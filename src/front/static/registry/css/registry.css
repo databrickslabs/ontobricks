@@ -296,6 +296,14 @@
     font-size: 0.78rem;
 }
 
+.registry-th-import-obx-name {
+    min-width: 14rem;
+}
+
+.registry-th-import-obx-check {
+    width: 2.5rem;
+}
+
 .registry-th-import-obx-versions {
     width: 8rem;
 }
@@ -305,7 +313,7 @@
 }
 
 .registry-th-import-obx-action {
-    width: 22rem;
+    width: 12rem;
 }
 
 .registry-th-export-check {

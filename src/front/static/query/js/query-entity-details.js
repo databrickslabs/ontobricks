@@ -470,19 +470,21 @@ async function showEntityDetails(entity) {
     const actions = entityMapping?.actions || classInfo?.actions || [];
     if (actions.length > 0) {
         const buttons = actions.map(action => {
+            const isJob = typeof _entityActionIsJob === 'function' && _entityActionIsJob(action);
             const fullName = action.fullName
-                || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
+                || (isJob ? ('job:' + action.job_id) : [action.catalog, action.schema, action.function].filter(Boolean).join('.'));
             if (!fullName) return '';
-            const label = action.function || fullName;
+            const label = action.job_name || action.function || fullName;
             const title = action.description || `Run ${fullName}`;
             const description = action.description || '';
+            const icon = isJob ? 'bi bi-play-circle' : 'bi bi-lightning-charge';
             return `
                 <div class="entity-detail-item">
                     <button type="button"
                             onclick="openEntityActionModal('${escapeHtml(entity.id)}', '${escapeHtml(fullName)}', '${escapeHtml(label)}', '${escapeHtml(description)}')"
                             class="btn btn-sm btn-outline-primary w-100"
                             title="${escapeHtml(title)}">
-                        <i class="bi bi-lightning-charge me-1"></i>${escapeHtml(label)}
+                        <i class="${icon} me-1"></i>${escapeHtml(label)}
                     </button>
                 </div>
             `;
@@ -491,6 +493,17 @@ async function showEntityDetails(entity) {
             <div class="entity-detail-section">
                 <h6><i class="bi bi-lightning-charge"></i> Actions</h6>
                 ${buttons}
+            </div>
+        `;
+    }
+
+    // SWRL business rules declared on the class — applied to this entity only
+    const businessRules = classInfo?.businessRules || [];
+    if (businessRules.length > 0 && typeof renderBusinessRuleSection === 'function') {
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-diagram-3"></i> Inference rules</h6>
+                ${renderBusinessRuleSection(entity.id, businessRules)}
             </div>
         `;
     }

@@ -78,14 +78,21 @@ body[data-app-role="admin"] [data-requires-app="admin"] {
  * aligned with the others" in the retractable sidebar (the Teams entry
  * is the only ``data-requires-app="admin"`` nav-link, so it loses
  * ``display: flex`` for admins and the icon falls back to inline
- * positioning, ignoring ``gap`` and ``align-items``).
+ * positioning, ignoring ``gap`` and ``align-items``). Navbar Settings
+ * gear rows are the same: Registry / GitHub / Admin items are
+ * ``admin_only``; ``display: block`` made their labels follow the glyph
+ * width while Databricks (not gated) stayed on the 20px flex column.
  */
 body[data-app-role="admin"] .sidebar-nav .nav-link[data-requires-app="admin"] {
     display: flex !important;
 }
 
 body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"] {
-    display: block !important;
+    display: flex !important;
+}
+
+body[data-app-role="admin"] .ob-domain-empty-cta[data-requires-app="admin"] {
+    display: inline-flex !important;
 }
 
 body[data-app-role="admin"] .ob-domain-empty-cta[data-requires-app="admin"] {
@@ -170,7 +177,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #manualAutoMapBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #manualSavePanelBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingAutoExclude,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingIncludeExcluded,
-/* --- Mapping > Information / Designer: Unmap all. Kept visible (not
+/* --- Mapping > General / Designer: Unmap all. Kept visible (not
        hidden via ``.ontology-edit-btn``) so the operator sees the control
        is unavailable rather than wondering where it went. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsBtn,
@@ -269,6 +276,10 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
      - ``.new-domain-field`` fields in the New Domain modal. Creating a
        separate domain is independent of the currently loaded domain's
        lifecycle status or edit lock.
+     - ``.ob-confirm-check`` the optional checkbox on ``showConfirmDialog``
+       (e.g. "Also delete this domain from GitHub"). The dialog is appended
+       to ``body`` and can open from Registry Browse while a PUBLISHED /
+       IN-REVIEW domain is loaded; the confirm is not a domain-design edit.
      - ``[data-collab]`` the discussion offcanvas fields (comment /
        reply boxes, task title / assignee / due-date — see
        ``comments-panel.js``). Comments and tasks are collaboration, not
@@ -299,7 +310,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
    ``/ontology/pitfalls/analyze`` endpoint is status-open), so a reader on
    a PUBLISHED/IN-REVIEW version must still be able to pick which patterns
    to check and run the analysis. */
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not(.new-domain-field):not([data-collab]),
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not(.new-domain-field):not(.ob-confirm-check):not([data-collab]),
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not(.new-domain-field):not([data-collab]),
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(.new-domain-field):not([data-collab]) {
     pointer-events: none !important;
@@ -308,7 +319,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="dig
     cursor: not-allowed !important;
 }
 
-/* --- MCP policy controls (Domain → Information → MCP).
+/* --- MCP policy controls (Domain → General → MCP).
    Their ids are derived from the tool / context-feature name
    (``#mcpTool_<tool>`` / ``#mcpContext_<feature>``), so the tool named
    ``query_graphql`` yields ``#mcpTool_query_graphql`` and slips through the
@@ -336,6 +347,33 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .btn:disabled,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .btn.disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* --- Ontology > Generate wizard, Stage 2 (Review) / Stage 3 (Complete):
+   every draft-mutating control. The generic form-field rule above already
+   covers the dynamically-rendered `input`/`textarea`/`select` elements in
+   this pane (candidate include checkboxes, canonical-label/description/
+   type-hint fields, the alternate-label chip input, the add-candidate
+   form) — none of their ids/classes match its exemption list. Buttons are
+   not covered by that generic rule anywhere in the app, so every wizard
+   button that actually mutates the durable draft (or discards/re-runs
+   detection) needs its own entry here. The view itself (locked anchors,
+   candidate list, completion checklist) stays fully visible — only the
+   controls are neutralised, per the shared read-only contract. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-add-candidate-toggle"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-add-candidate-submit"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-remove-candidate"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-remove-alt-label"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-add-evidence"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-remove-evidence"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-discard"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-continue"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-review-restart"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-complete-retry"],
+body:is(.read-only-version, .role-viewer, .read-only-locked) [data-action="wizard-complete-discard"] {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
 }
 
 /* ==========================================================================
@@ -390,4 +428,18 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .btn.disabled {
     display: flex;
     gap: 0.4rem;
     flex: 0 0 auto;
+}
+
+/* ==========================================================================
+   LLM availability gate
+
+   Keep this block after every role, version, and edit-lock rule. Authorized
+   role selectors use equal specificity and !important declarations, so source
+   order makes the independent fail-closed availability state deterministic.
+   The capture-phase controller in permissions.js owns interaction and ARIA.
+   ========================================================================== */
+
+body.llm-unconfigured [data-requires-llm] {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
 }

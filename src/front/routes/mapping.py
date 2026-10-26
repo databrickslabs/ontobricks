@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from back.core.graphdb.GraphDBFactory import is_graphless_backend
 from back.objects.session import SessionManager, get_domain, get_session_manager
-from front.fastapi.dependencies import templates
+from front.fastapi.dependencies import home_redirect_if_unloaded, templates
 
 router = APIRouter(prefix="/mapping", tags=["Mapping"])
 
@@ -18,9 +18,12 @@ async def mapping_page(
     """Mapping management page.
 
     Ontology-only ("No Backend") domains have no graph, so Mapping is
-    disabled: fall back to the Domain Information page.
+    disabled: fall back to the Domain → General page.
     """
     domain_session = get_domain(session_mgr)
+    redirect = home_redirect_if_unloaded(domain_session)
+    if redirect is not None:
+        return redirect
     if is_graphless_backend((domain_session.info or {}).get("graph_backend")):
         return RedirectResponse("/domain/?section=information", status_code=303)
     return templates.TemplateResponse(request, "mapping.html")

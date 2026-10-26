@@ -53,7 +53,7 @@ class TestGraphDBBackend:
 
     def test_get_query_translator_default(self):
         translator = _concrete_backend().get_query_translator()
-        from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
+        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
         assert isinstance(translator, SWRLSQLTranslator)
 
 
@@ -123,7 +123,7 @@ class TestGraphDBFactory:
             patch("back.core.graphdb.lakebase.LAKEBASE_AVAILABLE", True),
             patch("back.core.databricks.get_lakebase_auth", return_value=mock_auth),
             patch(
-                "back.objects.registry.RegistryCfg.from_domain",
+                "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
                 return_value=MagicMock(
                     catalog="team_cat",
                     schema="registry_uc_schema",
@@ -162,7 +162,7 @@ class TestGraphDBFactory:
             patch("back.core.graphdb.lakebase.LAKEBASE_AVAILABLE", True),
             patch("back.core.databricks.get_lakebase_auth", return_value=mock_auth),
             patch(
-                "back.objects.registry.RegistryCfg.from_domain",
+                "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
                 return_value=MagicMock(
                     catalog="team_cat",
                     schema="registry_uc_schema",
@@ -206,7 +206,7 @@ class TestGraphDBFactory:
             patch("back.core.graphdb.lakebase.LAKEBASE_AVAILABLE", True),
             patch("back.core.databricks.get_lakebase_auth", return_value=mock_auth),
             patch(
-                "back.objects.registry.RegistryCfg.from_domain",
+                "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
                 return_value=MagicMock(
                     catalog="benoit_cayla",
                     schema="ontobricks",
@@ -248,7 +248,7 @@ class TestGraphDBFactory:
             patch("back.core.graphdb.lakebase.LAKEBASE_AVAILABLE", True),
             patch("back.core.databricks.get_lakebase_auth", return_value=mock_auth),
             patch(
-                "back.objects.registry.RegistryCfg.from_domain",
+                "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
                 return_value=MagicMock(
                     catalog="",
                     schema="",  # no registry schema → fallback

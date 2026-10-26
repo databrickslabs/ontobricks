@@ -1,0 +1,201 @@
+# Wire UC metric views into Ontology Generate
+
+Context: After loading Unity Catalog metric views, Ontology → Generate
+detection returned no entities. Mapping already treated metric views as
+first-class sources; Stage 1 did not (metadata tools stripped object_kind
+and column roles, the prompt treated sources as flat tables, and the
+SELECT-permission probe used SELECT * which metric views reject).
+
+Changes:
+
+1. `src/agents/tools/metadata.py`
+   `get_metadata` / `get_table_detail` expose `object_kind` and per-column
+   `role`.
+2. `src/agents/agent_owl_generator/prompts.py`
+   Stage-1 prompt: metric-view dimensions are entity evidence; measures
+   are never classes.
+3. `src/back/core/databricks/uc/UnityCatalog.py`
+   SELECT probe for metric views uses `build_metric_view_base_sql` + LIMIT 0.
+4. `src/back/core/databricks/uc/MetadataService.py`,
+   `src/back/core/databricks/DatabricksClient.py`,
+   `src/back/objects/domain/Domain.py`,
+   `src/back/objects/domain/_metadata_tasks.py`
+   Load/refresh pass object_kind + columns into the probe; schema-wide
+   probe skips metric views so SELECT * does not false-fail the picker.
+5. `src/front/static/ontology/js/ontology-wizard.js`,
+   `src/front/templates/partials/ontology/_ontology_wizard.html`
+   Generate source list badges metric views.
+6. `.planning/agents/agent_owl_generator/SPEC.md`,
+   `tests/eval/datasets/agent_owl_generator/metric_view.jsonl`
+   Eval delta (10 rows) + SPEC tool/failure-mode notes. Live MLflow eval
+   not run (warehouse + Foundation Model access).
+7. `docs/features.md`, `docs/user-guide.md`
+   Generate reads metric-view dimensions as entities.
+
+Modified files:
+- src/agents/tools/metadata.py
+- src/agents/agent_owl_generator/prompts.py
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/databricks/uc/MetadataService.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/_metadata_tasks.py
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- .planning/agents/agent_owl_generator/SPEC.md
+- tests/eval/datasets/agent_owl_generator/metric_view.jsonl
+- .planning/agents/agent_owl_generator/eval/metric_view.jsonl
+- tests/units/agents/test_owl_generator_metric_views.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/core/test_metadata_service_object_kind.py
+- tests/units/domain/test_metadata_refresh_diff.py
+- tests/units/domain/test_list_schema_tables_object_kind.py
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- docs/features.md
+- docs/user-guide.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7098 passed, 315 skipped, 6 deselected, 1 xfailed in 65.70s
+
+## Rename Data Sources confirm button to Add assets
+
+Context: Domain → Data Sources catalog/schema popup still labelled the confirm
+action as tables-only. Sources now include tables, views, and metric views, so
+the CTA is Add assets.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_metadata.html`
+   Location modal confirm button: Add assets.
+2. `src/front/static/domain/js/domain-metadata.js`
+   Import-picker confirm counts assets, not tables.
+3. `tests/units/front/test_mapping_metric_view_ui.py`
+   Contract for both labels.
+4. `docs/examples.md`
+   Walkthrough click target updated.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/js/domain-metadata.js
+- tests/units/front/test_mapping_metric_view_ui.py
+- docs/examples.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7100 passed, 315 skipped, 6 deselected, 1 xfailed in 62.01s
+
+## Rename "Data Sources" UI labels to "Data Assets"
+
+Context: Domain sources now cover tables, views and UC metric views, so the
+"Data Sources" wording was too narrow. Every user-facing label, toast, dialog,
+help text and menu entry now says "Data Assets" / "data assets". Code
+identifiers, comments, routes and API/MCP descriptions are unchanged.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Domain sidebar entry: Data Assets.
+2. `src/front/templates/partials/domain/_domain_metadata.html`,
+   `src/front/templates/partials/domain/_domain_validation.html`,
+   `src/front/templates/partials/mapping/_mapping_information.html`,
+   `src/front/templates/partials/ontology/_ontology_wizard.html`,
+   `src/front/templates/partials/dtwin/_query_api.html`,
+   `src/front/templates/partials/layout/help_modal.html`
+   Headers, buttons, modals, tiles and help copy renamed.
+3. `src/front/static/domain/js/domain-metadata.js`,
+   `src/front/static/domain/js/domain-audit.js`,
+   `src/front/static/ontology/js/ontology-shared-panels.js`,
+   `src/front/static/ontology/js/ontology-wizard.js`,
+   `src/front/static/mapping/js/mapping-shared.js`,
+   `src/front/static/mapping/js/mapping-autoassign.js`,
+   `src/front/static/global/js/mapping-information.js`
+   Toasts, dialogs, status and empty-state strings renamed.
+4. `src/back/objects/domain/Domain.py`
+   Audit summary and change-location message say data asset(s).
+5. `tests/units/front/test_mapping_metric_view_ui.py`
+   Guard: no non-comment "data source" label left under src/front.
+6. `tests/units/front/test_metadata_guard_ui.py`,
+   `tests/units/front/test_ontology_dataset_description.py`
+   Assertions follow the new labels.
+7. `docs/get-started.md`, `docs/user-guide.md`, `docs/deployment.md`,
+   `docs/INFO.md`, `docs/data-access.md`, `docs/examples.md`, `docs/api.md`
+   UI label references updated.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/domain/js/domain-metadata.js
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/static/mapping/js/mapping-shared.js
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/global/js/mapping-information.js
+- src/back/objects/domain/Domain.py
+- tests/units/front/test_mapping_metric_view_ui.py
+- tests/units/front/test_metadata_guard_ui.py
+- tests/units/front/test_ontology_dataset_description.py
+- docs/get-started.md
+- docs/user-guide.md
+- docs/deployment.md
+- docs/INFO.md
+- docs/data-access.md
+- docs/examples.md
+- docs/api.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7101 passed, 315 skipped, 6 deselected, 1 xfailed in 52.54s
+
+## Fix live scenario campaign interpreter and staged Generate
+
+Context: `make scenario-campaign` sourced `.venv/bin/activate` while
+`VIRTUAL_ENV` still pointed at the 0.8.1 worktree, so pytest ran 0.8.1
+scenario files against the 0.9 app. Scenario 1 then clicked Detect Entities
+and polled `/ontology/load` for classes — Stage 1 never merges OWL, so the
+run timed out with an empty class list.
+
+Changes:
+
+1. `Makefile`
+   Campaign uses `env -u VIRTUAL_ENV uv run --frozen pytest` from this
+   worktree (no `activate`).
+2. `tests/e2e/scenarios/test_scenario_01_generate_live.py`
+   Detect → poll draft `reviewing` → Continue to Complete → poll classes.
+3. `tests/units/e2e/test_scenario_campaign_wiring.py`
+   Contracts for the Makefile recipe and the staged wizard walk.
+4. `tests/e2e/scenarios/README.md`, `docs/development.md`
+   Campaign interpreter + Stage 1/3 timeouts documented.
+
+Modified files:
+- Makefile
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/units/e2e/test_scenario_campaign_wiring.py
+- tests/e2e/scenarios/README.md
+- docs/development.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7106 passed, 315 skipped, 6 deselected, 1 xfailed in 65.81s
+
+## Drive Stage 3 completion from the live scenario API
+
+Context: After the staged Generate update, scenario 1 detected 11 candidates
+then clicked Continue. The draft stayed at `reviewing` with 0 classes for
+420s — Stage 3 never started. Detection is async; Continue stays disabled
+until Review re-renders, so a DOM click is the wrong trigger. Completion
+must POST `/ontology/wizard/generate/complete` (the same call the button
+makes) and poll the task, then assert `/ontology/load` has classes.
+
+Changes:
+
+1. `tests/e2e/scenarios/test_scenario_01_generate_live.py`
+   After a reviewing draft, POST complete, poll the task, assert classes.
+2. `tests/units/e2e/test_scenario_campaign_wiring.py`
+   Contract: detect click, then complete POST, then ontology load.
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/units/e2e/test_scenario_campaign_wiring.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7106 passed, 315 skipped, 6 deselected, 1 xfailed in 57.10s
+
+

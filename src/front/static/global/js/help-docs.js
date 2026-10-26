@@ -4,9 +4,9 @@
  * Renders docs/*.md inside the Help Center modal. Fetches the index once,
  * then fetches and renders each document on demand using marked.js.
  *
- * Exposes window.HelpDocs = { activate(slug?) } which help-modal.js calls
- * when the "Documentation" section is activated (or via deep-link hash
- * #help-docs/{slug}).
+ * Exposes window.HelpDocs = { activate(slug?, anchor?) } which help-modal.js
+ * calls when the "Documentation" section is activated (or via deep-link hash
+ * #help-docs/{slug} or #help-docs/{slug}#{heading-anchor}).
  */
 (function () {
     'use strict';
@@ -26,6 +26,7 @@
         categories: [],      // [{id,label,docs:[{slug,title}]}]
         currentSlug: null,
         pendingSlug: null,  // slug to activate once the index is ready
+        pendingAnchor: null,
     };
 
     // ── DOM helpers ──────────────────────────────────────────────────────────
@@ -152,8 +153,10 @@
                 _renderIndex();
                 if (state.pendingSlug) {
                     var s = state.pendingSlug;
+                    var anchor = state.pendingAnchor;
                     state.pendingSlug = null;
-                    _loadDoc(s);
+                    state.pendingAnchor = null;
+                    _loadDoc(s, anchor);
                 }
             })
             .catch(function (err) {
@@ -169,10 +172,11 @@
             });
     }
 
-    function _loadDoc(slug) {
+    function _loadDoc(slug, anchor) {
         if (!slug) return;
         if (!state.loadedIndex) {
             state.pendingSlug = slug;
+            state.pendingAnchor = anchor || null;
             _loadIndex();
             return;
         }
@@ -192,6 +196,7 @@
             })
             .then(function (payload) {
                 _renderMarkdown(payload);
+                if (anchor) _scrollToAnchor(anchor);
                 // Update the hash so the doc is deep-linkable
                 try {
                     var url =
@@ -249,6 +254,8 @@
      * target=_blank.
      */
     function _postProcess(root) {
+        _assignHeadingIds(root);
+
         var imgs = root.querySelectorAll('img');
         imgs.forEach(function (img) {
             var src = img.getAttribute('src') || '';
@@ -284,7 +291,9 @@
             var href = a.getAttribute('href') || '';
             if (!href) return;
             if (href.startsWith('#')) {
-                // Intra-document anchor (marked generates header ids) — no-op
+                // The URL hash drives Help routing, so scroll in place instead.
+                a.setAttribute('data-doc-anchor', href.slice(1));
+                a.classList.add('help-docs-anchor');
                 return;
             }
             if (/^https?:\/\//i.test(href) || href.startsWith('mailto:')) {
@@ -301,6 +310,9 @@
                 if (slug) {
                     a.setAttribute('href', '#help-docs/' + slug + (mdMatch[2] || ''));
                     a.setAttribute('data-doc-slug', slug);
+                    if (mdMatch[2]) {
+                        a.setAttribute('data-doc-anchor', mdMatch[2].slice(1));
+                    }
                     a.classList.add('help-docs-internal');
                     return;
                 }
@@ -315,15 +327,64 @@
         root.addEventListener(
             'click',
             function (e) {
+                var local = e.target.closest('a.help-docs-anchor');
+                if (local) {
+                    e.preventDefault();
+                    _scrollToAnchor(local.getAttribute('data-doc-anchor'));
+                    return;
+                }
                 var a = e.target.closest('a.help-docs-internal');
                 if (!a) return;
                 var slug = a.getAttribute('data-doc-slug');
                 if (!slug) return;
                 e.preventDefault();
-                _loadDoc(slug);
+                _loadDoc(slug, a.getAttribute('data-doc-anchor'));
             },
             { once: false }
         );
+    }
+
+    /**
+     * GitHub-compatible heading slug, so TOC and cross-doc anchors written
+     * for GitHub also resolve in the in-app viewer.
+     */
+    function _headingSlug(text) {
+        return String(text || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+            .replace(/\s/g, '-');
+    }
+
+    function _assignHeadingIds(root) {
+        var seen = {};
+        root.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(function (h) {
+            var base = _headingSlug(h.textContent);
+            var id = base;
+            if (Object.prototype.hasOwnProperty.call(seen, base)) {
+                seen[base] += 1;
+                id = base + '-' + seen[base];
+            } else {
+                seen[base] = 0;
+            }
+            h.id = id;
+        });
+    }
+
+    function _scrollToAnchor(anchor) {
+        if (!anchor) return;
+        var body = $('helpDocsBody');
+        if (!body) return;
+        var id;
+        try {
+            id = decodeURIComponent(anchor);
+        } catch (e) {
+            id = anchor;
+        }
+        var target = document.getElementById(id);
+        if (target && body.contains(target)) {
+            target.scrollIntoView({ block: 'start' });
+        }
     }
 
     function _slugForFile(filename) {
@@ -332,10 +393,10 @@
             // The index only stores title/category — check against categories
             // which still hold the original file info embedded in the slug.
             // We instead compare via a simple heuristic: slugs are derived
-            // from filenames, so "README.md" → "readme", "get-started.md"
-            // → "get-started", etc.
+            // from filenames, so "README.md" → "readme", "getting-started.md"
+            // → "getting-started", etc.
             var norm = filename.toLowerCase().replace(/\.md$/, '');
-            if (norm === slug) return slug;
+            if (norm === slug || norm.replace(/_/g, '-') === slug) return slug;
         }
         return null;
     }
@@ -346,10 +407,10 @@
      * Activate the Documentation viewer. If called without a slug, loads
      * the index and clears the viewer back to the placeholder.
      */
-    function activate(slug) {
+    function activate(slug, anchor) {
         _loadIndex();
         if (slug) {
-            _loadDoc(slug);
+            _loadDoc(slug, anchor);
         } else if (!state.currentSlug) {
             _showPlaceholder();
         }
@@ -379,6 +440,11 @@
         return m ? decodeURIComponent(m[1]) : null;
     }
 
+    function _anchorFromHash() {
+        var m = (window.location.hash || '').match(/^#help-docs\/[A-Za-z0-9_.-]+#(.+)$/);
+        return m ? m[1] : null;
+    }
+
     function _initHashHandling() {
         window.addEventListener('hashchange', function () {
             var slug = _slugFromHash();
@@ -389,7 +455,7 @@
                 ) {
                     window.HelpCenter.open('docs');
                 }
-                activate(slug);
+                activate(slug, _anchorFromHash());
             }
         });
         // On initial load, if the URL already contains a help-docs hash
@@ -418,7 +484,7 @@
                         ) {
                             window.HelpCenter.activate('docs');
                         }
-                        activate(slug);
+                        activate(slug, _anchorFromHash());
                     }
                 },
                 { once: false }

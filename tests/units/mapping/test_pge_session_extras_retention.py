@@ -74,3 +74,49 @@ def test_save_mappings_to_session_rejects_traversal_id(tmp_path: Path):
 
     assert not evil_path.exists(), "traversal id must not create files outside session_dir"
     assert list(tmp_path.iterdir()) == [], "no file must be created inside session_dir either"
+
+
+@pytest.mark.unit
+def test_save_mappings_keeps_in_memory_ontology_when_disk_is_stale(tmp_path: Path):
+    """Generate complete writes classes to the session cache before disk.
+
+    Auto-map must not rebuild the session from a stale file (0 classes) and
+    then clobber the cache — that is what left SHACL suggest with nothing.
+    """
+    session_id = "0123456789abcdef0123456789abcdef"
+    session_path = tmp_path / session_id
+    session_path.write_text(
+        json.dumps(
+            {
+                "domain_data": {
+                    "ontology": {"classes": []},
+                    "assignment": {"entities": [], "relationships": []},
+                    "domain": {},
+                }
+            }
+        )
+    )
+    session_ref = {
+        "domain_data": {
+            "ontology": {"classes": [{"name": "Customer"}]},
+            "assignment": {"entities": [], "relationships": []},
+            "domain": {},
+        }
+    }
+
+    settings = MagicMock()
+    settings.session_dir = str(tmp_path)
+
+    with patch("back.objects.mapping.Mapping.get_settings", return_value=settings):
+        Mapping.save_mappings_to_session(
+            session_id,
+            session_ref,
+            [{"class_name": "Customer"}],
+            [],
+        )
+
+    disk = json.loads(session_path.read_text())
+    assert disk["domain_data"]["ontology"]["classes"] == [{"name": "Customer"}]
+    assert session_ref["domain_data"]["ontology"]["classes"] == [{"name": "Customer"}]
+    assert disk["domain_data"]["assignment"]["entities"] == [{"class_name": "Customer"}]
+

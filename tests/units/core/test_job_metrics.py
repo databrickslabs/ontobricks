@@ -128,9 +128,12 @@ def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):
     """The job scans its source repeatedly, which a view would re-derive each time."""
     statements: List[str] = []
     client = SimpleNamespace(execute_statement=statements.append)
+    builder_calls = []
     monkeypatch.setattr(
         "back.core.graphdb.delta.DeltaBase.create_databricks_client",
-        lambda domain, settings=None: client,
+        lambda domain, settings=None, *, for_write=False: (
+            builder_calls.append(for_write) or client
+        ),
     )
 
     with analytics_snapshot(_view_only_domain(), None, "cat.sch.t_data") as table:
@@ -139,6 +142,7 @@ def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):
         assert "FROM cat.sch.t_data" in statements[0]
         assert len(statements) == 1
 
+    assert builder_calls == [True]
     assert statements[1] == (
         "DROP TABLE IF EXISTS cat.sch.triplestore_dom_V3_analytics"
     )
@@ -150,7 +154,7 @@ def test_the_snapshot_is_dropped_even_when_the_run_fails(monkeypatch):
     client = SimpleNamespace(execute_statement=statements.append)
     monkeypatch.setattr(
         "back.core.graphdb.delta.DeltaBase.create_databricks_client",
-        lambda domain, settings=None: client,
+        lambda domain, settings=None, *, for_write=False: client,
     )
 
     with pytest.raises(RuntimeError, match="job died"):
@@ -164,7 +168,7 @@ def test_a_view_only_domain_without_a_warehouse_says_so(monkeypatch):
     """Silently scanning the view instead would make the run cost unbounded."""
     monkeypatch.setattr(
         "back.core.graphdb.delta.DeltaBase.create_databricks_client",
-        lambda domain, settings=None: None,
+        lambda domain, settings=None, *, for_write=False: None,
     )
 
     with pytest.raises(InfrastructureError, match="temporary Delta snapshot"):

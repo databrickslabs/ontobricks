@@ -16,6 +16,7 @@ def _custom_branding() -> dict:
         "version": 1,
         "app_title": "Acme Graph",
         "primary_color": "#123456",
+        "aurora_color": "#22A7C8",
         "logo_data_url": "data:image/png;base64,AAAA",
         "logo_url": "data:image/png;base64,AAAA",
         "is_custom_logo": True,
@@ -28,6 +29,11 @@ def _custom_branding() -> dict:
             "focus": "rgba(18, 52, 86, 0.18)",
             "on_primary": "#FFFFFF",
             "selected_text": "#0C243A",
+            "aurora": "#22A7C8",
+            "aurora_rgb": "34, 167, 200",
+            "aurora_dark": "#1D8EAA",
+            "gradient_end": "#3E7FB0",
+            "canvas_tint": "#EDF1F5",
         },
     }
 
@@ -46,6 +52,14 @@ def test_configured_branding_is_in_first_html_response(client):
     assert '--db-primary-selected-text:' in html
     assert '--db-focus-ring:' in html
     assert '--db-shadow-primary:' in html
+    assert '--db-aurora: #22A7C8;' in html
+    assert '--db-aurora-rgb: 34, 167, 200;' in html
+    # gradient_end/canvas_tint are re-derived server-side from primary_color +
+    # aurora_color (normalize_ui_branding ignores the fixture's palette dict,
+    # same as primary_dark/primary_darker below) — assert the real derivation.
+    assert '--db-gradient-end: #196889;' in html
+    assert '--db-canvas-warm: #F3F5F7;' in html
+    assert '--db-shadow-primary: 0 8px 20px rgba(18, 52, 86, 0.35);' in html
     assert 'href="data:image/png;base64,AAAA"' in html
     assert 'id="brandLogoImg" data-brand-icon src="data:image/png;base64,AAAA"' in html
     assert 'id="brandTitleText" data-brand-title' in html

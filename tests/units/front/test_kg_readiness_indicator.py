@@ -11,12 +11,12 @@ SYNC_CSS = REPO_ROOT / "src/front/static/query/css/query-sync.css"
 # Sub-pages that must include the readiness indicator next to their title.
 _KG_PAGES = [
     "src/front/templates/partials/dtwin/_query_sigmagraph.html",
+    "src/front/templates/partials/dtwin/_query_query.html",
     "src/front/templates/partials/dtwin/_query_dataquality.html",
     "src/front/templates/partials/dtwin/_query_chat.html",
     "src/front/templates/partials/dtwin/_query_insights.html",
     "src/front/templates/partials/dtwin/_query_reasoning.html",
     "src/front/templates/partials/dtwin/_query_cohorts.html",
-    "src/front/templates/partials/dtwin/_query_graphql.html",
     "src/front/templates/partials/dtwin/_query_analytics.html",
 ]
 

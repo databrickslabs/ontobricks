@@ -37,20 +37,6 @@
         return esc(text).replace(/"/g, '&quot;');
     }
 
-    // Render a comment body's markdown to HTML. Uses `marked` (loaded globally
-    // in base.html, same as the ontology chat assistant); falls back to escaped
-    // text with <br> when it isn't available.
-    function renderMarkdown(text) {
-        const src = text || '';
-        if (typeof window.marked !== 'undefined' && window.marked.parse) {
-            try {
-                window.marked.setOptions({ breaks: true, gfm: true });
-                return window.marked.parse(src);
-            } catch (e) { /* fall through to plain text */ }
-        }
-        return esc(src).replace(/\n/g, '<br>');
-    }
-
     function notify(msg, kind) {
         if (typeof window.showNotification === 'function') {
             window.showNotification(msg, kind || 'info');
@@ -237,15 +223,6 @@
         } catch (err) {
             membersCache[key] = [];
         }
-    }
-
-    // True while the user is actively typing a reply somewhere in the panel.
-    function userIsComposing() {
-        if (!el) return false;
-        const active = document.activeElement;
-        if (active && el.contains(active) && active.tagName === 'TEXTAREA') return true;
-        return Array.from(el.querySelectorAll('textarea'))
-            .some((t) => (t.value || '').trim().length > 0);
     }
 
     // Cheap change-detector for the rendered comment set.

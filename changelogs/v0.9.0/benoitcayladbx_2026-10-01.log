@@ -1,0 +1,351 @@
+## Raise Dependabot security floors
+
+Context: GitHub Dependabot listed open alerts on `uv.lock` and
+`src/mcp-server/uv.lock` for PyJWT, GitPython, urllib3, anyio,
+cryptography, MLflow, sentence-transformers, oauthlib, and NLTK.
+The same floors were applied on 0.8.1. Patched releases were available
+for all except oauthlib 4.x (blocked by `databricks-sql-connector`
+`oauthlib<4`) and NLTK GHSA-8mgp-746c-j5xp (no upstream patch).
+
+Changes:
+
+1. pyproject.toml
+   Raise MLflow to ≥3.16.1, sentence-transformers to ≥5.6.0, and uv
+   constraint floors for gitpython, urllib3, anyio, pyjwt, cryptography.
+2. src/mcp-server/pyproject.toml
+   Add PyJWT, urllib3, and anyio floors next to the existing cryptography 50 floor.
+3. uv.lock / src/mcp-server/uv.lock
+   Relock; rewrite proxy URLs back to files.pythonhosted.org.
+4. docs/development.md
+   Document the new floors and the two blocked advisories.
+5. releases/ReleaseNotes_V0.9.0.md
+   Add a Dependabot security section.
+
+Modified files:
+- pyproject.toml
+- src/mcp-server/pyproject.toml
+- uv.lock
+- src/mcp-server/uv.lock
+- docs/development.md
+- releases/ReleaseNotes_V0.9.0.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7199 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.04s
+
+## Confirm Ontology Studio icon remapping
+
+Context: Clicking Auto-map icons in Ontology Studio stopped with
+"All entities already have custom icons" once every class had a custom
+emoji. Users needed a way to replace those icons after confirmation.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   When no default-icon candidates remain, ask via showConfirmDialog and
+   remap every entity if the user confirms; keep mixed default/custom
+   assignment one-click.
+2. tests/units/front/test_ontology_icon_remap_confirmation.py
+   Source-contract coverage for confirmation copy, cancel, full remap,
+   running-task guard, and missing-helper safety.
+3. docs/features.md
+   Document the remap confirmation on Auto-Map Icons.
+4. docs/architecture.md
+   Document the Studio toolbar candidate selection and remap confirm path.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_ontology_icon_remap_confirmation.py
+- docs/features.md
+- docs/architecture.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7205 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.05s
+
+## Add Ontology Studio multi-select gestures
+
+Context: Ontology Studio selected one entity at a time. Users need
+Ctrl/Cmd-click and Ctrl/Cmd-marquee selection so later tasks can move,
+delete, and create Business Views from a set. Pan/zoom and single-click
+selection stay unchanged.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Add selection Set helpers, Ctrl/Cmd toggle, modifier-only marquee,
+   Escape clear, and zoom.filter so modifier-primary drags do not pan.
+2. src/front/static/ontology/css/ontology-map.css
+   Style `.map-selection-marquee` with `--db-primary` tokens.
+3. tests/units/front/test_ontology_map_multi_select.py
+   Source contracts for modifier click, marquee replace, and Escape.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_ontology_map_multi_select.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7208 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.13s
+
+## Keep multi-select marquee and Set state in sync
+
+Context: Task 1 review found Ctrl/Cmd marquee starting on relationship
+paths/hitareas/labels, and relationship click/contextmenu clearing node
+CSS without clearing `mapSelectedEntityNames`.
+
+Changes:
+
+1. tests/units/front/test_ontology_map_multi_select.py
+   Source contracts for empty-canvas marquee and relationship Set sync.
+2. src/front/static/ontology/js/ontology-map.js
+   Start marquee only on the SVG background; clear selection via
+   `_clearMapSelection()` on relationship click and contextmenu.
+
+Modified files:
+- tests/units/front/test_ontology_map_multi_select.py
+- src/front/static/ontology/js/ontology-map.js
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7210 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.98s
+
+## Stop selection clear from racing panel switch
+
+Context: Re-review found relationship click calling guardedCloseSharedPanel
+via `_clearMapSelection` while `editPropertyByName`/`checkDirtyBeforeSwitch`
+already handles dirty entity-to-relationship switching. Canvas click also
+closed the panel twice.
+
+Changes:
+
+1. tests/units/front/test_ontology_map_multi_select.py
+   Contracts for closePanel:false on relationship handlers and a single
+   canvas-click guardedClose.
+2. src/front/static/ontology/js/ontology-map.js
+   Add closePanel to `_setMapSelection`/`_clearMapSelection`; skip panel
+   close on relationship clear and canvas clear.
+
+Modified files:
+- tests/units/front/test_ontology_map_multi_select.py
+- src/front/static/ontology/js/ontology-map.js
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7212 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.16s
+
+## Add Ontology Studio group move and multi-delete
+
+Context: Task 1 left a selection set without group actions. Users need to
+drag every selected node together, open a limited multi-select context
+menu, and delete the set with one confirm, one save, and one map refresh.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Translate selected nodes by the dragged-node delta; add a multi-select
+   menu (Create Business View + Delete N entities); delete once; stub
+   createBusinessViewFromSelection for Task 3.
+2. tests/units/front/test_ontology_map_multi_select.py
+   Source contracts for group drag, menu actions, and single-save delete.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_ontology_map_multi_select.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7215 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.65s
+
+## Create selected-only Studio Business Views
+
+Context: Ontology Studio can already multi-select, group-move, and
+multi-delete. Create Business View on a set still did nothing. Users need
+a view that contains exactly the selected entities, only
+object-property/inheritance links with both endpoints selected, named
+Auto_Selection with a numeric suffix, then the existing create/switch/save
+and Business Views navigation. Single-entity 1-hop Auto_<entity> is
+unchanged. This closes the full multi-select feature: Ctrl/Cmd-click,
+marquee, Escape, group move, multi-delete, and selected-only Business View.
+
+Changes:
+
+1. tests/units/front/test_ontology_map_multi_select.py
+   Contract for internal-only links, Auto_Selection naming, circular
+   layout, visibility arrays, persist/navigation, and 1-hop preservation.
+2. src/front/static/ontology/js/ontology-map.js
+   Implement createBusinessViewFromSelection with selected-only layout and
+   the existing design-views create/switch/save-current sequence.
+3. docs/features.md
+   Document Studio multi-select gestures and Auto_Selection vs 1-hop
+   Business View.
+4. docs/user-guide.md
+   Add concrete select/move/delete/Create Business View steps for the
+   Ontology Studio map.
+5. changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+   Record the selected-only Business View close-out.
+
+Modified files:
+- tests/units/front/test_ontology_map_multi_select.py
+- src/front/static/ontology/js/ontology-map.js
+- docs/features.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7217 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.69s
+
+## Fix macOS Control-click multi-select
+
+Context: Chromium on macOS emits pointerdown/mousedown/contextmenu/pointerup/mouseup
+for Control-click and never fires click, so the click-only Ctrl/Cmd toggle never
+ran. Control-drag on empty SVG started the marquee, then the SVG contextmenu
+opened the Canvas menu and interfered. Modifier contextmenu now toggles nodes
+and suppresses the Canvas menu; unmodified right-click menus stay unchanged.
+
+Changes:
+
+1. tests/units/front/test_ontology_map_multi_select.py
+   Failing-then-green contracts for modifier contextmenu on nodes and SVG.
+2. src/front/static/ontology/js/ontology-map.js
+   Toggle on modifier node contextmenu; preventDefault/return on modifier SVG
+   contextmenu so an active marquee is preserved.
+
+Modified files:
+- tests/units/front/test_ontology_map_multi_select.py
+- src/front/static/ontology/js/ontology-map.js
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7225 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.81s
+
+## List only Mapping Diagnostics issues
+
+Context: Mapping Diagnostics listed every passing check, treated queries
+that return rows as a diagnostic result, and could still flag excluded
+(unmapped) attributes as missing columns. The page should show issues
+only and keep row counts informational.
+
+Changes:
+
+1. src/back/objects/mapping/Mapping.py
+   Skip excluded attributes in column and drift checks; record row_count
+   without adding a passing has_data check.
+2. src/front/static/mapping/js/mapping-diagnostics.js
+   Render warning/error checks only and hide clean entity, relationship,
+   and permission rows.
+3. src/front/templates/partials/mapping/_mapping_diagnostics.html
+   Update the section subtitle to match the issues-only behaviour.
+4. tests/units/mapping/test_mapping_service.py
+   Cover excluded attributes and row-count vs has_data status.
+5. tests/units/mapping/test_schema_drift.py
+   Cover excluded attributes skipped by drift.
+6. tests/units/front/test_schema_drift_ui.py
+   Contract that the Diagnostics UI filters to issues.
+7. docs/user-guide.md / docs/features.md
+   Document issues-only Diagnostics and excluded-attribute skipping.
+
+Modified files:
+- src/back/objects/mapping/Mapping.py
+- src/front/static/mapping/js/mapping-diagnostics.js
+- src/front/templates/partials/mapping/_mapping_diagnostics.html
+- tests/units/mapping/test_mapping_service.py
+- tests/units/mapping/test_schema_drift.py
+- tests/units/front/test_schema_drift_ui.py
+- docs/user-guide.md
+- docs/features.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7223 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.70s
+
+## Harden Ontology Studio multi-select interactions
+
+Context: Final browser and code review found that the click emitted after a
+marquee could clear its result, context menus could retain stale selections,
+map rebuilds could race dirty-panel saves, and macOS Control gestures needed
+native context-menu handling. The Studio multi-select flow now preserves live
+selection state across those interactions and has Playwright coverage.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Preserve marquee results, close stale menus, avoid panel-close races,
+   share Business View persistence, handle cancellation paths, and report
+   the actual multi-delete count.
+2. tests/units/front/test_ontology_map_multi_select.py
+   Extend contracts for click suppression, live action selection, safe map
+   rebuilds, modal Escape, and shared Business View construction.
+3. tests/e2e/ontology/test_studio_multi_select_flows.py
+   Exercise Ctrl/Cmd marquee, empty marquee, menu freshness, canvas clearing,
+   and Escape behavior in a real Chromium session.
+4. docs/architecture.md
+   Document Studio multi-select state, gestures, group actions, and macOS
+   Control-click handling.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_ontology_map_multi_select.py
+- tests/e2e/ontology/test_studio_multi_select_flows.py
+- docs/architecture.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7237 passed, 325 skipped, 6 deselected, 1 xfailed
+
+## Skip excluded relationship diagnostic columns
+
+Context: Relationship Diagnostics still errored on bound IDs that were
+excluded or written as Spark implicit aliases (``source_id_column``
+``s`` vs SELECT ``obj_id s``). Match the entity behaviour: do not raise
+missing-column issues for those cases.
+
+Changes:
+
+1. src/back/objects/mapping/Mapping.py
+   Skip excluded relationship ID/attribute columns; match implicit
+   aliases in SELECT output.
+2. src/back/objects/digitaltwin/TwinMapping.py
+   Treat ``SELECT obj_id s`` as output column ``s``.
+3. tests/units/mapping/test_mapping_service.py
+   Cover implicit aliases, excluded relationship columns, and real misses.
+4. docs/user-guide.md / docs/features.md
+   Document relationship Diagnostics column skipping.
+
+Modified files:
+- src/back/objects/mapping/Mapping.py
+- src/back/objects/digitaltwin/TwinMapping.py
+- tests/units/mapping/test_mapping_service.py
+- docs/user-guide.md
+- docs/features.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7241 passed, 325 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.05s
+
+## Add Studio Select toolbar toggle
+
+Context: Multi-select on Ontology Studio was only discoverable via Ctrl/Cmd
+gestures. A toolbar Select button now turns click-to-toggle and empty-canvas
+marquee on without a modifier.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   Add an icon-only Select toggle in the layout/display cluster.
+2. src/front/static/ontology/js/ontology-map.js
+   Share Ctrl/Cmd and toolbar Select through `_isMapSelectGesture`.
+3. src/front/static/ontology/css/ontology-map.css
+   Crosshair cursor while select mode is on.
+4. tests/units/front/test_button_design_contract.py
+   Require the Select control in the joined display cluster.
+5. tests/units/front/test_ontology_map_multi_select.py
+   Contract the shared gesture helper, init bind, and marquee reuse.
+6. tests/e2e/ontology/test_studio_multi_select_flows.py
+   Click Select, toggle two entities, and marquee without a modifier.
+7. docs/user-guide.md / docs/features.md / docs/architecture.md
+   Document the toolbar Select toggle.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_ontology_map_multi_select.py
+- tests/e2e/ontology/test_studio_multi_select_flows.py
+- docs/user-guide.md
+- docs/features.md
+- docs/architecture.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7245 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.28s

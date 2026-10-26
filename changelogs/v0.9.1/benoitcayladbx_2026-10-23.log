@@ -1,0 +1,161 @@
+================================================================================
+## Speed bulk Data Quality with a VIEW-sourced snapshot and a live log
+================================================================================
+
+Context: Knowledge Graph → Data Quality re-expanded the R2RML gateway VIEW
+on every check, so a multi-rule run scanned source mappings N times.
+Keep that VIEW as the only source: CTAS it once into a task-scoped Delta
+table, run checks (up to 4 workers) against the copy, then drop it.
+Show task.log_entries in a scrollable activity log while the run executes.
+
+Changes:
+
+1. src/back/core/graphdb/delta/_table_naming.py
+   Add dq_snapshot_fqn(domain, settings, task_id) off the gateway stem.
+2. src/back/objects/digitaltwin/quality/DataQualitySnapshot.py
+   New context manager: CTAS from the VIEW, drop in finally, fall back
+   to the live VIEW (sequential) if CTAS fails.
+3. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   Wrap the bulk DQ worker; skip snapshot when total < 2.
+4. src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+   ThreadPoolExecutor(max_workers=4) only when a snapshot exists; keep
+   result order; serial path unchanged for the live VIEW.
+5. src/front/templates/partials/dtwin/_query_dataquality.html
+   Add #dqExecProgressLog with class task-activity-log.
+6. src/front/static/query/js/query-dataquality.js
+   Render task.log_entries on poll (TaskProgressUI.renderActivityLog).
+7. src/front/templates/dtwin.html
+   Load task-progress-ui.js before query-dataquality.js.
+8. tests/units/architecture/baseline.json
+   Shrink-only ratchet: SqlQualityChecks.run_sql_checks left the
+   oversized-function list.
+
+Modified files:
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/objects/digitaltwin/quality/DataQualitySnapshot.py
+- src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+- src/back/objects/digitaltwin/quality/__init__.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-dataquality.js
+- tests/units/architecture/baseline.json
+- tests/units/dtwin/test_dataquality_snapshot.py
+- tests/units/dtwin/test_v090_dq_sql_checks.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/front/test_dq_progress_log.py
+- tests/units/front/test_dq_run_payload.py
+- tests/units/graphdb/delta/test_delta_package.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9531 passed, 326 skipped, 8 deselected, 40 warnings in 48.66s
+
+================================================================================
+## Keep the Data Quality activity log visible and actually scrollable
+================================================================================
+
+Context: The execution log never showed a scrollbar. Polling started only
+after 1.5s, completion hid the progress card, and macOS overlay scrollbars
+made an empty 200px well look like a single status line.
+
+Changes:
+
+1. src/front/static/query/css/query-dataquality.css
+   Pin #dqExecProgressLog to 6.5–9.5rem with overflow-y auto, stable gutter,
+   and a visible webkit thumb.
+2. src/front/static/query/js/query-dataquality.js
+   Poll immediately; keep the log after success/failure; stop hiding the card.
+3. tests/units/front/test_dq_progress_log.py
+   Contract for overflow CSS, keepProgress, and immediate tick().
+
+Modified files:
+- src/front/static/query/css/query-dataquality.css
+- src/front/static/query/js/query-dataquality.js
+- tests/units/front/test_dq_progress_log.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9531 passed, 326 skipped, 8 deselected, 40 warnings in 50.39s
+
+================================================================================
+## Show a live activity log on entity Data Quality Checks
+================================================================================
+
+Context: Explorer still showed only "Running data quality checks…" with a
+spinner. That popup waited on a single GET /dtwin/nodes/shacl, so the
+Knowledge Graph tab log could not appear. Start the entity check as a
+TaskManager job, poll log_entries into a scrollable well, and keep the
+synchronous GET for MCP and the public API.
+
+Changes:
+
+1. src/back/objects/digitaltwin/node/NodeShaclService.py
+   Optional progress callback; per-shape queries after a DQ snapshot.
+2. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   run_node_shacl_task wraps evaluate and completes with the facet payload.
+3. src/api/routers/internal/dtwin.py
+   POST /dtwin/nodes/shacl/start returns a task_id.
+4. src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+   Dedicated #shaclFacetsProgressLog in the popup.
+5. src/front/static/query/js/query-shacl-facets.js
+   POST start, poll /tasks/{id}, render TaskProgressUI activity log.
+6. src/front/static/query/css/query-shacl-facets.css
+   6.5–9.5rem overflow-y auto scrollport with a visible thumb.
+
+Modified files:
+- src/back/objects/digitaltwin/models.py
+- src/back/objects/digitaltwin/node/NodeShaclService.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-shacl-facets.js
+- src/front/static/query/css/query-shacl-facets.css
+- tests/units/dtwin/test_node_shacl_service.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/api/test_node_shacl_endpoint.py
+- tests/units/front/test_shacl_facets_ui.py
+- tests/units/front/test_dq_progress_log.py
+- docs/api.md
+- docs/user-guide.md
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9538 passed, 326 skipped, 8 deselected, 40 warnings in 48.44s
+
+================================================================================
+## Teach Auto-Map to emit Unity Catalog metric-view SQL
+================================================================================
+
+Context: Mapping → Auto-Map already received metric views from get_metadata
+(object_kind + column roles) but the agent prompt never mentioned MEASURE()
+or GROUP BY, so the LLM treated them as tables. Align Auto-Map with the PGE
+generator: prompt rules plus a submit-time check_metric_view_sql guard.
+
+Changes:
+
+1. src/agents/agent_auto_assignment/engine.py
+   METRIC VIEW SOURCES rule: dimensions, MEASURE(measure), GROUP BY; ID is a dimension.
+2. src/agents/tools/mapping.py
+   Reject SELECT * / unwrapped measures / missing GROUP BY when the SQL hits a metric view.
+3. tests/eval/datasets/agent_auto_assignment/metric_view.jsonl
+   10-row contract dataset (happy / ambiguous / adversarial).
+4. tests/eval/run_agent_auto_assignment_metric.py
+   Dry-run judge (aggregate 1.000 vs threshold 0.95).
+5. .planning/agents/agent_auto_assignment/SPEC.md
+   metric_view_sql_correctness dimension, failure mode, dataset pointer.
+
+Modified files:
+- src/agents/agent_auto_assignment/engine.py
+- src/agents/tools/mapping.py
+- tests/units/agents/test_auto_assignment_metric_views.py
+- tests/units/agents/test_metric_view_eval_contract.py
+- tests/eval/datasets/agent_auto_assignment/metric_view.jsonl
+- tests/eval/run_agent_auto_assignment_metric.py
+- tests/eval/thresholds.yaml
+- .planning/agents/agent_auto_assignment/SPEC.md
+- .planning/agents/agent_auto_assignment/eval/metric_view.jsonl
+- docs/architecture.md
+- docs/user-guide.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9543 passed, 326 skipped, 8 deselected, 40 warnings in 56.51s
+

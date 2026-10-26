@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from back.objects.digitaltwin.NodeContextService import NodeContextService
+from back.objects.digitaltwin.node.NodeContextService import NodeContextService
 from shared.fastapi.main import app
 
 _CLASS = {

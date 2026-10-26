@@ -1,0 +1,71 @@
+<div class="sparql-playground">
+    <section class="sparql-editor-pane" aria-labelledby="sparqlEditorHeading">
+        <div class="query-pane-toolbar d-flex align-items-end gap-2 flex-wrap">
+            <div class="flex-grow-1">
+                <label class="form-label small mb-1"
+                       id="sparqlEditorHeading"
+                       for="sparqlSample">Sample</label>
+                <select class="form-select form-select-sm"
+                        id="sparqlSample">
+                    <option value="all">All triples</option>
+                    <option value="class">By class</option>
+                    <option value="label">By label</option>
+                    <option value="types">Entity types</option>
+                </select>
+            </div>
+            <div class="sparql-limit-control">
+                <label class="form-label small mb-1"
+                       for="sparqlResultLimit">Limit</label>
+                <input class="form-control form-control-sm"
+                       id="sparqlResultLimit"
+                       type="number"
+                       min="1"
+                       max="5000"
+                       value="100">
+            </div>
+            <button type="button"
+                    class="btn btn-sm btn-primary"
+                    id="sparqlRunBtn">
+                <i class="bi bi-play-fill me-1"></i>Run
+            </button>
+        </div>
+        <textarea class="form-control font-monospace sparql-editor"
+                  id="sparqlPlaygroundQuery"
+                  aria-label="SPARQL query"
+                  spellcheck="false"></textarea>
+        <section class="sparql-sql-pane" aria-labelledby="sparqlSqlHeading">
+            <strong class="small" id="sparqlSqlHeading">Generated SQL</strong>
+            <pre><code id="sparqlGeneratedSql">No SQL generated.</code></pre>
+        </section>
+    </section>
+
+    <section class="sparql-results-pane" aria-labelledby="sparqlResultsHeading">
+        <div class="query-pane-toolbar d-flex align-items-center gap-2">
+            <strong class="small me-auto" id="sparqlResultsHeading">Results</strong>
+            <span class="badge text-bg-secondary" id="sparqlResultCount">0</span>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    id="sparqlDownloadBtn"
+                    disabled>
+                <i class="bi bi-download me-1"></i>CSV
+            </button>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    id="sparqlExploreBtn"
+                    disabled>
+                <i class="bi bi-share me-1"></i>Show in Explorer
+            </button>
+        </div>
+        <div class="alert alert-info d-none"
+             id="sparqlStatus"
+             role="status"
+             aria-live="polite"></div>
+        <div class="sparql-results-container"
+             id="sparqlResultsContainer">
+            <div class="results-empty-state">
+                <i class="bi bi-play-circle"></i>
+                <p class="mb-0">Run a query to see results.</p>
+            </div>
+        </div>
+    </section>
+</div>

@@ -1,10 +1,6 @@
 """Tests for :mod:`back.objects.digitaltwin` domain module."""
 
 import pytest
-from back.objects.digitaltwin import (
-    augment_mappings_from_config,
-    augment_relationships_from_config,
-)
 from back.objects.digitaltwin import DigitalTwin
 
 
@@ -60,7 +56,7 @@ class TestAugmentMappingsFromConfig:
                 }
             ],
         }
-        result = augment_mappings_from_config(
+        result = DigitalTwin.augment_mappings_from_config(
             entity_mappings, mapping_config, "http://test.org/ontology#"
         )
         assert "http://test.org/ontology#Customer" in result
@@ -82,14 +78,14 @@ class TestAugmentMappingsFromConfig:
                 }
             ],
         }
-        result = augment_mappings_from_config(
+        result = DigitalTwin.augment_mappings_from_config(
             entity_mappings, mapping_config, "http://test.org/ontology#"
         )
         assert "http://test.org/ontology#Customer" not in result
 
     def test_empty_config(self):
         entity_mappings = {"existing": {"data": True}}
-        result = augment_mappings_from_config(entity_mappings, None, "http://test.org/")
+        result = DigitalTwin.augment_mappings_from_config(entity_mappings, None, "http://test.org/")
         assert result == {"existing": {"data": True}}
 
     def test_attribute_mappings_added_as_predicates(self):
@@ -106,7 +102,7 @@ class TestAugmentMappingsFromConfig:
                 }
             ],
         }
-        result = augment_mappings_from_config(
+        result = DigitalTwin.augment_mappings_from_config(
             entity_mappings, mapping_config, "http://test.org/ontology/"
         )
         mapping = result["http://test.org/ontology#Customer"]
@@ -141,14 +137,14 @@ class TestAugmentRelationshipsFromConfig:
                 }
             ],
         }
-        result = augment_relationships_from_config(
+        result = DigitalTwin.augment_relationships_from_config(
             rel_mappings, mapping_config, "http://test.org/ontology/"
         )
         assert len(result) == 1
         assert result[0]["predicate"] == "http://test.org/ontology/hasOrder"
 
     def test_empty_config(self):
-        result = augment_relationships_from_config([], None, "http://test.org/")
+        result = DigitalTwin.augment_relationships_from_config([], None, "http://test.org/")
         assert result == []
 
 

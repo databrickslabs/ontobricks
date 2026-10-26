@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.objects.domain.SettingsService import SettingsService
-from back.objects.registry.RegistryService import RegistryCfg
+from back.objects.domain.settings.SettingsService import SettingsService
+from back.objects.registry.RegistryCfg import RegistryCfg
 
 
 def _rcfg() -> RegistryCfg:

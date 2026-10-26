@@ -2,10 +2,8 @@
 
 import pytest
 
-from back.core.w3c.owl.OntologyConflictDetector import (
-    ConflictReport,
-    OntologyConflictDetector,
-)
+from back.core.w3c.owl.ConflictReport import ConflictReport
+from back.core.w3c.owl.OntologyConflictDetector import OntologyConflictDetector
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 <!-- Domain information section -->
 <div class="content-section">
     <div class="section-header mb-4">
-        <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>Domain Information</h4>
+        <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>General</h4>
         <p class="text-muted mb-0 small">Define your domain details</p>
     </div>
 
@@ -61,7 +61,7 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="tab-triplestore" data-bs-toggle="tab" data-bs-target="#panel-triplestore"
                     type="button" role="tab" aria-controls="panel-triplestore" aria-selected="false">
-                <i class="bi bi-lightning-charge me-1"></i> Knowledge Graph
+                <i class="bi bi-hdd-network me-1"></i> Backend
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -166,25 +166,31 @@
                     <!-- ======== LLM Tab ======== -->
                     <div class="tab-pane fade" id="panel-llm" role="tabpanel" aria-labelledby="tab-llm">
                         <div class="mb-3">
-                            <label for="domainLlmEndpoint" class="form-label">
-                                <i class="bi bi-robot"></i> LLM Endpoint <small class="text-muted">(for OntoBricks Agents)</small>
+                            <label for="domainLlmEndpointDisplay" class="form-label">
+                                <i class="bi bi-robot"></i> LLM <small class="text-muted">(for OntoBricks Agents)</small>
                             </label>
                             <div class="input-group">
-                                <select class="form-select domain-editable" id="domainLlmEndpoint"
-                                        data-saved-value="{{ domain.llm_endpoint or '' }}">
-                                    <option value="">-- Loading endpoints... --</option>
-                                </select>
-                                <button type="button" class="btn btn-outline-secondary" onclick="loadLlmEndpoints()" title="Refresh endpoints">
-                                    <i class="bi bi-arrow-clockwise"></i>
+                                <input type="hidden" class="domain-editable" id="domainLlmEndpoint"
+                                       value="{{ domain.llm_endpoint or '' }}"
+                                       data-saved-value="{{ domain.llm_endpoint or '' }}">
+                                <input type="hidden" class="domain-editable" id="domainLlmEndpointKind"
+                                       value="{{ domain.llm_endpoint_kind or '' }}"
+                                       data-saved-value="{{ domain.llm_endpoint_kind or '' }}">
+                                <input type="text" class="form-control" id="domainLlmEndpointDisplay"
+                                       value="{{ domain.llm_endpoint or '' }}" readonly
+                                       placeholder="No LLM selected">
+                                <button type="button" class="btn btn-outline-secondary domain-editable"
+                                        id="domainLlmBrowse">
+                                    <i class="bi bi-search me-1"></i>Browse
                                 </button>
                             </div>
-                            <small class="text-muted">Select the Databricks Model Serving endpoint to use for the OntoBricks Agents</small>
+                            <small class="text-muted">Select an AI Gateway model service or legacy Model Serving endpoint.</small>
                         </div>
                         <div class="alert alert-light border small mt-4">
                             <i class="bi bi-info-circle me-1"></i>
                             OntoBricks agents (OWL generation, auto-mapping, icon mapping) use this endpoint
-                            to interact with a Foundation Model. The endpoint must be a Databricks Model Serving
-                            endpoint accessible from this workspace.
+                            to interact with a Foundation Model. AI Gateway services are listed first and
+                            require <code>USE CATALOG</code>, <code>USE SCHEMA</code>, and <code>EXECUTE</code>.
                         </div>
                     </div>
 
@@ -283,15 +289,15 @@
                             </div>
                         </fieldset>
 
-                        <!-- Materialization mode (shown only when backend = Lakehouse) -->
+                        <!-- Access type (shown only when backend = Lakehouse) -->
                         <div class="mb-4 {% if domain.graph_backend != 'databricks' %}d-none{% endif %}" id="lakehouseMaterializationSection">
                             <label for="domainLakehouseMaterialization" class="form-label fw-semibold">
-                                <i class="bi bi-layers me-1"></i> Materialization
+                                <i class="bi bi-layers me-1"></i> Access type
                             </label>
                             <select class="form-select domain-editable" id="domainLakehouseMaterialization"
-                                    data-saved-value="{{ domain.lakehouse_materialization or 'table' }}">
-                                <option value="table" {% if (domain.lakehouse_materialization or 'table') == 'table' %}selected{% endif %}>Materialized Delta table (recommended)</option>
-                                <option value="view" {% if domain.lakehouse_materialization == 'view' %}selected{% endif %}>Views only &mdash; no data copy</option>
+                                    data-saved-value="{{ domain.lakehouse_materialization or 'view' }}">
+                                <option value="view" {% if (domain.lakehouse_materialization or 'view') != 'table' %}selected{% endif %}>Views only &mdash; no data copy</option>
+                                <option value="table" {% if domain.lakehouse_materialization == 'table' %}selected{% endif %}>Materialized - Faster but needs refresh</option>
                             </select>
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>How the mapped triples
@@ -307,6 +313,31 @@
                                 tables. Inferred triples (reasoning, cohorts) always keep their own Delta table,
                                 and Graph Analytics materializes a temporary snapshot for the duration of a run.
                             </div>
+                        </div>
+
+                        <!-- Search cache (Lakehouse + Lakebase companions) -->
+                        <div class="mb-4 {% if (domain.graph_backend or 'lakebase') not in ['databricks', 'lakebase'] %}d-none{% endif %}"
+                             id="searchCacheSection">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label fw-semibold mb-0" for="domainGraphCacheEnabled">
+                                    <i class="bi bi-lightning-charge me-1"></i> Search cache
+                                </label>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input domain-editable" type="checkbox"
+                                           id="domainGraphCacheEnabled"
+                                           {% if domain.graph_cache_enabled is not defined or domain.graph_cache_enabled %}checked{% endif %}
+                                           data-saved-value="{{ 'true' if (domain.graph_cache_enabled is not defined or domain.graph_cache_enabled) else 'false' }}">
+                                    <label class="form-check-label" for="domainGraphCacheEnabled">Enabled</label>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Materialized indexes (adjacency, entity-search, properties) speed
+                                Explorer Preview, expansion, GraphQL lists, and MCP
+                                <code>describe_entity</code>. Turn off to always read the live
+                                triple relation — Lakehouse Views only then hits source mapping SQL.
+                            </small>
+                            <div class="small mt-2" id="searchCacheStatusLine"></div>
                         </div>
 
                         <!-- Neo4j connection selector (shown only when backend = neo4j) -->
@@ -364,6 +395,71 @@
                                 registry's <strong>catalog.schema</strong>.  Its name is derived from the domain
                                 name and version (<code>triplestore_&lt;domain&gt;_V&lt;version&gt;</code>).
                             </small>
+                        </div>
+
+                        <!-- Data access & permissions for the selected backend -->
+                        <div class="alert alert-light border mb-0 {% if domain.graph_backend == 'none' %}d-none{% endif %}"
+                             id="graphAccessInfoSection">
+                            <h6 class="alert-heading mb-2"><i class="bi bi-shield-lock me-1"></i> Data Access &amp; Permissions</h6>
+                            <p class="small mb-3">
+                                Whose identity a graph read runs under depends on the backend selected above.
+                                In Databricks Apps every graph read also requires <strong>Team membership</strong>
+                                on this domain (<em>Viewer</em> role or higher); App administrators bypass, and
+                                these checks are disabled in local development.
+                            </p>
+
+                            {% set _backend = domain.graph_backend or 'lakebase' %}
+
+                            <!-- Lakehouse (Unity Catalog) — OBO -->
+                            <div class="graph-access-detail {% if _backend != 'databricks' %}d-none{% endif %}"
+                                 data-backend="databricks">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-hdd-network me-1"></i>Lakehouse <span class="text-muted">(Unity Catalog)</span>
+                                </div>
+                                <ul class="small mb-0">
+                                    <li><strong>Reads run as</strong> the signed-in user &mdash;
+                                        <i class="bi bi-check-circle-fill text-success me-1"></i>on-behalf-of (OBO).</li>
+                                    <li><strong>Read requires</strong> the caller's own Unity Catalog grants on the
+                                        data (<code>USE CATALOG</code> / <code>USE SCHEMA</code> / <code>SELECT</code>,
+                                        and <code>EXECUTE</code> for functions) <em>and</em> Team Viewer+.</li>
+                                    <li>A user who lacks the required UC grants is <strong>denied</strong> &mdash; the
+                                        read never silently falls back to the service principal.</li>
+                                    <li>The <strong>build</strong> (materialising the graph) runs as the app service
+                                        principal, not the user.</li>
+                                </ul>
+                            </div>
+
+                            <!-- Lakebase (Postgres) — no OBO -->
+                            <div class="graph-access-detail {% if _backend != 'lakebase' %}d-none{% endif %}"
+                                 data-backend="lakebase">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-database me-1"></i>Lakebase <span class="text-muted">(Postgres)</span>
+                                </div>
+                                <ul class="small mb-0">
+                                    <li><strong>Reads run as</strong> the app service principal &mdash;
+                                        <i class="bi bi-dash-circle text-muted me-1"></i>no OBO (Postgres carries no
+                                        Unity Catalog identity).</li>
+                                    <li><strong>Read requires</strong> Team membership on this domain
+                                        (Viewer role or higher); the query is pinned to this domain's graph table.</li>
+                                    <li>Both reads and the build use the same service-principal identity.</li>
+                                </ul>
+                            </div>
+
+                            <!-- Neo4j — no OBO -->
+                            <div class="graph-access-detail {% if _backend != 'neo4j' %}d-none{% endif %}"
+                                 data-backend="neo4j">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-diagram-3 me-1"></i>Neo4j
+                                </div>
+                                <ul class="small mb-0">
+                                    <li><strong>Reads run as</strong> the stored Bolt profile
+                                        (<a href="/settings?section=neo4j">Settings &rarr; Neo4j</a>) &mdash;
+                                        <i class="bi bi-dash-circle text-muted me-1"></i>no OBO.</li>
+                                    <li><strong>Read requires</strong> Team membership on this domain
+                                        (Viewer role or higher); queries are pinned to this domain's Neo4j database.</li>
+                                    <li>Both reads and the build use the same Bolt profile identity.</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 

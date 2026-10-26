@@ -160,9 +160,20 @@ classDiagram
         +import_domain()
     }
     class Ontology {
-        +generate_with_agent()
         +ensure_uris()
         +get_ontology_stats()
+    }
+    class GenerateWorkflow {
+        +run_detection()
+        +update_draft()
+        +run_completion()
+        +merge_draft_into_ontology()
+    }
+    class OwlGeneratorStaged {
+        +detect_entities()
+        +infer_relations()
+        +infer_attributes()
+        +infer_axioms()
     }
     class DigitalTwin {
         +augment_mappings_from_config()
@@ -179,8 +190,6 @@ classDiagram
         +store()
     }
     class AgentClient {
-        +run_owl_generator()
-        +run_ontology_assistant()
         +run_auto_assignment()
     }
 
@@ -189,7 +198,9 @@ classDiagram
     Domain        --> Ontology        : owns
     Domain        --> DigitalTwin     : owns
     Domain        --> Mapping         : owns
-    Ontology      --> AgentClient     : calls
+    Domain        --> GenerateWorkflow : drives
     Mapping       --> AgentClient     : calls
     DigitalTwin   --> AgentClient     : calls
     DigitalTwin   --> ReasoningService : delegates
+    GenerateWorkflow --> OwlGeneratorStaged : calls
+    GenerateWorkflow --> Ontology     : appends into

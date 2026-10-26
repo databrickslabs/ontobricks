@@ -1,0 +1,42 @@
+## Route builds through the configured Lakehouse transport
+
+Context: Knowledge Graph builds using a Lakebase graph backend selected the
+general SQL warehouse and created their source client with the default Thrift
+transport. Lakehouse/RT warehouses reject Thrift even when Settings already
+stored a Lakehouse warehouse with Statement Execution API enabled.
+
+Changes:
+
+1. src/back/core/helpers/DatabricksHelpers.py
+   Route every triple-store build through the configured Lakehouse warehouse,
+   with the existing global SQL warehouse fallback.
+2. src/back/objects/digitaltwin/_build_pipeline.py
+   Propagate the persisted Lakehouse Statement Execution API setting to the
+   SQL client used for source VIEW creation and build queries.
+3. tests/units/settings/test_delta_warehouse_config.py
+   Added regression coverage for Lakebase builds selecting the Lakehouse
+   warehouse.
+4. tests/back/core/digitaltwin/test_build_pipeline_units.py
+   Added regression coverage for forwarding the configured SQL transport to
+   the build client.
+5. src/mcp-server/app.yaml
+   Regenerated the deployed MCP runtime configuration for the 09x UI and
+   Lakebase registry resources.
+6. src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+   Propagated the Lakehouse Statement Execution API setting through the
+   Databricks-only Build endpoint pipeline.
+7. tests/units/graphdb/delta/test_delta_build_pipeline.py
+   Added regression coverage for the transport used by the Build button's
+   specialized Delta pipeline.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/mcp-server/app.yaml
+- tests/units/settings/test_delta_warehouse_config.py
+- tests/back/core/digitaltwin/test_build_pipeline_units.py
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5889 passed,
+304 skipped, 6 deselected, 1 xfailed in 48.28s.

@@ -1,0 +1,674 @@
+# Domain-scoped OBO user access + Team-gated graph data access
+
+Context:
+Enforce per-domain, on-behalf-of (OBO) access for graph data. In Databricks
+Apps, every non-build Unity Catalog data read now runs as the signed-in user
+(their forwarded token), so UC governance applies per user instead of the app
+service principal. Backends that carry no UC identity (Lakebase Postgres,
+Neo4j) are gated by Team membership — the caller must hold at least the Viewer
+role on the loaded domain. Build (view/triplestore materialisation) stays on
+the control-plane service principal. The MCP server forwards the end-user
+identity so the same rules apply to MCP-driven reads. All data-plane reads are
+fail-closed: no forwarded user token → access denied (never a silent SP
+fallback). Local dev is unaffected (OBO and the Team gate are no-ops outside
+App mode). Design + plan: `docs/superpowers/specs/2026-09-26-domain-obo-graph-access-design.md`,
+`docs/superpowers/plans/2026-09-26-domain-obo-graph-access.md`.
+
+Changes:
+
+1. `src/back/core/databricks/request_identity.py`
+   New request-scoped `RequestIdentity` (email, user_token, app_role,
+   domain_role) backed by a `ContextVar`, with set/get/reset helpers.
+2. `src/shared/fastapi/main.py`
+   `PermissionMiddleware` stamps the request identity (and `request.state.user_token`
+   from `x-forwarded-access-token`) around every `call_next`, with try/finally reset.
+3. `src/back/core/helpers/DatabricksHelpers.py`, `src/back/core/helpers/__init__.py`
+   Added `get_data_plane_client(domain, settings)` — mints a user-token client in
+   App mode (fail-closed: raises `AuthorizationError` when no user token), delegates
+   to the SP client in local mode. Exported from the helpers package.
+4. `src/back/core/databricks/SQLWarehouse.py`
+   Connection pools keyed by caller identity (`sp` vs `user:<sha256(token)[:16]>`)
+   so a connection minted for one user is never reused for another.
+5. `src/api/routers/internal/_graph_access.py`
+   New `assert_domain_graph_read(request)` Team gate: no-op in local mode, App
+   admins bypass, everyone else needs Viewer+ on the loaded domain.
+6. `src/back/objects/digitaltwin/DigitalTwin.py`, `src/api/routers/internal/dtwin.py`
+   SPARQL / GraphQL / triples / neighbors / clusters / DQ / inferred / node-context
+   reads run via `get_data_plane_client` and are guarded by `assert_domain_graph_read`.
+7. `src/back/core/graphdb/delta/DeltaBase.py`, `src/back/core/graphdb/GraphDBFactory.py`
+   Delta read path overrides the token with the request user token (OBO) in App
+   mode; Lakebase/Neo4j keep SP + Team-gate (documented via intent comments).
+8. `src/api/routers/internal/mapping.py`, `.../VirtualAttributeService.py`,
+   `.../NodeContextService.py`
+   Mapping preview / test-query / UC browse, Class Action `EXECUTE`, and
+   virtual-attribute compute repointed to `get_data_plane_client`. LLM/wizard
+   (model-serving) paths left on the control-plane.
+9. `src/mcp-server/server/http_client.py`, `.../session.py`, `.../session_scope.py`
+   MCP forwards the end-user identity: `set_forwarded_identity` / `_merged_headers`
+   attach `x-forwarded-email` / `x-forwarded-access-token` (+ M2M `Authorization`)
+   on every `_get` / `_post`; the session-scope middleware binds the inbound
+   headers per tool call and clears them in `finally`; session sets the server mode.
+10. Docs — `docs/deployment.md` (§E new "On-Behalf-Of (OBO) data-plane identity"),
+    `docs/features.md` (Security OBO + per-domain gating bullets, per-identity SQL
+    pooling), `docs/data-access.md` (MCP identity forwarding note).
+
+Modified/added files:
+- src/back/core/databricks/request_identity.py (new)
+- src/shared/fastapi/main.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/core/databricks/SQLWarehouse.py
+- src/api/routers/internal/_graph_access.py (new)
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/back/core/graphdb/delta/DeltaBase.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/api/routers/internal/mapping.py
+- src/back/objects/digitaltwin/VirtualAttributeService.py
+- src/back/objects/digitaltwin/NodeContextService.py
+- src/mcp-server/server/http_client.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/session_scope.py
+- docs/deployment.md
+- docs/features.md
+- docs/data-access.md
+- tests: tests/back/core/databricks/test_request_identity.py,
+  tests/back/core/databricks/test_sqlwarehouse_pool_identity.py,
+  tests/back/core/helpers/test_data_plane_client.py,
+  tests/units/api/test_graph_access_gate.py,
+  tests/back/core/digitaltwin/test_sparql_obo.py,
+  tests/units/api/test_explorer_access.py,
+  tests/units/api/test_mapping_obo.py,
+  tests/mcp/test_user_header_forwarding.py,
+  tests/units/api/test_mcp_dataplane_failclosed.py, plus patch-target fixups in
+  test_node_context_endpoint.py, test_virtual_attributes_endpoint.py,
+  test_node_action_endpoint.py, test_virtual_attribute_service.py,
+  test_node_context_virtual_attributes.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → 7006 passed, 316 skipped,
+  6 deselected, 1 xfailed, 32 warnings (after node-action patch fixup).
+- Full MCP suite: `uv run --frozen pytest tests/mcp -q` → 38 passed.
+
+## Per-backend OBO identity tests (Delta / Lakebase / Neo4j)
+
+Context:
+Locked the OBO identity split at the backend-construction layer so the contract
+can't silently change: Delta/Lakehouse reads run on-behalf-of the caller, while
+Lakebase Postgres and Neo4j stay on the service principal / stored Bolt profile
+and never consult the request identity (they are gated at the endpoint by Team
+membership instead).
+
+Changes:
+
+1. `tests/units/graphdb/test_obo_backends.py` (new)
+   Backend-parametrised OBO contract via a `get_request_identity` spy fixture:
+   - Delta read through `GraphDBFactory(engine="delta")` binds the forwarded
+     user token (OBO) and consults the request identity.
+   - Delta read in local mode (`is_databricks_app()` False) keeps the resolved
+     SP token — OBO is not applied.
+   - Delta build (`for_write=True`) keeps the SP token and never consults the
+     identity.
+   - Lakebase (`_create_lakebase`) is built from the SP `get_lakebase_auth()`
+     result and never reads the request identity.
+   - Neo4j (`_create_neo4j`) uses the named Bolt profile's database and never
+     reads the request identity.
+
+Modified files:
+- tests/units/graphdb/test_obo_backends.py (new)
+
+Tests:
+- `uv run --frozen pytest tests/units/graphdb/test_obo_backends.py -q` → 5 passed.
+- Full suite `uv run --frozen pytest -q -m "not scenario"` → 7018 passed,
+  316 skipped, 6 deselected, 1 xfailed, 32 warnings.
+
+## Surface OBO/permissions per backend in the Knowledge Graph tab
+
+Context:
+Document, in the UI where a user actually picks a graph backend
+(Domain → Information → Knowledge Graph), how data access works per backend:
+which identity a read runs under (OBO vs service principal) and what a read
+requires (Unity Catalog grants and/or Team membership). Keeps the OBO model
+visible at the point of choice.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   New `#graphAccessInfoSection` "Data Access & Permissions" alert at the end of
+   the Knowledge Graph tab: intro on the Team gate (Viewer+, admin bypass, local
+   no-op) + a per-backend table (Lakehouse = OBO / signed-in user / UC grants +
+   Team; Lakebase = SP / no OBO / Team; Neo4j = Bolt profile / no OBO / Team) +
+   a note that build stays on the service principal and Lakehouse reads are
+   fail-closed. Hidden for the `none` (ontology-only) backend.
+2. `src/front/static/domain/js/domain-information.js`
+   Added `graphAccessInfoSection` to the graph-only section list in
+   `applyGraphlessConstraints()` so the block also hides live when the user
+   switches to No Backend without reloading.
+3. `tests/units/front/test_kg_access_info.py` (new)
+   Structural contract: section present, hides for `none`, each backend's
+   identity/OBO answer documented, Team gate + admin bypass copy, build note,
+   and the JS toggles the new section.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_kg_access_info.py (new)
+
+Tests:
+- `uv run --frozen pytest tests/units/front -q` → 1342 passed.
+- Full suite `uv run --frozen pytest -q -m "not scenario"` → 7026 passed,
+  316 skipped, 6 deselected, 1 xfailed, 32 warnings.
+
+Note: static informational alert built from existing Bootstrap + `--db-*`
+tokens (no new CSS); not exercised with a live browser pass.
+
+## Rename Domain → Information "Knowledge Graph" tab to "Backend"
+
+Context:
+The tab fronts the graph-backend selection and now the per-backend access
+matrix, so "Backend" reads truer than "Knowledge Graph".
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Renamed the `#tab-triplestore` tab label from "Knowledge Graph" to "Backend"
+   and switched its icon to `bi-hdd-network` (matching the Graph Backend field).
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+
+Tests:
+- `uv run --frozen pytest tests/units/front -q` → 1342 passed.
+
+## Make the "Data Access & Permissions" block backend-specific
+
+Context:
+The access/permissions info in the Backend tab previously listed all three
+backends in one static table. Show only the authorization details for the
+backend the domain actually uses, updating live when the selection changes.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Replaced the all-backends table with three `.graph-access-detail` panels
+   (`data-backend="databricks|lakebase|neo4j"`). Only the panel matching
+   `domain.graph_backend` is shown on server render; each panel spells out the
+   identity (OBO signed-in user vs service principal vs Bolt profile), the read
+   requirements (UC grants + Team, or Team-only), and the build identity. The
+   Team-gate/admin-bypass/local-dev intro stays generic.
+2. `src/front/static/domain/js/domain-information.js`
+   `applyGraphlessConstraints()` now toggles `.graph-access-detail` panels so the
+   visible detail follows the selected backend live (on change / init / rehydrate),
+   in addition to hiding the whole section for No Backend.
+3. `tests/units/front/test_kg_access_info.py`
+   Reworked to assert one panel per backend, that exactly the selected backend's
+   panel is visible (lakehouse/lakebase/neo4j + default lakebase), per-panel copy
+   matches the auth model, and the JS shows only the matching panel.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_kg_access_info.py
+
+Tests:
+- `uv run --frozen pytest tests/units/front -q` → 1347 passed.
+
+## MCP OBO on Lakehouse: bypass path carries the forwarded user token
+
+Context:
+Explorer and Graph Chat already run Lakehouse / Unity Catalog reads
+on-behalf-of the signed-in user, but MCP did not. MCP hits the public
+`/api/v1/*` + `/graphql/*` surface, which `PermissionMiddleware` lists in
+`_PERM_BYPASS_PREFIXES` (they skip the session role gate so programmatic /
+MCP callers are not 302-redirected to `/access-denied`). The bypass branch
+stamped an *empty* request identity, discarding the forwarded
+`x-forwarded-access-token`, so `create_databricks_client` fell back to the
+app service principal — MCP graph reads inherited the SP's UC rights instead
+of the user's. This wires OBO on that path so MCP leverages OBO on Lakehouse
+exactly like Explorer and Chat.
+
+Changes:
+
+1. `src/shared/fastapi/main.py`
+   In the `_PERM_BYPASS_PREFIXES` branch of `PermissionMiddleware.dispatch`,
+   read `x-forwarded-access-token` and bind it (with the forwarded email) into
+   the request-scoped `RequestIdentity` / `request.state.user_token`. The
+   session role gate stays bypassed (roles remain `""`, no redirect), but the
+   forwarded user token is now available to `get_graphdb` →
+   `create_databricks_client`, so Lakehouse reads on `/api/v1/digitaltwin/*`
+   and `/graphql/*` run OBO. No token → SP fallback (unchanged).
+2. `tests/units/auth/test_permission_middleware.py`
+   Added `TestBypassBindsForwardedTokenForOBO`: the forwarded token is bound
+   into the request identity on `/api/*` and `/graphql/*` while roles stay
+   empty; a request with no token keeps an empty token (SP fallback).
+
+Modified files:
+- src/shared/fastapi/main.py
+- tests/units/auth/test_permission_middleware.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → 7034 passed, 316 skipped.
+
+## MCP Team gate + fail-closed on the public graph-read handlers
+
+Context:
+Part (a) gave the public `/api/v1/*` + `/graphql/*` surface the forwarded
+user token for OBO, but the public graph-read handlers still had no Team gate
+— the middleware bypasses the session role gate on those prefixes, so
+`request.state` carried empty roles and any M2M caller reached graph data.
+This closes the gap so MCP-driven reads get the same Viewer+ / admin-bypass /
+fail-closed enforcement as Explorer & Graph Chat on the internal routes
+(design §MCP: "resolve Team and OBO from the forwarded user headers … fail
+closed if those user headers are missing on a data-plane graph or UC route").
+Unattended M2M callers with no forwarded user now resolve to `none` → 403.
+
+Changes:
+
+1. `src/api/routers/internal/_graph_access.py`
+   Added `assert_public_graph_read(request, domain, settings)`: resolves the
+   forwarded user's role for the **target** (query-param / MCP-selected)
+   domain via `SettingsService.resolve_domain_role`, stamps it onto
+   `request.state`, and delegates to `assert_domain_graph_read` (Viewer+;
+   admin bypass; no-op outside App mode).
+2. `src/api/routers/digitaltwin.py`
+   Threaded `request: Request` into the public graph-read handlers
+   (`dt_status`, `dt_stats`, `dt_triples_find`, `dt_triples`,
+   `dt_nodes_context`, `dt_nodes_action`, `dt_nodes_virtual_attributes`) and
+   call the gate right after `resolve_domain`, before building the store /
+   invoking UC. Added a module-level lazy wrapper around the internal gate to
+   avoid an import cycle (external Block A is imported by the internal
+   package during its own init).
+3. `src/back/fastapi/graphql_routes.py`
+   Same gate on `graphql_execute` and `graphql_debug` (the graph-reading
+   routes); SDL / playground stay open (schema-only, no DB hit). Same lazy
+   wrapper to avoid the cycle.
+4. `tests/units/api/test_graph_access_gate.py`
+   Added `assert_public_graph_read` unit tests (local no-op, non-member 403,
+   no-forwarded-user 403, viewer allowed + state stamped, admin bypass) and
+   two wiring tests proving `dt_triples_find` and `graphql_execute` invoke the
+   gate before touching the store.
+5. `tests/units/dtwin/test_digitaltwin_api.py`
+   Pass a `request` arg to the direct `dt_triples` / `dt_triples_find` calls
+   (gate is a no-op in local test mode).
+
+Modified files:
+- src/api/routers/internal/_graph_access.py
+- src/api/routers/digitaltwin.py
+- src/back/fastapi/graphql_routes.py
+- tests/units/api/test_graph_access_gate.py
+- tests/units/dtwin/test_digitaltwin_api.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → 7041 passed, 316 skipped.
+
+## Compact Domain audit trail with before → after values
+
+Context: Domain → Audit trail mixed ontology and mapping into one noisy feed
+with tall action headers (“Entity added”) and version badges that added little
+information. Edits only named the asset. Designer saves also logged every class
+as updated when dict shape changed (e.g. `localName`), which duplicated rows.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_audit.html`
+   Card-integrated Ontology / Mapping / Status / Builds tabs; version filter
+   stays in the section header.
+2. `src/front/static/domain/js/domain-audit.js`
+   Change rows drop the action title and version badge (icon + `aria-label`
+   carry the action). One line: asset · field: previous → new. Collapse
+   identical historical rows.
+3. `src/front/static/domain/css/domain-audit.css`
+   Compact 20px markers and single-line row layout.
+4. `src/back/objects/session/DomainSession.py`
+   `diff_meta` stores `before` and `after` for changed fields; skip derived
+   keys such as `localName`.
+5. `src/back/objects/ontology/Ontology.py`, `src/back/objects/mapping/Mapping.py`
+   Attach diffs on add/update/remove; skip no-op bulk updates.
+6. `docs/features.md`, `docs/user-guide.md`
+   Document the tabbed trail and before → after lines.
+7. `tests/units/front/test_domain_audit.py`, `tests/units/domain/test_change_audit.py`
+   Structural and instrumentation contracts.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_audit.html
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/css/domain-audit.css
+- src/back/objects/session/DomainSession.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/mapping/Mapping.py
+- docs/features.md
+- docs/user-guide.md
+- tests/units/front/test_domain_audit.py
+- tests/units/domain/test_change_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7051 passed, 315 skipped, 6 deselected, 1 xfailed in 48.63s
+
+## Rename Designer to Studio and move OWL/R2RML export onto the canvas
+
+Context: OWL and R2RML no longer need dedicated Ontology/Mapping sidebar
+pages. Export belongs on the visual canvas. The canvas itself is now
+named Studio (Ontology Studio / Mapping Studio), with a matching Export
+button top-right.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Ontology and Mapping sidebar items labelled **Studio**. Removed Ontology
+   OWL and Mapping R2RML submenu items (Spark SQL stays).
+2. `src/front/templates/partials/ontology/_ontology_map.html`
+   Page title **Ontology Studio**; **Export** (OWL) in the top-right toolbar.
+3. `src/front/templates/partials/mapping/_mapping_design.html`
+   Page title **Mapping Studio**; **Export** (R2RML) in the top-right toolbar.
+4. `src/front/static/ontology/js/ontology-owl-content.js`,
+   `src/front/static/mapping/js/mapping-r2rml.js`
+   Studio Export generates then downloads Turtle.
+5. `src/front/templates/partials/layout/help_modal.html`,
+   `src/front/templates/partials/mapping/_mapping_autoassign.html`,
+   `src/front/static/query/js/query-ontology-viewer.js`
+   Help, Auto-Map “View in Studio”, and KG ontology viewer title follow the
+   new names.
+6. `docs/features.md`, `docs/user-guide.md`, `docs/get-started.md`,
+   `docs/INFO.md`, `docs/api.md`, `docs/development.md`
+   Product copy uses Studio and Studio → Export.
+7. `tests/units/front/test_help_center_menu_sync.py`,
+   `tests/units/api/test_ui_rendering.py`, e2e sidebar/export tests
+   Contracts for Studio labels and no OWL/R2RML sidebar links.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_autoassign.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/ontology/js/ontology-owl-content.js
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/query/js/query-ontology-viewer.js
+- docs/features.md
+- docs/user-guide.md
+- docs/get-started.md
+- docs/INFO.md
+- docs/api.md
+- docs/development.md
+- docs/README.md
+- docs/data-access.md
+- docs/product.md
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/ontology/test_sidebar_flows.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7051 passed, 315 skipped, 6 deselected, 1 xfailed in 47.08s
+
+## Red trash icon for audit-trail deletions
+
+Context: Deletion rows used the same info-coloured marker as other edits, so
+removes were easy to miss. They now use a red trash icon.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-audit.js`
+   `*_removed` (and reset) actions use `bi-trash` and `audit-marker-remove`.
+2. `src/front/static/domain/css/domain-audit.css`
+   Danger-token marker for deletions.
+3. `tests/units/front/test_domain_audit.py`
+   Contract for trash icon and red marker.
+
+Modified files:
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/css/domain-audit.css
+- tests/units/front/test_domain_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7051 passed, 315 skipped, 6 deselected, 1 xfailed in 47.25s
+
+## Audit trail diffs for SWRL, SHACL, relationships, axioms
+
+Context: Domain → Audit trail Ontology rows need ``entity | field | old → new``
+for every ontology edit, not only class CRUD. Relationships (object properties),
+SWRL, SHACL, groups, axioms/expressions, and business-rule CRUD now store
+``meta.before`` / ``meta.after``. Generate wizard remains a single summary line.
+
+Changes:
+
+1. `src/api/routers/internal/ontology.py`
+   SHACL/SWRL/axioms/expressions/business-rule save and delete (plus SWRL import)
+   record ``diff_meta``.
+2. `src/back/objects/ontology/Ontology.py`
+   Class/property delete and group member updates include full before/after.
+3. `src/back/objects/session/DomainSession.py`
+   Skip identity key ``id`` in diffs.
+4. `src/front/static/domain/js/domain-audit.js`
+   Field labels and default fields for relationships, SWRL, SHACL, axioms,
+   and rule types.
+5. `docs/user-guide.md`, `docs/architecture.md`
+   Document covered ontology edit types vs Generate wizard summary.
+6. `tests/units/front/test_domain_audit.py`, `tests/units/domain/test_change_audit.py`
+   Contracts for renderer helpers and class-delete ``meta.before``.
+
+Modified files:
+- src/api/routers/internal/ontology.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/session/DomainSession.py
+- src/front/static/domain/js/domain-audit.js
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/front/test_domain_audit.py
+- tests/units/domain/test_change_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7055 passed, 315 skipped, 6 deselected, 1 xfailed in 48.38s
+
+## Default Lakehouse access type to views only
+
+Context: On Domain → Information → Backend (Lakehouse), the Access type control
+was labelled Materialization and defaulted to a materialized Delta table.
+The product default is now a live view: faster to stand up, no copy, with
+materialization as an explicit opt-in for query speed.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Renamed the section to Access type, retitled the table option, defaulted
+   the picker to Views only.
+2. `src/back/objects/session/DomainSession.py`
+   New domains store `lakehouse_materialization=view`.
+3. `src/front/static/global/js/navbar.js`, `src/front/static/domain/js/domain.js`
+   Off-Lakehouse saves now persist `view` so switching back stays view-only.
+4. `docs/user-guide.md`, `docs/architecture.md`
+   Documented the Access type labels and the new-domain default (legacy
+   missing values still normalise to table).
+5. `tests/units/front/test_lakehouse_materialization_ui.py`,
+   `tests/units/domain/test_domain_session.py`,
+   `tests/units/dtwin/test_databricks_build_info_materialization.py`
+   Contracts for labels, default selection, empty-session default, and
+   missing-field fallback to table.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/back/objects/session/DomainSession.py
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain.js
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/front/test_lakehouse_materialization_ui.py
+- tests/units/domain/test_domain_session.py
+- tests/units/dtwin/test_databricks_build_info_materialization.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7067 passed, 315 skipped, 6 deselected, 1 xfailed in 47.11s
+
+## Left-align audit trail row headers
+
+Context: Audit trail entity/field labels sat in fixed 8rem/6rem columns, so
+short names looked inset. Tabs were also centred by `nav-fill`. Both now
+start on the left; the diff grid sizes the name and field columns to content.
+
+Changes:
+
+1. `src/front/static/domain/css/domain-audit.css`
+   Left-align `#auditTabs` labels; entity/field columns use `max-content`
+   with `justify-items: start`.
+2. `tests/units/front/test_domain_audit.py`
+   Contract for left-aligned asset, field grid, and tab labels.
+
+Modified files:
+- src/front/static/domain/css/domain-audit.css
+- tests/units/front/test_domain_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7071 passed, 315 skipped, 6 deselected, 1 xfailed in 49.16s
+
+## Audit trail lines without column gaps
+
+Context: Rows such as "Call entity → Call" still looked tabulated because
+entity/field/old/new sat in CSS grid columns. They are now one inline phrase
+with normal spaces; empty old/new values are omitted.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-audit.js`
+   Join asset, field, values with spaces; skip empty sides of the arrow.
+2. `src/front/static/domain/css/domain-audit.css`
+   Drop the grid; inline nowrap ellipsis.
+3. `tests/units/front/test_domain_audit.py`
+   Contract for space-joined rows and no grid.
+
+Modified files:
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/css/domain-audit.css
+- tests/units/front/test_domain_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7079 passed, 315 skipped, 6 deselected, 1 xfailed in 47.43s
+
+
+
+---
+
+# Unity Catalog Metric Views as a first-class data source
+
+Context:
+Extend the domain metadata layer so Unity Catalog **Metric Views** load and map
+alongside plain tables and views instead of being invisible or mis-treated as
+tables. Every data source now carries an `object_kind` discriminator
+(`table` / `view` / `metric_view`); metric-view columns additionally carry a
+`role` (`dimension` / `measure`) resolved from `SHOW CREATE TABLE`. Because a
+metric view must be queried `SELECT <dims>, MEASURE(<measure>) AS <measure>
+FROM <fqn> GROUP BY <dims>` (never `SELECT *`), the `agent_mapping_pge` mapping
+agent is taught to emit metric-aware SQL and a deterministic evaluator rejects
+malformed metric-view SQL. The picker and loaded-sources list flag metric views
+with a dedicated badge. Databricks Pages and the Knowledge Store are out of
+scope. Design + plan:
+`docs/superpowers/specs/2026-09-26-uc-metric-views-as-data-source-design.md`,
+`docs/superpowers/plans/2026-09-26-uc-metric-views-as-data-source.md`.
+AI-feature gate: `.planning/agents/agent_mapping_pge/SPEC.md`.
+
+Changes:
+1. `src/back/core/databricks/uc/UnityCatalog.py`
+   Add `object_kind_for_table_type()`, metric-view detection, and
+   `get_metric_view_columns_with_roles()` (parses measure names from the DDL,
+   soft-fails to an empty set).
+2. `src/back/core/databricks/uc/MetadataService.py`
+   Tag each fetched source with `object_kind`; resolve metric-view column roles,
+   defaulting others to `dimension`. Switched to `list_tables_and_views` to
+   capture `table_type`.
+3. `src/back/objects/domain/Domain.py`
+   `list_schema_tables_result` now surfaces `object_kind` per picker entry.
+4. `src/back/core/databricks/uc/metric_sql.py` (new)
+   Pure `build_metric_view_base_sql()` — projects dimensions, wraps measures in
+   `MEASURE(col) AS col`, adds `GROUP BY` only when measures + dimensions exist.
+5. `src/agents/agent_mapping_pge/contracts.py`
+   `TableRole` gains an `object_kind` field (serialised in to/from dict).
+6. `src/agents/agent_mapping_pge/generators/{entity,relationship}.py`
+   Add a "METRIC VIEW SOURCES (CRITICAL)" rule to both system prompts.
+7. `src/agents/agent_mapping_pge/evaluator/deterministic.py`
+   Add `check_metric_view_sql()` and wire it into entity/relationship mapping
+   evaluation (rejects `SELECT *`, unwrapped measures, missing `GROUP BY`).
+8. `src/front/static/domain/js/domain-metadata.js`
+   Add `objectKindMeta()` and render a metric-view badge/icon in both the import
+   picker and the loaded-sources list.
+9. `.planning/agents/agent_mapping_pge/SPEC.md`
+   New `metric_view_sql_correctness` eval dimension, failure mode, and
+   metric-view change checklist.
+10. `tests/eval/datasets/agent_mapping_pge/metric_view.jsonl` (+ planning mirror)
+    10 metric-view eval rows (4 happy / 3 ambiguous / 3 adversarial).
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/databricks/uc/MetadataService.py
+- src/back/core/databricks/uc/metric_sql.py
+- src/back/objects/domain/Domain.py
+- src/agents/agent_mapping_pge/contracts.py
+- src/agents/agent_mapping_pge/generators/entity.py
+- src/agents/agent_mapping_pge/generators/relationship.py
+- src/agents/agent_mapping_pge/evaluator/deterministic.py
+- src/front/static/domain/js/domain-metadata.js
+- .planning/agents/agent_mapping_pge/SPEC.md
+- tests/eval/datasets/agent_mapping_pge/metric_view.jsonl
+- .planning/agents/agent_mapping_pge/eval/metric_view.jsonl
+- docs/features.md
+- docs/data-access.md
+- tests/units/core/test_unity_catalog_object_kind.py (new)
+- tests/units/core/test_metadata_service_object_kind.py (new)
+- tests/units/core/test_metric_sql.py (new)
+- tests/units/core/test_metadata_mgt.py
+- tests/units/domain/test_list_schema_tables_object_kind.py (new)
+- tests/units/agents/test_contracts_object_kind.py (new)
+- tests/units/agents/test_deterministic_metric_sql.py (new)
+- tests/units/agents/test_generator_prompt_metric.py (new)
+- tests/units/front/test_mapping_metric_view_ui.py (new)
+
+Follow-up (user environment): the SQL-generation eval runner + baseline/delta
+MLflow runs over a live metric view are the remaining AI-gate steps — they need
+a warehouse + Foundation Model access and could not be run here. Metric-SQL
+correctness is enforced deterministically by `check_metric_view_sql` and its
+unit tests in the meantime.
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7084 passed, 315 skipped, 6 deselected, 1 xfailed in 47.50s
+
+---
+
+# Metric-view SQL-generation eval runner (agent_mapping_pge AI gate)
+
+Context:
+Close the remaining AI-feature-gate step for the UC metric-view mapping work:
+the metric-view eval set previously had no runner (the existing
+`run_agent_mapping_pge.py` is a parsed-document-corpus contract that needs
+`input.documents`). Add a dedicated SQL-generation contract that scores the
+SQL the EntityGenerator produces for a metric view against the metric-aware
+constraints, so baseline/delta runs are one command away.
+
+Changes:
+1. `tests/eval/metric_view_contract.py` (new)
+   Pure deterministic judge: loads `metric_view.jsonl`, scores a produced
+   `(sql, id_column)` against the constraint kinds (`metric_sql_no_select_star`,
+   `metric_measure_wrapped`, `metric_dimension_not_wrapped`, `metric_group_by`,
+   `metric_group_by_includes`, `metric_no_group_by_without_measure`,
+   `metric_id_is_dimension`, `metric_id_not_measure`). Provides a
+   `build_metric_view_base_sql` reference observation for dry runs and a
+   `run_contract` that logs `metric_view_sql_correctness` + per-tag scores to
+   MLflow on live runs.
+2. `tests/eval/run_agent_mapping_pge_metric.py` (new)
+   CLI: dry-run (default) validates the judge (aggregate 1.000); `--live`
+   shapes each row into a single-candidate SourceModel slice, runs
+   `run_entity_generator` against a live warehouse + Foundation Model endpoint,
+   and scores the emitted SQL. Threshold read from `thresholds.yaml`.
+3. `tests/eval/thresholds.yaml`
+   Add `mapping_pge.metric_view_sql_correctness: 0.95`.
+4. `.planning/agents/agent_mapping_pge/SPEC.md`
+   §7 now points at the runner + judge and documents the dry-run vs `--live`
+   split.
+5. `tests/units/agents/test_metric_view_eval_contract.py` (new)
+   Judge validation: reference SQL scores 1.000 on every row; SELECT *,
+   unwrapped measure, missing GROUP BY, and measure-as-id all drop the score.
+
+Modified files:
+- tests/eval/metric_view_contract.py (new)
+- tests/eval/run_agent_mapping_pge_metric.py (new)
+- tests/eval/thresholds.yaml
+- .planning/agents/agent_mapping_pge/SPEC.md
+- tests/units/agents/test_metric_view_eval_contract.py (new)
+
+Follow-up (user environment): run `--live` once metric views exist in the
+target warehouse to record the baseline `metric_view_sql_correctness` MLflow
+metric and, after any future prompt/tool change, the delta.
+
+Tests: `uv run --frozen pytest -q tests/units/agents/test_metric_view_eval_contract.py` → 8 passed. Dry-run runner aggregate 1.000 (threshold 0.950).

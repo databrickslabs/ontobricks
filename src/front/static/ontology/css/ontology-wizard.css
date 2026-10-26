@@ -4,14 +4,6 @@
 #wizardMetadataTableBody tr:hover { background-color: #ffffff; }
 .wizard-table-checkbox { cursor: pointer; }
 
-/* Progress steps styling */
-.wizard-step { transition: all 0.3s ease; padding: 8px 10px; margin: 0 -10px; border-radius: 8px; }
-.wizard-step.active { background: #e7f1ff; }
-.wizard-step.active .fw-semibold { color: #0d6efd; }
-.wizard-step.completed .fw-semibold { color: #198754; }
-.wizard-step-icon { width: 24px; text-align: center; }
-.wizard-step-icon i { font-size: 1.2rem; transition: all 0.3s ease; }
-
 #wizardTabContent {
     flex: 1;
     min-height: 0;
@@ -38,4 +30,370 @@
 
 .ob-wizard-owl-preview {
     font-size: 0.85rem;
+}
+
+/* -------------------------------------------------------------------- */
+/* Stage stepper: Configure/Detect -> Review Entities -> Complete       */
+/* -------------------------------------------------------------------- */
+
+.wizard-stepper-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.wizard-stepper-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 0.5rem;
+}
+
+.wizard-stepper-actions.ob-hidden {
+    display: none !important;
+}
+
+.wizard-stepper-list {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 0.5rem;
+}
+
+.wizard-step {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--db-radius-control);
+    color: var(--db-text-muted);
+    transition: var(--db-transition-fast);
+}
+
+.wizard-step .wizard-step-icon i {
+    font-size: 1.1rem;
+    color: var(--db-text-muted);
+    transition: var(--db-transition-fast);
+}
+
+.wizard-step .wizard-step-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+.wizard-step.active {
+    background: var(--db-primary-light);
+    color: var(--db-primary-darker);
+}
+
+.wizard-step.active .wizard-step-icon i {
+    color: var(--db-primary);
+}
+
+.wizard-step.completed .wizard-step-icon i {
+    color: var(--db-status-success);
+}
+
+.wizard-step.completed .wizard-step-label {
+    color: var(--db-status-success);
+}
+
+/* -------------------------------------------------------------------- */
+/* Stage panes                                                          */
+/* -------------------------------------------------------------------- */
+
+/* Fill remaining height like Ontology Import's direct-child
+   `.content-section > .card { flex: 1 }` chain. The stepper sits above the
+   pane, so the card is not a direct child of `.content-section` and needs
+   this extra link. */
+.wizard-stage-pane {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#wizardConfigurePane {
+    overflow: hidden;
+}
+
+#wizardReviewPane,
+#wizardCompletePane {
+    overflow-y: auto;
+}
+
+#wizardConfigurePane .card.h-100 {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#wizardConfigurePane .card-body.ob-tabs-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Shared `.ob-hidden { display: none; }` in components.css loads before
+   this file. Combined with `!important`, this guard stays hidden even if
+   `.wizard-stage-pane { display: flex }` would otherwise win. */
+.wizard-stage-pane.ob-hidden {
+    display: none !important;
+}
+
+#wizard-section .btn:focus-visible {
+    outline: none;
+    box-shadow: var(--db-focus-ring);
+}
+
+/* -------------------------------------------------------------------- */
+/* Review stage: entity rows (locked anchors + editable candidates)     */
+/* -------------------------------------------------------------------- */
+
+.wizard-entity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.wizard-locked-grid,
+.wizard-candidate-grid {
+    display: grid;
+    align-items: start;
+    gap: 0.5rem;
+}
+
+.wizard-locked-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.wizard-candidate-grid {
+    grid-template-columns: 1fr;
+}
+
+.wizard-entity-row {
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    background: var(--db-surface-warm);
+}
+
+.wizard-entity-locked {
+    background: var(--db-border-light);
+    font-size: 0.82rem;
+}
+
+.wizard-lock-icon {
+    color: var(--db-text-muted);
+    margin-right: 0.4rem;
+}
+
+.wizard-entity-label {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wizard-candidate-row.wizard-candidate-excluded {
+    opacity: 0.6;
+}
+
+.wizard-candidate-row .form-control-sm {
+    min-height: 1.85rem;
+    font-size: 0.78rem;
+}
+
+.wizard-candidate-row textarea.form-control-sm {
+    min-height: 3rem;
+    resize: vertical;
+}
+
+.wizard-add-candidate-form {
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--db-border-light);
+}
+
+/* Alternate-labels chip input (scoped to the wizard review stage) */
+.wizard-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+}
+
+.wizard-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: var(--db-radius-chip);
+    background: var(--db-primary-light);
+    color: var(--db-primary-darker);
+    font-size: 0.75rem;
+}
+
+.wizard-chip-remove {
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: inherit;
+    line-height: 1;
+    padding: 0;
+    font-size: 0.75rem;
+}
+
+.wizard-chip-input {
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    font-size: 0.78rem;
+    padding: 0.15rem 0.5rem;
+    min-width: 140px;
+    flex: 1;
+}
+
+.wizard-evidence-details summary {
+    cursor: pointer;
+}
+
+.wizard-evidence-row {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.3rem;
+}
+
+/* Live Stage-1 result chips replace the former frozen progress sentence. */
+.wizard-detect-live-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 1.8rem;
+}
+
+.wizard-detect-entity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-chip);
+    background: var(--db-surface-warm);
+    color: var(--db-text);
+    font-size: 0.78rem;
+}
+
+.wizard-detect-entity-chip i {
+    color: var(--db-status-success);
+}
+
+/* -------------------------------------------------------------------- */
+/* Complete stage: per-substage checklist                               */
+/* -------------------------------------------------------------------- */
+
+.wizard-complete-step {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.wizard-complete-step-icon i {
+    font-size: 1rem;
+}
+
+.wizard-complete-step.wizard-complete-step-done .wizard-complete-step-icon i {
+    color: var(--db-status-success);
+}
+
+.wizard-complete-step.wizard-complete-step-failed .wizard-complete-step-icon i {
+    color: var(--db-status-danger);
+}
+
+.wizard-complete-step.wizard-complete-step-running .wizard-complete-step-icon i {
+    color: var(--db-primary);
+}
+
+@media (min-width: 768px) {
+    .wizard-candidate-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1200px) {
+    .wizard-candidate-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* -------------------------------------------------------------------- */
+/* Mobile (<=768px): stepper wraps/compacts instead of overflowing the   */
+/* row, and the Configure pane's tab shell drops its (unused, on mobile) */
+/* desktop fixed-height/overflow-hidden chain so the page scrolls as one */
+/* normal document — same "reset to height:auto/overflow:visible after   */
+/* the desktop rule" convention documented in                            */
+/* .cursor/11-frontend-design.mdc for other fixed-height sections. Before */
+/* this rule, the 3-item stepper never wrapped, pushed the row wider than */
+/* the viewport, and forced page-level horizontal scroll — which is what  */
+/* made the source tabs and metadata table unreachable without panning.  */
+/* -------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+    .wizard-stepper-row {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .wizard-stepper-actions {
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .wizard-stepper-list {
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
+
+    .wizard-step {
+        flex: 1 1 auto;
+        justify-content: center;
+        padding: 0.3rem 0.5rem;
+    }
+
+    .wizard-step .wizard-step-label {
+        font-size: 0.72rem;
+        white-space: normal;
+    }
+
+    #wizardTabs .nav-item {
+        min-width: 0;
+    }
+
+    #wizardTabs .nav-link {
+        padding-right: 0.25rem;
+        padding-left: 0.25rem;
+        font-size: 0.78rem;
+        white-space: normal;
+    }
+
+    #wizardConfigurePane,
+    #wizardReviewPane,
+    #wizardCompletePane,
+    #wizardConfigurePane .card.h-100,
+    #wizardConfigurePane .card-body.ob-tabs-wrap,
+    #wizardTabContent {
+        flex: none;
+        height: auto;
+        max-height: none;
+        overflow: visible;
+    }
 }

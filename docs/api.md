@@ -2,6 +2,25 @@
 
 The OntoBricks REST API provides stateless endpoints for external applications to query ontologies and retrieve domain metadata.
 
+<!-- toc -->
+**Contents**
+
+- [Base URL](#base-url)
+- [Interactive references](#interactive-references)
+- [Authentication](#authentication)
+- [CSRF Protection](#csrf-protection)
+- [App liveness vs readiness](#app-liveness-vs-readiness)
+- [Response Format](#response-format)
+- [Endpoints](#endpoints)
+- [GraphQL API](#graphql-api)
+- [Knowledge Graph API](#knowledge-graph-api)
+- [Example Usage](#example-usage)
+- [Error Codes](#error-codes)
+- [Notes](#notes)
+- [Internal REST API reference (merged)](#internal-rest-api-reference-merged)
+- [OntoBricks API Reference](#ontobricks-api-reference)
+<!-- /toc -->
+
 ## Base URL
 
 ```
@@ -46,6 +65,18 @@ State-changing requests (POST, PUT, PATCH, DELETE) to internal endpoints require
 2. Include the cookie value in the `X-CSRF-Token` request header.
 3. The `fetch()` wrapper in the frontend attaches this header automatically.
 4. External API endpoints (`/api/v1/`) and GraphQL are exempted.
+5. A request with no cookie, no header, or mismatching values is rejected with `403`.
+
+## App liveness vs readiness
+
+These are **not** the same as `GET /api/v1/health`.
+
+| Endpoint | Who | What it returns |
+|----------|-----|-----------------|
+| `GET /health` | Public | Cheap liveness: `{status, version, service, timestamp}`. Always HTTP 200. No catalog names, paths, or exception text. |
+| `GET /settings/diagnostics/readiness` | Admin | Full readiness: Databricks auth, SQL warehouse, registry DDL, Lakebase USAGE, … as `{status, summary, checks}`. Settings → Health → Databricks calls this. |
+
+Probes that only need HTTP 200 should keep calling `/health`. Anything that parsed the old `checks` list from `/health` must switch to the readiness endpoint.
 
 ## Response Format
 
@@ -95,7 +126,7 @@ URLs use `/api/v1/domains` and `/api/v1/domain/…` for **domain** operations (s
 
 #### `POST /api/v1/domains/list`
 
-List available domains in a Unity Catalog volume.
+List domains in the Lakebase registry identified by the catalog / schema / volume triplet (the volume name is the registry key, not a JSON-on-Volume store).
 
 **Request:**
 ```json
@@ -595,7 +626,7 @@ List all domains that have at least one **PUBLISHED** version in the registry.
 ```
 
 `mcp_policy` is the domain's [per-domain MCP policy](mcp.md#per-domain-mcp-policy),
-authored in **Domain → Information → MCP**. Only non-default entries are
+authored in **Domain → General → MCP**. Only non-default entries are
 stored, so `{}` means "every tool exposed, every ontology attachment surfaced
 normally" — the pre-0.8 behaviour. `disabled_tools` never contains a
 registry-level tool, and a missing `context` key defaults to `normal`.
@@ -795,22 +826,18 @@ Trigger a triple store build (sync). Returns a task_id for progress polling.
 #### `GET /api/v1/digitaltwin/triples/find`
 
 BFS-based entity search with depth control.
-Use `depth=1` for type-wide scans, then add `search` for deeper
-entity-scoped scans.
 
 **Parameters:**
 - `project_name` (query, optional): Domain name in the registry
 - `search` (query): Search text
 - `entity_type` (query, optional): Filter by type
-- `depth` (query, optional): BFS depth (default: 2)
-- `limit` (query, optional): Page size (default: 1000)
-- `offset` (query, optional): Page offset (default: 0)
+- `depth` (query, optional): BFS depth (default: 1)
 
-The response includes exact pagination metadata:
-- `count`: triples in the current page
-- `total`: exact total distinct triples for the folded BFS result
-- `entity_count`: entities included after alias expansion
-- `has_more`: whether more triples exist beyond the current page
+**Behavior notes:**
+- Page ordering is deterministic: `(subject, predicate, object)`.
+- `total` is exact for the current query; `entity_count` includes URI-alias expansion.
+- `has_more` is additive and indicates whether another page exists beyond the current `limit`/`offset`.
+- For broad type scans, start with `depth=1`, then deepen only when needed.
 
 #### `GET /api/v1/digitaltwin/nodes/context`
 
@@ -856,26 +883,67 @@ returning several sets `message` instead of aggregating.
 
 #### `POST /api/v1/digitaltwin/nodes/action`
 
-Invoke one of the class's Unity Catalog function actions on a node. The function
-receives **exactly one argument: the entity's local ID**, extracted from
-`entity_uri`.
+Invoke a class action on a node: a Unity Catalog function or a Databricks Job
+(`job:<job_id>`). UC functions receive **exactly one argument: the entity's
+local ID**, extracted from `entity_uri`. Jobs must declare an `entity_id`
+parameter; OntoBricks calls Jobs `run_now`, reads the run state once to verify
+it started, and returns immediately with a `task_id` (navbar Background Tasks),
+`run_id`, `run_state` (Databricks life-cycle state such as `RUNNING` or
+`PENDING`, or `UNKNOWN` if it could not be read) and `run_page_url`. The
+`message` reports the verified state (for example "Job enrich-customer is
+running"). Spark still uses the Job's run-as
+identity. On Lakehouse domains in App mode the trigger uses the caller's
+forwarded token (OBO).
 
 **Body:**
 - `entity_uri`: Instance URI of the node to act on
-- `action_full_name`: Fully qualified function name (`catalog.schema.function`)
+- `action_full_name`: UC function FQN (`catalog.schema.function`) or `job:<job_id>`
 - `domain_name` / `domain_version` (optional): Registry domain and version
 
-Only functions declared in the resolved class's `actions` list may be invoked —
-the ontology is the allow-list. Requests for any other function are rejected
-with `success: false` and nothing is executed. Table-valued functions run as
+Only actions declared in the resolved class's `actions` list may be invoked —
+the ontology is the allow-list. Requests for any other name are rejected
+with `success: false` and nothing is executed. Table-valued UC functions run as
 `SELECT * FROM fn('<id>')`; scalar functions run as
-`SELECT fn('<id>') AS result`.
+`SELECT fn('<id>') AS result`. Job responses set `kind: job` and omit result rows.
 
 > **Policy filtering.** If the domain sets **Actions** to **Disabled**, every
 > invocation is refused here, whatever the function name — a caller that
 > learned a name before the attachment was disabled cannot keep using it. This
 > is deliberately independent of whether the `invoke_entity_action` MCP tool is
 > still published.
+
+#### `POST /api/v1/digitaltwin/nodes/business-rule`
+
+Run one of the SWRL business rules attached to the node's class (Ontology →
+Studio → Behaviour → **Inference rules (SWRL)**), **scoped to that entity**, and
+materialise the inferred triples into the graph.
+
+**Body:**
+- `entity_uri`: Instance URI of the node the rule is triggered on
+- `rule`: Name of a SWRL rule declared in the class's `business_rules` list
+- `domain_name` / `domain_version` (optional): Registry domain and version
+
+Only rules declared on the resolved class (and still present and enabled in the
+domain's SWRL rules) can be run — the ontology is the allow-list. The rule's
+antecedent gets an extra predicate binding the class variable(s) to
+`entity_uri`, so only facts involving that entity are inferred. Re-running is
+idempotent: facts already in the graph are not inserted twice.
+
+**Response:** `success`, `entity_uri`, `class_name`, `rule`, `inferred_count`,
+`materialized_count`, `triples` (capped at 200) and `truncated`.
+
+> **Permissions.** This route writes to the graph: in app mode the caller needs
+> the **Builder** role (or higher) on the domain; viewers get `403`. If the
+> domain sets **Business rules** to **Disabled** in its MCP policy, every call
+> is refused.
+>
+> **Neo4j.** The Cypher translation of SWRL rules is not implemented yet, so on
+> a Neo4j-backed domain the call succeeds with `inferred_count: 0`.
+
+The Graph Explorer uses a confirm-gated internal flow instead:
+`POST /dtwin/nodes/business-rule/request` mints a short-lived token,
+`POST /dtwin/nodes/business-rule/confirm` runs the rule, and
+`POST /dtwin/nodes/business-rule/cancel` discards the token. These routes also require Builder.
 
 #### `GET /api/v1/digitaltwin/nodes/virtual-attributes`
 
@@ -899,6 +967,41 @@ function fails carries an `error` and leaves the others intact.
 > **Disabled**, every computation is refused here, whatever the function name.
 > This is deliberately independent of whether the `compute_virtual_attributes`
 > MCP tool is still published.
+
+#### `GET /api/v1/digitaltwin/nodes/shacl`
+
+Check one entity against every enabled SHACL shape that applies to it: shapes
+targeting the entity's class, any of its ancestor classes (`parent` chain), or
+no class at all. Read-only.
+
+**Parameters:**
+- `entity_uri` (query): Full URI of the entity node
+- `domain_name` / `domain_version` (optional): Registry domain and version
+
+Each shape is translated to SQL and restricted to the entity; all of them run
+as one `UNION ALL` batch, with a per-shape retry when the batch fails. The
+response carries the entity header (`entity_local_id`, `entity_label`,
+`classes`, `lineage`), a `summary` (count per status plus `fail_by_severity`)
+and one `facets` entry per shape with its `status`:
+
+| Status | Meaning |
+|--------|---------|
+| `pass` | Checked; the entity conforms |
+| `fail` | Checked; the entity violates the shape (see `severity`, `details`) |
+| `not_applicable` | The shape's guard condition does not hold for this entity |
+| `not_evaluated` | The shape has no SQL translation (e.g. `sh:closed`) |
+| `error` | The SQL failed; `message` carries the engine error |
+
+`values` lists what the entity carries on the constrained property (at most
+20, `values_truncated` beyond). Inherited shapes name their ancestor in
+`inherited_from`. A graph that cannot be read (typically never built) returns
+502 with a readable `message`.
+
+`/api/v1/digitaltwin/nodes/context` and `/api/v1/domain/classes` expose the
+matching `shacl_shape_count`. The Graph Explorer starts the same check on the
+session domain with `POST /dtwin/nodes/shacl/start` and polls `/tasks/{id}`
+so the popup can show a live activity log; `GET /dtwin/nodes/shacl` remains
+for MCP and other synchronous callers.
 
 ---
 
@@ -1013,6 +1116,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | Knowledge Graph API | `/api/v1/digitaltwin` | Stateless access to triple store, builds, triple search, quality, reasoning |
 | Core/Navbar | `/` | Session status, file browsing |
 | Settings | `/settings` | Databricks connection, settings |
+| GitHub mirror | `/settings/github` | Instance repository config, test/claim, sync-all, OBX rebuild (admin) |
 | Scheduled Builds | `/settings/schedules` | Automated triple store build scheduling |
 | Ontology | `/ontology` | Ontology design, OWL operations |
 | SWRL Rules | `/ontology/swrl` | SWRL rule management |
@@ -1158,7 +1262,7 @@ POST /read-volume-file
 
 Shared Databricks configuration lives under `/settings`. Warehouse
 selection and every Settings **write** remain **admin-only** (`CAN_MANAGE`).
-Read-only discovery used by the domain **Data Sources** picker
+Read-only discovery used by the domain **Data Assets** picker
 (`GET /settings/catalogs`, `GET /settings/schemas`,
 `GET /settings/schemas/<catalog>`) is available to any signed-in app user;
 Editors and Builders then persist tables via `/domain/metadata/*`.
@@ -1277,6 +1381,30 @@ POST /settings/save
 }
 ```
 
+#### GitHub repository mirror (admin)
+
+Instance-wide mirror of the registry into one GitHub repository. The PAT is
+never stored — only a Databricks secret scope/key (or `ONTOBRICKS_GITHUB_TOKEN`
+locally). See [User Guide — GitHub](user-guide.md#configuration--github-repository-mirror).
+
+```http
+GET /settings/github
+POST /settings/github
+POST /settings/github/test
+POST /settings/github/sync-all
+GET /settings/github/obx
+```
+
+| Endpoint | Role |
+|----------|------|
+| `GET /settings/github` | Current `github_config` plus **Last sync** status |
+| `POST /settings/github` | Save owner/repo/branch/base path/secret refs/author/enable flags |
+| `POST /settings/github/test` | Optional body `{"take_over": true}`. Checks push permission and writes `.ontobricks/instance.json` |
+| `POST /settings/github/sync-all` | Rewrite every domain/version into the repository in one commit |
+| `GET /settings/github/obx` | Rebuild an `.obx` envelope from the repository JSON (feeds **Import → Load from GitHub**) |
+
+All five routes require the Administrator role (`CAN_MANAGE`).
+
 #### Get/Set Default Emoji
 
 ```http
@@ -1335,6 +1463,22 @@ POST /settings/save-registry-cache-ttl
 
 How long (seconds, min 10) the registry domain list is cached before refreshing.
 Admin only; stored globally. Save body: `{ "registry_cache_ttl": 300 }`.
+
+#### Get/Save Data Assets Import Limit
+
+```http
+GET /settings/data-assets-import-limit
+POST /settings/save-data-assets-import-limit
+```
+
+Maximum Unity Catalog tables, views, and metric views a domain may import
+(default **40**, range 1–500). Admin only; stored globally. Save body:
+`{ "data_assets_import_limit": 40 }`.
+
+**Response (GET):**
+```json
+{ "success": true, "data_assets_import_limit": 40 }
+```
 
 #### Get/Save Edit-Lock Lease TTL
 
@@ -1522,6 +1666,48 @@ POST /ontology/save-to-uc
   "path": "/Volumes/main/default/ontologies/taxonomy.ttl"
 }
 ```
+
+#### Ontology Assistant Chat
+
+```http
+POST /ontology/assistant/chat
+```
+
+Conversational ontology editing used by **Ontology → Studio**. The request
+does not include an LLM target; the route uses the LLM saved on the domain
+(`llm_endpoint` + `llm_endpoint_kind`, AI Gateway or Model Serving). An empty
+target (**No LLM**) returns HTTP 400.
+
+**Request Body:**
+```json
+{
+  "message": "Show me all relationships",
+  "history": []
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "reply": "...",
+  "ontology_changed": false
+}
+```
+
+When the agent mutates the ontology, `ontology_changed` is `true` and `config`
+contains the updated classes and properties.
+
+#### Ontology Assistant Invoke
+
+```http
+POST /ontology/assistant/invoke
+```
+
+OpenAI Responses-compatible wrapper around the same agent. The route injects
+the saved domain LLM target into `custom_inputs` (`endpoint_name`,
+`endpoint_kind`, credentials). Request-supplied host, token, or endpoint
+fields are ignored.
 
 ---
 
@@ -1788,6 +1974,48 @@ POST /ontology/dataquality/migrate
 ```
 
 Converts legacy ontology constraints to SHACL shapes.
+
+#### Suggest Shapes from the Ontology
+
+```http
+GET /ontology/dataquality/suggest
+```
+
+Read-only. Builds candidate SHACL shapes from the current session ontology and
+`domain.constraints` (the list produced by `OntologyParser.get_constraints()`).
+Does not persist anything. Suggestions whose `id` already exists in
+`domain.shacl_shapes` are filtered out.
+
+**Example — what is generated**
+
+- Completeness (`sh:minCount`) for data properties listed on a class, plus
+  `owl:minCardinality` / `owl:cardinality` / `owl:someValuesFrom` (including
+  object properties). A bare object property with no restriction is **not**
+  treated as required.
+- Cardinality (`sh:maxCount`) from `owl:FunctionalProperty` and
+  `owl:maxCardinality` / `owl:cardinality`.
+- Uniqueness (`sh:sparql` duplicate-value select) from
+  `owl:InverseFunctionalProperty`.
+- Datatype (`sh:datatype`) and relationship (`sh:class`) from property ranges.
+
+**Response:**
+```json
+{
+  "success": true,
+  "suggestions": [
+    {
+      "id": "auto_completeness_Trade_status_ab12cd34",
+      "category": "completeness",
+      "target_class": "Trade",
+      "property_path": "status",
+      "shacl_type": "sh:minCount",
+      "parameters": {"sh:minCount": 1},
+      "source": "auto"
+    }
+  ],
+  "total": 1
+}
+```
 
 ---
 
@@ -2266,7 +2494,7 @@ The `last_modified` field is retrieved from the Unity Catalog Delta table metada
 
 #### Auto-Map Entity Icons (LLM)
 
-Use the domain's configured LLM serving endpoint to suggest emoji icons for entity names.
+Use the LLM saved in **Domain → General → AI** to suggest emoji icons for entity names.
 
 ```http
 POST /dtwin/auto-assign-icons
@@ -2292,7 +2520,7 @@ POST /dtwin/auto-assign-icons
 }
 ```
 
-> **Note**: Requires a valid LLM serving endpoint configured in Domain Settings (`llm_endpoint`).
+> **Note**: Requires a saved LLM on the domain (`llm_endpoint`). An empty target (**No LLM**) returns HTTP 400 with guidance to select a model in Domain → General → AI.
 
 ---
 
@@ -2655,19 +2883,13 @@ GET /api/v1/digitaltwin/triples/find
 - `project_name` (optional): Domain name in the registry
 - `search` (required): Search text
 - `entity_type` (optional): Filter by type
-- `depth` (optional): BFS depth (default: 2)
-- `limit` (optional): Page size (default: 1000)
-- `offset` (optional): Page offset (default: 0)
+- `depth` (optional): BFS depth (default: 1)
 
 BFS-based entity search with depth control.
-Use `depth=1` for type-wide scans, then add `search` for deeper
-entity-scoped scans.
 
-The response includes exact pagination metadata:
-- `count`: triples in the current page
-- `total`: exact total distinct triples for the folded BFS result
-- `entity_count`: entities included after alias expansion
-- `has_more`: whether more triples exist beyond the current page
+Response pages are emitted in deterministic `(subject, predicate, object)` order
+and include exact `total`, alias-expanded `entity_count`, and additive
+`has_more`. Prefer `depth=1` for large type-wide scans before increasing depth.
 
 ---
 
@@ -2770,7 +2992,22 @@ recent successful run) and a per-version breakdown.
 
 ### Mapping SQL Wizard Endpoints
 
-LLM-assisted SQL generation for mapping queries.
+LLM-assisted SQL generation for mapping queries. Generation uses the LLM saved
+on the current domain. Request `endpoint_name` / `endpoint_kind` fields are
+ignored. An empty domain target (**No LLM**) returns HTTP 400.
+
+#### List LLM Targets
+
+```http
+GET /mapping/wizard/llm-endpoints
+```
+
+Returns executable Unity AI Gateway model services first (`kind: "ai_gateway"`),
+then legacy Model Serving endpoints (`kind: "serving"`). Domain → General →
+**Browse** and New Domain use this same list. Gateway rows require Unity Catalog
+`EXECUTE` or an effective `ALL_PRIVILEGES` grant for the application service
+principal. Saving a row on the domain is what Ontology Assistant, Wizard,
+Auto-Map, and the other in-app agents actually call.
 
 #### Get Schema Context
 

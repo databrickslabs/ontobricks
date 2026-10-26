@@ -373,7 +373,7 @@ class TestFactoryDispatch:
 
 class TestReasoningTranslator:
     def test_get_query_translator_returns_cypher_translator(self):
-        from back.core.reasoning.SWRLFlatCypherTranslator import (
+        from back.core.reasoning.swrl.SWRLFlatCypherTranslator import (
             SWRLFlatCypherTranslator,
         )
 
@@ -383,7 +383,7 @@ class TestReasoningTranslator:
         assert translator.node_label == "dom_V1"
 
     def test_translator_methods_return_none_with_warning(self, caplog):
-        from back.core.reasoning.SWRLFlatCypherTranslator import (
+        from back.core.reasoning.swrl.SWRLFlatCypherTranslator import (
             SWRLFlatCypherTranslator,
         )
 

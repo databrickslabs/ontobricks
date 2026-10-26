@@ -1,0 +1,86 @@
+## Skip known-missing `_props` and optimize expansion SQL
+
+Context: Explorer expansion on a Lakehouse graph built before the property
+companion was introduced paid a failing `_props` query on every request. Live
+measurements also showed Spark depth-zero expansion taking 10.85 seconds
+because it joined the payload relation through generic BFS CTEs. A graph-index
+refresh plus the optimized SQL reduced depth 0 / 1 / 2 medians to 1.48 / 1.83 /
+1.69 seconds, approximately 86% / 69% / 42% faster.
+
+Changes:
+
+1. src/back/core/graphdb/props.py
+   Added a process-local negative property-companion cache and shared
+   execute-with-fallback helper.
+2. src/back/core/graphdb/adjacency.py
+   Added direct subject filtering for depth zero and a Spark broadcast hint
+   for the bounded entity payload join.
+3. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Reused the shared fallback helper and invalidated stale negatives after a
+   successful graph-index rebuild.
+4. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Applied the same fallback and invalidation lifecycle to Lakebase.
+5. tests/units/graphdb/test_props_sql.py
+   Covered negative-cache, fallback, and unrelated-error behavior.
+6. tests/units/graphdb/test_adjacency_sql.py
+   Covered depth-zero SQL and backend-specific broadcast hints.
+7. tests/units/graphdb/delta/test_delta_flat_store.py
+   Covered repeated missing companions and rebuild invalidation for Delta.
+8. tests/units/graphdb/test_lakebase_adjacency.py
+   Covered repeated missing companions and rebuild invalidation for Lakebase.
+9. docs/optimizations.md
+   Documented the fallback lifecycle and before/after live timings.
+10. docs/superpowers/specs/2026-09-16-expansion-fallback-latency-design.md
+    Recorded the evidence, decisions, boundaries, and success criteria.
+11. docs/superpowers/plans/2026-09-16-expansion-fallback-latency.md
+    Added the TDD implementation and verification plan.
+12. docs/superpowers/plans/2026-09-15-search-transversal-next.md
+    Corrected shipped Preview optimization status and linked the measured
+    expansion follow-up.
+
+Modified files:
+- src/back/core/graphdb/props.py
+- src/back/core/graphdb/adjacency.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- tests/units/graphdb/test_props_sql.py
+- tests/units/graphdb/test_adjacency_sql.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/test_lakebase_adjacency.py
+- docs/optimizations.md
+- docs/superpowers/specs/2026-09-16-expansion-fallback-latency-design.md
+- docs/superpowers/plans/2026-09-16-expansion-fallback-latency.md
+- docs/superpowers/plans/2026-09-15-search-transversal-next.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-16.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6182 passed, 304 skipped,
+6 deselected, 1 xfailed in 47.83s.
+
+Live verification: BIGCustomers graph-index Refresh cache completed in 128.62
+seconds. Three-run medians were Preview 1.27 seconds, expansion depth 0 1.48
+seconds, depth 1 1.83 seconds, and depth 2 1.69 seconds. Expansion logs
+contained no missing `_props` error.
+
+## Navbar domain badge refresh after domain switch
+
+Context: After loading a new domain from Unity Catalog, the navbar badge kept
+showing the previous domain during the 1-second reload delay (and briefly after
+reload, from a stale sessionStorage entry). The server session was already
+correctly pointing at the new domain — this was a frontend-only display lag.
+
+Changes:
+1. src/front/static/global/js/navbar.js — In `doDomainLoad()`, after a
+   successful load, clear the stale remembered badge and repaint the navbar
+   from a fresh `/navbar/state` fetch (`clearRememberedDomainInfo()` +
+   `await loadNavbarState()`) before the reload. The badge now reflects the new
+   domain immediately, and the remembered value is already correct after reload.
+2. tests/units/front/test_navbar_domain_badge_persistence.py — Added a
+   regression contract asserting the badge is refreshed from the server session
+   before the reload, and that stale remembered info is dropped first.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_navbar_domain_badge_persistence.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6183 passed, 304 skipped,
+6 deselected, 1 xfailed in 55.36s.

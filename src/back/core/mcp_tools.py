@@ -3,7 +3,7 @@
 The MCP server (``src/mcp-server/``) is a separate process that only ever
 *applies* a policy it receives over REST; it deliberately knows nothing about
 this catalog. Everything that needs to enumerate or validate the surface —
-the Domain / Information MCP tab, the domain service, the external REST
+the Domain → General MCP tab, the domain service, the external REST
 contract — resolves it here so the two packages cannot drift.
 
 Two independent settings make up a domain's MCP policy:
@@ -99,8 +99,8 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
     {
         "name": "invoke_entity_action",
         "label": "Invoke entity action",
-        "description": "Run a Unity Catalog function declared on the entity's "
-        "class.",
+        "description": "Run a Unity Catalog function or Databricks Job declared "
+        "on the entity's class.",
         "requires_graph": True,
     },
     {
@@ -108,6 +108,20 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
         "label": "Compute virtual attributes",
         "description": "Run the Unity Catalog functions that compute an entity's "
         "virtual attributes and return their live values.",
+        "requires_graph": True,
+    },
+    {
+        "name": "run_entity_business_rule",
+        "label": "Run entity business rule",
+        "description": "Trigger a SWRL business rule declared on the entity's "
+        "class and write the inferred triples to the graph (Builder role).",
+        "requires_graph": True,
+    },
+    {
+        "name": "check_entity_shacl_facets",
+        "label": "Check entity SHACL facets",
+        "description": "Evaluate the SHACL shapes targeting an entity's class, "
+        "its ancestors and the whole graph against that entity only.",
         "requires_graph": True,
     },
 )
@@ -145,6 +159,13 @@ MCP_CONTEXT_FEATURES: tuple[Dict[str, str], ...] = (
         "description": "Class attributes computed on demand by a Unity Catalog "
         "function instead of being mapped. Disabling this also refuses "
         "computation, not just the listing.",
+    },
+    {
+        "name": "business_rules",
+        "label": "Business rules",
+        "description": "SWRL rules declared on a class that can be triggered "
+        "on one entity to materialise inferred facts. Disabling this also "
+        "refuses execution, not just the listing.",
     },
 )
 

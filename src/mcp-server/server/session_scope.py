@@ -65,8 +65,39 @@ class SessionScopeMiddleware(Middleware):
             )
             self._missing_session_warned = True
 
+        # Capture the end-user identity that Databricks Apps injects on the
+        # inbound HTTP request so the outbound ``http_client`` forwards it to
+        # the main app (OBO + Team gating on data-plane routes). Best-effort:
+        # in-process calls / tests have no HTTP request and forward nothing.
+        self._bind_forwarded_identity()
+
         token = CURRENT_SESSION_ID.set(sid or DEFAULT_SESSION_ID)
         try:
             return await call_next(context)
         finally:
             CURRENT_SESSION_ID.reset(token)
+            self._clear_forwarded_identity()
+
+    @staticmethod
+    def _bind_forwarded_identity() -> None:
+        """Bind inbound ``x-forwarded-*`` user identity for outbound forwarding."""
+        try:
+            from server import http_client as _http
+            from fastmcp.server.dependencies import get_http_headers
+
+            headers = get_http_headers()
+        except Exception:  # pragma: no cover - defensive; no HTTP request in scope
+            return
+        _http.set_forwarded_identity(
+            email=headers.get("x-forwarded-email", ""),
+            user_token=headers.get("x-forwarded-access-token", ""),
+        )
+
+    @staticmethod
+    def _clear_forwarded_identity() -> None:
+        try:
+            from server import http_client as _http
+
+            _http.clear_forwarded_identity()
+        except Exception:  # pragma: no cover
+            return

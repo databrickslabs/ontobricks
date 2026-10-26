@@ -43,9 +43,69 @@ function initNavbar() {
         const clean = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
         try { history.replaceState(null, '', clean); } catch (_) { /* ignore */ }
     }
+    restoreLastConfirmedDomainInfo();
     loadNavbarState();
     initSubnavActiveState();
+    bindWorkspaceMapTrigger();
 }
+
+/**
+ * Bind the L2 domain identity/context trigger to the workspace map modal.
+ */
+function bindWorkspaceMapTrigger() {
+    const triggerIds = ['domainContextTrigger', 'settingsDomainReturnLink'];
+    triggerIds.forEach((id) => {
+        const link = document.getElementById(id);
+        if (!link || link.dataset.workspaceMapBound === 'true') return;
+        link.dataset.workspaceMapBound = 'true';
+        link.addEventListener('click', openWorkspaceMap);
+    });
+}
+
+function openWorkspaceMap(event) {
+    if (event) event.preventDefault();
+    const modalElement = document.getElementById('workspaceMapModal');
+    if (!modalElement || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    syncWorkspaceMapTitle();
+    highlightWorkspaceMapCurrent();
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+function syncWorkspaceMapTitle() {
+    const source = document.getElementById('currentDomainName');
+    const target = document.getElementById('workspaceMapDomainLabel');
+    if (source && target) target.textContent = source.textContent;
+}
+
+function highlightWorkspaceMapCurrent() {
+    const path = window.location.pathname;
+    const section = new URLSearchParams(window.location.search).get('section')
+        || (window.location.hash || '').replace(/^#/, '');
+
+    document.querySelectorAll('[data-workspace-map-item]').forEach((anchor) => {
+        anchor.classList.remove('is-current');
+        anchor.removeAttribute('aria-current');
+
+        let target;
+        try {
+            target = new URL(anchor.getAttribute('href') || '', window.location.origin);
+        } catch (_) {
+            return;
+        }
+        if (!path.startsWith(target.pathname)) return;
+
+        const targetSection = target.searchParams.get('section') || '';
+        const matchesSection = targetSection && section === targetSection;
+        const matchesDefault = !section
+            && anchor.getAttribute('data-workspace-map-default') === 'true';
+        if (matchesSection || matchesDefault) {
+            anchor.classList.add('is-current');
+            anchor.setAttribute('aria-current', 'page');
+        }
+    });
+}
+
+window.openWorkspaceMap = openWorkspaceMap;
 
 /**
  * Mark the correct Level-2 subnav link as active based on the current URL
@@ -85,17 +145,41 @@ function disableCurrentSubnavDropdown(toggle) {
 }
 
 /**
- * Align the first L2 subnav item (Ontology) with the Domain link in L1.
- * Measures the left edge of #domainL1Link and shifts the subnav list by
- * that same offset so the two items are visually column-aligned.
- * Re-runs on window resize in case the brand/registry widths change.
- */
-
-/**
  * Load the consolidated navbar state in a single round-trip and
  * apply domain info and warehouse icon to the DOM.
  * Validation indicators have moved to the Domain Validation page.
  */
+const DOMAIN_INFO_STORAGE_KEY = 'ontobricks:last-confirmed-domain-info';
+
+function rememberDomainInfo(data) {
+    try {
+        sessionStorage.setItem(DOMAIN_INFO_STORAGE_KEY, JSON.stringify(data));
+    } catch (_) { /* sessionStorage unavailable or quota exceeded */ }
+}
+
+function clearRememberedDomainInfo() {
+    try {
+        sessionStorage.removeItem(DOMAIN_INFO_STORAGE_KEY);
+    } catch (_) { /* sessionStorage unavailable */ }
+}
+
+function restoreLastConfirmedDomainInfo() {
+    try {
+        const raw = sessionStorage.getItem(DOMAIN_INFO_STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!domainIsLoaded(data)) {
+            clearRememberedDomainInfo();
+            return false;
+        }
+        applyDomainInfo(data);
+        return true;
+    } catch (_) {
+        clearRememberedDomainInfo();
+        return false;
+    }
+}
+
 async function loadNavbarState() {
     try {
         const state = await fetchCached('/navbar/state', 15000);
@@ -104,8 +188,8 @@ async function loadNavbarState() {
         applyBrandLogo(state.branding || {});
     } catch (error) {
         console.error('Error loading navbar state:', error);
-        updateDomainMenuVisibility(false);
-        updateMenusForDomainStatus(false);
+        restoreLastConfirmedDomainInfo();
+        window.OB?.updateLlmAvailability(false);
     }
 }
 
@@ -161,6 +245,23 @@ function invalidateDomainCaches() {
     if (typeof fetchOnceInvalidate === 'function') {
         fetchOnceInvalidate('/domain/info');
     }
+}
+
+const DOMAIN_GENERAL_HREF = '/domain/?section=information';
+
+/**
+ * After a domain is loaded (navbar, home, registry, import), land on
+ * Domain → General. Reloading the current page would keep the user on
+ * Home with only the top menus updated.
+ */
+function navigateToDomainGeneral() {
+    const path = (window.location.pathname || '').replace(/\/+$/, '') || '/';
+    const section = new URLSearchParams(window.location.search).get('section') || 'information';
+    if (path === '/domain' && section === 'information') {
+        window.location.reload();
+        return;
+    }
+    window.location.href = DOMAIN_GENERAL_HREF;
 }
 
 window.refreshNavbarIndicators = refreshNavbarIndicators;
@@ -230,20 +331,60 @@ async function hasLoadedDomain() {
 
 function applyDomainInfo(data) {
     const currentDomainNameEl = document.getElementById('currentDomainName');
+    const domainContextVersion = document.getElementById('domainContextVersion');
     const domainSectionName = document.getElementById('domainSectionName');
     const hasDomain = domainIsLoaded(data);
+    // The navbar-state source of truth is domain.info.llm_endpoint.
+    window.OB?.updateLlmAvailability(Boolean(data.info?.llm_endpoint?.trim()));
 
     const domainName = (data.info && data.info.name) ? data.info.name : 'NewDomain';
     const version = (data.info && data.info.version) || '1';
     const status = (data.info && data.info.status) || 'DRAFT';
 
+    if (hasDomain) {
+        rememberDomainInfo(data);
+    } else {
+        clearRememberedDomainInfo();
+    }
+
     if (currentDomainNameEl) {
         if (hasDomain) {
-            currentDomainNameEl.textContent = `${domainName} V${version}`;
+            currentDomainNameEl.textContent = domainName;
             applyDomainStatusBadge(currentDomainNameEl, status);
         } else {
             currentDomainNameEl.textContent = 'Domain';
             applyDomainStatusBadge(currentDomainNameEl, null);
+        }
+    }
+    if (domainContextVersion) {
+        domainContextVersion.textContent = hasDomain ? String(version) : '';
+    }
+
+    const mapLabel = document.getElementById('workspaceMapDomainLabel');
+    if (mapLabel) {
+        mapLabel.textContent = hasDomain ? `${domainName} V${version}` : 'Domain';
+        applyDomainStatusBadge(mapLabel, hasDomain ? status : null);
+    }
+    const contextTrigger = document.getElementById('domainContextTrigger');
+    if (contextTrigger) {
+        if (hasDomain) {
+            contextTrigger.setAttribute(
+                'aria-label',
+                `Open workspace map for ${domainName}, version ${version}, ${statusLabel(status)}`
+            );
+        } else {
+            contextTrigger.setAttribute('aria-label', 'Open workspace map for Domain');
+        }
+    }
+    const settingsReturnLink = document.getElementById('settingsDomainReturnLink');
+    if (settingsReturnLink) {
+        if (hasDomain) {
+            const label = `Back to domain for ${domainName}, opens domain navigation via the workspace map`;
+            settingsReturnLink.setAttribute('aria-label', label);
+            settingsReturnLink.setAttribute('title', label);
+        } else {
+            settingsReturnLink.setAttribute('aria-label', 'Back to domain');
+            settingsReturnLink.setAttribute('title', 'Back to domain');
         }
     }
 
@@ -407,44 +548,35 @@ function enableMenusAfterSave() {
 }
 
 /**
- * Update domain L1 entry + L2 subnav visibility based on domain state.
- * When nothing is loaded, hide the Domain navbar item entirely.
+ * Update L2 subnav visibility based on domain state.
  *
- * The L2 subnav is domain-contextual (Domain/Ontology/Mapping/KG tabs), so
- * it stays hidden on Settings pages even when a domain is open in session —
- * Settings is a cross-domain area with its own left sidebar navigation.
+ * The L2 slot shows the domain workspace rail outside Settings, and the
+ * Settings return control when Settings has a domain open in session.
  */
 function updateDomainMenuVisibility(hasDomain) {
     const isSettingsPage = document.body.dataset.page === 'settings';
+    const showSettingsReturn = isSettingsPage && hasDomain;
+    const showWorkspaceRail = !isSettingsPage && hasDomain;
 
     // Show/hide L2 subnav
     const subnav = document.getElementById('obSubnav');
     if (subnav) {
-        subnav.classList.toggle('d-none', !hasDomain || isSettingsPage);
+        subnav.classList.toggle('d-none', !showSettingsReturn && !showWorkspaceRail);
         if (typeof window.OBBreadcrumb !== 'undefined' && typeof window.OBBreadcrumb._updateChromeHeight === 'function') {
             window.OBBreadcrumb._updateChromeHeight();
         }
     }
-
-    const domainNav = document.getElementById('domainL1NavItem');
-    const domainSep = document.getElementById('domainL1PathSep');
-    if (domainNav) domainNav.classList.toggle('d-none', !hasDomain);
-    if (domainSep) domainSep.classList.toggle('d-none', !hasDomain);
-
-    const domainL1 = document.getElementById('domainL1Link');
-    if (domainL1) {
-        if (hasDomain) {
-            domainL1.classList.remove('ob-nav-disabled');
-            domainL1.removeAttribute('aria-disabled');
-            domainL1.removeAttribute('tabindex');
-            domainL1.classList.add('active');
-        } else {
-            domainL1.classList.add('ob-nav-disabled');
-            domainL1.setAttribute('aria-disabled', 'true');
-            domainL1.setAttribute('tabindex', '-1');
-            domainL1.classList.remove('active');
-        }
+    const domainWorkspaceSubnavNav = document.getElementById('domainWorkspaceSubnavNav');
+    if (domainWorkspaceSubnavNav) {
+        domainWorkspaceSubnavNav.classList.toggle('d-none', !showWorkspaceRail);
     }
+    const settingsDomainReturnNav = document.getElementById('settingsDomainReturnNav');
+    if (settingsDomainReturnNav) {
+        settingsDomainReturnNav.classList.toggle('d-none', !showSettingsReturn);
+    }
+    document.querySelectorAll('[data-subnav-domain-chrome]').forEach((el) => {
+        el.classList.toggle('d-none', !showWorkspaceRail);
+    });
 }
 
 
@@ -475,6 +607,9 @@ async function domainNew() {
         const payload = { name: input.name };
         if (input.description) payload.description = input.description;
         if (input.llm_endpoint) payload.llm_endpoint = input.llm_endpoint;
+        if (input.llm_endpoint_kind) {
+            payload.llm_endpoint_kind = input.llm_endpoint_kind;
+        }
         if (input.graph_backend) payload.graph_backend = input.graph_backend;
         await fetch('/domain/info', {
             method: 'POST',
@@ -485,9 +620,9 @@ async function domainNew() {
 
         invalidateDomainCaches();
 
-        // Sync any stale Information form on the current page with the NEW
+        // Sync any stale Domain → General form on the current page with the NEW
         // domain values. When "New Domain" is triggered from another domain's
-        // Information page, #domainName still holds the previously-loaded
+        // General page, #domainName still holds the previously-loaded
         // domain's name. doDomainSave()'s pre-save duplicate-name guard reads
         // that field, so without this it would validate (and reject) the OLD
         // name — e.g. "A domain named \"cust360auto\" already exists" — instead
@@ -504,13 +639,21 @@ async function domainNew() {
             if (descEl) descEl.value = input.description || '';
             const llmEl = document.getElementById('domainLlmEndpoint');
             if (llmEl && input.llm_endpoint) llmEl.value = input.llm_endpoint;
+            const llmKindEl = document.getElementById('domainLlmEndpointKind');
+            if (llmKindEl && input.llm_endpoint_kind) {
+                llmKindEl.value = input.llm_endpoint_kind;
+            }
+            const llmDisplayEl = document.getElementById('domainLlmEndpointDisplay');
+            if (llmDisplayEl && input.llm_endpoint) {
+                llmDisplayEl.value = input.llm_endpoint;
+            }
             const backendEl = document.getElementById('domainGraphBackend');
             if (backendEl && input.graph_backend) {
                 backendEl.value = input.graph_backend;
                 if (typeof applyGraphlessConstraints === 'function') applyGraphlessConstraints();
             }
             if (typeof updateAutoBaseUri === 'function') updateAutoBaseUri();
-        } catch (e) { /* Information form not on this page — nothing to sync */ }
+        } catch (e) { /* General form not on this page — nothing to sync */ }
 
         // Register the new domain in the registry directly (no Save popup)
         // and open it on success.
@@ -526,10 +669,27 @@ async function domainNew() {
  * Save domain to the registry.
  * Persists domain info / design layout first, then saves without a confirmation popup.
  */
-async function domainSave() {
-    try {
-        if (!validateDomainInfoForm()) return;
+let _domainSaving = false;
 
+/** Swap the navbar Save icon for a spinner (and block re-clicks) while saving. */
+function setDomainSaveBusy(busy) {
+    document.querySelectorAll('.ob-subnav-save-btn').forEach((btn) => {
+        btn.classList.toggle('is-saving', busy);
+        btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+        btn.querySelector('i.bi')?.classList.toggle('d-none', busy);
+        btn.querySelector('.ob-save-spinner')?.remove();
+        if (busy) {
+            btn.insertAdjacentHTML('afterbegin',
+                '<span class="spinner-border ob-save-spinner" role="status" aria-hidden="true"></span>');
+        }
+    });
+}
+
+async function domainSave() {
+    if (_domainSaving || !validateDomainInfoForm()) return;
+    _domainSaving = true;
+    setDomainSaveBusy(true);
+    try {
         // First, save domain info from form if on the domain page
         await saveDomainInfoBeforeSave();
         
@@ -570,6 +730,9 @@ async function domainSave() {
     } catch (error) {
         console.error('Error preparing save:', error);
         showNotification('Failed to prepare save: ' + error.message, 'error');
+    } finally {
+        _domainSaving = false;
+        setDomainSaveBusy(false);
     }
 }
 
@@ -600,9 +763,9 @@ function buildMcpPolicy() {
 }
 
 /**
- * Build the ``/domain/info`` payload from the Information form.
+ * Build the ``/domain/info`` payload from the Domain → General form.
  *
- * Single source of truth for both save entry points (the Information form's
+ * Single source of truth for both save entry points (the General form's
  * own Save and the auto-save that runs before a UC save) so the two cannot
  * drift and silently drop a field.
  */
@@ -613,6 +776,7 @@ function buildDomainInfoPayload() {
     const quorumEl = document.getElementById('domainReviewQuorum');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const llmEndpointKindEl = document.getElementById('domainLlmEndpointKind');
     const graphBackendEl = document.getElementById('domainGraphBackend');
     const neo4jConnEl = document.getElementById('domainNeo4jDatabase');
     const materializationEl = document.getElementById('domainLakehouseMaterialization');
@@ -625,6 +789,7 @@ function buildDomainInfoPayload() {
         base_uri: baseUriEl ? baseUriEl.value.trim() : undefined,
         base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
         llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
+        llm_endpoint_kind: llmEndpointKindEl ? llmEndpointKindEl.value : undefined,
         review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : undefined,
         graph_backend: graphBackendEl ? graphBackendEl.value : undefined,
         // Only meaningful for Neo4j; cleared for other backends so a stale
@@ -632,13 +797,19 @@ function buildDomainInfoPayload() {
         neo4j_connection: graphBackendEl
             ? (graphBackendEl.value === 'neo4j' && neo4jConnEl ? neo4jConnEl.value : '')
             : undefined,
-        // Only meaningful for Lakehouse; reset for other backends so a domain
-        // that moved off Lakehouse cannot carry a view-only setting the other
-        // engines would have to ignore.
+        // Only meaningful for Lakehouse. Off Lakehouse, store the product
+        // default (`view`) so switching back to Lakehouse does not revive a
+        // materialized copy. Other engines ignore this field.
         lakehouse_materialization: graphBackendEl
             ? (graphBackendEl.value === 'databricks' && materializationEl
-                ? materializationEl.value : 'table')
+                ? materializationEl.value : 'view')
             : undefined,
+        graph_cache_enabled: (function () {
+            const backend = graphBackendEl ? graphBackendEl.value : '';
+            const cacheEl = document.getElementById('domainGraphCacheEnabled');
+            if (backend !== 'databricks' && backend !== 'lakebase') return undefined;
+            return cacheEl ? cacheEl.checked : true;
+        })(),
         version: versionEl ? versionEl.value : undefined,
         mcp_policy: buildMcpPolicy(),
     };
@@ -654,7 +825,7 @@ function buildDomainInfoPayload() {
 window.buildDomainInfoPayload = buildDomainInfoPayload;
 
 /**
- * True when the Information form can be persisted.
+ * True when the Domain → General form can be persisted.
  *
  * A Neo4j domain must name a connection — the server rejects a blank one, so
  * catch it here with a message that names the fix.
@@ -695,12 +866,19 @@ async function saveDomainInfoBeforeSave() {
         if (Object.keys(domainInfoPayload).length > 0) {
             console.log('[Domain] Auto-saving domain info before UC save:', domainInfoPayload);
             try {
-                await fetch('/domain/info', {
+                const response = await fetch('/domain/info', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(domainInfoPayload),
                     credentials: 'same-origin'
                 });
+                const data = await response.json();
+                if (!response.ok || data.success !== true) {
+                    throw new Error(data.message || 'Domain info save failed');
+                }
+                window.OB?.updateLlmAvailability(
+                    Boolean((data.info?.llm_endpoint || '').trim())
+                );
                 invalidateDomainCaches();
             } catch (e) {
                 console.warn('Could not auto-save domain info:', e);
@@ -915,6 +1093,57 @@ function showCloseDomainDialog(options = {}) {
 // ==========================================
 
 /**
+ * Create a new version from the current domain state.
+ *
+ * This global action is shared by the Versions popup and Domain > Versions.
+ * Branching remains available for read-only or incomplete domain versions.
+ */
+async function createNewDomainVersion(options = {}) {
+    const confirmed = await showConfirmDialog({
+        title: 'Create New Version',
+        message: 'This will copy the current version and increment the version number. Continue?',
+        confirmText: 'Create Version',
+        confirmClass: 'btn-primary',
+        icon: 'plus-circle'
+    });
+    if (!confirmed) return;
+
+    if (typeof options.closeSourceModal === 'function') {
+        options.closeSourceModal();
+    }
+    showDomainLoading('Creating and loading new version…');
+
+    try {
+        showNotification('Creating new version…', 'info', 2000);
+
+        const response = await fetch('/domain/create-version', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Version ' + data.new_version + ' created!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
+            window.location.reload();
+        } else {
+            hideDomainLoading();
+            if (typeof options.restoreSourceModal === 'function') {
+                options.restoreSourceModal();
+            }
+            showNotification('Error: ' + data.message, 'error');
+        }
+    } catch (err) {
+        hideDomainLoading();
+        if (typeof options.restoreSourceModal === 'function') {
+            options.restoreSourceModal();
+        }
+        showNotification('Error: ' + err.message, 'error');
+    }
+}
+
+/**
  * Switch the open domain to another version — or reload the current one — from
  * the Registry.
  *
@@ -994,6 +1223,9 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
                         </div>
                     </div>
                     <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" id="btnCreateVersionFromSwitch">
+                            <i class="bi bi-plus-circle me-1"></i> New Version
+                        </button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-primary" id="btnConfirmSwitch" disabled>
                             <i class="bi bi-arrow-repeat"></i> Switch
@@ -1006,12 +1238,16 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     const modalEl = document.getElementById('domainSwitchModal');
-    const modal = new bootstrap.Modal(modalEl);
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
     modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove());
 
     configureSwitchSaveOption();
     populateSwitchVersions(currentVersion);
+    document.getElementById('btnCreateVersionFromSwitch').addEventListener('click', () => createNewDomainVersion({
+        closeSourceModal: () => modal.hide(),
+        restoreSourceModal: () => showSwitchDomainDialog(domainSlug, domainName, currentVersion)
+    }));
 
     document.getElementById('btnConfirmSwitch').addEventListener('click', async () => {
         const select = document.getElementById('switchVersionSelect');
@@ -1319,8 +1555,14 @@ async function doDomainLoad(domainSlug, version) {
         const data = await response.json();
         if (data.success) {
             showNotification(data.message || 'Domain loaded successfully!', 'success');
+            // The server session already points at the new domain. Drop the
+            // stale remembered badge and repaint from the fresh /navbar/state
+            // *before* reloading, so the navbar never keeps showing the
+            // previous domain during the reload delay (or briefly after it).
             invalidateDomainCaches();
-            setTimeout(() => location.reload(), 1000);
+            clearRememberedDomainInfo();
+            await loadNavbarState();
+            setTimeout(() => navigateToDomainGeneral(), 1000);
         } else {
             hideDomainLoading();
             showNotification('Error: ' + data.message, 'error');
@@ -1329,52 +1571,6 @@ async function doDomainLoad(domainSlug, version) {
         hideDomainLoading();
         showNotification('Error: ' + error.message, 'error');
     }
-}
-
-/**
- * Handle the selected domain export file - parse and check for versions
- */
-async function handleDomainFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-    
-    try {
-        // Read the file content first
-        const content = await file.text();
-        let importedDomain;
-        
-        try {
-            importedDomain = JSON.parse(content);
-        } catch (e) {
-            showNotification('Error: Invalid JSON in domain file', 'error');
-            input.value = '';
-            return;
-        }
-        
-        // Check if file has versions
-        if (importedDomain.versions && Object.keys(importedDomain.versions).length > 0) {
-            const versions = Object.keys(importedDomain.versions).sort().reverse();
-            
-            if (versions.length > 1) {
-                // Show version selection dialog
-                showVersionSelectionDialog(versions, importedDomain, async (selectedVersion) => {
-                    await importDomainWithVersion(importedDomain, selectedVersion);
-                });
-            } else {
-                // Only one version, load it directly
-                await importDomainWithVersion(importedDomain, versions[0]);
-            }
-        } else {
-            // Legacy format without versions - load directly
-            await importDomainDirect(importedDomain);
-        }
-    } catch (error) {
-        console.error('Error loading domain file:', error);
-        showNotification('Failed to load domain: ' + error.message, 'error');
-    }
-    
-    // Reset file input
-    input.value = '';
 }
 
 /**
@@ -1509,7 +1705,7 @@ function handleImportResponse(data) {
         }
         showNotification(msg, 'success');
         invalidateDomainCaches();
-        setTimeout(() => location.reload(), 1500);
+        setTimeout(() => navigateToDomainGeneral(), 1500);
     } else {
         hideDomainLoading();
         showNotification('Error loading domain: ' + data.message, 'error');
@@ -1521,11 +1717,13 @@ window.domainNew = domainNew;
 window.domainSave = domainSave;
 window.domainClose = domainClose;
 window.domainSwitch = domainSwitch;
+window.createNewDomainVersion = createNewDomainVersion;
 window.domainLoad = domainLoad;
 window.showDomainSaveDialog = showDomainSaveDialog;
 window.showDomainLoadDialog = showDomainLoadDialog;
 window.doDomainSave = doDomainSave;
 window.doDomainLoad = doDomainLoad;
+window.navigateToDomainGeneral = navigateToDomainGeneral;
 window.checkDomainSavedStatus = loadDomainName;
 window.enableMenusAfterSave = enableMenusAfterSave;
 window.updateMenusForDomainStatus = updateMenusForDomainStatus;

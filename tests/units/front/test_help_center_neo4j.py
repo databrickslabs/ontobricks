@@ -22,7 +22,7 @@ def test_faq_lists_neo4j_as_graph_backend():
     assert "Lakebase" in html
     assert "Lakehouse" in html
     assert "currently <strong>Lakebase</strong> Postgres" not in html
-    assert 'data-help-doc="neo4j-requirements"' in html
+    assert 'data-help-doc="backend" data-help-anchor="neo4j-backend"' in html
 
 
 def test_glossary_defines_neo4j():
@@ -33,5 +33,5 @@ def test_glossary_defines_neo4j():
 
 def test_resources_link_to_neo4j_guide():
     html = _help_html()
-    assert 'data-help-doc="neo4j-requirements"' in html
+    assert 'data-help-doc="backend" data-help-anchor="neo4j-backend"' in html
     assert ">Neo4j Backend<" in html

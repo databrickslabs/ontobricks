@@ -1,0 +1,35 @@
+## Add New Version to the Versions popup
+
+Context: Users can now branch the open domain directly from the global
+Versions popup without navigating to Domain → Versions. Both entry points use
+one shared create-version workflow and preserve the existing ungated behavior.
+After popup confirmation, the popup closes and the branded full-page loading
+overlay remains visible until the new version loads; failures restore the
+popup.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   Added the popup button, shared global create-version action, loading overlay
+   lifecycle, and popup failure recovery.
+2. src/front/static/domain/js/domain-versions.js
+   Delegated Domain → Versions creation to the shared global action.
+3. tests/units/front/test_create_version_ungated.py
+   Added contracts for shared, ungated version creation and loading recovery.
+4. tests/units/front/test_switch_domain_modal.py
+   Added the popup button, ordering, icon, label, and contextual binding
+   contract.
+5. docs/superpowers/specs/2026-09-05-versions-popup-new-version-design.md
+   Documented the approved user experience and shared-action design.
+6. docs/superpowers/plans/2026-09-05-versions-popup-new-version.md
+   Recorded the test-first implementation and verification plan.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain-versions.js
+- tests/units/front/test_create_version_ungated.py
+- tests/units/front/test_switch_domain_modal.py
+- docs/superpowers/specs/2026-09-05-versions-popup-new-version-design.md
+- docs/superpowers/plans/2026-09-05-versions-popup-new-version.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5877 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 97.56s.

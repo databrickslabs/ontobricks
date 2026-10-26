@@ -298,36 +298,47 @@ async function loadSchemas(catalog) {
 }
 
 
-/**
- * Load volumes for a catalog and schema
- * @param {string} catalog - Catalog name
- * @param {string} schema - Schema name
- * @returns {Promise<Array>} List of volume names
- */
-async function loadVolumes(catalog, schema) {
-    try {
-        const data = await apiRequest(`/settings/volumes/${catalog}/${schema}`);
-        return data.volumes || [];
-    } catch (error) {
-        console.error('Error loading volumes:', error);
-        return [];
-    }
-}
-
-
 // ========== HTML UTILITIES ==========
+
+const _HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
 /**
  * Escape HTML special characters to prevent XSS.
  * Canonical implementation — all modules should use this instead of local copies.
+ * Safe for both text content and quoted attribute values.
  * @param {*} text - Text to escape
  * @returns {string} Escaped HTML string
  */
 function escapeHtml(text) {
     if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
+    return String(text).replace(/[&<>"']/g, ch => _HTML_ESCAPES[ch]);
+}
+
+/**
+ * Escape a value for a quoted HTML attribute (alias of escapeHtml).
+ * @param {*} text - Text to escape
+ * @returns {string} Escaped attribute string
+ */
+function escapeAttr(text) {
+    return escapeHtml(text);
+}
+
+/**
+ * Render untrusted Markdown to sanitised HTML.
+ * Uses the global `marked` + `DOMPurify` (loaded in base.html); without
+ * either of them it falls back to escaped plain text with <br> line breaks.
+ * @param {*} text - Markdown source
+ * @returns {string} HTML safe to assign to innerHTML
+ */
+function renderMarkdown(text) {
+    const src = text === null || text === undefined ? '' : String(text);
+    if (window.marked && typeof window.marked.parse === 'function'
+            && window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+        try {
+            return window.DOMPurify.sanitize(window.marked.parse(src, { breaks: true, gfm: true }));
+        } catch (e) { /* fall through to plain text */ }
+    }
+    return escapeHtml(src).replace(/\n/g, '<br>');
 }
 
 
@@ -418,6 +429,8 @@ function showStackedModal(modalEl) {
  *   scrollable bordered panel (for listing affected items, diffs, etc.)
  * @param {string} options.size - Optional Bootstrap modal size class, e.g. 'modal-lg'
  * @param {string} options.headerClass - Optional Bootstrap class for the header, e.g. 'bg-danger text-white'
+ * @param {string} options.checkboxLabel - Optional checkbox shown under the message
+ * @param {boolean} options.checkboxChecked - Initial checkbox state; updated on confirm
  * @returns {Promise<boolean>} Resolves to true if confirmed, false if cancelled
  */
 function showConfirmDialog(options = {}) {
@@ -431,13 +444,21 @@ function showConfirmDialog(options = {}) {
             icon = 'question-circle',
             detailHtml = '',
             size = '',
-            headerClass = ''
+            headerClass = '',
+            checkboxLabel = '',
+            checkboxChecked = false
         } = options;
 
         const modalId = 'confirmDialog_' + Date.now();
         const closeClass = headerClass.includes('text-white') ? 'btn-close-white' : '';
         const detailBlock = detailHtml
             ? `<div class="border rounded p-3 bg-light mt-3" style="max-height: 320px; overflow-y: auto;">${detailHtml}</div>`
+            : '';
+        const checkboxBlock = checkboxLabel
+            ? `<div class="form-check mt-3">
+                    <input class="form-check-input ob-confirm-check" type="checkbox" id="${modalId}_check"${checkboxChecked ? ' checked' : ''}>
+                    <label class="form-check-label" for="${modalId}_check">${checkboxLabel}</label>
+               </div>`
             : '';
 
         const modalHtml = `
@@ -452,6 +473,7 @@ function showConfirmDialog(options = {}) {
                         </div>
                         <div class="modal-body">
                             <p class="mb-0">${message}</p>
+                            ${checkboxBlock}
                             ${detailBlock}
                         </div>
                         <div class="modal-footer">
@@ -477,6 +499,8 @@ function showConfirmDialog(options = {}) {
         let resolved = false;
 
         document.getElementById(`${modalId}_confirm`).addEventListener('click', () => {
+            const box = document.getElementById(`${modalId}_check`);
+            if (box) options.checkboxChecked = box.checked;
             resolved = true;
             modal.hide();
             resolve(true);
@@ -593,23 +617,10 @@ const DocumentPreview = {
         return el;
     },
 
-    _extOf(filename) {
-        return (filename.includes('.') ? filename.split('.').pop() : '').toLowerCase();
-    },
-
-    _isBinary(ext) {
-        return ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
-    },
-
-    _isImage(ext) {
-        return ['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
-    },
-
     open(filename) {
         const modalEl = this._ensureModal();
         const title = document.getElementById('docPreviewTitle');
         const body = document.getElementById('docPreviewBody');
-        const ext = this._extOf(filename);
 
         title.innerHTML = `<i class="bi bi-eye me-2"></i>${escapeHtml(filename)}`;
         body.innerHTML = `<div class="d-flex justify-content-center align-items-center" style="min-height:300px;">
@@ -619,31 +630,21 @@ const DocumentPreview = {
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         modal.show();
 
+        // The original binary is never retained — preview always serves the
+        // parsed text extracted from the Knowledge Store.
         const url = `/domain/documents/preview/${encodeURIComponent(filename)}`;
-
-        if (ext === 'pdf') {
-            body.innerHTML = `<iframe class="doc-preview-iframe" src="${url}"></iframe>`;
-            return;
-        }
-
-        if (this._isImage(ext)) {
-            body.innerHTML = `<div class="text-center p-3">
-                <img src="${url}" class="doc-preview-image" alt="${escapeHtml(filename)}">
-            </div>`;
-            return;
-        }
-
         fetch(url, { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
                 if (!data.success) {
                     body.innerHTML = `<div class="p-4 text-center text-muted">
                         <i class="bi bi-file-earmark-x fs-1 d-block mb-2"></i>
-                        ${escapeHtml(data.message || 'Preview not available')}
+                        ${escapeHtml(data.error || data.message || 'Parsed content not available yet')}
                     </div>`;
                     return;
                 }
-                if (ext === 'md') {
+                const looksMarkdown = /^\s*#{1,6}\s|\*\*|^- /m.test(data.content || '');
+                if (looksMarkdown) {
                     body.innerHTML = `<div class="doc-preview-md p-4">${this._renderMarkdown(data.content)}</div>`;
                 } else {
                     body.innerHTML = `<pre class="doc-preview-text p-3 m-0">${escapeHtml(data.content)}</pre>`;
@@ -652,7 +653,7 @@ const DocumentPreview = {
             .catch(err => {
                 body.innerHTML = `<div class="p-4 text-center text-danger">
                     <i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i>
-                    Error loading preview: ${escapeHtml(err.message)}
+                    Error loading parsed content: ${escapeHtml(err.message)}
                 </div>`;
             });
     },
@@ -838,8 +839,8 @@ function isValidDomainName(name) {
 }
 
 /**
- * Show a modal that collects a new domain name, description, and LLM endpoint.
- * Resolves with { name, description, llm_endpoint } or null if cancelled.
+ * Show a modal that collects a new domain name, description, and LLM target.
+ * Resolves with endpoint name and kind, or null if cancelled.
  */
 function showNewDomainDialog() {
     return new Promise((resolve) => {
@@ -872,7 +873,7 @@ function showNewDomainDialog() {
                             <div class="alert alert-light border small py-2 mb-3">
                                 <i class="bi bi-hdd-network me-1"></i>
                                 This domain uses the <strong>Lakehouse</strong> graph backend by default. You can
-                                change it anytime in <strong>Domain → Information</strong>:
+                                change it anytime in <strong>Domain → General</strong>:
                                 <ul class="mb-0 mt-1 ps-3">
                                     <li><strong>Lakehouse</strong> — graph stored as Delta tables in Unity Catalog (default).</li>
                                     <li><strong>Lakebase</strong> — graph stored in a managed Postgres instance.</li>
@@ -881,18 +882,20 @@ function showNewDomainDialog() {
                                 </ul>
                             </div>
                             <div class="mb-1">
-                                <label for="${modalId}_llm" class="form-label fw-semibold">
+                                <label for="${modalId}_llm_display" class="form-label fw-semibold">
                                     <i class="bi bi-robot me-1"></i>LLM Endpoint <span class="text-muted fw-normal">(optional — for OntoBricks Agents)</span>
                                 </label>
                                 <div class="input-group">
-                                    <select class="form-select new-domain-field" id="${modalId}_llm">
-                                        <option value="">Loading endpoints…</option>
-                                    </select>
-                                    <button type="button" class="btn btn-outline-secondary" id="${modalId}_llm_refresh" title="Refresh endpoints">
-                                        <i class="bi bi-arrow-clockwise"></i>
+                                    <input type="hidden" id="${modalId}_llm" value="">
+                                    <input type="hidden" id="${modalId}_llm_kind" value="">
+                                    <input type="text" class="form-control new-domain-field"
+                                           id="${modalId}_llm_display" readonly placeholder="No LLM selected">
+                                    <button type="button" class="btn btn-outline-secondary"
+                                            id="${modalId}_llm_browse">
+                                        <i class="bi bi-search me-1"></i>Browse
                                     </button>
                                 </div>
-                                <small class="text-muted">Databricks Model Serving endpoint used by OntoBricks Agents.</small>
+                                <small class="text-muted">AI Gateway model service or legacy Model Serving endpoint.</small>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -908,36 +911,23 @@ function showNewDomainDialog() {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modalEl   = document.getElementById(modalId);
         const nameInput = document.getElementById(`${modalId}_name`);
-        const llmSelect = document.getElementById(`${modalId}_llm`);
+        const llmInput = document.getElementById(`${modalId}_llm`);
+        const llmKindInput = document.getElementById(`${modalId}_llm_kind`);
+        const llmDisplay = document.getElementById(`${modalId}_llm_display`);
         const modal     = new bootstrap.Modal(modalEl);
         let resolved    = false;
 
-        async function loadLlmOptions() {
-            llmSelect.innerHTML = '<option value="">Loading…</option>';
-            try {
-                const resp = await fetch('/mapping/wizard/llm-endpoints', { credentials: 'same-origin' });
-                const data = await resp.json();
-                llmSelect.innerHTML = '<option value="">— None —</option>';
-                if (data.success && data.endpoints && data.endpoints.length > 0) {
-                    data.endpoints.forEach(ep => {
-                        const opt = document.createElement('option');
-                        opt.value = ep.name;
-                        opt.textContent = ep.name;
-                        llmSelect.appendChild(opt);
-                    });
-                } else {
-                    const opt = document.createElement('option');
-                    opt.value = '';
-                    opt.textContent = 'No endpoints available';
-                    opt.disabled = true;
-                    llmSelect.appendChild(opt);
-                }
-            } catch (_) {
-                llmSelect.innerHTML = '<option value="">Could not load endpoints</option>';
-            }
-        }
-
-        document.getElementById(`${modalId}_llm_refresh`).addEventListener('click', loadLlmOptions);
+        document.getElementById(`${modalId}_llm_browse`).addEventListener('click', async () => {
+            if (typeof openLlmEndpointPicker !== 'function') return;
+            const selected = await openLlmEndpointPicker({
+                name: llmInput.value,
+                kind: llmKindInput.value
+            });
+            if (!selected) return;
+            llmInput.value = selected.name;
+            llmKindInput.value = selected.kind;
+            llmDisplay.value = selected.name;
+        });
 
         document.getElementById(`${modalId}_confirm`).addEventListener('click', () => {
             const name = enforceDomainNameCamelCase(nameInput.value).trim();
@@ -948,10 +938,17 @@ function showNewDomainDialog() {
                 return;
             }
             const desc = (document.getElementById(`${modalId}_desc`).value || '').trim();
-            const llm  = llmSelect.value || '';
+            const llm = llmInput.value || '';
+            const llmKind = llmKindInput.value || '';
             resolved = true;
             modal.hide();
-            resolve({ name, description: desc, llm_endpoint: llm, graph_backend: 'databricks' });
+            resolve({
+                name,
+                description: desc,
+                llm_endpoint: llm,
+                llm_endpoint_kind: llmKind,
+                graph_backend: 'databricks'
+            });
         });
 
         nameInput.addEventListener('input', () => {
@@ -977,7 +974,6 @@ function showNewDomainDialog() {
 
         modal.show();
         setTimeout(() => nameInput.focus(), 300);
-        loadLlmOptions();
     });
 }
 
@@ -990,6 +986,8 @@ window.showInfoDialog = showInfoDialog;
 window.showDeleteConfirm = showDeleteConfirm;
 window.apiRequest = apiRequest;
 window.escapeHtml = escapeHtml;
+window.escapeAttr = escapeAttr;
+window.renderMarkdown = renderMarkdown;
 window.enforceDomainNameCamelCase = enforceDomainNameCamelCase;
 window.isValidDomainName = isValidDomainName;
 window.showNewDomainDialog = showNewDomainDialog;

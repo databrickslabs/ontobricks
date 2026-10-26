@@ -4,11 +4,11 @@
 <div class="content-section">
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h4 class="mb-1"><i class="bi bi-database me-2"></i>Data Sources</h4>
-        <p class="text-muted mb-0 small">Load and manage table data sources from Unity Catalog</p>
+        <h4 class="mb-1"><i class="bi bi-database me-2"></i>Data Assets</h4>
+        <p class="text-muted mb-0 small">Load and manage data assets (tables, views, metric views) from Unity Catalog</p>
     </div>
     <div class="d-flex align-items-center gap-2">
-        <button type="button" class="btn btn-sm btn-outline-danger" data-meta-action="clear-metadata" title="Clear all data sources">
+        <button type="button" class="btn btn-sm btn-outline-danger" data-meta-action="clear-metadata" title="Clear all data assets">
             <i class="bi bi-trash me-1"></i> Reset
         </button>
         <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
@@ -17,21 +17,21 @@
             <i class="bi bi-chat-dots"></i>
         </button>
         <button type="button" class="btn btn-sm btn-primary" id="loadMetadataBtn" data-meta-action="show-load-modal">
-            <i class="bi bi-download me-1"></i> Add Data Source
+            <i class="bi bi-download me-1"></i> Add Data Asset
         </button>
     </div>
 </div>
 <div class="card">
     <div class="card-body">
         <p class="text-muted mb-4">
-            Load data sources from Unity Catalog by selecting a catalog and schema. This loads table structures, 
-            column information, and descriptions. New tables are added to existing data sources (duplicates are skipped).
+            Load data assets from Unity Catalog by selecting a catalog and schema. This loads table structures, 
+            column information, and descriptions. New tables are added to existing data assets (duplicates are skipped).
             You can deselect tables you don't need and edit table/column descriptions.
         </p>
         
         <!-- Current Data Sources Status -->
         <div id="metadataStatus" class="alert alert-secondary mb-4">
-            <span id="metadataStatusText">No data sources loaded</span>
+            <span id="metadataStatusText">No data assets loaded</span>
         </div>
 
         <!-- Description quality warning (rendered dynamically by checkMetadataQuality) -->
@@ -46,7 +46,7 @@
             <div class="progress dm-progress-tall">
                 <div class="progress-bar progress-bar-striped progress-bar-animated dm-progress-bar-full" 
                      role="progressbar">
-                    Loading data sources...
+                    Loading data assets...
                 </div>
             </div>
         </div>
@@ -82,7 +82,7 @@
                         <i class="bi bi-trash"></i> Remove Selected Tables
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-success d-none" data-meta-action="update-mappings" id="updateMappingsBtn"
-                            title="Push catalog.schema from data sources into entity/relationship mappings">
+                            title="Push catalog.schema from data assets into entity/relationship mappings">
                         <i class="bi bi-arrow-right-circle me-1"></i> Update Mappings
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-meta-action="update-from-uc" id="updateMetadataBtn" title="Refresh column information from Unity Catalog (selected tables only, or all tables if none are checked)">
@@ -99,7 +99,7 @@
                                        title="Select/Deselect all">
                             </th>
                             <th class="dm-th-table">Table</th>
-                            <th class="dm-th-datasource">Data Source <small class="text-muted">(click to change)</small></th>
+                            <th class="dm-th-datasource">Data Asset <small class="text-muted">(click to change)</small></th>
                             <th class="dm-th-cols">Cols</th>
                             <th class="dm-th-select-perm" title="Whether the service principal can SELECT this table">Rights</th>
                             <th class="dm-th-desc">Description <small class="text-muted">(click to view/edit)</small></th>
@@ -113,7 +113,7 @@
             <div class="mt-2 text-muted small">
                 <i class="bi bi-info-circle"></i> Check tables to target them with "Update from UC" (refresh columns) or "Remove Selected Tables".
                 If no tables are checked, "Update from UC" refreshes all loaded tables.
-                Click on a table name to view/edit column details. Click on "Data Source" to change catalog.schema per table.
+                Click on a table name to view/edit column details. Click on "Data Asset" to change catalog.schema per table.
                 Use "Update Mappings" to push catalog.schema into entity/relationship mappings.
 
             </div>
@@ -244,7 +244,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="loadMetadataConfirmBtn" data-meta-action="load-from-uc">
-                    <i class="bi bi-download"></i> Load Tables
+                    <i class="bi bi-download"></i> Add assets
                 </button>
             </div>
         </div>
@@ -256,7 +256,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-database-gear me-2"></i>Change Data Source</h5>
+                <h5 class="modal-title"><i class="bi bi-database-gear me-2"></i>Change Data Asset</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -265,13 +265,13 @@
                     <div class="form-control-plaintext bg-light p-2 rounded border small" id="dsModalTableName">-</div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-semibold">New Data Source (Catalog.Schema)</label>
+                    <label class="form-label fw-semibold">New Data Asset (Catalog.Schema)</label>
                     <div id="changeDataSourceWidget"></div>
                 </div>
                 <div class="form-check mt-3">
                     <input class="form-check-input" type="checkbox" id="dsApplyToAll">
                     <label class="form-check-label small" for="dsApplyToAll">
-                        Apply to <strong>all tables</strong> in data sources
+                        Apply to <strong>all tables</strong> in data assets
                     </label>
                 </div>
             </div>

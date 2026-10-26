@@ -2,7 +2,7 @@
 
 import pytest
 
-from back.core.reasoning.SWRLTextCodec import parse_rules, serialize_rules
+from back.core.reasoning.swrl.SWRLTextCodec import parse_rules, serialize_rules
 
 SAMPLE = [
     {

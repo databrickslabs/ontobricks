@@ -14,11 +14,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.errors import NotFoundError, ValidationError
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 
 pytestmark = pytest.mark.unit
 
-MODULE = "back.objects.domain.SettingsService"
+MODULE = "back.objects.domain.settings.SettingsService"
 
 
 @pytest.fixture
@@ -48,6 +48,7 @@ class TestListing:
             "cohort",
             "analytics",
             "reasoning",
+            "cache_refresh",
         }
 
 

@@ -5,12 +5,21 @@ through a SQL Warehouse endpoint.  Connections are pooled so that
 repeated queries reuse existing TCP/TLS sessions.
 """
 
+import hashlib
 import queue
 import threading
 import time
 from contextlib import contextmanager
 from databricks import sql
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from databricks.sql.exc import (
+    CursorAlreadyClosedError,
+    MaxRetryDurationError,
+    NonRecoverableNetworkError,
+    ServerOperationError,
+    SessionAlreadyClosedError,
+    UnsafeToRetryError,
+)
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
@@ -22,6 +31,58 @@ logger = get_logger(__name__)
 
 _POOL_MAX_SIZE = 8
 _POOL_MAX_IDLE_SECS = 300
+
+# Transient-failure retry policy. Serverless "Lakehouse/RT" warehouses reject
+# the Thrift protocol and use the Statement Execution API through the native
+# Kernel backend. While such a warehouse cold-starts or auto-scales, the HTTP
+# endpoint can briefly return 5xx. A stale pooled connection (session recycled
+# server-side) raises similar transport errors. Both clear on a reconnect, so
+# retry the whole borrow+execute on a fresh connection before surfacing it.
+_SQL_MAX_ATTEMPTS = 3
+# Backoff (seconds) applied *between* attempts: attempt1->2, attempt2->3.
+_SQL_RETRY_BACKOFF_S = (1.5, 4.0)
+
+# Substrings (lower-cased) that mark a transient transport/warehouse failure.
+_RETRYABLE_MSG_MARKERS = (
+    "status 5",  # SEA HTTP 5xx, e.g. "...failed with status 500"
+    "http request failed",
+    "connection reset",
+    "connection aborted",
+    "broken pipe",
+    "service unavailable",
+    "temporarily_unavailable",
+    "temporarily unavailable",
+)
+# Substrings that look transient but are NOT worth retrying (config errors).
+_NON_RETRYABLE_MSG_MARKERS = ("not supported for thrift",)
+# Exception types that explicitly must never be retried.
+_NON_RETRYABLE_TYPES = (
+    ServerOperationError,  # real server-side SQL error (BAD_REQUEST, syntax, ...)
+    NonRecoverableNetworkError,
+    UnsafeToRetryError,
+    MaxRetryDurationError,
+)
+
+
+def _is_retryable_transport_error(exc: BaseException) -> bool:
+    """Return True for transient transport/warehouse failures worth a reconnect.
+
+    Retries target serverless (Lakehouse/RT) warehouse cold-start ``HTTP 5xx``
+    and stale-pool connection resets. Genuine SQL errors
+    (:class:`ServerOperationError`) and non-recoverable transport errors are
+    never retried so they surface immediately with their original message.
+    """
+    if isinstance(exc, _NON_RETRYABLE_TYPES):
+        return False
+    msg = str(exc).lower()
+    if any(marker in msg for marker in _NON_RETRYABLE_MSG_MARKERS):
+        return False
+    # A recycled session/cursor is fixed by borrowing a fresh connection.
+    if isinstance(exc, (SessionAlreadyClosedError, CursorAlreadyClosedError)):
+        return True
+    if isinstance(exc, (ConnectionError, BrokenPipeError, TimeoutError)):
+        return True
+    return any(marker in msg for marker in _RETRYABLE_MSG_MARKERS)
 
 
 class _PooledConnection:
@@ -48,14 +109,38 @@ class SQLWarehouse:
 
     def __init__(self, auth: DatabricksAuth) -> None:
         self._auth = auth
-        self._pool: queue.Queue[_PooledConnection] = queue.Queue(
-            maxsize=_POOL_MAX_SIZE
-        )
+        # One pool per identity: connections authenticated with different
+        # tokens must never be shared, or one caller could reuse another's
+        # on-behalf-of (OBO) session. Keyed by :meth:`_identity_key`.
+        self._pools: "dict[str, queue.Queue[_PooledConnection]]" = {}
         self._pool_lock = threading.Lock()
 
     @property
     def warehouse_id(self) -> str:
         return self._auth.warehouse_id
+
+    def _identity_key(self) -> str:
+        """Stable per-identity pool key.
+
+        The app OAuth / service-principal path collapses to a single ``sp``
+        bucket; a PAT / forwarded user token gets its own bucket keyed by a
+        short token hash (never the raw token).
+        """
+        token = getattr(self._auth, "token", "") or ""
+        if not token:
+            return "sp"
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+        return f"user:{digest}"
+
+    def _pool_for_identity(self) -> "queue.Queue[_PooledConnection]":
+        """Return (creating if needed) the connection pool for this identity."""
+        key = self._identity_key()
+        with self._pool_lock:
+            pool = self._pools.get(key)
+            if pool is None:
+                pool = queue.Queue(maxsize=_POOL_MAX_SIZE)
+                self._pools[key] = pool
+            return pool
 
     def _require_warehouse(self) -> None:
         if not self._auth.warehouse_id:
@@ -63,7 +148,35 @@ class SQLWarehouse:
 
     def _new_connection(self):
         params = self._auth.get_sql_connection_params()
-        return sql.connect(**params)
+        try:
+            return sql.connect(**params)
+        except Exception as exc:
+            if params.get("use_kernel"):
+                raise
+            if "not supported for thrift" not in str(exc).lower():
+                raise
+            logger.warning(
+                "Warehouse rejected Thrift; reconnecting with native Kernel SEA: %s",
+                exc,
+            )
+            params = self._kernel_reconnect_params(params)
+            conn = sql.connect(**params)
+            self._auth.use_kernel = True
+            return conn
+
+    def _kernel_reconnect_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Kernel connect kwargs after a Thrift rejection.
+
+        ``use_kernel=True`` cannot take a custom ``credentials_provider``. Apps
+        M2M OAuth must pass ``oauth_client_id`` / ``oauth_client_secret`` so the
+        kernel owns the token lifecycle.
+        """
+        reconnect = {**params, "use_kernel": True}
+        reconnect.pop("credentials_provider", None)
+        if self._auth.is_app_mode and self._auth.client_id and self._auth.client_secret:
+            reconnect["oauth_client_id"] = self._auth.client_id
+            reconnect["oauth_client_secret"] = self._auth.client_secret
+        return reconnect
 
     @contextmanager
     def _borrow(self):
@@ -74,9 +187,10 @@ class SQLWarehouse:
         be broken the caller should **not** return it (the ``except`` branch
         takes care of that).
         """
+        pool = self._pool_for_identity()
         conn: Optional[_PooledConnection] = None
         try:
-            conn = self._pool.get_nowait()
+            conn = pool.get_nowait()
             if conn.age > _POOL_MAX_IDLE_SECS:
                 self._close_quietly(conn)
                 conn = None
@@ -93,7 +207,7 @@ class SQLWarehouse:
             raise
         else:
             try:
-                self._pool.put_nowait(conn)
+                pool.put_nowait(conn)
             except queue.Full:
                 self._close_quietly(conn)
 
@@ -103,6 +217,43 @@ class SQLWarehouse:
             pc.conn.close()
         except Exception:
             pass
+
+    def _run_with_retry(self, work: Callable[[Any], Any], *, op: str) -> Any:
+        """Borrow a connection and run ``work(conn)``, retrying on transient
+        transport failures with a *fresh* connection.
+
+        ``_borrow`` discards the (broken) connection on any exception, so each
+        retry naturally reconnects. Only errors classified as transient by
+        :func:`_is_retryable_transport_error` are retried; real SQL errors
+        propagate on the first attempt.
+        """
+        last_exc: Optional[BaseException] = None
+        for attempt in range(1, _SQL_MAX_ATTEMPTS + 1):
+            try:
+                with self._borrow() as conn:
+                    return work(conn)
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= _SQL_MAX_ATTEMPTS or not _is_retryable_transport_error(
+                    exc
+                ):
+                    raise
+                backoff = _SQL_RETRY_BACKOFF_S[
+                    min(attempt - 1, len(_SQL_RETRY_BACKOFF_S) - 1)
+                ]
+                logger.warning(
+                    "%s: transient warehouse/transport error on attempt %d/%d "
+                    "(%s) — reconnecting in %.1fs (likely a serverless "
+                    "Lakehouse/RT warehouse cold-start).",
+                    op,
+                    attempt,
+                    _SQL_MAX_ATTEMPTS,
+                    exc,
+                    backoff,
+                )
+                time.sleep(backoff)
+        # Unreachable: the loop either returns or raises. Guards type-checkers.
+        raise last_exc  # type: ignore[misc]
 
     def test_connection(self) -> Tuple[bool, str]:
         """Test connectivity to the SQL Warehouse.
@@ -151,22 +302,41 @@ class SQLWarehouse:
         """
         self._require_warehouse()
         bounded = bool(statement_timeout_s and int(statement_timeout_s) > 0)
-        try:
-            with self._borrow() as conn:
-                with conn.cursor() as cur:
-                    if bounded:
-                        cur.execute(
-                            f"SET STATEMENT_TIMEOUT = {int(statement_timeout_s)}"
-                        )
-                    try:
-                        cur.execute(query)
-                        columns = [desc[0] for desc in cur.description]
-                        return [dict(zip(columns, row)) for row in cur.fetchall()]
-                    finally:
-                        if bounded:
-                            # 0 disables the per-session bound (workspace default
-                            # applies) so the recycled connection is unaffected.
+        # Lakehouse/RT uses the Kernel backend and relies on its request
+        # timeout. Avoid issuing a session-level SET that this execution path
+        # does not guarantee; classic Thrift warehouses retain the SQL bound.
+        if bounded and bool(getattr(self._auth, "use_kernel", False)):
+            logger.debug(
+                "execute_query: skipping SET STATEMENT_TIMEOUT on Kernel connection; "
+                "relying on the Kernel request timeout."
+            )
+            bounded = False
+
+        def _work(conn) -> List[Dict[str, Any]]:
+            apply_timeout = bounded and not bool(
+                getattr(self._auth, "use_kernel", False)
+            )
+            with conn.cursor() as cur:
+                if apply_timeout:
+                    cur.execute(f"SET STATEMENT_TIMEOUT = {int(statement_timeout_s)}")
+                try:
+                    cur.execute(query)
+                    columns = [desc[0] for desc in cur.description]
+                    return [dict(zip(columns, row)) for row in cur.fetchall()]
+                finally:
+                    if apply_timeout:
+                        # 0 disables the per-session bound (workspace default
+                        # applies) so the recycled connection is unaffected.
+                        # Guarded: if the query failed on a broken connection
+                        # the reset would raise and mask the real error — the
+                        # connection is discarded by ``_borrow`` anyway.
+                        try:
                             cur.execute("SET STATEMENT_TIMEOUT = 0")
+                        except Exception:
+                            pass
+
+        try:
+            return self._run_with_retry(_work, op="execute_query")
         except Exception as exc:
             logger.exception("Error executing query: %s", exc)
             raise
@@ -206,22 +376,25 @@ class SQLWarehouse:
     def execute_statement(self, statement: str) -> bool:
         """Execute a DDL/DML *statement* without returning results."""
         self._require_warehouse()
-        try:
-            with self._borrow() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(statement)
-                # UC DDL must be committed before control-plane APIs (e.g. synced
-                # database tables) can resolve catalog.schema in the metastore.
-                commit = getattr(conn, "commit", None)
-                if callable(commit):
-                    try:
-                        commit()
-                    except Exception as commit_exc:  # noqa: BLE001
-                        logger.debug(
-                            "Ignoring commit() after DDL (autocommit driver): %s",
-                            commit_exc,
-                        )
+
+        def _work(conn) -> bool:
+            with conn.cursor() as cur:
+                cur.execute(statement)
+            # UC DDL must be committed before control-plane APIs (e.g. synced
+            # database tables) can resolve catalog.schema in the metastore.
+            commit = getattr(conn, "commit", None)
+            if callable(commit):
+                try:
+                    commit()
+                except Exception as commit_exc:  # noqa: BLE001
+                    logger.debug(
+                        "Ignoring commit() after DDL (autocommit driver): %s",
+                        commit_exc,
+                    )
             return True
+
+        try:
+            return self._run_with_retry(_work, op="execute_statement")
         except Exception as exc:
             logger.exception("Error executing statement: %s", exc)
             raise
@@ -245,7 +418,18 @@ class SQLWarehouse:
             return True, f"{kind} {fqn} created successfully"
         except Exception as exc:
             logger.exception("ERROR creating %s: %s", kind.lower(), exc)
-            return False, f"Failed to create {kind.lower()}: {exc}"
+            detail = str(exc)
+            if (
+                "not supported for Thrift protocol" in detail
+                or "UNSUPPORTED_FEATURE.CREATE_VIEW" in detail
+                or "CREATE VIEW is not supported in Lakehouse//RT" in detail
+            ):
+                return False, (
+                    f"Failed to create {kind.lower()}: Lakehouse//RT is read-only "
+                    "and cannot execute build DDL. Select a non-RT Build SQL "
+                    "Warehouse in Settings -> Databricks, then rebuild."
+                )
+            return False, f"Failed to create {kind.lower()}: {detail}"
 
     def create_or_replace_view(
         self, catalog: str, schema: str, view_name: str, select_sql: str
@@ -263,7 +447,8 @@ class SQLWarehouse:
         """List available SQL Warehouses.
 
         Uses the Databricks SDK in app mode, falling back to REST API.
-        Returns list of dicts with ``id``, ``name``, ``state`` keys.
+        Returns list of dicts with ``id``, ``name``, ``state``, and
+        ``warehouse_type`` keys.
         """
         logger.debug("Host: %s, App mode: %s", self._auth.host, self._auth.is_app_mode)
 
@@ -281,6 +466,12 @@ class SQLWarehouse:
                             "id": wh.id,
                             "name": wh.name,
                             "state": str(wh.state) if wh.state else "UNKNOWN",
+                            "warehouse_type": (
+                                getattr(wh.warehouse_type, "value", None)
+                                or str(wh.warehouse_type)
+                                if wh.warehouse_type
+                                else ""
+                            ),
                         }
                     )
                 logger.info("Found %d warehouses via SDK", len(warehouses))
@@ -312,6 +503,7 @@ class SQLWarehouse:
                         "id": wh["id"],
                         "name": wh["name"],
                         "state": wh.get("state", "UNKNOWN"),
+                        "warehouse_type": wh.get("warehouse_type", ""),
                     }
                 )
             logger.info("Found %d warehouses via REST", len(warehouses))

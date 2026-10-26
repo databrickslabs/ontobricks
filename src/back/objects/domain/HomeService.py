@@ -273,7 +273,7 @@ class HomeService:
             # cache to avoid replaying a stale failure ("table not found")
             # across page loads.
             dt.get_or_fetch_dt_existence(settings, force_refresh=True),
-            run_blocking(Domain(domain).count_documents_in_volume, settings),
+            run_blocking(Domain(domain).count_documents, settings),
         )
 
         all_classes = domain.get_classes()
@@ -382,8 +382,7 @@ class HomeService:
         }
 
         # Metadata table count (in-session, no I/O)
-        _dom = domain._data.get("domain") or domain._data.get("project") or {}
-        metadata = _dom.get("metadata", {})
+        metadata = domain._data["domain"].get("metadata", {})
         metadata_table_count = len(metadata.get("tables", [])) if metadata else 0
 
         # Document count: live list of UC documents path (same rules as domain documents list)

@@ -40,4 +40,4 @@ def test_format_find_uses_exact_total_and_has_more_hint():
     )
 
     assert "2 of 7 triples" in text
-    assert "more exist" in text
+    assert "increase limit or use pagination for more" in text

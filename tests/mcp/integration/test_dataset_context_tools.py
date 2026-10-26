@@ -361,3 +361,40 @@ async def test_invoke_entity_action_surfaces_rejection(dataset_mcp):
         )
     )
     assert "is not configured on class" in text
+
+
+@pytest.mark.mcp
+@pytest.mark.asyncio
+async def test_invoke_entity_action_formats_job_start(dataset_mcp):
+    dataset_mcp.configure_selected_domain()
+    await dataset_mcp.call("select_domain", domain_name="sales")
+    dataset_mcp.route_post(
+        "/api/v1/digitaltwin/nodes/action",
+        {
+            "success": True,
+            "kind": "job",
+            "entity_uri": "http://x/Customer/CUST001",
+            "entity_local_id": "CUST001",
+            "class_name": "Customer",
+            "action": "job:42",
+            "task_id": "t1",
+            "run_id": 99,
+            "message": "Running in Background Tasks",
+        },
+    )
+
+    text = _text(
+        await dataset_mcp.call(
+            "invoke_entity_action",
+            entity_uri="http://x/Customer/CUST001",
+            action="job:42",
+        )
+    )
+    assert "Action: job:42" in text
+    assert "task_id: t1" in text
+    assert "run_id: 99" in text
+    assert "Running in Background Tasks" in text
+
+    requests = dataset_mcp.requests_to("/api/v1/digitaltwin/nodes/action")
+    body = json.loads(requests[-1].content.decode("utf-8"))
+    assert body["action_full_name"] == "job:42"

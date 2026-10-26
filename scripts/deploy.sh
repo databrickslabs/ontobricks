@@ -162,14 +162,12 @@ _dab_var_overrides=(
     "--var=warehouse_id=${WAREHOUSE_ID}"
     "--var=registry_catalog=${REGISTRY_CATALOG}"
     "--var=registry_schema=${REGISTRY_SCHEMA}"
-    "--var=registry_volume=${REGISTRY_VOLUME}"
     "--var=lakebase_project=${LAKEBASE_PROJECT}"
     "--var=lakebase_branch=${LAKEBASE_BRANCH}"
     "--var=lakebase_database_resource_segment=${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
     "--var=lakebase_registry_schema=${LAKEBASE_SCHEMA}"
 )
 
-EXPECTED_VOLUME_FQN="${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${REGISTRY_VOLUME}"
 EXPECTED_PG_BRANCH_PATH="projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}"
 EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
 
@@ -180,7 +178,7 @@ echo "Instance: ${INSTANCE_ID:-?}"
 echo "Target  : $TARGET"
 echo "App     : $APP_NAME ($APP_RESOURCE_KEY)"
 echo "MCP app : $MCP_APP_NAME ($MCP_APP_RESOURCE_KEY)"
-echo "Registry: ${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${REGISTRY_VOLUME}"
+echo "Registry: ${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}"
 if $IS_LAKEBASE; then
     echo "Lakebase: projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
 fi
@@ -249,6 +247,11 @@ if $RENDER_APP_YAML; then
     require_file "src/mcp-server/app.yaml.template" "the MCP app.yaml source template"
     require_file "scripts/_internal/_render-app-yaml.py" "the app.yaml renderer"
 fi
+require_file "scripts/_internal/_init-lakebase-registry.py"
+if $IS_LAKEBASE; then
+    require_file "scripts/bootstrap/setup-lakebase.sh"
+    require_file "scripts/_internal/_lakebase-resolve-db.py"
+fi
 if $DO_BOOTSTRAP; then
     require_file "scripts/bootstrap/app-permissions.sh"
     if $IS_LAKEBASE; then
@@ -259,17 +262,106 @@ fi
 ok "required files present"
 
 # 1c. Required config values (fail fast with a precise name).
+# WAREHOUSE_ID may be empty — resolved after auth from the workspace
+# serverless warehouse. Lakebase db-… segment is resolved after
+# create-if-missing (needs auth).
 require_var APP_NAME; require_var MCP_APP_NAME
 require_var APP_RESOURCE_KEY; require_var MCP_APP_RESOURCE_KEY
 require_var TARGET
-require_var WAREHOUSE_ID
-require_var REGISTRY_CATALOG; require_var REGISTRY_SCHEMA; require_var REGISTRY_VOLUME
+require_var REGISTRY_CATALOG; require_var REGISTRY_SCHEMA
 if $IS_LAKEBASE; then
     require_var LAKEBASE_PROJECT; require_var LAKEBASE_BRANCH
     require_var LAKEBASE_SCHEMA; require_var LAKEBASE_DATABASE
+fi
+ok "deploy.config values present"
 
-    # Resolve db-… segment from LAKEBASE_DATABASE when not explicitly set.
-    # This calls the API once and caches the result in LAKEBASE_DATABASE_RESOURCE_SEGMENT.
+# 1d. Target sanity (soft — bundle validate is the source of truth).
+case "$TARGET" in
+    dev|dev-lakebase|dev-lakebase-*) : ;;
+    *) warn "target '${TARGET}' is not one of the documented targets (dev, dev-lakebase, dev-lakebase-<id>) — continuing; bundle validate will confirm it exists." ;;
+esac
+
+# ── 2. Verify Databricks authentication ─────────────────────────────
+begin_step "Verify Databricks authentication"
+if ! databricks current-user me &>/dev/null; then
+    die "Not authenticated to Databricks. Run: databricks auth login --host https://<workspace>${DATABRICKS_CONFIG_PROFILE:+ --profile $DATABRICKS_CONFIG_PROFILE} (or export DATABRICKS_HOST/DATABRICKS_TOKEN)."
+fi
+DATABRICKS_USERNAME="$(databricks current-user me -o json \
+    | python3 -c 'import sys,json; print(json.load(sys.stdin).get("userName","<unknown>"))' 2>/dev/null || echo "<unknown>")"
+ok "authenticated as ${DATABRICKS_USERNAME}"
+
+# ── 2a. SQL warehouse (explicit id, or workspace serverless default) ─
+begin_step "Resolve SQL warehouse"
+if [[ -n "${WAREHOUSE_ID:-}" ]]; then
+    ok "using WAREHOUSE_ID=${WAREHOUSE_ID}"
+else
+    _wh_json="$(databricks warehouses list -o json 2>/dev/null || true)"
+    _wh_hit="$(printf '%s' "$_wh_json" \
+        | python3 scripts/_internal/_init-lakebase-registry.py pick-warehouse 2>/dev/null || true)"
+    if [[ -z "$_wh_hit" ]]; then
+        die "WAREHOUSE_ID is empty and no serverless SQL warehouse was found. Set DEFAULT_WAREHOUSE_ID in ${CONFIG_FILE} or create a Serverless Starter Warehouse."
+    fi
+    WAREHOUSE_ID="${_wh_hit%%$'\t'*}"
+    _wh_name="${_wh_hit#*$'\t'}"
+    export WAREHOUSE_ID
+    export APP_SQL_WAREHOUSE_FALLBACK="${APP_SQL_WAREHOUSE_FALLBACK:-$WAREHOUSE_ID}"
+    ok "SQL warehouse → ${WAREHOUSE_ID} (${_wh_name})"
+fi
+if [[ "$WAREHOUSE_ID" == \#* || ! "$WAREHOUSE_ID" =~ ^[0-9a-fA-F]+$ ]]; then
+    die "WAREHOUSE_ID='${WAREHOUSE_ID}' is not a SQL warehouse id. Leave DEFAULT_WAREHOUSE_ID empty (Serverless Starter) or set a hex id — do not quote a # comment into the value."
+fi
+for _i in "${!_dab_var_overrides[@]}"; do
+    if [[ "${_dab_var_overrides[$_i]}" == --var=warehouse_id=* ]]; then
+        _dab_var_overrides[$_i]="--var=warehouse_id=${WAREHOUSE_ID}"
+        break
+    fi
+done
+
+# ── 2a2. Create-if-missing UC + Lakebase (Lakebase target only) ─────
+if $IS_LAKEBASE; then
+    begin_step "Ensure Unity Catalog catalog/schema"
+    if databricks catalogs get "$REGISTRY_CATALOG" >/dev/null 2>&1; then
+        ok "UC catalog '${REGISTRY_CATALOG}' already exists"
+    else
+        if $DRY_RUN; then
+            warn "UC catalog '${REGISTRY_CATALOG}' missing (would create on real deploy)"
+        else
+            databricks catalogs create "$REGISTRY_CATALOG" \
+                || die "Failed to create UC catalog '${REGISTRY_CATALOG}'"
+            ok "UC catalog '${REGISTRY_CATALOG}' created"
+        fi
+    fi
+    if databricks schemas get "${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}" >/dev/null 2>&1; then
+        ok "UC schema '${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}' already exists"
+    else
+        if $DRY_RUN; then
+            warn "UC schema '${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}' missing (would create on real deploy)"
+        else
+            databricks schemas create "$REGISTRY_SCHEMA" "$REGISTRY_CATALOG" \
+                || die "Failed to create UC schema '${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}'"
+            ok "UC schema '${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}' created"
+        fi
+    fi
+
+    begin_step "Ensure Lakebase project/database"
+    chmod +x scripts/bootstrap/setup-lakebase.sh
+    _setup_args=(
+        --name "$LAKEBASE_PROJECT"
+        --database "$LAKEBASE_DATABASE"
+        --branch "$LAKEBASE_BRANCH"
+        --profile "${DATABRICKS_CONFIG_PROFILE:-DEFAULT}"
+    )
+    if $DRY_RUN; then
+        scripts/bootstrap/setup-lakebase.sh --dry-run "${_setup_args[@]}" \
+            || warn "setup-lakebase dry-run reported an issue"
+        info "Lakebase project/database would be created if missing"
+    else
+        scripts/bootstrap/setup-lakebase.sh "${_setup_args[@]}" \
+            || die "Lakebase project/database provision failed (see scripts/bootstrap/setup-lakebase.sh)"
+        ok "Lakebase project '${LAKEBASE_PROJECT}' / database '${LAKEBASE_DATABASE}' ready"
+    fi
+
+    # Resolve db-… segment now that the database should exist.
     if [[ -z "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" ]]; then
         _branch_path="projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}"
         _resolve_out="$(databricks postgres list-databases "$_branch_path" -o json 2>/dev/null || true)"
@@ -289,47 +381,35 @@ if $IS_LAKEBASE; then
             fi
         fi
         if [[ -z "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" ]]; then
-            _lakebase_print_diag_hints \
-                "no db-… segment matches datname '${LAKEBASE_DATABASE}'" \
-                "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
-                "${LAKEBASE_DATABASE}" "" "${CONFIG_FILE}"
-            die "Could not resolve db-… resource segment for database '${LAKEBASE_DATABASE}'. Set LAKEBASE_DATABASE_RESOURCE_SEGMENT explicitly or fix LAKEBASE_PROJECT/LAKEBASE_BRANCH/DATABASE in ${CONFIG_FILE}."
+            if $DRY_RUN; then
+                warn "Lakebase database '${LAKEBASE_DATABASE}' missing (would create on real deploy)"
+            else
+                _lakebase_print_diag_hints \
+                    "no db-… segment matches datname '${LAKEBASE_DATABASE}'" \
+                    "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+                    "${LAKEBASE_DATABASE}" "" "${CONFIG_FILE}"
+                die "Could not resolve db-… resource segment for database '${LAKEBASE_DATABASE}'. Set LAKEBASE_DATABASE_RESOURCE_SEGMENT explicitly or fix LAKEBASE_PROJECT/LAKEBASE_BRANCH/DATABASE in ${CONFIG_FILE}."
+            fi
+        else
+            export LAKEBASE_DATABASE_RESOURCE_SEGMENT
+            info "Resolved db-… segment: ${LAKEBASE_DATABASE_RESOURCE_SEGMENT} (from database '${LAKEBASE_DATABASE}')"
         fi
-        export LAKEBASE_DATABASE_RESOURCE_SEGMENT
-        info "Resolved db-… segment: ${LAKEBASE_DATABASE_RESOURCE_SEGMENT} (from database '${LAKEBASE_DATABASE}')"
     fi
 
-    case "$LAKEBASE_DATABASE_RESOURCE_SEGMENT" in
-        db-*) : ;;
-        *) warn "LAKEBASE_DATABASE_RESOURCE_SEGMENT='${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' does not look like a 'db-…' id." ;;
-    esac
-
-    # Patch the _dab_var_overrides entry now that the segment is known
-    # (the array was built before resolution, so the entry was empty).
-    for _i in "${!_dab_var_overrides[@]}"; do
-        if [[ "${_dab_var_overrides[$_i]}" == --var=lakebase_database_resource_segment=* ]]; then
-            _dab_var_overrides[$_i]="--var=lakebase_database_resource_segment=${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
-            break
-        fi
-    done
-    EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
+    if [[ -n "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" ]]; then
+        case "$LAKEBASE_DATABASE_RESOURCE_SEGMENT" in
+            db-*) : ;;
+            *) warn "LAKEBASE_DATABASE_RESOURCE_SEGMENT='${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' does not look like a 'db-…' id." ;;
+        esac
+        for _i in "${!_dab_var_overrides[@]}"; do
+            if [[ "${_dab_var_overrides[$_i]}" == --var=lakebase_database_resource_segment=* ]]; then
+                _dab_var_overrides[$_i]="--var=lakebase_database_resource_segment=${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
+                break
+            fi
+        done
+        EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
+    fi
 fi
-ok "deploy.config values present"
-
-# 1d. Target sanity (soft — bundle validate is the source of truth).
-case "$TARGET" in
-    dev|dev-lakebase|dev-lakebase-*) : ;;
-    *) warn "target '${TARGET}' is not one of the documented targets (dev, dev-lakebase, dev-lakebase-<id>) — continuing; bundle validate will confirm it exists." ;;
-esac
-
-# ── 2. Verify Databricks authentication ─────────────────────────────
-begin_step "Verify Databricks authentication"
-if ! databricks current-user me &>/dev/null; then
-    die "Not authenticated to Databricks. Run: databricks auth login --host https://<workspace>${DATABRICKS_CONFIG_PROFILE:+ --profile $DATABRICKS_CONFIG_PROFILE} (or export DATABRICKS_HOST/DATABRICKS_TOKEN)."
-fi
-DATABRICKS_USERNAME="$(databricks current-user me -o json \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin).get("userName","<unknown>"))' 2>/dev/null || echo "<unknown>")"
-ok "authenticated as ${DATABRICKS_USERNAME}"
 
 # ── 2b. Resolve ONTOBRICKS_URL for the MCP app.yaml ─────────────────
 # Fetch the main app's URL from the platform so the MCP companion yaml
@@ -362,9 +442,10 @@ if $IS_LAKEBASE && $DO_BOOTSTRAP; then
             "$APP_NAME" \
             "$MCP_APP_NAME"; then
         if $DRY_RUN; then
-            die "Lakebase bootstrap preflight failed — fix the issues above before deploying (see docs/DEPLOY_CHECKLIST.md)."
+            warn "Lakebase bootstrap preflight reported issues — missing registry is OK on dry-run (would initialize on real deploy)."
+        else
+            warn "Lakebase bootstrap preflight reported blocking issues — deploy will continue but step 11 may fail."
         fi
-        warn "Lakebase bootstrap preflight reported blocking issues — deploy will continue but step 11 may fail."
     else
         if [[ $_PREFLIGHT_WARNINGS -gt 0 ]]; then
             info "preflight passed with ${_PREFLIGHT_WARNINGS} warning(s) — review messages above."
@@ -442,14 +523,17 @@ check_resource() {
 check_resource "SQL warehouse '${WAREHOUSE_ID}'" \
     databricks warehouses get "$WAREHOUSE_ID"
 
-check_resource "Volume '${EXPECTED_VOLUME_FQN}'" \
-    databricks volumes read "$EXPECTED_VOLUME_FQN"
-
 if $IS_LAKEBASE; then
-    # The Lakebase Postgres database must already exist (created by
-    # scripts/bootstrap/setup-lakebase.sh). Verify the db-… segment is listed under
-    # the configured project/branch.
-    if _pg_dbs="$(databricks postgres list-databases "$EXPECTED_PG_BRANCH_PATH" -o json 2>/dev/null)"; then
+    # After create-if-missing the database should exist. On --dry-run it
+    # may still be absent — that is a planned create, not a check failure.
+    if [[ -z "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" ]]; then
+        if $DRY_RUN; then
+            warn "Lakebase database '${LAKEBASE_DATABASE}' not resolved (would create on real deploy)"
+        else
+            CHECK_FAILED=$((CHECK_FAILED + 1))
+            warn "Lakebase database segment not resolved for '${LAKEBASE_DATABASE}'."
+        fi
+    elif _pg_dbs="$(databricks postgres list-databases "$EXPECTED_PG_BRANCH_PATH" -o json 2>/dev/null)"; then
         if printf '%s' "$_pg_dbs" | grep -q "$LAKEBASE_DATABASE_RESOURCE_SEGMENT"; then
             ok "Lakebase database '${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' present on ${EXPECTED_PG_BRANCH_PATH}"
             # Auto-derive the PostgreSQL datname from the resource segment when the
@@ -478,20 +562,28 @@ except Exception:
                 info "Auto-corrected LAKEBASE_DATABASE → '${_derived_datname}' for this deploy."
             fi
         else
-            CHECK_FAILED=$((CHECK_FAILED + 1))
-            warn "Lakebase database '${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' not found under ${EXPECTED_PG_BRANCH_PATH}."
-            _lakebase_print_diag_hints \
-                "db-… segment not listed under project/branch" \
-                "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
-                "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT}" "${CONFIG_FILE}"
+            if $DRY_RUN; then
+                warn "Lakebase database '${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' not found under ${EXPECTED_PG_BRANCH_PATH} (would create on real deploy)."
+            else
+                CHECK_FAILED=$((CHECK_FAILED + 1))
+                warn "Lakebase database '${LAKEBASE_DATABASE_RESOURCE_SEGMENT}' not found under ${EXPECTED_PG_BRANCH_PATH}."
+                _lakebase_print_diag_hints \
+                    "db-… segment not listed under project/branch" \
+                    "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+                    "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT}" "${CONFIG_FILE}"
+            fi
         fi
     else
-        CHECK_FAILED=$((CHECK_FAILED + 1))
-        warn "could not list Lakebase databases for ${EXPECTED_PG_BRANCH_PATH} (API error or project/branch not found)."
-        _lakebase_print_diag_hints \
-            "postgres list-databases call failed" \
-            "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
-            "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" "${CONFIG_FILE}"
+        if $DRY_RUN; then
+            warn "could not list Lakebase databases for ${EXPECTED_PG_BRANCH_PATH} (would create project/database on real deploy)."
+        else
+            CHECK_FAILED=$((CHECK_FAILED + 1))
+            warn "could not list Lakebase databases for ${EXPECTED_PG_BRANCH_PATH} (API error or project/branch not found)."
+            _lakebase_print_diag_hints \
+                "postgres list-databases call failed" \
+                "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
+                "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" "${CONFIG_FILE}"
+        fi
     fi
 fi
 
@@ -539,7 +631,22 @@ begin_step "Verify synced source"
 
 # Critical files the apps need to boot. Paths are relative to the synced
 # bundle root (source_code_path "." for the UI, "src/mcp-server" for MCP).
-_CRITICAL_SYNCED_FILES=(run.py pyproject.toml src/mcp-server/pyproject.toml src/mcp-server/app.yaml src/mcp-server/app.yaml.template)
+# Entry/deps alone are not enough: a stale snapshot can skip an unchanged
+# module (identical mtime after a package rename) while run.py is present,
+# and the app then dies with ModuleNotFoundError. Probe the packages that
+# already burned us that way.
+_CRITICAL_SYNCED_FILES=(
+    "run.py"
+    "pyproject.toml"
+    "src/mcp-server/pyproject.toml"
+    "src/mcp-server/app.yaml"
+    "src/mcp-server/app.yaml.template"
+    "src/back/objects/registry/collab/__init__.py"
+    "src/back/objects/registry/collab/CommentService.py"
+    "src/back/objects/registry/collab/EditLockService.py"
+    "src/back/objects/registry/collab/ReviewService.py"
+    "src/back/objects/digitaltwin/build/__init__.py"
+)
 
 # Authoritative remote files dir from the resolved bundle; fall back to the
 # databricks.yml root_path convention if `bundle summary` is unavailable.
@@ -651,7 +758,6 @@ verify_app_resources() {
 
     if APP_JSON="$app_json" \
         EXPECT_WAREHOUSE="$WAREHOUSE_ID" \
-        EXPECT_VOLUME="$EXPECTED_VOLUME_FQN" \
         EXPECT_PG_BRANCH="$EXPECTED_PG_BRANCH_PATH" \
         EXPECT_PG_DATABASE="$EXPECTED_PG_DATABASE_PATH" \
         EXPECT_LAKEBASE="$expect_lakebase" \
@@ -666,16 +772,6 @@ sqlw = ((resources.get("sql-warehouse") or {}).get("sql_warehouse") or {}).get("
 if sqlw != os.environ["EXPECT_WAREHOUSE"]:
     errors.append(
         f"sql-warehouse.id mismatch: got={sqlw!r} expected={os.environ['EXPECT_WAREHOUSE']!r}"
-    )
-
-volume = (
-    (resources.get("volume") or {})
-    .get("uc_securable", {})
-    .get("securable_full_name")
-)
-if volume != os.environ["EXPECT_VOLUME"]:
-    errors.append(
-        f"volume.securable_full_name mismatch: got={volume!r} expected={os.environ['EXPECT_VOLUME']!r}"
     )
 
 expect_lakebase = os.environ["EXPECT_LAKEBASE"] == "true"
@@ -744,6 +840,21 @@ else
     warn "app self-permission bootstrap returned non-zero — the app may not yet be reachable; re-run \`make bootstrap-perms\` once it is RUNNING."
 fi
 
+# ── 10b. Initialize Lakebase registry schema (create-if-missing DDL) ─
+if $IS_LAKEBASE; then
+    begin_step "Initialize Lakebase registry schema"
+    export PGUSER="${DATABRICKS_USERNAME}"
+    export PGDATABASE="$LAKEBASE_DATABASE"
+    export PGPORT="${PGPORT:-5432}"
+    export LAKEBASE_PROJECT LAKEBASE_BRANCH LAKEBASE_DATABASE LAKEBASE_SCHEMA
+    export REGISTRY_CATALOG REGISTRY_SCHEMA
+    if PYTHONPATH=src uv run --frozen python scripts/_internal/_init-lakebase-registry.py initialize; then
+        ok "registry schema '${LAKEBASE_SCHEMA}' initialized"
+    else
+        die "Lakebase registry initialize failed"
+    fi
+fi
+
 # ── 11. Registry Lakebase schema permissions (dev-lakebase only) ───
 # When the postgres resource binding is unbound/rebound — which happens
 # every time we redeploy with a different target — Lakebase loses the
@@ -758,9 +869,7 @@ fi
 # with the explicit graph project/database/schema).
 #
 # Re-running the bootstrap is idempotent, so we do it on every
-# Lakebase-target deploy. Failures are tolerated (e.g. first deploy
-# before the schema is initialised, or psql not installed) — the
-# script prints actionable guidance in that case.
+# Lakebase-target deploy. The registry schema is created in step 10b.
 if $IS_LAKEBASE; then
     begin_step "Lakebase schema permissions"
     chmod +x scripts/bootstrap/lakebase-perms.sh
@@ -785,8 +894,7 @@ if $IS_LAKEBASE; then
             "bootstrap-lakebase-perms.sh failed (connection, endpoint, or schema grants)" \
             "${LAKEBASE_PROJECT}" "${LAKEBASE_BRANCH}" \
             "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" "${CONFIG_FILE}"
-        echo "    If the registry schema does not exist yet, initialise it"
-        echo "    from Settings > Registry > Initialize and re-run:"
+        echo "    Re-run after fixing grants:"
         echo "      scripts/bootstrap/lakebase-perms.sh \\"
         echo "        -i $LAKEBASE_PROJECT \\"
         echo "        -b $LAKEBASE_BRANCH \\"
@@ -805,9 +913,8 @@ echo "  1. To change ANY deployment value, edit scripts/deploy.config.sh"
 echo "     and re-run \`make deploy\` — never edit app.yaml directly"
 echo "     (it is generated from app.yaml.template + the config)."
 echo "  2. Bind resources in the Databricks Apps UI if this is a fresh app:"
-echo "       sql-warehouse + volume (always), postgres (only on dev-lakebase)"
-echo "  3. Initialize the registry on first deploy: Settings > Registry > Initialize"
-echo "  4. Resource bindings carry over between deploys — only needed once"
-echo "  5. To switch backends, redeploy with the matching target:"
+echo "       sql-warehouse (always), postgres (only on Lakebase targets)"
+echo "  3. Resource bindings carry over between deploys — only needed once"
+echo "  4. To switch backends, redeploy with the matching target:"
 echo "       scripts/deploy.sh -t dev           # Volume-only"
 echo "       scripts/deploy.sh -t dev-lakebase  # Lakebase Postgres"

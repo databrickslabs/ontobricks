@@ -24,6 +24,7 @@
 {% block content %}
 <!-- Ontology Core Module (shared state across all partials) -->
 <script src="{{ url_for('static', filename='global/js/ontology-core.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='global/js/ontology-inheritance.js') }}?v={{ asset_version }}"></script>
 
 <div class="container-fluid px-0">
     <div class="sidebar-layout">
@@ -41,7 +42,7 @@
                 {% include "partials/ontology/_ontology_wizard.html" %}
             </div>
             
-            <!-- Information Section - Default view -->
+            <!-- General section (id remains information) — default view -->
             <div id="information-section" class="sidebar-section active">
                 {% include "partials/ontology/_ontology_information.html" %}
             </div>
@@ -112,6 +113,8 @@
     </div>
 </div>
 
+{% include "partials/ontology/_ontology_entity_import_modal.html" %}
+
 <!-- OntoViz library for Design section -->
 <script src="{{ url_for('static', filename='global/ontoviz/ontoviz.js') }}?v={{ asset_version }}"></script>
 
@@ -120,6 +123,7 @@
 
 <!-- Ontology modules (extracted from partials) -->
 <script src="{{ url_for('static', filename='ontology/js/ontology-map.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-entity-import.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-shared-panels.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-entities.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-relationships.js') }}?v={{ asset_version }}"></script>
@@ -135,9 +139,8 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-import.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-groups.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='global/js/task-progress-ui.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-wizard-review.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-wizard.js') }}?v={{ asset_version }}"></script>
-<!-- Markdown rendering for assistant chat -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-assistant.js') }}?v={{ asset_version }}"></script>
 
 <script src="{{ url_for('static', filename='ontology/js/ontology-pitfalls.js') }}?v={{ asset_version }}"></script>

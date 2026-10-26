@@ -155,6 +155,21 @@ def test_ontology_assistant_has_no_floating_action_button():
     assert "btn btn-sm btn-outline-secondary" in partial
 
 
+def test_ontology_designer_select_toggle_is_in_the_display_cluster():
+    """Select mode is a display/tool toggle, same cluster as grid."""
+    partial = _read(MAP_PARTIAL)
+    groups = re.findall(r'<div class="btn-group[^"]*"[^>]*>(.*?)</div>', partial, re.DOTALL)
+    grouped = "".join(groups)
+    assert 'id="mapToggleSelect"' in grouped
+    assert 'id="mapToggleGrid"' in grouped
+    start = grouped.index('id="mapToggleSelect"')
+    tag = grouped[start:grouped.index(">", start)]
+    assert 'aria-pressed="false"' in tag
+    assert 'title="Select entities (or hold Ctrl/Cmd)"' in tag
+    css = _read(REPO_ROOT / "src/front/static/ontology/css/ontology-map.css")
+    assert "#ontology-map-container.map-select-mode" in css
+
+
 def test_ontology_designer_grid_toggle_is_in_the_display_cluster():
     """Dot-grid visibility is a display toggle, same cluster as inheritance."""
     partial = _read(MAP_PARTIAL)
@@ -210,6 +225,38 @@ def test_settings_header_buttons_carry_the_small_size():
     assert re.search(
         r'class="btn btn-sm btn-outline-primary" id="btnOpenProvisionModal"', html
     )
+
+
+def test_lakehouse_save_is_on_the_section_title_row():
+    """Lakehouse persists warehouse choice from the page title row, like
+    Databricks/Neo4j Save — not from an Apply control next to the select."""
+    html = _read(SETTINGS_HTML)
+    section = re.search(
+        r'id="delta-section".*?</div>\s*</div>\s*<!--\s*={5,}',
+        html,
+        flags=re.DOTALL,
+    )
+    assert section, "Could not isolate the Lakehouse settings section"
+    body = section.group(0)
+    header = re.search(
+        r'<div class="section-header d-flex justify-content-between '
+        r'align-items-center mb-4">(.*?)</div>\s*<div id="deltaSectionBanner"',
+        body,
+        flags=re.DOTALL,
+    )
+    assert header, "Lakehouse title row is not a shared section-header flex"
+    header_html = header.group(1)
+    assert "Lakehouse" in header_html
+    assert 'id="btnApplyDeltaWarehouse"' in header_html
+    assert re.search(
+        r'<i class="bi bi-check-circle me-1"></i>\s*Save', header_html
+    )
+    assert "> Apply" not in header_html
+    controls = re.search(
+        r'id="deltaWarehouseControls"[^>]*>(.*?)</div>', body, flags=re.DOTALL
+    )
+    assert controls
+    assert 'id="btnApplyDeltaWarehouse"' not in controls.group(1)
 
 
 def test_no_button_is_hidden_with_an_inline_style():

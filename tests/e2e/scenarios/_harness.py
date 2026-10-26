@@ -16,6 +16,58 @@ from __future__ import annotations
 import json
 import os
 import time
+from typing import Optional
+from urllib.parse import urlparse
+
+# ``GET /health`` is a local liveness check, but the server can still be
+# slow to answer right after a long KG build; a skip here aborts the rest
+# of the campaign via pytest-dependency. Budget a full minute.
+PROBE_TIMEOUT_S = 60.0
+PROBE_PATHS = ("/health", "/healthz")
+
+# Durable campaign domains. Prefix ``Zz`` (CamelCase stand-in for ``ZZ_`` —
+# underscores are illegal in domain names) so they sort last in the registry.
+CAMPAIGN_DOMAIN_NAME = "ZzTestScenario1"
+CAMPAIGN_DOMAIN_FOLDER = CAMPAIGN_DOMAIN_NAME.lower()
+METADATA_DOMAIN_NAME = "ZzTestMetadataIntegrity"
+ZERO_COPY_DOMAIN_NAME = "ZzTestZeroCopy"
+LIFECYCLE_DOMAIN_NAME = "ZzSalesDomain"
+# Folders from before the Zz rename — still purged at campaign start.
+_LEGACY_CAMPAIGN_FOLDERS = frozenset(
+    {"testscenario1", "testzerocopy", "testmetadataintegrity", "salesdomain"}
+)
+
+
+def is_loopback_base(url: str) -> bool:
+    """True when *url* points at this machine (local campaign, not Apps)."""
+    host = (urlparse(url).hostname or "").lower()
+    return host in {"localhost", "127.0.0.1", "::1"}
+
+
+def needs_apps_gateway_token(base: Optional[str]) -> bool:
+    """Deployed Databricks Apps need a workspace bearer; localhost does not."""
+    if not base:
+        return False
+    return not is_loopback_base(base)
+
+
+def probe_app(
+    base: str, *, timeout: float = PROBE_TIMEOUT_S, token: Optional[str] = None
+) -> None:
+    """Hit ``/health`` then ``/healthz``; raise the last error if neither is 200."""
+    import httpx
+
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    last_exc: Exception | None = None
+    for probe in PROBE_PATHS:
+        try:
+            resp = httpx.get(f"{base}{probe}", timeout=timeout, headers=headers)
+            if resp.status_code == 200:
+                return
+            last_exc = RuntimeError(f"{probe} → HTTP {resp.status_code}")
+        except Exception as exc:  # noqa: BLE001 — surface as the skip reason
+            last_exc = exc
+    raise last_exc or RuntimeError("non-200 health")
 
 
 def base_url() -> str:
@@ -25,6 +77,49 @@ def base_url() -> str:
         or os.environ.get("ONTOBRICKS_SCENARIO_BASE")
         or "http://localhost:8000"
     ).rstrip("/")
+
+
+def is_campaign_leftover(name: str) -> bool:
+    """True for ``Zz*`` / ``ZZ_*`` campaign domains (and the pre-rename folders)."""
+    key = (name or "").strip().lower()
+    if not key:
+        return False
+    if key.replace("_", "").startswith("zz"):
+        return True
+    return key in _LEGACY_CAMPAIGN_FOLDERS
+
+
+def registry_domain_keys(page, base: str) -> list[str]:
+    """Return registry domain folders/names from ``GET /domain/list-projects``."""
+    try:
+        data = json_body(page.request.get(f"{base}/domain/list-projects"))
+    except Exception:  # noqa: BLE001 — empty registry / transient
+        return []
+    out: list[str] = []
+    for item in data.get("domains", []) or []:
+        name = item if isinstance(item, str) else (item.get("folder") or item.get("name") or "")
+        if name:
+            out.append(str(name))
+    return out
+
+
+def purge_campaign_domains(page, base: str, *, step=None) -> list[str]:
+    """DELETE every leftover campaign domain. Returns the folders removed."""
+    headers = csrf_headers(page.context)
+    deleted: list[str] = []
+    for folder in registry_domain_keys(page, base):
+        if not is_campaign_leftover(folder):
+            continue
+        if step is not None:
+            step(f"deleting leftover campaign domain '{folder}'")
+        resp = page.context.request.delete(
+            f"{base}/settings/registry/domains/{folder}",
+            headers=headers,
+            timeout=60_000,
+        )
+        assert resp.status in (200, 204), resp.text()
+        deleted.append(folder)
+    return deleted
 
 
 def csrf_headers(context) -> dict:

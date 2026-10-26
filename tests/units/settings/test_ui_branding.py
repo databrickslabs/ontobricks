@@ -9,11 +9,11 @@ import pytest
 
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.helpers.UIBranding import normalize_ui_branding
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 from back.objects.session.GlobalConfigService import GlobalConfigService
 from shared.fastapi.ui_branding import resolve_request_ui_branding
 
-_svc_module = importlib.import_module("back.objects.domain.SettingsService")
+_svc_module = importlib.import_module("back.objects.domain.settings.SettingsService")
 
 REGISTRY_CFG = {"catalog": "cat", "schema": "sch", "volume": "vol"}
 
@@ -80,6 +80,19 @@ class TestGlobalConfigUiBranding:
         assert "ui_branding" in updates
         assert updates["ui_branding"]["app_title"] == "Acme"
         assert updates["navbar_logo"] == ""
+
+    def test_set_ui_branding_persists_derived_aurora_color(self):
+        svc = GlobalConfigService()
+        with patch.object(svc, "_save", return_value=(True, "ok")) as mock_save:
+            ok, _ = svc.set_ui_branding(
+                "h",
+                "t",
+                REGISTRY_CFG,
+                {"app_title": "Acme", "primary_color": "#123456", "logo_data_url": ""},
+            )
+        assert ok
+        updates = mock_save.call_args[0][3]
+        assert updates["ui_branding"]["aurora_color"]  # derived, non-empty
 
     def test_failed_save_does_not_mutate_cache(self):
         svc = GlobalConfigService()
@@ -209,6 +222,7 @@ class TestSettingsServiceUiBranding:
                 SettingsService.save_ui_branding_result(
                     app_title="Acme",
                     primary_color="#123456",
+                    aurora_color="",
                     logo_content=b"abc",
                     logo_mime="image/png",
                     reset_logo=True,
@@ -226,6 +240,7 @@ class TestSettingsServiceUiBranding:
                 SettingsService.save_ui_branding_result(
                     app_title="",
                     primary_color="#123456",
+                    aurora_color="",
                     logo_content=None,
                     logo_mime=None,
                     reset_logo=False,
@@ -248,6 +263,7 @@ class TestSettingsServiceUiBranding:
             result = SettingsService.save_ui_branding_result(
                 app_title="Acme Graph",
                 primary_color="#123456",
+                aurora_color="",
                 logo_content=None,
                 logo_mime=None,
                 reset_logo=False,
@@ -278,6 +294,7 @@ class TestSettingsServiceUiBranding:
                 SettingsService.save_ui_branding_result(
                     app_title="Acme Graph",
                     primary_color="#123456",
+                    aurora_color="",
                     logo_content=None,
                     logo_mime=None,
                     reset_logo=False,
@@ -305,6 +322,7 @@ class TestSettingsServiceUiBranding:
             SettingsService.save_ui_branding_result(
                 app_title="Acme Graph",
                 primary_color="#123456",
+                aurora_color="",
                 logo_content=None,
                 logo_mime=None,
                 reset_logo=False,
@@ -390,6 +408,7 @@ class TestSettingsServiceUiBranding:
             SettingsService.save_ui_branding_result(
                 app_title="Acme Graph",
                 primary_color="#123456",
+                aurora_color="",
                 logo_content=None,
                 logo_mime=None,
                 reset_logo=False,
@@ -402,3 +421,71 @@ class TestSettingsServiceUiBranding:
 
         assert branding["app_title"] == "Acme Graph"
         assert branding["primary_color"] == "#123456"
+
+
+class TestSettingsServiceUiBrandingAurora:
+    def test_save_ui_branding_persists_explicit_aurora(self):
+        session_mgr, settings = _mock_context()
+        with (
+            patch.object(SettingsService, "require_admin_error", return_value=None),
+            patch.object(
+                _svc_module,
+                "resolve_app_registry_context",
+                return_value=("h", "t", REGISTRY_CFG),
+            ),
+            patch.object(
+                _svc_module.global_config_service,
+                "get_ui_branding",
+                return_value=normalize_ui_branding({}).to_dict(),
+            ),
+            patch.object(
+                _svc_module.global_config_service,
+                "set_ui_branding",
+                return_value=(True, "ok"),
+            ) as mock_set,
+        ):
+            result = SettingsService.save_ui_branding_result(
+                app_title="Acme",
+                primary_color="#4F46E5",
+                aurora_color="#22A7C8",
+                logo_content=None,
+                logo_mime=None,
+                reset_logo=False,
+                email="a@b.com",
+                user_token="tok",
+                session_mgr=session_mgr,
+                settings=settings,
+            )
+        assert result["success"] is True
+        assert result["branding"]["aurora_color"] == "#22A7C8"
+        mock_set.assert_called_once()
+        assert mock_set.call_args[0][3]["aurora_color"] == "#22A7C8"
+
+    def test_save_ui_branding_rejects_malformed_aurora(self):
+        session_mgr, settings = _mock_context()
+        with (
+            patch.object(SettingsService, "require_admin_error", return_value=None),
+            patch.object(
+                _svc_module,
+                "resolve_app_registry_context",
+                return_value=("h", "t", REGISTRY_CFG),
+            ),
+            patch.object(
+                _svc_module.global_config_service,
+                "get_ui_branding",
+                return_value=normalize_ui_branding({}).to_dict(),
+            ),
+        ):
+            with pytest.raises(ValidationError, match="aurora"):
+                SettingsService.save_ui_branding_result(
+                    app_title="Acme",
+                    primary_color="#4F46E5",
+                    aurora_color="not-a-color",
+                    logo_content=None,
+                    logo_mime=None,
+                    reset_logo=False,
+                    email="a@b.com",
+                    user_token="tok",
+                    session_mgr=session_mgr,
+                    settings=settings,
+                )

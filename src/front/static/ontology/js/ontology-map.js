@@ -17,6 +17,105 @@ let ontologyMapLinks  = [];   // live reference to link data (set by initOntolog
 let ontologyMapNodes  = [];   // live reference to node data (set by initOntologyMap)
 let _mapHighlightNeighborhood = null;  // set by initOntologyMap, used by focusMapEntity
 let _mapClearHighlights       = null;  // set by initOntologyMap, used by focusMapEntity
+let mapSelectedEntityNames    = new Set();
+let mapSelectMode             = false;
+let _mapCanvasClickSuppressUntil = 0;  // performance.now() deadline; 0 = not armed
+
+/**
+ * True for Ctrl/Cmd gestures and while the Studio Select toolbar is on.
+ * @param {Event} event
+ * @returns {boolean}
+ */
+function _isMapSelectGesture(event) {
+    return !!(mapSelectMode || (event && (event.ctrlKey || event.metaKey)));
+}
+
+/**
+ * A Ctrl/Cmd marquee ends on ``pointerup``; the browser then dispatches a
+ * ``click`` on the canvas, which would clear the selection the marquee just
+ * made. Arm a one-shot, short-lived guard so that click is ignored.
+ */
+function _suppressNextMapCanvasClick() {
+    _mapCanvasClickSuppressUntil = performance.now() + 400;
+}
+
+/**
+ * @returns {boolean} true (once) when the next canvas click must be ignored.
+ */
+function _consumeMapCanvasClickSuppression() {
+    const armed = _mapCanvasClickSuppressUntil > 0
+        && performance.now() <= _mapCanvasClickSuppressUntil;
+    _mapCanvasClickSuppressUntil = 0;
+    return armed;
+}
+
+/**
+ * Names currently selected (live read, never a cached copy).
+ * @returns {string[]}
+ */
+function _liveMapSelectionNames() {
+    return Array.from(mapSelectedEntityNames);
+}
+
+/**
+ * Apply a new entity selection set and sync node classes, neighbourhood
+ * dimming, and the single-entity panel.
+ * @param {Iterable<string>} names
+ * @param {{openPanel?: boolean, closePanel?: boolean}} [options]
+ */
+function _setMapSelection(names, options) {
+    const openPanel = !(options && options.openPanel === false);
+    const closePanel = !(options && options.closePanel === false);
+    const previousSize = mapSelectedEntityNames.size;
+    mapSelectedEntityNames = new Set(names || []);
+    // A context menu captured the previous selection; never leave it open.
+    hideMapContextMenu();
+    d3.selectAll('.map-node').classed('selected', d => d && mapSelectedEntityNames.has(d.name));
+
+    if (mapSelectedEntityNames.size === 1) {
+        const name = mapSelectedEntityNames.values().next().value;
+        if (_mapHighlightNeighborhood) _mapHighlightNeighborhood(name);
+        if (openPanel && typeof editClassByName === 'function') {
+            editClassByName(name);
+        }
+        return;
+    }
+
+    if (_mapClearHighlights) _mapClearHighlights();
+    if (closePanel && previousSize !== 0 && typeof guardedCloseSharedPanel === 'function') {
+        guardedCloseSharedPanel();
+    }
+}
+
+function _toggleMapEntitySelection(name) {
+    const next = new Set(mapSelectedEntityNames);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    _setMapSelection(next, { openPanel: false });
+}
+
+function _clearMapSelection(options) {
+    _setMapSelection([], { openPanel: false, closePanel: options && options.closePanel });
+}
+
+function handleMapSelectionKeyDown(event) {
+    if (event.key !== 'Escape') return;
+    // Escape belongs to an open Bootstrap modal, or to another Ontology
+    // section, not to the Studio canvas. Bootstrap's own (element-level)
+    // keydown handler runs first and already drops `.show` while dismissing,
+    // so also look at where the key came from and at `body.modal-open`
+    // (which stays set until the hide transition ends).
+    if (event.target && event.target.closest && event.target.closest('.modal')) return;
+    if (document.body.classList.contains('modal-open')) return;
+    if (document.querySelector('.modal.show')) return;
+    if (!document.querySelector('#map-section.active')) return;
+    hideMapContextMenu();
+    if (mapConnectionMode) return;
+    if (mapSelectedEntityNames.size <= 1) return;
+    _clearMapSelection();
+}
+
+document.addEventListener('keydown', handleMapSelectionKeyDown);
 
 /**
  * Resolve the name from a D3 link endpoint that may be either a plain string
@@ -165,13 +264,49 @@ function initMapGridToggle() {
 }
 
 /**
+ * Sync the Select toolbar button and canvas cursor with ``mapSelectMode``.
+ */
+function applyMapSelectMode() {
+    const container = document.getElementById('ontology-map-container');
+    const btn = document.getElementById('mapToggleSelect');
+    if (container) {
+        container.classList.toggle('map-select-mode', mapSelectMode);
+    }
+    if (btn) {
+        btn.classList.toggle('active', mapSelectMode);
+        btn.setAttribute('aria-pressed', mapSelectMode ? 'true' : 'false');
+        btn.title = mapSelectMode
+            ? 'Exit select mode (plain click opens the panel)'
+            : 'Select entities (or hold Ctrl/Cmd)';
+        btn.setAttribute('aria-label', btn.title);
+    }
+}
+
+/**
+ * Bind the header Select toggle once. Safe to call from every map init.
+ */
+function initMapSelectToggle() {
+    const btn = document.getElementById('mapToggleSelect');
+    applyMapSelectMode();
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.onclick = () => {
+        mapSelectMode = !mapSelectMode;
+        applyMapSelectMode();
+    };
+}
+
+/**
  * Initialize the Ontology Designer visualization
  */
 async function initOntologyMap() {
     // Increment generation counter to cancel any previous in-flight init
     const thisGeneration = ++_mapInitGeneration;
+    // Rebuilds must not double-save/close a panel the caller just opened.
+    _clearMapSelection({ closePanel: false });
 
     initMapGridToggle();
+    initMapSelectToggle();
     showOntologyMapLoading(true);
     
     const container = document.getElementById('ontology-map-container');
@@ -247,7 +382,7 @@ async function initOntologyMap() {
             label: cls.label || cls.name,
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
             // True when the backing class has a Dashboard, Dataset, Actions, or
-            // Bridges configured under the entity panel's References tab.
+            // Bridges configured (entity panel's Links / Behaviour / Model tabs).
             hasExternal: _classHasExternalConfig(cls),
             parent: cls.parent,
             // Use saved position if available, fix positions to prevent animation
@@ -334,6 +469,29 @@ async function initOntologyMap() {
         }
     });
     
+    classes.forEach(cls => {
+        const rels = (typeof outgoingRelationsForClass === 'function')
+            ? outgoingRelationsForClass(classes, properties, cls.name)
+            : [];
+        rels.forEach(rel => {
+            if (!rel.inherited) return;
+            if (PRIMITIVE_TYPES.has((rel.range || '').toLowerCase())) return;
+            const source = resolveNodeId(cls.name);
+            const target = resolveNodeId(rel.range);
+            if (!source || !target) return;
+            links.push({
+                source: source,
+                target: target,
+                name: rel.name,
+                label: rel.label || rel.name,
+                type: 'relationship',
+                direction: rel.direction || 'forward',
+                inherited: true,
+                inheritedFrom: rel.inheritedFrom || '',
+            });
+        });
+    });
+
     console.log(`[Map] Built ${links.length} valid links from ${properties.length} properties`);
 
     // Expose to module scope so context-menu handlers can access them
@@ -378,6 +536,13 @@ async function initOntologyMap() {
         .on('zoom', (event) => {
             g.attr('transform', event.transform);
         });
+
+    ontologyMapZoom.filter((event) => {
+        if (event.type === 'wheel') return true;
+        if (event.button) return false;
+        if (_isMapSelectGesture(event)) return false;
+        return true;
+    });
 
     svg.call(ontologyMapZoom);
 
@@ -459,20 +624,41 @@ async function initOntologyMap() {
     }
 
     // Drag handlers
+    let mapDragStartPositions = new Map();
+
     function dragStarted(event, d) {
         d.fx = d.x;
         d.fy = d.y;
+        mapDragStartPositions = new Map();
+        if (mapSelectedEntityNames.size > 1 && mapSelectedEntityNames.has(d.name)) {
+            ontologyMapNodes.forEach(node => {
+                if (mapSelectedEntityNames.has(node.name)) {
+                    mapDragStartPositions.set(node.name, { x: node.x, y: node.y });
+                }
+            });
+        }
     }
 
     function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-        // Immediately update positions
+        if (mapDragStartPositions.size > 1) {
+            const origin = mapDragStartPositions.get(d.name);
+            const deltaX = event.x - origin.x;
+            const deltaY = event.y - origin.y;
+            ontologyMapNodes.forEach(node => {
+                const start = mapDragStartPositions.get(node.name);
+                if (!start) return;
+                node.fx = start.x + deltaX;
+                node.fy = start.y + deltaY;
+            });
+        } else {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
         ontologyMapSimulation.alpha(0.01).restart();
     }
 
     function dragEnded(event, d) {
-        // Keep fixed position and save
+        mapDragStartPositions = new Map();
         scheduleMapAutoSave(nodes);
     }
 
@@ -504,7 +690,7 @@ async function initOntologyMap() {
         .data(regularLinks.filter(l => l.type === 'relationship'))
         .enter()
         .append('path')
-        .attr('class', d => `map-link${d.direction === 'reverse' ? ' reverse' : ''}`);
+        .attr('class', d => `map-link${d.direction === 'reverse' ? ' reverse' : ''}${d.inherited ? ' inherited' : ''}`);
 
     // Draw inheritance links
     const inheritanceLinkElements = g.append('g')
@@ -520,7 +706,7 @@ async function initOntologyMap() {
         .data(selfLoopLinks)
         .enter()
         .append('path')
-        .attr('class', 'map-link self-loop');
+        .attr('class', d => `map-link self-loop${d.inherited ? ' inherited' : ''}`);
 
     // Draw clickable hitareas at link midpoints (for relationships only)
     const linkHitareas = g.append('g')
@@ -537,7 +723,7 @@ async function initOntologyMap() {
             event.stopPropagation();
 
             // Clear entity selection, then highlight both endpoints
-            d3.selectAll('.map-node').classed('selected', false);
+            _clearMapSelection({ closePanel: false });
             highlightLink(d);
 
             // Show floating delete button near the hitarea (only in edit mode)
@@ -557,7 +743,7 @@ async function initOntologyMap() {
             if (window.isActiveVersion === false) return;
 
             // Clear entity selection, then highlight both endpoints
-            d3.selectAll('.map-node').classed('selected', false);
+            _clearMapSelection({ closePanel: false });
             highlightLink(d);
 
             showMapRelationshipContextMenu(event, d, container);
@@ -610,7 +796,7 @@ async function initOntologyMap() {
         .text(d => d.label || d.name);
 
     // Small badge overlay signalling the class has Dashboard/Dataset/Actions/
-    // Bridges configured (entity panel's "References" tab). Purely visual — no
+    // Bridges configured (entity panel's Links / Behaviour / Model tabs). Purely visual — no
     // tooltip, no click handler — so it's rendered only for matching nodes
     // and marked pointer-events: none in CSS.
     const externalBadgeNodes = nodeElements.filter(d => d.hasExternal);
@@ -732,45 +918,52 @@ async function initOntologyMap() {
             .attr('fill', '#e9ecef')
             .attr('stroke', '#999')
             .attr('stroke-width', 1.5);
-        
-        // Highlight selected node + neighborhood
-        d3.selectAll('.map-node').classed('selected', false);
-        d3.select(this).classed('selected', true);
-        highlightNeighborhood(d.name);
-        
-        // Open entity edit panel (using shared panel)
-        if (typeof editClassByName === 'function') {
-            editClassByName(d.name);
+
+        if (_isMapSelectGesture(event)) {
+            _toggleMapEntitySelection(d.name);
+            return;
         }
+
+        _setMapSelection([d.name]);
     });
     
-    // Right-click context menu for entities (suppressed in view mode)
+    // Right-click context menu for entities (suppressed in view mode).
+    // macOS Control-click emits contextmenu with no click; toggle then.
     nodeElements.on('contextmenu', function(event, d) {
         event.preventDefault();
         event.stopPropagation();
 
+        if (event.ctrlKey || event.metaKey) {
+            _toggleMapEntitySelection(d.name);
+            return;
+        }
+
         if (window.isActiveVersion === false) return;
-        
-        // Highlight selected node + neighborhood
-        d3.selectAll('.map-node').classed('selected', false);
-        d3.select(this).classed('selected', true);
-        highlightNeighborhood(d.name);
-        
-        // Show context menu
+
+        if (!mapSelectedEntityNames.has(d.name)) {
+            _setMapSelection([d.name], { openPanel: false });
+        }
+
+        if (mapSelectedEntityNames.size > 1) {
+            showMapMultiSelectContextMenu(event, Array.from(mapSelectedEntityNames), container);
+            return;
+        }
+
         showMapContextMenu(event, d, container);
     });
     
     // Clicking the empty canvas drops the selection. Entity and relationship
     // clicks stop propagation, so only background clicks reach this handler.
     svg.on('click', function() {
+        // The click that trails a Ctrl/Cmd marquee pointerup must not undo it.
+        if (_consumeMapCanvasClickSuppression()) return;
         hideMapContextMenu();
         hideMapRelationshipActions();
-        d3.selectAll('.map-node').classed('selected', false);
         d3.selectAll('.map-link-hitarea')
             .attr('fill', '#e9ecef')
             .attr('stroke', '#999')
             .attr('stroke-width', 1.5);
-        clearHighlights();
+        _clearMapSelection({ closePanel: false });
 
         // Guarded: this is now the only way out of the panel, so a pending
         // edit must be flushed rather than dropped.
@@ -778,8 +971,102 @@ async function initOntologyMap() {
             guardedCloseSharedPanel();
         }
     });
+
+    function startMapMarquee(event) {
+        if (mapConnectionMode) return;
+        if (!_isMapSelectGesture(event)) return;
+        if (event.button !== 0) return;
+        if (event.target.tagName !== 'svg') return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        const fromSelectMode = mapSelectMode;
+
+        const svgNode = svg.node();
+        const pointerToGraph = (evt) => d3.zoomTransform(svgNode).invert(d3.pointer(evt, svgNode));
+        const [startX, startY] = pointerToGraph(event);
+        const marquee = g.append('rect')
+            .attr('class', 'map-selection-marquee')
+            .attr('x', startX)
+            .attr('y', startY)
+            .attr('width', 0)
+            .attr('height', 0);
+        let cancelled = false;
+
+        // Remove listeners and the rubber band only; never touch the selection.
+        function cleanup() {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onCancel);
+            window.removeEventListener('blur', onCancel);
+            svgNode.removeEventListener('pointerleave', onCancel);
+            marquee.remove();
+        }
+
+        function onCancel() {
+            cleanup();
+        }
+
+        function onMove(evt) {
+            if (!fromSelectMode && !_isMapSelectGesture(evt)) {
+                // Modifier released mid-drag: abandon the marquee but keep
+                // listening so the trailing pointerup/click is still absorbed.
+                cancelled = true;
+                marquee.attr('width', 0).attr('height', 0);
+                return;
+            }
+            if (cancelled) return;
+            const [curX, curY] = pointerToGraph(evt);
+            const x = Math.min(startX, curX);
+            const y = Math.min(startY, curY);
+            marquee
+                .attr('x', x)
+                .attr('y', y)
+                .attr('width', Math.abs(curX - startX))
+                .attr('height', Math.abs(curY - startY));
+        }
+
+        function onUp(evt) {
+            const [endX, endY] = pointerToGraph(evt);
+            const minX = Math.min(startX, endX);
+            const maxX = Math.max(startX, endX);
+            const minY = Math.min(startY, endY);
+            const maxY = Math.max(startY, endY);
+            cleanup();
+            // The browser dispatches a click on the canvas right after this
+            // pointerup; it must neither clear a fresh selection nor undo a
+            // no-op marquee.
+            _suppressNextMapCanvasClick();
+            if (cancelled || (!fromSelectMode && !_isMapSelectGesture(evt))) return;
+            const namesInside = ontologyMapNodes
+                .filter(n => n.x >= minX && n.x <= maxX && n.y >= minY && n.y <= maxY)
+                .map(n => n.name);
+            if (namesInside.length) {
+                _setMapSelection(namesInside);
+            }
+        }
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onCancel);
+        window.addEventListener('blur', onCancel);
+        svgNode.addEventListener('pointerleave', onCancel);
+    }
+
+    svg.on('pointerdown', function(event) {
+        // A new gesture starts: any leftover guard from a previous marquee
+        // (e.g. macOS Control-click never produces a trailing click) must go.
+        _mapCanvasClickSuppressUntil = 0;
+        startMapMarquee(event);
+    });
     
     svg.on('contextmenu', function(event) {
+        // Control-drag starts the marquee on pointerdown; suppress the
+        // synthesised contextmenu so the Canvas menu does not cancel it.
+        if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            return;
+        }
         // Only show canvas context menu if clicking on background (not on a node)
         if (event.target.tagName === 'svg' || event.target.closest('g.map-node') === null) {
             event.preventDefault();
@@ -1006,6 +1293,10 @@ async function initOntologyMap() {
             <span>Relationship</span>
         </div>
         <div class="map-legend-item">
+            <div class="map-legend-line inherited"></div>
+            <span>Inherited relation</span>
+        </div>
+        <div class="map-legend-item">
             <div class="map-legend-line inheritance"></div>
             <span>Inheritance</span>
         </div>
@@ -1193,32 +1484,28 @@ function focusMapEntity(name) {
 
 
 /**
- * Create a Business View (design-view) from a single entity — 1-hop neighbourhood.
- * The view is named "Auto_<entityName>", with numeric suffixes if the name already exists.
+ * Create, switch to and populate a Business View (design-view) from a set of
+ * Studio entities, then navigate to Business Views. Shared by the single-entity
+ * (1-hop) and multi-select (selected-only) entry points.
+ *
+ * Everything outside `entityNames` is hidden in the saved view; the relationship
+ * and inheritance arrays are exactly `relLinks` / `inhLinks`.
+ *
+ * @param {Object}   spec
+ * @param {string}   spec.baseName     Preferred name; a numeric suffix is added if taken.
+ * @param {string[]} spec.entityNames  Entities in layout order.
+ * @param {Array<{name: string, source: string, target: string}>} spec.relLinks
+ * @param {Array<{source: string, target: string}>} spec.inhLinks
+ * @param {function(number, number, number, number): {x: number, y: number}} spec.positionFor
+ *        Placement for an entity, called as (index, cx, cy, radius): the
+ *        entity's index in `entityNames`, the circle centre, and its radius.
+ * @param {string}   spec.logLabel     Caller name for diagnostics.
  */
-async function createBusinessViewFromEntity(entityData) {
+async function _createMapBusinessView(spec) {
+    const { baseName, entityNames, relLinks, inhLinks, positionFor, logLabel } = spec;
     try {
-        // ── 1. Collect unique neighbour names (1-hop) ───────────────────────
-        const selectedName = entityData.name;
-        const neighbourNames = new Set();
-        const relLinks = [];    // {name, source, target}  – ObjectProperty / datatype
-        const inhLinks = [];    // {source, target}         – inheritance
-
-        ontologyMapLinks.forEach(link => {
-            const srcName = _resolveLinkEndpoint(link.source);
-            const tgtName = _resolveLinkEndpoint(link.target);
-            if (srcName !== selectedName && tgtName !== selectedName) return;
-            const neighbourName = srcName === selectedName ? tgtName : srcName;
-            neighbourNames.add(neighbourName);
-            if (link.type === 'inheritance') {
-                inhLinks.push({ source: srcName, target: tgtName });
-            } else {
-                relLinks.push({ name: link.name, source: srcName, target: tgtName });
-            }
-        });
-
-        // ── 2. Compute a unique view name ───────────────────────────────────
-        let viewName = `Auto_${selectedName}`;
+        // ── 1. Unique view name ─────────────────────────────────────────────
+        let viewName = baseName;
         let existingViews = [];
         try {
             const viewsResp = await fetch('/domain/design-views');
@@ -1234,26 +1521,17 @@ async function createBusinessViewFromEntity(entityData) {
             viewName = `${viewName}_${suffix}`;
         }
 
-        // ── 3. Build entity list with circular layout ───────────────────────
+        // ── 2. Entities with circular layout ────────────────────────────────
         const cx = 450, cy = 280, radius = 230;
-        const allEntityNames = [selectedName, ...Array.from(neighbourNames)];
-        const visibleNames   = new Set(allEntityNames);   // used for visibility filter below
+        const visibleNames = new Set(entityNames);
 
-        // Map entity name → stable id
         const entityIdMap = new Map();
-        allEntityNames.forEach((name, i) => {
+        entityNames.forEach((name, i) => {
             entityIdMap.set(name, `ent_${Date.now()}_${i}`);
         });
 
-        const entities = allEntityNames.map((name, i) => {
-            let x, y;
-            if (i === 0) {
-                x = cx; y = cy;          // centre
-            } else {
-                const angle = (2 * Math.PI / neighbourNames.size) * (i - 1);
-                x = Math.round(cx + radius * Math.cos(angle));
-                y = Math.round(cy + radius * Math.sin(angle));
-            }
+        const entities = entityNames.map((name, i) => {
+            const { x, y } = positionFor(i, cx, cy, radius);
             // Try to get properties from the node data already loaded in the map
             const nodeData = ontologyMapNodes.find(n => n.name === name);
             return {
@@ -1266,7 +1544,7 @@ async function createBusinessViewFromEntity(entityData) {
             };
         });
 
-        // ── 4. Build relationship and inheritance arrays ─────────────────────
+        // ── 3. Relationship and inheritance arrays ──────────────────────────
         const relationships = relLinks
             .filter(l => entityIdMap.has(l.source) && entityIdMap.has(l.target))
             .map((l, i) => ({
@@ -1288,10 +1566,10 @@ async function createBusinessViewFromEntity(entityData) {
                 direction: 'forward',
             }));
 
-        // ── 4b. Build visibility — hide everything outside the 1-hop neighbourhood ──
+        // ── 4. Visibility — hide everything outside the chosen entities ─────
         // loadOntologyIntoDesigner always merges with the full ontology classes list;
         // hiddenEntities / hiddenRelationships / hiddenInheritances control what is
-        // actually rendered, so we must populate them to restrict the view to 1 hop.
+        // actually rendered, so we must populate them to restrict the view.
         const hiddenEntities = ontologyMapNodes
             .map(n => n.name)
             .filter(name => !visibleNames.has(name));
@@ -1364,11 +1642,157 @@ async function createBusinessViewFromEntity(entityData) {
 
         console.log(`[Map] Business view "${viewName}" created with ${entities.length} entities.`);
     } catch (err) {
-        console.error('[Map] createBusinessViewFromEntity failed:', err);
+        console.error(`[Map] ${logLabel} failed:`, err);
         if (typeof showNotification === 'function') {
             showNotification(`Could not create Business View: ${err.message}`, 'danger');
         }
     }
+}
+
+/**
+ * Create a Business View (design-view) from a single entity — 1-hop neighbourhood.
+ * The view is named "Auto_<entityName>", with numeric suffixes if the name already exists.
+ */
+async function createBusinessViewFromEntity(entityData) {
+    const selectedName = entityData.name;
+    const neighbourNames = new Set();
+    const relLinks = [];    // {name, source, target}  – ObjectProperty / datatype
+    const inhLinks = [];    // {source, target}         – inheritance
+
+    ontologyMapLinks.forEach(link => {
+        const srcName = _resolveLinkEndpoint(link.source);
+        const tgtName = _resolveLinkEndpoint(link.target);
+        if (srcName !== selectedName && tgtName !== selectedName) return;
+        const neighbourName = srcName === selectedName ? tgtName : srcName;
+        neighbourNames.add(neighbourName);
+        if (link.type === 'inheritance') {
+            inhLinks.push({ source: srcName, target: tgtName });
+        } else {
+            relLinks.push({ name: link.name, source: srcName, target: tgtName });
+        }
+    });
+
+    await _createMapBusinessView({
+        baseName: `Auto_${selectedName}`,
+        entityNames: [selectedName, ...Array.from(neighbourNames)],
+        relLinks,
+        inhLinks,
+        // Selected entity at the centre, neighbours evenly spaced on the circle.
+        positionFor: (i, cx, cy, radius) => {
+            if (i === 0) return { x: cx, y: cy };
+            const angle = (2 * Math.PI / neighbourNames.size) * (i - 1);
+            return {
+                x: Math.round(cx + radius * Math.cos(angle)),
+                y: Math.round(cy + radius * Math.sin(angle)),
+            };
+        },
+        logLabel: 'createBusinessViewFromEntity',
+    });
+}
+
+/**
+ * Create a Business View from the current multi-selection.
+ * Contains exactly the selected entities plus object-property / inheritance
+ * links whose both endpoints are selected. Named Auto_Selection[_N].
+ * @param {string[]} names
+ */
+async function createBusinessViewFromSelection(names) {
+    if (!names || !names.length) return;
+    const visibleNames = new Set(names);
+    const relLinks = [];
+    const inhLinks = [];
+
+    ontologyMapLinks.forEach(link => {
+        const source = _resolveLinkEndpoint(link.source);
+        const target = _resolveLinkEndpoint(link.target);
+        if (!(visibleNames.has(source) && visibleNames.has(target))) return;
+        if (link.type === 'inheritance') {
+            inhLinks.push({ source, target });
+        } else {
+            relLinks.push({ name: link.name, source, target });
+        }
+    });
+
+    const entityNames = Array.from(visibleNames);
+    await _createMapBusinessView({
+        baseName: 'Auto_Selection',
+        entityNames,
+        relLinks,
+        inhLinks,
+        // Every selected entity on one circle (a lone entity sits at angle 0).
+        positionFor: (i, cx, cy, radius) => {
+            const angle = entityNames.length === 1
+                ? 0
+                : (2 * Math.PI / entityNames.length) * i;
+            return {
+                x: Math.round(cx + radius * Math.cos(angle)),
+                y: Math.round(cy + radius * Math.sin(angle)),
+            };
+        },
+        logLabel: 'createBusinessViewFromSelection',
+    });
+}
+
+
+function showMapMultiSelectContextMenu(event, names, container) {
+    hideMapContextMenu();
+
+    const menu = document.createElement('div');
+    menu.id = 'mapContextMenu';
+    menu.className = 'map-context-menu';
+    menu.innerHTML = `
+        <div class="map-context-header">
+            <span class="map-context-icon"><i class="bi bi-collection"></i></span>
+            <span class="map-context-title">${names.length} entities</span>
+        </div>
+        <div class="map-context-divider"></div>
+        <div class="map-context-item" data-action="create-business-view">
+            <i class="bi bi-layout-text-window"></i>
+            <span>Create Business View</span>
+        </div>
+        <div class="map-context-divider"></div>
+        <div class="map-context-item map-context-danger" data-action="delete">
+            <i class="bi bi-trash"></i>
+            <span>Delete ${names.length} entities</span>
+        </div>
+    `;
+
+    const containerRect = container.getBoundingClientRect();
+    let x = event.clientX - containerRect.left;
+    let y = event.clientY - containerRect.top;
+
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    container.appendChild(menu);
+
+    const menuRect = menu.getBoundingClientRect();
+    if (menuRect.right > containerRect.right) {
+        menu.style.left = (x - menuRect.width) + 'px';
+    }
+    if (menuRect.bottom > containerRect.bottom) {
+        menu.style.top = (y - menuRect.height) + 'px';
+    }
+
+    // Defense in depth: the menu closes on every selection change, but act on
+    // the live selection rather than the names captured when it opened.
+    menu.querySelector('[data-action="create-business-view"]').addEventListener('click', async () => {
+        hideMapContextMenu();
+        const live = _liveMapSelectionNames();
+        if (live.length < 2) return;
+        await createBusinessViewFromSelection(live);
+    });
+
+    menu.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+        hideMapContextMenu();
+        const live = _liveMapSelectionNames();
+        if (live.length < 2) return;
+        await deleteEntitiesFromMap(live);
+    });
+
+    setTimeout(() => {
+        document.addEventListener('click', hideMapContextMenuOnClickOutside);
+        document.addEventListener('contextmenu', hideMapContextMenuOnClickOutside);
+    }, 0);
 }
 
 
@@ -1388,19 +1812,23 @@ function showMapContextMenu(event, entityData, container) {
         <div class="map-context-divider"></div>
         <div class="map-context-item" data-action="open-tab-details">
             <i class="bi bi-info-circle"></i>
-            <span>Details</span>
+            <span>General</span>
         </div>
         <div class="map-context-item" data-action="open-tab-attributes">
             <i class="bi bi-tags"></i>
             <span>Attributes</span>
         </div>
-        <div class="map-context-item" data-action="open-tab-actions">
-            <i class="bi bi-lightning"></i>
-            <span>References</span>
+        <div class="map-context-item" data-action="open-tab-model">
+            <i class="bi bi-diagram-2"></i>
+            <span>Model</span>
         </div>
-        <div class="map-context-item" data-action="open-tab-constraints">
-            <i class="bi bi-sliders"></i>
-            <span>Constraints</span>
+        <div class="map-context-item" data-action="open-tab-behaviour">
+            <i class="bi bi-lightning"></i>
+            <span>Behaviour</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-links">
+            <i class="bi bi-link-45deg"></i>
+            <span>Links</span>
         </div>
         <div class="map-context-divider"></div>
         <div class="map-context-item" data-action="create-relationship">
@@ -1444,7 +1872,7 @@ function showMapContextMenu(event, entityData, container) {
     }
     
     // Handle menu item clicks
-    ['details', 'attributes', 'actions', 'constraints'].forEach(tab => {
+    ['details', 'attributes', 'model', 'behaviour', 'links'].forEach(tab => {
         menu.querySelector(`[data-action="open-tab-${tab}"]`).addEventListener('click', () => {
             hideMapContextMenu();
             if (typeof editClassByName === 'function') {
@@ -1482,8 +1910,7 @@ function showMapContextMenu(event, entityData, container) {
 
 /**
  * Show a right-click context menu for a relationship link, offering
- * shortcuts straight to each tab of its edit panel (Details, Constraints —
- * relationships have no Attributes/References tab).
+ * shortcuts straight to each tab of its edit panel (General, Constraints).
  */
 function showMapRelationshipContextMenu(event, linkData, container) {
     // Remove existing menu
@@ -1500,7 +1927,7 @@ function showMapRelationshipContextMenu(event, linkData, container) {
         <div class="map-context-divider"></div>
         <div class="map-context-item" data-action="open-tab-details">
             <i class="bi bi-info-circle"></i>
-            <span>Details</span>
+            <span>General</span>
         </div>
         <div class="map-context-item" data-action="open-tab-constraints">
             <i class="bi bi-sliders"></i>
@@ -1719,6 +2146,75 @@ async function deleteEntityFromMap(entityName) {
     } catch (error) {
         console.error('Error deleting entity:', error);
         showNotification('Error deleting entity: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Delete several entities after a single confirmation.
+ * @param {string[]} names
+ */
+async function deleteEntitiesFromMap(names) {
+    if (!names || !names.length) return;
+    if (typeof showConfirmDialog !== 'function') return;
+
+    const confirmed = await showConfirmDialog({
+        title: 'Delete entities',
+        message: `Delete ${names.length} entities? Relationships connected to them will also be removed.`,
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger',
+        icon: 'trash'
+    });
+
+    if (!confirmed) return;
+
+    try {
+        if (typeof OntologyState === 'undefined' || !OntologyState.config) return;
+
+        const namesSet = new Set(names);
+        const classesBefore = (OntologyState.config.classes || []).length;
+        OntologyState.config.classes = (OntologyState.config.classes || []).filter(
+            c => !namesSet.has(c.name)
+        );
+        const removedCount = classesBefore - OntologyState.config.classes.length;
+        if (removedCount === 0) {
+            if (typeof showNotification === 'function') {
+                showNotification('Entities not found', 'warning');
+            }
+            return;
+        }
+        OntologyState.config.properties = (OntologyState.config.properties || []).filter(
+            p => !namesSet.has(p.domain) && !namesSet.has(p.range)
+        );
+        OntologyState.config.classes.forEach(c => {
+            if (namesSet.has(c.parent)) {
+                delete c.parent;
+            }
+        });
+
+        if (typeof saveConfigToSession === 'function') {
+            await saveConfigToSession();
+        }
+
+        initOntologyMap();
+
+        if (typeof updateClassesList === 'function') {
+            updateClassesList();
+        }
+        if (typeof updatePropertiesList === 'function') {
+            updatePropertiesList();
+        }
+
+        if (typeof showNotification === 'function') {
+            showNotification(
+                removedCount === 1 ? '1 entity deleted' : `${removedCount} entities deleted`,
+                'success'
+            );
+        }
+    } catch (error) {
+        console.error('Error deleting entities:', error);
+        if (typeof showNotification === 'function') {
+            showNotification('Error deleting entities: ' + error.message, 'error');
+        }
     }
 }
 
@@ -2316,9 +2812,9 @@ async function checkAndResumeIconsTask() {
 }
 
 /**
- * Auto-map icons to all entities that still have the default icon.
- * Starts the icon agent as a background task, persists task_id to
- * sessionStorage, and polls /tasks/{id} for the result.
+ * Auto-map icons to entities that still have the default icon.
+ * When every entity already has a custom icon, ask the user to confirm a
+ * full remap before starting the same background task.
  */
 async function autoAssignEntityIcons() {
     if (window.isActiveVersion === false) return;
@@ -2330,21 +2826,33 @@ async function autoAssignEntityIcons() {
         return;
     }
 
-    const defaultEmoji = OntologyState.defaultClassEmoji || '📦';
-    const candidates = classes.filter(cls => (cls.emoji || defaultEmoji) === defaultEmoji);
-    if (candidates.length === 0) {
-        if (typeof showNotification === 'function') {
-            showNotification('All entities already have custom icons', 'info', 2000);
-        }
-        return;
-    }
-
     // A task is already running — don't launch another.
     if (sessionStorage.getItem(ICONS_TASK_KEY)) {
         if (typeof showNotification === 'function') {
             showNotification('Icon assignment already in progress…', 'info', 2500);
         }
         return;
+    }
+
+    const defaultEmoji = OntologyState.defaultClassEmoji || '📦';
+    let candidates = classes.filter(cls => (cls.emoji || defaultEmoji) === defaultEmoji);
+    if (candidates.length === 0) {
+        if (typeof showConfirmDialog !== 'function') {
+            if (typeof showNotification === 'function') {
+                showNotification('All entities already have custom icons', 'info', 2000);
+            }
+            return;
+        }
+        const confirmed = await showConfirmDialog({
+            title: 'Remap entity icons?',
+            message: 'All entities already have custom icons. Remapping will replace every current icon.',
+            confirmText: 'Remap all',
+            cancelText: 'Cancel',
+            confirmClass: 'btn-primary',
+            icon: 'emoji-smile',
+        });
+        if (!confirmed) return;
+        candidates = classes;
     }
 
     const entityNames = candidates.map(cls => cls.name);

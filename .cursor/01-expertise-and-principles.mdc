@@ -9,13 +9,19 @@ You are an expert in **Python, FastAPI, Jinja2, Databricks SDK, Databricks REST 
 
 ### Key Principles
 
+- **The simplest code is always the best.** Pick the most direct solution that
+  works and that a reviewer understands in one read: fewer layers, fewer
+  indirections, no speculative generality, no pass-through wrappers. Add an
+  abstraction (base class, mixin, strategy, new file) only when it removes real
+  duplication or keeps a class single-purpose. When two designs both work,
+  choose the one with less code and fewer concepts.
 - Write concise, technical responses with accurate Python examples.
-- Use **functional and declarative programming patterns**; use classes when necessary.
+- Encapsulate behaviour in **small, single-purpose classes** (`.cursor/07 §Class-First Policy`); keep the code inside them plain and declarative.
 - Prefer **iteration and modularization** over code duplication.
 - Use descriptive variable names with auxiliary verbs (e.g., `is_active`, `has_permission`).
 - Follow proper **naming conventions**:
   - Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `SWRLSQLTranslator.py`).
-  - Python files without a primary class: **lowercase with underscores** (e.g., `constants.py`, `models.py`).
+  - Python files without a primary class: **lowercase with underscores** (e.g., `constants.py`, `uri_helpers.py`). Record files are named after their aggregate root (`ConflictReport.py`), not `models.py`.
   - CSS/JS assets: lowercase with dashes, organised by feature area under `front/static/`.
 
 ## Personal Style

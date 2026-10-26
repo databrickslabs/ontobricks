@@ -131,16 +131,18 @@ def test_panel_is_hosted_on_the_wrapper_not_the_canvas():
 
 
 def test_resize_handle_matches_explorer_and_stays_visible():
-    """8px hit area, 3px x 40px grip, always displayed — same as #sgResizeHandle."""
+    """1px track, 0.5px x 40px grip, half-gutter overlap, always displayed."""
     css = _read(PANELS_CSS)
     handle = _block(css, ".detail-panel-resize-handle")
 
-    assert _declaration(handle, "width") == "8px"
+    assert _declaration(handle, "width") == "1px"
+    assert _declaration(handle, "margin-left") == "-0.25rem"
+    assert _declaration(handle, "margin-right") == "-0.25rem"
     assert _declaration(handle, "display") == "flex"
     assert _declaration(handle, "cursor") == "col-resize"
 
     bar = _block(css, ".detail-panel-resize-handle .resize-handle-bar")
-    assert _declaration(bar, "width") == "3px"
+    assert _declaration(bar, "width") == "0.5px"
     assert _declaration(bar, "height") == "40px"
 
 
@@ -331,6 +333,26 @@ def test_empty_panel_title_is_select_item():
     )
     assert create, "createDetailPanel must set sharedPanelTitle"
     assert "<i " not in create.group(1)
+
+
+def test_selected_entity_and_relationship_titles_have_no_pencil():
+    js = _read(PANELS_JS)
+    entity = re.search(
+        r"openEntityPanelForEdit[\s\S]*?"
+        r"sharedPanelTitle'\)\.innerHTML\s*=\s*`([^`]+)`",
+        js,
+    )
+    relationship = re.search(
+        r"openRelationshipPanelForEdit[\s\S]*?"
+        r"sharedPanelTitle'\)\.innerHTML\s*=\s*`([^`]+)`",
+        js,
+    )
+    assert entity, "openEntityPanelForEdit must set sharedPanelTitle"
+    assert relationship, "openRelationshipPanelForEdit must set sharedPanelTitle"
+    assert "bi-pencil" not in entity.group(1)
+    assert "bi-pencil" not in relationship.group(1)
+    assert "sharedPanelItemName" in entity.group(1)
+    assert "sharedPanelItemName" in relationship.group(1)
 
 
 def test_form_tabs_inside_the_right_panel_use_the_shared_compact_rail():

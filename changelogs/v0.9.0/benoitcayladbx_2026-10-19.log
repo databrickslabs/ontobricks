@@ -1,0 +1,38 @@
+================================================================================
+## Redirect domain load to Domain → General
+================================================================================
+
+Context:
+Loading a domain from Home or the navbar Load dialog left the user on the
+homepage. The session and top menus updated, but the page never opened
+Domain → General. Generic load paths now navigate to
+`/domain/?section=information`. Intentional Validation/Publication jumps
+are unchanged.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   Added `navigateToDomainGeneral()` and used it after Load from Registry
+   and after domain import, instead of `location.reload()`.
+2. src/front/static/home/js/home.js
+   Home gateway Open now lands on Domain → General.
+3. src/front/static/registry/js/registry.js
+   Registry Load navigates to Domain → General instead of reloading Browse.
+4. src/front/static/domain/js/domain-versions.js
+   Loading or reloading a version opens Domain → General.
+5. tests/units/front/test_navbar_domain_badge_persistence.py
+   Badge refresh still runs before navigation; load no longer reloads the
+   current page.
+6. tests/units/front/test_domain_load_redirect.py
+   Source contracts for Home, Registry, and Versions load navigation.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/home/js/home.js
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- tests/units/front/test_navbar_domain_badge_persistence.py
+- tests/units/front/test_domain_load_redirect.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-19.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9478 passed, 326 skipped, 7 deselected, 1 xfailed in 62.63s

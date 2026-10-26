@@ -113,3 +113,60 @@ def test_action_response_surfaces_failure_message(formatters):
 def test_empty_class_context_block_stays_empty(formatters):
     format_class, _, _ = formatters
     assert format_class("CUST1", {"name": "Customer", "dataset": None, "bridges": []}) == ""
+
+
+_JOB_ACTION = {
+    "kind": "job",
+    "fullName": "job:42",
+    "function": "enrich-customer",
+    "job_id": 42,
+    "description": "DQ ticket",
+}
+
+
+def test_class_context_block_lists_jobs(formatters):
+    format_class, _, _ = formatters
+    text = format_class(
+        "CUST1",
+        {"name": "Customer", "dataset": None, "bridges": [], "actions": [_JOB_ACTION]},
+    )
+    assert "Jobs:" in text
+    assert "job:42: DQ ticket" in text
+    assert "invoke_entity_action" in text
+
+
+def test_node_context_response_lists_jobs_separately(formatters):
+    _, format_node, _ = formatters
+    text = format_node(
+        {
+            "success": True,
+            "entity_uri": "http://example.org/Customer/CUST1",
+            "entity_local_id": "CUST1",
+            "class_name": "Customer",
+            "actions": _ACTIONS + [_JOB_ACTION],
+        }
+    )
+    assert "Actions (Unity Catalog functions):" in text
+    assert "Jobs (Databricks Job run_now, tracked in Background Tasks):" in text
+    assert "job:42" in text
+    assert text.index("Actions (Unity Catalog functions):") < text.index("Jobs (")
+
+
+def test_action_response_formats_job_start(formatters):
+    _, _, format_action = formatters
+    text = format_action(
+        {
+            "success": True,
+            "kind": "job",
+            "entity_local_id": "CUST1",
+            "class_name": "Customer",
+            "action": "job:42",
+            "task_id": "t1",
+            "run_id": 99,
+            "message": "Running in Background Tasks",
+        }
+    )
+    assert "Action: job:42" in text
+    assert "task_id: t1" in text
+    assert "run_id: 99" in text
+    assert "Running in Background Tasks" in text

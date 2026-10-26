@@ -1,69 +1,53 @@
-<!-- JS: /static/domain/js/domain-versions.js -->
-<!-- Project Versions Section -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-clock-history me-2"></i>Versions</h4>
-            <p class="text-muted mb-0 small">Manage domain version history</p>
-            <p class="text-muted small mb-0 mt-1">
-                <i class="bi bi-info-circle me-1"></i>
-                To change a version's <strong>lifecycle status</strong>
-                (Draft → In Review → Published), use
-                the navbar <strong>Registry</strong> icon → <strong>Browse</strong>.
-                The API/MCP serves the latest <strong>Published</strong> version.
+            <p class="text-muted mb-0 small">
+                Review version history, lifecycle, and available actions.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadVersion"
-                    onclick="reloadLastSavedVersion()" title="Reload the current version from the registry">
-                <i class="bi bi-arrow-counterclockwise me-1"></i> Reload Saved
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    id="btnReloadVersion"
+                    title="Reload the current version from the registry">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Reload Saved
             </button>
-            <button type="button" class="btn btn-sm btn-primary" id="btnAddVersion"
-                    onclick="addNewVersionFromList()"
-                    title="Create a new version from the current state (allowed even when ontology or mapping is incomplete)">
-                <i class="bi bi-plus-circle me-1"></i> New Version
+            <button type="button" class="btn btn-sm btn-primary"
+                    id="btnAddVersion"
+                    title="Create a new version from the current state">
+                <i class="bi bi-plus-circle me-1"></i>New Version
             </button>
         </div>
     </div>
 
-    <!-- Loading state -->
-    <div id="versionsLoading" class="text-center py-5" style="display:none;">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
+    <section class="dm-versions-workspace card"
+             aria-labelledby="versionsListHeading">
+        <h5 id="versionsListHeading" class="visually-hidden">Saved versions</h5>
+        <div id="versionsLoading" class="dm-versions-state text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading versions</span>
+            </div>
+            <p class="text-muted mt-2 mb-0 small">Loading versions…</p>
         </div>
-        <p class="text-muted mt-2 small">Loading versions from registry&hellip;</p>
-    </div>
-
-    <!-- Empty state -->
-    <div id="versionsEmpty" class="text-center py-5" style="display:none;">
-        <i class="bi bi-clock-history text-muted fs-1"></i>
-        <p class="text-muted mt-2 mb-1">No versions found</p>
-        <p class="text-muted small">Save the domain to the registry to start tracking versions.</p>
-    </div>
-
-    <!-- Error state -->
-    <div id="versionsError" class="alert alert-warning" role="alert" style="display:none;">
-        <i class="bi bi-exclamation-triangle me-1"></i>
-        <span id="versionsErrorMessage"></span>
-    </div>
-
-    <!-- Version list -->
-    <div id="versionsTableWrapper" style="display:none;">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="dm-th-version-col">Version</th>
-                        <th>Description</th>
-                        <th class="dm-th-mcp-col text-center" title="Lifecycle status; change in Registry → Browse">Status</th>
-                        <th class="dm-th-author-col">Author</th>
-                        <th class="dm-th-actions-col text-center">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="versionsTableBody">
-                    <!-- Populated by JS -->
-                </tbody>
-            </table>
+        <div id="versionsEmpty"
+             class="dm-versions-state text-center py-5 ob-hidden">
+            <i class="bi bi-clock-history text-muted fs-1"></i>
+            <p class="text-muted mt-2 mb-1">No versions found</p>
+            <p class="text-muted small mb-0">
+                Save the domain to start tracking versions.
+            </p>
         </div>
-    </div>
+        <div id="versionsError"
+             class="alert alert-warning m-3 ob-hidden"
+             role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            <span id="versionsErrorMessage"></span>
+            <button type="button"
+                    class="btn btn-sm btn-outline-warning ms-2"
+                    id="versionsRetryBtn">Retry</button>
+        </div>
+        <div id="versionsCardList"
+             class="dm-version-card-list ob-hidden"
+             role="list"></div>
+    </section>
 </div>

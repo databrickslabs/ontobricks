@@ -1,0 +1,49 @@
+================================================================================
+## Fail Knowledge Graph builds on a lost triple count instead of reporting 0
+================================================================================
+
+Context:
+Reliance (0.8.2, Azure) had three Lakehouse builds "finish with warnings"
+after exactly 1h 0m: "VIEW created but no triples generated (check your
+mappings)", with no Delta table created. The app log of 19 Oct shows why: the
+SQL connector's status poll on the long `SELECT COUNT(*)` over the gateway VIEW
+failed (`RequestError: Error during request to server`) once the static M2M
+OAuth token passed at connect time expired (tokens last one hour). The count
+swallowed the error and returned 0, so a failed build was recorded as a
+successful empty one. Materialized builds also scanned every mapped source
+twice (COUNT over the VIEW, then CTAS). `_BuildPipeline` (Lakebase / Neo4j
+full rebuild) had the same swallowed count.
+
+Changes:
+
+1. src/back/core/databricks/DatabricksAuth.py
+   App-mode SQL connections pass a `credentials_provider` whose header factory reads `get_oauth_token()` on every request, so long statements pick up the refreshed token instead of a static `access_token`.
+2. src/back/core/graphdb/delta/materialize.py
+   New `count_triples(client, relation)`: raises `InfrastructureError` naming the relation when the count cannot run, never 0 (complies with `src/.coding_rules.md §4`).
+3. src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+   Materialized builds run the CTAS first and count the Delta table afterwards (one source scan instead of two); view-only builds still count the gateway VIEW first. Count errors fail the task and are audited as "error". Extract Method: `_build_data_relation`, `_finish_without_triples`; `_count_view_triples` removed. Behaviour note: in table mode an empty mapping now leaves an empty `…_data` table instead of the previous build's table.
+4. src/back/objects/digitaltwin/_build_pipeline.py
+   `_count_view_triples` delegates to `materialize.count_triples`, so a lost count fails the full rebuild too; the post-sync count of the managed-synced path stays non-fatal (reporting only) and logs the error.
+5. tests/units/objects/test_build_pipeline_materialize.py
+   Recording SQL client instead of stubbing the count; tests for count failures (both modes, task and audit), a single gateway-VIEW scan, counting the built table, the empty-table warning, and the Lakebase full-rebuild count failure.
+6. tests/units/auth/test_auth.py
+   App-mode params expose `credentials_provider`; new test that the header factory returns the refreshed token after the 50-minute cache.
+7. tests/units/dtwin/test_build_pipeline_streaming.py
+   A failed post-sync count does not fail a successful synced build.
+8. docs/graphdb-integration.md
+   `materialize.py` row mentions `count_triples`.
+
+Modified files:
+- src/back/core/databricks/DatabricksAuth.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- tests/units/objects/test_build_pipeline_materialize.py
+- tests/units/auth/test_auth.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- docs/graphdb-integration.md
+- changelogs/v0.8.2/dermotsmyth-db_2026-10-19.log
+
+Sphinx: not applicable, `docs/sphinx` is not present on the 0.8.2 branch.
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5938 passed, 316 skipped, 9 deselected, 0 failed in 43.03s. Deselected: 6 by the `not scenario` marker, plus 3 network-bound health tests (`tests/units/api/test_routes.py::TestHealthRoutes::test_health_check`, `tests/units/core/test_health.py::TestRunReadinessChecks`). Those three open a real SQL warehouse connection and sit in the connector's retry back-off; they hang identically on the untouched 0.8.2 base (the known 0.8.2 stall at `test_routes.py`), with `DATABRICKS_CONFIG_FILE` pointed at an empty file. 10 of the 11 new or changed tests failed on the unfixed code and all 11 pass after the fix; the eleventh (empty materialized build still warns) guards existing behaviour through the reorder.

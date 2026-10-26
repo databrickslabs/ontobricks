@@ -175,6 +175,18 @@ class TestDeployDoesNotBindNeo4jSecrets:
     def test_make_targets_do_not_pass_removed_neo4j_scope(self):
         assert "neo4j_secret_scope" not in MAKEFILE.read_text()
 
+    def test_make_deploy_unsets_lakebase_project_so_dotenv_cannot_rebind_postgres(self):
+        """A sourced ``.env`` ``LAKEBASE_PROJECT`` must not override deploy.config.sh."""
+        recipe = MAKEFILE.read_text()
+        for var in (
+            "LAKEBASE_PROJECT",
+            "LAKEBASE_BRANCH",
+            "LAKEBASE_DATABASE",
+            "LAKEBASE_SCHEMA",
+            "APP_LAKEBASE_PROJECT",
+        ):
+            assert f"unset {var}" in recipe or var in recipe.split("unset ", 1)[1].split(";", 1)[0]
+
     def test_deploy_config_does_not_export_neo4j_secret_scope(self):
         body = CONFIG.read_text()
         assert "NEO4J_SECRET_SCOPE" not in body

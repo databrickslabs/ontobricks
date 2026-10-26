@@ -1335,6 +1335,7 @@ window.SwrlModule = {
             return;
         }
 
+        const previousName = this.editingIndex >= 0 ? (this.rules[this.editingIndex] || {}).name : null;
         try {
             const r = await fetch('/ontology/swrl/save', {
                 method: 'POST',
@@ -1345,6 +1346,7 @@ window.SwrlModule = {
 
             if (d.success) {
                 bootstrap.Modal.getInstance(document.getElementById('swrlGraphEditorModal'))?.hide();
+                if (previousName && previousName !== rule.name) this._renameBusinessRuleRefs(previousName, rule.name);
                 this.rules = d.rules || [];
                 this.renderRulesList();
                 if (typeof OntologyState !== 'undefined' && OntologyState.config) {
@@ -1362,6 +1364,20 @@ window.SwrlModule = {
         }
     },
 
+    // Keep entity business-rule references (cls.business_rules) in step with
+    // rule renames/deletions; the backend applies the same cascade.
+    _renameBusinessRuleRefs(oldName, newName) {
+        const classes = (typeof OntologyState !== 'undefined' && OntologyState.config && OntologyState.config.classes) || [];
+        classes.forEach(c => (c.business_rules || []).forEach(ref => { if (ref.name === oldName) ref.name = newName; }));
+    },
+
+    _dropBusinessRuleRefs(name) {
+        const classes = (typeof OntologyState !== 'undefined' && OntologyState.config && OntologyState.config.classes) || [];
+        classes.forEach(c => {
+            if (c.business_rules) c.business_rules = c.business_rules.filter(ref => ref.name !== name);
+        });
+    },
+
     async deleteRule(index) {
         const confirmed = await showConfirmDialog({
             title: 'Delete SWRL Rule',
@@ -1372,6 +1388,7 @@ window.SwrlModule = {
         });
         if (!confirmed) return;
 
+        const removedName = (this.rules[index] || {}).name;
         try {
             const r = await fetch('/ontology/swrl/delete', {
                 method: 'POST',
@@ -1382,6 +1399,7 @@ window.SwrlModule = {
 
             if (d.success) {
                 this.rules = d.rules || [];
+                if (removedName && !this.rules.some(x => x.name === removedName)) this._dropBusinessRuleRefs(removedName);
                 this.renderRulesList();
                 if (typeof OntologyState !== 'undefined' && OntologyState.config) {
                     OntologyState.config.swrl_rules = this.rules;

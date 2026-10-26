@@ -13,11 +13,13 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-visualization.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sigmagraph.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-dataquality.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-shacl-facets.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-chat.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-analytics.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sparql.css') }}?v={{ asset_version }}">
 <!-- Query page specific styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/query.css') }}">
 <!-- Ontology map styles for read-only viewer modal -->
@@ -82,7 +84,7 @@
             
             <!-- GraphQL Playground Section -->
             <div id="graphql-section" class="sidebar-section">
-                {% include "partials/dtwin/_query_graphql.html" %}
+                {% include "partials/dtwin/_query_query.html" %}
             </div>
 
             <!-- Graph Chat Section -->
@@ -148,6 +150,7 @@
 <script defer src="{{ url_for('static', filename='query/js/query.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-loaders.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-execute.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/timed-task-log.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-databricks-build.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/runs-render.js') }}?v={{ asset_version }}"></script>
@@ -156,6 +159,9 @@
 <script defer src="{{ url_for('static', filename='query/js/query-entity-details.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dashboard.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-virtual-attributes.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/task-progress-ui.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-shacl-facets.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-business-rules.js') }}?v={{ asset_version }}"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-analytics.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dataquality.js') }}?v={{ asset_version }}"></script>
@@ -163,6 +169,7 @@
 <script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-purge-inferences.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sigmagraph.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-find-path.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-graphql.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-chat.js') }}?v={{ asset_version }}"></script>
 <!-- External REST / GraphQL API reference (also used from Settings → Registry) -->

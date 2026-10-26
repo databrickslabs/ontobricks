@@ -239,6 +239,12 @@
     marker-end: url(#mapping-arrow-inheritance);
 }
 
+.mapping-map-link.inherited {
+    stroke-dasharray: 4, 4;
+    stroke-width: 1.5px;
+    opacity: 0.85;
+}
+
 /* Link labels */
 .mapping-map-link-label {
     font-size: 11px;
@@ -358,6 +364,16 @@
         #adb5bd 5px,
         transparent 5px,
         transparent 10px
+    );
+}
+
+.mapping-map-legend-line.inherited {
+    background: repeating-linear-gradient(
+        90deg,
+        #6c757d 0px,
+        #6c757d 4px,
+        transparent 4px,
+        transparent 8px
     );
 }
 

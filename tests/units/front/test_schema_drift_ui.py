@@ -217,3 +217,22 @@ class TestDiagnosticsRendering:
         body = _function_body(_diagnostics(), "_driftBadge")
         assert "bg-warning" in body
         assert "bg-danger" not in body
+
+
+class TestDiagnosticsListsIssuesOnly:
+    def test_ok_checks_are_filtered_before_render(self):
+        body = _function_body(_diagnostics(), "_renderChecks")
+        assert "_issueChecks(checks)" in body
+        assert "issues.map" in body
+
+    def test_issue_filter_drops_ok_status(self):
+        body = _function_body(_diagnostics(), "_issueChecks")
+        assert "c.status !== 'ok'" in body
+
+    def test_clean_entities_and_relationships_are_hidden(self):
+        body = _function_body(_diagnostics(), "runDiagnostics")
+        assert "(data.entities || []).filter(_hasIssues)" in body
+        assert "(data.relationships || []).filter(_hasIssues)" in body
+        assert "(data.permissions || []).filter(_hasIssues)" in body
+        assert "No entity mapping issues." in body
+        assert "No relationship mapping issues." in body

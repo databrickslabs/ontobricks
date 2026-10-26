@@ -26,6 +26,7 @@ Covered:
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -45,6 +46,11 @@ def _csrf_headers(context) -> dict:
 
 def _json(resp) -> dict | list:
     return json.loads(resp.body())
+
+
+def _skip_if_fake_databricks() -> None:
+    if os.environ.get("ONTOBRICKS_E2E_FAKE_CREDS") == "1":
+        pytest.skip("Databricks-backed route hangs with ONTOBRICKS_E2E_FAKE_CREDS=1")
 
 
 def _assert_contract(resp):
@@ -89,6 +95,7 @@ class TestDtwinSyncRead:
         assert resp.status < 500, f"sync/info 5xx: {resp.text()}"
 
     def test_sync_dt_existence_no_5xx(self, page, live_server):
+        _skip_if_fake_databricks()
         resp = self._get(page, live_server, "/dtwin/sync/dt-existence")
         assert resp.status < 500, f"sync/dt-existence 5xx: {resp.text()}"
 

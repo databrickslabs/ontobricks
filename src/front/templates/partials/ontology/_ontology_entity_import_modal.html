@@ -1,0 +1,41 @@
+<!-- Studio "Import entity" modal. JS: /static/ontology/js/ontology-entity-import.js -->
+<div class="modal fade" id="entityImportModal" tabindex="-1" aria-labelledby="entityImportTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="entityImportTitle">
+                    <i class="bi bi-box-arrow-in-down me-2"></i>Import entities
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <label for="entityImportDomain" class="form-label">Source domain</label>
+                <select class="form-select mb-3" id="entityImportDomain">
+                    <option value="">Select a domain…</option>
+                </select>
+                <div class="alert alert-danger d-none" id="entityImportError" role="alert"></div>
+                <div class="d-none" id="entityImportBody">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <h6 class="mb-2">Entities</h6>
+                            <input type="search" class="form-control form-control-sm mb-2" id="entityImportSearch"
+                                   placeholder="Filter entities" aria-label="Filter entities">
+                            <div class="list-group entity-import-list" id="entityImportList"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="mb-2">Related entities</h6>
+                            <div class="entity-import-list" id="entityImportRelated">
+                                <p class="text-muted small mb-0">Select an entity to see its related entities.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span class="text-muted small me-auto" id="entityImportSummary"></span>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="entityImportConfirm" disabled>Import</button>
+            </div>
+        </div>
+    </div>
+</div>

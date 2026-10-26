@@ -63,19 +63,12 @@ def probe_data_table(
     ("the warehouse must be asleep") sends people off to check a
     warehouse that was running all along.
     """
-    from back.core.databricks.DatabricksClient import DatabricksClient
-    from back.core.helpers import (
-        get_databricks_host_and_token,
-        resolve_delta_warehouse_id,
-    )
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
 
     try:
-        host, token = get_databricks_host_and_token(domain, settings)
-        client = DatabricksClient(
-            host=host,
-            token=token,
-            warehouse_id=resolve_delta_warehouse_id(domain, settings),
-        )
+        client = create_databricks_client(domain, settings, for_write=True)
+        if client is None:
+            raise RuntimeError("Delta SQL client could not be created")
         rows = client.execute_query(f"SELECT 1 AS ok FROM {table} LIMIT 1")
         return bool(rows), ""
     except Exception as exc:  # noqa: BLE001

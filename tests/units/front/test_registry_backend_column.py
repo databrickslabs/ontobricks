@@ -13,9 +13,10 @@ def _source() -> str:
 
 def test_registry_browse_has_backend_column_after_uri():
     source = _source()
-    start = source.index("async function loadRegistryDomains")
+    loader_name = "async function _loadRegistryDomains"
+    start = source.index(loader_name)
     # Next top-level async function after the domain list renderer.
-    end = source.index("async function ", start + len("async function loadRegistryDomains"))
+    end = source.index("async function ", start + len(loader_name))
     body = source[start:end]
 
     uri_idx = body.index(">URI</th>")

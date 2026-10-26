@@ -26,6 +26,7 @@ from api.routers.internal._helpers import map_route_errors
 from back.core.logging import get_logger, LogManager
 
 from back.objects.domain import SettingsService as config_service
+from back.objects.domain.settings import GitHubSettings
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 logger = get_logger(__name__)
@@ -126,6 +127,28 @@ async def select_warehouse(
     )
 
 
+@router.post("/select-build-warehouse")
+async def select_build_warehouse(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Select the non-RT SQL warehouse used for build DDL and writes."""
+    data = await request.json()
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.select_build_warehouse(
+        data.get("warehouse_id"),
+        data.get("warehouse_type"),
+        False,
+        email,
+        user_token,
+        session_mgr,
+        settings,
+    )
+
+
 @router.post("/select-delta-warehouse")
 async def select_delta_warehouse(
     request: Request,
@@ -143,6 +166,7 @@ async def select_delta_warehouse(
         user_token,
         session_mgr,
         settings,
+        use_sea=bool(data.get("use_sea", False)),
     )
 
 
@@ -234,6 +258,20 @@ async def get_uc_functions(
     """List Unity Catalog functions in a schema (with parameter metadata)."""
     return await config_service.fetch_uc_functions(
         catalog, schema, session_mgr, settings
+    )
+
+
+@router.get("/jobs")
+async def get_entity_jobs(
+    q: str = "",
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Databricks Jobs that declare an entity_id parameter (class Job picker)."""
+    from back.objects.domain.settings.RegistrySettings import RegistrySettings
+
+    return await RegistrySettings.fetch_entity_jobs(
+        session_mgr, settings, query=q
     )
 
 
@@ -332,7 +370,11 @@ async def list_registry_domains(
 
     Non-admin users only see domains they have a role on; admins see all.
     """
-    result = config_service.list_registry_domains_result(session_mgr, settings)
+    result = config_service.list_registry_domains_result(
+        session_mgr,
+        settings,
+        user_role=getattr(request.state, "user_role", "") or "",
+    )
     result["domains"] = filter_visible_domains(
         request, session_mgr, settings, result.get("domains", [])
     )
@@ -353,10 +395,11 @@ async def delete_registry_domain(
     domain_name: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
+    delete_github: bool = Query(False),
 ):
     """Delete a domain folder and all its versions from the registry."""
     return config_service.delete_registry_domain_result(
-        domain_name, session_mgr, settings
+        domain_name, session_mgr, settings, delete_github=delete_github
     )
 
 
@@ -364,15 +407,19 @@ async def delete_registry_domain(
 async def delete_registry_version(
     domain_name: str,
     version: str,
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
+    delete_github: bool = Query(False),
 ):
     """Delete a single version file from a domain in the registry."""
     return config_service.delete_registry_version_result(
         domain_name,
         version,
-        session_mgr,
-        settings,
+        user_role=getattr(request.state, "user_role", "") or "",
+        session_mgr=session_mgr,
+        settings=settings,
+        delete_github=delete_github,
     )
 
 
@@ -475,15 +522,24 @@ async def import_registry_obx(
     Multipart fields:
 
     * ``file`` -- the uploaded `.obx` JSON body.
+    * ``from_github`` -- ``1`` to rebuild and import from the GitHub
+      repository (no file; blobs are read at confirm time).
     * ``decisions`` -- JSON string ``[{"name": <folder>,
       "action": "skip"|"overwrite"|"rename", "new_name": <str>}]``.
       Missing entries default to ``"skip"``.
     """
     form = await request.form()
-    upload = form.get("file")
-    if upload is None:
-        raise ValidationError("No file provided")
-    file_bytes = await upload.read()
+    from_github = str(form.get("from_github") or "").lower() in ("1", "true", "yes")
+    if from_github:
+        email, _, _, _, _ = _settings_request_identity(request)
+        file_bytes = await run_blocking(
+            GitHubSettings.github_import_bytes, email, session_mgr, settings
+        )
+    else:
+        upload = form.get("file")
+        if upload is None:
+            raise ValidationError("No file provided")
+        file_bytes = await upload.read()
 
     decisions_raw = form.get("decisions") or "[]"
     try:
@@ -498,6 +554,85 @@ async def import_registry_obx(
     return config_service.import_registry_obx_result(
         file_bytes, decisions, session_mgr, settings
     )
+
+
+# ===========================================
+# GitHub repository mirror (one repository per instance)
+# ===========================================
+
+
+@router.get("/github", dependencies=[Depends(require(ROLE_ADMIN))])
+async def get_github_settings(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the GitHub mirror settings and the last sync status."""
+    return await run_blocking(GitHubSettings.get_github_result, session_mgr, settings)
+
+
+@router.post("/github", dependencies=[Depends(require(ROLE_ADMIN))])
+async def save_github_settings(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the GitHub mirror settings (the token stays in a Databricks secret)."""
+    data = await request.json()
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    return await run_blocking(
+        GitHubSettings.save_github_result, data, session_mgr, settings
+    )
+
+
+@router.post("/github/test", dependencies=[Depends(require(ROLE_ADMIN))])
+async def test_github_settings(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Check repository access and claim it for this instance.
+
+    Body (optional): ``{"take_over": true}`` to claim a repository already
+    used by another OntoBricks instance.
+    """
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        data = {}
+    take_over = bool(data.get("take_over")) if isinstance(data, dict) else False
+    with map_route_errors("GitHub connection test", logger):
+        return await run_blocking(
+            GitHubSettings.test_github_result, take_over, session_mgr, settings
+        )
+
+
+@router.post("/github/sync-all", dependencies=[Depends(require(ROLE_ADMIN))])
+async def sync_all_github(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Rewrite every registry domain/version into the repository in one commit."""
+    email, _, _, _, _ = _settings_request_identity(request)
+    with map_route_errors("GitHub sync all", logger):
+        return await run_blocking(
+            GitHubSettings.sync_all_github_result, email, session_mgr, settings
+        )
+
+
+@router.get("/github/obx", dependencies=[Depends(require(ROLE_ADMIN))])
+async def github_obx_envelope(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List domains/versions in the GitHub repository (feeds the import modal)."""
+    email, _, _, _, _ = _settings_request_identity(request)
+    with map_route_errors("GitHub import read", logger):
+        return await run_blocking(
+            GitHubSettings.github_obx_envelope_result, email, session_mgr, settings
+        )
 
 
 # ===========================================
@@ -586,12 +721,13 @@ async def save_ui_branding(
     request: Request,
     app_title: str = Form(""),
     primary_color: str = Form(""),
+    aurora_color: str = Form(""),
     reset_logo: bool = Form(False),
     logo_file: UploadFile | None = File(None),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Save title/color/logo atomically from multipart form data (admin only)."""
+    """Save title/color/Aurora/logo atomically from multipart form data (admin only)."""
     logo_content = None
     logo_mime = None
     if logo_file is not None:
@@ -607,6 +743,7 @@ async def save_ui_branding(
     return config_service.save_ui_branding_result(
         app_title=app_title,
         primary_color=primary_color,
+        aurora_color=aurora_color,
         logo_content=logo_content,
         logo_mime=logo_mime,
         reset_logo=reset_logo,
@@ -734,6 +871,35 @@ async def save_graph_limits(
     )
 
 
+@router.get("/data-assets-import-limit")
+async def get_data_assets_import_limit(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get the max number of Unity Catalog data assets a domain may import."""
+    return config_service.get_data_assets_import_limit_result(session_mgr, settings)
+
+
+@router.post("/save-data-assets-import-limit")
+async def save_data_assets_import_limit(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the data-assets import cap (admin only, stored globally). Default 40."""
+    data = await request.json()
+    try:
+        limit = int(data.get("data_assets_import_limit", 40))
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("data_assets_import_limit must be an integer") from exc
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_data_assets_import_limit_result(
+        limit, email, user_token, session_mgr, settings
+    )
+
+
 @router.get("/edit-lock-ttl")
 async def get_edit_lock_ttl(
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -782,6 +948,23 @@ async def save_analytics_job_enabled(
         _settings_request_identity(request)
     )
     return config_service.save_analytics_job_enabled_result(
+        enabled, email, user_token, session_mgr, settings
+    )
+
+
+@router.post("/save-cloud-fetch")
+async def save_cloud_fetch(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the global CloudFetch toggle (admin only)."""
+    data = await request.json()
+    enabled = bool(data.get("use_cloud_fetch", False))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_use_cloud_fetch_result(
         enabled, email, user_token, session_mgr, settings
     )
 
@@ -977,7 +1160,7 @@ async def teams_save_batch(
 
 # NOTE: The graph backend *selection* (formerly GET/POST /graph-engine and
 # GET/POST /triple-store-backend) moved to a mandatory per-domain choice — see
-# the Domain Information -> Knowledge Graph tab (POST /domain/info). Only the
+# the Domain -> General -> Knowledge Graph tab (POST /domain/info). Only the
 # Delta connection info (which SQL warehouse) remains a workspace-global read.
 
 
@@ -1553,7 +1736,7 @@ async def list_edit_locks(
     settings: Settings = Depends(get_settings),
 ):
     """List all active domain edit-locks across the registry (admin only)."""
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     with map_route_errors("list edit locks", logger):
         return EditLockService.list_all(session_mgr, settings)
@@ -1569,7 +1752,7 @@ async def release_edit_lock_admin(
     settings: Settings = Depends(get_settings),
 ):
     """Force-unlock a ``(folder, version)`` edit-lock (admin only)."""
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     data = await request.json()
     folder = (data.get("folder") or "").strip()
@@ -1602,11 +1785,27 @@ async def run_diagnostics(settings: Settings = Depends(get_settings)):
     * **Delta Triple Store** — Delta warehouse, UC objects, Accelerated Sync
 
     Each group contains individual ``{name, label, status, detail, duration_ms}``
-    checks that mirror the shape used by ``GET /health``.
+    checks that mirror the shape used by ``GET /settings/diagnostics/readiness``.
     """
     from shared.fastapi.health import run_diagnostics_checks
 
     return await run_blocking(run_diagnostics_checks, settings)
+
+
+@router.get(
+    "/diagnostics/readiness",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def run_readiness(settings: Settings = Depends(get_settings)):
+    """Run the flat dependency readiness probes (admin only).
+
+    Warehouse ``SELECT 1``, registry view DDL, Databricks auth and
+    Lakebase probes; their details name hosts, catalogs and schemas, so
+    they are never exposed on the anonymous ``GET /health``.
+    """
+    from shared.fastapi.health import run_readiness_checks
+
+    return await run_blocking(run_readiness_checks, settings)
 
 
 # ===========================================

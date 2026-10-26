@@ -1,0 +1,865 @@
+================================================================================
+## Hide GitHub settings body while the spinner is showing
+================================================================================
+
+Context:
+Settings → GitHub painted the info banner, Test connection / Take over /
+Sync all toolbar and last-sync row immediately, while only the form waited
+behind the loading spinner. GET /settings/github often takes a few seconds,
+so the toolbar sat idle next to "Loading GitHub settings…". Hide the whole
+section body until the fetch finishes.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_github.html
+   Wrap header, info banner, form, toolbar and last-sync in `#githubLoaded`
+   (`d-none`); leave `#githubLoading` as the only visible content.
+2. src/front/static/config/js/settings-github.js
+   Reveal `#githubLoaded` (and hide the spinner) after GET /settings/github.
+3. tests/units/front/test_settings_github_loading.py
+   Contract: toolbar/form/header start inside the hidden wrapper; JS swaps
+   spinner for that wrapper after the fetch.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/static/config/js/settings-github.js
+- tests/units/front/test_settings_github_loading.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9061 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 53.40s.
+
+================================================================================
+## Keep GitHub title visible while settings load
+================================================================================
+
+Context:
+Hiding the whole GitHub section behind the spinner also hid the page title
+and subtitle. Keep the section header (title, subtitle, disabled Save) on
+screen and only hide the form, info banner and Test connection toolbar.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_github.html
+   Move `.section-header` above `#githubLoading`; `#githubLoaded` still
+   wraps the body that waits on GET /settings/github.
+2. tests/units/front/test_settings_github_loading.py
+   Assert the title row is outside the hidden wrapper.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_github.html
+- tests/units/front/test_settings_github_loading.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9062 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 60.68s.
+
+================================================================================
+## Hide GitHub configuration until the mirror is enabled
+================================================================================
+
+Context:
+Settings → GitHub always showed owner, repo, secrets, Test connection and
+Sync all, even with Enable GitHub mirror off. Those fields are unused until
+the switch is on; keep only the enable control until then.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_github.html
+   Wrap repo fields, info banner and toolbar in `#githubDetails` (`d-none`).
+2. src/front/static/config/js/settings-github.js
+   Toggle `#githubDetails` from the Enable GitHub mirror checkbox after load
+   and on change. Saved values stay in the form when hidden.
+3. tests/units/front/test_settings_github_loading.py
+   Contract: details start hidden; JS binds the enable switch.
+4. docs/user-guide.md
+   Setup now ticks Enable first so the fields appear.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/static/config/js/settings-github.js
+- tests/units/front/test_settings_github_loading.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9064 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 54.05s.
+
+================================================================================
+## Fix Load from GitHub doing nothing on Import
+================================================================================
+
+Context:
+Registry → Import → Load from GitHub looked like a no-op: GitHubClient used
+httpx `base_url` without a trailing slash and request paths with a leading
+slash, so Git Data calls joined to `https://api.github.com/git/...` instead
+of `/repos/{owner}/{repo}/git/...`. Test connection could still work because
+`get_repo` used an absolute URL. The import modal also hid the spinner until
+after the envelope download.
+
+Changes:
+
+1. src/back/core/github/GitHubClient.py
+   Trailing slash on `base_url`; strip leading slashes so requests stay under
+   the repo prefix. `get_repo` uses a relative GET.
+2. tests/fixtures/github.py
+   Reject calls that escape `/repos/acme/onto` so the join bug cannot regress
+   in FakeGitHub.
+3. tests/units/registry/test_github_client.py
+   Assert tree/ref URLs keep the repo prefix.
+4. src/front/static/registry/js/registry.js
+   Show the preview spinner immediately, toast errors on GitHub read failure.
+5. src/front/templates/partials/registry/_import_obx_modal.html
+   Generic "Reading…" busy copy for file and GitHub.
+6. tests/units/front/test_registry_obx_import_rename.py
+   Contract: GitHub click shows busy and hits `/settings/github/obx`.
+
+Modified files:
+- src/back/core/github/GitHubClient.py
+- tests/fixtures/github.py
+- tests/units/registry/test_github_client.py
+- src/front/static/registry/js/registry.js
+- src/front/templates/partials/registry/_import_obx_modal.html
+- tests/units/front/test_registry_obx_import_rename.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9066 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 55.55s.
+
+================================================================================
+## Stop GitHub import spinner hanging on Reading…
+================================================================================
+
+Context:
+Load from GitHub showed Reading… indefinitely. GET /settings/github/obx
+returned the full envelope, the browser JSON-parsed it, then POSTed it to
+/settings/registry/import/preview (warehouse lookups per domain) with no
+fetch timeout. The spinner only hid after both hops finished.
+
+Changes:
+
+1. src/back/objects/domain/settings/GitHubSettings.py
+   Preview on the server; stash the envelope for confirm; reject empty repos.
+2. src/api/routers/internal/settings.py
+   POST /settings/registry/import accepts ``from_github=1`` and uses the stash.
+3. src/front/static/registry/js/registry.js
+   Render the preview JSON directly; 60s AbortController; confirm sends
+   from_github instead of re-uploading the envelope.
+4. src/back/objects/registry/gitsync/GitHubSyncService.py
+   Log file/domain counts and duration for the OBX rebuild.
+5. tests/units/settings/test_github_settings.py
+   Preview+stash, empty repo, envelope TTL.
+6. tests/units/front/test_registry_obx_import_rename.py
+   Contract: abort + renderImportObxPreview, no second preview POST.
+
+Modified files:
+- src/back/objects/domain/settings/GitHubSettings.py
+- src/api/routers/internal/settings.py
+- src/front/static/registry/js/registry.js
+- src/back/objects/registry/gitsync/GitHubSyncService.py
+- tests/units/settings/test_github_settings.py
+- tests/units/front/test_registry_obx_import_rename.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9069 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 65.77s.
+
+================================================================================
+## Fix Test connection 404 on GET repo
+================================================================================
+
+Context:
+After the httpx base_url trailing-slash fix, Test connection called
+``get_repo`` as ``GET ""``, which joined to ``/repos/{owner}/{repo}/``.
+GitHub 404s that trailing slash (``GitHub resource not found: GET``).
+
+Changes:
+
+1. src/back/core/github/GitHubClient.py
+   ``get_repo`` uses the absolute repo URL with no trailing slash.
+2. tests/units/registry/test_github_client.py
+   Assert the GET URL is ``https://api.github.com/repos/acme/onto``.
+
+Modified files:
+- src/back/core/github/GitHubClient.py
+- tests/units/registry/test_github_client.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9070 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 56.13s.
+
+================================================================================
+## List GitHub import domains from the Git tree
+================================================================================
+
+Context:
+Load from GitHub timed out because it downloaded every JSON blob to rebuild
+a full .obx envelope before showing the domain/version table. The recursive
+tree listing already has folder and version in the paths.
+
+Changes:
+
+1. src/back/objects/registry/gitsync/GitHubSyncService.py
+   ``list_domain_versions()`` — one tree listing, no blob reads.
+2. src/back/objects/domain/settings/GitHubSettings.py
+   Preview from that listing + cached registry details. Blob reads move to
+   ``github_import_bytes`` on confirm.
+3. src/api/routers/internal/settings.py
+   GET /github/obx lists; POST import ``from_github`` rebuilds the envelope.
+4. src/front/templates/partials/registry/_import_obx_modal.html
+   Busy copy: Listing GitHub repository…
+5. tests/units/settings/test_github_settings.py
+   Preview does not call ``build_obx_envelope``.
+6. tests/units/registry/test_github_sync.py
+   Tree listing adds no extra blob GETs.
+
+Modified files:
+- src/back/objects/registry/gitsync/GitHubSyncService.py
+- src/back/objects/domain/settings/GitHubSettings.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/registry/_import_obx_modal.html
+- tests/units/settings/test_github_settings.py
+- tests/units/registry/test_github_sync.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9070 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 54.32s.
+
+================================================================================
+## Allow deleting a domain's last version
+================================================================================
+
+Context:
+Admins could not delete the latest draft or the only remaining version
+("must keep at least one version" / "latest cannot be deleted"). Deleting
+the sole version should remove the domain as well.
+
+Changes:
+
+1. src/back/objects/registry/version_lifecycle.py
+   Latest drafts are deletable. The last remaining draft may be deleted
+   even if it is loaded. Still Draft-only; loaded versions with siblings
+   still require switching first.
+2. src/back/objects/domain/settings/RegistryDomainSettings.py
+   After deleting the last version, delete the empty domain.
+3. src/front/static/registry/js/registry.js
+   Confirm copy when the delete also removes the domain.
+4. src/front/static/domain/js/domain-versions.js
+   Same confirm; redirect home when the domain is gone.
+5. tests/units/registry/test_version_lifecycle.py
+   Latest and last-version drafts are allowed.
+6. tests/units/settings/test_settings_version_deletion.py
+   Last version cascades to domain delete.
+7. tests/units/domain/test_version_capabilities.py
+   Sole loaded draft is deletable and sets ``deletes_domain``.
+8. tests/units/front/test_domain_versions_cards.py
+   Last-version confirm copy.
+9. tests/e2e/domain/test_domain_versions_cards.py
+   Loaded (non-last) version uses the load-another-version reason.
+
+Modified files:
+- src/back/objects/registry/version_lifecycle.py
+- src/back/objects/domain/settings/RegistryDomainSettings.py
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- tests/units/registry/test_version_lifecycle.py
+- tests/units/settings/test_settings_version_deletion.py
+- tests/units/domain/test_version_capabilities.py
+- tests/units/front/test_domain_versions_cards.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9071 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 58.53s.
+
+================================================================================
+## Ask to delete the GitHub domain when deleting a registry domain
+================================================================================
+
+Context:
+With GitHub enabled, Delete Domain (and last-version cascade) never offered
+to remove the mirrored folder. Hooks no longer auto-delete GitHub domains;
+the confirm dialog now shows an opt-in checkbox and DELETE takes
+``delete_github=1``.
+
+Changes:
+
+1. src/front/static/global/js/utils.js
+   Confirm dialog already supports a checkbox; callers now use it.
+2. src/front/static/registry/js/registry.js
+   Delete Domain / last version: checkbox when the GitHub mirror is on;
+   pass ``?delete_github=1`` when checked.
+3. src/front/static/domain/js/domain-versions.js
+   Same checkbox on last-version delete from Domain → Versions.
+4. src/back/objects/domain/settings/RegistryDomainSettings.py
+   ``github_enabled`` on the domain list; pause the mirror during domain
+   delete; call GitHub only when ``delete_github`` is true.
+5. src/back/objects/domain/settings/GitHubSettings.py
+   ``delete_mirrored_domain`` removes ``domains/<folder>/`` when the mirror
+   is ready.
+6. src/back/objects/domain/settings/SettingsService.py
+   Forward ``delete_github`` on domain and version delete.
+7. src/api/routers/internal/settings.py
+   Query ``delete_github`` on registry domain/version DELETE.
+8. src/api/routers/internal/domain.py
+   Same query on ``DELETE /domain/versions/{version}``.
+9. src/back/objects/registry/gitsync/GitHubConfig.py
+   ``ready_for(store)`` reports whether the mirror is on.
+10. src/api/routers/internal/domain.py
+    Versions list includes ``github_enabled``.
+11. src/back/objects/registry/gitsync/GitHubMirrorHooks.py
+    Domain delete is opt-in; do not enqueue a GitHub domain delete.
+12. docs/user-guide.md
+    Document the GitHub delete checkbox.
+13. docs/architecture.md
+    Domain GitHub delete is opt-in, not automatic.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- src/back/objects/domain/settings/RegistryDomainSettings.py
+- src/back/objects/domain/settings/GitHubSettings.py
+- src/back/objects/domain/settings/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/domain.py
+- src/back/objects/registry/gitsync/GitHubConfig.py
+- src/back/objects/registry/gitsync/GitHubMirrorHooks.py
+- src/back/objects/registry/gitsync/GitHubMirror.py
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/front/test_domain_versions_cards.py
+- tests/units/settings/test_v090_settings_registry_domains.py
+- tests/units/settings/test_github_settings.py
+- tests/units/registry/test_github_sync.py
+- tests/units/domain/test_version_capabilities.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9081 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 53.70s.
+
+================================================================================
+## Make the GitHub delete checkbox clickable on read-only domains
+================================================================================
+
+Context:
+Delete Domain showed "Also delete this domain from GitHub" but the box
+could not be checked. Registry Browse opens over the loaded domain; when
+that domain is PUBLISHED / IN-REVIEW (or the user is a viewer),
+permissions.css sets pointer-events: none on every input. Exempt the
+confirm-dialog checkbox the same way as New Domain fields.
+
+Changes:
+
+1. src/front/static/global/js/utils.js
+   Class ``ob-confirm-check`` on the confirm-dialog checkbox.
+2. src/front/static/global/css/permissions.css
+   Exempt ``.ob-confirm-check`` from the read-only input lock.
+3. tests/units/front/test_stacked_confirm_modal.py
+   Contract: class + CSS exemption.
+
+Modified files:
+- src/front/static/global/js/utils.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_stacked_confirm_modal.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9082 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 54.61s.
+
+================================================================================
+## Split entity panel Actions from Refs.
+================================================================================
+
+Context:
+Ontology Studio's entity right pane packed dashboard, dataset, bridges,
+UC actions and SWRL business rules under one References tab. Split
+behaviours into an Actions tab and keep the link targets under a shorter
+Refs. label so the compact rail still fits.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Entity tabs: Details / Attributes / Refs. / Actions / Constraints.
+   Refs. holds Dashboard, Dataset, Bridges; Actions holds UC actions
+   and business rules.
+2. src/front/static/ontology/js/ontology-map.js
+   Designer context menu shortcuts for Refs. and Actions.
+3. tests/units/front/test_map_context_menu_tabs.py
+   Five entity tab shortcuts, including Refs. and Actions.
+4. tests/units/front/test_class_actions_ui.py
+   Refs. pane owns dashboard/dataset/bridges, not actions/rules.
+5. tests/units/front/test_entity_business_rules_ui.py
+   Business rules live in the Actions pane.
+6. tests/units/front/test_ontology_map_external_badge.py
+   Badge docstring points at Refs. / Actions.
+7. docs/user-guide.md
+   Class actions and SWRL attach from Studio → Actions.
+8. docs/api.md
+   Business-rule endpoint cites Studio → Actions.
+9. src/front/static/query/js/query-business-rules.js
+   Comment path updated to Studio > Actions.
+10. .cursor/11-frontend-design.mdc
+    Compact-tab count no longer hard-coded as four.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/query/js/query-business-rules.js
+- tests/units/front/test_map_context_menu_tabs.py
+- tests/units/front/test_class_actions_ui.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/front/test_ontology_map_external_badge.py
+- docs/user-guide.md
+- docs/api.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9083 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 56.97s.
+
+================================================================================
+## Align Databricks icon in the top-right Settings dropdown
+================================================================================
+
+Context:
+The Settings gear menu rendered brand icons as ``class="bi ob-brand-icon …"``.
+Bootstrap Icons' ``.bi`` ::before plus a 1em background mark sat left of the
+20px column used by Registry / GitHub / Global. Drop the ``bi`` prefix on
+brand marks and size ``.ob-brand-icon`` like the other dropdown icons.
+
+Changes:
+
+1. src/front/templates/base.html
+   Settings gear items: brand-icon classes as-is; Bootstrap icons keep ``bi``.
+2. src/front/static/global/css/main.css
+   Dropdown ``.ob-brand-icon`` shares the 20×20px icon column with ``.bi``.
+3. tests/units/front/test_backend_brand_icons.py
+   Contract: no ``bi`` prefix on brand icons in the gear menu.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9084 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 60.71s.
+
+================================================================================
+## Align Settings dropdown labels on a shared icon column
+================================================================================
+
+Context:
+After dropping the ``bi`` prefix on brand marks, Databricks still sat in a
+different box than Bootstrap icons, so labels (Databricks vs Registry vs
+GitHub) did not share a left edge. Wrap every gear-menu icon in a 20px
+``ob-dropdown-icon`` slot and put the label in its own span.
+
+Changes:
+
+1. src/front/templates/base.html
+   Settings gear rows: icon slot + label span (including Open full settings).
+2. src/front/static/global/css/main.css
+   ``flex: 0 0 20px`` icon column; glyphs centered inside it.
+3. tests/units/front/test_backend_brand_icons.py
+   Contract for the slot class and width.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9084 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 56.71s.
+
+================================================================================
+## Left-align Settings dropdown labels with the icon column
+================================================================================
+
+Context:
+Icons lined up, but labels still started at different x and sat off the icon
+vertically. Flex ``min-width: auto`` let ``.bi::before`` widen some slots;
+whitespace between icon and label added a second gap. Lock the slot at 20px
+(``min/max-width``, overflow hidden) and give labels ``line-height: 20px``.
+
+Changes:
+
+1. src/front/templates/base.html
+   ``ob-dropdown-label`` on the text; no whitespace between icon and label.
+2. src/front/static/global/css/main.css
+   Rigid 20px icon slot; label line-height matches the slot height.
+3. tests/units/front/test_backend_brand_icons.py
+   Slot min-width / overflow and label line-height.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9084 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 53.99s.
+
+================================================================================
+## Restore flex on admin Settings gear rows
+================================================================================
+
+Context:
+The gear menu mixed layout modes. Databricks / Global / Lakebase are not
+``admin_only`` and used the 20px flex icon column. Registry / GitHub / Admin
+items have ``data-requires-app="admin"``; permissions.css restored them with
+``display: block !important`` (Bootstrap default), so labels sat against each
+glyph instead of a shared left edge. Restore ``display: flex !important``.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   Admin-gated ``.dropdown-item`` is flex, matching the navbar menu.
+2. tests/units/front/test_admin_only_domain_create.py
+   Contract: flex, not block.
+
+Modified files:
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_admin_only_domain_create.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9085 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 61.56s.
+
+================================================================================
+## Shorten entity pane Details/Attributes tabs
+================================================================================
+
+Context:
+The Ontology right pane tab strip for a selected entity was wrapping or crowding
+on the compact rail. Rename Details → Infos and Attributes → Attrs. to match
+the existing Refs. abbreviation. Tab ids and context-menu wording stay as they
+are.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Entity form tabs: Infos, Attrs. (relationship pane still Details).
+2. tests/units/front/test_ontology_split_panel_layout.py
+   Contract on the entity tab nav labels.
+3. docs/user-guide.md
+   Virtual-attributes steps point at the Attrs. tab.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_split_panel_layout.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9086 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 56.24s.
+
+================================================================================
+## Rename Actions section to UC functions
+================================================================================
+
+Context:
+Ontology Studio entity pane → Actions tab still headed the bindable Unity
+Catalog functions as "Actions", which duplicated the tab name. Rename the
+section to "UC functions". Tab id and Graph Explorer wording stay the same.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Actions-tab section heading: UC functions.
+2. tests/units/front/test_class_actions_ui.py
+   Contract on that heading.
+3. docs/user-guide.md
+   Class-actions steps use Actions tab / UC functions section.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_class_actions_ui.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: PENDING
+
+================================================================================
+## Thin Ontology and Mapping split handles to 2px
+================================================================================
+
+Context:
+Ontology Studio and Mapping Studio used an 8px drag handle with a 3px grip
+between the canvas and the detail panel. Shrink the track to a quarter of
+that thickness so the split is a hairline; keep the 40px grip length.
+
+Changes:
+
+1. src/front/static/ontology/css/ontology-shared-panels.css
+   `.detail-panel-resize-handle` is 2px (column: 2px height); grip bar is 1px.
+2. tests/units/front/test_ontology_split_panel_layout.py
+   Contract on the 2px / 1px × 40px vertical handle.
+3. tests/units/front/test_mapping_designer_split_layout.py
+   Contract on the 2px / 40px × 1px horizontal handle.
+4. .cursor/11-frontend-design.mdc
+   Drag-handle dimensions in the split-panel contract.
+
+Modified files:
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_ontology_split_panel_layout.py
+- tests/units/front/test_mapping_designer_split_layout.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_split_panel_layout.py tests/units/front/test_mapping_designer_split_layout.py` → 42 passed, 1 error at setup of `test_detail_panel_is_permanently_visible` (circular import in unrelated WIP `back.core.databricks.jobs`). Full `pytest -q -m "not scenario"` could not collect (273 errors, same import cycle).
+
+================================================================================
+## Halve Ontology and Mapping split-handle thickness again
+================================================================================
+
+Context:
+The 2px track still sat in a full 0.5rem gutter on each side (~18px valley).
+Halve the track and overlap half the gutter so the split is a hairline.
+
+Changes:
+
+1. src/front/static/ontology/css/ontology-shared-panels.css
+   1px track, 0.5px grip, ±0.25rem margin into the gutter; 8px invisible hit.
+2. tests/units/front/test_ontology_split_panel_layout.py
+   Contract on 1px / 0.5px × 40px and negative horizontal margins.
+3. tests/units/front/test_mapping_designer_split_layout.py
+   Same for the column split (1px height, ±0.25rem vertical margins).
+4. .cursor/11-frontend-design.mdc
+   Drag-handle contract.
+
+Modified files:
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_ontology_split_panel_layout.py
+- tests/units/front/test_mapping_designer_split_layout.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_split_panel_layout.py tests/units/front/test_mapping_designer_split_layout.py` → 43 passed, 1 warning in 0.24s.
+
+================================================================================
+## Drop the pencil from the Ontology detail-panel title
+================================================================================
+
+Context:
+Selecting an entity or relationship in Ontology Studio prefixed the right
+pane heading with a pencil. The name (and entity emoji) is enough.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Edit-mode entity and relationship titles no longer include `bi-pencil`.
+2. tests/units/front/test_ontology_split_panel_layout.py
+   Contract: those titles have no pencil.
+3. .cursor/11-frontend-design.mdc
+   Split-panel contract: selected titles have no pencil.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_split_panel_layout.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_split_panel_layout.py` → 24 passed, 1 warning in 0.17s.
+
+================================================================================
+## Bind Databricks Jobs as class actions
+================================================================================
+
+Context:
+Ontology Studio Actions already bound Unity Catalog functions. Authors also
+need to start an existing workspace Job with `entity_id` (Spark still uses
+the Job run-as identity). OntoBricks only calls `run_now`, tracks the run
+in navbar Background Tasks, and allow-lists `job:<job_id>` from Explorer
+and MCP. Lakehouse App mode triggers OBO with the forwarded user token.
+
+Changes:
+
+1. src/back/core/databricks/jobs/JobActionRunner.py
+   List Jobs that declare `entity_id`, `run_now`, poll `get_run`; Lakehouse
+   App mode uses the caller token (fail-closed).
+2. src/back/objects/digitaltwin/node/JobActionService.py
+   Allow-list invoke, debounce in-flight runs, TaskManager `entity_job_action`.
+3. src/back/objects/digitaltwin/node/NodeContextService.py
+   `class_action_entries` and `invoke_action` branch on `kind=job`.
+4. src/api/routers/internal/settings.py
+   `GET /settings/jobs` for the Studio picker.
+5. src/front/static/ontology/js/ontology-shared-panels.js
+   Actions tab Jobs box, picker, save concat with UC functions.
+6. src/front/static/query/js/query-dashboard.js
+   Job invoke toasts "Running in Background Tasks" (no UC result modal).
+7. src/front/static/query/js/query-entity-details.js
+   Explorer details Run buttons for Jobs (`bi-play-circle`).
+8. src/front/static/query/js/query-sigmagraph.js
+   Details pane and right-click menu for Jobs.
+9. src/front/static/global/js/task-tracker.js
+   `entity_job_action` type; completion notification can link `run_page_url`.
+10. src/mcp-server/server/formatting.py
+    Context and invoke responses list Jobs and return `task_id` / `run_id`.
+11. src/mcp-server/server/tools.py
+    `invoke_entity_action` accepts `job:<id>` as well as a UC FQN.
+12. docs/user-guide.md, docs/mcp.md, docs/api.md, docs/architecture.md
+    Document Job class actions, OBO, and Background Tasks.
+
+Modified files:
+- src/back/core/databricks/jobs/JobActionRunner.py
+- src/back/core/databricks/jobs/__init__.py
+- src/back/objects/digitaltwin/node/JobActionService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/digitaltwin/node/__init__.py
+- src/back/objects/domain/settings/RegistrySettings.py
+- src/back/objects/domain/settings/SettingsService.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/settings.py
+- src/back/core/mcp_tools.py
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/global/js/task-tracker.js
+- src/mcp-server/server/formatting.py
+- src/mcp-server/server/tools.py
+- examples/mcp_client.py
+- docs/user-guide.md
+- docs/mcp.md
+- docs/api.md
+- docs/architecture.md
+- docs/sphinx/api/app.core.databricks.rst
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- tests/units/dtwin/test_class_action_entries.py
+- tests/units/core/test_job_action_runner.py
+- tests/units/api/test_node_job_action.py
+- tests/units/front/test_class_actions_ui.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/settings/test_settings_jobs.py
+- tests/units/mcp/test_node_action_formatting.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9109 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 56.04s.
+
+================================================================================
+## Add create/delete fake-contract test Jobs
+================================================================================
+
+Context:
+Class Actions will bind Databricks Jobs that declare `entity_id`. Add two
+test-only Job scripts (create a fake contract, delete a contract) to try the
+Job Action path. They are not declared in the bundle; the Jobs are created
+by hand in the workspace.
+
+Changes:
+
+1. src/jobs/contract_demo.py
+   `ContractDemoTable`: Delta DDL, fake row, delete SQL (contract id or FAKE-* customer); manual Job setup notes.
+2. src/jobs/create_fake_contract_job.py
+   Spark entry: insert one fake contract for `entity_id`.
+3. src/jobs/delete_contract_job.py
+   Spark entry: delete matching contract / fake customer rows.
+4. tests/units/jobs/test_contract_demo_jobs.py
+   Argparse, row/SQL contracts, and a guard that no bundle resource declares them; no live Spark.
+
+Modified files:
+- src/jobs/contract_demo.py
+- src/jobs/create_fake_contract_job.py
+- src/jobs/delete_contract_job.py
+- tests/units/jobs/test_contract_demo_jobs.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q tests/units/jobs/test_contract_demo_jobs.py tests/units/settings/test_bundle_job_resource.py` → 28 passed, 1 warning in 0.23s.
+
+================================================================================
+## Add tests for Job class actions
+================================================================================
+
+Context:
+Job entity actions shipped with smoke coverage (allow-list, runner happy path,
+one invoke). Add behavioral tests for OBO, failed runs, TaskManager debounce,
+409 conflict, nodes/context, MCP `job:<id>` formatting, and Explorer/Studio
+contracts.
+
+Changes:
+
+1. tests/units/dtwin/test_job_action_service.py
+   Invoke creates `entity_job_action`; conflict / notebook / invalid id;
+   poll completes or fails the task.
+2. tests/units/core/test_job_action_runner.py
+   Failed run, missing run id, `class_job_entry`, Lakehouse OBO token.
+3. tests/units/api/test_node_job_action.py
+   Duplicate run 409, context lists jobs, disabled MCP policy blocks jobs.
+4. tests/units/front/test_class_actions_ui.py
+   Explorer job icon, skip UC modal, refresh Background Tasks.
+5. tests/units/front/test_task_tracker_job_actions.py
+   Completion notification links `run_page_url`.
+6. tests/units/mcp/test_node_action_formatting.py
+   Mixed UC + Job context listings.
+7. tests/mcp/integration/test_dataset_context_tools.py
+   `invoke_entity_action` posts `job:42` and formats the async start.
+
+Modified files:
+- tests/units/dtwin/test_job_action_service.py
+- tests/units/core/test_job_action_runner.py
+- tests/units/api/test_node_job_action.py
+- tests/units/front/test_class_actions_ui.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/mcp/test_node_action_formatting.py
+- tests/mcp/integration/test_dataset_context_tools.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9132 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 54.99s.
+
+================================================================================
+## Rewrite V0.9.0 release notes from the full changelog
+================================================================================
+
+Context:
+The published `releases/ReleaseNotes_V0.9.0.md` still described only the
+early-September Lakehouse//RT and Explorer slice. Operators needed a
+product summary that also covers staged Generate, Knowledge Store, GitHub
+mirror, Studio, SWRL, Job actions, SPARQL, OBO, and later reliability work.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.0.md
+   Replace highlights and body with the September–October 0.9.0 feature set,
+   selected bug fixes, security table, and upgrade notes (Knowledge Store,
+   GitHub mirror, MCP tools).
+2. releases/Roadmap_2026-09.md
+   Align the executive summary with the rewritten notes; mark Knowledge
+   Store and three-stage Generate as shipped.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.0.md
+- releases/Roadmap_2026-09.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9130 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 57.56s.
+
+================================================================================
+## List Job actions from Spark task args, not jobs.list parameters
+================================================================================
+
+Context:
+Add Databricks Job showed "No jobs with an entity_id parameter" even for
+Jobs that declare `entity_id`. `jobs.list` omits `settings.parameters`;
+`expand_tasks` returns Spark `--entity-id` / `{{job.parameters.entity_id}}`.
+
+Changes:
+
+1. src/back/core/databricks/jobs/JobActionRunner.py
+   List with `expand_tasks=True`; treat Spark/notebook task args as the
+   `entity_id` signal when job-level parameters are missing from list.
+2. tests/units/core/test_job_action_runner.py
+   Spark-python arg contract and expand_tasks on list.
+
+Modified files:
+- src/back/core/databricks/jobs/JobActionRunner.py
+- tests/units/core/test_job_action_runner.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-13.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9132 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 61.71s.
+
+
+
+
+

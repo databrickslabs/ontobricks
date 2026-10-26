@@ -125,22 +125,6 @@
     }
 
     // =====================================================
-    // Markdown rendering
-    // =====================================================
-
-    function renderMarkdown(text) {
-        if (typeof marked !== 'undefined' && marked.parse) {
-            try {
-                marked.setOptions({ breaks: true, gfm: true });
-                return marked.parse(text);
-            } catch (_) { /* fall through */ }
-        }
-        return text
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>');
-    }
-
-    // =====================================================
     // Message rendering
     // =====================================================
 

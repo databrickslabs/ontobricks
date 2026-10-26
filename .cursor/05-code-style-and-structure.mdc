@@ -38,7 +38,8 @@ follows existing localisation. It **does** apply to everything listed above.
 - Use `def` for pure functions and `async def` for asynchronous operations (FastAPI route handlers, SDK calls).
 - **Type Hints**: Use Python type hints extensively.
 - **RORO Pattern**: API handlers follow "Receive an Object, Return an Object".
-- **Class-first policy**: Encapsulate behaviour in classes, not loose module-level functions. One public class per file, named in PascalCase matching the class name.
+- **Simplest code wins** (`.cursor/01 §Key Principles`): the most direct design that a reviewer understands in one read beats a clever or "future-proof" one.
+- **Class-first policy**: Encapsulate behaviour in classes, not loose module-level functions. One public class per file, named in PascalCase matching the class name, one purpose per class, within the size budget — full rules in `.cursor/07 §Class-First Policy`.
 
 - **Error Handling**:
   - Always raise from the `OntoBricksError` hierarchy, never return `{'success': False, ...}` or bare `HTTPException`.
@@ -96,6 +97,16 @@ When refactoring, explicitly name smells and apply suitable refactorings from Fo
 - **Large "god" services or utility modules:**
   - Extract Class or Extract Module by domain.
   - Move Function closer to the data or concept it operates on.
+- **Middle Man** (a facade whose methods only forward to another class):
+  - Remove Middle Man — callers import the real class.
+- **Refused Bequest** (a subclass overriding most of its base):
+  - Extract Superclass / introduce an intermediate base so each subclass inherits only what it uses.
+- **Same loop or flow copied across siblings** (agents, build phases, checks):
+  - Form Template Method in a base class; subclasses implement only the varying steps.
+- **`if/elif` ladder on a kind or type:**
+  - Replace Conditional with Polymorphism (one strategy class per branch).
+- **Speculative Generality** (hooks, parameters, layers "for later"):
+  - Inline Class / Remove Parameter. The simplest code that works today wins.
 - **Repeated request/response boilerplate:**
   - Extract Function for common response building, error mapping, or conversion logic.
   - Replace Magic Number/String with named constants for status codes, error codes, and paths.

@@ -1,0 +1,32 @@
+================================================================================
+## Unblock enterprise Initialize and bound-volume ontology generation
+================================================================================
+
+Context:
+Reliance on 0.8.1 is blocked by two defects. Initialize applies schema.sql
+and the registry-row DML in one try/except, so a "must be owner of table"
+DDL error (app SP is DML-only) returns 502 and never pins the bound volume.
+Ontology generation then passes the seeded session dict (OntoBricksRegistry)
+instead of RegistryCfg.from_domain(), so agents look in the wrong UC Volume.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/store.py
+   Treat `_apply_ddl()` as non-fatal; log a warning and still upsert the
+   registry row. DML failures still fail Initialize.
+2. src/back/objects/ontology/Ontology.py
+   Pass `RegistryCfg.from_domain(s, get_settings()).as_dict()` into
+   `generate_with_agent` and `generate_rules_with_agent`.
+3. tests/units/registry/test_lakebase_initialize_ddl.py
+   Cover non-owner DDL continuing and DML failure still aborting.
+4. tests/units/ontology/test_ontology_service.py
+   Assert generate paths use the bound volume, not OntoBricksRegistry.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/ontology/Ontology.py
+- tests/units/registry/test_lakebase_initialize_ddl.py
+- tests/units/ontology/test_ontology_service.py
+- changelogs/v0.8.2/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/registry tests/units/ontology/test_ontology_service.py` → 549 passed in 1.60s. Full `pytest -q -m "not scenario"` hung at `tests/units/api/test_routes.py` (known 0.8.2 stall, same as 2026-10-01).

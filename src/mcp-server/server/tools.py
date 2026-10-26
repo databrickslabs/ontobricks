@@ -1,6 +1,6 @@
 """MCP tool registration for the OntoBricks server.
 
-``register_tools(mcp, session)`` binds all 13 ``@mcp.tool`` handlers to a
+``register_tools(mcp, session)`` binds all 15 ``@mcp.tool`` handlers to a
 :class:`~server.session.MCPServerSession`. The handlers are thin: they enforce
 the per-domain policy gate, issue the HTTP call through
 :mod:`server.http_client` (late-bound for monkeypatching) and hand the JSON to
@@ -24,7 +24,9 @@ from server.constants import (
     API_V1_DOMAIN_VERSIONS,
     API_V1_DOMAINS,
     API_V1_DT_NODE_ACTION,
+    API_V1_DT_NODE_BUSINESS_RULE,
     API_V1_DT_NODE_CONTEXT,
+    API_V1_DT_NODE_SHACL,
     API_V1_DT_NODE_VIRTUAL_ATTRIBUTES,
     API_V1_DT_STATS,
     API_V1_DT_STATUS,
@@ -35,13 +37,17 @@ from server.formatting import (
     _format_find_response,
     _format_graphql_response,
     _format_node_action_response,
+    _format_node_business_rule_response,
     _format_node_context_response,
+    _format_shacl_facets_response,
     _format_virtual_attributes_response,
 )
 from server.session import MCPServerSession
 from server.uri_helpers import _local_name, _pretty_predicate
 
 logger = logging.getLogger(__name__)
+
+SHACL_TOOL = "check_entity_shacl_facets"
 
 
 def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
@@ -50,6 +56,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     # ── Tools — Domain selection ──────────────────────────────────────
 
     @mcp.tool()
+    @_http.http_errors_as_text("list the domains")
     async def list_domains() -> str:
         """List all domains (knowledge graphs) available in the registry.
 
@@ -106,6 +113,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
+    @_http.http_errors_as_text("list the domain versions")
     async def list_domain_versions(domain_name: str) -> str:
         """List registry versions for a domain (latest first).
 
@@ -143,6 +151,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
+    @_http.http_errors_as_text("load the design status")
     async def get_design_status(domain_name: Optional[str] = None) -> str:
         """Design pipeline readiness: ontology, metadata, assignment, build_ready.
 
@@ -201,6 +210,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
+    @_http.http_errors_as_text("select the domain")
     async def select_domain(domain_name: str, ctx: Context) -> str:
         """Select a domain (knowledge graph) to work with.
 
@@ -224,8 +234,8 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
         async with session.client() as client:
             data = await _http._get(client, API_V1_DT_STATUS, params=params)
-            if not data.get("success") and data.get("message"):
-                return f"Error selecting domain: {data['message']}"
+            if not data.get("success"):
+                return f"Error selecting domain: {data.get('message') or 'status check failed'}"
             session.selected_domain_name = domain_name
             # Ontology labels are resolved lazily via ``label_or_local``
             # (local-name fallback). A dedicated read-only label endpoint
@@ -241,6 +251,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                     API_V1_DOMAIN_CLASSES,
                     params={**session.registry_params(), "domain_name": domain_name},
                 )
+                shacl_on = session.ensure_tool_allowed(SHACL_TOOL) is None
                 for cls in cls_data.get("classes", []):
                     uri = cls.get("uri", "")
                     if uri:
@@ -249,7 +260,11 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                             "dataset": cls.get("dataset") or None,
                             "bridges": cls.get("bridges") or [],
                             "actions": cls.get("actions") or [],
+                            "business_rules": cls.get("business_rules") or [],
                             "virtualAttributes": cls.get("virtualAttributes") or [],
+                            "shacl_shape_count": (
+                                (cls.get("shacl_shape_count") or 0) if shacl_on else 0
+                            ),
                         }
                 logger.info(
                     "select_domain: loaded class Actions for %d classes",
@@ -304,6 +319,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     # ── Tools — Ontology structure ────────────────────────────────────
 
     @mcp.tool()
+    @_http.http_errors_as_text("load the ontology")
     async def describe_ontology(domain_name: Optional[str] = None) -> str:
         """Describe the selected domain's ontology structure.
 
@@ -373,6 +389,8 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                     tags.append(f"{len(cls['bridges'])} bridge(s)")
                 if cls.get("actions"):
                     tags.append(f"{len(cls['actions'])} action(s)")
+                if cls.get("business_rules"):
+                    tags.append(f"{len(cls['business_rules'])} business rule(s)")
                 if cls.get("virtualAttributes"):
                     tags.append(f"{len(cls['virtualAttributes'])} virtual attr")
                 suffix = f"  [{', '.join(tags)}]" if tags else ""
@@ -391,6 +409,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     # ── Tools — Knowledge graph queries ───────────────────────────────
 
     @mcp.tool()
+    @_http.http_errors_as_text("retrieve the graph statistics")
     async def list_entity_types() -> str:
         """List all entity types available in the selected domain's knowledge graph.
 
@@ -452,6 +471,10 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                     fn_desc = (fn_action.get("description") or "").strip()
                     suffix = f" — {fn_desc}" if fn_desc else ""
                     lines.append(f"    Action: {fn_action.get('fullName', '')}{suffix}")
+                for br in actions.get("business_rules") or []:
+                    br_desc = (br.get("description") or "").strip()
+                    suffix = f" — {br_desc}" if br_desc else ""
+                    lines.append(f"    Business rule: {br.get('name', '')}{suffix}")
             lines.append("")
 
         top_predicates = data.get("top_predicates", [])
@@ -467,10 +490,12 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
+    @_http.http_errors_as_text("search the knowledge graph")
     async def describe_entity(
         search: Optional[str] = None,
         entity_type: Optional[str] = None,
         depth: int = MAX_DEPTH,
+        cache: Optional[bool] = None,
     ) -> str:
         """Search for an entity and return a full-text description.
 
@@ -498,27 +523,23 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         A domain must be selected first via ``select_domain``.
         At least one of ``search`` or ``entity_type`` must be provided.
 
-        PERFORMANCE — choose the query shape:
-          - For a SPECIFIC entity, pass ``search`` (an id/name) and use a
-            deeper ``depth`` (2+) freely — the walk is scoped to that entity
-            and stays fast.
-          - For a WHOLE TYPE (``entity_type`` with no ``search``), keep
-            ``depth=1``. A deep type-wide walk fans out across every entity of
-            the type and is far slower; go one hop, then drill into a specific
-            entity with ``search`` for its deeper context.
-
         Args:
             search: Text to search for in entity names / labels / URIs.
                 Example: ``"Jacob Martinez"``, ``"CUST00094"``.
             entity_type: Entity type to filter by (local name,
                 case-insensitive). Example: ``"Customer"``, ``"Order"``.
             depth: How many hops to traverse (1 = direct neighbors only,
-                default 1, max 10). Prefer depth=1 for type-wide scans; use
-                deeper hops with ``search`` (entity-scoped).
+                default 1, max 10).
+            cache: If true, require search-cache companions. If false, read
+                the live triple store. Omit to use the domain Search cache
+                setting.
 
         Returns:
             A full-text description of the matching entities, their
             attributes, and their relationships, organized hop by hop.
+            When the output ends with "Showing X of Y triples", the backend
+            reported ``has_more=true`` for this page; narrow the query and/or
+            keep ``depth=1`` for broad type scans before deepening traversal.
         """
         blocked = session.require_domain("describe_entity")
         if blocked:
@@ -531,9 +552,8 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                 "depth": min(max(depth, 1), 10),
                 # Keep the LLM payload tight: 100 triples is plenty to
                 # describe an entity + its immediate neighbours, and cuts
-                # both backend fetch size and token cost. The backend sets
-                # exact ``total`` plus ``has_more`` so the model knows
-                # when to page for the rest.
+                # both backend fetch size and token cost. The backend still
+                # reports ``total`` so the model can page for more.
                 "limit": 100,
                 "offset": 0,
             }
@@ -542,18 +562,27 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             params["search"] = search
         if entity_type:
             params["entity_type"] = entity_type
+        if cache is not None:
+            params["cache"] = str(cache).lower()
 
         async with session.client() as client:
             data = await _http._get(client, API_V1_DT_TRIPLES_FIND, params=params)
 
-        return _format_find_response(
+        formatted = _format_find_response(
             data,
             session.label_or_local,
             class_actions=session.class_actions,
             context_policy=session.active_context_policy(),
         )
+        if cache is False and not data.get("cache_used", True):
+            formatted = (
+                formatted
+                + "\n\nRead live triple store (search cache disabled for this call)."
+            )
+        return formatted
 
     @mcp.tool()
+    @_http.http_errors_as_text("check the graph status")
     async def get_status() -> str:
         """Check whether the selected domain's knowledge graph is ready.
 
@@ -568,6 +597,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
         async with session.client() as client:
             data = await _http._get(client, API_V1_DT_STATUS, params=session.domain_params())
+        if not data.get("success"):
+            why = data.get("message") or data.get("reason") or "unknown error"
+            return f"Could not check the graph status: {why}"
         status = data.get("reason") or "OK"
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
@@ -584,6 +616,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     # ── Tools — GraphQL queries ─────────────────────────────────────
 
     @mcp.tool()
+    @_http.http_errors_as_text("retrieve the GraphQL schema")
     async def get_graphql_schema() -> str:
         """Get the GraphQL schema (SDL) for the selected domain.
 
@@ -599,24 +632,12 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             return blocked
 
         domain_name = session.selected_domain_name
-        try:
-            async with session.client() as client:
-                resp = await client.get(
-                    f"/graphql/{domain_name}/schema",
-                    params=session.registry_params(),
-                    timeout=120,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "GraphQL schema request failed: %s %s", exc.response.status_code, exc
+        async with session.client() as client:
+            data = await _http._get(
+                client,
+                _http._graphql_path(domain_name, "/schema"),
+                params=session.registry_params(),
             )
-            body_text = exc.response.text[:500]
-            return f"Could not retrieve GraphQL schema ({exc.response.status_code}): {body_text}"
-        except Exception as exc:
-            logger.warning("GraphQL schema request error: %s", exc)
-            return f"Error fetching GraphQL schema: {exc}"
 
         sdl = data.get("sdl", "")
         if not sdl:
@@ -632,6 +653,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
+    @_http.http_errors_as_text("execute the GraphQL query")
     async def query_graphql(
         query: str,
         variables: Optional[str] = None,
@@ -681,25 +703,21 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
         try:
             async with session.client() as client:
-                resp = await client.post(
-                    f"/graphql/{domain_name}",
+                data = await _http._post(
+                    client,
+                    _http._graphql_path(domain_name),
                     json=body,
                     params=session.registry_params(),
-                    timeout=120,
                 )
-                resp.raise_for_status()
-                data = resp.json()
         except httpx.HTTPStatusError as exc:
-            logger.warning("GraphQL query failed: %s %s", exc.response.status_code, exc)
-            body_text = exc.response.text[:500]
-            return f"GraphQL query failed ({exc.response.status_code}): {body_text}"
-        except Exception as exc:
-            logger.warning("GraphQL query error: %s", exc)
-            return f"Error executing GraphQL query: {exc}"
-
+            # A query error is a 400 whose ``errors`` the model needs to fix it.
+            data = _http._json_body(exc.response)
+            if not data.get("errors"):
+                raise
         return _format_graphql_response(data, domain_name)
 
     @mcp.tool()
+    @_http.http_errors_as_text("load the entity context")
     async def get_entity_context(
         entity_uri: str,
         fetch_dataset_rows: bool = False,
@@ -780,9 +798,13 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         async with session.client() as client:
             data = await _http._get(client, API_V1_DT_NODE_CONTEXT, params=params)
 
+        # Never point the model at a tool its policy refuses.
+        if session.ensure_tool_allowed(SHACL_TOOL):
+            data = {**data, "shacl_shape_count": 0}
         return _format_node_context_response(data, session.active_context_policy())
 
     @mcp.tool()
+    @_http.http_errors_as_text("compute virtual attributes")
     async def compute_virtual_attributes(
         entity_uri: str,
         function: Optional[str] = None,
@@ -823,41 +845,23 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         if function:
             params["function"] = function
 
-        try:
-            async with session.client() as client:
-                data = await _http._get(
-                    client, API_V1_DT_NODE_VIRTUAL_ATTRIBUTES, params=params
-                )
-        except httpx.HTTPStatusError as exc:
-            try:
-                err_body = exc.response.json()
-            except Exception:
-                err_body = {}
-            return (
-                err_body.get("message")
-                or err_body.get("error")
-                or (
-                    f"Could not compute virtual attributes "
-                    f"(HTTP {exc.response.status_code})."
-                )
+        async with session.client() as client:
+            data = await _http._get(
+                client, API_V1_DT_NODE_VIRTUAL_ATTRIBUTES, params=params
             )
-
         return _format_virtual_attributes_response(data, session.active_context_policy())
 
     @mcp.tool()
+    @_http.http_errors_as_text("invoke the action")
     async def invoke_entity_action(entity_uri: str, action: str) -> str:
-        """Run a Unity Catalog function action configured on an entity's class.
+        """Run a UC function or Job (job:<id>) declared on the entity's class.
 
-        Requires a domain to be selected first via select_domain. Discover the
-        available actions with get_entity_context or describe_entity — only
-        functions declared on the entity's ontology class can be invoked.
-
-        The function is called with exactly one argument: the entity's local ID,
-        derived server-side from *entity_uri*.
+        Requires select_domain. Discover names via get_entity_context. UC
+        functions receive the entity local ID; Jobs start in Background Tasks.
 
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
-            action: Fully qualified function name (catalog.schema.function).
+            action: catalog.schema.function or job:<job_id>.
         """
         blocked = session.require_domain("invoke_entity_action")
         if blocked:
@@ -872,18 +876,77 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         body.update(session.registry_params())
         body["domain_name"] = session.selected_domain_name
 
-        try:
-            async with session.client() as client:
-                data = await _http._post(client, API_V1_DT_NODE_ACTION, json=body)
-        except httpx.HTTPStatusError as exc:
-            try:
-                err_body = exc.response.json()
-            except Exception:
-                err_body = {}
-            return (
-                err_body.get("message")
-                or err_body.get("error")
-                or f"Could not invoke the action (HTTP {exc.response.status_code})."
-            )
-
+        async with session.client() as client:
+            data = await _http._post(client, API_V1_DT_NODE_ACTION, json=body)
         return _format_node_action_response(data)
+
+    @mcp.tool()
+    @_http.http_errors_as_text("run the business rule")
+    async def run_entity_business_rule(entity_uri: str, rule: str) -> str:
+        """Trigger a SWRL business rule declared on an entity's class.
+
+        Requires a domain to be selected first via select_domain and the
+        Builder role on that domain. Discover the available rules with
+        get_entity_context or describe_entity — only rules declared on the
+        entity's ontology class can be triggered.
+
+        The rule is evaluated for this entity only and the inferred triples
+        are WRITTEN to the knowledge graph (idempotent: facts already present
+        are not inferred again).
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+            rule: Name of the business rule.
+        """
+        blocked = session.require_domain("run_entity_business_rule")
+        if blocked:
+            return blocked
+        # Disabling the business_rules element also stops execution, even
+        # when the tool itself is still exposed.
+        blocked = session.ensure_context_allowed("business_rules", "Business rules")
+        if blocked:
+            return blocked
+
+        body: dict = {"entity_uri": entity_uri, "rule": rule}
+        body.update(session.registry_params())
+        body["domain_name"] = session.selected_domain_name
+
+        async with session.client() as client:
+            data = await _http._post(client, API_V1_DT_NODE_BUSINESS_RULE, json=body)
+        return _format_node_business_rule_response(data)
+
+    _register_shacl_tool(mcp, session)
+
+
+def _register_shacl_tool(mcp: FastMCP, session: MCPServerSession) -> None:
+    """Register ``check_entity_shacl_facets`` on *mcp*, bound to *session*."""
+
+    @mcp.tool()
+    @_http.http_errors_as_text("check the SHACL facets")
+    async def check_entity_shacl_facets(entity_uri: str) -> str:
+        """Check one entity against every SHACL shape that applies to it.
+
+        Requires a domain to be selected first via select_domain. The shapes
+        are those targeting the entity's class, any of its ancestor classes,
+        or the whole graph. Each one is evaluated against this entity only and
+        reported as PASS, FAIL (with its severity), NOT APPLICABLE (its guard
+        condition does not hold), NOT EVALUATED (no SQL translation, e.g.
+        sh:closed) or ERROR, along with the values the entity carries on the
+        constrained property.
+
+        Use it when the user asks whether an entity is valid, complete or
+        conforms to the data-quality rules. Only PASS means the entity was
+        checked and conforms — never report a NOT EVALUATED or ERROR shape as
+        satisfied. Read-only.
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+        """
+        blocked = session.require_domain(SHACL_TOOL)
+        if blocked:
+            return blocked
+
+        params = session.domain_params({"entity_uri": entity_uri})
+        async with session.client() as client:
+            data = await _http._get(client, API_V1_DT_NODE_SHACL, params=params)
+        return _format_shacl_facets_response(data)

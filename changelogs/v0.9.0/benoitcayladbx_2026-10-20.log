@@ -1,0 +1,231 @@
+================================================================================
+## Catch up V0.9.0 release notes and operator docs for load → General
+================================================================================
+
+Context:
+Loading a domain now always opens Domain → General. The V0.9.0 release
+notes, operator guides, Help Center, and several inline comments still
+described a page reload (or the old Information menu label). This pass
+aligns those artifacts with the shipped UI.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.0.md
+   Highlights, Versions, bug fixes, documentation list, and upgrade notes
+   cover load navigation to Domain → General. Test status updated.
+2. README.md
+   What's new mentions that a load opens Domain → General.
+3. docs/user-guide.md, docs/getting-started.md, docs/mcp.md,
+   docs/architecture.md, docs/development.md
+   Load steps, MCP / Knowledge Graph paths, sidebar labels, and page
+   verification tables use General (and current Domain/Ontology/Mapping
+   sections).
+4. src/front/templates/partials/layout/help_modal.html
+   Domain workflow lists Knowledge Store; load lands on Domain → General.
+5. Inline comments/docstrings in navbar, home, registry, versions, mapping
+   templates/JS, ontology-core, DigitalTwin, Domain, mcp_tools, materialize,
+   and the Knowledge Graph Overview `/sync/info` handler.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.0.md
+- README.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/mcp.md
+- docs/architecture.md
+- docs/development.md
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/domain.html
+- src/front/templates/ontology.html
+- src/front/templates/mapping.html
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/mapping-information.js
+- src/front/static/home/js/home.js
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/query/js/query-sync.js
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/domain/Domain.py
+- src/back/core/mcp_tools.py
+- src/back/core/graphdb/delta/materialize.py
+- src/api/routers/internal/dtwin.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9478 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 48.87s
+
+================================================================================
+## Align v0.9.0 operator docs with shipped features
+================================================================================
+
+Context:
+A documentation audit against the v0.9.0 release notes found leftover 0.8
+storage and menu wording (Unity Catalog Volumes as the domain store,
+Designer instead of Studio, Sphinx build path, wrong release-note file
+names). Online https://ontobricks.org/ still publishes the previous master
+snapshot (0.8.0 hub, Designer, split satellite guides) and cannot be
+updated from this worktree until 0.9.0 is published.
+
+Changes:
+
+1. docs/README.md
+   Added a v0.9.0 feature map, pointed Sphinx build at ci/build_docs.sh,
+   and noted that ontobricks.org lags until publish.
+2. docs/getting-started.md
+   Knowledge Store (no Volume uploads), Search tab, SPARQL playground,
+   staged Generate, Save to Lakebase registry.
+3. docs/user-guide.md
+   Domain storage, Save/Load, and feature inventory describe the Lakebase
+   registry instead of JSON-on-Volume.
+4. docs/examples.md
+   Mapping and ontology walkthroughs use Studio instead of Designer.
+5. docs/architecture.md, docs/advanced_features.md, docs/product.md,
+   docs/development.md, docs/deployment.md, docs/api.md
+   Studio naming, registry vs Volume, /health vs readiness, CSRF.
+6. docs/sphinx/overview/getting-started.rst,
+   docs/sphinx/overview/architecture.rst
+   Python 3.10, frozen pytest, ci/build_docs.sh, Lakebase registry.
+7. releases/ReleaseNotes_V0.9.0.md
+   Documentation file list uses getting-started.md and user-guide.md.
+8. README.md
+   Deploy Volume described as registry identifier / export bundles.
+
+Modified files:
+- docs/README.md
+- docs/getting-started.md
+- docs/user-guide.md
+- docs/examples.md
+- docs/architecture.md
+- docs/advanced_features.md
+- docs/product.md
+- docs/development.md
+- docs/deployment.md
+- docs/api.md
+- docs/sphinx/overview/getting-started.rst
+- docs/sphinx/overview/architecture.rst
+- releases/ReleaseNotes_V0.9.0.md
+- README.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9478 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 52.32s
+
+================================================================================
+## Refresh V0.9.0 release notes and October Asana roadmap
+================================================================================
+
+Context:
+v0.9.0 is closed on the OntoBricks-Product Asana board (all 15 tasks in
+Version 0.9.0 completed). The published release notes still omitted Metric
+Views and OBX Import as. The living roadmap was the September snapshot and
+still listed Knowledge Store / three-stage Generate as unstarted 0.9.0 work.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.0.md
+   Highlights, Knowledge Store, GitHub/registry, and documentation list now
+   cover Unity Catalog Metric Views and OBX Import as.
+2. README.md
+   What's new in 0.9.0 lists Metric Views and Import as.
+3. releases/Roadmap_2026-10.md
+   New Asana-first roadmap: 0.8.x/0.9.0 closed; 0.10.0 (Auto-Map High, Genie,
+   LLM allow-list, Marketplace, Job-action close-out, later-wave GA items);
+   To evaluate (13 parents including High industry-catalog rollup).
+4. releases/Roadmap_2026-09.md
+   Marked superseded by the October snapshot.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.0.md
+- README.md
+- releases/Roadmap_2026-10.md
+- releases/Roadmap_2026-09.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9478 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 47.73s
+
+================================================================================
+## Drop extra Generate subClassOf parents (single inheritance)
+================================================================================
+
+Context:
+Ontology → Generate on an existing ontology could propose a second
+rdfs:subClassOf parent for a class that already inherits. The OntoBricks
+model stores a single `parent` per class, so the extra axiom either failed
+merge or could not be represented. Generate now refuses extra parents:
+locked anchors snapshot the existing parent, the axioms prompt forbids a
+second one, parsing drops extras, and merge keeps the live parent.
+
+Changes:
+
+1. src/back/objects/ontology/generate/GenerateDraft.py
+   Snapshot `parent` on locked anchors; expose `existing_parents()`.
+2. src/agents/agent_owl_generator/prompts.py
+   List existing subclass axioms; require single inheritance.
+3. src/agents/agent_owl_generator/schemas.py
+   Drop extra `subClassOf` parents in `parse_axioms_payload`.
+4. src/agents/agent_owl_generator/staged.py
+   Pass existing parents into axiom parsing.
+5. src/back/objects/ontology/generate/GenerateWorkflow.py
+   Merge keeps the existing parent and ignores extra `subClassOf` axioms.
+6. src/agents/agent_owl_generator/engine.py
+   Legacy OWL guidelines: one superclass only.
+7. src/agents/PITFALL_RULES.md
+   P4.2: do not assign a second superclass.
+8. tests/eval/datasets/agent_owl_generator/baseline.jsonl
+   Rows `staged-single-inheritance-001..003`; floor 28 → 31.
+
+Modified files:
+- src/back/objects/ontology/generate/GenerateDraft.py
+- src/back/objects/ontology/generate/GenerateWorkflow.py
+- src/agents/agent_owl_generator/prompts.py
+- src/agents/agent_owl_generator/schemas.py
+- src/agents/agent_owl_generator/staged.py
+- src/agents/agent_owl_generator/engine.py
+- src/agents/PITFALL_RULES.md
+- tests/units/ontology/test_generate_draft.py
+- tests/units/ontology/test_generate_workflow.py
+- tests/units/agents/test_owl_generator_schemas.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/eval/staged_contract.py
+- tests/eval/run_agent_owl_generator.py
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- .planning/agents/agent_owl_generator/eval/dataset.jsonl
+- .planning/agents/agent_owl_generator/SPEC.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9484 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 47.22s
+
+================================================================================
+## Classify SEA-wrapped VIEW errors; keep Apps bearer on Playwright continue
+================================================================================
+
+Context: Live campaign scenario 5 failed after a successful Lakehouse
+zero-copy build because ``DESCRIBE DETAIL`` on the ``…_data`` VIEW comes
+back from Statement Execution as ``InfrastructureError("Databricks SQL
+statement failed")`` with ``EXPECT_TABLE_NOT_VIEW`` only in ``detail``.
+Classifiers that look at ``str(exc)`` treated the VIEW as missing. Live
+Playwright e2e also landed on Databricks Sign-In / 401 because
+``route.continue_()`` dropped ``extra_http_headers``.
+
+Changes:
+
+1. src/back/core/graphdb/entity_search.py
+   ``is_view_not_table_error`` / ``is_missing_relation_error`` also read
+   ``exc.detail`` (SEA warehouse payload).
+2. tests/e2e/conftest.py
+   Re-apply ``Authorization: Bearer`` on every Playwright ``continue_``.
+3. tests/units/graphdb/test_entity_search_sql.py
+   SEA-detail classifier cases.
+4. tests/units/graphdb/delta/test_delta_status_probe.py
+   Zero-copy ``…_data`` VIEW still exists when SEA wraps the VIEW error.
+5. tests/units/e2e/test_scenario_campaign_wiring.py
+   Bearer headers are copied onto ``route.continue_``.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- tests/e2e/conftest.py
+- tests/units/graphdb/test_entity_search_sql.py
+- tests/units/graphdb/delta/test_delta_status_probe.py
+- tests/units/e2e/test_scenario_campaign_wiring.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9489 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 55.59s
+

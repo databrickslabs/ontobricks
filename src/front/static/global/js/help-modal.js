@@ -78,7 +78,7 @@
             // Optional deep-link into a specific document slug (Documentation panel)
             var docSlug = jump.getAttribute('data-help-doc');
             if (docSlug && window.HelpDocs && typeof window.HelpDocs.activate === 'function') {
-                window.HelpDocs.activate(docSlug);
+                window.HelpDocs.activate(docSlug, jump.getAttribute('data-help-anchor'));
             }
         });
     }

@@ -1,0 +1,482 @@
+================================================================================
+## Add test-first contracts for entity SHACL facets
+================================================================================
+
+Context:
+New feature: for one Graph Explorer entity (right-click, detail panel, canvas
+ring) or via a new MCP tool, evaluate every SHACL shape related to its type
+(own class, ancestors, global) against that entity only. Spec lives in
+`.planning/entity-shacl-facets/SPEC.md`. Tests are written first (TDD) and
+are intentionally red until the implementation lands; no production code is
+changed in this section.
+
+Changes:
+
+1. tests/units/dtwin/test_node_shacl_service.py
+   New. NodeShaclService contract: shape selection, inherited-shape class
+   substitution, entity-filtered UNION ALL batch (escaping, hostile shape
+   IDs), five statuses, observed values across the #// URI separator with a
+   20-value cap, ordering, summary, per-shape fallback, rdf:type fallback.
+2. tests/units/api/test_node_shacl_endpoint.py
+   New. Public and internal `/nodes/shacl` routes (GET-only, entity_uri
+   required) and `shacl_shape_count` on `/nodes/context` and
+   `/api/v1/domain/classes`.
+3. tests/units/mcp/test_shacl_facets_formatting.py
+   New. `_format_shacl_facets_response` text contract and the `[Context]`
+   hint in node and class blocks; unchecked shapes never read as PASS.
+4. tests/units/mcp/test_domain_policy_gating.py
+   Tool count 14 → 15; `check_entity_shacl_facets` backend call, hidden on
+   select and refused at call time when disabled, hint gating, GRAPH_TOOLS.
+5. tests/units/core/test_mcp_tools_policy.py
+   The tool is a configurable graph tool.
+6. tests/units/front/test_shacl_facets_ui.py
+   New. Structural contract for the popup partial, menu gating, loader
+   count, detail-panel section, status icons/labels, and the canvas ring
+   (drawn before seed / Find-Path highlights). Follows `.cursor/11` modal
+   and status rules.
+7. .planning/entity-shacl-facets/SPEC.md
+   Shape count on `/api/v1/domain/classes`, client-side menu gating via
+   `shaclShapeCountFor`, and the test plan updated to the written tests.
+
+Modified files:
+- tests/units/dtwin/test_node_shacl_service.py
+- tests/units/api/test_node_shacl_endpoint.py
+- tests/units/mcp/test_shacl_facets_formatting.py
+- tests/units/mcp/test_domain_policy_gating.py
+- tests/units/core/test_mcp_tools_policy.py
+- tests/units/front/test_shacl_facets_ui.py
+- .planning/entity-shacl-facets/SPEC.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 39 failed, 9133 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings, 42 errors in 67.50s. All 81 failures/errors are the new SHACL-facet contracts (feature not implemented yet); no pre-existing test regressed.
+
+================================================================================
+## Implement entity SHACL facets (Explorer popup, panel, ring + MCP tool)
+================================================================================
+
+Context:
+Implementation of `.planning/entity-shacl-facets/SPEC.md` against the
+test-first contracts above. One entity is checked against every enabled SHACL
+shape on its class, its ancestors and the whole graph, as entity-scoped SQL.
+Surfaces: Graph Explorer right-click menu, detail-panel section, popup and
+canvas ring; MCP tool `check_entity_shacl_facets`; REST `/nodes/shacl`.
+
+Changes:
+
+1. src/back/objects/digitaltwin/node/NodeShaclService.py
+   New. Shape selection (own class, `parent` lineage, global), inherited
+   shapes re-targeted to the entity's own class URI, one `UNION ALL` batch
+   filtered on the entity with a per-shape fallback, five statuses, observed
+   values (20-value cap), summary. An unreadable graph (never built) raises
+   InfrastructureError with the engine message instead of a 500.
+2. src/back/objects/digitaltwin/node/NodeShaclResponse.py
+   New. Pydantic response contract of `/nodes/shacl` (own file: the router is
+   capped by the class-per-file ratchet).
+3. src/back/objects/digitaltwin/node/__init__.py, src/back/objects/digitaltwin/__init__.py
+   Export NodeShaclService and NodeShaclResponse.
+4. src/api/routers/digitaltwin.py, src/api/routers/internal/dtwin.py
+   New `GET /api/v1/digitaltwin/nodes/shacl` (registry domain, public graph
+   read check) and `GET /dtwin/nodes/shacl` (session domain, graph read
+   check); `shacl_shape_count` on NodeContextResponse.
+5. src/back/objects/digitaltwin/node/NodeContextService.py, src/api/routers/domains.py
+   `shacl_shape_count` on `/nodes/context` and per class on
+   `/api/v1/domain/classes`.
+6. src/back/core/mcp_tools.py, src/mcp-server/server/constants.py, src/mcp-server/server/app.py
+   Catalog entry (graph tool, policy-configurable), GRAPH_TOOLS mirror,
+   `API_V1_DT_NODE_SHACL`, re-exports.
+7. src/mcp-server/server/tools.py
+   `check_entity_shacl_facets` tool (15 tools); hint count cleared when the
+   policy disables the tool. Extracted `_http_error_message` (four identical
+   HTTP-error blocks) and `_register_shacl_tool` to keep `register_tools`
+   within its size budget.
+8. src/mcp-server/server/formatting.py
+   `_format_shacl_facets_response` (never reports unchecked shapes as PASS),
+   `SHACL shapes (N)` hint in node and class context blocks; extracted
+   `_class_virtual_lines` and `_node_business_rule_lines` to keep both
+   context formatters within their size budget.
+9. src/front/static/query/js/query-shacl-facets.js, src/front/static/query/css/query-shacl-facets.css,
+   src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+   New. Popup (status chips as filters, accordion per category, values,
+   inheritance, Re-check, Open Data Quality), per-entity cache with
+   `shacl-facets:updated` event, detail-panel section, ring status and
+   token-based colours, client-side `shaclShapeCountFor`.
+10. src/front/static/query/js/query-sigmagraph.js, src/front/static/query/js/query-loaders.js,
+    src/front/templates/partials/dtwin/_query_sigmagraph.html, src/front/templates/dtwin.html
+    "Data quality → Check SHACL facets (N)" menu item, detail-panel section,
+    ring in `_nodeReducer` before seed / Find-Path highlights, "Quality"
+    toolbar toggle, shape counts loaded from `/ontology/dataquality/list`,
+    asset wiring.
+11. tests/units/dtwin/test_node_shacl_service.py
+    Added the unreadable-graph case (regression found while probing the
+    local server).
+12. tests/units/core/test_mcp_tools_policy.py, examples/mcp_client.py
+    Catalog size 10 → 11; curated description for the new tool.
+13. tests/units/architecture/baseline.json
+    Ratchet tightened (`register_tools` 900 → 882, `resolve_context`
+    139 → 138, `_format_class_context_block` 117 → 102,
+    `_format_node_context_response` 117 → 103, SettingsService 1400 → 1389).
+14. tests/eval/datasets/mcp/entity_shacl_facets.jsonl
+    New. 10-example eval dataset (SPEC §7).
+15. docs/mcp.md, docs/api.md, docs/architecture.md, docs/user-guide.md,
+    docs/sphinx/api/app.objects.digitaltwin.rst, .planning/entity-shacl-facets/SPEC.md
+    Tool, endpoint, Explorer feature and Sphinx entries; sign-off status.
+
+Modified files:
+- src/back/objects/digitaltwin/node/NodeShaclService.py
+- src/back/objects/digitaltwin/node/NodeShaclResponse.py
+- src/back/objects/digitaltwin/node/__init__.py
+- src/back/objects/digitaltwin/__init__.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/domains.py
+- src/back/core/mcp_tools.py
+- src/mcp-server/server/constants.py
+- src/mcp-server/server/app.py
+- src/mcp-server/server/tools.py
+- src/mcp-server/server/formatting.py
+- src/front/static/query/js/query-shacl-facets.js
+- src/front/static/query/css/query-shacl-facets.css
+- src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-loaders.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/dtwin.html
+- tests/units/dtwin/test_node_shacl_service.py
+- tests/units/core/test_mcp_tools_policy.py
+- tests/units/architecture/baseline.json
+- tests/eval/datasets/mcp/entity_shacl_facets.jsonl
+- examples/mcp_client.py
+- docs/mcp.md
+- docs/api.md
+- docs/architecture.md
+- docs/user-guide.md
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- .planning/entity-shacl-facets/SPEC.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-14.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9215 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 55.91s (full working tree). The committed snapshot alone (without the uncommitted Job-action work) → 9171 passed, 326 skipped, 6 deselected, 1 xfailed.
+Manual: on the local server, new assets serve (200), `/api/v1/domain/classes` returns real counts (cust360auto: Customer 22, Contract 11), and `/dtwin/nodes/shacl` on an unbuilt graph returns a readable 502. No local domain has a built graph, so a live facet evaluation was not possible.
+
+================================================================================
+## Rename to "Data Quality Checks", add per-dimension gauges, collapse sections
+================================================================================
+
+Context:
+User request: rename the Explorer right-click item and the popup from
+"SHACL facets" to "Data Quality Checks", show gauges by dimension in the
+popup, and collapse the dimension sections by default. A follow-up removed
+the grey border drawn around each gauge.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Context-menu item reads "Data Quality Checks (N)"; the unavailable
+   fallback notification reads "Data quality checks are unavailable.".
+2. src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+   Title "Data Quality Checks — <entity>"; new `#shaclFacetsGauges`
+   container above the status chips.
+3. src/front/static/query/js/query-shacl-facets.js
+   `_shaclGroups` (dimension grouping shared by gauges and accordion),
+   `_shaclGaugesHtml` (one SVG half-gauge per dimension, score =
+   passed / (passed + failed), "—" when nothing was checked, label and
+   "P of C passed" as text), `_shaclExpandSection`. Accordion sections start
+   collapsed; a status filter chip expands sections holding a match;
+   clicking a gauge expands and scrolls to its section. Loading and error
+   strings renamed.
+4. src/front/static/query/css/query-shacl-facets.css
+   Gauge grid, arc and tone classes on the `--db-status-*` tokens (Data
+   Quality tab thresholds: 100 % success, >= 80 % warning, below danger,
+   unchecked draft). No border around a gauge; light hover background.
+5. tests/units/front/test_shacl_facets_ui.py
+   Menu label, popup title, gauges, token-only colours, collapsed sections.
+6. docs/user-guide.md, .planning/entity-shacl-facets/SPEC.md
+   Label, gauges and collapsed sections documented (SPEC §3.5.2 / §3.5.3).
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+- src/front/static/query/js/query-shacl-facets.js
+- src/front/static/query/css/query-shacl-facets.css
+- tests/units/front/test_shacl_facets_ui.py
+- docs/user-guide.md
+- .planning/entity-shacl-facets/SPEC.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9221 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 55.60s. After the gauge border tweak: `tests/units/front` → 1549 passed.
+
+================================================================================
+## Explorer Details tab: every section starts collapsed
+================================================================================
+
+Context:
+User request: when an entity is selected in the Graph Explorer, all sections
+of the Details tab should be collapsed by default (Entity Info, Attributes,
+Virtual Attributes, Data quality, Dashboard, Dataset, Actions, Business
+rules, Bridges, Outgoing, Incoming).
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   `_sec(icon, title, body)` always renders `entity-detail-section collapsed`;
+   the `startOpen` flag is removed from the helper and its 11 call sites.
+2. tests/units/front/test_explorer_detail_sections.py
+   New. The helper renders collapsed and no call passes an open flag
+   (fails on the previous code).
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_detail_sections.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9221 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 55.60s.
+
+================================================================================
+## Release notes V0.9.0: entity Data Quality Checks
+================================================================================
+
+Context:
+User request: update the release notes. The V0.9.0 notes already covered the
+changelogs up to 2026-10-13; today's entity check feature was missing.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.0.md
+   Highlight bullet; "Entity Data Quality Checks" subsection under Knowledge
+   Graph Explorer (shape selection, entry points, evaluation, popup gauges,
+   canvas ring); documentation list; bug fix (unbuilt graph returns a
+   readable 502 instead of 500); Upgrade Notes for `/nodes/shacl`,
+   `shacl_shape_count` and the MCP tool `check_entity_shacl_facets`.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.0.md
+
+Tests: documentation only; suite unchanged (9221 passed).
+
+================================================================================
+## Global code review: session secrets, session-debug masking, legacy session migrations
+================================================================================
+
+Context:
+Global code review (`.cursorrules` review order). Guardrails green, session
+data audited, README checked. The user approved the fixes below from the
+first batch of findings. Finishing the registry Volume removal was stopped
+before any edit: the volume is still part of `RegistryCfg.is_configured`,
+the Lakebase `registries` row and the Initialize flow, so it needs a
+decision of its own.
+
+Changes:
+
+1. src/back/objects/domain/settings/WarehouseSettings.py
+   `POST /settings/save` no longer stores a posted Databricks token in the
+   session (`.cursor/07 §Domain Security`). No UI posted one; every reader
+   already falls back to env / OAuth / OBO.
+2. src/back/objects/session/DomainSession.py
+   Loading drops a `settings.databricks.token` left in an older session.
+   Removed the pre-unified session migrations: `project_data` fallback key,
+   `_migrate_legacy` (separate `ontology_config` / `mapping_config` /
+   `design_layout` keys), `_migrate_top_level_renames` (`project` ->
+   `domain`) and `_clear_legacy_keys`. File sessions expire after 24 h, so
+   no such session can still exist; registry imports map fields themselves.
+   Migrations that still apply to stored domains are kept.
+3. src/back/objects/domain/Domain.py
+   The DEBUG-only session dump masked `data["databricks"]["token"]`, a path
+   that no longer exists, so a token under `settings.databricks` printed in
+   clear. It now masks the real path without mutating the session.
+4. src/back/objects/session/FileSessionMiddleware.py
+   Debug logging reads only `domain_data` (dropped `project_data` fallback).
+5. README.md
+   Explorer paragraph mentions per-entity Data Quality Checks, SWRL business
+   rules and Job class actions.
+6. tests
+   - tests/units/settings/test_v090_settings_warehouse.py: posted token ignored.
+   - tests/units/domain/test_domain_session.py: token dropped on load;
+     migration tests use the current session key.
+   - tests/units/domain/test_session_debug_masking.py: new.
+   - tests/units/architecture/baseline.json: tightened (DomainSession
+     1580 -> 1411, Domain 2306 -> 2305, `_migrate_legacy` entry removed).
+
+Modified files:
+- src/back/objects/domain/settings/WarehouseSettings.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/FileSessionMiddleware.py
+- README.md
+- tests/units/settings/test_v090_settings_warehouse.py
+- tests/units/domain/test_domain_session.py
+- tests/units/domain/test_session_debug_masking.py
+- tests/units/architecture/baseline.json
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9223 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 57.41s.
+
+================================================================================
+## Explorer: thinner pane separator
+================================================================================
+
+Context:
+The Knowledge Graph Explorer resize handle was a wide grey bar. It now
+matches the thin separator used in Ontology Studio and Mapping Studio.
+
+Changes:
+
+1. src/front/static/query/css/query-sigmagraph.css
+   `#sigmagraph-section .resize-handle` is a 1px column with a wider invisible
+   hit area (`::before`), a short `--db-border` bar that turns `--db-primary`
+   on hover / drag.
+2. tests/units/front/test_explorer_resize_handle.py (new)
+   Pins the thin handle, the hit area and token-only colours.
+
+Modified files:
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_explorer_resize_handle.py
+
+Tests: covered by the full run in the next section.
+
+================================================================================
+## Global code review, second batch: security, SQL escaping, dead code, plans
+================================================================================
+
+Context:
+Second batch of review findings approved by the user (s1-s6, dead code,
+medium findings, plans for structural items). Each fix landed with tests
+written first; the integration pass tightened the size ratchet, refreshed the
+docs and release notes, and ran the full suite.
+
+Changes:
+
+1. Permissions, reviews, cohort (S1)
+   - src/back/objects/registry/PermissionService.py: permission updates read
+     the row `FOR UPDATE`, so two concurrent edits cannot wipe each other.
+   - src/back/objects/registry/store/lakebase/Catalog.py: a failed read
+     raises instead of reading as "no permissions"; saves are transactional.
+   - src/back/objects/registry/collab/ReviewService.py: quorum fails closed.
+   - src/back/objects/digitaltwin/cohort/CohortService.py: the UC write probe
+     quotes identifiers with `quote_uc_identifier`.
+2. One dialect-aware SQL escape (S2)
+   - src/back/core/helpers/SQLHelpers.py (+ __init__): `sql_escape(value,
+     dialect)`, `sql_literal`, `is_sql_numeric`, `SQL_DIALECT_*`. Spark doubles
+     backslashes then quotes; Postgres doubles quotes only.
+   - SPARQLRuleEngine, DecisionTableEngine, AggregateRuleEngine, SHACLService,
+     SparqlTranslator, GraphDBBackend, SWRLSQLTranslator use it; the store's
+     `sql_flavor()` picks the dialect. `nan` / `inf` / `1_000` are quoted, a
+     non-numeric aggregate `threshold` is rejected instead of pasted into
+     HAVING. `_construct_to_sql` is back under the function budget.
+   - src/back/core/w3c/shacl/ShapeConditions.py: rule conditions use
+     `is_sql_numeric` on the SQL, in-memory and SPARQL paths.
+3. Front-end XSS and dead JS (S3)
+   - src/front/static/global/js/utils.js: one DOMPurify-sanitised
+     `renderMarkdown`; quote-safe `escapeHtml` / `escapeAttr`. marked and
+     DOMPurify pinned with SRI in base.html / ontology.html.
+   - comments-panel, domain-collaboration, query-chat, ontology-assistant,
+     domain-audit render through it; untrusted ontology / metadata values are
+     escaped before `innerHTML`.
+   - Six local quote-unsafe `escapeHtml` copies removed (registry-teams,
+     home-tasks, settings-locks, settings-logs, settings-health,
+     domain-review); 26 dead functions and uc-file-browser-modal.js deleted.
+4. CSRF and /health (S4, S5)
+   - src/shared/fastapi/csrf.py: unsafe methods need a non-empty cookie AND
+     header, compared with `secrets.compare_digest` on bytes.
+   - src/front/static/global/js/ontology-design.js: unload-time layout save
+     uses `fetch(..., {keepalive: true})` (sendBeacon cannot carry the header).
+   - src/shared/fastapi/health.py: `/health` runs local liveness checks only
+     and returns no detail; readiness probes moved to the admin-only
+     `GET /settings/diagnostics/readiness` (src/api/routers/internal/
+     settings.py, settings-health.js, _settings_health.html). `_worst_status`
+     helper; `_exc_text` reads `InfrastructureError.detail` so UC permission
+     denials still get the GRANT hint.
+   - run.py: the startup-failure fallback `/health` and `/` no longer return
+     the traceback.
+5. MCP (S6)
+   - src/mcp-server/server/http_client.py, tools.py: GraphQL paths
+     URL-encode the domain name and forward the caller's identity; HTTP errors
+     become a short message (`http_errors_as_text`).
+   - src/mcp-server/server/resources.py: `_fetch_json` gives every resource
+     the same short error JSON.
+6. Dead Python code and false-success errors
+   - 63 verified-unused symbols deleted across DatabricksClient,
+     DocumentExtractor, AgentClient, GraphDBBackend, DeltaBase,
+     _table_naming, SyncedTableManager, Mapping, registry store base +
+     Lakebase store, DomainSession, GlobalConfigService, TaskContext,
+     internal/dtwin.py, digitaltwin/__init__.py (14 wrappers), DigitalTwin
+     (20 forwarders), back/core/__init__.py, task_manager.
+   - Old `project` key fallbacks removed in internal/ontology.py, domains.py,
+     HomeService.py.
+   - SHACLService: an unparseable report raises InfrastructureError instead of
+     "conforms". UnityCatalog / MetadataService: failed listings raise instead
+     of returning an empty schema; callers re-raise (502) or log per table.
+7. Plans
+   - .planning/code-review-2026-10-14/PLAN.md (new): ten structural items
+     with evidence, target design, migration, tests, priority (P0-P2),
+     including the registry Volume removal and the scheduled-build
+     `last_build` rewrite.
+8. Docs and release notes
+   - docs/deployment.md, docs/development.md: `/health` vs readiness.
+   - docs/architecture.md, docs/api.md: CSRF rejection rules.
+   - docs/backend.md, docs/diagrams/class-hierarchy.mmd: deleted methods.
+   - releases/ReleaseNotes_V0.9.0.md: "Security hardening (code review)"
+     section, behaviour-change upgrade notes (health probes, CSRF,
+     `sh:pattern` backslashes, UC errors), test status.
+9. Tests
+   - New: test_sql_literal_escaping.py, test_frontend_xss_hardening.py,
+     test_tool_http_boundary.py, test_startup_fallback.py,
+     test_shacl_report_parsing.py, test_metadata_service_uc_failures.py,
+     test_mapping_uc_discovery_errors.py.
+   - Updated: csrf middleware, health (readiness probes stubbed so the unit
+     test no longer calls Databricks with local credentials), routes,
+     permissions, Lakebase catalog, review service, cohort, unity catalog,
+     shape conditions, external API, dtwin service, dataquality, registry
+     store, MCP policy gating and smoke tests.
+   - tests/units/architecture/baseline.json: tightened (GraphDBBackend
+     1434 -> 1189, DomainSession -> 1397, Mapping 2755 -> 2713,
+     SyncedTableManager 850 -> 814, DigitalTwin and `_construct_to_sql`
+     now under budget).
+
+Modified files:
+- run.py, README.md, .cursor/11-frontend-design.mdc
+- docs/api.md, docs/architecture.md, docs/backend.md, docs/deployment.md,
+  docs/development.md, docs/diagrams/class-hierarchy.mmd
+- releases/ReleaseNotes_V0.9.0.md
+- src/api/routers/domains.py, src/api/routers/internal/{dtwin,ontology,settings}.py
+- src/back/core/__init__.py, agents/AgentClient.py,
+  databricks/{DatabricksClient,document/DocumentExtractor,uc/MetadataService,uc/UnityCatalog}.py,
+  graphdb/{GraphDBBackend,delta/DeltaBase,delta/_table_naming,lakebase/SyncedTableManager}.py,
+  helpers/{SQLHelpers,__init__}.py,
+  reasoning/rules/{AggregateRuleEngine,DecisionTableEngine,SPARQLRuleEngine}.py,
+  reasoning/swrl/SWRLSQLTranslator.py, task_manager/__init__.py,
+  w3c/shacl/{SHACLService,ShapeConditions}.py, w3c/sparql/SparqlTranslator.py
+- src/back/objects/digitaltwin/{DigitalTwin,__init__,cohort/CohortService}.py,
+  domain/{Domain,HomeService,settings/WarehouseSettings}.py, mapping/Mapping.py,
+  registry/{PermissionService,collab/ReviewService,schedule/TaskContext,schedule/build,store/base,store/lakebase/Catalog,store/lakebase/store}.py,
+  session/{DomainSession,FileSessionMiddleware,GlobalConfigService}.py
+- src/front/static/** (utils.js, ontology-design.js, settings-*.js, domain-*.js,
+  comments-panel.js, home*.js, ontology-*.js, query-*.js, registry-teams.js,
+  navbar.js, mapping-information.js; uc-file-browser-modal.js deleted)
+- src/front/templates/{base,ontology}.html, partials/layout/uc_file_browser_modal.html,
+  partials/settings/_settings_health.html
+- src/mcp-server/server/{http_client,resources,tools}.py
+- src/shared/fastapi/{csrf,health}.py
+- tests/** (listed above), tests/e2e/scenarios/_harness.py (comment)
+- .planning/code-review-2026-10-14/PLAN.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9400 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 49.37s.
+
+================================================================================
+## README: "What's new in 0.9.0" callout
+================================================================================
+
+Context:
+The README had no at-a-glance summary of the 0.9.0 release. The biggest
+features are now listed right under the header badges, in a highlighted box.
+
+Changes:
+
+1. README.md
+   Added a boxed "What's new in 0.9.0" section (single-cell HTML table, so it
+   renders as a bordered box on GitHub and in IDE previews) with eleven bullets
+   (Lakehouse//RT queries, three-stage Generate, Knowledge Store, entity Data
+   Quality Checks, entity business rules, Jobs as class actions, SPARQL
+   playground, GitHub mirror, faster Explorer, Ontology Studio, security
+   hardening) and a link to releases/ReleaseNotes_V0.9.0.md.
+
+Modified files:
+- README.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9400 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 57.88s.

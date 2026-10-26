@@ -622,10 +622,42 @@ class TestRunDiagnosticsRowCounts:
                     "target_class_label": "A",
                 }
             ],
+            ontology={
+                "classes": [{"uri": "http://t/A", "name": "A"}],
+                "properties": [{"uri": "http://t/p", "name": "p"}],
+            },
         )
         result = Mapping(domain).run_diagnostics(client=client)
         assert result["entities"][0]["row_count"] == 5
         assert result["relationships"][0]["row_count"] == 5
+        assert result["entities"][0]["status"] == "ok"
+        assert result["relationships"][0]["status"] == "ok"
+        assert not any(
+            c["check"] == "has_data" for c in result["entities"][0]["checks"]
+        )
+        assert not any(
+            c["check"] == "has_data" for c in result["relationships"][0]["checks"]
+        )
+
+    def test_empty_source_still_warns(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"cnt": 0}]
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/A",
+                    "ontology_class_label": "A",
+                    "sql_query": "SELECT id FROM c.s.t",
+                    "id_column": "id",
+                }
+            ]
+        )
+        result = Mapping(domain).run_diagnostics(client=client)
+        has_data = [
+            c for c in result["entities"][0]["checks"] if c["check"] == "has_data"
+        ]
+        assert has_data[0]["status"] == "warning"
+        assert result["entities"][0]["status"] == "warning"
 
     def test_row_count_none_without_client(self):
         domain = _mock_domain(
@@ -640,3 +672,107 @@ class TestRunDiagnosticsRowCounts:
         )
         result = Mapping(domain).run_diagnostics()
         assert result["entities"][0]["row_count"] is None
+
+
+class TestDiagnoseExcludedAttributes:
+    def test_excluded_attribute_missing_from_select_is_not_an_error(self):
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/A",
+                    "ontology_class_label": "A",
+                    "sql_query": "SELECT id, name FROM c.s.t",
+                    "id_column": "id",
+                    "attribute_mappings": {"name": "name", "age": "age"},
+                    "excluded_attributes": ["age"],
+                }
+            ],
+            ontology={"classes": [{"uri": "http://t/A", "name": "A"}]},
+        )
+        result = Mapping(domain).run_diagnostics()
+        attr_checks = [
+            c for c in result["entities"][0]["checks"] if c["check"].startswith("attribute:")
+        ]
+        assert [c["check"] for c in attr_checks] == ["attribute:name"]
+        assert all(c["status"] == "ok" for c in attr_checks)
+        assert result["entities"][0]["status"] == "ok"
+
+
+class TestDiagnoseRelationshipColumns:
+    def _domain(self, rel, entities=None):
+        return _mock_domain(
+            entities=entities
+            or [
+                {
+                    "ontology_class": "http://t/A",
+                    "ontology_class_label": "A",
+                    "sql_query": "SELECT obj_id FROM c.s.t",
+                    "id_column": "obj_id",
+                }
+            ],
+            relationships=[rel],
+            ontology={
+                "classes": [{"uri": "http://t/A", "name": "A"}],
+                "properties": [{"uri": "http://t/p", "name": "p"}],
+            },
+        )
+
+    def _rel(self, **overrides):
+        rel = {
+            "property": "http://t/p",
+            "property_label": "p",
+            "sql_query": "SELECT obj_id s, parent_obj_id t FROM c.s.t",
+            "source_id_column": "s",
+            "target_id_column": "t",
+            "source_class": "http://t/A",
+            "source_class_label": "A",
+            "target_class": "http://t/A",
+            "target_class_label": "A",
+        }
+        rel.update(overrides)
+        return rel
+
+    def test_implicit_alias_source_id_is_not_an_error(self):
+        result = Mapping(self._domain(self._rel())).run_diagnostics()
+        checks = {
+            c["check"]: c["status"] for c in result["relationships"][0]["checks"]
+        }
+        assert checks["source_id_column"] == "ok"
+        assert checks["target_id_column"] == "ok"
+        assert result["relationships"][0]["status"] == "ok"
+
+    def test_excluded_source_id_column_is_not_an_error(self):
+        rel = self._rel(
+            sql_query="SELECT parent_obj_id t FROM c.s.t",
+            excluded_attributes=["s"],
+        )
+        result = Mapping(self._domain(rel)).run_diagnostics()
+        names = [c["check"] for c in result["relationships"][0]["checks"]]
+        assert "source_id_column" not in names
+
+    def test_excluded_relationship_attribute_is_not_an_error(self):
+        rel = self._rel(
+            attribute_mappings={"note": "missing_col"},
+            excluded_attributes=["note"],
+        )
+        result = Mapping(self._domain(rel)).run_diagnostics()
+        attr_checks = [
+            c
+            for c in result["relationships"][0]["checks"]
+            if c["check"].startswith("attribute:")
+        ]
+        assert attr_checks == []
+
+    def test_genuinely_missing_source_id_still_errors(self):
+        rel = self._rel(
+            sql_query="SELECT obj_id, parent_obj_id FROM c.s.t",
+            source_id_column="s",
+            target_id_column="parent_obj_id",
+        )
+        result = Mapping(self._domain(rel)).run_diagnostics()
+        src = [
+            c
+            for c in result["relationships"][0]["checks"]
+            if c["check"] == "source_id_column"
+        ][0]
+        assert src["status"] == "error"

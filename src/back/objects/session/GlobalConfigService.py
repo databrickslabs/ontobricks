@@ -153,8 +153,14 @@ class GlobalConfigService:
     def get_warehouse_id(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> str:
-        """Return the globally configured SQL Warehouse ID (or empty string)."""
+        """Return the globally configured build SQL Warehouse ID."""
         return self.get(host, token, registry_cfg, "warehouse_id")
+
+    def get_build_warehouse_use_sea(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> bool:
+        """Return False because build SQL always uses the Thrift transport."""
+        return False
 
     def get_delta_warehouse_id(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -163,6 +169,20 @@ class GlobalConfigService:
         from back.core.graphdb.engine_config import resolve_lakehouse_warehouse_id
 
         return resolve_lakehouse_warehouse_id(
+            self.get_graph_engine_config(host, token, registry_cfg)
+        )
+
+    def get_delta_warehouse_use_sea(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> bool:
+        """Return ``graph_engine_config.lakehouse.use_sea`` (default ``False``).
+
+        The key name is retained for compatibility. ``True`` means the SQL
+        client uses the native Kernel backend required by Lakehouse/RT.
+        """
+        from back.core.graphdb.engine_config import resolve_lakehouse_use_sea
+
+        return resolve_lakehouse_use_sea(
             self.get_graph_engine_config(host, token, registry_cfg)
         )
 
@@ -177,16 +197,6 @@ class GlobalConfigService:
     ) -> str:
         """Return the globally configured default class icon."""
         return self.get(host, token, registry_cfg, "default_emoji")
-
-    def get_navbar_logo(
-        self, host: str, token: str, registry_cfg: Dict[str, str]
-    ) -> str:
-        """Return the globally configured navbar logo as a ``data:`` URL.
-
-        Empty string means "no custom logo" — the UI falls back to the
-        bundled default (``static/global/img/favicon.svg``).
-        """
-        return self.get_ui_branding(host, token, registry_cfg).get("logo_data_url", "")
 
     def get_ui_branding(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -269,8 +279,28 @@ class GlobalConfigService:
         registry_cfg: Dict[str, str],
         warehouse_id: str,
     ) -> Tuple[bool, str]:
-        """Persist a new SQL Warehouse ID in the global config file."""
+        """Persist a new build SQL Warehouse ID in the global config file."""
         return self._save(host, token, registry_cfg, {"warehouse_id": warehouse_id})
+
+    def set_build_warehouse(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        warehouse_id: str,
+        *,
+        use_sea: bool,
+    ) -> Tuple[bool, str]:
+        """Persist the build warehouse and clear any legacy Kernel transport flag."""
+        return self._save(
+            host,
+            token,
+            registry_cfg,
+            {
+                "warehouse_id": (warehouse_id or "").strip(),
+                "warehouse_use_sea": False,
+            },
+        )
 
     def set_default_base_uri(
         self,
@@ -341,6 +371,7 @@ class GlobalConfigService:
         merged["version"] = int(merged.get("version") or normalized.version or 1)
         merged["app_title"] = normalized.app_title
         merged["primary_color"] = normalized.primary_color
+        merged["aurora_color"] = normalized.aurora_color
         merged["logo_data_url"] = normalized.logo_data_url
 
         updates = {
@@ -405,8 +436,13 @@ class GlobalConfigService:
         token: str,
         registry_cfg: Dict[str, str],
         warehouse_id: str,
+        use_sea: Optional[bool] = None,
     ) -> Tuple[bool, str]:
-        """Persist the Lakehouse SQL warehouse under ``graph_engine_config.lakehouse``."""
+        """Persist the Lakehouse SQL warehouse under ``graph_engine_config.lakehouse``.
+
+        When *use_sea* is provided it is stored alongside ``warehouse_id``;
+        when ``None`` any previously saved ``use_sea`` value is preserved.
+        """
         from back.core.graphdb.engine_config import normalize_graph_engine_config
 
         wid = (warehouse_id or "").strip()
@@ -418,6 +454,8 @@ class GlobalConfigService:
         )
         lh = dict(nested.get("lakehouse") or {})
         lh["warehouse_id"] = wid
+        if use_sea is not None:
+            lh["use_sea"] = bool(use_sea)
         nested["lakehouse"] = lh
         return self._save(
             host,
@@ -513,6 +551,32 @@ class GlobalConfigService:
             host, token, registry_cfg, {"graph_chat_result_cap": to_save}
         )
 
+    def get_data_assets_import_limit(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> int:
+        """Return the max number of data assets a domain may import (default 40)."""
+        from back.core.databricks.uc.MetadataService import MetadataService
+
+        val = self.get(host, token, registry_cfg, "data_assets_import_limit", "")
+        if val is None or str(val).strip() == "":
+            return MetadataService.DEFAULT_DATA_ASSETS_IMPORT_LIMIT
+        return MetadataService.clamp_import_limit(val)
+
+    def set_data_assets_import_limit(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        limit: int,
+    ) -> Tuple[bool, str]:
+        """Persist the data-assets import cap (clamped 1–500)."""
+        from back.core.databricks.uc.MetadataService import MetadataService
+
+        to_save = MetadataService.clamp_import_limit(limit)
+        return self._save(
+            host, token, registry_cfg, {"data_assets_import_limit": to_save}
+        )
+
     def get_edit_lock_ttl_s(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> Optional[int]:
@@ -583,6 +647,31 @@ class GlobalConfigService:
             host, token, registry_cfg, {"analytics_job_enabled": bool(enabled)}
         )
 
+    def get_github_config(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """Return the instance GitHub mirror settings (normalised)."""
+        from back.objects.registry.gitsync import GitHubConfig
+
+        raw = self.load(host, token, registry_cfg).get("github_config")
+        return GitHubConfig.from_dict(raw).to_dict()
+
+    def set_github_config(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        config: Dict[str, Any],
+    ) -> Tuple[bool, str]:
+        """Persist the instance GitHub mirror settings (one repository per instance)."""
+        from back.objects.registry.gitsync import GitHubConfig, github_mirror
+
+        normalized = GitHubConfig.from_dict(config).to_dict()
+        ok, msg = self._save(host, token, registry_cfg, {"github_config": normalized})
+        if ok:
+            github_mirror.invalidate_config()
+        return ok, msg
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -592,6 +681,7 @@ class GlobalConfigService:
         return {
             "version": 1,
             "warehouse_id": "",
+            "warehouse_use_sea": False,
             "default_base_uri": "",
             "default_emoji": "",
             "navbar_logo": "",
@@ -606,7 +696,9 @@ class GlobalConfigService:
             # 0 = unset → env var / built-in default from back.core.query_limits.
             "graph_query_timeout_s": 0,
             "graph_chat_result_cap": 0,
+            "data_assets_import_limit": 40,
             "graph_engine_config": {},
+            "github_config": {},
         }
 
 

@@ -25,7 +25,7 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Set, Tuple
 
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
@@ -77,6 +77,7 @@ def get_empty_domain() -> Dict[str, Any]:
                 "description": "",
                 "author": "",
                 "llm_endpoint": "",
+                "llm_endpoint_kind": "",
                 "mcp_enabled": False,
                 "status": "DRAFT",
                 "review_quorum": 1,
@@ -92,7 +93,14 @@ def get_empty_domain() -> Dict[str, Any]:
                 "neo4j_connection": "",
                 # How the Lakehouse backend builds ``…_data``: table | view.
                 # Only honoured when graph_backend == "databricks".
-                "lakehouse_materialization": "table",
+                # New domains default to view; missing values on import still
+                # normalise to table so legacy Lakehouse domains keep a copy.
+                "lakehouse_materialization": "view",
+                # Search companions (adj / entity-search / props). On until
+                # the operator turns the Backend switch off. New domains stay
+                # pending_refresh until the first successful rebuild.
+                "graph_cache_enabled": True,
+                "graph_cache_state": "pending_refresh",
             },
             "triplestore": {
                 "stats": {},
@@ -125,6 +133,14 @@ def get_empty_domain() -> Dict[str, Any]:
         },
         "assignment": {"entities": [], "relationships": []},
         "design_layout": {"current_view": "default", "views": {}, "map": {}},
+        # Durable three-stage ontology Generate draft (detect → review →
+        # complete), or None when no draft exists. See
+        # ``back.objects.ontology.generate.GenerateDraft`` for the typed model and
+        # ``docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md``
+        # for the full contract. Persisted as a plain dict here (like every
+        # other DomainSession section); GenerateDraftStore is the typed
+        # read/write boundary with optimistic-concurrency revision checks.
+        "generate_draft": None,
         # Buffered ontology/mapping change-audit events (who/what/when).
         # Appended as edits happen; flushed to the registry on save-to-uc.
         # Kept out of _config_snapshot() and export_for_save() so it never
@@ -170,18 +186,9 @@ class DomainSession:
         self._initial_assignment_snapshot = asgn_snap
 
     def _load(self) -> Dict[str, Any]:
-        """Load domain data from session, migrating legacy keys if needed."""
-        # Try unified domain_data first (fallback: legacy project_data bucket key)
+        """Load domain data from session, filling any missing section."""
         data = self._session_mgr.get(self.SESSION_KEY)
-        if not data:
-            data = self._session_mgr.get("project_data")
-
-        if data:
-            # Ensure all sections exist
-            return self._ensure_structure(data)
-
-        # Migrate from legacy session keys
-        return self._migrate_legacy()
+        return self._ensure_structure(data) if data else get_empty_domain()
 
     def _ensure_structure(self, data: Dict) -> Dict:
         """Ensure all required keys exist in domain data and migrate legacy structures.
@@ -193,7 +200,7 @@ class DomainSession:
         surgery required.
         """
         empty = get_empty_domain()
-        self._migrate_top_level_renames(data, empty)
+        data.setdefault("domain", empty["domain"])
         self._migrate_uc_location(data)
         self._migrate_databricks_and_preferences(data, empty)
         self._fill_default_settings(data, empty)
@@ -220,29 +227,6 @@ class DomainSession:
             Ontology.finalize_class_attributes(ontology)
 
     @staticmethod
-    def _migrate_top_level_renames(data: Dict, empty: Dict) -> None:
-        """Rename ``project`` → ``domain``, ``project_folder`` → ``domain_folder``."""
-        if "domain" not in data and "project" in data:
-            data["domain"] = data.pop("project")
-
-        if (
-            "domain" in data
-            and "domain_folder" not in data["domain"]
-            and "project_folder" in data["domain"]
-        ):
-            data["domain"]["domain_folder"] = data["domain"].pop("project_folder", "")
-
-        if "domain" not in data:
-            data["domain"] = empty["domain"].copy()
-            if "info" in data:
-                data["domain"]["info"] = data.pop("info")
-            if "current_version" in data:
-                data["domain"]["current_version"] = data.pop("current_version")
-
-        if "is_active_version" in data:
-            data["domain"]["is_active_version"] = data.pop("is_active_version")
-
-    @staticmethod
     def _migrate_uc_location(data: Dict) -> None:
         """Move legacy ``uc_location`` payload onto ``domain.domain_folder``."""
         old_uc = data.get("domain", {}).pop("uc_location", None) or data.pop(
@@ -264,6 +248,8 @@ class DomainSession:
                 **empty["settings"]["databricks"],
                 **old_db,
             }
+        # Tokens come from env / OAuth / OBO; a session never keeps one.
+        data["settings"].get("databricks", {}).pop("token", None)
 
         old_prefs = data.pop("preferences", None)
         if old_prefs:
@@ -443,118 +429,6 @@ class DomainSession:
             if isinstance(legacy_m, dict):
                 data["domain"]["metadata"] = legacy_m
 
-    def _migrate_legacy(self) -> Dict:
-        """Migrate from legacy separate session keys to unified structure."""
-        data = get_empty_domain()
-
-        # Migrate domain_info / legacy project_name session key into domain.info
-        domain_info = self._session_mgr.get("domain_info", {})
-        if domain_info:
-            data["domain"]["info"].update(domain_info)
-        legacy_name = self._session_mgr.get("project_name")
-        if legacy_name:
-            data["domain"]["info"]["name"] = legacy_name
-
-        # Migrate ontology_config (including constraints, swrl_rules, axioms)
-        ontology_config = self._session_mgr.get("ontology_config", {})
-        legacy_all_axioms = self._session_mgr.get("owl_axioms", [])
-        legacy_axioms, legacy_expressions = _split_axioms_expressions(legacy_all_axioms)
-        if ontology_config:
-            data["ontology"].update(
-                {
-                    "name": ontology_config.get("name", ""),
-                    "base_uri": ontology_config.get("base_uri", ""),
-                    "description": ontology_config.get("description", ""),
-                    "classes": ontology_config.get("classes", []),
-                    "properties": ontology_config.get("properties", []),
-                    "constraints": self._session_mgr.get("property_constraints", []),
-                    "swrl_rules": self._session_mgr.get("swrl_rules", []),
-                    "axioms": legacy_axioms,
-                    "expressions": legacy_expressions,
-                }
-            )
-        else:
-            data["ontology"]["constraints"] = self._session_mgr.get(
-                "property_constraints", []
-            )
-            data["ontology"]["swrl_rules"] = self._session_mgr.get("swrl_rules", [])
-            data["ontology"]["axioms"] = legacy_axioms
-            data["ontology"]["expressions"] = legacy_expressions
-
-        # Migrate mapping_config
-        mapping_config = self._session_mgr.get("mapping_config", {})
-        if mapping_config:
-            data["assignment"] = {
-                "entities": mapping_config.get(
-                    "entities", mapping_config.get("data_source_mappings", [])
-                ),
-                "relationships": mapping_config.get(
-                    "relationships", mapping_config.get("relationship_mappings", [])
-                ),
-                "r2rml_output": mapping_config.get("r2rml_output", "")
-                or self._session_mgr.get("r2rml_output", ""),
-            }
-
-        # Migrate design_layout (clean up old structure)
-        design_layout = self._session_mgr.get("design_layout", {})
-        if design_layout:
-            # Remove old 'positions' key
-            design_layout.pop("positions", None)
-
-            # Ensure new structure
-            if "views" not in design_layout:
-                design_layout["views"] = {}
-            if "map" not in design_layout:
-                design_layout["map"] = {}
-
-            # Migrate old root-level entities/relationships/inheritances into default view
-            old_entities = design_layout.pop("entities", None)
-            old_relationships = design_layout.pop("relationships", None)
-            old_inheritances = design_layout.pop("inheritances", None)
-            old_visibility = design_layout.pop("visibility", None)
-
-            if "default" not in design_layout["views"] or not design_layout[
-                "views"
-            ].get("default"):
-                if old_entities or old_relationships or old_inheritances:
-                    design_layout["views"]["default"] = {
-                        "entities": old_entities or [],
-                        "relationships": old_relationships or [],
-                        "inheritances": old_inheritances or [],
-                    }
-                    if old_visibility:
-                        design_layout["views"]["default"]["visibility"] = old_visibility
-
-            # Set current_view: only to existing views
-            if "current_view" not in design_layout:
-                design_layout["current_view"] = (
-                    "default"
-                    if "default" in design_layout["views"]
-                    else (
-                        list(design_layout["views"].keys())[0]
-                        if design_layout["views"]
-                        else None
-                    )
-                )
-
-            data["design_layout"] = design_layout
-
-        # Migrate databricks settings and preferences into settings
-        # Note: warehouse_id, default_emoji, default_base_uri are
-        # no longer stored per-session (they are instance-global).
-        # Note: token is NOT migrated — resolved at runtime from env/OAuth.
-        data["settings"] = {
-            "databricks": {
-                "host": self._session_mgr.get("databricks_host", ""),
-            },
-            "registry": {"catalog": "", "schema": "", "volume": "OntoBricksRegistry"},
-        }
-
-        # Note: generated content is runtime-only, not migrated from legacy
-        # It will be lazily initialized when accessed via self.generated property
-
-        return data
-
     def _sanitized_ontology_for_hash(self) -> Dict[str, Any]:
         """Return a deep-copied ontology with volatile runtime flags stripped.
 
@@ -608,6 +482,56 @@ class DomainSession:
                 }
             ),
         )
+
+    _IDENTITY_KEYS = frozenset({
+        "uri", "ontology_class", "property", "localName", "id",
+    })
+
+    @staticmethod
+    def previous_values(
+        old: Optional[Dict[str, Any]],
+        new: Optional[Dict[str, Any]],
+        *,
+        skip: Optional[Set[str]] = None,
+    ) -> Dict[str, Any]:
+        """Return ``{field: previous_value}`` for keys that changed.
+
+        Skips identity keys (URI / mapping target). Ignores empty builder
+        defaults that were not present on the old object, so a save that
+        only fills ``description: ""`` does not pollute the audit trail.
+        """
+        old_map = dict(old or {})
+        new_map = dict(new or {})
+        ignored = set(skip or ()) | DomainSession._IDENTITY_KEYS
+        before: Dict[str, Any] = {}
+        for key in set(old_map) | set(new_map):
+            if key in ignored:
+                continue
+            ov = old_map.get(key)
+            nv = new_map.get(key)
+            if ov == nv:
+                continue
+            if key not in old_map and DomainSession._is_empty_audit_value(nv):
+                continue
+            before[key] = ov if key in old_map else None
+        return before
+
+    @staticmethod
+    def _is_empty_audit_value(value: Any) -> bool:
+        return value in ("", None) or value == [] or value == {}
+
+    @staticmethod
+    def diff_meta(
+        old: Optional[Dict[str, Any]],
+        new: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """``{"before": ..., "after": ...}`` for changed fields, else ``{}``."""
+        before = DomainSession.previous_values(old, new)
+        if not before:
+            return {}
+        new_map = dict(new or {})
+        after = {key: new_map.get(key) for key in before}
+        return {"before": before, "after": after}
 
     def record_change(
         self,
@@ -725,7 +649,6 @@ class DomainSession:
             self._data["settings"] = saved_settings
         self._rebake_snapshots()
         self.save()
-        self._clear_legacy_keys()
 
     def clear_generated_content(self):
         """Clear all generated/cached content (OWL, R2RML, query results).
@@ -775,6 +698,9 @@ class DomainSession:
                 "axioms": [],
                 "expressions": [],
                 "groups": [],
+                "rdf_extras": {},
+                "label_lang": None,
+                "comment_lang": None,
             }
         )
         self.assignment.update(
@@ -790,6 +716,11 @@ class DomainSession:
                 "map": {},
             }
         )
+        # A Generate draft snapshots existing-anchor identities off the
+        # ontology at detection time; wiping the ontology invalidates that
+        # snapshot outright — never leave a stale draft resumable against
+        # entities that no longer exist.
+        self._data["generate_draft"] = None
         self.clear_generated_content()
         self.record_change(
             "ontology_reset", entity_type="ontology",
@@ -808,32 +739,6 @@ class DomainSession:
         self._data.pop("available_versions", None)
         self._data.pop("is_active_version", None)
         self.save()
-
-    def _clear_legacy_keys(self):
-        """Remove legacy session keys."""
-        legacy_keys = [
-            "domain_info",
-            "project_name",
-            "project_config",
-            "ontology_config",
-            "property_constraints",
-            "swrl_rules",
-            "owl_axioms",
-            "mapping_config",
-            "r2rml_output",
-            "design_layout",
-            "databricks_host",
-            "databricks_token",
-            "warehouse_id",
-            "catalog",
-            "schema",
-            "default_emoji",
-            "generated_owl",
-            "generated_sql",
-            "query_result",
-        ]
-        for key in legacy_keys:
-            self._session_mgr.delete(key)
 
     # ===========================================
     # Property Accessors
@@ -903,7 +808,8 @@ class DomainSession:
         resolution happens inside :class:`RegistryService` at I/O time.
         """
         from shared.config.settings import get_settings
-        from back.objects.registry.RegistryService import RegistryCfg, _DOMAINS_FOLDER
+        from back.objects.registry.RegistryCfg import RegistryCfg
+        from back.objects.registry.RegistryService import _DOMAINS_FOLDER
 
         cfg = RegistryCfg.from_domain(self, get_settings())
         if not cfg.is_configured:
@@ -1161,7 +1067,7 @@ class DomainSession:
         while ``uc_version_path`` looked at the right one.
         """
         from shared.config.settings import get_settings
-        from back.objects.registry.RegistryService import RegistryCfg
+        from back.objects.registry.RegistryCfg import RegistryCfg
 
         try:
             cfg = RegistryCfg.from_domain(self, get_settings())
@@ -1209,6 +1115,20 @@ class DomainSession:
             self._data["generated"] = {"owl": "", "sql": "", "r2rml": ""}
         return self._data["generated"]
 
+    @property
+    def generate_draft_store(self) -> "GenerateDraftStore":
+        """Typed read/write boundary for the durable Generate draft.
+
+        See ``back.objects.ontology.generate.GenerateDraft`` for
+        :class:`GenerateDraftStore`, :class:`GenerateDraft`, and the
+        optimistic-concurrency revision-check contract. Lazily imported to
+        avoid a module-load cycle (``Ontology`` sub-package already lazily
+        imports from ``DomainSession`` for the same reason).
+        """
+        from back.objects.ontology.generate.GenerateDraftStore import GenerateDraftStore
+
+        return GenerateDraftStore(self)
+
     # ===========================================
     # Convenience Methods
     # ===========================================
@@ -1216,20 +1136,6 @@ class DomainSession:
     def get_classes(self) -> List[Dict]:
         """Get ontology classes."""
         return self._data["ontology"].get("classes", [])
-
-    def _ensure_inherited_properties(self) -> None:
-        """Propagate inherited dataProperties down the subClassOf hierarchy.
-
-        Mutates classes in-place so that child classes include their
-        ancestors' datatype properties (marked ``inherited: True``).
-        Safe to call multiple times -- already-inherited entries are
-        detected by name and not duplicated.
-        """
-        from back.core.w3c.owl.OntologyParser import OntologyParser
-
-        classes = self._data["ontology"].get("classes", [])
-        if classes:
-            OntologyParser._propagate_inherited_properties(classes)
 
     def get_properties(self) -> List[Dict]:
         """Get ontology properties (relationships)."""
@@ -1343,12 +1249,20 @@ class DomainSession:
             normalize_graph_backend,
             normalize_lakehouse_materialization,
         )
+        from back.core.graphdb.search_cache import (
+            GRAPH_CACHE_STATE_READY,
+            normalize_graph_cache_enabled,
+            normalize_graph_cache_state,
+        )
 
         info_export = {
             "name": self._data["domain"]["info"].get("name", "NewDomain"),
             "description": self._data["domain"]["info"].get("description", ""),
             "author": self._data["domain"]["info"].get("author", ""),
             "llm_endpoint": self._data["domain"]["info"].get("llm_endpoint", ""),
+            "llm_endpoint_kind": self._data["domain"]["info"].get(
+                "llm_endpoint_kind", ""
+            ),
             "mcp_enabled": self._data["domain"]["info"].get("mcp_enabled", False),
             "status": self._data["domain"]["info"].get("status", "DRAFT"),
             "review_quorum": max(
@@ -1366,6 +1280,16 @@ class DomainSession:
             "lakehouse_materialization": normalize_lakehouse_materialization(
                 self._data["domain"]["info"].get("lakehouse_materialization")
             ),
+            "graph_cache_enabled": normalize_graph_cache_enabled(
+                self._data["domain"]["info"].get("graph_cache_enabled")
+            ),
+            "graph_cache_state": normalize_graph_cache_state(
+                self._data["domain"]["info"].get("graph_cache_state"),
+                enabled=normalize_graph_cache_enabled(
+                    self._data["domain"]["info"].get("graph_cache_enabled")
+                ),
+                default_when_missing=GRAPH_CACHE_STATE_READY,
+            ),
             "last_update": self._data["domain"].get("last_update", ""),
             "last_build": self._data["domain"].get("last_build", ""),
         }
@@ -1375,6 +1299,9 @@ class DomainSession:
             "base_uri": self._data["ontology"].get("base_uri", ""),
             "base_uri_auto": self._data["ontology"].get("base_uri_auto", False),
             "description": self._data["ontology"].get("description", ""),
+            "label_lang": self._data["ontology"].get("label_lang"),
+            "comment_lang": self._data["ontology"].get("comment_lang"),
+            "rdf_extras": self._data["ontology"].get("rdf_extras", {}),
             "classes": self._data["ontology"].get("classes", []),
             "properties": self._data["ontology"].get("properties", []),
             "constraints": self._data["ontology"].get("constraints", []),
@@ -1453,6 +1380,11 @@ class DomainSession:
         self._data["domain"]["domain_folder"] = ""
         self._data["domain"]["last_update"] = ""
         self._data["domain"]["last_build"] = ""
+        # A Generate draft snapshots the *previous* domain/version's
+        # ontology and metadata identity at detection time; importing a
+        # different domain/version must never resurrect it — cross-domain/
+        # version leakage.
+        self._data["generate_draft"] = None
 
         # Import info into domain.info
         if "info" in data:
@@ -1460,12 +1392,20 @@ class DomainSession:
                 normalize_graph_backend,
                 normalize_lakehouse_materialization,
             )
+            from back.core.graphdb.search_cache import (
+                GRAPH_CACHE_STATE_READY,
+                normalize_graph_cache_enabled,
+                normalize_graph_cache_state,
+            )
 
             info = data["info"]
             self._data["domain"]["info"]["name"] = info.get("name", "NewDomain")
             self._data["domain"]["info"]["description"] = info.get("description", "")
             self._data["domain"]["info"]["author"] = info.get("author", "")
             self._data["domain"]["info"]["llm_endpoint"] = info.get("llm_endpoint", "")
+            self._data["domain"]["info"]["llm_endpoint_kind"] = info.get(
+                "llm_endpoint_kind", ""
+            )
             self._data["domain"]["info"]["mcp_enabled"] = info.get("mcp_enabled", False)
             self._data["domain"]["info"]["status"] = info.get("status", "DRAFT")
             self._data["domain"]["info"]["review_quorum"] = max(
@@ -1485,6 +1425,19 @@ class DomainSession:
                     info.get("lakehouse_materialization")
                 )
             )
+            self._data["domain"]["info"]["graph_cache_enabled"] = (
+                normalize_graph_cache_enabled(
+                    info.get("graph_cache_enabled"),
+                    default=True,
+                )
+            )
+            self._data["domain"]["info"]["graph_cache_state"] = (
+                normalize_graph_cache_state(
+                    info.get("graph_cache_state"),
+                    enabled=self._data["domain"]["info"]["graph_cache_enabled"],
+                    default_when_missing=GRAPH_CACHE_STATE_READY,
+                )
+            )
             # Drop legacy domain DB override if present on import.
             self._data["domain"]["info"].pop("neo4j_database", None)
             self._data["domain"]["last_update"] = info.get("last_update", "")
@@ -1497,18 +1450,14 @@ class DomainSession:
 
         # Check for new versioned format
         if "versions" in data:
+            from back.objects.domain.payload import loaded_version_document
+
             versions = data["versions"]
-            version_keys = sorted(versions.keys(), reverse=True)
-
-            if version_keys:
-                # Use specified version or default to latest
-                if version and version in versions:
-                    selected_version = version
-                else:
-                    selected_version = version_keys[0]  # Latest version
-
-                self._data["domain"]["current_version"] = selected_version
-                version_data = versions[selected_version]
+            if versions:
+                selected_version, version_data = loaded_version_document(
+                    versions, requested=version
+                )
+                self.current_version = selected_version
 
                 if "ontology" in version_data:
                     merged_ont = {**empty["ontology"], **version_data["ontology"]}

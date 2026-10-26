@@ -5,7 +5,7 @@ Verifies that clicking each sidebar link makes the corresponding
 ``#{section}-section`` ``<div>`` visible.
 
 Sections covered: information, import, wizard, map, design, entities,
-relationships, dataquality, swrl, axioms, owl.
+relationships, dataquality, swrl, axioms.
 """
 
 import pytest
@@ -27,7 +27,6 @@ class TestOntologySidebar:
             "dataquality",
             "swrl",
             "axioms",
-            "owl",
         ],
     )
     def test_sidebar_switches_section(self, page, live_server, section):

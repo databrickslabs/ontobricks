@@ -1,0 +1,3276 @@
+## Establish the staged ontology Generate contract and baseline evaluation
+
+Context: Task 1 of the `staged-ontology-generate` plan. Generate is being
+refactored from a one-shot LLM call into a durable three-stage wizard
+(detect → human review → checkpointed relations/attributes/axioms
+completion) that appends to the existing ontology instead of replacing it.
+This entry establishes the approved design, the `agent_owl_generator` SPEC
+target contract, and the expanded eval dataset ahead of any runtime code
+change, per the AI Feature Lifecycle gate (`.cursor/12-ai-feature-lifecycle.mdc`).
+No runtime source code was changed.
+
+Changes:
+
+1. docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md
+   New design doc capturing the approved three-stage Generate architecture:
+   Stage 1 detection inputs/outputs, Stage 2 human review (add/remove/
+   include/exclude/edit + alternate labels, at-least-one-entity invariant,
+   locked existing anchors), the durable versioned draft and source
+   fingerprint/invalidation contract, stable entity identity across rename,
+   Stage 3 strict relations→attributes→axioms ordering with per-substage
+   checkpoints and resume, the append-only final merge, the no-reparse
+   contract, and removal of the post-generation pitfall rewrite loop in
+   favor of prompt-first constraints and reject-only validation.
+2. .planning/agents/agent_owl_generator/SPEC.md
+   Fully updated for the staged material change: four staged entry points
+   (`detect_entities`, `infer_relations`, `infer_attributes`,
+   `infer_axioms`) marked `(staged, planned)` alongside the still-current
+   one-shot `run_agent` contract; a new §3a structured-schema section for
+   candidate entities and locked anchors; three new staged success-criteria
+   examples; eight new proposed staged eval dimensions (§5) with a proposed
+   ≥0.95 aggregate, explicitly not yet in `tests/eval/thresholds.yaml`; a
+   new §6a documenting prompt-first pitfall handling, entity closure, the
+   append-only merge, and the no-reparse rule; five new staged failure
+   modes (§6); updated tracing requirements (draft id/revision/stage trace
+   tags); and a sign-off section recording the real dry-run baseline result
+   and the exact live-baseline blocker (missing Databricks credentials) —
+   no run URI was fabricated.
+3. .planning/agents/agent_owl_generator/eval/dataset.jsonl and
+   tests/eval/datasets/agent_owl_generator/baseline.jsonl
+   Synced both mirrors to be byte-identical (the planning mirror was
+   missing 3 legacy seed rows already present in the baseline mirror), then
+   appended 12 new `staged`-tagged material-change examples covering
+   detection, default inclusion, manual add/edit/remove, alternate labels,
+   excluded-entity rejection, locked-anchor append/dedup, strict
+   relations→attributes→axioms ordering, checkpoint recovery, stale-source
+   invalidation, and no document reparse. The dataset now has 25 examples
+   (10 parsed-corpus + 3 legacy + 12 staged), all unique ids, all valid
+   JSONL. The 10 pre-existing parsed-corpus rows are unchanged.
+4. tests/eval/run_agent_owl_generator.py
+   Added `_validate_staged_examples()` — a schema-level structural check
+   (unique ids, required `input.stage`, non-empty `expected.constraints`
+   with `kind`/`value`) run before the existing parsed-corpus contract
+   check, so the 12 staged rows are represented and executable now without
+   changing or weakening the existing 10-case parsed-corpus scoring. The
+   staged rows are not yet judged behaviorally because `detect_entities` /
+   `infer_relations` / `infer_attributes` / `infer_axioms` do not exist at
+   runtime; that harness extension lands with the staged agent (plan Task 3).
+
+Modified files:
+- docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md (new; force-added — `docs/superpowers/` is gitignored by default, matching the existing tracked sibling `2026-09-18-parsed-document-corpus-design.md`)
+- .planning/agents/agent_owl_generator/SPEC.md
+- .planning/agents/agent_owl_generator/eval/dataset.jsonl
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- tests/eval/run_agent_owl_generator.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- `uv run --frozen python tests/eval/run_agent_owl_generator.py` → `[STAGED] validated 12 staged contract examples`; all 10 parsed-corpus cases PASS; aggregate `1.000` (threshold `0.900`). This is the pre-change baseline for the unchanged parsed-corpus contract — no runtime code changed in this revision.
+- `uv run --frozen python tests/eval/run_agent_owl_generator.py --live` → **BLOCKED**: `--live requires host, token, and endpoint` (no `DATABRICKS_HOST`/`DATABRICKS_TOKEN`/`ONTOBRICKS_LLM_ENDPOINT` configured in this environment). No MLflow run URI exists for this attempt; none was fabricated.
+- `uv run --frozen pytest -q -m "not scenario"` → 6329 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.98s.
+
+## Address Task 1 review findings for the staged ontology Generate contract
+
+Context: Follow-up to the entry above. A review of Task 1 flagged four gaps:
+missing staged eval coverage for the "no rewrite after a rejected validation"
+and "no one-shot default path" invariants, an inconsistent constraint-kind
+name for the at-least-one-entity rule, sequential `draft_revision` values
+across unrelated staged examples that implied a false shared session, and an
+inconsistent annotation placement in the SPEC identity table. No runtime
+source code was changed; the attached implementation plan
+(`/Users/benoit.cayla/.cursor/plans/staged-ontology-generate_6fc7e158.plan.md`)
+was not edited.
+
+Changes:
+
+1. .planning/agents/agent_owl_generator/eval/dataset.jsonl and
+   tests/eval/datasets/agent_owl_generator/baseline.jsonl
+   Added two new `staged`-tagged examples: `staged-no-rewrite-after-
+   validation-001` (a rejected Stage 3 axioms output must be reported as a
+   retryable failure and never resubmitted as an in-request rewrite) and
+   `staged-no-one-shot-default-001` (no entry point may silently perform
+   one-shot generation as a default path). Renamed the inconsistent
+   `min_remaining_entities` constraint kind to the canonical
+   `min_included_entities` used elsewhere for the same at-least-one-entity
+   invariant. Replaced the sequential `draft_revision` values across
+   independent staged examples (2..9) with non-sequential, example-specific
+   values so no example implies it continues another's draft session.
+   Dataset now has 27 rows (10 parsed-corpus + 3 legacy + 14 staged), all
+   unique ids, byte-identical mirrors, valid JSONL.
+2. .planning/agents/agent_owl_generator/SPEC.md
+   Moved the `stage_entry_points` `(staged, planned)` annotation from the
+   identity table's Field column into the Value column, consistent with the
+   `max_owl_eval_rounds` row's annotation style. Added a ninth proposed
+   staged eval dimension, `stage_no_one_shot_default`, matching the new
+   dataset coverage. Updated §7 to describe 14 staged cases (was 12) and the
+   two new required-coverage topics, and documented the runner's new
+   required-constraint-kind check. Updated the §10 sign-off note to record
+   the 14-example validation result.
+3. tests/eval/run_agent_owl_generator.py
+   Raised `_MIN_STAGED_EXAMPLES` from 10 to 14 to match the current staged
+   row count, and added `_REQUIRED_STAGED_CONSTRAINT_KINDS` — a coverage
+   check asserting `stage_no_rewrite_after_reject` and
+   `stage_no_one_shot_default` are each exercised by at least one staged
+   example — so neither review-flagged gap can silently regress out of the
+   dataset even if the row count is later satisfied by unrelated additions.
+   Verified the new checks actually fail by temporarily corrupting/removing
+   staged rows, then restored the files and re-validated byte-identical
+   mirrors.
+4. .superpowers/sdd/progress.md (ignored; not committed)
+   Added a "Three-stage ontology generate implementation" section
+   referencing the plan file and recording the Task 1 and Task 1 fixes
+   commits/baseline/test results.
+
+Modified files:
+- .planning/agents/agent_owl_generator/SPEC.md
+- .planning/agents/agent_owl_generator/eval/dataset.jsonl
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- tests/eval/run_agent_owl_generator.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- `uv run --frozen python tests/eval/run_agent_owl_generator.py` → `[STAGED] validated 14 staged contract examples`; all 10 parsed-corpus cases PASS; aggregate `1.000` (threshold `0.900`).
+- Negative-control check: temporarily dropped `staged-no-one-shot-default-001` → runner correctly raised `ValueError: ... has 13 staged examples; minimum is 14`; restored the file and re-confirmed mirrors byte-identical and the harness passes again.
+- `uv run --frozen pytest -q -m "not scenario"` → 6329 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.18s.
+
+## Durable Generate draft/contract layer (task 2 of staged ontology generate)
+
+Context: Task 2 of the `staged-ontology-generate` plan (design:
+`docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md`).
+Implements the draft/contract layer only — stable entity identity, the
+durable versioned draft, source fingerprinting/invalidation, and the
+optimistic-concurrency persistence and validation primitives that Task 3
+(staged agent entry points) and Task 4 (async workflow routes) will build
+on. No agent, API, or UI code was touched; `agent_owl_generator` still only
+exposes the one-shot `run_agent` entry point. The attached implementation
+plan (`/Users/benoit.cayla/.cursor/plans/staged-ontology-generate_6fc7e158.plan.md`)
+was not edited. Followed strict TDD: focused tests were written and run to
+an observed RED (module import error) before any production code existed,
+then the model was implemented to GREEN.
+
+Changes:
+
+1. src/back/objects/ontology/GenerateDraft.py (new)
+   New, focused module — kept separate from the 2,500-line `Ontology.py`
+   per the plan's explicit instruction. Defines:
+   - `GenerateEntity` — one dataclass for both the design's `locked_anchor`
+     and `candidate_entity` shapes (`id`, `canonical_label`, `description`,
+     `type_hint`, `evidence`, `alternate_labels`, `origin`, `included`,
+     `locked`). `id` is assigned once (`cand-<hex12>` for new candidates,
+     the existing class `name` for anchors — existing classes have no
+     assigned UUID and `name` is already the stable identity used
+     everywhere else in the ontology) and never changes; `with_updates()`
+     rejects any attempt to change `id`/`locked`/`origin` and rejects any
+     edit at all on a locked anchor (matching the design's read-only
+     Stage-2 anchor rendering).
+   - `GenerateDraft` — the durable draft (`draft_revision`, `stage`,
+     `source_fingerprint`, `selected_source_config`, `existing_anchors`,
+     `candidate_entities`, `completion_checkpoints`). Constructor enforces
+     that anchors are all locked, candidates are never locked, entity ids
+     are unique, and normalized canonical/alternate labels are unique
+     across the whole entity set (anchors + candidates, including excluded
+     ones). Review-stage mutation helpers (`with_candidate_added/
+     _removed/_updated`) re-run the same invariants on every edit.
+     `ensure_ready_for_completion()` enforces the at-least-one-entity
+     invariant (anchors always count). `closed_entity_ids()` /
+     `validate_references()` implement the Stage-3 entity-closure check
+     (excluded candidates are simply absent from the closed set — "excluded
+     entities unavailable to completion"). `with_checkpoint()` /
+     `next_pending_substage()` enforce the strict relations→attributes→
+     axioms order and refuse to reopen a substage already `done`.
+     `to_dict()`/`from_dict()` round-trip exactly; `from_dict()` is the
+     dedicated migration boundary — it self-heals unknown/missing `stage`,
+     `type_hint`, `origin`, and checkpoint `status` values instead of
+     raising, so an older persisted schema never crashes a resume.
+   - `compute_source_fingerprint()` — deterministic `sha256:`-prefixed hash
+     over selected metadata, ready-document manifest identity, and current
+     ontology entity identity, list-order independent. One documented
+     field-name adjustment from the design doc's illustrative JSON: ready
+     documents are hashed by `filename`/`source_hash` (the real
+     parsed-corpus manifest contract in
+     `docs/superpowers/specs/2026-09-18-parsed-document-corpus-design.md`),
+     not the design doc's placeholder `name`/content-hash wording, so
+     manifests can be fed in directly without a translation layer.
+     `GenerateDraft.is_stale()`/`ensure_not_stale()` compare a draft's
+     stored fingerprint against a freshly recomputed one.
+   - `GenerateDraftStore` — the `DomainSession`-backed persistence
+     boundary. `save()` enforces optimistic concurrency: the submitted
+     draft's `draft_revision` must equal the currently-persisted revision
+     (`0` when no draft exists yet); on success the persisted revision is
+     bumped by 1. A mismatch raises `DraftRevisionConflict` (409). `load()`
+     returns `None` when no draft is persisted; `reset()` discards it.
+   - `DraftValidationError` (400, business/structural invariant),
+     `DraftRevisionConflict` and `DraftStaleError` (409, optimistic
+     concurrency / stale source) — all thin subclasses of the existing
+     `back.core.errors.ValidationError`/`ConflictError` hierarchy so the
+     global FastAPI error handler needs no new wiring in later tasks.
+2. src/back/objects/session/DomainSession.py
+   Added a `"generate_draft"` key (default `None`) to `get_empty_domain()`
+   — the same "sibling durable session state" mechanism as `ontology`/
+   `assignment`/`design_layout`, so a draft survives modal close, page
+   reload, and backend process restart exactly like the rest of the
+   session (the existing `_fill_default_top_level_keys()` migration step
+   already backfills the key for old sessions with no code change needed).
+   Added a lazily-imported `generate_draft_store` property returning a
+   `GenerateDraftStore` bound to `self` — avoids a module-load cycle with
+   the same pattern `Ontology.py` already uses for its own lazy imports.
+   No other `DomainSession` method was touched; `export_for_save()` /
+   `import_from_file()` / `reset_ontology()` are intentionally left alone —
+   the draft is workflow-in-progress session state, not versioned domain
+   content, and any ontology/metadata change that would invalidate it is
+   already caught generically by fingerprint staleness rather than a
+   special-cased clear.
+3. src/back/objects/ontology/__init__.py
+   Re-exported `GenerateDraft`, `GenerateDraftStore`, `GenerateEntity`, and
+   `compute_source_fingerprint` alongside the existing `Ontology` exports.
+4. tests/units/ontology/test_generate_draft.py (new)
+   131 focused tests: entity construction/validation, serialization round
+   trip, migration self-healing (unknown stage/type_hint/origin/checkpoint
+   status, missing keys), locked-anchor snapshotting from ontology classes,
+   deterministic/order-independent fingerprinting and staleness, draft
+   construction invariants (locked/unlocked placement, unique ids, unique
+   normalized labels including excluded candidates and anchor-vs-candidate
+   collisions), rename identity stability, manual add/remove/exclude/
+   re-include, the minimum-included-entity gate, entity-closure reference
+   validation (including excluded-id rejection), strict checkpoint
+   ordering (including failed-substage retry and reopening a done
+   substage), the `DraftValidationError`/`DraftRevisionConflict` error
+   hierarchy, and `GenerateDraftStore` revision-conflict + durable-resume
+   behavior (a second `DomainSession` over the same session store resumes
+   the same persisted draft, simulating a page reload/process restart).
+5. tests/units/domain/test_domain_session.py
+   Added a `TestGenerateDraftIntegration` class covering the
+   `DomainSession` wiring only (empty-domain default, the
+   `generate_draft_store` property, persistence under the
+   `"generate_draft"` session key, and that `reset()` clears it) — model
+   behavior itself is covered in `test_generate_draft.py`.
+
+Modified files:
+- src/back/objects/ontology/GenerateDraft.py (new)
+- src/back/objects/ontology/__init__.py
+- src/back/objects/session/DomainSession.py
+- tests/units/ontology/test_generate_draft.py (new)
+- tests/units/domain/test_domain_session.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- RED (module absent): `uv run --frozen pytest -q tests/units/ontology/test_generate_draft.py tests/units/domain/test_domain_session.py -k "GenerateDraft or generate_draft"` → collection error, `ModuleNotFoundError: No module named 'back.objects.ontology.GenerateDraft'`.
+- GREEN (focused): `uv run --frozen pytest -q tests/units/ontology/test_generate_draft.py tests/units/domain/test_domain_session.py` → 131 passed.
+- Regression (ontology/domain/agents): `uv run --frozen pytest -q tests/units/ontology/ tests/units/domain/ tests/units/agents/` → 1135 passed.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6421 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.90s.
+
+## Address Task 2 review findings for the Generate draft/contract layer
+
+Context: Fixes both "Important" review findings plus two related hardening
+gaps flagged against the task-2 commit (`fb35d6b2`) for the
+`staged-ontology-generate` plan. No agent/API/UI code touched; draft error
+messages remain unchanged and user-facing (no error-exposure change). Strict
+TDD: each finding got a focused failing test, observed RED, then the
+minimal fix to GREEN.
+
+Changes:
+
+1. src/back/objects/ontology/GenerateDraft.py — `GenerateEntity.with_updates()`
+   **(Important)** Was calling `GenerateEntity.from_dict(merged)`, which
+   self-heals an unknown/invalid enum value (e.g. a bogus `type_hint`) back
+   to a safe default instead of raising — correct for the `from_dict`
+   migration boundary, wrong for a live human-review edit, where a bad
+   value should surface immediately. Changed to strict construction
+   (`GenerateEntity(**merged)`), so `__post_init__`'s validation raises
+   `DraftValidationError` for any invalid editable field. `from_dict`
+   itself is untouched and still heals persisted data on deserialize —
+   the two boundaries are now clearly separated by which constructor path
+   they go through.
+2. src/back/objects/session/DomainSession.py — `reset_ontology()` and
+   `import_from_file()`
+   **(Important)** Neither cleared a persisted Generate draft. A draft
+   snapshots existing-anchor identity off the ontology at detection time;
+   `reset_ontology()` wiping the ontology, or `import_from_file()` loading
+   a different domain/version into the same session, left a draft
+   resumable against entities that no longer exist (cross-ontology-reset
+   and cross-domain/version leakage) — the fingerprint mechanism designed
+   to catch a *changed* ontology never even ran because the caller doesn't
+   have to check it before resuming. Both methods now set
+   `self._data["generate_draft"] = None` alongside their other
+   reset/re-init steps.
+3. src/back/objects/ontology/GenerateDraft.py — `GenerateDraftStore.load()`
+   Hardened against a structurally invalid persisted draft (duplicate
+   entity ids, a missing required `id`/`canonical_label` on an entity, or
+   any other whole-draft invariant `GenerateEntity.from_dict`'s per-field
+   healing cannot repair). `GenerateDraft.from_dict` still raises
+   `DraftValidationError` for these — correct, since they are genuine data
+   corruption, not a schema evolution — but `load()` now catches that
+   specific exception, logs a warning, and returns `None`: the same safe
+   "no resumable draft, force re-detection" behavior as an absent draft,
+   instead of an unhandled exception surfacing wherever a caller resumes
+   the Review/Complete screen.
+4. src/back/objects/ontology/GenerateDraft.py — `_normalize_checkpoints()`
+   Added chain-consistency repair on the deserialize path: a substage can
+   only legitimately be `done`/`running`/`failed` if every predecessor is
+   `done` (enforced live by `with_checkpoint()`), so a persisted draft
+   where e.g. `relations` is `pending`/`failed` while `attributes` is
+   `done` could never have been produced by the normal flow. Once a
+   predecessor is found not `done`, every later substage (and its result)
+   is forced back to `pending`/`None`, cascading forward — a corrupted or
+   hand-edited checkpoint blob can no longer let Stage 3 resume claiming a
+   later substage is complete while an earlier one has not actually run.
+5. Explicitly left unchanged per review guidance: `DraftValidationError`/
+   `DraftRevisionConflict`/`DraftStaleError` messages remain user-facing as
+   before (no error-exposure change), and `_sorted_source_config()` stays
+   scoped to sorting top-level list values only (no recursive/nested
+   normalization) — no test in this pass or the prior one surfaced a case
+   needing it.
+6. tests/units/ontology/test_generate_draft.py /
+   tests/units/domain/test_domain_session.py
+   12 new focused tests: `with_updates`/`with_candidate_updated` rejecting
+   an invalid `type_hint` and an empty `canonical_label`; `reset_ontology()`
+   and `import_from_file()` clearing a persisted draft; `GenerateDraftStore
+   .load()` returning `None` (not raising) for a duplicate-id draft, a
+   missing-`id` entity, and confirming the happy path still loads
+   correctly after the hardening; and checkpoint-chain normalization for
+   an impossible `attributes done` while `relations` is `pending`, a
+   cascading `relations failed` case, and two negative controls (a valid
+   in-progress chain and a fully-done chain must be preserved unchanged).
+
+Modified files:
+- src/back/objects/ontology/GenerateDraft.py
+- src/back/objects/session/DomainSession.py
+- tests/units/ontology/test_generate_draft.py
+- tests/units/domain/test_domain_session.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/ontology/test_generate_draft.py tests/units/domain/test_domain_session.py` → 8 failed (the 8 new/updated assertions for findings 1/3/4 on the entity/draft/store side and 2 on the DomainSession side), 135 passed.
+- GREEN: same command → 143 passed.
+- Regression (ontology/domain/agents): `uv run --frozen pytest -q tests/units/ontology/ tests/units/domain/ tests/units/agents/` → 1150 passed.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6433 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.04s.
+
+## Add a browser console pass to the code-review checklist
+
+Context: Code review previously ended at pytest + docs and could miss runtime
+JavaScript console errors and warnings on HTML pages. The review contract now
+requires opening every user-facing page (and in-page sections that load
+distinct JS) and collecting a clean DevTools console.
+
+Changes:
+
+1. .cursorrules
+   Insert a "Browser console pass" step in the code-review checklist, before
+   documentation updates, pointing at the procedure in `.cursor/08`.
+2. .cursor/08-testing-and-deployment.mdc
+   Add §Code-review browser console pass: running app, enumerate routes and
+   `menu_config.json` sections, fail on any JS error or warning, do not claim
+   a clean console if browser tools were unavailable.
+3. .claude/skills/code-review/SKILL.md
+   Sequence the new step, extend the review summary, and require the console
+   pass (or an explicit skip reason) before "all good".
+
+Modified files:
+- .cursorrules
+- .cursor/08-testing-and-deployment.mdc
+- .claude/skills/code-review/SKILL.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6482 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.18s.
+
+## Staged owl-generator orchestration (task 3 of staged ontology generate)
+
+Context: Task 3 of the `staged-ontology-generate` plan
+(`/Users/benoit.cayla/.cursor/plans/staged-ontology-generate_6fc7e158.plan.md`,
+not edited). Refactors `agent_owl_generator` into a staged orchestrator
+exposing four explicit public entry points — `detect_entities`,
+`infer_relations`, `infer_attributes`, `infer_axioms` — on top of the
+Task 2 `GenerateDraft`/`GenerateEntity` contract layer. The deprecated
+one-shot `run_agent` bridge (`engine.py`) is preserved only so the existing
+`Ontology.generate_with_agent()` / `/wizard/generate-async` API path stays
+green until Task 4 replaces it; it is no longer re-exported from the
+package root and the staged module never imports or falls back to it.
+Followed strict TDD: the new test modules were run against a temporarily
+removed `staged.py`/`prompts.py`/`schemas.py` to observe RED
+(`ModuleNotFoundError`), then restored to GREEN.
+
+Changes:
+
+1. src/agents/agent_owl_generator/schemas.py (new)
+   Reject-only structured-answer parsing/validation boundary.
+   `parse_detection_payload()` parses Stage-1 candidates (fence-tolerant
+   JSON), defaults every candidate to `included=true`/`origin=detected`,
+   mints a detection-time id via `GenerateEntity.new_candidate()`, and
+   deduplicates against locked anchors (and against earlier candidates in
+   the same answer) by normalized canonical label **and** every alternate
+   label — synonyms are never emitted as separate candidates.
+   `parse_relations_payload()` / `parse_attributes_payload()` /
+   `parse_axioms_payload()` parse the Stage-3 completion shapes and their
+   `*_referenced_ids()` companions extract the ids each output touches
+   (domain/range, domain, subject/object) for the entity-closure check. A
+   malformed/out-of-schema answer raises `SchemaValidationError` (a
+   `DraftValidationError` subclass) — the caller reports it, never re-feeds
+   it to another LLM call.
+2. src/agents/agent_owl_generator/prompts.py (new)
+   Prompt-first stage prompts (design §Prompt-First Pitfall Handling,
+   SPEC §6a): naming rules, entity-closure instructions, and structured-
+   JSON-only output constraints are stated in the system prompt itself,
+   not corrected after the fact. `build_detection_system_prompt()` lists
+   locked anchors (canonical + alternate labels) so the model dedups
+   against them up front. `build_relations/attributes/axioms_system_prompt()`
+   state the closed-entity-set rule and per-stage modelling rules (naming,
+   at-most-one-relation-per-pair, xsd datatypes, disjointness sanity).
+   `build_*_user_prompt()` render the closed entity catalog (id + canonical
+   label + alternate labels + description; excluded candidates omitted)
+   and, for attributes/axioms, a summary of already-checkpointed prior
+   substage results.
+3. src/agents/agent_owl_generator/staged.py (new)
+   The four public entry points, each `@trace_agent`-wrapped with a
+   stage-specific trace name (`owl_generator.detect` /`.relations` /
+   `.attributes` /`.axioms`) and `stage` tag:
+   - `detect_entities()` — tool-calling loop (bounded, `_MAX_DETECTION_
+     ITERATIONS=8`) over the existing no-reparse `list_documents`/
+     `read_document`/`get_metadata`/`get_table_detail` tools, degrading to
+     a single-shot call if the endpoint rejects `tools`. A truncated
+     (`finish_reason == "length"`) answer gets one bounded "re-emit
+     concisely" retry (a completeness retry, not a validation rewrite); a
+     malformed final answer is rejected via `schemas.SchemaValidationError`
+     with zero retries. Returns `DetectionResult(candidate_entities=...)`.
+   - `infer_relations()` / `infer_attributes()` / `infer_axioms()` — share
+     `_run_completion()`: a strict-ordering gate
+     (`_ordering_error()`/`GenerateDraft`'s `_SUBSTAGE_ORDER`) fails fast
+     *before any LLM call* if the predecessor substage is not checkpointed
+     `done`; the LLM call passes `tools=None` (completion never reads
+     documents/metadata — no-reparse contract); the answer is parsed by
+     the matching `schemas.parse_*_payload()` and its referenced ids are
+     checked against `draft.validate_references()` (locked anchors ∪
+     included candidates only — an excluded candidate's id is rejected
+     exactly like an unknown one). Any rejection returns
+     `CompletionResult(rejected=True, rejection_reason=...)` after exactly
+     one LLM call — no rewrite loop. These functions **do not** persist
+     checkpoints or merge into the ontology; that is Task 4's
+     responsibility (they accept a `GenerateDraft` and return a result the
+     caller checkpoints).
+4. src/agents/agent_owl_generator/__init__.py
+   Package root now re-exports only the four staged entry points plus
+   `DetectionResult`/`CompletionResult` — `run_agent` is no longer part of
+   the public surface. `src/back/core/agents/AgentClient.py` and
+   `src/back/objects/ontology/Ontology.py` updated to import `run_agent`
+   explicitly from `agents.agent_owl_generator.engine` (the one remaining
+   caller of the deprecated bridge), since it is no longer reachable from
+   the package root.
+5. src/agents/tracing.py
+   `trace_agent()` gained a `stage` keyword; every span additionally sets
+   `stage` (from the decorator) and `draft_id`/`draft_revision` (forwarded
+   from the wrapped call's kwargs, when present) as span attributes, so a
+   resumed run's traces correlate across checkpointed substages (SPEC §8).
+6. tests/units/agents/test_owl_generator_schemas.py (new, 22 tests)
+   Detection-payload parsing (minimal candidate, fence-stripping,
+   malformed/missing-key rejection, synonym-as-alternate-label, dedup
+   against an anchor's canonical label/alternate label/another candidate,
+   unknown `type_hint` coercion, `max_candidates` bound, evidence
+   passthrough) and the three completion schemas (parse + required-field
+   rejection + referenced-id extraction).
+7. tests/units/agents/test_owl_generator_staged.py (new, 26 tests)
+   Detection (default inclusion, anchor dedup, no-reparse tool surface,
+   truncation recovery, malformed-answer rejection with zero retries,
+   trace identity); relations/attributes/axioms (valid-closure success,
+   no document tools, out-of-closure and excluded-candidate rejection with
+   exactly one LLM call, trace identity, truncation recovery,
+   ordering-gate rejection with zero LLM calls when a predecessor is not
+   done); the no-one-shot-default contract (`staged` module does not
+   expose or reference `run_agent`; all four entry points are callable);
+   and prompt contracts (anchors/alternate labels surfaced for dedup,
+   alternate labels as lexical evidence, naming rules present, excluded
+   candidates omitted from the completion catalog).
+8. tests/units/agents/test_agent_tracing.py
+   Added `TestTraceAgentStageTags` (1 test) pinning that `stage`/`draft_id`/
+   `draft_revision` land on the span's attributes when tracing is enabled.
+9. tests/eval/staged_contract.py (new)
+   Behavioral, deterministic scoring for every `staged`-tagged dataset row:
+   each `expected.constraints[].kind` maps to a check function that
+   exercises the real `staged`/`schemas`/`GenerateDraft` code paths
+   (scripted `call_serving_endpoint` responses, no live endpoint). Replaces
+   the prior schema-only validation for these rows.
+10. tests/eval/run_agent_owl_generator.py
+    Calls `staged_contract.score_staged_examples()` after the existing
+    structural validation, so the offline eval run now behaviorally scores
+    the staged contract in addition to the pre-existing parsed-corpus
+    contract.
+11. tests/eval/thresholds.yaml
+    Added `owl_generator.staged_contract: 0.95` (SPEC §5's proposed
+    aggregate), now enforced by the runner above.
+12. .planning/agents/agent_owl_generator/SPEC.md
+    Updated every `(staged, planned)` annotation that Task 3 now satisfies
+    to reflect the landed staged entry points, live tracing, live
+    reject-only entity closure/ordering/staleness enforcement, and the
+    live behavioral staged-contract eval — while keeping `(staged,
+    planned)` on the genuinely still-pending Task 4/5 items (async
+    workflow routes, checkpoint persistence, the append-only final merge,
+    and the wizard UI). Recorded the Task 3 dry-run eval result in §10.
+
+No API, checkpoint-persistence, or frontend code was touched (Task 4/5
+scope). `engine.py`'s pitfall-tool/consolidation rewrite loops are
+unchanged — they remain scoped to the deprecated one-shot bridge only, not
+the staged path.
+
+Modified files:
+- src/agents/agent_owl_generator/schemas.py (new)
+- src/agents/agent_owl_generator/prompts.py (new)
+- src/agents/agent_owl_generator/staged.py (new)
+- src/agents/agent_owl_generator/__init__.py
+- src/agents/tracing.py
+- src/back/core/agents/AgentClient.py
+- src/back/objects/ontology/Ontology.py
+- tests/units/agents/test_owl_generator_schemas.py (new)
+- tests/units/agents/test_owl_generator_staged.py (new)
+- tests/units/agents/test_agent_tracing.py
+- tests/eval/staged_contract.py (new)
+- tests/eval/run_agent_owl_generator.py
+- tests/eval/thresholds.yaml
+- .planning/agents/agent_owl_generator/SPEC.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- RED: temporarily moved `staged.py`/`prompts.py`/`schemas.py` out of
+  `src/agents/agent_owl_generator/` and ran
+  `uv run --frozen pytest -q tests/units/agents/test_owl_generator_staged.py
+  tests/units/agents/test_owl_generator_schemas.py` → 2 collection errors,
+  `ModuleNotFoundError: No module named 'agents.agent_owl_generator.staged'`.
+  Restored the files.
+- GREEN (focused): `uv run --frozen pytest -q
+  tests/units/agents/test_owl_generator_staged.py
+  tests/units/agents/test_owl_generator_schemas.py
+  tests/units/agents/test_agent_tracing.py` → 73 passed.
+- Regression (agents/ontology/domain/api):
+  `uv run --frozen pytest -q tests/units/agents/ tests/units/ontology/
+  tests/units/domain/ tests/units/api/` → 1752 passed.
+- Offline eval: `uv run --frozen python tests/eval/run_agent_owl_generator.py`
+  → all 14 staged examples PASS, staged-contract aggregate `1.000`
+  (threshold `0.950`); all 10 parsed-corpus cases PASS, aggregate `1.000`
+  (threshold `0.900`). No live MLflow run — same missing-credentials
+  blocker as Task 1/2 (`DATABRICKS_HOST`/`DATABRICKS_TOKEN`/
+  `ONTOBRICKS_LLM_ENDPOINT` not configured in this environment).
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6482 passed,
+  304 skipped, 6 deselected, 1 xfailed, 32 warnings in 44.74s (identical
+  pass count to the pre-change baseline — no regressions).
+
+## Address Task 3 review findings for the staged owl-generator orchestration
+
+Context: Fixes five review findings against the task-3 commit (`3ff760a2`)
+for the `staged-ontology-generate` plan. No API/UI/session-orchestration
+code touched; the deprecated one-shot bridge (`engine.py`) removal stays
+scoped to Task 4 as before. Followed strict TDD: each finding got a
+focused failing test, an observed RED, then the minimal fix to GREEN.
+
+Changes:
+
+1. tests/eval/staged_contract.py — **(Important)** detection-tagged
+   constraint checks now exercise the real `staged.detect_entities()`
+   orchestrator instead of calling `schemas.parse_detection_payload()`
+   directly with a hand-written literal. New `_run_detection_for_example()`
+   builds existing anchors / metadata / selected docs from each dataset
+   row's own `input` (`existing_ontology`/`metadata`/`corpus`), scripts two
+   `staged.call_serving_endpoint` responses (a `get_metadata` tool-call
+   round-trip dispatched for real through `dispatch_tool`/`TOOL_HANDLERS` —
+   offline-safe, no network — followed by the final structured answer, its
+   candidates built by `_build_scripted_detection_payload()` from the row's
+   own constraints), and asserts the observed `trace_name`. Rewrote
+   `_c_all_included`, `_c_excludes_anchor`, `_c_excludes_anchor_alt`,
+   `_c_min_new_candidates`, `_c_synonyms_as_alt`, and `_c_no_separate_synonym`
+   to call it. `_c_does_not_parse` now branches on the row's own
+   `input.stage`: for a `detect` row it inspects the tool definitions
+   actually offered to the scripted LLM call (`mock_llm.call_args_list[...]
+   .kwargs["tools"]`) and the tool calls actually dispatched
+   (`DetectionResult.steps`) for `ai_parse_document`/`check_owl_pitfalls`,
+   rather than a static `TOOL_DEFINITIONS` name check that would pass even
+   if a bug caused one to be dispatched anyway; for the one completion-stage
+   row it delegates to `_c_no_document_tools` (real `infer_attributes()`
+   call, `tools=None`). The deterministic/offline eval and the pre-existing
+   parsed-corpus gate are unaffected — only `call_serving_endpoint` is
+   scripted, still no live endpoint.
+2. src/agents/agent_owl_generator/staged.py — per-tool MLflow tracing for
+   Stage-1 tool dispatch. Added `_dispatch_detection_tool()`, a local
+   `@trace_tool()`-wrapped wrapper around the existing `dispatch_tool()`
+   call in `detect_entities()`'s tool loop. `dispatch_tool` itself (shared
+   by ~10 other agent engines' ReAct loops) and the shared tool handlers
+   are untouched — adding a span inside the shared helper would have
+   changed every one of those agents' traces, which is out of scope here.
+   `trace_tool`'s existing per-handler pattern (statically decorating one
+   handler, e.g. `agent_graph_interpreter.tools.tool_get_entity_details`)
+   doesn't fit a tool name chosen dynamically per LLM tool call, so this is
+   a thin local dispatcher instead; its positional call signature
+   `(ctx, tool_name, arguments)` matches `trace_tool`'s existing
+   argument-index contract exactly, so no change was needed there either.
+3. src/agents/tracing.py — `trace_tool()` span outputs now include a
+   `status` (`"ok"`/`"error"`) alongside the existing `result_length`,
+   derived from whether the JSON result string carries a top-level `error`
+   key (`_tool_result_status()`, new) — so a tool call's name (already a
+   span input) and outcome are both visible on the trace. Purely additive;
+   the wrapped function's return value is unchanged (no handler behaviour
+   change).
+4. src/agents/tracing.py — terminology fix. `trace_agent()`'s local `tags`
+   variable renamed to `attributes` (it is passed to `Span.set_attributes`,
+   never a trace-tags API), and its docstring — plus the corresponding
+   passage in SPEC.md §8 — corrected from "trace tags/attributes" to
+   "span attributes … not MLflow trace-level tags (`mlflow.set_trace_tag`
+   / trace `tags=`), which this module does not use." No behaviour change;
+   this repo has no existing use of the real trace-tags API, so none was
+   added (avoiding overreach).
+5. tests/units/agents/test_owl_generator_staged.py — added a hard
+   regression test (`TestNoOneShotDefault`) asserting, via `ast`-parsing
+   `staged.py`'s own import statements, that it never imports
+   `agents.agent_owl_generator.engine` (the legacy one-shot bridge's
+   module), and a second test asserting the module source never references
+   the bridge's pitfall-rewrite-loop symbols (`tool_check_owl_pitfalls`,
+   `check_owl_pitfalls`, `_evaluate_ontology_stage`, `owl_eval_max_rounds`,
+   `MAX_OWL_EVAL_ROUNDS`) alongside the pre-existing `run_agent` check.
+   Both already passed with no production change needed (the invariant
+   already held) — this only hardens the regression coverage per the
+   review's Task-4 hand-off note. Also added `TestPerToolTracing` (3 tests:
+   named `tool:<name>` TOOL span with `ok` status, `error` status for a
+   failed dispatch, and byte-identical tool-result output whether or not
+   tracing is enabled).
+6. tests/units/agents/test_agent_tracing.py — added `TestTraceToolStatus`
+   (3 tests: `status="ok"` for a plain result, `status="error"` for a JSON
+   `{"error": ...}` result, `status="ok"` for a non-JSON string result).
+7. tests/eval/test_staged_contract.py (new) — 8 focused pytest tests
+   pinning finding 1: five tests assert the rewritten detection checks
+   call the real `staged.detect_entities` (via `patch.object(..., wraps=
+   staged.detect_entities)`) and that `_c_min_new_candidates` seeds the
+   real call from the example's own `existing_ontology` anchors (not a
+   literal); two tests pin `_c_does_not_parse`'s observed-behaviour
+   contract — a scripted `DetectionResult` with an actually-dispatched
+   `ai_parse_document` tool-call step must fail the check (a purely
+   static `TOOL_DEFINITIONS` check would incorrectly pass), and the real
+   detection run over the dataset's own example must pass; one test pins
+   the completion-stage row still going through `_c_no_document_tools`.
+8. .planning/agents/agent_owl_generator/SPEC.md — §7 now documents that
+   detection-tagged rows drive the real orchestrator end-to-end (tool
+   surface/dispatch and dedup outcome observed, not asserted from a direct
+   `schemas` call); §8 corrected to "span attributes" (not trace tags) and
+   documents the new per-tool `@trace_tool` TOOL spans for Stage-1
+   dispatch, scoped to the staged path. No eval dataset row, threshold, or
+   count changed — the aggregate is unaffected by this fix (still `1.000`).
+
+Modified files:
+- tests/eval/staged_contract.py
+- tests/eval/test_staged_contract.py (new)
+- src/agents/agent_owl_generator/staged.py
+- src/agents/tracing.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/units/agents/test_agent_tracing.py
+- .planning/agents/agent_owl_generator/SPEC.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- RED (focused, new failing assertions before the fix):
+  `uv run --frozen pytest -q tests/eval/test_staged_contract.py` → 7 failed,
+  1 passed (detection checks never called `detect_entities`; the scripted-
+  dispatch `does_not_parse` check returned `True` when it should have
+  reacted to an observed banned tool call).
+  `uv run --frozen pytest -q tests/units/agents/test_agent_tracing.py -k
+  TraceToolStatus` → 3 failed (`KeyError: 'status'`, not yet implemented).
+  `uv run --frozen pytest -q tests/units/agents/test_owl_generator_staged.py
+  -k "PerToolTracing or legacy_engine"` → 4 failed (no `_dispatch_detection_
+  tool`, no TOOL span, an over-strict draft of the legacy-import test).
+- GREEN (focused): `uv run --frozen pytest -q tests/units/agents/
+  tests/eval/test_staged_contract.py` → 245 passed.
+- Offline eval: `uv run --frozen python tests/eval/run_agent_owl_generator.py`
+  → all 14 staged examples PASS, staged-contract aggregate `1.000`
+  (threshold `0.950`); all 10 parsed-corpus cases PASS, aggregate `1.000`
+  (threshold `0.900`). No live MLflow run — same missing-credentials
+  blocker as prior Task 1/2/3 entries.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6498 passed,
+  304 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.86s (16 more
+  passing than the Task 3 baseline — the 16 new focused tests above; no
+  regressions).
+
+## Wire the staged Generate workflow into API routes and merge (task 4 of staged ontology generate)
+
+Context: Task 4 of the `staged-ontology-generate` plan on reviewed base
+`be0e66e6` (Task 3 review fixes). Wires the Task 2 draft/contract layer
+(`GenerateDraft.py`) and the Task 3 staged agent entry points (`staged.py`)
+into an actual runnable workflow: detect -> human review -> checkpointed
+completion -> append-only merge, exposed via new API routes. Also removes
+every remaining production bridge that could still run the deprecated
+one-shot `agent_owl_generator` path (and its post-generation pitfall-rewrite
+loop), per the user's explicit instruction that pitfalls must never be
+applied after generation. The attached implementation plan
+(`/Users/benoit.cayla/.cursor/plans/staged-ontology-generate_6fc7e158.plan.md`)
+was not edited. Followed strict TDD: `test_generate_workflow.py` and
+`test_generate_routes.py` were written first and run to an observed RED
+(`ModuleNotFoundError`/route-not-found) before `GenerateWorkflow.py` and the
+new routes existed, then implemented to GREEN. Frontend templates/JS/CSS are
+explicitly out of scope (Task 5); the existing wizard "Generate" button
+still calls the now-410 legacy route and will need a Task 5 rewire.
+
+Changes:
+
+1. src/back/objects/ontology/GenerateWorkflow.py (new, 612 lines)
+   Focused workflow service (kept out of the 2,500-line `Ontology.py` per
+   the plan's explicit instruction), all pure orchestration — no FM call is
+   made inline; every function that calls the staged agent is documented as
+   expected to run inside a `TaskManager` worker thread.
+   - `list_ready_document_manifests()` / `compute_current_fingerprint()` —
+     reads only the durable parsed-corpus manifest (`DocumentParseService
+     .status()`, never `parse_pending`/the extractor — no-reparse contract)
+     plus the live ontology's locked-anchor identities, and recomputes the
+     Task 2 `source_fingerprint` from them.
+   - `run_detection()` — Stage 1: resolves locked anchors from
+     `domain.get_classes()`, computes the fingerprint, calls
+     `staged.detect_entities()`, then applies a defense-in-depth dedup pass
+     against locked anchors by normalized canonical/alternate label **and**
+     by the class name the merge would mint (`_sanitize_pascal`) — a second
+     line of defense on top of `detect_entities()`'s own internal dedup, so
+     this persistence boundary never depends on a caller/mock reproducing
+     that behavior. Discards any prior draft and persists a fresh one,
+     `stage=REVIEWING`, every new candidate `included=true` by default.
+   - `get_draft_view()` / `update_draft()` / `discard_draft()` — Stage 2,
+     fully synchronous (no LLM call). `update_draft()` handles `add` (manual
+     candidate), `remove`, `update` (any of `canonical_label`,
+     `description`, `type_hint`, `evidence`, `alternate_labels`, `included`),
+     `include`, `exclude`, enforcing optimistic concurrency (`draft_revision`
+     mismatch raises `DraftRevisionConflict`, 409) and delegating every
+     invariant (locked-anchor immutability, unique labels, at-least-one-
+     entity) to `GenerateDraft`'s existing Task 2 primitives.
+   - `run_completion()` — Stage 3: rejects a stale draft
+     (`ensure_not_stale`) or one not yet ready (`ensure_ready_for_completion`)
+     before any LLM call; loops `next_pending_substage()` and runs
+     `infer_relations` -> `infer_attributes` -> `infer_axioms` in that
+     order, checkpointing `RUNNING` before each call and `DONE`/`FAILED`
+     after, so a resumed run skips every substage already `done`. Adds a
+     workflow-level entity-closure re-check (`_SUBSTAGE_REF_EXTRACTORS` +
+     `draft.validate_references()`) immediately after each substage
+     returns success and *before* checkpointing `DONE` — defense-in-depth
+     against the substage's own internal check being bypassed by a test
+     mock or a future staged.py bug; a failing re-check checkpoints `FAILED`
+     and raises. On all three substages reaching `DONE`, calls
+     `merge_draft_into_ontology()` then sets `stage=DONE`.
+   - `merge_draft_into_ontology()` — the deterministic append-only merge.
+     Existing classes/properties/`dataProperties` are read-only except for
+     appends and one exception (setting a currently-unset `parent` from a
+     `subClassOf` axiom); included candidates are minted a fresh,
+     collision-free class `name` from `canonical_label` (`_sanitize_pascal`
+     + `_unique_name`) and persisted via `alternate_labels` (new first-class
+     field, see #2) — their detection-time `id` is the merge-time join key
+     only (`id_to_name`), never carried into the live ontology as identity.
+     Relations become new `ObjectProperty` entries (domain/range resolved
+     through `id_to_name`); attributes become new `dataProperties` entries
+     on the resolved class; axioms translate the staged shape
+     (`kind`/`subject`/`object`) into the ontology's (`subClassOf` sets
+     `parent`; `disjointWith`/`equivalentClass` append to `domain.axioms` as
+     `{type, subject, objects}`). Any relation/attribute/axiom whose id
+     doesn't resolve through `id_to_name` is dropped with a warning (already
+     unreachable in practice — the entity-closure check above rejects it
+     first) rather than silently corrupting the ontology. Calls
+     `domain.clear_generated_content()` + `domain.record_change(...)` +
+     `domain.save()`, matching the existing ontology-mutation contract.
+2. src/back/objects/ontology/Ontology.py — `build_class_from_data()`
+   Added `alternate_labels` as a first-class field on the ontology class
+   dict (defaults to the existing value on edit, `[]` on create) — the
+   persistence target `merge_draft_into_ontology()` writes synonyms into.
+   Also removed `generate_with_agent()` (the legacy one-shot bridge to
+   `agents.agent_owl_generator.engine.run_agent`, including its
+   `TYPE_CHECKING`-only `AgentResult` import) — its only caller was the now-
+   gated `/wizard/generate-async` route (#3), and the design requires the
+   post-generation pitfall-rewrite loop it triggered to be unreachable from
+   production Generate, not merely undocumented.
+3. src/api/routers/internal/ontology.py
+   - `POST /wizard/generate-async` (legacy) now always raises
+     `OntoBricksError(..., status_code=410)` and does nothing else — no
+     `require_domain_llm`, no `create_task`, no thread. Docstring points
+     callers at the five new routes below.
+   - `POST /wizard/generate/detect` — Stage 1, async (`TaskManager`
+     background thread): resolves the LLM endpoint/warehouse via the
+     existing `require_domain_llm`/`resolve_warehouse_id` helpers, then runs
+     `GenerateWorkflow.run_detection()` in a worker thread exactly like the
+     old generate-async route did; returns `{task_id}` for polling
+     (`GET /tasks/{task_id}`) — the task result carries `{"draft": ...}`.
+   - `GET /wizard/generate/draft` — Stage 2, synchronous: returns
+     `GenerateWorkflow.get_draft_view()` (draft dict + a computed `stale`
+     flag), or `{"draft": None}` if none is persisted.
+   - `POST /wizard/generate/draft/update` — Stage 2, synchronous: validates
+     `revision`/`op` are present, delegates to `GenerateWorkflow.
+     update_draft()`, returns the updated draft (and its new revision).
+   - `POST /wizard/generate/draft/discard` — Stage 2, synchronous: discards
+     the persisted draft.
+   - `POST /wizard/generate/complete` — Stage 3, async (`TaskManager`
+     background thread): runs `GenerateWorkflow.run_completion()` (relations
+     -> attributes -> axioms -> merge) in a worker thread; returns
+     `{task_id}` — the task result carries `{"draft": ..., "merge": {
+     classes_added, relations_added, attributes_added, axioms_added}}`.
+   All five new routes reuse the existing `map_route_errors`/`OntoBricksError`
+   mapping so `DraftValidationError`/`DraftRevisionConflict`/`DraftStaleError`
+   /`NotFoundError` surface with their existing status codes (400/409/404)
+   with no new error-handling wiring.
+4. src/back/core/agents/AgentClient.py
+   Removed `run_owl_generator()` (the gateway method wrapping the
+   deprecated `run_agent` bridge) and its `TYPE_CHECKING`-only import — its
+   only caller was the supervisor's `"ontology"` task branch (#5), now also
+   removed.
+5. src/agents/agent_supervisor/engine.py
+   Removed the `"ontology"` task branch entirely: `_VALID_TASKS` is now
+   `("mapping",)` only, and `SupervisorEngine.run()` dropped the now-unused
+   `base_uri`/`selected_tables` parameters. This branch was dead in
+   production (only `task="mapping"` is reachable from
+   `responses_agent.py`), but removing it outright — rather than leaving it
+   reachable-but-undocumented — closes the last code path that could still
+   invoke the pitfall-rewrite loop via `AgentClient.run_owl_generator`.
+   Docstring rewritten to explain the removal and point at the staged
+   workflow instead.
+6. src/back/objects/ontology/__init__.py
+   Re-exported `GenerateWorkflow` alongside the existing `Ontology`/
+   `GenerateDraft` exports.
+7. tests/units/ontology/test_generate_workflow.py (new, 577 lines, 31 tests)
+   `TestRunDetection` (default inclusion, anchor dedup by label and by
+   minted class-name collision, ready-corpus-only/no-reparse, fingerprint
+   composition), `TestDraftReview` (add/remove/update every editable field,
+   include/exclude, locked-anchor immutability, revision-conflict 409,
+   at-least-one-entity gate, unknown op), `TestRunCompletion` (strict
+   relations->attributes->axioms ordering with per-substage checkpoints,
+   resume skipping a `done` substage, stale-fingerprint rejection before any
+   LLM call, entity-closure rejection with a `FAILED` checkpoint even when
+   the substage itself reports fabricated success, not-ready/already-done
+   guard errors), `TestMergePreservesExistingEntities` (existing classes/
+   properties/`dataProperties` byte-identical after merge; new entities
+   correctly appended with alternate labels persisted; relations/attributes
+   correctly resolved through `id_to_name`), and
+   `TestSubClassOfAndDisjointAxiomMerge` (parent-setting only when unset;
+   `disjointWith`/`equivalentClass` appended to `domain.axioms`; unresolved/
+   self-referential axioms dropped, never crash the merge).
+8. tests/units/api/test_generate_routes.py (new, 291 lines, 10 tests)
+   `TestStartGenerateDetection` (task created, background thread invokes
+   `GenerateWorkflow.run_detection`, `require_domain_llm`/task-manager wiring
+   matches the existing async-route pattern), `TestDraftRoutes` (GET/update/
+   discard call through to the workflow functions with the right kwargs and
+   surface `DraftRevisionConflict`/`NotFoundError` as their existing status
+   codes), `TestStartGenerateCompletion` (same async pattern for Stage 3),
+   and `TestLegacyOneShotRouteGone` (the old route returns 410 and calls
+   neither `require_domain_llm` nor `create_task`/`threading.Thread`).
+9. tests/units/api/test_no_llm_route_contract.py
+   `ROUTES` now lists `start_generate_detection`/`start_generate_completion`
+   instead of the removed `generate_ontology_async`. [Corrected 2026-09-21:
+   the original entry here mischaracterized where `require_domain_llm` is
+   called — it actually runs synchronously in the `async def` route body,
+   *before* `create_task`/the background thread are created (only cheap
+   credential/endpoint resolution, no blocking FM call); the existing
+   `test_every_ontology_and_mapping_llm_route_uses_domain_guard` contract
+   test asserts exactly this ordering (`require_domain_llm(` appears
+   before `create_task(` in source) for both new routes. The actual
+   blocking LLM completion calls — `GenerateWorkflow.run_detection()`/
+   `run_completion()` — happen inside the background-thread target, never
+   in the route body; that is the invariant this contract test enforces.]
+   Added `test_legacy_one_shot_generate_route_never_calls_require_domain_llm`,
+   asserting the 410 route calls neither `require_domain_llm` nor
+   `create_task` — the strongest possible "no silent one-shot path"
+   regression test for this route.
+10. tests/agents/agent_supervisor/test_engine.py
+    Removed the `run_owl_generator` stub from `_FakeAgentClient` (no longer
+    a valid method) and replaced `test_ontology_task_uses_single_engine`
+    with `test_ontology_task_no_longer_accepted`, asserting
+    `SupervisorEngine.run(task="ontology")` now raises `ValueError`.
+11. .planning/agents/agent_owl_generator/SPEC.md
+    Marked every Task-4-scoped `(staged, planned)` annotation as landed:
+    the header banner, §1 Purpose, the `stage_entry_points` identity row,
+    the "Replace instead of append" and "Entity injection" failure-mode
+    rows (§6), §6a's append-only-merge bullet, and §8's `draft_id`/
+    `draft_revision` tracing note. Documented that
+    `Ontology.generate_with_agent`/`AgentClient.run_owl_generator`/the
+    supervisor's `"ontology"` task were removed outright, not left dormant.
+    Added a §10 sign-off entry recording that no new eval dimension was
+    needed (Task 4 wires together behavior §5 already scores) and the
+    unchanged 14/14 staged + 10/10 parsed-corpus offline eval result.
+    `(staged, planned)` on the still-pending Task 5 wizard UI is unchanged.
+
+No frontend template/JS/CSS code was touched (Task 5 scope) — the existing
+wizard "Generate" button still POSTs to the now-410 legacy route and will
+silently fail in the UI until Task 5 rewires it to the new staged routes.
+
+Modified files:
+- src/back/objects/ontology/GenerateWorkflow.py (new)
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/ontology/__init__.py
+- src/api/routers/internal/ontology.py
+- src/back/core/agents/AgentClient.py
+- src/agents/agent_supervisor/engine.py
+- tests/units/ontology/test_generate_workflow.py (new)
+- tests/units/api/test_generate_routes.py (new)
+- tests/units/api/test_no_llm_route_contract.py
+- tests/agents/agent_supervisor/test_engine.py
+- .planning/agents/agent_owl_generator/SPEC.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/ontology/test_generate_workflow.py
+  tests/units/api/test_generate_routes.py` → collection errors (`ModuleNotFoundError:
+  No module named 'back.objects.ontology.GenerateWorkflow'`; new routes not
+  yet defined) before either module existed.
+- GREEN (focused): `uv run --frozen pytest -q
+  tests/units/ontology/test_generate_workflow.py
+  tests/units/api/test_generate_routes.py
+  tests/units/api/test_no_llm_route_contract.py
+  tests/agents/agent_supervisor/test_engine.py` → 50 passed.
+- Regression (ontology/api/domain/agents): `uv run --frozen pytest -q
+  tests/units/ontology/ tests/units/api/ tests/units/domain/
+  tests/units/agents/ tests/agents/` → 1928 passed.
+- Offline eval: `uv run --frozen python tests/eval/run_agent_owl_generator.py`
+  → unchanged: all 14 staged examples PASS, staged-contract aggregate
+  `1.000` (threshold `0.950`); all 10 parsed-corpus cases PASS, aggregate
+  `1.000` (threshold `0.900`). No new eval dimension needed (Task 4 wires
+  together behavior the existing dimensions already score). No live MLflow
+  run — same missing-credentials blocker as prior Task 1/2/3 entries
+  (`DATABRICKS_HOST`/`DATABRICKS_TOKEN`/`ONTOBRICKS_LLM_ENDPOINT` not
+  configured in this environment); no run URI fabricated.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6540 passed,
+  304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.35s (42 more
+  passing than the Task 3 baseline — the new focused tests above; no
+  regressions).
+
+---
+
+## Fix Task 4 review findings: lifecycle gate, idempotent merge, type-hint/subClassOf validation, SKOS altLabel, payload validation
+
+Context: Follow-up review pass on the Task 4 staged-Generate wiring (see
+the entry above). Two "Important" and five "Minor" findings, fixed with
+TDD (RED before each production change), no frontend files touched.
+
+Changes:
+
+1. src/shared/fastapi/main.py (Important #1 — lifecycle/edit locking)
+   `_is_status_gated_edit` previously exempted every `/wizard/` path from
+   the version-status/single-editor-lock gate, including
+   `POST /ontology/wizard/generate/complete` — which actually runs the
+   deterministic append-only merge and calls `domain.save()`, a genuine
+   design mutation. Added `_STATUS_GATE_WIZARD_EDIT_SUFFIXES` (currently
+   just `.../generate/complete`), checked *before* the blanket `/wizard/`
+   exemption, so `complete` is now gated exactly like every other
+   `/ontology/` write while Stage 1 `detect` and Stage 2
+   `draft/update`/`draft/discard` (session-scoped draft only, never the
+   persisted design) remain exempt.
+2. tests/units/auth/test_permission_middleware.py
+   Added `test_generate_complete_is_gated`,
+   `test_generate_review_routes_remain_exempt`,
+   `test_generate_complete_get_not_gated` to `TestIsStatusGatedEdit`, and a
+   new `TestGenerateCompleteLifecycleGate` class covering: `complete`
+   blocked on `PUBLISHED`/`IN-REVIEW`; `complete` passes on `DRAFT` with no
+   lock holder; `complete` blocked by a different lock holder on `DRAFT`;
+   admins not exempt from the lock; viewer role still blocked; and the
+   three review-only routes staying reachable on a locked version and
+   despite another user holding the edit lock.
+3. src/back/objects/ontology/GenerateDraft.py (Important #2 — durable
+   merge checkpoint)
+   Added a `merge_checkpoint` field (`{"status": ..., "result": ...}`,
+   default `pending`), deliberately independent of `stage`/
+   `completion_checkpoints`: the merge is a workflow-level step whose
+   completion must be checkable across a crash between its own
+   `domain.save()` and `stage` flipping to `done`, which the existing
+   per-substage checkpoints cannot express. Added
+   `with_merge_checkpoint()` (rejects reopening an already-`done`
+   checkpoint, mirroring `with_checkpoint()`'s strictness) and wired
+   serialization (`to_dict`/`from_dict`/`new`) plus self-healing
+   normalization for missing/invalid persisted values.
+4. src/back/objects/ontology/GenerateWorkflow.py (Important #2 — idempotent
+   merge; Minor #3 — type_hint validation; Minor #5 — subClassOf handling;
+   Minor #7 — payload validation defense-in-depth)
+   - `run_completion()`: checks `draft.merge_checkpoint` before ever
+     calling `merge_draft_into_ontology()` again. If already `done`,
+     short-circuits with the cached merge stats (and still finishes the
+     `stage -> DONE` transition if that didn't land last time). Otherwise
+     sets the checkpoint to `running`, runs the merge, sets it to `failed`
+     (re-raising) or `done` accordingly. The staleness check
+     (`ensure_not_stale`) is now only performed on the initial
+     `REVIEWING -> COMPLETING` transition — once completion has started,
+     the merge itself grows the live ontology, so re-fingerprinting the
+     current source on every resume would misread that self-inflicted
+     growth as drift and permanently block a legitimate resume.
+   - `merge_draft_into_ontology()` is now idempotent by construction as
+     defense in depth on top of the checkpoint: new classes are tagged
+     `generated_from=<candidate id>` so a second call for the same draft
+     recognizes and reuses already-merged classes instead of re-adding
+     them under a suffixed name; object-property relations are deduped by
+     `(domain, range, label)`; `disjointWith`/`equivalentClass` axioms are
+     deduped by `(type, subject, sorted(objects))`; `alternate_labels` are
+     deduped order-preservingly when building a new class.
+   - Added an upfront reject-only check: an *included* candidate with a
+     `type_hint` other than `class` raises `DraftValidationError` before
+     any mutation — the ontology model only supports merging class
+     candidates today, so a property-hinted candidate is rejected
+     explicitly rather than silently merged as a wrongly-shaped class.
+   - `subClassOf` axiom handling: an exact-repeat parent is now a silent
+     no-op (idempotent); a *different* parent on a class that already has
+     one raises `DraftValidationError` (the model supports only one
+     `parent` per class — multi-inheritance is explicitly rejected, never
+     silently dropped as before).
+   - `update_draft()`: wrapped the op-dispatch body in
+     `try/except (TypeError, ValueError, AttributeError)`, re-raising as
+     `DraftValidationError`, so a malformed nested field (e.g. non-list
+     `evidence`) that slips past the route-level shape checks still
+     surfaces as a 400, never a 500.
+5. tests/units/ontology/test_generate_draft.py
+   Added `TestMergeCheckpoint`: defaults to `pending`; `running`/`done`/
+   `failed` transitions and result storage; rejects reopening a `done`
+   checkpoint; rejects an invalid status; round-trips through
+   serialization; self-heals a missing or invalid persisted checkpoint to
+   `pending`. Imported `CHECKPOINT_PENDING`.
+6. tests/units/ontology/test_generate_workflow.py
+   Added `TestSubClassOfAndDisjointAxiomMerge` (exact-repeat `subClassOf`
+   deduped not errored; conflicting `subClassOf` rejected explicitly;
+   `disjointWith` deduped on exact repeat), `TestTypeHintValidationInMerge`
+   (`class` merges normally; `object_property`/`data_property` rejected;
+   an excluded non-class candidate is never checked), and
+   `TestIdempotentMerge` (checkpoint defaults `pending` before completion
+   and is `done` after; a simulated crash after the merge already touched
+   the live ontology but before the checkpoint write resumes idempotently
+   without duplicating entities; a `done` checkpoint with `stage` still
+   `completing` short-circuits and finishes the stage transition; a
+   repeated `complete` call on an already-`DONE` draft is rejected).
+   Removed a dead conditional in `_seed_ready_for_merge` left over from an
+   earlier draft of the test helpers.
+7. src/back/core/w3c/owl/OntologyGenerator.py (Minor #4 — alternate_labels
+   as first-class OWL data)
+   `_add_class` now emits a `skos:altLabel` triple for every entry in a
+   class's `alternate_labels`, using rdflib's standard `SKOS` namespace
+   (consistent with the existing `RDF`/`RDFS`/`OWL` prefix usage) — the
+   synonym data was previously only an in-app session field, never
+   round-tripped through the OWL export/import contract.
+8. src/back/core/w3c/owl/OntologyParser.py
+   `get_classes()` now reads back `skos:altLabel` triples per class into
+   the parsed `alternate_labels` list (deduped, sorted for determinism).
+9. tests/units/ontology/test_owl_generator.py /
+   tests/units/ontology/test_owl_parser.py
+   Added round-trip tests: `alternate_labels` export as `skos:altLabel`
+   and re-import identically; no `alternate_labels` omits the triple
+   entirely; a class with no `altLabel` parses to an empty list.
+10. src/api/routers/internal/ontology.py (Minor #7 — payload validation at
+    the route boundary)
+    `update_generate_draft` now validates payload *shapes* before calling
+    into `GenerateWorkflow.update_draft`: `revision` must coerce to `int`
+    (was previously an unguarded `int(revision)` that raised a raw
+    `ValueError`, mapped to a 500 by `map_route_errors`); `entity`/
+    `updates` must be JSON objects if present; `entity_id` must be a
+    string if present. Each failure now raises `ValidationError` (400).
+11. tests/units/api/test_generate_routes.py
+    Added `test_update_draft_non_numeric_revision_is_400`,
+    `test_update_draft_non_dict_entity_is_400`,
+    `test_update_draft_non_dict_updates_is_400`,
+    `test_update_draft_non_string_entity_id_is_400` to `TestDraftRoutes`.
+12. .planning/agents/agent_owl_generator/SPEC.md
+    Updated the "Replace instead of append" pitfall bullet and added new
+    bullets documenting: the durable `merge_checkpoint` + idempotent-merge
+    defense in depth against duplicate merges on crash/retry; that
+    included non-`class` `type_hint` candidates are rejected, not silently
+    merged; that `alternate_labels` round-trips through OWL as
+    `skos:altLabel`; and that a conflicting `subClassOf` (different
+    existing parent) is rejected explicitly, never silently dropped. Also
+    documented that `POST /wizard/generate/complete` is lifecycle-gated
+    while Stage 1/2 remain exempt.
+13. changelogs/v0.9.0/benoitcayladbx_2026-09-21.log (Minor #6 — changelog
+    inaccuracy)
+    Corrected earlier in this file (entry 9 of the Task 4 section above):
+    `require_domain_llm` runs synchronously in the `async def` route body
+    before `create_task`, not "only inside the background-thread target"
+    as originally stated.
+
+Modified/added files:
+- src/shared/fastapi/main.py
+- src/back/objects/ontology/GenerateDraft.py
+- src/back/objects/ontology/GenerateWorkflow.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/api/routers/internal/ontology.py
+- tests/units/auth/test_permission_middleware.py
+- tests/units/ontology/test_generate_draft.py
+- tests/units/ontology/test_generate_workflow.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/ontology/test_owl_parser.py
+- tests/units/api/test_generate_routes.py
+- .planning/agents/agent_owl_generator/SPEC.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- RED: each finding's new test class/method was written and observed
+  failing against the pre-fix code (lifecycle gate: `complete` passed
+  through ungated; merge: duplicate classes on a simulated re-run;
+  type_hint: non-class candidates silently merged as classes; altLabel:
+  `KeyError`/missing round-trip; subClassOf: `AssertionError` on silent
+  drop of a conflicting parent; payload validation: raw
+  `TypeError`/`ValueError` surfaced as 500 via `map_route_errors`) before
+  each corresponding production change.
+- GREEN (focused): `uv run --frozen pytest -q
+  tests/units/auth/test_permission_middleware.py
+  tests/units/ontology/test_generate_draft.py
+  tests/units/ontology/test_generate_workflow.py
+  tests/units/ontology/test_owl_generator.py
+  tests/units/ontology/test_owl_parser.py
+  tests/units/api/test_generate_routes.py` → 533 passed.
+- Offline eval: `uv run --frozen python tests/eval/run_agent_owl_generator.py`
+  → unchanged: all 14 staged examples PASS, staged-contract aggregate
+  `1.000` (threshold `0.950`); all 10 parsed-corpus cases PASS, aggregate
+  `1.000` (threshold `0.900`). No new eval dimension needed — these are
+  merge/validation/permission-layer fixes, not new agent behavior.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6590 passed,
+  304 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.26s — no
+  regressions (50 more passing than the Task 4 baseline: the new focused
+  tests above).
+
+---
+
+## Resumable three-step Generate wizard UI (task 5 of staged ontology generate)
+
+Context: Task 5 (final task) of the `staged-ontology-generate` plan on
+reviewed base `9eab9437` (Task 4 review fixes). Rebuilds the Ontology ->
+Generate section's existing single-page wizard into a resumable three-step
+in-page wizard — Configure & Detect -> Review Entities -> Complete — wired
+to the five staged routes landed in Task 4, replacing every remaining
+client reference to the now-410 legacy `/wizard/generate-async` one-shot
+path. The attached implementation plan
+(`/Users/benoit.cayla/.cursor/plans/staged-ontology-generate_6fc7e158.plan.md`)
+was not edited. Followed strict TDD: `tests/units/front/
+test_ontology_generate_wizard_staged.py` (39 structural/behavior contract
+tests, following this repo's existing regex-on-raw-source convention for
+frontend tests since there is no JS test runner) was written first and run
+to an observed RED (10 failing — missing routes/functions/session keys/
+stepper wiring) before any markup/JS/CSS change, then implemented to GREEN.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_wizard.html
+   Restructured from one form into three stage panes under a new
+   accessible stepper nav (`wizard-stepper`, `aria-label`, one `<li
+   aria-current="step">` per active step): `wizardConfigurePane` (visible
+   by default, wraps the existing Data Sources/Documents/Guidelines/
+   Options tabs unchanged — `wizardMetadataTableBody`/`wizardDocsList`/
+   `wizardGuidelines`/`wizardIncludeDataProps`/`wizardTemplateButtons` all
+   preserved verbatim), `wizardReviewPane` (`ob-hidden` by default —
+   stale-source banner with a "Re-detect" action, an `aria-live="polite"`
+   validation banner, a read-only "Existing Entities" (locked anchors)
+   card, a "Candidate Entities" card with an add-candidate form and a
+   Discard Draft / disabled-by-default Continue-to-Complete footer), and
+   `wizardCompletePane` (`ob-hidden` by default — a `relations -> attributes
+   -> axioms -> merge` checklist with `data-substage` markers in that exact
+   order, a summary block, and a Retry button). The top-right CTA keeps its
+   existing id/`data-requires-llm` (`wizardTopGenerateBtn`) but is now
+   relabeled "Detect Entities" and drives Stage 1 detection instead of the
+   old one-shot generate. No inline `style=`/`<script>` anywhere in the
+   template; tabs keep the shared `ob-tabs` treatment.
+2. src/front/static/ontology/js/ontology-wizard-review.js (new)
+   Owns Stage 2 rendering/mutation only. `render(draftView)` re-renders the
+   stale banner, locked-anchor rows (`renderLockedAnchorRow` — read-only,
+   deliberately never wires include/exclude/remove/edit controls, per the
+   design's "existing anchors cannot be edited from this screen" rule),
+   candidate rows (checkbox include/exclude, editable canonical label/
+   description/type-hint/evidence, a repeatable alternate-label chip
+   input), and the Continue button's disabled state (stale OR zero
+   entities). Every mutation (`add`/`remove`/`update`/`include`/`exclude`)
+   goes through one `postDraftUpdate({op, ...})` helper that attaches the
+   current `draft_revision` and POSTs to `.../draft/update`; a `409`
+   response reloads the draft from the server instead of clobbering it
+   (`showNotification` + `GET .../draft`), never silently retrying the
+   stale write. Discard uses the shared `showConfirmDialog` (no native
+   `confirm()`/`alert()`/`prompt()` anywhere in this module or
+   `ontology-wizard.js`). Event handling is delegated on the pane root
+   (3 `addEventListener` calls total for click/change/keydown — not one
+   listener per rendered row) via `data-action` attributes
+   (`wizard-review-continue`/`-discard`/`-remove-candidate`/etc.).
+   Cross-module calls into `ontology-wizard.js` (Continue -> Stage 3,
+   Discard success -> back to Configure, stale re-detect) go through a
+   small `window.WizardCore` bridge object rather than duplicating task-
+   polling/stage-transition logic here.
+3. src/front/static/ontology/js/ontology-wizard.js (rewritten)
+   - Removed every legacy one-shot symbol (`generateOntologyFromWizard`,
+     `applyWizardOntology(Silent)`, `showWizardResults`,
+     `wizardGeneratedOWL`, the pitfall-refinement-round panel helpers tied
+     to the old agent) and its three sessionStorage keys (`WIZARD_TASK_KEY`,
+     `WIZARD_OWL_KEY`, `WIZARD_STATS_KEY`) — no code path calls
+     `/wizard/generate-async` (410) anymore.
+   - Added `WIZARD_DETECT_TASK_KEY`/`WIZARD_COMPLETE_TASK_KEY` — the *only*
+     two sessionStorage keys this module ever writes, and only ever an
+     opaque task id string (`sessionStorage.setItem(KEY, taskId)`, never
+     `JSON.stringify` of a draft/entity/checkpoint). All draft/entity/
+     checkpoint state is fetched fresh from `GET .../draft` on every
+     resume (page load with no running task, task completion, task
+     failure/cancel, server-restart/404-on-poll) — `resumeDraftFromServer()`
+     is the single choke point that decides which stage to show
+     (`reviewing` -> Review pane; `completing`/`done` -> Complete pane;
+     no draft -> Configure pane).
+   - `setWizardStage()` drives the stepper: toggles each `.wizard-step`'s
+     `active`/`completed` class and sets/clears `aria-current="step"" per
+     the accessible-stepper requirement.
+   - `startGenerateDetection()` confirms (shared `showConfirmDialog`, not
+     `window.confirm`) before discarding an in-progress Review/Complete
+     draft, then POSTs `.../generate/detect` with the same metadata/
+     guidelines/options/documents payload as before (unchanged ready-
+     document filtering: `file.parse_status !== 'ready'`) plus the
+     selected table names, stores the task id, and polls via the existing
+     `/tasks/{id}` + `TaskProgressUI` overlay.
+   - `startGenerateCompletion()`/`retryGenerateCompletion()` POST
+     `.../generate/complete` and poll the same way; `renderCompleteChecklist
+     (draft)` reads `draft.completion_checkpoints`/`draft.merge_checkpoint`
+     to paint the relations/attributes/axioms/merge checklist and shows the
+     Retry button only when a checkpoint is `failed` — retrying just
+     re-issues the same completion call, which the server already resumes
+     at the first non-`done` substage (never resets a `done` one).
+     `renderCompleteChecklistFromTaskSteps()` mirrors the same checklist
+     live from the polling task's `steps` while a completion is running.
+   - `handleCompletionSuccess()` mirrors today's post-generate behavior:
+     refresh ontology status, reload the session ontology, `SidebarNav
+     .switchTo('map')`, and a `showNotification` summary of what was
+     merged.
+   - `window.WizardCore` exposes exactly the three calls Stage 2 needs
+     (`startCompletion`, `redetect`, `onDraftDiscarded`) — no other
+     surface is shared between the two files, and no task-polling logic is
+     duplicated in `ontology-wizard-review.js`.
+   - Stage 1 config loading (`loadWizardMetadata`/`loadWizardDocuments`/
+     `loadWizardTemplatesFromServer`), table/document selection, and the
+     `data-action` delegation for the Configure pane's own controls are
+     unchanged from before this task.
+4. src/front/static/ontology/css/ontology-wizard.css
+   Replaced the old hard-coded-hex `.wizard-step` progress-step styling
+   with design tokens (`var(--db-primary)`, `var(--db-primary-light)`,
+   `var(--db-status-success)`, `var(--db-text-muted)`, `var(--db-radius-*)`)
+   and added the new stepper/entity-row/chip-input/complete-checklist rules
+   scoped under `.wizard-*` classes — no new visual language, all built
+   from existing tokens/`ob-*` primitives.
+5. src/front/templates/ontology.html
+   Added the `ontology-wizard-review.js` `<script>` tag immediately before
+   `ontology-wizard.js` (load order: review module's `window.WizardReview`
+   must exist before the orchestrator calls it).
+6. tests/units/front/test_ontology_generate_wizard_staged.py (new, 39 tests)
+   Structural/behavior contracts (regex-on-raw-source, matching every
+   other `tests/units/front/test_*` module in this repo): asset wiring;
+   exact staged-endpoint usage per stage and that the legacy one-shot route/
+   symbols are gone; sessionStorage holds only the two task-id keys and no
+   `setItem` call ever carries a `JSON.stringify`d or `"draft"`-named
+   payload; the three-step accessible stepper (nav `aria-label`, per-step
+   `data-wizard-step`, JS-owned `active`/`completed`/`aria-current`
+   transitions); Configure pane preserves every existing control and stays
+   visible by default with Review/Complete both `ob-hidden`; the top CTA
+   keeps `data-requires-llm`; locked-anchor rows never wire mutation
+   controls; candidates default-included with full edit controls
+   (canonical label/description/type-hint/evidence/alternate-label chips);
+   add/remove/include/exclude/update all POST the right `op`; every
+   `draft/update` call carries the current revision and a `409` reloads
+   rather than clobbers; the Continue button starts `disabled`; discard
+   uses `showConfirmDialog`, never `confirm()`/`alert()`/`prompt()`
+   anywhere in either new JS file; the complete checklist is in strict
+   `relations/attributes/axioms/merge` order and rendered from
+   `completion_checkpoints`/`merge_checkpoint`; the Retry button exists and
+   resumes via the same `.../complete` route; completion success mirrors
+   today's `SidebarNav.switchTo('map')` + notification behavior; the stale
+   banner + its re-detect action exist and `ontology-wizard-review.js`
+   checks `.stale`; the validation banner is `aria-live`; no inline
+   `style=`/`<script>` in the template; delegated (not per-row) event
+   handling in the review module (<=6 `addEventListener` calls); ready-
+   document filtering is preserved; and `test_no_llm_ui_gate.py` still
+   references `wizardTopGenerateBtn`. One test-authoring bug found and
+   fixed during RED (the `renderLockedAnchor*` body-extraction regex
+   required an unindented closing brace, which doesn't exist for a function
+   defined inside an IIFE) — corrected to `\n\s*\}` before writing any
+   production code to satisfy it.
+
+No backend route/workflow semantics were changed — Task 4's
+`GenerateWorkflow.py`/routes/error codes are used exactly as documented in
+`tests/units/api/test_generate_routes.py`/`GenerateDraft.py`'s `to_dict()`
+shape (`stage`/`existing_anchors`/`candidate_entities`/`draft_revision`/
+`completion_checkpoints`/`merge_checkpoint`/`stale`).
+
+Modified/added files:
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/ontology/js/ontology-wizard-review.js (new)
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/static/ontology/css/ontology-wizard.css
+- src/front/templates/ontology.html
+- tests/units/front/test_ontology_generate_wizard_staged.py (new)
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_ontology_generate_wizard_staged.py`
+  → 10 failed, 29 passed (before `ontology-wizard-review.js` existed and
+  before `ontology-wizard.js`/the template were rewritten — the 29 early
+  passes are the HTML/CSS contracts already satisfied by the first
+  edit pass; the 10 failures were exactly the JS-orchestrator-dependent
+  assertions: detect/complete route usage, legacy route/symbol removal,
+  new sessionStorage keys, `setWizardStage`, locked-anchor read-only body
+  (test-regex bug, see above), `completion_checkpoints`, and the retry
+  button/function).
+- GREEN: same command → 39 passed.
+- Focused regression: `uv run --frozen pytest -q tests/units/front/
+  tests/units/api/test_generate_routes.py tests/units/api/
+  test_no_llm_route_contract.py tests/units/auth/test_permission_middleware.py
+  tests/units/ontology/ tests/units/domain/test_domain_session.py` →
+  2382 passed.
+- Non-scenario e2e (browser-dependent, skipped in this environment — no
+  Playwright browser binaries installed): `uv run --frozen pytest -q
+  tests/e2e/ontology/test_sidebar_flows.py -k wizard` → 2 skipped (both
+  reference only the unchanged `wizardSelectAllCheckbox`/section-switch
+  behavior, not the new stages — no code path here required updating
+  them). Live scenario suites were not run per instructions.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6629 passed,
+  304 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.28s (39 more
+  passing than the Task 4-fixes baseline — the new focused tests above; no
+  regressions).
+
+Concerns / follow-ups for the browser tester:
+- Local run: `./scripts/start.sh` (already running in this environment per
+  the open terminal), then open Ontology -> Generate. No new fixture is
+  needed — the five staged routes and the durable draft/session-store
+  wiring already existed from Task 4.
+- Not covered by structural tests (needs a real browser): actual multi-
+  round trip through Configure -> Detect -> Review (edit/add/remove/
+  include/exclude a candidate, add an alternate label, confirm the
+  Continue button flips from disabled to enabled) -> Complete ->
+  Map-view navigation; the 409-conflict banner path (two tabs editing the
+  same draft); the stale-banner path (change a table selection after
+  detecting, confirm the banner appears and Continue stays disabled); and
+  a simulated task-manager restart mid-detect/-complete (confirm the
+  "interrupted, please try again" notification and a clean return to a
+  resumable state). No Databricks LLM endpoint was exercised in this
+  environment (same missing-credentials gap as every earlier task in this
+  plan) — Stage 1/3 button clicks were not driven against a live endpoint,
+  only the structural JS/HTML/CSS contracts above.
+
+---
+
+## Fix Task 5 review + browser findings for the Generate wizard UI
+
+Context: Follow-up review + browser-testing pass on the Task 5 wizard UI
+(commit `cac2ada5`) for the `staged-ontology-generate` plan. Four blocking/
+important findings and five additional findings, all fixed with TDD (each
+got a focused failing test observed RED before the fix). No backend route/
+workflow semantics touched — every change is frontend HTML/CSS/JS plus one
+new/extended `permissions.css` gate. The attached implementation plan
+(`/Users/benoit.cayla/.cursor/plans/staged-ontology-generate_6fc7e158.plan.md`)
+was not edited.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-wizard-review.js (Blocking #1 —
+   draft-mutation race/loss-on-409)
+   `postDraftUpdate` used to read `_draft.draft_revision` synchronously at
+   call time — three rapid calls fired back-to-back (typing across two
+   fields, toggling include while an evidence edit was still in flight)
+   all read the *same* revision before any request was sent, so the
+   server only ever durably applied the first one; a `409` from one call
+   had no defined effect on calls already queued behind it. Renamed the
+   function body to `_applyDraftUpdate()` and added `postDraftUpdate()` as
+   a thin FIFO-queue wrapper (`_updateQueue.then(run, run)`, with the
+   queue's own continuation decoupled from the call's result via
+   `.then(ok, ok)`) — each call now only reads `_draft.draft_revision`
+   once its turn in the queue arrives, after every earlier call has
+   applied its response, and a rejected/409'd request can never wedge
+   edits queued behind it. `postDraftUpdate` is additionally exposed on
+   `window.WizardReview` purely for the new behavior-contract test below —
+   no markup or delegated handler calls it directly.
+2. src/front/templates/partials/ontology/_ontology_wizard.html (Blocking #2)
+   Added `data-requires-llm` to `wizardReviewContinueBtn` (Stage 3 runs
+   three LLM completions) and `wizardCompleteRetryBtn` (re-issues the same
+   completion call) — both were missing the declarative marker the global
+   fail-closed No-LLM gate (`permissions.js`/`permissions.css`) reads.
+3. src/front/static/ontology/css/ontology-wizard.css (Blocking #3 — hidden
+   pane visibility)
+   `components.css`'s shared `.ob-hidden { display: none; }` loads
+   *before* this file's `<link>` (base.html's own stylesheets vs.
+   `ontology.html`'s `extra_css` block); on the resulting equal-specificity
+   tie, this file's later `.wizard-stage-pane { display: block; }` won and
+   a stage pane marked `ob-hidden` silently rendered anyway (all three
+   panes visible/overlapping regardless of `setWizardStage()`). Added
+   `.wizard-stage-pane.ob-hidden { display: none !important; }` — a
+   combined selector has strictly higher specificity than either rule
+   alone, so it wins regardless of link/source order, and `!important`
+   additionally guards against any future higher-specificity or flex/grid
+   override on `.wizard-stage-pane` itself.
+4. src/front/static/ontology/css/ontology-wizard.css (Blocking #4 — mobile
+   ≤768px)
+   The 3-item stepper never wrapped and pushed the row wider than the
+   viewport, forcing page-level horizontal scroll — which is what made the
+   Configure pane's source tabs and metadata table unreachable without
+   panning sideways, on top of a large vertical gap left over from the
+   (on mobile, unused) desktop fixed-height/overflow-hidden tab shell.
+   Added a `@media (max-width: 768px)` block: `.wizard-stepper-list` gains
+   `flex-wrap: wrap`, `.wizard-step` becomes `flex: 1 1 auto` with reduced
+   padding, and `.wizard-step-label` shrinks/wraps instead of clipping;
+   `#wizardConfigurePane .card.h-100`/`.card-body.ob-tabs-wrap`/
+   `#wizardTabContent` reset to `flex: none; height: auto; overflow:
+   visible;` — the same "reset the desktop fixed-height chain to natural
+   flow after the desktop rule" convention already documented in
+   `.cursor/11-frontend-design.mdc` for other sections (Knowledge Graph
+   Data Quality, Graph Chat). Bootstrap's `.table-responsive`/the shared
+   `.nav-tabs.ob-tabs { overflow-x: auto; }` already made the table and
+   tabs independently scrollable — the page-level overflow was the actual
+   root cause, not those two containers.
+5. src/front/static/ontology/js/ontology-wizard.js (finding #5 — focus
+   management)
+   `setWizardStage()` now tracks whether it has ever run
+   (`_wizardStageBooted`) and which stage it last rendered
+   (`_wizardCurrentStage`). On a genuine transition (stage actually
+   changed, and this isn't the very first call) it moves focus to the new
+   pane's heading. The very first call ever — resuming a running task or
+   an existing draft on page load — never focuses, so it can't steal focus
+   from wherever the browser naturally placed it on paint; re-calling the
+   *same* stage (e.g. `resumeDraftFromServer`'s own redundant
+   `setWizardStage('review')` right after a fresh detection already
+   transitioned there) does not re-focus either.
+6. src/front/templates/partials/ontology/_ontology_wizard.html (finding #5)
+   Added a `tabindex="-1"` heading per stage pane as the focus target:
+   new visually-hidden `<h2 id="wizardConfigureHeading">`/
+   `<h2 id="wizardReviewHeading">` (Configure/Review had no pane-level
+   heading before), and `tabindex="-1"` added directly to the Complete
+   pane's existing visible `<h6 id="wizardCompleteHeading">`.
+7. src/front/static/ontology/js/ontology-wizard.js (finding #7 — confirm
+   before a stale re-detect)
+   The stale-banner's "Re-detect" action (`window.WizardCore.redetect`)
+   called `runGenerateDetection` directly, bypassing the "this discards
+   your current draft" confirmation — even though a stale draft can still
+   hold manually-added/edited candidates the user hasn't acted on.
+   `redetect` now points at `startGenerateDetection` (the same confirm-
+   guarded entry point Stage 1's own button uses), which sees the Review
+   pane is visible and prompts before discarding.
+8. src/front/static/global/css/permissions.css (finding #6 — gating)
+   The generic read-only form-field rule already covers every dynamically-
+   rendered `input`/`textarea`/`select` in the Review pane (none of their
+   ids/classes match its exemption list), but buttons are never covered by
+   that generic rule anywhere in the app. Added a dedicated block gating
+   every draft-mutating *button* (`data-action`-selected):
+   add-candidate toggle/submit, remove-candidate, remove-alt-label,
+   add/remove-evidence, discard, continue, the stale-banner re-detect, and
+   the complete-stage retry — `pointer-events: none !important; opacity:
+   0.5 !important; cursor: not-allowed !important;`, matching every other
+   gated write control in this file. The pane's own visible content
+   (locked anchors, candidate list, completion checklist) is untouched —
+   only the controls are neutralised.
+9. src/front/static/ontology/js/ontology-wizard.js (finding #8 — aria
+   labels; finding #9 — XSS hardening)
+   `loadWizardMetadata()`'s table-row renderer and `renderWizardDocsList()`
+   were both substantially rewritten for the staged wizard and injected
+   server-supplied table names/comments/document names into `innerHTML`
+   without escaping. Added a local `escWizardAttr()` helper (mirrors
+   `escAttr` in `ontology-wizard-review.js`) on top of the existing global
+   `escapeHtml()` — `escapeHtml()` alone only escapes `&`/`<`/`>` in text
+   content and is not attribute-safe (a literal `"` would break out of a
+   quoted attribute). Every interpolated field (`tableName`, `displayName`,
+   `description`, `file.name`) is now escaped: `escWizardAttr()` inside the
+   quoted `data-table`/`value`/`aria-label` attributes, `escapeHtml()` in
+   text content. The same pass added the missing programmatic labels:
+   `aria-label="Include <name>"` on both the metadata-table checkbox and
+   the document-row checkbox (the latter previously had no `<label for>`
+   or `aria-label` at all), plus `aria-label` on `wizardSelectAllCheckbox`
+   alongside its existing `title`.
+10. tests/units/front/test_wizard_draft_update_queue.py (new, 3 tests)
+    Real-JS behavior-contract tests via `vm.runInContext` (same pattern as
+    `test_no_llm_save_gate_sync.py` — no JS test runner in this repo):
+    three rapid `postDraftUpdate` calls submit incrementing revisions
+    `[0, 1, 2]` (not `[0, 0, 0]`); three distinct edits are sent to the
+    server in the exact order issued; a `409` on the second of three
+    queued calls does not wedge the third — it still fires, using the
+    revision reloaded after the conflict.
+11. tests/units/front/test_wizard_stage_focus_management.py (new, 4 tests)
+    Same `vm.runInContext` pattern against `ontology-wizard.js`'s
+    `setWizardStage`: the first call ever never focuses; a real transition
+    after load focuses the new heading; recalling the same stage does not
+    refocus; multiple real transitions focus each heading in order.
+12. tests/units/front/test_wizard_review_permissions_gate.py (new, 13
+    tests)
+    Every gated `data-action` is disabled (`pointer-events: none`) under
+    `body:is(.read-only-version, .role-viewer, .read-only-locked)`; the
+    gate uses `!important`; every gated action still exists in the markup/
+    JS (regression guard against a silent rename); the pane's own content
+    ids are never targeted by the gate (view stays visible).
+13. tests/units/front/test_ontology_generate_wizard_staged.py
+    Extended with 9 new structural tests, one per finding #2–#9 (Continue/
+    Retry `data-requires-llm`; the `.wizard-stage-pane.ob-hidden`
+    `!important` guard and its source-order placement; the mobile
+    `@media` block's `flex-wrap`/height-reset rules; a focusable heading
+    per pane; the `isFirstCall`/`_wizardStageBooted` guard's presence;
+    `redetect` pointing at `startGenerateDetection`; accessible labels on
+    the document/metadata checkboxes; `escapeHtml()` wrapping every
+    server-supplied field in both rewritten renderers).
+14. tests/units/front/test_no_llm_ui_gate.py
+    Added `wizardReviewContinueBtn`/`wizardCompleteRetryBtn` to the
+    per-page declarative-marker table for `_ontology_wizard.html`.
+
+Modified/added files:
+- src/front/static/ontology/js/ontology-wizard-review.js
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/static/ontology/css/ontology-wizard.css
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_wizard_draft_update_queue.py (new)
+- tests/units/front/test_wizard_stage_focus_management.py (new)
+- tests/units/front/test_wizard_review_permissions_gate.py (new)
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- tests/units/front/test_no_llm_ui_gate.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- Node syntax: `node --check src/front/static/ontology/js/ontology-wizard.js
+  src/front/static/ontology/js/ontology-wizard-review.js` → both OK.
+- RED (each new test file/assertion observed failing against the pre-fix
+  code before its corresponding production change): the queue test failed
+  with `[0, 0, 0]`/out-of-order requests (no `postDraftUpdate` exposed at
+  all, then a `TypeError` once exposed unqueued); the focus test had no
+  `.focus()` calls; the permissions-gate test's `_gated()` helper found no
+  matching rule for any of the 10 actions (11 of 13 failed); the 9 new
+  structural assertions in `test_ontology_generate_wizard_staged.py` all
+  failed (missing `data-requires-llm`, missing CSS guard/media block/
+  headings/focus guard/escaping, `redetect: runGenerateDetection`, no
+  `aria-label` on the doc checkbox).
+- GREEN (focused): `uv run --frozen pytest -q
+  tests/units/front/test_wizard_draft_update_queue.py
+  tests/units/front/test_wizard_stage_focus_management.py
+  tests/units/front/test_wizard_review_permissions_gate.py
+  tests/units/front/test_ontology_generate_wizard_staged.py
+  tests/units/front/test_no_llm_ui_gate.py` → 82 passed.
+- Full frontend suite: `uv run --frozen pytest -q tests/units/front/` →
+  1248 passed.
+- API/permission/design contracts: `uv run --frozen pytest -q
+  tests/units/api/test_generate_routes.py
+  tests/units/api/test_no_llm_route_contract.py
+  tests/units/auth/test_permission_middleware.py` → 324 passed (unchanged —
+  no backend route/workflow semantics touched in this pass).
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → 6659 passed,
+  304 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.02s (30 more
+  passing than the Task 5 baseline — the new focused tests above; no
+  regressions).
+
+Local browser retest instructions:
+- `./scripts/start.sh`, open Ontology -> Generate.
+- Findings #1/#7/#8/#9 have no visible UI change to eyeball beyond the new
+  `aria-label`s on the Data Sources/Documents checkboxes (inspect via
+  DevTools Accessibility panel or a screen reader) — their coverage is the
+  new behavior-contract tests above (no JS test runner in this repo to run
+  them live in a browser console instead).
+- #2/#6: with no LLM endpoint configured (or as a read-only-version/viewer/
+  locked-out caller), confirm "Continue to Complete" and the Complete
+  stage's "Retry" button are visibly disabled (50% opacity, not-allowed
+  cursor) and inert to clicks; as a read-only caller in the Review stage,
+  confirm every candidate add/remove/discard/continue control is inert
+  while the locked-anchor and candidate lists themselves stay visible.
+- #3: run detection, confirm only the Review pane is visible (not stacked
+  under/over Configure or Complete); click "Continue to Complete" and
+  confirm only the Complete pane renders.
+- #4: open DevTools device toolbar at 390×844 (iPhone 12), confirm the
+  3-step stepper wraps/stays compact without clipped labels, there is no
+  page-level horizontal scrollbar, and the Data Sources table / tab strip
+  scroll independently within their own bounds.
+- #5: with a screen reader (or by watching `document.activeElement` in the
+  console), run detection and confirm focus lands on "Review Entities"
+  once the Review pane appears (not on page load/resume), then click
+  Continue and confirm focus lands on "Completing Ontology Generate".
+
+---
+
+## Close final-review gaps for the staged ontology Generate change
+
+Context: Closes every actionable gap from the final review of the
+`staged-ontology-generate` plan (base `0fc3532d`, all five tasks + fixes
+landed). The one "Important" gap — the eval harness's `--live` mode never
+actually exercised the staged entry points and still imported the
+deprecated one-shot `agent_owl_generator.engine.run_agent` bridge — is
+fixed, a real live eval was run against the `DEFAULT` Databricks profile
+and `databricks-claude-sonnet-5`, Sphinx docs were extended for the new
+modules, and three minor closures (task-tracker deep link, README, typed
+410 error) were applied. The attached implementation plan was not edited.
+Followed TDD for every executable change: each fix has a new focused test
+observed to exercise the change (RED before the fix where a prior behavior
+existed to contrast against; new capability tests written test-first).
+
+Changes:
+
+1. tests/eval/staged_contract.py (Important — live staged eval truthfulness)
+   Added a live-endpoint mode that retargets the *existing* detect-tagged
+   constraint checks (`_c_all_included`, `_c_excludes_anchor`,
+   `_c_excludes_anchor_alt`, `_c_min_new_candidates`, `_c_synonyms_as_alt`,
+   `_c_no_separate_synonym`, `_c_does_not_parse`) from the scripted mock to
+   the real Databricks Foundation Model endpoint, with zero duplicated
+   scoring logic: `live_endpoint(host, token, endpoint)` (context manager)
+   + `_run_detection_live()` (real `staged.detect_entities()` call, tool
+   surface wired to each row's own `input.corpus`, `call_serving_endpoint`
+   only *spied* — `wraps=`, not scripted) + a per-example-id cache so a row
+   with N constraints costs one live call, not N. Added
+   `_run_live_completion_chain()` — runs `infer_relations` ->
+   `infer_attributes` -> `infer_axioms` end to end against the real
+   endpoint for one representative (non-adversarial) closed entity set,
+   chaining each real structured output into the next substage's
+   checkpoint exactly like `GenerateWorkflow.run_completion` does in
+   production, and scoring entity closure (`success`) and no-document-tool
+   access (the real `tools=` kwarg observed via the same spy technique) —
+   the completion-tagged dataset rows are all deliberately adversarial/
+   scripted-invalid (testing rejection of a bad LLM answer), which a real
+   endpoint cannot be made to reproduce on demand, so this chain is the
+   representative live substitute. `score_staged_examples_live()` runs both
+   and returns per-dimension + aggregate scores as **evidence for the
+   record, not a second CI gate** — the enforced
+   `owl_generator.staged_contract: 0.95` gate stays the deterministic/
+   scripted `score_staged_examples()`, unweakened and unchanged.
+2. tests/eval/run_agent_owl_generator.py (Important)
+   `_live_runner` (parsed-corpus contract, `--live`) rewritten to call the
+   real `staged.detect_entities()` instead of the deprecated
+   `agents.agent_owl_generator.engine.run_agent` — `detect_entities` is now
+   the *only* production entry point that reads source material at all
+   (SPEC §3), so it is what the parsed-corpus document-reading contract
+   (`ready_corpus_use`/`no_parse_safety`/`status_disclosure`/
+   `sidecar_hiding`) actually needs verified live. The observed trace is
+   built the same way as before (tool-call names + every tool-result
+   payload, which always echoes back the requested filename) plus the
+   detected candidates' own labels/descriptions/evidence standing in for
+   the free-text "reply" the removed one-shot bridge produced. `main()`
+   now also calls `staged_contract.score_staged_examples_live()` under
+   `--live`, logging its metrics (`staged_live_*`) into the *same* MLflow
+   run as the parsed-corpus contract via a new `extra_mlflow_logging`
+   callback (see #3) rather than a disconnected second run. This closes
+   the **last** eval dependency on the legacy engine — `engine.py` itself
+   is intentionally **not deleted**: `tests/units/agents/
+   test_agent_owl_generator_truncation.py`,
+   `test_agent_owl_generator_class_cap.py`, and `tests/units/pge_eval/
+   test_owl_evaluator_stage.py` still exercise it directly as real
+   consumers, so deletion is not safe per this change's own "only if no
+   consumers remain" criterion.
+3. tests/eval/document_corpus_contract.py
+   `run_contract()` gained an optional `extra_mlflow_logging: Callable[[],
+   None] | None` parameter, invoked once inside the existing
+   `mlflow.start_run()` block (only when `not dry_run and
+   mlflow_experiment`) — purely additive, default `None`, so
+   `tests/eval/run_agent_mapping_pge.py`'s existing call site is unaffected
+   (verified by rerunning it offline).
+4. tests/eval/test_run_agent_owl_generator.py (new, 8 tests)
+   AST-level proof neither `run_agent_owl_generator.py` nor
+   `staged_contract.py` imports `agents.agent_owl_generator.engine` (same
+   technique as `test_owl_generator_staged.py`'s existing
+   `test_staged_module_never_imports_legacy_engine`); spy-based proof
+   `_live_runner` and `score_staged_examples_live` really call
+   `staged.detect_entities`/`infer_relations`/`infer_attributes`/
+   `infer_axioms` (never the legacy bridge, patched to raise if called);
+   proof the live-endpoint context manager fully restores offline/scripted
+   scoring afterward (no cross-run leakage in the same process).
+5. .planning/agents/agent_owl_generator/SPEC.md §10
+   Recorded the real live MLflow run (see Tests below) with its full
+   metric breakdown, including the one imperfect live dimension
+   (`excludes_existing_alternate_label_as_new=0.000` on
+   `staged-locked-anchor-dedup-001` — the real model re-proposed a locked
+   anchor's alternate label as "new"; the code path's own dedup logic
+   passes 14/14 offline, so this is live prompt-following variance, not a
+   defect, and not smoothed over). Recorded the legacy pre-change run
+   `0531b3c6936d45b69c414f31d060c44b` truthfully as historical
+   parsed-corpus-only evidence (confirmed via `mlflow.get_run` to predate
+   the `staged_live_*` metrics, i.e. it never assessed a staged prompt).
+   Corrected the two "BLOCKED — NOT RUN" sign-off bullets now that a live
+   run exists; did not alter or weaken the declared §5 thresholds.
+6. docs/sphinx/api/agents.rst (Sphinx — Important)
+   Added `agents.agent_owl_generator.{staged,schemas,prompts}` automodule
+   entries (public staged surface, documented before `.tools`), and moved
+   `.engine` to a dedicated "Legacy one-shot bridge (deprecated)" heading
+   below it explaining it is not re-exported, not called by the staged
+   module, and has no remaining production caller — de-emphasized in
+   position/framing without deleting the entry (the module itself is kept
+   for the reason in #2).
+7. docs/sphinx/api/app.objects.ontology.rst (Sphinx — Important)
+   Added `back.objects.ontology.GenerateDraft` (draft/entity/fingerprint
+   contract) and `back.objects.ontology.GenerateWorkflow` (async
+   orchestration + append-only merge) automodule sections, each with a
+   short framing paragraph.
+8. docs/sphinx/api/app.core.errors.rst
+   Added the new `GoneError` automodule entry (see #11).
+9. src/front/static/global/js/task-tracker.js (minor closure)
+   `TASK_TYPE_URLS`'s `'ontology_generation'` key never matched a real
+   backend `task_type` — the staged Generate workflow creates
+   `'ontology_generate_detect'`/`'ontology_generate_complete'`
+   (`src/api/routers/internal/ontology.py`'s `/wizard/generate/detect` and
+   `/wizard/generate/complete` routes). Replaced with both real task types,
+   both mapping to `/ontology#wizard` — `initOntologyWizard()` resumes at
+   the right step from the persisted draft's own `stage`, so one URL
+   correctly covers both.
+10. README.md (minor closure)
+    Added a paragraph under "Design ontologies visually or with AI"
+    describing the staged, resumable, human-in-the-loop Generate wizard
+    (Detect -> Review -> Complete) and its append-only merge/stale-draft
+    re-detect behavior — previously undocumented at the README level (the
+    full flow was already documented in `docs/user-guide.md`).
+11. src/back/core/errors/GoneError.py (new) + src/back/core/errors/__init__.py
+    (minor closure — typed 410 error)
+    Added `GoneError(OntoBricksError)` (status 410), following the exact
+    pattern of `ConflictError`/`NotFoundError`. `src/api/routers/internal/
+    ontology.py`'s `/wizard/generate-async` route now raises `GoneError`
+    instead of the raw base `OntoBricksError(..., status_code=410)`.
+12. tests/back/core/errors/test_errors.py /
+    tests/units/api/test_generate_routes.py
+    Added `GoneError` to the error-code-derivation, subclass-defaults, and
+    subclass-polymorphism parametrized tests; strengthened
+    `test_wizard_generate_async_always_returns_410` to assert
+    `isinstance(exc_info.value, GoneError)`, not just the status code.
+13. tests/units/api/test_no_llm_route_contract.py
+    `test_legacy_one_shot_generate_route_never_calls_require_domain_llm`
+    asserted the literal `"status_code=410"` substring in
+    `generate_ontology_async`'s source — broken by #11's switch to the
+    typed `GoneError()` (410 is now a default on the class, not a call-site
+    kwarg). Full-suite run (below) caught this as a real regression; fixed
+    by asserting `"GoneError(" in source` plus that `GoneError` really
+    defaults to 410, preserving the test's original intent (a typed 410,
+    reached without ever touching the LLM guard) with the new call shape.
+
+Modified/added files:
+- tests/eval/staged_contract.py
+- tests/eval/run_agent_owl_generator.py
+- tests/eval/document_corpus_contract.py
+- tests/eval/test_run_agent_owl_generator.py (new)
+- .planning/agents/agent_owl_generator/SPEC.md
+- docs/sphinx/api/agents.rst
+- docs/sphinx/api/app.objects.ontology.rst
+- docs/sphinx/api/app.core.errors.rst
+- src/front/static/global/js/task-tracker.js
+- README.md
+- src/back/core/errors/GoneError.py (new)
+- src/back/core/errors/__init__.py
+- src/api/routers/internal/ontology.py
+- tests/back/core/errors/test_errors.py
+- tests/units/api/test_generate_routes.py
+- tests/units/api/test_no_llm_route_contract.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- Focused RED/GREEN: `test_run_agent_owl_generator.py` and the `GoneError`
+  additions to `test_errors.py`/`test_generate_routes.py` were written
+  test-first against the pre-fix code (legacy-engine import present /
+  `--live` not wired to staged entry points / no `GoneError`) and observed
+  to characterize the change before it landed; then implemented to GREEN.
+- Focused GREEN: `uv run --frozen pytest -q tests/eval/
+  tests/units/agents/test_owl_generator_staged.py
+  tests/units/agents/test_owl_generator_schemas.py
+  tests/back/core/errors/test_errors.py
+  tests/units/api/test_generate_routes.py` → 120 passed.
+- Offline eval (unweakened, unchanged): `uv run --frozen python
+  tests/eval/run_agent_owl_generator.py` → all 14 staged examples PASS,
+  staged-contract aggregate `1.000` (threshold `0.950`); all 10
+  parsed-corpus cases PASS, aggregate `1.000` (threshold `0.900`).
+- **Live eval (real Databricks endpoint, no credentials printed)**:
+  ```
+  export ONTO_DBX_HOST=$(databricks auth env --profile DEFAULT | jq -r '.env.DATABRICKS_HOST')
+  export ONTO_DBX_TOKEN=$(databricks auth token DEFAULT -o json | jq -r '.access_token')
+  DATABRICKS_CONFIG_PROFILE=DEFAULT uv run --frozen python tests/eval/run_agent_owl_generator.py \
+    --live --host "$ONTO_DBX_HOST" --token "$ONTO_DBX_TOKEN" \
+    --endpoint databricks-claude-sonnet-5 --mlflow-tracking-uri databricks
+  ```
+  → MLflow run
+  `https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/1426639566663818/runs/218202e1c9a64a6a98d4add618310e48`
+  (experiment `1426639566663818`, run name `parsed-corpus-baseline`).
+  Parsed-corpus contract (now via real `staged.detect_entities()`, not the
+  legacy bridge): `judge_score=1.000` (threshold `0.900`);
+  `ready_corpus_use`/`no_parse_safety`/`status_disclosure`/
+  `sidecar_hiding=1.000`. Staged live evidence (new `staged_live_*`
+  metrics, not a gate): `staged_live_aggregate=0.850` over 4 `detect`-tagged
+  rows + the 3-substage `infer_relations`/`infer_attributes`/`infer_axioms`
+  completion chain — 7 of 9 scored dimensions `1.000`
+  (`all_candidates_included_by_default`, `append_only_merge`,
+  `does_not_call_document_tools`, `does_not_parse`,
+  `min_new_candidate_entities`, `no_separate_synonym_entity`,
+  `synonyms_as_alternate_labels`, `stage_entity_closure`); two below 1.0 —
+  `excludes_existing_anchor_as_new=0.500`,
+  `excludes_existing_alternate_label_as_new=0.000` (the real model
+  re-proposed a locked anchor's alternate label as "new" on one row — an
+  honest live result, not fabricated or smoothed; the deterministic gate
+  covering the same dedup code path passes 14/14 — see SPEC §10 for detail).
+  The deterministic `owl_generator.staged_contract: 0.950` CI gate is
+  unaffected and unweakened.
+- Docs build: `ci/build_docs.sh` → built clean; only 2 pre-existing
+  warnings unrelated to this change (`agent_dtwin_chat`'s ambiguous
+  `object` cross-reference, a stale `../LICENSE.txt` myst link in
+  `docs/development.md`) — zero new warnings from the `agents.rst`/
+  `app.objects.ontology.rst`/`app.core.errors.rst` additions (verified the
+  built HTML actually renders `staged`/`schemas`/`prompts`/`GenerateDraft`/
+  `GenerateWorkflow`/`GoneError`).
+- JS syntax: `node --check src/front/static/global/js/task-tracker.js` → OK.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → **6670 passed**,
+  304 skipped, 6 deselected, 1 xfailed, 32 warnings in ~44-53s — first full
+  run caught one real regression from #11/#12 (`test_no_llm_route_contract
+  .py` asserted the literal `status_code=410` call-site kwarg text, which
+  `GoneError()` no longer has), fixed per #13, rerun to a clean pass with
+  no failures.
+
+Concerns:
+- The live `excludes_existing_alternate_label_as_new`/
+  `excludes_existing_anchor_as_new` gap above is real model behavior on a
+  single live sample, not a code defect — a candidate for a future
+  detection-prompt tuning pass (e.g. more explicit "never re-propose an
+  anchor's alternate label" wording in
+  `prompts.build_detection_system_prompt`), tracked as SPEC evidence, not
+  fixed here (no prompt/threshold change was made to make this run look
+  better).
+- `agent_owl_generator/engine.py` remains in the codebase, still reachable
+  for direct/ad-hoc use and still covered by its own three existing unit
+  test modules; no removal plan is proposed here beyond what SPEC.md
+  already documents (no remaining production caller).
+
+---
+
+## Fix root cause of the below-gate live staged score (fixture shape + missing tracing)
+
+Context: The prior live eval (run `218202e1c9a64a6a98d4add618310e48`) scored
+`staged_live_aggregate=0.850`, below the requested `0.950` bar, on
+`excludes_existing_anchor_as_new`/`excludes_existing_alternate_label_as_new`.
+A read-only systematic investigation established this was **not** a dedup
+defect: `staged-locked-anchor-dedup-001`'s dataset metadata used
+`{catalog, schema, table}` keys, but every production metadata consumer
+(`agents.tools.metadata.tool_get_metadata`/`tool_get_table_detail`,
+`staged.py`/`engine.py`) keys off `name`/`full_name`. Against the real
+endpoint this made `get_metadata` return a table entry with `name: null`,
+`get_table_detail` could not resolve it, and — since this row has no
+`input.corpus` fallback to ground the model any other way — the model
+replied with prose instead of JSON, so `detect_entities` rejected the
+malformed answer *before its anchor-dedup logic ever ran*. The reported
+anchor/alt-label failures were downstream of that rejection, not independent
+dedup misses. `staged-detect-new-entities-001` had the identical malformed
+shape but happened to PASS live because its `input.corpus` grounded the
+model independently of the broken metadata tool — masking the bug. The same
+investigation found `--live` never called `agents.tracing.setup_tracing()`,
+so the `@trace_agent`/`@trace_llm`/`@trace_tool` decorators already on the
+staged entry points silently no-opped and the live run carried zero
+trace/span evidence. Followed TDD: each fix below has a test written and
+observed RED against the pre-fix code before the fix landed.
+
+Changes:
+
+1. tests/eval/datasets/agent_owl_generator/baseline.jsonl +
+   .planning/agents/agent_owl_generator/eval/dataset.jsonl (dataset fixture
+   fix, mirrors kept byte-identical)
+   Corrected the 4 staged rows whose `input.metadata.tables` entries used
+   the stale `{catalog, schema, table}` shape
+   (`staged-detect-new-entities-001`, `staged-default-inclusion-001`,
+   `staged-locked-anchor-dedup-001`, `staged-no-one-shot-default-001`) to
+   the real production shape (`name`/`full_name`, e.g. `{"name":
+   "purchase_orders", "full_name": "demo.sales.purchase_orders", ...}`),
+   matching `back/core/databricks/uc/MetadataService.py`'s actual Unity
+   Catalog fetch shape. **No production metadata tolerance for
+   `catalog`/`schema`/`table` was added anywhere** — the fixture was wrong,
+   not the production contract, per this closure's explicit instruction.
+   Diff is minimal: only the 4 malformed table objects changed, compact
+   JSON formatting preserved for every untouched line.
+2. tests/eval/test_staged_dataset_metadata_shape.py (new, 9 tests)
+   RED-first proof of #1: asserts neither mirrored dataset uses the stale
+   shape, every metadata table carries `name`+`full_name` (`full_name`
+   ending with `name`), the specific `staged-locked-anchor-dedup-001` row
+   resolves to the exact expected table, and — the strongest regression
+   guard — calls the REAL `agents.tools.metadata.tool_get_metadata`/
+   `tool_get_table_detail` functions (via a real `ToolContext`) against
+   every staged row's metadata and asserts no table entry ever has a null
+   `name`/`full_name`, catching this exact bug at its source rather than
+   only checking JSON field names. Plus a byte-identical-mirrors guard.
+3. tests/eval/staged_contract.py (Important — explicit detection-failure
+   diagnostics)
+   `score_staged_examples_live()` now calls `_run_detection_for_example()`
+   once, explicitly, per detect row — reusing the exact same cached call
+   `_score_constraint()` already made (no extra live round-trip: still one
+   LLM call per detect row) — and reports a new
+   `detection_returned_valid_structured_output` dimension (1.0/0.0) plus a
+   `[STAGED LIVE DETECTION FAILED]` diagnostic print naming the row and
+   explicitly stating "not a dedup miss" whenever `detect_entities()`
+   rejects/fails, so this failure mode is never again indistinguishable
+   from a real anchor/alternate-label dedup miss. No threshold changed;
+   the deterministic `owl_generator.staged_contract: 0.950` gate is
+   untouched.
+4. tests/eval/test_run_agent_owl_generator.py
+   (`TestScoreStagedExamplesLiveReportsDetectionFailureExplicitly`, 3 new
+   tests) RED-first proof of #3: a prose (non-JSON) fake reply scores
+   `detection_returned_valid_structured_output=0.0` and prints a diagnostic
+   naming the row + "not a dedup miss"/"dedup"; a valid-JSON reply scores
+   `1.0`; the diagnostic costs zero extra live calls (still exactly one
+   `call_serving_endpoint`/`detect_entities` call per detect row).
+5. tests/eval/run_agent_owl_generator.py (Important — tracing gap)
+   New `_init_live_tracing(tracking_uri, experiment_name)`: sets
+   `mlflow.set_tracking_uri()` then calls `agents.tracing.setup_tracing()`
+   — never passed `host`/`token` (its only parameter is the experiment
+   name, so no secret can be logged through this call by construction,
+   mirroring `agents.tracing._safe_inputs`'s own exclusion set) — and
+   prints an `[TRACING] ... -> enabled/DISABLED` diagnostic. Called from
+   `main()` under `--live`, *before* constructing the `live_runner`
+   lambda and before `run_contract(...)` — i.e. before `run_contract`'s own
+   per-example loop makes its first live call to
+   `_live_runner`/`staged.detect_entities`, and before
+   `score_staged_examples_live`'s completion-chain calls. Offline
+   (non-`--live`) mode never calls this — zero MLflow side effects, as
+   before.
+6. tests/eval/test_run_agent_owl_generator.py
+   (`TestLiveModeInitializesTracingBeforeAnyFoundationModelCall`, 5 new
+   tests) RED-first proof of #5: `_init_live_tracing` calls
+   `setup_tracing(experiment_name=...)` with no `host`/`token` kwarg at
+   all; its diagnostic print never contains a token value; `main()` calls
+   tracing setup before `run_contract` and before `_live_runner` actually
+   fire (proven via call-order tracking with monkeypatched collaborators,
+   using a real secret-shaped token string in `sys.argv` to prove it never
+   leaks into stdout); offline mode never initializes tracing.
+7. .planning/agents/agent_owl_generator/SPEC.md §10
+   Marked live-run attempt 1 (`218202e1...`) as a **FAILED live evaluation
+   caused by the dataset fixture bug** (not a code defect) — recorded
+   truthfully with the full root-cause explanation rather than deleted —
+   and added the new passing attempt 2 (`68ee4e8e...`) with its full metric
+   breakdown and trace-evidence confirmation (see Tests below).
+
+Modified/added files:
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- .planning/agents/agent_owl_generator/eval/dataset.jsonl
+- tests/eval/test_staged_dataset_metadata_shape.py (new)
+- tests/eval/staged_contract.py
+- tests/eval/run_agent_owl_generator.py
+- tests/eval/test_run_agent_owl_generator.py
+- .planning/agents/agent_owl_generator/SPEC.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests:
+- Focused RED/GREEN: all new tests observed RED against the pre-fix dataset
+  and pre-fix `staged_contract.py`/`run_agent_owl_generator.py` before each
+  fix landed (see #2, #4, #6 above), then GREEN after.
+- Focused suite: `uv run --frozen pytest -q tests/eval/` → **33 passed**
+  (was 28 before this session's new tests).
+- Offline eval (unweakened, unchanged): `uv run --frozen python
+  tests/eval/run_agent_owl_generator.py` → all 14 staged examples PASS,
+  staged-contract aggregate `1.000` (threshold `0.950`); all 10
+  parsed-corpus cases PASS, aggregate `1.000` (threshold `0.900`).
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` → **6687
+  passed**, 304 skipped, 6 deselected, 1 xfailed, 32 warnings, no failures.
+- **Live eval, attempt 2 (real Databricks endpoint, no credentials
+  printed)** — same command as the prior session's live run:
+  ```
+  export ONTO_DBX_HOST=$(databricks auth env --profile DEFAULT | jq -r '.env.DATABRICKS_HOST')
+  export ONTO_DBX_TOKEN=$(databricks auth token DEFAULT -o json | jq -r '.access_token')
+  DATABRICKS_CONFIG_PROFILE=DEFAULT uv run --frozen python tests/eval/run_agent_owl_generator.py \
+    --live --host "$ONTO_DBX_HOST" --token "$ONTO_DBX_TOKEN" \
+    --endpoint databricks-claude-sonnet-5 --mlflow-tracking-uri databricks
+  ```
+  → MLflow run
+  `https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/1426639566663818/runs/68ee4e8e6211443591c63ec95847d17c`.
+  `judge_score=1.000` (≥ `0.900` required); `staged_live_aggregate=1.000`
+  (≥ `0.950` required) — **both required thresholds met**. Every
+  `staged_live_*` dimension is `1.000`, including the two that failed in
+  attempt 1 (`excludes_existing_anchor_as_new`,
+  `excludes_existing_alternate_label_as_new`) and the new
+  `detection_returned_valid_structured_output`. Completion chain
+  (`infer_relations`/`infer_attributes`/`infer_axioms`) all
+  `PASS (rejected=False)` — attempt 1 stopped at `infer_relations`
+  (`rejected=True`) because the completion chain's own draft depends on
+  nothing from the malformed row, so this improvement is attributable
+  entirely to detection succeeding earlier in the run, not to any change in
+  the completion chain itself.
+- **Trace evidence verification** (workspace MLflow API,
+  `mlflow.search_traces(run_id=..., experiment_ids=[...])`):
+  - Attempt 1 (`218202e1...`): **0 traces** — confirms the pre-fix run truly
+    carried no trace evidence (tracing was never initialized).
+  - Attempt 2 (`68ee4e8e...`): **7 traces**, all state `OK` — 4×
+    `owl_generator.detect` (each with nested `agent:llm` +
+    `tool:get_metadata`/`tool:list_documents`/`tool:read_document`/
+    `tool:get_table_detail` spans, 6-9 spans per trace) + 1× each of
+    `owl_generator.relations`/`.attributes`/`.axioms` (2 spans each:
+    the agent span + its `agent:llm` call) — proving `_init_live_tracing()`
+    genuinely enables tracing for this run, not merely prints a claim.
+
+Concerns:
+- `staged-no-one-shot-default-001`'s metadata was also fixed to the
+  name/full_name shape for consistency even though it is not exercised by
+  any live call (`stage: entry_point_contract` is a structural-only row) —
+  no behavioural test covers this row's metadata shape specifically beyond
+  the dataset-shape tests in #2, which do cover it.
+- The three `_run_live_completion_chain` substages (`relations`/
+  `attributes`/`axioms`) still only exercise one representative,
+  non-adversarial closed entity set per live run (unchanged from the prior
+  session) — this fix did not add additional live completion-chain
+  coverage, only fixed the detect-side fixture bug and the tracing gap.
+
+## Align the Generate detection note with tab content
+
+Context: The informational note below Ontology → Generate configuration tabs
+started at the card edge while the tab content used Bootstrap's standard
+horizontal padding. Align the note with the content above it.
+
+Changes:
+
+1. `src/front/templates/partials/ontology/_ontology_wizard.html`
+   Added the shared Bootstrap horizontal padding utility to the detection
+   information note.
+2. `tests/units/front/test_ontology_generate_wizard_staged.py`
+   Added a structural regression contract that keeps the note aligned with
+   the padded tab content.
+
+Modified files:
+- `src/front/templates/partials/ontology/_ontology_wizard.html`
+- `tests/units/front/test_ontology_generate_wizard_staged.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6688 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.11s.
+
+---
+
+## Fix live Stage-1 false rejection when every selected entity is already a locked anchor
+
+Context: Two live Generate tasks (`aa2f34cc`, `72fd9955`) failed after a
+successful Foundation Model call with `output is not valid JSON: Expecting
+value: line 1 column 1 (char 0)`; the draft stayed `null`. Root cause: the
+active session's 10 selected tables' core entities were ALL already among
+its 15 locked ontology anchors, so the model had no genuinely NEW grounded
+candidate — the Stage-1 prompt said "JSON only" but never defined what to
+answer in that case, so the model wrote prose/analysis instead of
+`{"candidate_entities": []}`, and `detect_entities` correctly-but-
+unhelpfully rejected the malformed output. Fixed per strict TDD and the AI
+Feature Lifecycle gate, prompt-only (no rewrite/re-prompt loop; reject-only
+architecture unchanged).
+
+Changes:
+
+1. `src/agents/agent_owl_generator/prompts.py`
+   `build_detection_system_prompt` now states, immediately after the
+   anchors listing, that existing anchors are context-not-candidates and
+   that when nothing new is grounded the mandatory answer is exactly
+   `{"candidate_entities": []}` (no explanation/refusal/prose/fence). The
+   OUTPUT section additionally requires the first character of the reply
+   to be `{` and forbids an analysis/reasoning preamble before the JSON —
+   added after live reproduction showed the model narrating visible
+   reasoning ahead of its JSON answer.
+2. `src/back/objects/ontology/GenerateWorkflow.py`
+   `run_detection`'s rejection path no longer echoes the raw parser/schema
+   exception text to the user; it raises a generic `DraftValidationError`
+   stating the model failed the structured contract and suggesting a
+   retry. The raw detail is still logged server-side for debugging.
+3. `tests/units/agents/test_owl_generator_staged.py`
+   Added `TestZeroCandidateContract` (5 tests pinning the exact empty-JSON
+   contract wording, anchors-are-context wording, no-prose/refusal
+   wording, contract stated even with zero anchors, and the no-reasoning-
+   preamble/first-char-`{` rule) and
+   `test_empty_candidate_list_is_a_successful_result_not_a_rejection`
+   (confirms `detect_entities` treats an empty candidate list as a
+   successful, non-rejected result).
+4. `tests/units/agents/test_owl_generator_schemas.py`
+   Added 2 tests pinning that `parse_detection_payload` already accepted
+   — and continues to accept — an empty `candidate_entities` list, with
+   and without existing anchors.
+5. `tests/units/ontology/test_generate_workflow.py`
+   Added `test_detection_rejection_message_is_generic_not_raw_parser_text`
+   pinning that the user-facing rejection message never leaks the raw
+   parser exception text.
+6. `tests/eval/datasets/agent_owl_generator/baseline.jsonl` and
+   `.planning/agents/agent_owl_generator/eval/dataset.jsonl` (byte-
+   identical mirrors)
+   Added regression row `staged-zero-new-candidates-001`: 2 tables, both
+   already covered by 2 locked anchors, expecting
+   `success=True`/`rejected=False`/`candidate_entities=[]`.
+7. `tests/eval/run_agent_owl_generator.py`
+   Raised `_MIN_STAGED_EXAMPLES` from 14 to 15; added
+   `empty_candidates_when_fully_anchored` to
+   `_REQUIRED_STAGED_CONSTRAINT_KINDS` so this row cannot silently
+   disappear from the dataset.
+8. `tests/eval/staged_contract.py`
+   `_build_scripted_detection_payload` now returns
+   `{"candidate_entities": []}` for rows tagged
+   `empty_candidates_when_fully_anchored` (instead of the default
+   placeholder-candidate payload); added the
+   `_c_empty_candidates_when_fully_anchored` behavioural check and wired
+   it into `_CHECKS`.
+9. `tests/eval/test_staged_contract.py`
+   Added `TestZeroNewCandidatesWhenFullyAnchoredCheck` (6 tests: the new
+   constraint kind maps to a real behavioural check rather than the
+   "unmapped kind" neutral-1.0 default, passes for the real orchestrator
+   run, fails on a regression to a non-empty/rejected result, the
+   scripted builder emits the exact empty payload, and the dataset harness
+   requires this kind's coverage).
+10. `tests/eval/test_run_agent_owl_generator.py`
+    Updated hardcoded `spy_detect.call_count`/`spy_llm.call_count`
+    assertions (4→5, 5→6) to account for the new detect-tagged dataset
+    row.
+11. `.planning/agents/agent_owl_generator/SPEC.md`
+    Added the "Zero-new-candidate contract" bullet to §3a; added the
+    `stage_zero_new_candidate_contract` dimension to §5's staged table;
+    added the "Zero-new-candidate false rejection (live bug, fixed this
+    revision)" row to §6's failure-mode table; updated §7 to list the new
+    15th staged-contract row; added the full sign-off entry to §10 with
+    RED/GREEN evidence and both live results below.
+
+Deterministic/offline eval (unweakened gate):
+`uv run --frozen python tests/eval/run_agent_owl_generator.py` → all 15
+staged examples PASS, staged-contract aggregate `1.000` (threshold
+`0.950`); all 10 parsed-corpus cases PASS, aggregate `1.000` (threshold
+`0.900`).
+
+Live eval (`--live`, `DEFAULT` Databricks CLI profile,
+`ONTOBRICKS_LLM_ENDPOINT=databricks-claude-sonnet-5` — the production-
+gated eval endpoint): MLflow run
+`https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/1426639566663818/runs/9003944a961b43139e7bd50fdcd5474c`.
+Parsed-corpus contract `judge_score=0.985` (≥ `0.900`, met). Deterministic
+staged-contract gate `1.000` (≥ `0.950`, unweakened). Staged **live**
+evidence (`staged_live_*`) aggregate `1.000` over 5 detect rows + the
+3-substage completion chain, including `staged-zero-new-candidates-001`
+scoring `1.000` live: the real `databricks-claude-sonnet-5` model returned
+`success=True`, `rejected=False`, `candidate_entities=[]` for the fully-
+anchored case. MLflow tracing confirmed initialized
+(`[TRACING] setup_tracing(...) -> enabled`) before the run's first live
+call.
+
+Exact-case reproduction (read-only, against the user's own active endpoint
+`benoit_cayla.ontobricks-todrop.monclaudesonnetamoi`, distinct from the
+eval-gated endpoint above): loaded the real 10 selected tables + 15 locked
+anchors from the local session file
+`fastapi_session/b3bd26a3fbe54f89895b0cfcfbff1feb` (read-only; session/
+draft never mutated) and called the production `staged.detect_entities`
+path directly with `databricks auth token DEFAULT` credentials (never
+printed). Mixed/intermittent result across 5 calls made while diagnosing
+and verifying the fix: 1 succeeded (`success=True`, valid JSON, some
+genuinely-new candidates grounded in this endpoint's fuller metadata
+comments) and 4 still failed with the identical `output is not valid
+JSON: Expecting value: line 1 column 1 (char 0)` rejection. A captured step
+trace on the failing calls shows the model itself writing a visible
+reasoning/analysis preamble in the answer channel despite the strengthened
+"first character must be `{`, no reasoning preamble" instruction — this
+reproduced *after* the fix was applied. A raw-response probe confirmed
+`message.content` is a plain string (not distinct text/thinking content
+blocks) on this AI-Gateway route, so the model's own visible narration —
+not a content-extraction bug on our side — is the proximate cause of the
+residual failures.
+
+Concern (residual, not fixed by this revision): this specific user endpoint
+alias appears to intermittently ignore strict JSON-only formatting
+instructions by narrating visible reasoning in the answer channel,
+independent of whether the eventual answer would be empty or non-empty —
+an apparent model/route reliability characteristic, not a deterministic
+prompt defect. Per this task's hard constraints (no post-validation
+rewrite/re-prompt loop; reject-only architecture mandatory; no permissive
+prose parsing), this residual non-determinism cannot be fully eliminated
+by a prompt/schema-only fix — a user hitting this endpoint may still need
+to manually retry an occasional rejected detection call. The originally-
+reported bug (no explicit zero-candidate contract) is fixed and verified
+both deterministically and live against the production-gated
+`databricks-claude-sonnet-5` endpoint above.
+
+Modified files:
+- `src/agents/agent_owl_generator/prompts.py`
+- `src/back/objects/ontology/GenerateWorkflow.py`
+- `tests/units/agents/test_owl_generator_staged.py`
+- `tests/units/agents/test_owl_generator_schemas.py`
+- `tests/units/ontology/test_generate_workflow.py`
+- `tests/eval/datasets/agent_owl_generator/baseline.jsonl`
+- `.planning/agents/agent_owl_generator/eval/dataset.jsonl`
+- `tests/eval/run_agent_owl_generator.py`
+- `tests/eval/staged_contract.py`
+- `tests/eval/test_staged_contract.py`
+- `tests/eval/test_run_agent_owl_generator.py`
+- `.planning/agents/agent_owl_generator/SPEC.md`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6703 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 36.79s.
+
+## Implement transport-level structured output for Stage-1 detection (supersedes the prompt-only fix above)
+
+Context: the prompt-only zero-new-candidate fix above was reported
+insufficient by explicit user feedback — the exact-case reproduction
+against the user's own active endpoint
+(`benoit_cayla.ontobricks-todrop.monclaudesonnetamoi`) only succeeded on 1
+of 5 calls, with the model narrating a visible reasoning preamble before
+its JSON on the other 4 despite the strengthened "first character must be
+`{`" instruction. The user independently confirmed by directly probing
+that endpoint: (1) `response_format={"type":"json_object"}` returns 400
+unsupported; (2) `response_format={"type":"json_schema","json_schema":
+{...}}` is accepted and returns exactly the schema-shaped JSON; (3)
+combining `response_format` with `tools` in the same request is rejected
+("Cannot specify both response_format and tools"). Fixed per strict TDD:
+`detect_entities` is now a bounded tool-gathering phase followed by
+exactly one schema-enforced finalization call, with the answer shape
+enforced at the transport layer, not only requested in the prompt. No
+rewrite/re-prompt loop added; reject-only architecture unchanged.
+
+Changes:
+
+1. `src/shared/llm_target.py`
+   `build_llm_request` gained an optional `response_format` parameter
+   (defaults to `None` — every other caller's payload is byte-identical).
+   Combining `tools` and `response_format` now raises `ValueError`
+   fail-fast, client-side, before any network call — the endpoint contract
+   rejects that combination.
+2. `src/agents/engine_base.py`
+   `call_serving_endpoint` gained the same optional `response_format`
+   pass-through. An endpoint that rejects `response_format` with a clear
+   400 (the same "does not support the ... parameter" shape already
+   handled for `temperature`) has it stripped and the request retried
+   once, with the ban cached per endpoint for later calls — mirrors the
+   pre-existing `temperature` ban-cache mechanism exactly; no new caching
+   structure needed.
+3. `src/agents/agent_owl_generator/schemas.py`
+   Added `DETECTION_RESPONSE_FORMAT` — a strict
+   `{"type": "json_schema", ..., "strict": true}` constant whose item
+   schema mirrors `parse_detection_payload`'s own field contract exactly
+   (`canonical_label`, `description`, `type_hint` (enum `["class"]`),
+   `evidence` (`source`/`excerpt`), `alternate_labels`); every object
+   `additionalProperties: false` and every field `required`.
+4. `src/agents/agent_owl_generator/staged.py`
+   `detect_entities` refactored into two phases: a bounded tool-GATHERING
+   loop (`tools=` the metadata/document tools, never `response_format`;
+   renamed budget constant `_MAX_DETECTION_ITERATIONS` ->
+   `_MAX_GATHERING_ITERATIONS`) followed by exactly ONE schema-enforced
+   FINALIZATION call (`tools=None`,
+   `response_format=schemas.DETECTION_RESPONSE_FORMAT`). A gathering turn
+   with no tool calls ends gathering; its content is discarded — never
+   parsed as the answer, and not even carried into the finalization
+   conversation. If the endpoint rejects `tools` outright (400/422),
+   gathering is skipped entirely and finalization is called directly. The
+   old "truncated -> ask the model to re-emit concisely" retry was removed
+   along with the single-phase loop it belonged to: a length-truncated
+   finalization answer now fails clearly, with no re-prompt.
+5. `tests/units/shared/test_llm_target.py`
+   3 new tests: `response_format` included when provided, absent by
+   default, `ValueError` raised when combined with `tools`.
+6. `tests/units/agents/test_agent_engine_base.py`
+   6 new tests: `response_format` included/absent, `ValueError` raised
+   with zero network calls when combined with `tools`, unsupported
+   `response_format` stripped-and-retried-once, the ban cached across
+   calls to the same endpoint.
+7. `tests/units/agents/test_owl_generator_schemas.py`
+   Added `TestDetectionResponseFormat` (4 tests: is a `json_schema`
+   response_format with `strict: true`; requires `candidate_entities` as
+   an array with `additionalProperties: false`; the item schema's
+   properties/required/enum/`additionalProperties` match the parser's own
+   field contract exactly; an empty-list answer still parses cleanly).
+8. `tests/units/agents/test_owl_generator_staged.py`
+   Added `TestTwoPhaseDetectionArchitecture` (6 tests: tools and
+   response_format are never sent in the same call; gathering calls never
+   carry response_format; the finalization call always carries the strict
+   schema with `tools=None`; a gather-stop turn's prose is ignored and not
+   carried into the finalization conversation; finalization receives the
+   accumulated tool call/result context; a bounded gathering budget still
+   reaches finalization) and `TestDetectionResponseFormatFallbackIntegration`
+   (1 end-to-end test: a real `detect_entities` call through the real,
+   only-HTTP-mocked `call_serving_endpoint` still succeeds when the
+   endpoint rejects `response_format`). Every existing `TestDetectEntities`
+   test updated for the new two-call-minimum shape (a gathering turn now
+   always precedes the finalization answer that is actually parsed); added
+   `test_finalization_truncation_fails_without_reprompt` and
+   `test_gathering_truncation_is_treated_as_a_gather_stop` to pin the
+   no-re-prompt truncation contract explicitly; two pre-existing
+   `TestPerToolTracing` scripts extended with the extra gather-stop
+   response the new architecture requires.
+9. `tests/eval/staged_contract.py`
+   `_run_detection_for_example`'s scripted flow updated from 2 to 3
+   responses (tool call, gather-stop, finalization) to match the new
+   two-phase shape.
+10. `tests/eval/test_run_agent_owl_generator.py`
+    `test_does_not_cost_an_extra_live_call_per_row`'s
+    `spy_llm.call_count` assertion updated `6` -> `11` (each
+    `detect_entities()` call is now 2 LLM round-trips, not 1: 5 detect
+    rows * 2 + 1 completion-chain call).
+11. `.planning/agents/agent_owl_generator/SPEC.md`
+    Added the "Transport-level structured output" bullet to §3a; added the
+    `stage_transport_schema_enforcement` row (explicitly marked
+    unit-tested-only, not yet a scored `staged_contract` dataset
+    dimension) to §5's staged table; extended the zero-new-candidate
+    failure-mode row in §6a with the transport-level follow-up, superseding
+    the "prompt-only fix" framing while preserving the original diagnostic
+    evidence; appended the full sign-off entry to §10 with RED/GREEN
+    evidence and both live results below.
+
+Deterministic/offline eval (unchanged gate, unweakened):
+`uv run --frozen python tests/eval/run_agent_owl_generator.py` → all 15
+staged examples PASS, staged-contract aggregate `1.000` (threshold
+`0.950`); all 10 parsed-corpus cases PASS, aggregate `1.000` (threshold
+`0.900`).
+
+Live eval (`--live`, `DEFAULT` Databricks CLI profile,
+`ONTOBRICKS_LLM_ENDPOINT=databricks-claude-sonnet-5` — the production-
+gated eval endpoint): MLflow run
+`https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/1426639566663818/runs/af6645c81da84ec583199c0ce14360b5`.
+Parsed-corpus contract `judge_score=0.985` (≥ `0.900`, met, unaffected).
+Deterministic staged-contract gate `1.000` (≥ `0.950`, unweakened). Staged
+**live** evidence now `1.000` over the 5 detect rows *and* the full
+3-substage completion chain (`infer_relations`/`infer_attributes`/
+`infer_axioms` all succeeded) — including `staged-zero-new-candidates-001`
+again scoring `1.000` live.
+
+Exact-case verification (read-only, exactly ONE `detect_entities()` call,
+against the user's own active endpoint
+`benoit_cayla.ontobricks-todrop.monclaudesonnetamoi` — the SAME
+session/endpoint combination that scored 1/5 in the prior prompt-only
+entry): loaded the same real 10 selected tables + 15 locked anchors from
+the local session file
+`fastapi_session/b3bd26a3fbe54f89895b0cfcfbff1feb` (read-only; session/
+draft never mutated) and called the production `staged.detect_entities`
+path directly with `databricks auth token DEFAULT` credentials (never
+printed). Result: `success=True`, `rejected=False`, 14 genuinely new
+candidate entities (`EnergyType`, `SubscriptionPlan`,
+`InteractionChannel`, `CustomerSegment`, `LoyaltyProgram`,
+`PaymentMethod`, `CallReason`, `ClaimType`, `Address`,
+`SatisfactionScore`, `Sentiment`, `MeterInspection`, `BillingPeriod`,
+`TransactionReference` — none duplicating the 15 locked anchors), on the
+first attempt, with no `response_format`-unsupported fallback triggered
+(confirmed absent from the captured log) — the finalization call's raw
+output began directly with `{"candidate_entities":[...` (no reasoning
+preamble). Call structure: 6 gathering tool calls (`get_metadata`,
+`list_documents`, `get_table_detail` x4) then one finalization call. This
+resolves the user's explicit "the prompt-only fix is insufficient"
+feedback for this exact endpoint.
+
+Concern (residual, informational): the transport-level fix removes the
+model's ability to narrate prose instead of JSON on the finalization call,
+but does not change gathering-phase behavior beyond what already existed;
+if a future endpoint supports neither `tools` nor `response_format`,
+detection still falls back to the original prompt-only single-shot
+behavior (unchanged, pre-existing degrade path) and could in principle
+retain the same residual unreliability documented in the entry above for
+such an endpoint. No such endpoint was observed in this task's live
+verification.
+
+Modified files:
+- `src/shared/llm_target.py`
+- `src/agents/engine_base.py`
+- `src/agents/agent_owl_generator/schemas.py`
+- `src/agents/agent_owl_generator/staged.py`
+- `tests/units/shared/test_llm_target.py`
+- `tests/units/agents/test_agent_engine_base.py`
+- `tests/units/agents/test_owl_generator_schemas.py`
+- `tests/units/agents/test_owl_generator_staged.py`
+- `tests/eval/staged_contract.py`
+- `tests/eval/test_run_agent_owl_generator.py`
+- `.planning/agents/agent_owl_generator/SPEC.md`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6724 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.15s.
+
+## Fix: live id-bracketing false rejection in Stage-3 completion (bare-id catalog + enum-constrained response_format)
+
+### Context
+
+Blocking bug reproduced live by the user: Stage-3 completion failed after
+13.1s with `relations: references unknown or excluded entity id(s):
+[Agent], [Call], [Claim], [Contract], [Customer], [Customerjourneyevent],
+[Energyasset], [Financialdocument], [Interaction], [Invoice], [Meter],
+[Meterreading], [Payment], [Person], [Subscription],
+[cand-3a295986dc3f], [cand-6d2837cbaf28]`.
+
+Root cause: `agents.agent_owl_generator.prompts._entity_catalog` rendered
+each entity as `  • [{entity.id}] {label}` and the closure rule said
+"reference entities ONLY by the ids listed above" — the model copied the
+*bracketed* token (e.g. `[Agent]`) verbatim as the `domain`/`range` value.
+`GenerateDraft.validate_references` compares against the **bare** id from
+`closed_entity_ids()`, so every reference was rejected — a prompt-format-
+induced id mismatch, not a real closure violation (the `cand-*` ids in the
+error prove detection/inclusion worked correctly; only the id *format* was
+wrong).
+
+### Changes (two layers, no schema-repair/rewrite loop added — reject-only unweakened)
+
+1. `src/agents/agent_owl_generator/prompts.py`
+   Prompt-only layer, insufficient alone (a prompt cannot structurally stop
+   a non-compliant model — same lesson as the prior Stage-1 fix).
+   `_entity_catalog` now renders each entity as a bare
+   `- id: <value>\n  label: <value>` pair — never bracketed or quoted.
+   `_CLOSURE_RULE` rewritten to explicitly forbid brackets/quotes/label
+   substitution, with a worked counter-example (`id: Agent` → use `Agent`,
+   never `[Agent]`, never `"Agent"`). Also reworded the trailing
+   instruction in `build_relations_user_prompt`/`build_attributes_user_
+   prompt`/`build_axioms_user_prompt` from "Return the `<X>` JSON." to "Now
+   infer and provide the `<x>`." — a SEPARATE quirk surfaced only by this
+   same revision's `response_format` change: live probing of
+   `databricks-claude-sonnet-5` showed that once a completion substage
+   sends `response_format` for the first time, the old trailing phrasing
+   occasionally made the model double-encode its answer (a JSON *string*
+   holding the real answer nested inside the top-level array key, e.g.
+   `{"relations": "{\"relations\": [...]}"}"`), which fails
+   `parse_relations_payload`. The new phrasing was verified live to answer
+   correctly, repeatably. Wording-only — no lenient/tolerant parsing was
+   added for the double-encoded shape.
+2. `src/agents/agent_owl_generator/schemas.py`
+   Structural layer, the actual fix. Added `_AXIOM_KINDS`, `_closed_id_enum`
+   (a fresh `{"type": "string", "enum": sorted(ids)}` dict per call — never
+   shared by reference across fields), and
+   `build_relations_response_format`/`build_attributes_response_format`/
+   `build_axioms_response_format`: strict `json_schema` payloads
+   (`additionalProperties: false`, explicit `required`) whose id-valued
+   fields (`domain`/`range`/`subject`/`object`) are each an `enum` of
+   exactly `draft.closed_entity_ids()`. `axioms`' `kind` is constrained to
+   the same 3-value enum the prompt documents
+   (`subClassOf`/`disjointWith`/`equivalentClass`). Because the id fields
+   are an enum, a bracketed or invented id is now structurally impossible
+   on any endpoint that honours `response_format` — not merely instructed
+   against.
+3. `src/agents/agent_owl_generator/staged.py`
+   Added `_completion_response_format(builder, draft)`: builds the
+   substage's enum-constrained schema from `draft.closed_entity_ids()`, or
+   returns `None` when the closed set is empty (rather than building an
+   impossible empty `enum`) so completion falls back to the strengthened
+   bare-id prompt as the safety net. `_run_completion` now accepts and
+   forwards `response_format` to `call_serving_endpoint`, always with
+   `tools=None` (completion never reads documents/metadata, so there is no
+   tools/response_format conflict to guard). `infer_relations`/
+   `infer_attributes`/`infer_axioms` each now pass
+   `_completion_response_format(schemas.build_*_response_format, draft)`.
+   `validate_references` is unchanged and still runs unconditionally on
+   every substage's parsed output — reject-only, never trust the wire even
+   with schema enforcement; an unsupported `response_format` degrades
+   transparently via the existing per-endpoint ban cache in
+   `agents.engine_base.call_serving_endpoint` (same fallback mechanism as
+   the prior Stage-1 fix).
+4. `tests/units/agents/test_owl_generator_schemas.py`
+   Added `TestRelationsResponseFormat`/`TestAttributesResponseFormat`/
+   `TestAxiomsResponseFormat`: strict-schema shape, `additionalProperties`,
+   required fields, enum contents built from an arbitrary id set, distinct
+   dict objects per field (no accidental shared-reference enum), and the
+   `kind` enum for axioms.
+5. `tests/units/agents/test_owl_generator_staged.py`
+   Added: bare-id catalog rendering (`test_entity_catalog_renders_bare_ids_
+   without_brackets`); closure-rule wording forbidding brackets/quotes,
+   shared across relations/attributes/axioms prompts
+   (`test_closure_rule_forbids_bracketed_or_quoted_ids`,
+   `test_closure_rule_wording_shared_by_attributes_and_axioms_prompts`);
+   per-substage `response_format` wiring with the enum built from
+   `closed_entity_ids()` and `tools=None`; a bracketed-id answer still
+   rejected reject-only with exactly one LLM call (no second finalization);
+   an unsupported `response_format` degrading transparently end-to-end
+   (`TestCompletionResponseFormatFallbackIntegration`); and the trailing
+   double-encoding-trigger regression
+   (`test_completion_user_prompts_avoid_the_return_json_double_encoding_
+   trigger`).
+6. `tests/eval/staged_contract.py`
+   Added `_c_rejects_bracketed_id_ref`, mapped to the new
+   `rejects_bracketed_id_reference` constraint kind — a real behavioural
+   check (scripts a `[cand-...]`-shaped domain/range answer and asserts
+   rejection with no rewrite), never the neutral-1.0 "unmapped kind"
+   default. Added `TestRejectsBracketedIdReferenceCheck` unit tests for the
+   new check function itself.
+7. `tests/eval/test_staged_contract.py`
+   Unit tests pinning `_c_rejects_bracketed_id_ref`'s behavior.
+8. `tests/eval/run_agent_owl_generator.py`
+   `_MIN_STAGED_EXAMPLES` raised `15` -> `16`;
+   `_REQUIRED_STAGED_CONSTRAINT_KINDS` extended with
+   `rejects_bracketed_id_reference` so the new dimension can't silently
+   disappear from the dataset.
+9. `tests/eval/datasets/agent_owl_generator/baseline.jsonl` and
+   `.planning/agents/agent_owl_generator/eval/dataset.jsonl` (byte-identical
+   mirrors)
+   Appended `staged-bracketed-id-rejection-001`: a `complete_relations` row
+   built from the exact live-bug shape (one locked anchor + one included
+   candidate, `cand-6`) whose scripted constraint requires rejection of a
+   `[cand-6]`-bracketed reference with no post-rejection rewrite.
+10. `.planning/agents/agent_owl_generator/SPEC.md`
+    Documented the bare-id catalog + transport-level enum enforcement in
+    §3a; added the `stage_completion_bare_id_enforcement` row (**scored**,
+    unlike the Stage-1 transport row, via `rejects_bracketed_id_reference`)
+    to §5's staged table; added the "Id-bracketing false rejection"
+    failure-mode row to §6 with full root-cause/fix detail; raised the
+    dataset floor `15` -> `16` and documented the new regression row in §7;
+    appended the full sign-off entry to §10 with RED/GREEN evidence, both
+    live results, and the double-encoding-wording secondary finding.
+
+### RED/GREEN evidence
+
+RED confirmed by running the new tests against the pre-fix source (no
+`build_*_response_format` in `schemas.py`, no `response_format` parameter
+on `_run_completion`, bracketed catalog rendering in `prompts.py`) — all
+new assertions failed with `AttributeError`/`KeyError`/plain assertion
+failures, none pre-existing. GREEN after implementing the fix: all new and
+pre-existing tests pass.
+
+### Deterministic/offline eval (unchanged gate, unweakened)
+
+`uv run --frozen python tests/eval/run_agent_owl_generator.py` → all 16
+staged examples PASS, staged-contract aggregate `1.000` (threshold
+`0.950`); all 10 parsed-corpus cases PASS, aggregate `0.985` (threshold
+`0.900`, unaffected — the single pre-existing sub-threshold row,
+`owl-pending-only` at `0.850`, is unrelated to this change).
+
+### Live eval (`--live`, `DEFAULT` Databricks CLI profile, `ONTOBRICKS_LLM_ENDPOINT=databricks-claude-sonnet-5` — the production-gated eval endpoint)
+
+MLflow run:
+`https://fe-vm-bcayla-demos.cloud.databricks.com/ml/experiments/1426639566663818/runs/17f9399a8e44413bbf93838b0935d2a7`.
+Parsed-corpus contract aggregate `0.985` (≥ `0.900`, met). Deterministic
+staged-contract gate `1.000` (≥ `0.950`, unweakened, includes the new
+`staged-bracketed-id-rejection-001` row scoring `1.000`).
+
+Staged **live** evidence (informational only, per `staged_contract.py`'s
+own documented design — "not re-enforced" as a second CI gate, real
+endpoint output varies run to run): 5 detect rows all PASS `1.000`; the
+representative completion chain scored `infer_relations` PASS
+(`rejected=False`, `tools=None`) and `infer_attributes` FAIL
+(`rejected=True`, error `output must contain a 'attributes' list`) on this
+particular run — aggregate `0.958` against the informational, non-gating
+comparison point of `0.950`. This looks like a recurrence of the
+double-encoding quirk the prompt-wording fix targets, this time on the
+`attributes` substage; not chased further with additional paid live calls
+in this task per the live-verification budget constraint — flagged below
+as a residual concern for follow-up.
+
+### Exact-case live verification (read-only, exactly ONE `infer_relations` call, against the user's own endpoint `benoit_cayla.ontobricks-todrop.monclaudesonnetamoi`)
+
+Built a `GenerateDraft` in `COMPLETING` stage from the live session's own
+data — `fastapi_session/b3bd26a3fbe54f89895b0cfcfbff1feb`'s
+`domain_data.generate_draft`: the exact 15 locked anchors
+(`Agent`, `Call`, ..., `Subscription`) and the exact 2 already-included
+candidates (`cand-3a295986dc3f` "PaymentMethod",
+`cand-6d2837cbaf28` "Address") that produced the original live bug report
+— read-only (`json.load`, no session mutation; confirmed untouched
+afterwards). Called the production `staged.infer_relations` path directly
+with `databricks auth token --profile DEFAULT` credentials (never
+printed). Result: `success=True`, `rejected=False`, 26 relations returned,
+zero out-of-closure or bracketed ids — every `domain`/`range` value is a
+bare id from `closed_entity_ids()` (e.g. `{"label": "hasAddress",
+"domain": "Customer", "range": "cand-6d2837cbaf28"}`). This is the exact
+same session/anchor/candidate combination that produced the original
+`[Agent], [Call], ...` rejection error — confirming the fix resolves the
+reported bug end-to-end against the user's own endpoint.
+
+### Concerns (residual, informational)
+
+The `infer_attributes` FAIL observed in the informational live-scoring
+section above (real `databricks-claude-sonnet-5` endpoint, not the user's
+endpoint) suggests the double-encoding quirk the wording fix targets may
+not be fully eliminated on every substage/run — it is non-gating by the
+harness's own design and was not chased further to stay within the
+live-call budget for this task, but is worth a follow-up probe if it
+recurs. Both live verifications otherwise landed clean: the exact-case
+`infer_relations` call against the user's own endpoint (the specific
+combination that reproduced the original bug) returned zero bracketed or
+out-of-closure ids.
+
+Modified/added files:
+- `src/agents/agent_owl_generator/prompts.py`
+- `src/agents/agent_owl_generator/schemas.py`
+- `src/agents/agent_owl_generator/staged.py`
+- `tests/units/agents/test_owl_generator_schemas.py`
+- `tests/units/agents/test_owl_generator_staged.py`
+- `tests/eval/staged_contract.py`
+- `tests/eval/test_staged_contract.py`
+- `tests/eval/run_agent_owl_generator.py`
+- `tests/eval/datasets/agent_owl_generator/baseline.jsonl`
+- `.planning/agents/agent_owl_generator/eval/dataset.jsonl`
+- `.planning/agents/agent_owl_generator/SPEC.md`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6743 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 56.54s.
+
+## Fix residual JSON double-encoding under response_format json_schema in Stage-3 completion parsing
+
+### Context
+
+Flagged as the residual bug by the prior "id-bracketing" completion fix
+above: its "Secondary finding" only reworded a trailing prompt instruction
+("Return the `<X>` JSON." → "Now infer and provide the `<x>`."), which
+reduced but did not eliminate the underlying transport intermittency — the
+same fix's own informational live-scoring section already showed
+`infer_attributes` FAIL with `output must contain a 'attributes' list`
+on a real `databricks-claude-sonnet-5` run.
+
+Under `response_format` json_schema, Claude Sonnet endpoints
+(`databricks-claude-sonnet-5`, and the user's own
+`benoit_cayla.ontobricks-todrop.monclaudesonnetamoi`) intermittently
+double-encode the structured answer in two possible shapes: (a) a
+list-typed field's value comes back as a JSON-encoded STRING instead of
+the raw array (e.g. `{"attributes": "[{...}]"}"`, tripping
+`_require_list`'s `'attributes' must be a list` check), or (b) the ENTIRE
+payload comes back as a JSON string holding the real object as its value
+(`content = "{\"attributes\": [...]}"`, tripping `parse_json_object`'s
+`structured output must be a JSON object` check).
+
+### Changes (deterministic, reject-only preserved — NOT prose parsing)
+
+1. `src/agents/agent_owl_generator/schemas.py`
+   Added `_unwrap_double_encoded(value, expected)`: undoes AT MOST ONE
+   level of JSON-string double-encoding. Only when *value* is itself a
+   `str` is a single extra `json.loads` attempted; the decoded result is
+   used only if it is already an instance of *expected* — otherwise
+   *value* is returned unchanged (no loop, no regex/prose extraction).
+   Applied in two places: `parse_json_object`, when the top-level decode
+   yields a `str` (whole-payload shape — accepted only if the one extra
+   decode yields a `dict`); and `_require_list` plus
+   `parse_detection_payload`'s `candidate_entities` getter, when the
+   field's value is a `str` (field-level shape — accepted only if the one
+   extra decode yields a `list`). A shape still wrong after the one
+   tolerated decode (a plain sentence, a number, triple-encoding, a
+   decoded list of non-dict items) is rejected with the same pre-existing
+   clear message, with no further decoding. `validate_references` and the
+   closure/ordering checks are entirely unchanged.
+2. `src/agents/agent_owl_generator/staged.py`
+   No code change required: `_run_completion`'s attempt loop already only
+   retries on `finish_reason == "length"` (output truncation), never on
+   `SchemaValidationError` — a still-invalid-after-one-decode answer was
+   already returned immediately as `rejected=True` with exactly one LLM
+   call, and remains so.
+3. `tests/units/agents/test_owl_generator_schemas.py`
+   Added `TestWholePayloadDoubleEncodingTolerance` (5 tests: whole-payload
+   double-encoded acceptance, still-rejects-triple-encoded,
+   still-rejects-a-plain-json-encoded-sentence, still-rejects-a-
+   json-encoded-number, normal-payload-unchanged) and
+   `TestFieldLevelDoubleEncodingTolerance` (8 tests: field-level
+   double-encoded acceptance for relations/attributes/axioms/detection
+   `candidate_entities`, still-rejects-triple-encoded,
+   still-rejects-a-non-json-string, still-rejects-a-json-string-decoding-
+   to-a-number, still-validates-item-shape-after-unwrap).
+4. `tests/units/agents/test_owl_generator_staged.py`
+   Added to `TestInferAttributes`: `test_double_encoded_attributes_field_
+   is_accepted`, `test_whole_payload_double_encoded_is_accepted` (both
+   end-to-end through the real orchestrator, `mock_llm.call_count == 1`),
+   and `test_still_invalid_after_one_decode_is_rejected_no_second_call`
+   (triple-encoded field, `rejected=True`, exactly one LLM call — no
+   second finalization call).
+5. `tests/eval/staged_contract.py`
+   Added `_c_accepts_double_encoded_list_field`, mapped to the new
+   `accepts_double_encoded_list_field` constraint kind — builds the
+   completion draft from the dataset row's own `input.draft` (never a
+   hand-picked literal), scripts a double-encoded `attributes` field
+   answer, and asserts `infer_attributes` succeeds with the correctly
+   unwrapped `domain` — a real behavioural check, never the neutral-1.0
+   "unmapped kind" default.
+6. `tests/eval/run_agent_owl_generator.py`
+   `_MIN_STAGED_EXAMPLES` raised `16` -> `17`.
+7. `tests/eval/datasets/agent_owl_generator/baseline.jsonl` and
+   `.planning/agents/agent_owl_generator/eval/dataset.jsonl`
+   (byte-identical mirrors)
+   Appended `staged-double-encoded-payload-001`: a `complete_attributes`
+   row (one locked anchor + one included candidate, `cand-6`) whose
+   scripted constraint (`accepts_double_encoded_list_field`) requires
+   acceptance of a double-encoded `attributes` field with the domain
+   correctly unwrapped to `cand-6`.
+8. `.planning/agents/agent_owl_generator/SPEC.md`
+   Added the "JSON double-encoding under `response_format` json_schema
+   (residual, this revision)" failure-mode row to §6 with full detail;
+   documented the dataset floor raise `16` -> `17` and the new regression
+   row in §7; appended the full sign-off entry to §10 with RED/GREEN
+   evidence, the deterministic/offline eval result, the full-suite result,
+   and the live verification result.
+
+### RED/GREEN evidence
+
+RED confirmed by running the 13 new `test_owl_generator_schemas.py` tests
+against the pre-fix source (no `_unwrap_double_encoded` in `schemas.py`):
+exactly 5 failures — `test_whole_payload_double_encoded_json_string_is_
+accepted`, and the 4 field-level `*_is_unwrapped` tests for
+attributes/relations/axioms/detection — all with the pre-fix rejection
+messages (`structured output must be a JSON object` /
+`output must contain a '<key>' list`); the 8 still-reject/unchanged tests
+in the same run already passed, as expected, since those code paths were
+untouched by the fix. GREEN after implementing `_unwrap_double_encoded`
+and wiring it into `parse_json_object`/`_require_list`/
+`parse_detection_payload`: all 47 tests in the file pass, plus the 3 new
+`test_owl_generator_staged.py::TestInferAttributes` integration tests.
+
+### Deterministic/offline eval (unchanged gate, unweakened)
+
+`uv run --frozen python tests/eval/run_agent_owl_generator.py` → all 17
+staged examples PASS (including the new `staged-double-encoded-payload-
+001` scoring `1.000`), staged-contract aggregate `1.000` (threshold
+`0.950`); all 10 parsed-corpus cases PASS, aggregate `1.000` (threshold
+`0.900`).
+
+### Live verification (read-only, exactly ONE `infer_attributes` call, against the user's own endpoint `benoit_cayla.ontobricks-todrop.monclaudesonnetamoi`)
+
+Rebuilt a `COMPLETING`-stage `GenerateDraft` from the live session
+`fastapi_session/b3bd26a3fbe54f89895b0cfcfbff1feb`'s
+`domain_data.ontology.classes` (15 real ontology classes, via
+`GenerateDraft.build_locked_anchors_from_classes` — read-only, the session
+file was only read, never written) as locked anchors, plus 2 dummy
+included candidates, with the `relations` checkpoint marked `done` (a
+minimal valid relations result referencing only closed ids) so the
+ordering gate allowed `infer_attributes` to start. Called the production
+`staged.infer_attributes` directly with `databricks auth token --profile
+DEFAULT --output json` credentials (never printed/logged). Result:
+`success=True`, `rejected=False`, 105 attributes returned, every returned
+`domain` id confirmed a member of `closed_entity_ids()` (all 15 anchor
+ids used; the 2 dummy candidates were not grounded in any evidence, so the
+model reasonably did not attribute them). `infer_attributes` never
+mutates the ontology, so this call was read-only by construction.
+
+### Concerns (residual)
+
+The live call above did not itself trip the double-encoding shape (the
+endpoint answered correctly-shaped JSON on this attempt), so it is
+evidence that `infer_attributes` still works end-to-end against this
+endpoint, not direct proof that a double-encoded wire response was
+unwrapped live — per this task's own instruction, no repeated paid live
+calls were made to force-reproduce an intermittent endpoint quirk. The
+deterministic unit/staged tests above are the actual gate for the fix
+itself and cover every shape (whole-payload, field-level, still-reject
+after one decode) offline and deterministically.
+
+Modified/added files:
+- `src/agents/agent_owl_generator/schemas.py`
+- `tests/units/agents/test_owl_generator_schemas.py`
+- `tests/units/agents/test_owl_generator_staged.py`
+- `tests/eval/staged_contract.py`
+- `tests/eval/run_agent_owl_generator.py`
+- `tests/eval/datasets/agent_owl_generator/baseline.jsonl`
+- `.planning/agents/agent_owl_generator/eval/dataset.jsonl`
+- `.planning/agents/agent_owl_generator/SPEC.md`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6759 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 56.42s.
+
+## Generate wizard: rename Class -> Entity, clarify Relationship/Attribute, add Start Over
+
+### Context
+
+User-approved frontend-only fix batch for the Generate ontology wizard
+(`_ontology_wizard.html` + `ontology-wizard.js` / `ontology-wizard-review.js`):
+(1) the wizard and Help Center glossary still showed the technical OWL term
+"Class" to end users instead of the app's established "Entity" vocabulary;
+(2) the Add/Edit candidate "Type hint" dropdown offered bare "Object
+Property" / "Data Property" options with no link back to the app's existing
+friendly split (Entities / Relationships / Attributes), which field
+feedback flagged as ambiguous; (3) Stage 3 (Complete) had no way back to
+Configure — only a hidden Retry button — unlike Stage 2, which already had
+a "Discard Draft" button wired to `discardDraft()`. No backend/agents code
+was touched; `value="class"` / `value="object_property"` /
+`value="data_property"` and the `stats.classes_added` data key are
+unchanged — only user-visible label text and wizard navigation changed.
+
+### Changes
+
+1. `src/front/templates/partials/ontology/_ontology_wizard.html`
+   Add-candidate "Type hint" `<select>`: relabeled `Class` -> `Entity`,
+   `Object Property` -> `Relationship (object property)`, `Data Property`
+   -> `Attribute (data property)` (values unchanged). Added a one-line
+   `.text-muted.small` hint under the select clarifying that a Relationship
+   links two entities while an Attribute stores a single value on one
+   entity. Relabeled the Stage 2 "Discard Draft" button to "Discard Draft &
+   Start Over" (same `data-action="wizard-review-discard"`, unchanged
+   behavior) for consistency with the new Stage 3 control. Added a Stage 3
+   "Start Over" button (`btn btn-outline-danger`, `id="wizardCompleteDiscardBtn"`,
+   `data-action="wizard-complete-discard"`) next to the existing Retry
+   button in the Complete pane's `d-flex gap-2` row.
+2. `src/front/static/ontology/js/ontology-wizard-review.js`
+   Same relabeling (`Entity` / `Relationship (object property)` /
+   `Attribute (data property)`) plus the matching one-line hint on the
+   Stage 2 per-candidate edit variant of the type-hint select
+   (`renderCandidateRow`), found duplicated during the "any other
+   Class/Classes text" sweep.
+3. `src/front/static/ontology/js/ontology-wizard.js`
+   Renamed the word "classes" -> "entities" in the two user-visible
+   completion toasts/summary strings (`renderCompleteChecklist`'s merge
+   summary and `handleCompletionSuccess`'s success toast); the underlying
+   `stats.classes_added` data key is untouched. Added
+   `discardDraftAndStartOver()`: fetches the current draft to distinguish
+   an in-flight/failed completion from an already-`done` (merged) draft
+   for accurate confirm copy, shows the shared `showConfirmDialog(...)`
+   (never a native `confirm()`), cancels `WIZARD_COMPLETE_TASK_KEY`
+   polling/sessionStorage tracking and re-enables the form if a completion
+   task is still running (mirrors the existing stale-banner re-detect
+   guard's "don't silently discard unacted-on work" pattern), then POSTs
+   the same `/ontology/wizard/generate/draft/discard` endpoint Stage 2 uses
+   and calls `setWizardStage('configure')` to return to Configure. Wired
+   `data-action="wizard-complete-discard"` into the existing delegated
+   click handler alongside `wizard-complete-retry`.
+4. `src/front/templates/partials/layout/help_modal.html`
+   Glossary entry reworded from `<dt>Entity / Class</dt>` to `<dt>Entity</dt>`
+   with the dd now stating "the underlying OWL term is *Class*" — leads
+   with the friendly term, keeps the technical mapping instead of erasing it.
+5. `src/front/static/global/css/permissions.css`
+   Added `[data-action="wizard-complete-discard"]` to the existing
+   read-only/role-viewer/edit-lock disable rule alongside the other
+   Stage 2/3 draft-mutating controls, per the file's own "every
+   draft-mutating control needs its own entry" contract.
+6. `tests/units/front/test_ontology_generate_wizard_staged.py`
+   New tests (RED before implementation, GREEN after): Entity label with
+   `value="class"` preserved in both the Add-candidate and per-candidate
+   edit type-hint selects; Relationship/Attribute relabeling + hint text in
+   both selects; help modal glossary leads with Entity; toast strings say
+   "entities" while `stats.classes_added` stays intact; Stage 3 Start Over
+   button exists, wired to the discard endpoint + `showConfirmDialog` +
+   return-to-Configure, and clears `WIZARD_COMPLETE_TASK_KEY`; Stage 2
+   discard button keeps its `data-action` and endpoint after the label
+   change.
+7. `tests/units/front/test_wizard_review_permissions_gate.py`
+   Added `wizard-complete-discard` to both the "every mutation action is
+   gated" and "every gated action still exists in markup/JS" parametrized
+   lists.
+
+### Scope notes / deliberately left as technical OWL/RDF/SPARQL terms
+
+Left unchanged per the task's explicit exemption for internal/technical
+vocabulary: `owl:Class` / `owl:equivalentClass` in code-sample text
+(`_query_api.html`), the SPARQL `<Class>` placeholder in
+`_ontology_business_rules.html`, the `equivalentClass` axiom `value=`
+attributes in `_ontology_axioms.html`/`ontology-axioms.js`, and every
+`*Class*`-named JS identifier/CSS class attribute across `mapping-*.js`,
+`ontology-entities.js`, `ontology-shared-panels.js`, etc. (className,
+classList, querySelector, existing `OntologyState.classes` data model).
+The Stage 2 read-only locked-anchor badge (`renderLockedAnchorRow`) still
+renders the raw `type_hint` value (e.g. lowercase `class`) rather than a
+friendly label — out of this batch's explicit known-targets list; flagging
+for a follow-up if the same clarity bar should apply there too.
+`docs/user-guide.md` and the Sphinx API docs were grepped for a
+wizard-specific "Class" type-option mention per the process step; none
+exists, so neither was touched.
+
+### Note on repo state
+
+This worktree had substantial pre-existing/concurrent uncommitted work on
+`src/agents/agent_owl_generator/**`, `src/api/routers/internal/ontology.py`,
+`src/back/core/task_manager/TaskManager.py`,
+`src/back/objects/ontology/GenerateWorkflow.py`, and a Stage-2/3 UI
+grid-layout redesign (`wizard-candidate-grid` / `wizard-locked-grid` /
+detect-live-list) partially landed in
+`tests/units/front/test_ontology_generate_wizard_staged.py` — none of it
+authored by this change, none of it touched by this change, and none of it
+staged/committed here (verified file-by-file and hunk-by-hunk via
+`git diff`/`git add -p`, then confirmed with an isolated `git stash
+--keep-index` test run). That parallel work is unrelated to and untouched
+by this frontend-only batch; it remains in the working tree exactly as it
+was, for whoever owns it to finish and commit separately.
+
+Modified files (this change only):
+- `src/front/templates/partials/ontology/_ontology_wizard.html`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/static/ontology/js/ontology-wizard.js`
+- `src/front/static/ontology/js/ontology-wizard-review.js`
+- `src/front/static/global/css/permissions.css`
+- `tests/units/front/test_ontology_generate_wizard_staged.py`
+- `tests/units/front/test_wizard_review_permissions_gate.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: new/updated wizard tests RED before implementation (11 failing),
+GREEN after. Full suite run in isolation (this change's 7 files staged,
+all other pre-existing/concurrent worktree changes stashed via `git stash
+--keep-index` for the duration of the run only, then restored) via
+`uv run --frozen pytest -q -m "not scenario"` -> 6772 passed, 304 skipped,
+6 deselected, 1 xfailed, 32 warnings, 0 failed.
+
+## Collapse inverse Generate relations to one direction
+
+Context: Stage 3 `infer_relations` was emitting both directions of the same
+fact (for example `handles` A→B and `handled` B→A). The prompt already
+forbade bidirectional relations, but merge only deduped exact
+`(domain, range, label)` tuples, so both object properties landed in the
+ontology. Collapse inverses deterministically and keep the active-voice
+direction.
+
+Changes:
+
+1. src/agents/agent_owl_generator/prompts.py
+   Relations system prompt: never emit a relation and its inverse; worked
+   example is handles vs handled / owns vs ownedBy.
+2. src/agents/agent_owl_generator/schemas.py
+   `drop_inverse_relations` keeps the higher active-voice score direction
+   per unordered entity pair; `parse_relations_payload` applies it.
+3. src/back/objects/ontology/GenerateWorkflow.py
+   Merge skips a relation whose reverse directed pair is already present
+   (defense in depth for older checkpoints).
+4. tests/units/agents/test_owl_generator_schemas.py
+   Parser keeps `handles` and drops `handled`; unrelated pairs stay.
+5. tests/units/ontology/test_generate_workflow.py
+   Merge of a handles/handled checkpoint adds one ObjectProperty.
+6. tests/eval/staged_contract.py, tests/eval/run_agent_owl_generator.py,
+   tests/eval/datasets/agent_owl_generator/baseline.jsonl,
+   .planning/agents/agent_owl_generator/eval/dataset.jsonl
+   New `drops_inverse_relations` constraint and
+   `staged-no-inverse-relations-001` row; staged example floor 17 → 18.
+7. .planning/agents/agent_owl_generator/SPEC.md
+   New §6 failure mode for inverse duplicate relations.
+8. docs/user-guide.md
+   Complete step notes that inverse pairs collapse to the active-voice
+   direction.
+
+Modified files:
+- src/agents/agent_owl_generator/prompts.py
+- src/agents/agent_owl_generator/schemas.py
+- src/back/objects/ontology/GenerateWorkflow.py
+- tests/units/agents/test_owl_generator_schemas.py
+- tests/units/ontology/test_generate_workflow.py
+- tests/eval/staged_contract.py
+- tests/eval/run_agent_owl_generator.py
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- .planning/agents/agent_owl_generator/eval/dataset.jsonl
+- .planning/agents/agent_owl_generator/SPEC.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-21.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6773 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.21s.
+
+## Focus detection and compact the entity review
+
+Context: The Generate detection stage exposed relationship, attribute, and
+inheritance options even though Stage 1 must only propose entities.
+Detection progress also showed a static sentence, while entity review used
+full-width rows that made existing and candidate entities hard to scan.
+
+Changes:
+
+1. `src/front/templates/partials/ontology/_ontology_wizard.html`
+   Remove the Stage 1 Options tab and all relationship/attribute/type
+   selectors; add entity-only guidance, responsive review grid classes, and
+   move the Review actions beside the top 1–2–3 stepper.
+2. `src/front/static/ontology/js/ontology-wizard.js`
+   Send an empty Stage 1 options object, render detected-entity progress,
+   poll detection at the publication cadence, and show the top action group
+   only during Review.
+3. `src/front/static/ontology/js/ontology-wizard-review.js`
+   Render locked entities as compact Entity cards and keep candidate edits
+   entity-only while persisting the internal class type.
+4. `src/front/static/ontology/css/ontology-wizard.css`
+   Add responsive locked/candidate grids, compact card controls, live
+   detection chips, desktop/mobile stepper-action layout, narrow-screen tab
+   sizing, and a visible keyboard focus ring for wizard buttons.
+5. `src/front/static/global/js/task-progress-ui.js`
+   Add the accessible live detected-entity chip region to async overlays.
+6. `src/api/routers/internal/ontology.py` and
+   `src/back/core/task_manager/TaskManager.py`
+   Publish detected entity labels incrementally through the running task.
+7. `tests/units/front/test_ontology_generate_wizard_staged.py`,
+   `tests/units/api/test_generate_routes.py`, and
+   `tests/units/core/test_task_manager.py`
+   Cover entity-only configuration/review, responsive grids, top Review
+   actions, live progress publication, and task result merging.
+8. `docs/user-guide.md`
+   Document the entity-only Stage 1, live entity progress, responsive review
+   cards, and top Review action placement.
+
+Modified files:
+- `src/front/templates/partials/ontology/_ontology_wizard.html`
+- `src/front/static/ontology/js/ontology-wizard.js`
+- `src/front/static/ontology/js/ontology-wizard-review.js`
+- `src/front/static/ontology/css/ontology-wizard.css`
+- `src/front/static/global/js/task-progress-ui.js`
+- `src/api/routers/internal/ontology.py`
+- `src/back/core/task_manager/TaskManager.py`
+- `tests/units/front/test_ontology_generate_wizard_staged.py`
+- `tests/units/api/test_generate_routes.py`
+- `tests/units/core/test_task_manager.py`
+- `docs/user-guide.md`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6777 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.19s.
+
+Eval: `uv run --frozen python tests/eval/run_agent_owl_generator.py` →
+staged contract 1.000 (threshold 0.950), parsed-corpus contract 1.000
+(threshold 0.900).
+
+## Restore the moved Complete action
+
+Context: Moving `Continue to Complete` beside the top stepper placed it
+outside `#wizardReviewPane`, but Review click delegation was still attached
+only to that pane. The button therefore received no handler and appeared to
+do nothing.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-wizard-review.js`
+   Delegate Review clicks from the shared `#wizard-section` host so the
+   stepper-level Continue and Discard actions reach their existing handlers;
+   keep field change and keyboard listeners scoped to the Review pane.
+2. `tests/units/front/test_ontology_generate_wizard_staged.py`
+   Add a regression contract proving stepper-level Review actions share the
+   wizard click delegate.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-wizard-review.js`
+- `tests/units/front/test_ontology_generate_wizard_staged.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6778 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.91s.
+
+## Aurora Pro visual refresh: admin-configurable Aurora accent and gradient CTAs
+
+Context: The Aurora Pro design direction asked for a modern, gradient-led
+shell (filled CTAs, selected L2 workspace chip, sidebar active rail, resting
+card shadow) driven by a second admin-configurable accent color alongside
+Primary, without touching navigation structure/IA. All new colors had to
+stay configurable from Settings → Configuration → UI, deterministically
+derived when omitted, and contrast-safe against `--db-on-primary`.
+
+Changes:
+
+1. `src/back/core/helpers/UIBranding.py`
+   Add `DEFAULT_AURORA_COLOR`, HSL round-trip helpers (`_rgb_to_hsl`,
+   `_hsl_to_rgb`), a generic `_mix_colors` primitive, and
+   `_derive_aurora_hex` / `_derive_gradient_end` / `_derive_canvas_tint`.
+   Extend `BrandPalette` and `UIBranding` with `aurora`, `aurora_rgb`,
+   `aurora_dark`, `gradient_end`, `canvas_tint`, `aurora_color`.
+   `derive_brand_palette` gains an optional `aurora_color` parameter;
+   `normalize_ui_branding` treats an invalid/missing stored Aurora as absent
+   and re-derives instead of failing. Add `validate_optional_hex_color` for
+   the save-path field validation (blank = derive, malformed = reject).
+2. `src/back/objects/session/GlobalConfigService.py`,
+   `src/back/objects/domain/SettingsService.py`,
+   `src/api/routers/internal/settings.py`
+   Persist and validate `aurora_color` end to end:
+   `SettingsService.save_ui_branding_result` gains `aurora_color` as its 3rd
+   positional parameter, validated via `validate_optional_hex_color` before
+   `normalize_ui_branding`; the `/settings/ui-branding` route accepts a new
+   `aurora_color` form field.
+3. `src/shared/fastapi/ui_branding.py`
+   `render_ui_branding_css_vars` now emits `--db-aurora`, `--db-aurora-rgb`,
+   `--db-aurora-dark`, `--db-gradient-end`, `--db-canvas-warm` at first paint,
+   and redefines `--db-shadow-primary` to `0 8px 20px rgba(primary_rgb, 0.35)`.
+4. `src/front/templates/settings.html`, `src/front/static/global/css/config.css`
+   Add an Aurora color picker (`#uiBrandingAuroraColor` /
+   `#uiBrandingAuroraHex`) mirroring Primary, plus an `#uiSwatchAurora` swatch
+   in the Theme card.
+5. `src/front/static/config/js/settings.js`
+   Mirror the Python HSL/Aurora/gradient-end/canvas-tint math exactly for
+   live preview: `deriveBrandPalette(primaryColor, auroraColor)` gains the
+   Aurora parameter; `UI_BRANDING_DEFAULTS` gains `aurora_color`;
+   `normalizeUIBrandingDraft`, `previewUIBranding`, `updateUIBrandingValidity`,
+   `updateUIBrandingDirtyState`, `isSavedUIBrandingDefaultState`, and
+   `saveUIBranding` all read/write Aurora; add `updateDraftAurora` and bind
+   the new inputs with the same validation/aria-invalid pattern as Primary.
+6. `src/front/static/global/css/main.css`
+   Add `--db-aurora`, `--db-aurora-rgb`, `--db-aurora-dark`,
+   `--db-gradient-end`, `--db-gradient-primary`, `--db-gradient-rail`,
+   `--db-halo` tokens; give resting `.card` a `--db-shadow-sm` box-shadow;
+   gradient-fill `.ob-subnav-link.active` (+ ordinal swap) and
+   `.ob-subnav-save-btn` with `--db-gradient-primary`.
+7. `src/front/static/global/css/sidebar-layout.css`,
+   `src/front/static/global/css/components.css`
+   Paint the sidebar active-row rail with `--db-gradient-rail` and the shared
+   `.btn-primary` CTA with `--db-gradient-primary` + `--db-shadow-primary`
+   (pressed/open states stay solid `--db-primary-darker`, unchanged).
+8. `.cursor/11-frontend-design.mdc`
+   Document the Aurora accent, `--db-gradient-primary`/`--db-gradient-rail`
+   contract, and the resting-card shadow addition.
+
+Modified files:
+- `src/back/core/helpers/UIBranding.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/back/core/helpers/__init__.py`
+- `src/api/routers/internal/settings.py`
+- `src/shared/fastapi/ui_branding.py`
+- `src/front/templates/settings.html`
+- `src/front/static/global/css/config.css`
+- `src/front/static/config/js/settings.js`
+- `src/front/static/global/css/main.css`
+- `src/front/static/global/css/sidebar-layout.css`
+- `src/front/static/global/css/components.css`
+- `tests/units/ui/test_branding.py`
+- `tests/units/settings/test_ui_branding.py`
+- `tests/units/api/test_ui_branding_settings.py`
+- `tests/units/front/test_ui_branding_rendering.py`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/front/test_segmented_subnav_contract.py`
+- `.cursor/11-frontend-design.mdc`
+- `docs/superpowers/specs/2026-09-21-aurora-pro-ui-design.md`
+- `docs/superpowers/plans/2026-09-21-aurora-pro-ui.md`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6800 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.52s.
+
+## Soften the L2 Domain badge with a darker fill
+
+Context: The navbar level-2 Domain badge used a light primary wash plus a
+hard 1px primary outline, which read as a boxed chip next to the segmented
+workspace control. Replace the outline with a darker brand-tinted
+background so the badge stays selected without a hard border.
+
+Changes:
+
+1. src/front/static/global/css/main.css
+   Add `--db-primary-soft` / `--db-primary-soft-hover` (0.18 / 0.28 of
+   `--db-primary-rgb`) and restyle `.ob-subnav-context-trigger` as a
+   borderless filled badge; hover darkens the wash instead of the outline.
+2. tests/units/front/test_segmented_subnav_contract.py
+   Lock the borderless Domain-badge fill and hover wash tokens.
+3. .cursor/11-frontend-design.mdc
+   Document the soft-fill tokens and the L2 Domain badge contract.
+
+Modified files:
+- src/front/static/global/css/main.css
+- tests/units/front/test_segmented_subnav_contract.py
+- .cursor/11-frontend-design.mdc
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6800 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.81s
+
+## Add SPARQL playground runtime lifecycle
+
+Context: Implement Task 3 for the Knowledge Graph SPARQL playground by adding
+sample loading, SPARQL execution, result rendering, generated SQL display, CSV
+download, and query tab/deep-link lifecycle while preserving the existing
+delegated query-shell action map and GraphiQL lazy init IDs.
+
+Changes:
+
+1. `src/front/static/query/js/query-execute.js`
+   Replace legacy query executor with `SPARQLPlayground` controller (`init`,
+   `execute`, `applySample`, `isTripleProjection`, `showInExplorer` guard),
+   limit clamping (1..5000, default 100), status/error handling, Grid.js/fallback
+   results rendering on `sparql*` IDs, generated SQL `textContent`, and CSV export.
+2. `src/front/static/query/js/query.js`
+   Add query language tab lifecycle (`initQueryPlayground`), URL deep-link tab
+   support (`?tab=sparql`), and one-time `shown.bs.tab` listeners without changing
+   `_QUERY_SHELL_ACTION_MAP` / `_bindQueryShellActions()`.
+3. `src/front/static/query/js/query-graphql.js`
+   Align `_hide` with no-inline-style markup by adding `d-none` and `display:none`.
+4. `tests/units/front/test_sparql_playground_contract.py`
+   Add static contract checks for `SPARQLPlayground` interfaces and no automatic
+   Explorer switch from `execute()`, plus selected-tab initialization assertions.
+5. `tests/e2e/dtwin/test_dtwin_flows.py`
+   Add Query-shell tab visibility, SPARQL deep-link default query, and triple
+   projection detection checks.
+
+Modified files:
+- `src/front/static/query/js/query-execute.js`
+- `src/front/static/query/js/query.js`
+- `src/front/static/query/js/query-graphql.js`
+- `tests/units/front/test_sparql_playground_contract.py`
+- `tests/e2e/dtwin/test_dtwin_flows.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py tests/e2e/dtwin/test_dtwin_flows.py` → 10 passed, 12 skipped, 1 warning in 0.26s
+- `uv run --frozen pytest -q -m "not scenario"` → 3 failed, 6826 passed, 307 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.87s (failures in existing `_query_graphql.html` contracts unrelated to Task 3 JS/test scope)
+
+## Fix Task 3 review regressions
+
+Context: Address critical and important review findings for Task 3 before
+acceptance: Query tab re-entry must preserve the selected tab, generated SQL
+must remain visible after a failed subsequent execution, and stale template
+contracts must follow the Task 2 Query-shell architecture (`_query_query.html`
+shared header + `_query_graphql.html` tab pane only).
+
+Changes:
+
+1. `src/front/static/query/js/query.js`
+   Add `getActiveQueryTabName()` and update `initQueryPlayground(tabName)` so
+   only explicit `tab=graphql|sparql` triggers Bootstrap `.show()`; when no
+   pending tab exists, it inspects the currently active tab and lazily inits
+   only that module without force-switching back to GraphQL.
+2. `src/front/static/query/js/query-execute.js`
+   Preserve prior generated SQL on execution failure by removing the catch-path
+   reset call to `displayGeneratedSql("")`.
+3. `tests/units/front/test_sparql_playground_contract.py`
+   Add regression contracts proving no default GraphQL force-switch on later
+   Query activation and proving execute catch-path does not clear generated SQL.
+4. `tests/units/front/test_help_center_menu_sync.py`
+   Move Query Ontology-button icon contract to `_query_query.html`; keep
+   GraphQL-pane-specific assertions on `_query_graphql.html`.
+5. `tests/units/front/test_kg_readiness_indicator.py`
+   Update readiness-indicator include coverage to check `_query_query.html`
+   instead of `_query_graphql.html`.
+6. `tests/units/front/test_kg_section_headers.py`
+   Update Query header contract to target `_query_query.html` (shared header)
+   while keeping Explorer/Chat checks unchanged.
+
+Modified files:
+- `src/front/static/query/js/query.js`
+- `src/front/static/query/js/query-execute.js`
+- `tests/units/front/test_sparql_playground_contract.py`
+- `tests/units/front/test_help_center_menu_sync.py`
+- `tests/units/front/test_kg_readiness_indicator.py`
+- `tests/units/front/test_kg_section_headers.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py` → RED: 2 failed, 10 passed, 1 warning in 0.18s; GREEN: included in focused suite below.
+- `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py tests/e2e/dtwin/test_dtwin_flows.py tests/units/front/test_help_center_menu_sync.py tests/units/front/test_kg_readiness_indicator.py tests/units/front/test_kg_section_headers.py` → 44 passed, 12 skipped, 1 warning in 0.34s
+- `uv run --frozen pytest -q -m "not scenario"` → 6831 passed, 307 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.31s
+
+## Add the explicit Show in Explorer bridge
+
+Context: Task 4 of the `staged-ontology-generate`/query-shell follow-up plan.
+`SPARQLPlayground` already kept Run on the SPARQL tab and gated
+`sparqlExploreBtn` on triple-shaped columns via a guarded `showInExplorer()`
+stub. This task wires that explicit action to a new `SigmaGraph.loadQueryResults`
+bridge so clicking "Show in Explorer" — and only that click — navigates to the
+Explorer section and renders the current SPARQL rows. Run continues to never
+navigate.
+
+Changes:
+
+1. `src/front/static/query/js/query-sigmagraph.js`
+   Add `SigmaGraph.loadQueryResults(results, columns)` to the module's public
+   API: guards on non-empty array input, shows the graph-loading overlay,
+   awaits `_waitForGraphLibs(10000)`, and on failure hides the overlay and
+   emits a `showNotification(..., 'error')` without throwing. On success it
+   defensively copies `results`/`columns` into `lastQueryResults`, calls the
+   existing `buildGraph`, resets selection/hover/search state exactly like
+   `_expandAndRenderGraph`, and calls `_render()`.
+2. `src/front/static/query/js/query-execute.js`
+   Replace the `showInExplorer()` guard stub with the real bridge: re-checks
+   `currentResult` is non-empty and triple-shaped, calls
+   `SidebarNav.switchTo('sigmagraph')`, then after a 150ms tick (letting the
+   section become visible) calls `SigmaGraph.loadQueryResults(rows, columns)`
+   and surfaces a fallback notification if it returns `false`. Run's
+   `execute()` body is untouched — no sidebar switch was added there.
+3. `tests/units/front/test_sparql_playground_contract.py`
+   Add `test_explorer_bridge_is_explicit_and_sigma_accepts_query_rows`,
+   asserting `SigmaGraph.loadQueryResults` is called from
+   `query-execute.js`, `loadQueryResults:` is defined on `SigmaGraph`, and the
+   explicit `SidebarNav.switchTo('sigmagraph')` call exists outside of
+   `execute()` (already covered by the pre-existing
+   `test_sparql_controller_has_samples_and_no_automatic_explorer_switch`).
+4. `tests/e2e/dtwin/test_dtwin_flows.py`
+   Add `TestQueryPlayground::test_show_in_explorer_stays_disabled_for_non_triples`,
+   confirming `#sparqlExploreBtn` stays disabled on the default (non-triple)
+   sample query — i.e. no implicit path ever enables/triggers the bridge.
+
+Modified files:
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/static/query/js/query-execute.js`
+- `tests/units/front/test_sparql_playground_contract.py`
+- `tests/e2e/dtwin/test_dtwin_flows.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py` → RED: 1 failed, 12 passed; GREEN: 13 passed in 0.14s.
+- `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py tests/e2e/dtwin/test_dtwin_flows.py` → 13 passed, 13 skipped (e2e nightly-gated) in 0.46s; re-run with `ONTOBRICKS_E2E_FAKE_CREDS=1` to force the browser suite → 26 passed in 19.60s (no new warnings emitted).
+- `node --check` on both modified JS files → syntax OK.
+- `uv run --frozen pytest -q -m "not scenario"` → 6832 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.76s (no new warnings vs. baseline).
+
+## Fix Task 4 review Important findings (self-sufficient loader, no timer, dedup notification)
+
+Context: Code review of "Add the explicit Show in Explorer bridge" found
+three Important findings and one adjacent Minor. The user chose the hardened
+implementation over the original timer handoff: `SigmaGraph.loadQueryResults`
+must not depend on `SigmaGraph.init()` having been scheduled elsewhere, the
+150ms timer coupling in `showInExplorer()` must go, and a graph-library
+failure must produce exactly one user notification. Also strengthened the
+weak Task 4 tests (pure string presence / a statically-disabled button) into
+real behavioral coverage.
+
+Changes:
+
+1. `src/front/static/query/js/query-sigmagraph.js`
+   `loadQueryResults` now calls `_loadGraphLibs()` itself (no longer relies
+   on `SigmaGraph.init()`'s call). It also claims `_graphFilterActive` and
+   caches `lastQueryResults` **synchronously, before its first `await`**, so
+   a `SigmaGraph.init()` concurrently scheduled by query.js's
+   `sidebarSectionChanged` → 100ms timer sees the flag already set and takes
+   its "already active" branch instead of resetting `d3NodesData` /
+   `d3LinksData` / `_graph` out from under the rows being loaded. On a
+   library-load failure it restores the prior flag/cache (so a failed load
+   can't mask an existing, already-rendered graph as "active") and no
+   longer calls `showNotification` itself — it `console.error`s and returns
+   `false`, leaving the single user-facing toast to the caller.
+2. `src/front/static/query/js/query-execute.js`
+   `showInExplorer()` drops the `window.setTimeout(..., 150)` handoff:
+   after validating rows/columns it calls `SidebarNav.switchTo('sigmagraph')`
+   then chains `SigmaGraph.loadQueryResults(rows, columns).then(...)`
+   directly — no timer, and the sole failure notification lives here.
+3. `tests/units/front/test_sparql_playground_contract.py`
+   Strengthened `test_explorer_bridge_is_explicit_and_sigma_accepts_query_rows`
+   with a `showInExplorer()` body-order assertion (no `setTimeout`, `switchTo`
+   before `loadQueryResults`). Added
+   `test_load_query_results_starts_its_own_lib_load_before_waiting` (proves
+   `_loadGraphLibs()` precedes `await _waitForGraphLibs()`) and
+   `test_load_query_results_claims_graph_filter_state_before_any_await`
+   (proves `_graphFilterActive = true` is set before the function's first
+   `await`).
+4. `tests/e2e/dtwin/test_dtwin_flows.py`
+   Replaced the "statically disabled button" check with
+   `test_show_in_explorer_switches_then_loads_sigma_bridge_with_query_rows`:
+   mocks `/dtwin/execute` (`page.route`) with a triple-shaped result, runs
+   the query through the real UI to prove `#sparqlExploreBtn` goes from
+   disabled to enabled, stubs `SidebarNav.switchTo` / `SigmaGraph.
+   loadQueryResults` to record call order/args, clicks Show in Explorer, and
+   asserts `switchTo` fires before `loadQueryResults` with the exact
+   executed rows/columns — deterministic and network-independent.
+
+Modified files:
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/static/query/js/query-execute.js`
+- `tests/units/front/test_sparql_playground_contract.py`
+- `tests/e2e/dtwin/test_dtwin_flows.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-21.log`
+
+Tests:
+- RED (new assertions against pre-fix code, JS temporarily reverted via
+  `git stash`): `test_explorer_bridge_is_explicit_and_sigma_accepts_query_rows`,
+  `test_load_query_results_starts_its_own_lib_load_before_waiting`, and
+  `test_load_query_results_claims_graph_filter_state_before_any_await` all
+  failed as expected (3 failed, 12 passed). The new e2e behavioral test
+  passed even against the pre-fix timer code (it asserts final order/args,
+  which the old code also produced, just via a timer) — the "no timer"
+  requirement itself is covered by the static test above.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py` → 15 passed in 0.13s.
+- `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py tests/e2e/dtwin/test_dtwin_flows.py` → 15 passed, 13 skipped (e2e nightly-gated) in 0.47s.
+- Forced e2e: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py tests/e2e/dtwin/test_dtwin_flows.py` → 28 passed in 19.37s.
+- `uv run --frozen pytest -q -m "not scenario"` → 6834 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.58s (+2 vs. Task 4 baseline of 6832 = the 2 new unit contract tests; no regressions).

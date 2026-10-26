@@ -3,7 +3,7 @@
 The :class:`RegistryStore` ABC is the single seam between the registry
 services (:mod:`back.objects.registry.RegistryService`,
 :mod:`back.objects.registry.PermissionService`,
-:mod:`back.objects.registry.scheduler`,
+:mod:`back.objects.registry.schedule.BuildScheduler`,
 :mod:`back.objects.session.GlobalConfigService`) and the underlying
 Lakebase Postgres storage.
 
@@ -30,18 +30,34 @@ removed in v0.4.0. Operators with on-Volume registry data must run
 from __future__ import annotations
 
 from .base import (
+    BuildRunEntry,
+    ChangeEvent,
+    DocumentRow,
+    DomainComment,
     DomainSummary,
+    DomainTask,
+    GraphAnalyticsResult,
+    GraphAnalyticsRun,
     RegistryStore,
+    ReviewEvent,
     ScheduleHistoryEntry,
     StoreError,
 )
 from .factory import RegistryFactory
 
 __all__ = [
+    "BuildRunEntry",
+    "ChangeEvent",
+    "DocumentRow",
+    "DomainComment",
     "DomainSummary",
+    "DomainTask",
+    "GraphAnalyticsResult",
+    "GraphAnalyticsRun",
     "LakebaseRegistryStore",
     "RegistryFactory",
     "RegistryStore",
+    "ReviewEvent",
     "ScheduleHistoryEntry",
     "StoreError",
 ]

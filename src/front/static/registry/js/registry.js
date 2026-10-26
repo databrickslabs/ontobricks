@@ -3,6 +3,141 @@
  * Registry page JavaScript – domain browsing and registry configuration
  */
 
+var registryGithubEnabled = false;
+
+function githubDomainDeleteExtras(enabled) {
+    return enabled
+        ? { checkboxLabel: 'Also delete this domain from GitHub', checkboxChecked: false }
+        : {};
+}
+
+function deleteGithubQuery(options) {
+    return options && options.checkboxChecked ? '?delete_github=1' : '';
+}
+
+function createRegistryVersionDeleteControl(v, domainName) {
+    if (!v.delete_control_visible) return null;
+
+    const version = String(v.version ?? '');
+    const reason = v.delete_block_reason || ('Delete version v' + version);
+    const wrapper = document.createElement('span');
+    wrapper.className = 'registry-version-delete-control';
+    wrapper.title = reason;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm btn-outline-danger border-0 registry-delete-version-btn';
+    button.dataset.domain = String(domainName ?? '');
+    button.dataset.version = version;
+    button.setAttribute('data-requires-app', 'admin');
+    button.setAttribute('aria-label', 'Delete version v' + version);
+
+    if (v.deletes_domain) {
+        button.dataset.deletesDomain = '1';
+    }
+
+    if (v.can_delete) {
+        button.tabIndex = 0;
+    } else {
+        wrapper.tabIndex = 0;
+        button.disabled = true;
+        button.tabIndex = -1;
+    }
+
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-trash';
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+    wrapper.appendChild(button);
+    return wrapper;
+}
+
+async function deleteRegistryDomain(domainName) {
+    const options = {
+        title: 'Delete Domain',
+        message: 'Permanently delete domain "' + escapeHtml(domainName)
+            + '" and all its versions from the registry? This permanently '
+            + 'removes all Knowledge Store content and cannot be undone.',
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger',
+        icon: 'trash',
+        ...githubDomainDeleteExtras(registryGithubEnabled)
+    };
+    const confirmed = await showConfirmDialog(options);
+    if (!confirmed) return;
+
+    try {
+        const resp = await fetch(
+            '/settings/registry/domains/' + encodeURIComponent(domainName) +
+                deleteGithubQuery(options),
+            { method: 'DELETE', credentials: 'same-origin' }
+        );
+        const data = await resp.json();
+        if (data.success) {
+            showNotification(data.message, 'success');
+            if (typeof invalidateRegistryBridges === 'function') {
+                invalidateRegistryBridges();
+            }
+            if (typeof loadRegistryDomains === 'function') {
+                loadRegistryDomains(true);
+            }
+        } else {
+            showNotification('Error: ' + data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('Error deleting domain: ' + e.message, 'error');
+    }
+}
+
+async function deleteRegistryVersion(
+    domainName,
+    version,
+    refreshDomains = () => {},
+    invalidateBridges = () => {},
+    deletesDomain = false
+) {
+    const options = {
+        title: deletesDomain ? 'Delete last version and domain' : 'Delete Version',
+        message: deletesDomain
+            ? 'Version v' + escapeHtml(String(version))
+                + ' is the only version of "' + escapeHtml(String(domainName))
+                + '". Deleting it will also delete the domain and all Knowledge '
+                + 'Store content. This cannot be undone.'
+            : 'Permanently delete version v' + escapeHtml(String(version)) +
+                ' from domain "' + escapeHtml(String(domainName)) +
+                '"? This permanently removes its Knowledge Store content '
+                + 'and cannot be undone.',
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger',
+        icon: 'trash',
+        ...githubDomainDeleteExtras(deletesDomain && registryGithubEnabled)
+    };
+    const confirmed = await showConfirmDialog(options);
+    if (!confirmed) return;
+
+    try {
+        const resp = await fetch(
+            '/settings/registry/domains/' + encodeURIComponent(domainName) +
+                '/versions/' + encodeURIComponent(version) +
+                deleteGithubQuery(options),
+            { method: 'DELETE', credentials: 'same-origin' }
+        );
+        const data = await resp.json();
+        if (resp.status === 409) {
+            showNotification(data.message || 'Version deletion is no longer allowed', 'error');
+            refreshDomains(true);
+        } else if (data.success) {
+            showNotification(data.message, 'success');
+            invalidateBridges();
+            refreshDomains(true);
+        } else {
+            showNotification('Error: ' + data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('Error deleting version: ' + e.message, 'error');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
 
     let registryConfigured = false;
@@ -268,7 +403,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Registry domain list ---
 
-    async function loadRegistryDomains() {
+    const DOMAINS_CACHE_TTL_MS = 15000;
+    let domainsLoadPromise = null;
+    let domainsLoadedAt = 0;
+
+    function loadRegistryDomains(force = false) {
+        const cacheIsFresh = Date.now() - domainsLoadedAt < DOMAINS_CACHE_TTL_MS;
+        if (!force && cacheIsFresh) return Promise.resolve();
+        if (domainsLoadPromise) return domainsLoadPromise;
+
+        domainsLoadPromise = _loadRegistryDomains()
+            .finally(() => { domainsLoadPromise = null; });
+        return domainsLoadPromise;
+    }
+    window.loadRegistryDomains = loadRegistryDomains;
+
+    async function _loadRegistryDomains() {
         const section = document.getElementById('registryDomainsSection');
         const listDiv = document.getElementById('registryDomainsList');
         if (!section || !listDiv) return;
@@ -292,6 +442,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
+            domainsLoadedAt = Date.now();
+            registryGithubEnabled = !!data.github_enabled;
             const rows = data.domains || data.projects || [];
             if (!rows.length) {
                 listDiv.innerHTML = '<div class="text-muted small py-3 text-center">' +
@@ -309,6 +461,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 databricks: 'ob-icon-lakehouse',
                 neo4j: 'ob-icon-neo4j',
             };
+            const versionDeleteControls = [];
             let html = '<div class="table-responsive registry-domain-table-wrapper">' +
                 '<table class="table table-sm table-hover align-middle mb-0 registry-domain-table">' +
                 '<thead><tr>' +
@@ -391,12 +544,12 @@ document.addEventListener('DOMContentLoaded', function () {
                             : '<button type="button" class="btn btn-sm btn-outline-primary registry-load-version-btn" ' +
                                   'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" title="Load this version">' +
                                   '<i class="bi bi-box-arrow-in-down me-1"></i>Load</button>';
-                        const deleteBtn = isLoaded
-                            ? ''
-                            : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-version-btn" data-requires-app="admin" ' +
-                                  'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" ' +
-                                  'title="Delete version v' + escapeHtml(ver) + '">' +
-                                  '<i class="bi bi-trash"></i></button>';
+                        let deleteBtn = '';
+                        if (typeof v === 'object' && v.delete_control_visible) {
+                            const slotId = 'registry-version-delete-' + versionDeleteControls.length;
+                            versionDeleteControls.push({ slotId, version: v, domainName: d.name });
+                            deleteBtn = '<span id="' + slotId + '"></span>';
+                        }
                         html += '<div class="registry-version-row d-flex align-items-center gap-2 px-4 py-2' + (isLoaded ? ' registry-version-loaded' : '') + '">' +
                             '<span class="badge ' + (isLoaded ? 'bg-primary' : 'bg-secondary') + ' registry-version-num">v' + escapeHtml(ver) + '</span>' +
                             '<div class="d-flex align-items-center gap-2">' + statusLabel + loadedLabel + '</div>' +
@@ -411,6 +564,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
             html += '</tbody></table></div>';
             listDiv.innerHTML = html;
+
+            versionDeleteControls.forEach(({ slotId, version, domainName }) => {
+                const slot = document.getElementById(slotId);
+                const control = createRegistryVersionDeleteControl(version, domainName);
+                if (slot && control) slot.replaceWith(control);
+            });
 
             listDiv.querySelectorAll('.registry-domain-row').forEach(row => {
                 row.addEventListener('click', (e) => {
@@ -434,7 +593,13 @@ document.addEventListener('DOMContentLoaded', function () {
             listDiv.querySelectorAll('.registry-delete-version-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    deleteRegistryVersion(btn.dataset.domain, btn.dataset.version);
+                    deleteRegistryVersion(
+                        btn.dataset.domain,
+                        btn.dataset.version,
+                        loadRegistryDomains,
+                        () => { invalidateRegistryBridges(); },
+                        btn.dataset.deletesDomain === '1'
+                    );
                 });
             });
 
@@ -464,60 +629,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function deleteRegistryDomain(domainName) {
-        const confirmed = await showConfirmDialog({
-            title: 'Delete Domain',
-            message: 'Delete domain "' + domainName + '" and all its versions from the registry? This cannot be undone.',
-            confirmText: 'Delete',
-            confirmClass: 'btn-danger',
-            icon: 'trash'
-        });
-        if (!confirmed) return;
-
-        try {
-            const resp = await fetch('/settings/registry/domains/' + encodeURIComponent(domainName), {
-                method: 'DELETE',
-                credentials: 'same-origin'
-            });
-            const data = await resp.json();
-            if (data.success) {
-                showNotification(data.message, 'success');
-                loadRegistryDomains();
-            } else {
-                showNotification('Error: ' + data.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error deleting domain: ' + e.message, 'error');
-        }
-    }
-
-    async function deleteRegistryVersion(domainName, version) {
-        const confirmed = await showConfirmDialog({
-            title: 'Delete Version',
-            message: 'Delete version v' + version + ' from domain "' + domainName + '"? This cannot be undone.',
-            confirmText: 'Delete',
-            confirmClass: 'btn-danger',
-            icon: 'trash'
-        });
-        if (!confirmed) return;
-
-        try {
-            const resp = await fetch(
-                '/settings/registry/domains/' + encodeURIComponent(domainName) + '/versions/' + encodeURIComponent(version),
-                { method: 'DELETE', credentials: 'same-origin' }
-            );
-            const data = await resp.json();
-            if (data.success) {
-                showNotification(data.message, 'success');
-                loadRegistryDomains();
-            } else {
-                showNotification('Error: ' + data.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error deleting version: ' + e.message, 'error');
-        }
-    }
-
     async function loadRegistryDomainVersion(domainName, version) {
         const confirmed = await showConfirmDialog({
             title: 'Load Domain',
@@ -540,7 +651,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success) {
                 showNotification(data.message || 'Domain loaded!', 'success');
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
-                setTimeout(() => window.location.reload(), 800);
+                // Generic loads open Domain → General; do not reload Browse.
+                setTimeout(() => {
+                    if (typeof navigateToDomainGeneral === 'function') {
+                        navigateToDomainGeneral();
+                    } else {
+                        window.location.href = '/domain/?section=information';
+                    }
+                }, 800);
             } else {
                 showNotification('Error: ' + (data.message || 'Failed to load domain'), 'error');
             }
@@ -587,7 +705,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    document.getElementById('btnRefreshDomains')?.addEventListener('click', () => loadRegistryDomains());
+    document.getElementById('btnRefreshDomains')?.addEventListener('click', () => loadRegistryDomains(true));
 
     // =====================================================================
     //  OBX EXPORT / IMPORT
@@ -732,22 +850,121 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    const IMPORT_NAME_PATTERN = /^[A-Z][A-Za-z0-9]{0,63}$/;
+
+    function sanitizeImportFolder(name) {
+        return name.trim().toLowerCase().replace(/[ -]/g, '_').replace(/[^a-z0-9_]/g, '') ||
+            'untitled_domain';
+    }
+
+    function syncImportActionControls(row) {
+        const input = row.querySelector('.import-obx-name');
+        const conflictActions = row.querySelector('.import-obx-conflict-actions');
+        const createAction = row.querySelector('.import-obx-create-action');
+        const targetsExisting = row.dataset.exists === '1' &&
+            sanitizeImportFolder(input?.value || '') === row.dataset.name;
+        conflictActions?.classList.toggle('d-none', !targetsExisting);
+        createAction?.classList.toggle('d-none', targetsExisting);
+    }
+
+    function syncImportPickState() {
+        const rows = document.querySelectorAll('#importObxTableBody .import-obx-row');
+        const selectAll = document.getElementById('importObxSelectAll');
+        const btn = document.getElementById('btnImportObxConfirm');
+        let checkedCount = 0;
+        rows.forEach(row => {
+            const picked = !!row.querySelector('.import-obx-pick')?.checked;
+            if (picked) checkedCount += 1;
+            row.classList.toggle('table-secondary', !picked);
+            row.querySelectorAll('.import-obx-name, input[type="radio"]').forEach(el => {
+                el.disabled = !picked;
+            });
+        });
+        if (selectAll) {
+            selectAll.checked = rows.length > 0 && checkedCount === rows.length;
+            selectAll.indeterminate = checkedCount > 0 && checkedCount < rows.length;
+        }
+        if (btn) btn.disabled = checkedCount === 0;
+    }
+
+    // The file being imported: either the picked .obx or one rebuilt from GitHub.
+    let pendingImportFile = null;
+    let pendingImportFromGithub = false;
+
     function openImportObxModal() {
         const modalEl = document.getElementById('importObxModal');
         if (!modalEl) return;
-        document.getElementById('importObxStep1').style.display = '';
-        document.getElementById('importObxStep2').style.display = 'none';
+        pendingImportFile = null;
+        pendingImportFromGithub = false;
+        document.getElementById('importObxStep1').classList.remove('d-none');
+        document.getElementById('importObxStep2').classList.add('d-none');
         document.getElementById('importObxFile').value = '';
-        document.getElementById('importObxPreviewError').style.display = 'none';
-        document.getElementById('btnImportObxConfirm').style.display = 'none';
+        document.getElementById('importObxPreviewError').classList.add('d-none');
+        document.getElementById('importObxPreviewBusy')?.classList.add('d-none');
+        document.getElementById('btnImportObxConfirm').classList.add('d-none');
+        document.getElementById('btnImportObxConfirm').disabled = false;
+        const selectAll = document.getElementById('importObxSelectAll');
+        if (selectAll) {
+            selectAll.checked = true;
+            selectAll.indeterminate = false;
+        }
         showStackedModal(modalEl);
     }
 
-    document.getElementById('importObxFile')?.addEventListener('change', async (e) => {
+    document.getElementById('importObxFile')?.addEventListener('change', (e) => {
         const file = e.target.files?.[0];
+        if (file) previewImportFile(file);
+    });
+
+    document.getElementById('btnImportFromGithub')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
         const errEl = document.getElementById('importObxPreviewError');
-        if (!file) return;
-        errEl.style.display = 'none';
+        const busyEl = document.getElementById('importObxPreviewBusy');
+        errEl.classList.add('d-none');
+        btn.disabled = true;
+        busyEl?.classList.remove('d-none');
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), 60000);
+        try {
+            const resp = await fetch('/settings/github/obx', {
+                credentials: 'same-origin',
+                signal: ac.signal
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.success === false) {
+                errEl.textContent = data.message || 'Could not read the GitHub repository';
+                errEl.classList.remove('d-none');
+                if (typeof showNotification === 'function') {
+                    showNotification(errEl.textContent, 'error');
+                }
+                return;
+            }
+            pendingImportFile = null;
+            pendingImportFromGithub = true;
+            renderImportObxPreview(data);
+        } catch (err) {
+            const timedOut = err && err.name === 'AbortError';
+            errEl.textContent = timedOut
+                ? 'GitHub import timed out. Try again, or use Sync all in Settings → GitHub first.'
+                : ('Network error: ' + err.message);
+            errEl.classList.remove('d-none');
+            if (typeof showNotification === 'function') {
+                showNotification(errEl.textContent, 'error');
+            }
+        } finally {
+            clearTimeout(timer);
+            busyEl?.classList.add('d-none');
+            btn.disabled = false;
+        }
+    });
+
+    async function previewImportFile(file) {
+        const errEl = document.getElementById('importObxPreviewError');
+        const busyEl = document.getElementById('importObxPreviewBusy');
+        const input = document.getElementById('importObxFile');
+        errEl.classList.add('d-none');
+        busyEl?.classList.remove('d-none');
+        input.disabled = true;
         try {
             const form = new FormData();
             form.append('file', file);
@@ -759,22 +976,25 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await resp.json();
             if (!resp.ok || !data.success) {
                 errEl.textContent = data.message || 'Could not read the .obx file';
-                errEl.style.display = '';
+                errEl.classList.remove('d-none');
                 return;
             }
+            pendingImportFile = file;
             renderImportObxPreview(data);
         } catch (err) {
             errEl.textContent = 'Network error: ' + err.message;
-            errEl.style.display = '';
+            errEl.classList.remove('d-none');
+        } finally {
+            busyEl?.classList.add('d-none');
+            input.disabled = false;
         }
-    });
+    }
 
     function renderImportObxPreview(data) {
-        document.getElementById('importObxStep1').style.display = 'none';
-        document.getElementById('importObxStep2').style.display = '';
+        document.getElementById('importObxStep1').classList.add('d-none');
+        document.getElementById('importObxStep2').classList.remove('d-none');
         const obxConfirmBtn = document.getElementById('btnImportObxConfirm');
         obxConfirmBtn.classList.remove('d-none');
-        obxConfirmBtn.style.display = '';
 
         const meta = document.getElementById('importObxMeta');
         meta.innerHTML =
@@ -793,40 +1013,60 @@ document.addEventListener('DOMContentLoaded', function () {
             const statusBadge = d.exists
                 ? '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Exists</span>'
                 : '<span class="badge bg-success-subtle text-success border-success">New</span>';
-            const defaultAction = d.exists ? 'skip' : 'overwrite';
-            return '<tr class="import-obx-row" data-name="' + escapeHtml(d.name) + '" data-suggested="' + escapeHtml(d.suggested_new_name || '') + '">' +
+            const importName = d.exists
+                ? (d.suggested_new_name || d.display_name || d.name)
+                : (d.display_name || d.name);
+            const actionControls = d.exists
+                ? '<div class="btn-group btn-group-sm import-obx-conflict-actions" role="group">' +
+                      actionRadio(idx, 'skip', 'Skip', true, false) +
+                      actionRadio(idx, 'overwrite', 'Overwrite', false, false) +
+                  '</div>' +
+                  '<span class="small text-muted import-obx-create-action d-none">' +
+                      '<i class="bi bi-plus-circle me-1"></i>Create new</span>'
+                : '<span class="small text-muted import-obx-create-action">' +
+                      '<i class="bi bi-plus-circle me-1"></i>Create new</span>';
+            return '<tr class="import-obx-row" data-name="' + escapeHtml(d.name) + '" data-exists="' + (d.exists ? '1' : '0') + '">' +
+                '<td class="text-center"><input type="checkbox" class="form-check-input import-obx-pick" checked aria-label="Import this domain"></td>' +
                 '<td><i class="bi bi-box me-1 text-primary"></i>' + escapeHtml(d.name) +
                     (d.original_name && d.original_name !== d.name
                         ? '<div class="small text-muted">from <code>' + escapeHtml(d.original_name) + '</code></div>'
                         : '') +
                 '</td>' +
+                '<td>' +
+                    '<input type="text" class="form-control form-control-sm import-obx-name" ' +
+                        'value="' + escapeHtml(importName) + '" required maxlength="64" ' +
+                        'pattern="[A-Z][A-Za-z0-9]*" autocomplete="off" spellcheck="false" ' +
+                        'aria-label="Imported domain name">' +
+                    '<div class="invalid-feedback">Use a unique CamelCase alphanumeric name.</div>' +
+                '</td>' +
                 '<td>' + versionBadges + '</td>' +
                 '<td>' + statusBadge + '</td>' +
-                '<td>' +
-                    '<div class="d-flex flex-column gap-1">' +
-                        '<div class="btn-group btn-group-sm" role="group">' +
-                            actionRadio(idx, 'skip', 'Skip', defaultAction === 'skip', !d.exists) +
-                            actionRadio(idx, 'overwrite', 'Overwrite', defaultAction === 'overwrite', false) +
-                            actionRadio(idx, 'rename', 'Rename', false, !d.exists) +
-                        '</div>' +
-                        '<input type="text" class="form-control form-control-sm import-obx-rename" ' +
-                            'value="' + escapeHtml(d.suggested_new_name || '') + '" ' +
-                            'placeholder="new name" style="display:none;">' +
-                    '</div>' +
-                '</td>' +
+                '<td>' + actionControls + '</td>' +
             '</tr>';
         }).join('');
 
         tbody.querySelectorAll('.import-obx-row').forEach(row => {
-            const rename = row.querySelector('.import-obx-rename');
-            row.querySelectorAll('input[type="radio"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (rename) rename.style.display = radio.value === 'rename' && radio.checked ? '' : (
-                        row.querySelector('input[type="radio"]:checked')?.value === 'rename' ? '' : 'none'
-                    );
-                });
+            const input = row.querySelector('.import-obx-name');
+            input?.addEventListener('input', () => {
+                input.classList.remove('is-invalid');
+                syncImportActionControls(row);
             });
+            row.querySelector('.import-obx-pick')?.addEventListener('change', syncImportPickState);
+            syncImportActionControls(row);
         });
+
+        const selectAll = document.getElementById('importObxSelectAll');
+        if (selectAll) {
+            selectAll.checked = true;
+            selectAll.indeterminate = false;
+            selectAll.onchange = () => {
+                tbody.querySelectorAll('.import-obx-pick').forEach(cb => {
+                    cb.checked = selectAll.checked;
+                });
+                syncImportPickState();
+            };
+        }
+        syncImportPickState();
     }
 
     function actionRadio(rowIdx, value, label, checked, disabled) {
@@ -834,23 +1074,71 @@ document.addEventListener('DOMContentLoaded', function () {
         return '<input type="radio" class="btn-check" name="obx-action-' + rowIdx + '" ' +
                     'id="' + id + '" value="' + value + '" ' +
                     (checked ? 'checked' : '') + ' ' + (disabled ? 'disabled' : '') + '>' +
-                '<label class="btn btn-outline-' + (value === 'overwrite' ? 'warning' : value === 'rename' ? 'primary' : 'secondary') +
+                '<label class="btn btn-outline-' + (value === 'overwrite' ? 'warning' : 'secondary') +
                     '" for="' + id + '">' + escapeHtml(label) + '</label>';
     }
 
     document.getElementById('btnImportObxConfirm')?.addEventListener('click', async () => {
-        const file = document.getElementById('importObxFile')?.files?.[0];
-        if (!file) { showNotification('Pick a .obx file first', 'warning'); return; }
+        const file = pendingImportFile;
+        if (!file && !pendingImportFromGithub) {
+            showNotification('Pick a .obx file first', 'warning');
+            return;
+        }
 
         const decisions = [];
+        const targetFolders = new Set();
+        let namesValid = true;
         document.querySelectorAll('#importObxTableBody .import-obx-row').forEach(row => {
-            const action = row.querySelector('input[type="radio"]:checked')?.value || 'skip';
-            const decision = { name: row.dataset.name, action };
-            if (action === 'rename') {
-                decision.new_name = row.querySelector('.import-obx-rename')?.value?.trim() || row.dataset.suggested;
+            const sourceFolder = row.dataset.name;
+            if (!row.querySelector('.import-obx-pick')?.checked) {
+                decisions.push({ name: sourceFolder, action: 'skip' });
+                return;
             }
-            decisions.push(decision);
+            const nameInput = row.querySelector('.import-obx-name');
+            const importName = nameInput?.value.trim() || '';
+            const targetFolder = sanitizeImportFolder(importName);
+            const duplicate = targetFolders.has(targetFolder);
+            const valid = IMPORT_NAME_PATTERN.test(importName) && !duplicate;
+
+            nameInput?.classList.toggle('is-invalid', !valid);
+            if (!valid) {
+                namesValid = false;
+                return;
+            }
+            targetFolders.add(targetFolder);
+
+            if (sourceFolder !== targetFolder) {
+                decisions.push({
+                    name: sourceFolder,
+                    action: 'rename',
+                    new_name: importName
+                });
+            } else if (row.dataset.exists === '1') {
+                decisions.push({
+                    name: sourceFolder,
+                    action: row.querySelector('input[type="radio"]:checked')?.value || 'skip'
+                });
+            } else {
+                decisions.push({ name: sourceFolder, action: 'overwrite' });
+            }
         });
+
+        const selectedCount = document.querySelectorAll(
+            '#importObxTableBody .import-obx-pick:checked'
+        ).length;
+        if (!selectedCount) {
+            showNotification('Pick at least one domain to import', 'warning');
+            return;
+        }
+
+        if (!namesValid) {
+            showNotification(
+                'Use a unique CamelCase alphanumeric name for every imported domain',
+                'warning'
+            );
+            document.querySelector('#importObxTableBody .import-obx-name.is-invalid')?.focus();
+            return;
+        }
 
         const overwrites = decisions.filter(d => d.action === 'overwrite').length;
         if (overwrites > 0) {
@@ -871,7 +1159,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             const form = new FormData();
-            form.append('file', file);
+            if (pendingImportFromGithub) {
+                form.append('from_github', '1');
+            } else {
+                form.append('file', file);
+            }
             form.append('decisions', JSON.stringify(decisions));
             const resp = await fetch('/settings/registry/import', {
                 method: 'POST',
@@ -888,7 +1180,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.warn('OBX import warnings:', data.errors);
             }
             bootstrap.Modal.getInstance(document.getElementById('importObxModal'))?.hide();
-            loadRegistryDomains();
+            invalidateRegistryBridges();
+            loadRegistryDomains(true);
         } catch (e) {
             showNotification('Import error: ' + e.message, 'error');
         } finally {
@@ -910,6 +1203,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let bridgesLoaded = false;
     let bridgesData = null;
+    let bridgesLoadPromise = null;
+
+    function invalidateRegistryBridges() {
+        bridgesLoaded = false;
+        bridgesData = null;
+    }
+    window.invalidateRegistryBridges = invalidateRegistryBridges;
 
     function _ensureD3() {
         if (typeof d3 !== 'undefined') return Promise.resolve();
@@ -974,17 +1274,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('sidebarSectionChanged', (e) => {
         const section = e.detail?.section;
-        // Re-fetch the domain list every time the user navigates back
-        // to the Domains (Browse) section. The list can go stale when
-        // versions are loaded / activated / deleted from another tab,
-        // when an admin switches the Lakebase database in Settings,
-        // or simply because new versions appeared after a build. Skip
-        // the refresh while the registry is still being
-        // configured (no point hammering the API on a non-configured
-        // registry) — the initial ``loadRegistryConfig`` already
-        // primes the list once the config is ready.
+        // Reuse a recent domain list when navigating back to Browse. The
+        // short TTL avoids duplicate modal-open requests while still
+        // refreshing data that may have changed in another tab or after a
+        // build. Skip requests while the registry is still being configured;
+        // the initial loadRegistryConfig call primes the list when ready.
         if (section === 'domains' && registryConfigured) {
             loadRegistryDomains();
+        }
+        if (e.detail?.source === 'registry-modal' && !bridgesLoaded) {
+            loadRegistryBridges();
         }
         if (section === 'bridges') {
             if (!bridgesLoaded) {
@@ -1007,9 +1306,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('btnRefreshBridges')?.addEventListener('click', () => {
-        bridgesLoaded = false;
-        bridgesData = null;
-        loadRegistryBridges();
+        loadRegistryBridges(true);
     });
 
     // --- Build entity-level graph model grouped by domain ---
@@ -1322,7 +1619,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Main load function ---
 
-    async function loadRegistryBridges() {
+    function loadRegistryBridges(force = false) {
+        if (!force && bridgesLoaded) return Promise.resolve();
+        if (bridgesLoadPromise) return bridgesLoadPromise;
+        if (force) {
+            bridgesLoaded = false;
+            bridgesData = null;
+        }
+
+        bridgesLoadPromise = _loadRegistryBridges()
+            .finally(() => { bridgesLoadPromise = null; });
+        return bridgesLoadPromise;
+    }
+
+    async function _loadRegistryBridges() {
         const content = document.getElementById('bridgesContent');
         const status = document.getElementById('bridgesStatus');
         const graphContainer = document.getElementById('bridgesGraphContainer');

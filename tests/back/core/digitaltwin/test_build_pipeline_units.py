@@ -1,6 +1,6 @@
 """Pure-function tests for `_BuildPipeline` (private build orchestrator).
 
-`_BuildPipeline` (`src/back/objects/digitaltwin/_build_pipeline.py`) is the
+`_BuildPipeline` (`src/back/objects/digitaltwin/build/_build_pipeline.py`) is the
 Fowler "Method Object" extracted from the legacy 839-line
 `DigitalTwin.run_build_task`. Most of it is heavy I/O — Databricks SQL,
 the triple store, the task manager — which lives in the integration tier.
@@ -10,8 +10,9 @@ This file covers the **pure** surface:
 - `__init__` derived state (`is_api`, `domain_name`, `parts`,
   `phase_times` initialization, lazy-state defaults).
 - `_log_phase` — records elapsed time on `self.phase_times` and logs.
-- `_persist_last_build_to_registry` — registry write after a successful
-  build so the Submit-for-Review gate is unblocked.
+- `_persist_last_build_to_registry` — targeted last_build stamp after a
+  successful build so the Submit-for-Review gate is unblocked (must not
+  rewrite ontology JSONB).
 
 Behaviour-rich phases (the various ``_apply_*`` and ``_*_progress``
 methods) are exercised end-to-end in higher tiers.
@@ -26,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.objects.digitaltwin._build_pipeline import _BuildPipeline
+from back.objects.digitaltwin.build._build_pipeline import _BuildPipeline
 from back.objects.registry.RegistryService import RegistryService
 
 
@@ -145,6 +146,49 @@ class TestInit:
         assert pipe.base_uri == "http://my-base/"
 
 
+# --- _prepare_translation ------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPrepareTranslation:
+    def test_source_client_uses_configured_build_transport(self) -> None:
+        pipe = _make_pipeline(r2rml_content="mapping")
+
+        with (
+            patch("back.core.databricks.DatabricksClient") as client_cls,
+            patch(
+                "back.core.helpers.resolve_build_use_sea",
+                return_value=True,
+            ),
+            patch(
+                "back.core.w3c.sparql.extract_r2rml_mappings",
+                return_value=([{"entity": "Customer"}], []),
+            ),
+            patch(
+                "back.objects.digitaltwin.DigitalTwin.DigitalTwin."
+                "augment_mappings_from_config",
+                side_effect=lambda mappings, *_args: mappings,
+            ),
+            patch(
+                "back.objects.digitaltwin.DigitalTwin.DigitalTwin."
+                "augment_relationships_from_config",
+                side_effect=lambda mappings, *_args: mappings,
+            ),
+            patch(
+                "back.core.w3c.sparql.translate_sparql_to_spark",
+                return_value={"success": True, "sql": "SELECT 1"},
+            ),
+        ):
+            assert pipe._prepare_translation() is True
+
+        client_cls.assert_called_once_with(
+            host="host",
+            token="token",
+            warehouse_id="wh-1",
+            use_sea=True,
+        )
+
+
 # --- _log_phase ----------------------------------------------------------
 
 
@@ -201,15 +245,16 @@ def _make_domain(
 
 
 def _make_registry_svc(write_ok: bool = True, write_msg: str = "") -> MagicMock:
-    """Return a mock RegistryService whose _store.write_version returns (write_ok, write_msg)."""
+    """Return a mock RegistryService whose store stamps last_build only."""
     svc = MagicMock()
+    svc._store.stamp_last_build.return_value = (write_ok, write_msg)
     svc._store.write_version.return_value = (write_ok, write_msg)
     return svc
 
 
 @pytest.mark.unit
 class TestPersistLastBuildToRegistry:
-    """_persist_last_build_to_registry writes domain.last_build to the registry DB."""
+    """_persist_last_build_to_registry stamps last_build without rewriting JSONB."""
 
     def _make_pipe(self, domain=None, **overrides):
         dom = domain or _make_domain()
@@ -217,42 +262,45 @@ class TestPersistLastBuildToRegistry:
         snap.current_version = dom.current_version
         return _make_pipeline(domain=dom, domain_snap=snap, **overrides)
 
-    def test_calls_write_version_on_success(self) -> None:
-        """Happy path: write_version is called once with folder + version."""
+    def test_stamps_last_build_without_rewriting_the_document(self) -> None:
+        """Happy path: only stamp_last_build; never rewrite ontology JSONB."""
         pipe = self._make_pipe()
         svc = _make_registry_svc()
 
         with patch.object(RegistryService, "from_context", return_value=svc):
             pipe._persist_last_build_to_registry()
 
-        svc._store.write_version.assert_called_once()
-        call_args = svc._store.write_version.call_args
-        folder, version, _ = call_args.args
-        assert folder == "supplychain"
-        assert version == "1"
+        svc._store.write_version.assert_not_called()
+        svc._store.stamp_last_build.assert_called_once_with(
+            "supplychain", "1", "2026-06-19T09:00:00+00:00"
+        )
 
-    def test_domain_data_includes_last_build(self) -> None:
-        """The domain_data passed to write_version carries last_build."""
-        pipe = self._make_pipe()
+    def test_empty_session_ontology_does_not_call_write_version(self) -> None:
+        """A worker whose export has 0 classes must not wipe a saved ontology."""
+        dom = _make_domain()
+        dom.export_for_save = lambda: {
+            "info": {"last_build": dom.last_build},
+            "versions": {
+                "1": {
+                    "ontology": {"classes": []},
+                    "assignment": {"entities": [{"id": "e1"}]},
+                }
+            },
+        }
+        pipe = self._make_pipe(domain=dom)
         svc = _make_registry_svc()
 
         with patch.object(RegistryService, "from_context", return_value=svc):
             pipe._persist_last_build_to_registry()
 
-        _, _, domain_data = svc._store.write_version.call_args.args
-        assert domain_data["info"]["last_build"] == "2026-06-19T09:00:00+00:00"
+        svc._store.write_version.assert_not_called()
+        svc._store.stamp_last_build.assert_called_once()
 
     def test_api_build_stamps_last_build_when_empty(self) -> None:
-        """API build path: domain.last_build is empty before the build; the method
-        stamps it so the registry write carries a non-empty timestamp."""
+        """API build path: domain.last_build is empty before the build."""
         dom = _make_domain(last_build="")
         snap = MagicMock()
         snap.current_version = dom.current_version
-        # export_for_save must reflect the updated last_build after stamping.
-        def _export():
-            return {"info": {"last_build": dom.last_build}}
-        dom.export_for_save = _export
-
         pipe = _make_pipeline(domain=dom, domain_snap=snap, build_kind="api")
         svc = _make_registry_svc()
 
@@ -260,11 +308,12 @@ class TestPersistLastBuildToRegistry:
             pipe._persist_last_build_to_registry()
 
         assert dom.last_build  # was stamped
-        _, _, domain_data = svc._store.write_version.call_args.args
-        assert domain_data["info"]["last_build"]
+        svc._store.write_version.assert_not_called()
+        ts = svc._store.stamp_last_build.call_args.args[2]
+        assert ts
 
     def test_skips_when_folder_cannot_be_resolved(self) -> None:
-        """No folder available → method returns early without calling write_version."""
+        """No folder available → method returns early without touching the store."""
         snap = MagicMock()
         snap.current_version = ""
         pipe = _make_pipeline(domain=SimpleNamespace(
@@ -283,16 +332,17 @@ class TestPersistLastBuildToRegistry:
             pipe._persist_last_build_to_registry()
 
         svc._store.write_version.assert_not_called()
+        svc._store.stamp_last_build.assert_not_called()
 
-    def test_handles_write_version_failure_gracefully(self) -> None:
-        """write_version returning (False, msg) is logged but does not raise."""
+    def test_handles_stamp_failure_gracefully(self) -> None:
+        """stamp_last_build returning (False, msg) is logged but does not raise."""
         pipe = self._make_pipe()
         svc = _make_registry_svc(write_ok=False, write_msg="DB error")
 
         with patch.object(RegistryService, "from_context", return_value=svc):
             pipe._persist_last_build_to_registry()  # must not raise
 
-        svc._store.write_version.assert_called_once()
+        svc._store.stamp_last_build.assert_called_once()
 
     def test_handles_registry_service_exception_gracefully(self) -> None:
         """An exception from RegistryService.from_context must not propagate."""

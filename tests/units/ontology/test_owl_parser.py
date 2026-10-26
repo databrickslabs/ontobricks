@@ -187,6 +187,24 @@ class TestGetClasses:
         assert classes["VIPCustomer"]["parent"] == "Customer"
         assert classes["Customer"]["parent"] == ""
 
+    def test_external_subclass_keeps_full_uri(self):
+        ttl = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://example.org/onto#> .
+:Customer a owl:Class ;
+    rdfs:subClassOf <http://example.org/other-onto#Party> .
+"""
+        classes = {c["name"]: c for c in OntologyParser(ttl).get_classes()}
+        assert classes["Customer"]["parent"] == "Party"
+        assert (
+            classes["Customer"]["parent_uri"]
+            == "http://example.org/other-onto#Party"
+        )
+
+    def test_class_without_parent_has_empty_parent_uri(self):
+        classes = {c["name"]: c for c in OntologyParser(SAMPLE_TURTLE).get_classes()}
+        assert classes["Customer"]["parent_uri"] == ""
+
     def test_data_properties_assigned(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         classes = {c["name"]: c for c in parser.get_classes()}
@@ -206,6 +224,28 @@ class TestGetClasses:
         classes = parser.get_classes()
         names = [c["name"] for c in classes]
         assert names == sorted(names)
+
+    def test_alternate_labels_parsed_from_skos_altlabel(self):
+        """``alternate_labels`` (synonyms) are first-class ontology data,
+        serialized as ``skos:altLabel`` (task 4 review finding #4) — the
+        parser must read them back."""
+        turtle = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix : <http://test.org/ontology#> .
+
+:Carrier a owl:Class ;
+    rdfs:label "Carrier" ;
+    skos:altLabel "Shipper", "Hauler" .
+"""
+        parser = OntologyParser(turtle)
+        classes = {c["name"]: c for c in parser.get_classes()}
+        assert set(classes["Carrier"]["alternate_labels"]) == {"Shipper", "Hauler"}
+
+    def test_no_altlabel_yields_empty_list(self):
+        parser = OntologyParser(SAMPLE_TURTLE)
+        classes = {c["name"]: c for c in parser.get_classes()}
+        assert classes["Customer"]["alternate_labels"] == []
 
 
 class TestGetProperties:
@@ -228,6 +268,22 @@ class TestGetProperties:
         assert props["hasOrder"]["domain"] == "Customer"
         assert props["hasOrder"]["range"] == "Order"
 
+    def test_external_domain_and_range_keep_full_uris(self):
+        ttl = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://example.org/onto#> .
+:hasParty a owl:ObjectProperty ;
+    rdfs:domain <http://example.org/domain-onto#Account> ;
+    rdfs:range <http://example.org/other-onto#Party> .
+"""
+        props = {p["name"]: p for p in OntologyParser(ttl).get_properties()}
+        assert props["hasParty"]["domain"] == "Account"
+        assert props["hasParty"]["domain_uri"] == (
+            "http://example.org/domain-onto#Account"
+        )
+        assert props["hasParty"]["range"] == "Party"
+        assert props["hasParty"]["range_uri"] == "http://example.org/other-onto#Party"
+
 
 class TestGetOntologyInfo:
     def test_basic_info(self):
@@ -236,6 +292,34 @@ class TestGetOntologyInfo:
         assert info["uri"] == "http://test.org/ontology"
         assert info["label"] == "TestOntology"
         assert info["comment"] == "A test ontology"
+
+    def test_consumed_literals_keep_language_tags(self):
+        ttl = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://example.org/onto#> .
+<http://example.org/onto> a owl:Ontology ;
+    rdfs:label "Test Ontology"@en ;
+    rdfs:comment "Ontologie de test"@fr .
+:Customer a owl:Class ;
+    rdfs:label "Customer"@en ;
+    rdfs:comment "Client"@fr .
+:hasCustomer a owl:ObjectProperty ;
+    rdfs:label "has customer"@en ;
+    rdfs:comment "Relie un client"@fr .
+"""
+        parser = OntologyParser(ttl)
+        info = parser.get_ontology_info()
+        assert info["label"] == "Test Ontology"
+        assert info["label_lang"] == "en"
+        assert info["comment_lang"] == "fr"
+
+        ontology_class = parser.get_classes()[0]
+        assert ontology_class["label_lang"] == "en"
+        assert ontology_class["comment_lang"] == "fr"
+
+        ontology_property = parser.get_properties()[0]
+        assert ontology_property["label_lang"] == "en"
+        assert ontology_property["comment_lang"] == "fr"
 
     def test_namespace_has_separator(self):
         parser = OntologyParser(SAMPLE_TURTLE)

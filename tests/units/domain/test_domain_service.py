@@ -2,8 +2,9 @@
 
 import pytest
 from unittest.mock import MagicMock
-from back.objects.domain import Domain
+from back.objects.domain import Domain, WorkspacePresence
 from back.core.errors import ConflictError, ValidationError
+from back.core.helpers import build_auto_base_uri
 
 
 def _mock_domain(
@@ -19,6 +20,7 @@ def _mock_domain(
         "description": "Desc",
         "author": "Author",
         "llm_endpoint": "",
+        "llm_endpoint_kind": "",
     }
     domain.triplestore = {"stats": {}}
     domain.current_version = "1"
@@ -81,12 +83,64 @@ class TestGetDomainStats:
         assert stats["entities"] == 1
 
 
+class TestWorkspacePresence:
+    def test_placeholder_name_without_content_is_unloaded(self):
+        domain = _mock_domain(name="NewDomain")
+        assert WorkspacePresence.is_loaded(domain) is False
+
+    def test_legacy_new_project_placeholder_is_unloaded(self):
+        domain = _mock_domain(name="NewProject")
+        assert WorkspacePresence.is_loaded(domain) is False
+
+    def test_custom_name_is_loaded(self):
+        domain = _mock_domain(name="TestDomain")
+        assert WorkspacePresence.is_loaded(domain) is True
+
+    def test_placeholder_with_entities_is_loaded(self):
+        domain = _mock_domain(
+            name="NewDomain",
+            classes=[{"name": "A", "uri": "http://t#A"}],
+        )
+        assert WorkspacePresence.is_loaded(domain) is True
+
+
 class TestSaveDomainInfo:
     def test_save_name(self):
         domain = _mock_domain()
         result = Domain(domain).save_domain_info({"name": "New Name"})
         assert result["name"] == "New Name"
         domain.save.assert_called_once()
+
+    def test_save_domain_name_preserves_imported_ontology_label_and_language(self):
+        domain = _mock_domain(name="ImportedProject")
+        domain.ontology.update(
+            {"name": "Imported Ontology", "label_lang": "en"}
+        )
+
+        Domain(domain).save_domain_info({"name": "ImportedProject"})
+
+        assert domain.ontology["name"] == "Imported Ontology"
+        assert domain.ontology["label_lang"] == "en"
+
+    def test_save_llm_endpoint_kind(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info(
+            {
+                "llm_endpoint": "main.ai.monclaudesonnetamoi",
+                "llm_endpoint_kind": "ai_gateway",
+            }
+        )
+        assert domain.info["llm_endpoint_kind"] == "ai_gateway"
+        assert result["llm_endpoint_kind"] == "ai_gateway"
+
+    def test_legacy_llm_endpoint_kind_is_inferred(self):
+        domain = _mock_domain()
+        domain.info["llm_endpoint"] = "databricks-claude-sonnet-4-5"
+        domain.info.pop("llm_endpoint_kind")
+
+        result = Domain(domain).get_domain_info()
+
+        assert result["info"]["llm_endpoint_kind"] == "serving"
 
     def test_new_domain_rejects_spaces_and_special_chars(self):
         """Unregistered domains must use CamelCase alphanumeric names only."""
@@ -116,6 +170,15 @@ class TestSaveDomainInfo:
         assert result["base_uri"].endswith("/AcmeSales#")
         assert result["base_uri"] != "Unknown"
         assert result["base_uri_auto"] is True
+
+    def test_shared_auto_base_uri_matches_domain_generation(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"name": "ClaimsSales"})
+        assert result["base_uri"].endswith("/ClaimsSales#")
+        assert result["base_uri_auto"] is True
+        assert build_auto_base_uri(
+            "Claims Sales", "https://example.org"
+        ) == "https://example.org/Claims_Sales#"
 
     def test_custom_base_uri_preserved_over_auto(self):
         """A custom URI with base_uri_auto=False is kept verbatim."""

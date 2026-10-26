@@ -16,6 +16,30 @@ This is the **workflow** guide. Deep dives live next to it:
 
 GitHub also looks at the repo-root [CONTRIBUTING.md](../CONTRIBUTING.md), which points here.
 
+<!-- toc -->
+**Contents**
+
+- [1. Code of conduct](#1-code-of-conduct)
+- [2. Prerequisites](#2-prerequisites)
+- [3. Fork and clone](#3-fork-and-clone)
+- [4. Development setup](#4-development-setup)
+- [5. Day-to-day loop](#5-day-to-day-loop)
+- [6. Where new code goes](#6-where-new-code-goes)
+- [7. Code style](#7-code-style)
+- [8. Frontend](#8-frontend)
+- [9. Testing](#9-testing)
+- [10. AI / agent features](#10-ai--agent-features)
+- [11. Changelog](#11-changelog)
+- [12. Commits](#12-commits)
+- [13. Branches](#13-branches)
+- [14. Pull requests](#14-pull-requests)
+- [15. Documentation](#15-documentation)
+- [16. Versioning and releases](#16-versioning-and-releases)
+- [17. Supply chain](#17-supply-chain)
+- [18. License](#18-license)
+- [19. Questions](#19-questions)
+<!-- /toc -->
+
 ---
 
 ## Table of contents

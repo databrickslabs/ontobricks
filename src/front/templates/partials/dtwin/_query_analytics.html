@@ -25,7 +25,9 @@
             <button type="button" class="btn btn-sm btn-outline-primary" id="analyticsComputeBtn" onclick="analyticsOpenScope()">
                 <i class="bi bi-arrow-clockwise me-1"></i>Run Analysis
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="analyticsInterpretBtn" onclick="analyticsInterpret()" title="Ask AI to interpret the results">
+            <button type="button" class="btn btn-sm btn-outline-secondary d-none"
+                    id="analyticsInterpretBtn" data-requires-llm
+                    onclick="analyticsInterpret()" title="Ask AI to interpret the results">
                 <i class="bi bi-stars me-1"></i>Interpret
             </button>
             <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"

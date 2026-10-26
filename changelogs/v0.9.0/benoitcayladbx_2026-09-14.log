@@ -1,0 +1,504 @@
+## Adjacency Index — full feature (Tasks 1–7)
+
+Context: Implements a two-table adjacency index (`_adj_out` / `_adj_in`) for
+Lakehouse (Delta) and Lakebase (Postgres) backends, wires it into every write
+path that mutates the graph (Build, managed-synced apply, reasoning
+materialization, cohort edge writes, inference purge), exposes an adjacency-
+only refresh action in the UI (Lakehouse Build panel and Lakebase Sync panel),
+and documents the feature in the canonical architecture, graphdb-integration,
+and user-guide docs. Neo4j is unchanged and has no adjacency tables.
+
+### Changes
+
+1. **src/back/core/graphdb/adjacency.py** — new dialect-aware shared SQL
+   module: typed-out / typed-in selects, 1-hop neighbor UNION, and
+   `expand_and_fetch_sql` with Spark LEFT ANTI JOIN vs Postgres NOT EXISTS.
+   `__all__` declared; raises `ValueError` on empty URI lists; UNION ALL with
+   outer DISTINCT.
+
+2. **src/back/core/graphdb/GraphDBBackend.py** — adjacency capability hooks:
+   `supports_adjacency` (default `False`), `sql_flavor`, `adjacency_table_ids`,
+   `rebuild_adjacency`, `adjacency_ready`; `expand_entity_neighbors` branches
+   to adjacency SQL when `adjacency_ready`.
+
+3. **src/back/core/graphdb/_starter_kit/ExampleStore.py** — added commented
+   optional adjacency override stubs for new engine integrations.
+
+4. **src/back/core/graphdb/delta/_table_naming.py** — added `_adj_out` /
+   `_adj_in` FQN and suffix helpers aligned with existing
+   `triplestore_<domain>_V<n>` naming.
+
+5. **src/back/core/graphdb/delta/materialize.py** — added
+   `build_adj_ctas_sql(spo_fqn, adj_fqn, direction)` with Delta CTAS +
+   required clustering (`src` for out, `dst` for in); reuses shared
+   `typed_out_select` / `typed_in_select` for semantic parity with fallback.
+
+6. **src/back/core/graphdb/delta/DeltaFlatStore.py** — enabled adjacency
+   support (`supports_adjacency`, `sql_flavor`, `adjacency_table_ids`,
+   `rebuild_adjacency`); adjacency `OPTIMIZE` is best-effort (warn on error,
+   CTAS is hard failure); `expand_and_fetch_subgraph` uses adjacency SQL when
+   ready, with SPO fallback; `purge_materialized_triples` triggers full
+   adjacency rebuild.
+
+7. **src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py** — wired
+   post-build adjacency rebuild after graph VIEW creation and (table mode) after
+   `_data` optimize; adjacency failures fail the build; progress messages
+   include "Building adjacency index…".
+
+8. **src/back/core/graphdb/lakebase/_adjacency_ddl.py** — new module:
+   adjacency DDL/rebuild helpers for Lakebase (`CREATE TABLE` + PK + btree
+   indexes, `TRUNCATE`/`INSERT`/`ANALYZE`); deterministic identifier bounding
+   with hash suffixes (`≤63` bytes); `adjacency_index_name()`;
+   `rebuild_adjacency_data` (transactional) + `analyze_adjacency_tables` (post-
+   commit).
+
+9. **src/back/core/graphdb/lakebase/LakebaseFlatStore.py** — enabled adjacency
+   capability; `rebuild_adjacency()` uses explicit `_txn_cursor` transaction for
+   atomic data refresh (CTAS hard failure; ANALYZE post-commit); `expand_and_
+   fetch_subgraph` with Postgres multi-hop SQL when adjacency ready, SPO-derived
+   CTE fallback when missing; `purge_materialized_triples` triggers full
+   adjacency rebuild.
+
+10. **src/back/objects/digitaltwin/_build_pipeline.py** — Lakebase-only guard
+    (`supports_adjacency` + `sql_flavor == postgres`) triggers adjacency rebuild
+    after full rebuild optimize and at end of managed-synced apply; adjacency
+    failures are fail-loud, decoupled from companion truncate try-block.
+
+11. **src/back/core/reasoning/ReasoningService.py** — post-insert adjacency
+    rebuild guard in `materialize_inferred` after `optimize_inferred_companion`;
+    fail-loud semantics.
+
+12. **src/back/core/graph_analysis/CohortBuilder.py** — guarded adjacency
+    rebuild in `materialize_to_graph` after successful edge insert (`count > 0`);
+    returns inserted count.
+
+13. **src/api/routers/internal/dtwin.py** — added thin
+    `POST /dtwin/adjacency/refresh` route with per-domain `graph_backend`
+    validation, TaskManager task creation, daemon-thread orchestration; no JSON
+    body parsing.
+
+14. **src/back/objects/digitaltwin/DigitalTwin.py** — added
+    `run_adjacency_refresh_task` worker: opens active store via
+    `get_graphdb(domain_snapshot, settings)`, checks adjacency support, resolves
+    current graph relation, calls `store.rebuild_adjacency(graph_name)`.
+
+15. **src/front/templates/partials/dtwin/_query_sync.html** — "Refresh
+    adjacency" secondary action in Lakebase Sync panel; role-gated (builder /
+    admin only, disabled lock variant for other roles).
+
+16. **src/front/templates/partials/dtwin/_query_databricks_build.html** —
+    "Refresh adjacency" secondary action in Lakehouse Build panel; same role
+    gating.
+
+17. **src/front/static/query/js/query-sync.js** — adjacency task start /
+    resume / poll flow (`/dtwin/adjacency/refresh` + `/tasks/{id}`),
+    sessionStorage persistence, explicit hide for `neo4j` / `none`, disable
+    guards while build/refresh runs or graph has no data; visibility strictly
+    `backend === 'lakebase'`.
+
+18. **src/front/static/query/js/query-databricks-build.js** — Lakehouse
+    adjacency refresh polling flow, button visibility / state guards,
+    `checkAndResumeDatabricksTask` (task-status pre-check before resuming poll),
+    status reload on completion.
+
+19. **docs/graphdb-integration.md** — documented adjacency index objects table
+    (Lakehouse Delta + Lakebase Postgres), Neo4j unchanged note, and
+    adjacency-only refresh semantics per mode.
+
+20. **docs/architecture.md** — added "Adjacency index objects" subsection under
+    Lakehouse Unity Catalog objects with per-mode refresh semantics and
+    cross-reference.
+
+21. **docs/user-guide.md** — added "Adjacency index snapshot" note in Build
+    guidance with per-mode freshness table and caveat on Explorer vs SPARQL
+    divergence in table mode.
+
+### Modified files
+
+Implementation:
+- src/back/core/graphdb/adjacency.py *(new)*
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graphdb/_starter_kit/ExampleStore.py
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/core/graphdb/lakebase/_adjacency_ddl.py *(new)*
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-databricks-build.js
+
+Tests:
+- tests/units/graphdb/test_adjacency_sql.py *(new)*
+- tests/units/graphdb/test_graphdb_adjacency_contract.py *(new)*
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- tests/units/graphdb/test_lakebase_adjacency.py *(new)*
+- tests/units/graphdb/test_materialized_inference_purge.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- tests/units/dtwin/test_cohort_builder.py
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/api/test_dtwin_adjacency_refresh.py *(new)*
+- tests/units/front/test_adjacency_refresh_ui.py *(new)*
+
+Docs:
+- docs/graphdb-integration.md
+- docs/architecture.md
+- docs/user-guide.md
+
+Planning:
+- docs/superpowers/plans/2026-09-14-adjacency-index.md *(new)*
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` — 6073 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 64.46s. UI browser
+verification passed for Lakebase and simulated Lakehouse desktop/mobile
+layouts; no adjacency-specific console or network errors were observed.
+
+## Final review fixes — C1/I1/I2
+
+Context: Follow-up fixes after final review findings on adjacency index SQL,
+cohort adjacency invalidation, and Delta consistency documentation.
+
+### Changes
+
+1. `tests/units/graphdb/delta/test_delta_package.py` — added regression tests
+   proving `build_adj_ctas_sql` must not append a duplicate trailing
+   `FROM <spo>` suffix.
+2. `tests/units/dtwin/test_cohort_builder.py` — added regression test for
+   delete-only cohort materialization (`delete>0`, `insert=0`) requiring
+   adjacency rebuild; tightened adjacent test setup to explicitly set
+   `delete_cohort_triples` return values.
+3. `src/back/core/graphdb/delta/materialize.py` — fixed `build_adj_ctas_sql`
+   to emit only the typed select returned by `typed_out_select` /
+   `typed_in_select` (no extra trailing `FROM`).
+4. `src/back/core/graph_analysis/CohortBuilder.py` — `materialize_to_graph`
+   now rebuilds adjacency when either delete changed rows (`deleted != 0`) or
+   insert changed rows (`inserted > 0`), while preserving the
+   `supports_adjacency` guard (Neo4j/non-adjacency backends unchanged).
+5. `docs/graphdb-integration.md`, `docs/architecture.md`,
+   `docs/user-guide.md` — documented that Lakehouse `_adj_out` and `_adj_in`
+   are replaced sequentially (two CTAS statements), not through cross-table
+   atomic replacement; added operator guidance to avoid overlapping
+   consistency-sensitive reads with Build/Refresh.
+
+### Modified files
+
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/dtwin/test_cohort_builder.py
+- docs/graphdb-integration.md
+- docs/architecture.md
+- docs/user-guide.md
+
+Test result:
+- RED (new regressions only): `3 failed` as expected.
+- GREEN (same regressions): `3 passed`.
+- Adjacency-focused verification:
+  `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_package.py tests/units/graphdb/delta/test_delta_flat_store.py tests/units/graphdb/delta/test_delta_build_pipeline.py tests/units/dtwin/test_cohort_builder.py tests/units/api/test_dtwin_adjacency_refresh.py tests/units/front/test_adjacency_refresh_ui.py tests/units/graphdb/test_adjacency_sql.py tests/units/graphdb/test_graphdb_adjacency_contract.py tests/units/graphdb/test_lakebase_adjacency.py tests/units/graphdb/test_materialized_inference_purge.py tests/units/ontology/test_reasoning_service.py` → `182 passed`, `0 failed`.
+- Final full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6073 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings`.
+
+## Migrate Lakehouse/RT queries to Kernel
+
+Context: KG Explorer queries through the connector's deprecated Python SEA
+backend failed with `CLOUD_IO_INVALID_ARGUMENT`. Lakehouse/RT connections now
+use the supported native Kernel backend while preserving the existing
+`use_sea` registry key and Settings workflow for backward compatibility.
+
+Changes:
+
+1. `src/back/core/databricks/DatabricksAuth.py`
+   Maps the persisted Lakehouse/RT flag to `use_kernel=True`, removes
+   `use_sea` from connector arguments, and applies the same path to CloudFetch
+   capability probes.
+2. `src/back/core/databricks/SQLWarehouse.py`
+   Recognizes Kernel connections when applying request and statement timeout
+   behavior.
+3. `src/back/core/graphdb/engine_config.py`,
+   `src/back/objects/session/GlobalConfigService.py`, and
+   `src/back/objects/domain/SettingsService.py`
+   Document the compatibility-key behavior without migrating stored
+   configuration.
+4. `pyproject.toml` and `uv.lock`
+   Enable the connector's `kernel` extra and lock
+   `databricks-sql-kernel==1.0.0` with public PyPI artifact URLs.
+5. `src/front/templates/settings.html`
+   Identifies the native Kernel backend in the Lakehouse/RT query help text.
+6. `tests/units/auth/test_auth.py`,
+   `tests/units/core/test_sql_warehouse.py`, and
+   `tests/units/front/test_settings_warehouse_split.py`
+   Add red/green contracts for Kernel parameter routing, probing, timeout
+   handling, and Settings guidance.
+7. `docs/development.md`, `docs/features.md`, and `docs/architecture.md`
+   Document the Kernel runtime dependency and Lakehouse/RT transport.
+
+Modified files:
+- pyproject.toml
+- uv.lock
+- src/back/core/databricks/DatabricksAuth.py
+- src/back/core/databricks/SQLWarehouse.py
+- src/back/core/graphdb/engine_config.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/settings.html
+- tests/units/auth/test_auth.py
+- tests/units/core/test_sql_warehouse.py
+- tests/units/front/test_settings_warehouse_split.py
+- docs/development.md
+- docs/features.md
+- docs/architecture.md
+
+Tests:
+- RED: Kernel routing contracts failed with four expected failures; Settings
+  guidance contract failed with one expected failure.
+- Targeted: `146 passed, 0 failed`.
+- Kernel dependency smoke test: `databricks-sql-kernel==1.0.0` imported
+  `KernelDatabricksClient`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6075 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.51s`.
+
+## Paint the neighbour-expansion spinner before loading
+
+Context: The Graph Explorer's shared loading overlay was activated by
+**Expand neighbours**, but the request started before the browser was given a
+paint frame. Users could therefore see an empty overlay instead of the branded
+spinner while neighbour data loaded.
+
+Changes:
+
+1. `src/front/static/query/js/query-sigmagraph.js`
+   Waits for the branded loading overlay to paint before starting the
+   neighbour-expansion request.
+2. `tests/units/front/test_explorer_loading_overlay.py`
+   Verifies the required show, paint, then request ordering.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_loading_overlay.py
+
+Tests:
+- RED: the neighbour-expansion ordering contract failed as expected.
+- Focused: `10 passed, 0 failed`.
+- Browser: branded spinner and label remained visible during delayed success
+  and failure requests at 1440×900 and 375×667, then cleared correctly.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6075 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.37s`.
+
+## Preserve the Explorer spinner across graph rebuilds
+
+Context: The first **Expand neighbours** operation displayed the loading
+overlay, but Sigma renderer teardown deleted the overlay from its managed
+container. Subsequent expansions therefore had no spinner element to activate.
+
+Changes:
+
+1. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Moves the shared loading overlay outside the DOM subtree owned and cleared
+   by the Sigma renderer.
+2. `src/front/static/query/css/query-sigmagraph.css`
+   Hides the busy Sigma canvas while keeping its sibling overlay visible.
+3. `tests/units/front/test_explorer_loading_overlay.py`
+   Adds a regression contract ensuring renderer teardown cannot remove the
+   loading overlay.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_explorer_loading_overlay.py
+
+Tests:
+- RED: the overlay lifecycle contract failed at the expected DOM-order
+  assertion.
+- Focused: `11 passed, 0 failed`.
+- Browser: the branded overlay remained in the DOM after Sigma renderer
+  recreation and was visible on two consecutive neighbour expansions; both
+  `/dtwin/neighbors` requests returned 200 with no console errors.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6076 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.54s`.
+
+## Add a compact entity-search index for Explorer Preview
+
+Context: Explorer Preview previously scanned the full SPO relation to find
+subjects, then issued a second warehouse query for type and label metadata.
+The graph-index refresh now materializes a compact entity directory alongside
+the adjacency pair so the normal Preview path needs one bounded statement.
+
+Changes:
+
+1. `src/back/core/graphdb/entity_search.py`
+   Adds shared SQL for the typed-entity projection, search matching, and
+   asserted-only relation detection.
+2. `src/back/core/graphdb/GraphDBBackend.py`
+   Adds the entity-search capability and one-query Preview path with a
+   missing-table SPO fallback and no existence-query round trip.
+3. `src/back/core/graphdb/delta/_table_naming.py`,
+   `src/back/core/graphdb/delta/materialize.py`, and
+   `src/back/core/graphdb/delta/DeltaFlatStore.py`
+   Materialize and optimize the Delta `_entity_search` table with the
+   adjacency tables.
+4. `src/back/core/graphdb/lakebase/_adjacency_ddl.py` and
+   `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Create and load the Postgres entity index in the same data transaction as
+   `_adj_out` and `_adj_in`.
+5. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Routes Preview through indexed rows while preserving caps and response
+   shape; Refresh adjacency progress identifies both index families.
+6. `tests/units/graphdb/test_entity_search_sql.py`,
+   `tests/units/graphdb/test_graphdb_adjacency_contract.py`,
+   `tests/units/graphdb/delta/test_delta_package.py`,
+   `tests/units/graphdb/delta/test_delta_flat_store.py`,
+   `tests/units/graphdb/test_lakebase_adjacency.py`, and
+   `tests/units/dtwin/test_filter_preview_entity_search.py`
+   Add red/green SQL, backend, lifecycle, transaction, and response contracts.
+7. `docs/graphdb-integration.md`, `docs/architecture.md`,
+   `docs/user-guide.md`, and `docs/superpowers/`
+   Document the third graph-index companion, shared refresh clock, fallback,
+   staleness, and implementation plan.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graphdb/_starter_kit/ExampleStore.py
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/lakebase/_adjacency_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/units/graphdb/test_entity_search_sql.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/test_lakebase_adjacency.py
+- tests/units/dtwin/test_filter_preview_entity_search.py
+- docs/graphdb-integration.md
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-14-entity-search-index-design.md
+- docs/superpowers/plans/2026-09-14-entity-search-index.md
+
+Tests:
+- RED: shared SQL import, backend contract, Delta materialization, Lakebase
+  lifecycle, DigitalTwin Preview, and one-round-trip contracts failed for the
+  expected missing implementation.
+- Targeted: `83 passed, 0 failed`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6092 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.33s`.
+
+## Recover orphaned Lakebase sync pipelines
+
+Context: A managed-synced build waited for ten minutes and reported a timeout
+after the Lakebase registration entered `OFFLINE_FAILED` because its backing
+Lakeflow pipeline disappeared. Subsequent builds reused the broken registration
+and failed immediately. The Lakebase control plane also rejected deletion of
+that registration, requiring a healthy fallback table name.
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+   Detects terminally failed registrations during `ensure`, attempts safe
+   deletion, and uses the first healthy `_b` / `_c` / `_d` registration when
+   deletion is unavailable. Pipeline-update polling now checks the synced-table
+   state concurrently and reports the control-plane failure message immediately.
+2. `tests/units/core/test_synced_table_manager.py`
+   Adds red/green regression coverage for failed-registration fallback and
+   terminal failure detection during an active update wait.
+3. `docs/graphdb-integration.md`
+   Documents terminal-state monitoring and fallback registration recovery.
+
+Modified files:
+- src/back/core/graphdb/lakebase/SyncedTableManager.py
+- tests/units/core/test_synced_table_manager.py
+- docs/graphdb-integration.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-14.log
+
+Tests:
+- RED: `2 failed` as expected.
+- Focused: `25 passed, 0 failed`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6078 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.00s`.
+- Live recovery: fallback registration reached
+  `SYNCED_TABLE_ONLINE_NO_PENDING_UPDATE` with `7,641,879 / 7,641,879` rows;
+  the graph union view was repointed to the recovered `_sync_b` table.
+
+## Route Lakehouse index refreshes to the build warehouse
+
+Context: Refresh adjacency opened the Delta graph through the Lakehouse query
+warehouse. Lakehouse/RT rejects the `CREATE OR REPLACE TABLE` statements used
+to rebuild adjacency and entity-search indexes, so the refresh failed before
+creating its first companion table.
+
+Changes:
+
+1. `src/back/core/graphdb/delta/DeltaBase.py`
+   Adds an explicit write-client path that resolves the build warehouse and
+   its configured transport instead of the Lakehouse query warehouse.
+2. `src/back/core/graphdb/GraphDBFactory.py`
+   Propagates the write intent through automatic and explicit Delta factory
+   creation while leaving normal read clients unchanged.
+3. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Opens Databricks adjacency refreshes with the write path; Lakebase refresh
+   behavior remains unchanged.
+4. `tests/units/graphdb/delta/test_delta_base.py`,
+   `tests/units/graphdb/delta/test_graphdb_factory_delta.py`, and
+   `tests/units/api/test_dtwin_adjacency_refresh.py`
+   Add regression coverage for build-warehouse resolution and backend-specific
+   refresh routing.
+5. `docs/graphdb-integration.md`, `docs/architecture.md`, and
+   `docs/user-guide.md`
+   Document that Lakehouse graph-index DDL runs on the Build SQL Warehouse
+   while Lakehouse/RT remains dedicated to graph reads.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaBase.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/units/graphdb/delta/test_delta_base.py
+- tests/units/graphdb/delta/test_graphdb_factory_delta.py
+- tests/units/api/test_dtwin_adjacency_refresh.py
+- docs/graphdb-integration.md
+- docs/architecture.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-14.log
+
+Tests:
+- RED: `3 failed, 5 passed` as expected before implementation.
+- Targeted: `37 passed, 0 failed`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6094 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.85s`.
+
+## Document backend copy vs no-copy object lifecycle
+
+Context: Backend, materialization, and index behaviour was split across several
+sections. Operators needed one matrix covering Lakehouse table/view, both
+Lakebase sync modes, and Neo4j: what is copied, who creates it, and how Build
+versus Refresh adjacency manage the objects.
+
+Changes:
+
+1. `docs/architecture.md`
+   Adds the canonical capability and object-lifecycle matrix, plus a precise
+   copy vs no-copy note for mapped triples, inferred triples, and indexes.
+2. `docs/user-guide.md`
+   Adds a short operator table and links to the architecture matrix.
+3. `docs/graphdb-integration.md`
+   Corrects `_data` as TABLE-or-VIEW and points at the same matrix.
+
+Modified files:
+- docs/architecture.md
+- docs/user-guide.md
+- docs/graphdb-integration.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-14.log
+
+Tests:
+- Documentation-only change; previous full suite still applies:
+  `6094 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 44.80s`.

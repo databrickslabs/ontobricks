@@ -8,6 +8,12 @@ owl_generator:
   schema_validity: 0.95
   class_coverage: 0.80
   property_quality: 0.80
+  parsed_corpus_contract: 0.90
+  # Staged-contract aggregate (SPEC §5). Now enforceable: the staged entry
+  # points (detect_entities / infer_relations / infer_attributes /
+  # infer_axioms) exist, so tests/eval/staged_contract.py scores every
+  # `staged` row's constraints deterministically against the real code.
+  staged_contract: 0.95
   latency_p95_seconds: 30.0
   cost_per_call_usd: 0.05
   aggregate: 0.82
@@ -30,6 +36,9 @@ auto_assignment:
   # Pass/fail, excluded from the weighted aggregate below.
   trace_step_order: 1.0
   audit_report_parity: 1.0
+  # Metric-view SQL-generation contract (SPEC §5). Scored by
+  # run_agent_auto_assignment_metric.py against datasets/.../metric_view.jsonl.
+  metric_view_sql_correctness: 0.95
   aggregate: 0.90
 
 auto_icon_assign:
@@ -64,3 +73,15 @@ graph_interpreter:
   latency_p95_seconds: 20.0
   cost_per_call_usd: 0.02
   aggregate: 0.82
+
+mapping_pge:
+  entity_coverage: 1.00
+  relationship_coverage: 1.00
+  dangling_rate: 1.00
+  sql_executes: 0.98
+  semantic_correctness: 0.85
+  parsed_corpus_contract: 0.90
+  # Metric-view SQL-generation contract (SPEC §5). Scored by
+  # run_agent_mapping_pge_metric.py against datasets/.../metric_view.jsonl.
+  metric_view_sql_correctness: 0.95
+  aggregate: 0.90

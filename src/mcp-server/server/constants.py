@@ -28,6 +28,8 @@ GRAPH_TOOLS = frozenset(
         "get_entity_context",
         "invoke_entity_action",
         "compute_virtual_attributes",
+        "run_entity_business_rule",
+        "check_entity_shacl_facets",
     }
 )
 
@@ -45,7 +47,9 @@ API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
 API_V1_DOMAIN_ONTOLOGY = "/api/v1/domain/ontology"
 API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"
 API_V1_DT_NODE_ACTION = "/api/v1/digitaltwin/nodes/action"
+API_V1_DT_NODE_BUSINESS_RULE = "/api/v1/digitaltwin/nodes/business-rule"
 API_V1_DT_NODE_VIRTUAL_ATTRIBUTES = "/api/v1/digitaltwin/nodes/virtual-attributes"
+API_V1_DT_NODE_SHACL = "/api/v1/digitaltwin/nodes/shacl"
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"

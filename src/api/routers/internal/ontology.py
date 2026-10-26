@@ -11,18 +11,27 @@ import re
 from fastapi import APIRouter, Request, Depends
 
 from api.routers.internal._helpers import map_route_errors
-from back.core.errors import InfrastructureError, NotFoundError, ValidationError
+from back.core.errors import (
+    GoneError,
+    InfrastructureError,
+    NotFoundError,
+    OntoBricksError,
+    ValidationError,
+)
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
-from back.objects.ontology import Ontology
+from back.objects.ontology import Ontology, Rules
+from back.objects.ontology.generate import GenerateWorkflow
 from back.objects.session import get_domain
 from back.core.task_manager import get_task_manager
 from back.core.helpers import (
     get_databricks_host_and_token,
     make_volume_file_service,
-    require_serving_llm,
+    require_domain_llm,
     resolve_warehouse_id,
 )
+import time
+
 from agents.serialization import serialize_agent_steps
 from back.core.industry import (
     get_fibo_catalog,
@@ -191,6 +200,10 @@ async def generate_owl_endpoint(
 
     with map_route_errors("OWL generation failed", logger):
         domain = get_domain(session_mgr)
+        ontology_data = dict(data)
+        for key in ("rdf_extras", "label_lang"):
+            if key not in ontology_data and key in domain.ontology:
+                ontology_data[key] = domain.ontology[key]
         constraints = data.get("constraints") or domain.constraints
         swrl_rules = data.get("swrl_rules") or domain.swrl_rules
         axioms = data.get("axioms") or domain.axioms
@@ -198,7 +211,7 @@ async def generate_owl_endpoint(
         groups = data.get("groups") or domain.groups
 
         owl_content = Ontology.generate_owl(
-            data, constraints, swrl_rules, axioms, expressions, groups
+            ontology_data, constraints, swrl_rules, axioms, expressions, groups
         )
         domain.generated["owl"] = owl_content
         domain.save()
@@ -497,8 +510,10 @@ async def save_shape(
         shapes = list(domain.shacl_shapes)
 
         is_update = bool(shape_id and any(s["id"] == shape_id for s in shapes))
+        old = next((dict(s) for s in shapes if s.get("id") == shape_id), {})
         if is_update:
             shapes = SHACLService.update_shape(shapes, shape_id, shape_data)
+            saved = next((s for s in shapes if s.get("id") == shape_id), shape_data)
         else:
             new_shape = SHACLService.create_shape(
                 category=shape_data.get("category", "conformance"),
@@ -516,13 +531,15 @@ async def save_shape(
                 condition_logic=shape_data.get("condition_logic", "and"),
             )
             shapes.append(new_shape)
+            saved = new_shape
 
         domain.shacl_shapes = shapes
-        _ref = shape_id or shape_data.get("label", "") or shape_data.get("target_class", "")
+        _ref = shape_id or saved.get("label", "") or saved.get("target_class", "")
         domain.record_change(
             "shacl_updated" if is_update else "shacl_added",
             entity_type="shacl", entity_ref=_ref,
-            summary=shape_data.get("label", "") or _ref,
+            summary=saved.get("label", "") or _ref,
+            meta=domain.diff_meta(old if is_update else {}, saved),
         )
         domain.save()
         return {"success": True, "message": "Shape saved", "shapes": shapes}
@@ -540,11 +557,14 @@ async def delete_shape(
             raise ValidationError("Shape id is required")
 
         domain = get_domain(session_mgr)
+        shapes = list(domain.shacl_shapes)
+        old = next((dict(s) for s in shapes if s.get("id") == shape_id), {})
         shapes = SHACLService.delete_shape(domain.shacl_shapes, shape_id)
         domain.shacl_shapes = shapes
         domain.record_change(
             "shacl_removed", entity_type="shacl",
-            entity_ref=shape_id, summary=shape_id,
+            entity_ref=shape_id, summary=old.get("label") or shape_id,
+            meta=domain.diff_meta(old, {}),
         )
         domain.save()
         return {"success": True, "message": "Shape deleted", "shapes": shapes}
@@ -607,9 +627,7 @@ async def export_shacl(session_mgr: SessionManager = Depends(get_session_manager
         domain.ontology.get("base_uri", ""),
     )
     export_name = (
-        domain._data.get("domain", domain._data.get("project", {}))
-        .get("info", {})
-        .get("name", DEFAULT_GRAPH_NAME)
+        domain._data["domain"].get("info", {}).get("name", DEFAULT_GRAPH_NAME)
     )
     filename = f"{export_name}_shacl_shapes.ttl"
     return Response(
@@ -777,10 +795,12 @@ async def cleanup_shapes(session_mgr: SessionManager = Depends(get_session_manag
 async def suggest_shapes(session_mgr: SessionManager = Depends(get_session_manager)):
     """Auto-suggest SHACL shapes from current ontology (read-only, not persisted).
 
-    Introspects OWL classes and properties to produce:
-    - completeness rules (sh:minCount 1) for every declared data property
-    - datatype constraints (sh:datatype) from OWL range declarations
-    - relationship constraints (sh:class) from ObjectProperty domain/range
+    Introspects OWL classes, properties and ``domain.constraints`` to produce:
+    - completeness (sh:minCount) for class-listed data properties and OWL
+      minCardinality / cardinality / someValuesFrom restrictions
+    - cardinality (sh:maxCount) from owl:FunctionalProperty and max/exact cardinality
+    - uniqueness (sh:sparql) from owl:InverseFunctionalProperty
+    - datatype (sh:datatype) and relationship (sh:class) from property ranges
 
     Filters out any suggestion whose id already exists in domain.shacl_shapes.
     """
@@ -788,9 +808,12 @@ async def suggest_shapes(session_mgr: SessionManager = Depends(get_session_manag
         domain = get_domain(session_mgr)
         classes = domain.get_classes()
         properties = domain.get_properties()
+        constraints = domain.constraints
         base_uri = domain.ontology.get("base_uri", "")
         existing_ids = {s.get("id") for s in domain.shacl_shapes}
-        all_suggestions = SHACLService.suggest_from_ontology(classes, properties, base_uri)
+        all_suggestions = SHACLService.suggest_from_ontology(
+            classes, properties, base_uri, constraints=constraints
+        )
         new_suggestions = [s for s in all_suggestions if s.get("id") not in existing_ids]
         return {
             "success": True,
@@ -865,16 +888,22 @@ async def save_swrl_rule(
         rules = domain.swrl_rules
 
         is_update = 0 <= index < len(rules)
+        old = dict(rules[index]) if is_update else {}
         if is_update:
             rules[index] = rule
         else:
             rules.append(rule)
 
         domain.swrl_rules = rules
+        if is_update:
+            Rules.rename_business_rule_refs(
+                domain.get_classes(), old.get("name", ""), rule.get("name", "")
+            )
         domain.record_change(
             "swrl_updated" if is_update else "swrl_added",
             entity_type="swrl", entity_ref=rule.get("name", ""),
             summary=rule.get("name", ""),
+            meta=domain.diff_meta(old, rule),
         )
         domain.save()
         return {
@@ -898,12 +927,18 @@ async def delete_swrl_rule(
         if not (0 <= index < len(rules)):
             raise ValidationError("Invalid rule index")
 
-        removed_name = rules[index].get("name", "") if isinstance(rules[index], dict) else ""
+        removed = dict(rules[index]) if isinstance(rules[index], dict) else {}
+        removed_name = removed.get("name", "")
         rules.pop(index)
         domain.swrl_rules = rules
+        if removed_name and not any(
+            isinstance(r, dict) and r.get("name") == removed_name for r in rules
+        ):
+            Rules.drop_business_rule_refs(domain.get_classes(), removed_name)
         domain.record_change(
             "swrl_removed", entity_type="swrl",
             entity_ref=removed_name, summary=removed_name,
+            meta=domain.diff_meta(removed, {}),
         )
         domain.save()
         return {"success": True, "message": "SWRL rule deleted", "rules": rules}
@@ -922,7 +957,7 @@ async def validate_swrl_rule(request: Request):
 @router.get("/swrl/text")
 async def get_swrl_text(session_mgr: SessionManager = Depends(get_session_manager)):
     """Serialize all SWRL rules as OntoBricks SWRL text."""
-    from back.core.reasoning.SWRLTextCodec import serialize_rules
+    from back.core.reasoning.swrl.SWRLTextCodec import serialize_rules
 
     domain = get_domain(session_mgr)
     return {"success": True, "text": serialize_rules(domain.swrl_rules)}
@@ -932,14 +967,12 @@ async def get_swrl_text(session_mgr: SessionManager = Depends(get_session_manage
 async def export_swrl(session_mgr: SessionManager = Depends(get_session_manager)):
     """Download SWRL rules as an OntoBricks SWRL text file."""
     from fastapi.responses import Response
-    from back.core.reasoning.SWRLTextCodec import serialize_rules
+    from back.core.reasoning.swrl.SWRLTextCodec import serialize_rules
 
     domain = get_domain(session_mgr)
     text = serialize_rules(domain.swrl_rules)
     export_name = (
-        domain._data.get("domain", domain._data.get("project", {}))
-        .get("info", {})
-        .get("name", DEFAULT_GRAPH_NAME)
+        domain._data["domain"].get("info", {}).get("name", DEFAULT_GRAPH_NAME)
     )
     filename = f"{export_name}_swrl_rules.swrl"
     return Response(
@@ -954,7 +987,7 @@ async def import_swrl(
     request: Request, session_mgr: SessionManager = Depends(get_session_manager)
 ):
     """Import SWRL rules from OntoBricks SWRL text (always append)."""
-    from back.core.reasoning.SWRLTextCodec import parse_rules
+    from back.core.reasoning.swrl.SWRLTextCodec import parse_rules
 
     with map_route_errors("SWRL import failed", logger):
         data = await request.json()
@@ -977,11 +1010,13 @@ async def import_swrl(
         rules = list(domain.swrl_rules)
         rules.extend(imported)
         domain.swrl_rules = rules
+        names = [r.get("name", "") for r in imported if isinstance(r, dict)]
         domain.record_change(
             "swrl_added",
             entity_type="swrl",
             entity_ref=f"{len(imported)} imported",
             summary=f"Imported {len(imported)} SWRL rule(s)",
+            meta=domain.diff_meta({}, {"name": ", ".join(n for n in names if n)}),
         )
         domain.save()
         return {
@@ -1039,12 +1074,20 @@ async def save_rule(
         domain = get_domain(session_mgr)
         rules = list((domain.ontology or {}).get(key, []))
 
-        if 0 <= index < len(rules):
+        is_update = 0 <= index < len(rules)
+        old = dict(rules[index]) if is_update else {}
+        if is_update:
             rules[index] = rule
         else:
             rules.append(rule)
 
         domain._data["ontology"][key] = rules
+        domain.record_change(
+            f"{key}_updated" if is_update else f"{key}_added",
+            entity_type=key, entity_ref=rule.get("name", ""),
+            summary=rule.get("name", ""),
+            meta=domain.diff_meta(old, rule),
+        )
         domain.save()
         return {"success": True, "message": "Rule saved", "rules": rules}
 
@@ -1069,8 +1112,15 @@ async def delete_rule(
         if not (0 <= index < len(rules)):
             raise ValidationError("Invalid rule index")
 
+        removed = dict(rules[index]) if isinstance(rules[index], dict) else {}
         rules.pop(index)
         domain._data["ontology"][key] = rules
+        domain.record_change(
+            f"{key}_removed",
+            entity_type=key, entity_ref=removed.get("name", ""),
+            summary=removed.get("name", ""),
+            meta=domain.diff_meta(removed, {}),
+        )
         domain.save()
         return {"success": True, "message": "Rule deleted", "rules": rules}
 
@@ -1238,7 +1288,9 @@ async def generate_business_rules_async(
     documents = data.get("documents", [])
 
     domain = get_domain(session_mgr)
-    host, token, llm_endpoint = require_serving_llm(domain, settings)
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
+        domain, settings
+    )
     warehouse_id = resolve_warehouse_id(domain, settings)
 
     tm = get_task_manager()
@@ -1428,7 +1480,10 @@ async def save_axiom(
         else:
             items = domain.axioms
 
-        if 0 <= index < len(items):
+        kind = "expression" if collection == "expressions" else "axiom"
+        is_update = 0 <= index < len(items)
+        old = dict(items[index]) if is_update else {}
+        if is_update:
             items[index] = axiom
         else:
             items.append(axiom)
@@ -1437,6 +1492,12 @@ async def save_axiom(
             domain.expressions = items
         else:
             domain.axioms = items
+        _ref = axiom.get("subject") or axiom.get("type") or kind
+        domain.record_change(
+            f"{kind}_updated" if is_update else f"{kind}_added",
+            entity_type=kind, entity_ref=_ref, summary=_ref,
+            meta=domain.diff_meta(old, axiom),
+        )
         domain.save()
         return {
             "success": True,
@@ -1468,11 +1529,19 @@ async def delete_axiom(
         if not (0 <= index < len(items)):
             raise ValidationError("Invalid axiom index")
 
+        kind = "expression" if collection == "expressions" else "axiom"
+        removed = dict(items[index]) if isinstance(items[index], dict) else {}
         items.pop(index)
         if collection == "expressions":
             domain.expressions = items
         else:
             domain.axioms = items
+        _ref = removed.get("subject") or removed.get("type") or kind
+        domain.record_change(
+            f"{kind}_removed",
+            entity_type=kind, entity_ref=_ref, summary=_ref,
+            meta=domain.diff_meta(removed, {}),
+        )
         domain.save()
         return {
             "success": True,
@@ -1709,6 +1778,69 @@ async def list_bridge_domain_classes(
 
 
 # ===========================================
+# Entity import (Studio "Import entity")
+# ===========================================
+
+
+async def _load_source_ontology(domain, settings, domain_name: str):
+    """Latest-version ontology of *domain_name*; refuses the current domain."""
+    from back.objects.registry import RegistryService
+    from back.core.helpers import run_blocking
+
+    current = {
+        (domain.info.get("name") or "").strip().lower(),
+        (domain.domain_folder or "").strip().lower(),
+    }
+    if domain_name.strip().lower() in current:
+        raise ValidationError("Cannot import entities from the current domain")
+    svc = RegistryService.from_context(domain, settings)
+    ok, data, version, msg = await run_blocking(svc.load_latest_domain_data, domain_name)
+    if not ok:
+        raise InfrastructureError("Loading source domain ontology failed", detail=msg)
+    return svc._extract_latest_ontology(data), version
+
+
+@router.get("/entity-import/domains/{domain_name}/catalog")
+async def entity_import_catalog(
+    domain_name: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Entities and relationships of another domain, flagged against the current one."""
+    with map_route_errors("Loading entity import catalog failed", logger):
+        from back.objects.ontology import EntityImport
+
+        domain = get_domain(session_mgr)
+        source, version = await _load_source_ontology(domain, settings, domain_name)
+        catalog = EntityImport.build_catalog(source, domain.ontology)
+        return {"success": True, "domain": domain_name, "version": version, **catalog}
+
+
+@router.post("/entity-import")
+async def entity_import(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Copy selected entities (and their relationships) from another domain."""
+    with map_route_errors("Entity import failed", logger):
+        data = await request.json()
+        domain_name = (data.get("domain") or "").strip()
+        names = [n for n in data.get("entities") or [] if isinstance(n, str) and n]
+        if not domain_name or not names:
+            raise ValidationError("A source domain and at least one entity are required")
+        domain = get_domain(session_mgr)
+        source, version = await _load_source_ontology(domain, settings, domain_name)
+        return Ontology(domain).import_entities_from_domain(
+            source,
+            names,
+            data.get("renames") or {},
+            source_domain=domain_name,
+            source_version=version,
+        )
+
+
+# ===========================================
 # OWL File Operations (Unity Catalog)
 # ===========================================
 
@@ -1820,15 +1952,54 @@ async def get_wizard_templates():
 
 
 @router.post("/wizard/generate-async")
-async def generate_ontology_async(
+async def generate_ontology_async():
+    """Removed: legacy one-shot ontology generation.
+
+    This route used to drive ``agent_owl_generator``'s deprecated
+    ``run_agent`` bridge in one unattended call, including a post-generation
+    pitfall-rewrite loop. Per the three-stage Generate design
+    (``docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md``),
+    there is no one-shot Generate path anymore — this route always returns
+    ``410 Gone`` and never runs generation. Use the staged workflow instead:
+
+    * ``POST /ontology/wizard/generate/detect`` — Stage 1 (detect candidates)
+    * ``GET /ontology/wizard/generate/draft`` — Stage 2 (read the draft)
+    * ``POST /ontology/wizard/generate/draft/update`` — Stage 2 (edit/include/exclude)
+    * ``POST /ontology/wizard/generate/draft/discard`` — Stage 2 (discard)
+    * ``POST /ontology/wizard/generate/complete`` — Stage 3 (complete + merge)
+    """
+    raise GoneError(
+        "This one-shot Generate route has been removed. Use the staged "
+        "workflow: POST /ontology/wizard/generate/detect, "
+        "GET/POST /ontology/wizard/generate/draft(/update|/discard), "
+        "POST /ontology/wizard/generate/complete."
+    )
+
+
+# ===========================================
+# Wizard — staged Generate (three-stage workflow: detect -> review -> complete)
+# ===========================================
+
+
+# Pause between publishing each detected label on the running task so the
+# Generate overlay can render entities one by one before the task completes
+# (unit tests set this to 0).
+_DETECT_ENTITY_REVEAL_PAUSE_S = 0.3
+
+
+@router.post("/wizard/generate/detect")
+async def start_generate_detection(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Start ontology generation via ``agent_owl_generator`` (background task).
+    """Stage 1: detect candidate entities (background task).
 
-    Poll ``GET /tasks/{task_id}`` for ``owl_content``, ``stats``, and agent trace fields.
-    There is no synchronous generate endpoint; this is the only LLM wizard entry point.
+    Discards any prior Generate draft and persists a fresh one, paused for
+    review — ``included=true`` by default for every new candidate, existing
+    ontology entities carried over as locked anchors. Poll
+    ``GET /tasks/{task_id}`` for the ``draft`` result, or read it directly via
+    ``GET /wizard/generate/draft`` once the task completes.
     """
     import threading
 
@@ -1837,104 +2008,239 @@ async def generate_ontology_async(
     guidelines = data.get("guidelines", "")
     options = data.get("options", {})
     documents = data.get("documents", [])
+    tables = data.get("tables", [])
 
     tables_count = len(metadata.get("tables", []))
 
     domain = get_domain(session_mgr)
-    host, token, llm_endpoint = require_serving_llm(domain, settings)
+    host, token, llm_endpoint, _llm_endpoint_kind = require_domain_llm(
+        domain, settings
+    )
     warehouse_id = resolve_warehouse_id(domain, settings)
 
     tm = get_task_manager()
     task = tm.create_task(
         name=(
-            f"Generate Ontology ({tables_count} tables)"
+            f"Detect Ontology Entities ({tables_count} tables)"
             if tables_count
-            else "Generate Ontology (guidelines only)"
+            else "Detect Ontology Entities (guidelines only)"
         ),
-        task_type="ontology_generation",
+        task_type="ontology_generate_detect",
         steps=[
             {"name": "init", "description": "Initializing agent"},
-            {
-                "name": "gather",
-                "description": "Gathering context (metadata & documents)",
-            },
-            {"name": "generate", "description": "Generating ontology with AI"},
-            {"name": "process", "description": "Processing results"},
-            {"name": "finalize", "description": "Finalizing"},
+            {"name": "detect", "description": "Detecting candidate entities"},
         ],
     )
 
-    def run_generation():
+    def run_detection_task():
         try:
-            tm.start_task(task.id, "Initializing agent…")
-            tm.advance_step(task.id, "Gathering context (metadata & documents)…")
-            tm.advance_step(task.id, "Generating ontology with AI…")
+            tm.start_task(task.id, "Detecting candidate entities…")
 
             def on_step(msg: str):
                 tm.update_progress(task.id, task.progress, msg)
 
-            agent_result = Ontology(domain).generate_with_agent(
+            draft = GenerateWorkflow.run_detection(
+                domain,
+                settings,
                 host=host,
                 token=token,
                 endpoint_name=llm_endpoint,
                 metadata=metadata,
                 guidelines=guidelines,
                 options=options,
+                selected_tables=tables,
                 selected_docs=documents,
                 warehouse_id=warehouse_id,
                 on_step=on_step,
             )
-
-            if not agent_result.success:
-                tm.fail_task(
-                    task.id, agent_result.error or "Agent did not produce output"
-                )
-                return
-
-            tm.advance_step(task.id, "Processing results…")
-            owl_content, stats = Ontology.postprocess_generated_owl(
-                agent_result.owl_content
-            )
-
-            tm.advance_step(task.id, "Finalizing…")
-
-            iteration_summary = agent_result.iteration_summary or []
-            final_score = (
-                iteration_summary[-1]["score"] if iteration_summary else None
-            )
-            converged = bool(
-                iteration_summary
-                and iteration_summary[-1]["status"] in ("passed", "max_rounds_reached")
-            )
-
+            found: list[str] = []
+            candidates = draft.candidate_entities or []
+            total = len(candidates)
+            for index, entity in enumerate(candidates):
+                label = entity.canonical_label
+                found.append(label)
+                tm.merge_result(task.id, {"detected_entities": list(found)})
+                progress = 40 + int(50 * ((index + 1) / total)) if total else 90
+                tm.update_progress(task.id, progress, f"Found {label}")
+                if _DETECT_ENTITY_REVEAL_PAUSE_S:
+                    time.sleep(_DETECT_ENTITY_REVEAL_PAUSE_S)
             tm.complete_task(
                 task.id,
                 result={
-                    "owl_content": owl_content,
-                    "stats": stats,
-                    "agent_steps": serialize_agent_steps(agent_result.steps),
-                    "agent_iterations": agent_result.iterations,
-                    "agent_usage": agent_result.usage,
-                    "iteration_summary": iteration_summary,
-                    "generation_score": final_score,
-                    "generation_converged": converged,
+                    "draft": draft.to_dict(),
+                    "detected_entities": found,
                 },
-                message=(
-                    f"Generated {stats.get('classes', 0)} classes, "
-                    f"{stats.get('properties', 0)} properties "
-                    f"({agent_result.iterations} agent iterations)"
-                    + (f" — quality score {final_score}/100" if final_score is not None else "")
-                ),
+                message=f"Detected {len(draft.candidate_entities)} candidate entity(ies)",
             )
-
+        except OntoBricksError as exc:
+            tm.fail_task(task.id, exc.message)
         except Exception as e:
-            logger.exception("Wizard async: Ontology generation failed: %s", e)
-            tm.fail_task(task.id, "Ontology generation failed unexpectedly")
+            logger.exception("Generate detect task failed: %s", e)
+            tm.fail_task(task.id, "Entity detection failed unexpectedly")
 
-    thread = threading.Thread(target=run_generation, daemon=True)
+    thread = threading.Thread(target=run_detection_task, daemon=True)
     thread.start()
 
-    return {"success": True, "task_id": task.id, "message": "Agent task started"}
+    return {"success": True, "task_id": task.id, "message": "Detection task started"}
+
+
+@router.get("/wizard/generate/draft")
+async def get_generate_draft(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Stage 2: read the persisted Generate draft (synchronous, no LLM call).
+
+    Returns ``{"success": True, "draft": None}`` when no draft is persisted.
+    The draft payload includes a ``stale`` flag (recomputed source
+    fingerprint vs. the one captured at detection time).
+    """
+    domain = get_domain(session_mgr)
+    with map_route_errors("Loading Generate draft failed", logger):
+        view = GenerateWorkflow.get_draft_view(domain, settings)
+    return {"success": True, "draft": view}
+
+
+@router.post("/wizard/generate/draft/update")
+async def update_generate_draft(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Stage 2: apply one review mutation (synchronous, no LLM call).
+
+    Body: ``{"revision": int, "op": "add"|"remove"|"update"|"include"|"exclude",
+    "entity_id"?: str, "entity"?: dict, "updates"?: dict}``. ``revision`` must
+    match the currently-persisted draft revision (optimistic concurrency) —
+    a stale revision raises a 409 conflict. Existing (locked) anchors are
+    never editable through this route.
+    """
+    data = await request.json()
+    revision = data.get("revision")
+    op = data.get("op")
+    if revision is None or not op:
+        raise ValidationError("Both 'revision' and 'op' are required")
+
+    # Validate payload *shapes* at the route boundary — a malformed
+    # revision/entity/updates/entity_id must surface as a user-facing 400,
+    # never a raw TypeError/ValueError leaking through as a 500 (task 4
+    # review finding #7). Unknown *fields* inside an otherwise well-shaped
+    # ``updates``/``entity`` object are a separate concern already handled
+    # by ``GenerateWorkflow.update_draft`` (filtered, not rejected).
+    try:
+        revision = int(revision)
+    except (TypeError, ValueError):
+        raise ValidationError(f"'revision' must be an integer, got {revision!r}")
+
+    entity = data.get("entity")
+    if entity is not None and not isinstance(entity, dict):
+        raise ValidationError("'entity' must be a JSON object")
+    updates = data.get("updates")
+    if updates is not None and not isinstance(updates, dict):
+        raise ValidationError("'updates' must be a JSON object")
+    entity_id = data.get("entity_id")
+    if entity_id is not None and not isinstance(entity_id, str):
+        raise ValidationError("'entity_id' must be a string")
+
+    domain = get_domain(session_mgr)
+    with map_route_errors("Updating Generate draft failed", logger):
+        draft = GenerateWorkflow.update_draft(
+            domain,
+            revision=revision,
+            op=op,
+            entity=entity,
+            entity_id=entity_id,
+            updates=updates,
+        )
+    return {"success": True, "draft": draft.to_dict()}
+
+
+@router.post("/wizard/generate/draft/discard")
+async def discard_generate_draft(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Stage 2: discard the persisted Generate draft entirely."""
+    domain = get_domain(session_mgr)
+    with map_route_errors("Discarding Generate draft failed", logger):
+        GenerateWorkflow.discard_draft(domain)
+    return {"success": True, "message": "Draft discarded"}
+
+
+@router.post("/wizard/generate/complete")
+async def start_generate_completion(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Stage 3: complete (relations -> attributes -> axioms) and merge (background task).
+
+    Re-validates the draft's source fingerprint and rejects a stale draft.
+    Runs the three completion substages in strict order, persisting a
+    running/done/failed checkpoint around each; a retry after a partial
+    failure resumes at the first incomplete substage rather than re-running
+    already-``done`` ones. On success, appends the validated new entities to
+    the live ontology (append-only — existing entities/content are never
+    deleted or renamed). Poll ``GET /tasks/{task_id}`` for the final
+    ``draft`` + ``merge`` stats result.
+    """
+    import threading
+
+    data = await request.json()
+    options = data.get("options", {})
+
+    domain = get_domain(session_mgr)
+    host, token, llm_endpoint, _llm_endpoint_kind = require_domain_llm(
+        domain, settings
+    )
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Complete Ontology Generate",
+        task_type="ontology_generate_complete",
+        steps=[
+            {"name": "relations", "description": "Inferring relations"},
+            {"name": "attributes", "description": "Inferring attributes"},
+            {"name": "axioms", "description": "Inferring axioms"},
+            {"name": "merge", "description": "Merging into ontology"},
+        ],
+    )
+
+    def run_completion_task():
+        try:
+            tm.start_task(task.id, "Completing ontology Generate…")
+
+            def on_step(msg: str):
+                tm.update_progress(task.id, task.progress, msg)
+
+            outcome = GenerateWorkflow.run_completion(
+                domain,
+                settings,
+                host=host,
+                token=token,
+                endpoint_name=llm_endpoint,
+                options=options,
+                on_step=on_step,
+            )
+            merge_stats = outcome["merge"]
+            tm.complete_task(
+                task.id,
+                result=outcome,
+                message=(
+                    f"Merged {merge_stats['classes_added']} classes, "
+                    f"{merge_stats['relations_added']} relations, "
+                    f"{merge_stats['attributes_added']} attributes, "
+                    f"{merge_stats['axioms_added']} axioms"
+                ),
+            )
+        except OntoBricksError as exc:
+            tm.fail_task(task.id, exc.message)
+        except Exception as e:
+            logger.exception("Generate completion task failed: %s", e)
+            tm.fail_task(task.id, "Ontology completion failed unexpectedly")
+
+    thread = threading.Thread(target=run_completion_task, daemon=True)
+    thread.start()
+
+    return {"success": True, "task_id": task.id, "message": "Completion task started"}
 
 
 # ===========================================
@@ -1964,7 +2270,9 @@ async def auto_assign_icons(
         raise ValidationError("No entity names provided")
 
     domain = get_domain(session_mgr)
-    host, token, llm_endpoint = require_serving_llm(domain, settings)
+    host, token, llm_endpoint, _llm_endpoint_kind = require_domain_llm(
+        domain, settings
+    )
 
     tm = get_task_manager()
     task = tm.create_task(
@@ -2091,7 +2399,9 @@ async def ontology_assistant_chat(
         raise ValidationError("No message provided")
 
     domain = get_domain(session_mgr)
-    host, token, llm_endpoint = require_serving_llm(domain, settings)
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
+        domain, settings
+    )
 
     classes = list(domain.get_classes())
     properties = list(domain.get_properties())
@@ -2110,6 +2420,7 @@ async def ontology_assistant_chat(
             host=host,
             token=token,
             endpoint_name=llm_endpoint,
+            endpoint_kind=llm_endpoint_kind,
             classes=classes,
             properties=properties,
             base_uri=base_uri,
@@ -2159,8 +2470,8 @@ async def ontology_assistant_invoke(
     """Invoke the Ontology Assistant via the MLflow ResponsesAgent interface.
 
     Accepts the OpenAI Responses-compatible schema used by the Databricks
-    Agent Framework.  The caller can either supply Databricks credentials in
-    ``custom_inputs`` or let the route fill them from the active session.
+    Agent Framework. The route injects the saved domain LLM target and fills
+    authoritative Databricks credentials from the active session.
 
     Expects JSON body (ResponsesAgentRequest)::
 
@@ -2168,11 +2479,7 @@ async def ontology_assistant_invoke(
             "input": [
                 {"role": "user", "content": "Add an entity called Vehicle"}
             ],
-            "custom_inputs": {          // optional overrides
-                "host": "...",
-                "token": "...",
-                "endpoint_name": "..."
-            }
+            "custom_inputs": {}         // optional non-credential context
         }
 
     Returns a ``ResponsesAgentResponse`` with ``custom_outputs`` containing
@@ -2184,23 +2491,20 @@ async def ontology_assistant_invoke(
     data = await request.json()
 
     domain = get_domain(session_mgr)
-    host, token = get_databricks_host_and_token(domain, settings)
-    llm_endpoint = domain.info.get("llm_endpoint", "")
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
+        domain, settings
+    )
     base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
 
     custom_inputs = data.get("custom_inputs", {})
-    custom_inputs.setdefault("host", host)
-    custom_inputs.setdefault("token", token)
-    custom_inputs.setdefault("endpoint_name", llm_endpoint)
+    custom_inputs["host"] = host
+    custom_inputs["token"] = token
+    custom_inputs["endpoint_name"] = llm_endpoint
+    custom_inputs["endpoint_kind"] = llm_endpoint_kind
     custom_inputs.setdefault("base_uri", base_uri)
     custom_inputs.setdefault("classes", list(domain.get_classes()))
     custom_inputs.setdefault("properties", list(domain.get_properties()))
     data["custom_inputs"] = custom_inputs
-
-    if not custom_inputs.get("host") or not custom_inputs.get("token"):
-        raise ValidationError("Databricks credentials not configured")
-    if not custom_inputs.get("endpoint_name"):
-        raise ValidationError("No LLM serving endpoint configured.")
 
     with map_route_errors("Ontology assistant invoke failed", logger):
         agent = OntologyAssistantResponsesAgent()

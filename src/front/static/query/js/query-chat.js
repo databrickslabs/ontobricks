@@ -85,18 +85,6 @@
         return parts.length ? parts.join('\n\n') : UNREADABLE_REPLY;
     }
 
-    function renderMarkdown(text) {
-        if (typeof marked !== 'undefined' && marked.parse) {
-            try {
-                marked.setOptions({ breaks: true, gfm: true });
-                return marked.parse(text);
-            } catch (_) { /* fall through */ }
-        }
-        return String(text)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>');
-    }
-
     // =====================================================
     // Entity link enhancement
     // Turns /resolve?uri=... links into fancy badges, and auto-

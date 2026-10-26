@@ -22,7 +22,9 @@ HTTP endpoint, the service layer and the tests all agree.
 
 from __future__ import annotations
 
-from back.core.errors import AuthorizationError, ValidationError
+from typing import Any
+
+from back.core.errors import AuthorizationError, ConflictError, ValidationError
 from back.objects.registry.PermissionService import ROLE_ADMIN, ROLE_BUILDER
 
 STATUS_DRAFT = "DRAFT"
@@ -38,6 +40,12 @@ ALLOWED_TRANSITIONS = {
     (STATUS_IN_REVIEW, STATUS_DRAFT): "builder",
     (STATUS_IN_REVIEW, STATUS_PUBLISHED): "builder",
     (STATUS_PUBLISHED, STATUS_DRAFT): "admin",
+}
+
+TRANSITION_LABELS = {
+    STATUS_IN_REVIEW: "Submit for Review",
+    STATUS_PUBLISHED: "Publish",
+    STATUS_DRAFT: "Return to Draft",
 }
 
 
@@ -117,3 +125,112 @@ def check_status_transition(
             "Graph build nor a valid ontology. Define an ontology (or run a "
             "Knowledge Graph build) first."
         )
+
+
+def transition_capabilities(
+    current: str,
+    *,
+    user_role: str,
+    user_domain_role: str,
+    last_build: str,
+    has_ontology: bool,
+) -> list[dict[str, Any]]:
+    current = (current or STATUS_DRAFT).upper()
+    capabilities: list[dict[str, Any]] = []
+    for (source, target), _tier in ALLOWED_TRANSITIONS.items():
+        if source != current:
+            continue
+        label = (
+            "Reopen as Draft"
+            if source == STATUS_PUBLISHED and target == STATUS_DRAFT
+            else TRANSITION_LABELS[target]
+        )
+        try:
+            check_status_transition(
+                source,
+                target,
+                user_role=user_role,
+                user_domain_role=user_domain_role,
+                last_build=last_build,
+                has_ontology=has_ontology,
+            )
+        except AuthorizationError:
+            continue
+        except ValidationError as exc:
+            capabilities.append(
+                {
+                    "target_status": target,
+                    "label": label,
+                    "enabled": False,
+                    "blocked_reason": str(exc),
+                }
+            )
+        else:
+            capabilities.append(
+                {
+                    "target_status": target,
+                    "label": label,
+                    "enabled": True,
+                    "blocked_reason": "",
+                }
+            )
+    return capabilities
+
+
+def check_version_deletion(
+    *,
+    user_role: str,
+    status: str,
+    is_loaded: bool,
+    version_count: int,
+    is_latest: bool = False,
+) -> None:
+    if user_role != ROLE_ADMIN:
+        raise AuthorizationError("Only an application administrator can delete versions")
+    _ = is_latest
+    if (status or STATUS_DRAFT).upper() != STATUS_DRAFT:
+        raise ConflictError("Reopen this version as Draft before deleting it")
+    # The last remaining version may be deleted (it removes the domain).
+    # A loaded version may be deleted only when it is that last version.
+    if is_loaded and version_count > 1:
+        raise ConflictError(
+            "Load another version before deleting this loaded version"
+        )
+
+
+def version_deletion_capability(
+    *,
+    user_role: str,
+    status: str,
+    is_loaded: bool,
+    version_count: int,
+    is_latest: bool = False,
+) -> dict[str, Any]:
+    visible = user_role == ROLE_ADMIN
+    deletes_domain = version_count <= 1
+    try:
+        check_version_deletion(
+            user_role=user_role,
+            status=status,
+            is_loaded=is_loaded,
+            version_count=version_count,
+            is_latest=is_latest,
+        )
+    except (AuthorizationError, ConflictError) as exc:
+        reason = str(exc)
+        if "Load another" in reason:
+            reason = "Load another version before deleting this one."
+        elif "Draft" in reason:
+            reason = "Reopen this version as Draft before deleting it."
+        return {
+            "delete_control_visible": visible,
+            "can_delete": False,
+            "delete_block_reason": reason,
+            "deletes_domain": deletes_domain,
+        }
+    return {
+        "delete_control_visible": True,
+        "can_delete": True,
+        "delete_block_reason": "",
+        "deletes_domain": deletes_domain,
+    }

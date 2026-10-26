@@ -17,7 +17,7 @@
             <i class="bi bi-box text-primary"></i> Domain
         </h5>
         <p class="text-muted small mb-2">
-            List registry domains, discover versions, inspect design readiness (ontology, data sources, mappings),
+            List registry domains, discover versions, inspect design readiness (ontology, data assets, mappings),
             and export artifacts (OWL, R2RML, generated Spark SQL).
             Optional registry overrides: <code>registry_catalog</code>, <code>registry_schema</code>, <code>registry_volume</code>.
         </p>
@@ -155,7 +155,7 @@
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Returns the readiness status of the domain's <strong>ontology</strong>,
-                    <strong>data sources</strong>, and <strong>mapping</strong> (entity, relationship,
+                    <strong>data assets</strong>, and <strong>mapping</strong> (entity, relationship,
                     and attribute mapping progress). Indicates whether the domain is ready to build.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
@@ -563,9 +563,11 @@ Content-Type: application/json
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Search for entities by type and/or label text, then traverse their relationships
-                    up to N levels deep (BFS graph walk). Returns all triples discovered during traversal,
-                    similar to the Graph Viewer's Find &amp; Filter feature. Use <code>depth=1</code> for
-                    type-wide scans, then add <code>search</code> for deeper entity-scoped scans.
+                    up to N levels deep (BFS graph walk). Triples are paged in deterministic
+                    <code>(subject, predicate, object)</code> order and return exact <code>total</code>,
+                    additive <code>has_more</code>, and alias-expanded <code>entity_count</code>.
+                    For broad type scans, start with <code>depth=1</code> and page with
+                    <code>limit</code>/<code>offset</code>.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">

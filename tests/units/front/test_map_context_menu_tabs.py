@@ -2,8 +2,8 @@
 
 Right-clicking an entity or relationship on the Ontology "Designer" graph
 should offer shortcuts straight to each tab of the shared entity/relationship
-panel (Details/Attributes/References/Constraints for entities; Details/
-Constraints for relationships, which have no Attributes/References tab).
+panel (General/Attributes/Model/Behaviour/Links for entities; General/
+Constraints for relationships). Labels are pinned in test_entity_panel_tabs.
 """
 
 from pathlib import Path
@@ -14,23 +14,23 @@ MAP_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-map.js"
 PANELS_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"
 
 
-def test_entity_context_menu_has_four_tab_shortcuts():
+def test_entity_context_menu_has_five_tab_shortcuts():
     js = MAP_JS.read_text(encoding="utf-8")
-    for tab, label, icon in [
-        ("details", "Details", "bi-info-circle"),
-        ("attributes", "Attributes", "bi-tags"),
-        ("actions", "References", "bi-lightning"),
-        ("constraints", "Constraints", "bi-sliders"),
+    for tab, icon in [
+        ("details", "bi-info-circle"),
+        ("attributes", "bi-tags"),
+        ("model", "bi-diagram-2"),
+        ("behaviour", "bi-lightning"),
+        ("links", "bi-link-45deg"),
     ]:
         assert f'data-action="open-tab-{tab}"' in js
         assert icon in js
-        assert label in js
 
 
 def test_entity_tab_shortcuts_call_edit_class_by_name_with_tab():
     js = MAP_JS.read_text(encoding="utf-8")
     assert "editClassByName(entityData.name, tab)" in js
-    assert "['details', 'attributes', 'actions', 'constraints']" in js
+    assert "['details', 'attributes', 'model', 'behaviour', 'links']" in js
 
 
 def test_relationship_context_menu_exists_with_two_tab_shortcuts():

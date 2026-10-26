@@ -19,6 +19,11 @@ from contextlib import asynccontextmanager
 from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
 from back.objects.session import FileSessionMiddleware, reap_expired_sessions
+from back.core.databricks.request_identity import (
+    RequestIdentity,
+    set_request_identity,
+    reset_request_identity,
+)
 from back.core.logging import setup_logging, get_logger
 from shared.fastapi.ui_branding import UIBrandingMiddleware
 
@@ -149,17 +154,20 @@ _PERM_BYPASS_PREFIXES = (
 
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
-# Read-only endpoints that take their parameters as a POST body. Viewers need
-# them to use the Knowledge Graph at all: the Explorer's search and expand
-# (/sync/filter) and Graph Chat. None of them persists domain content; Graph
-# Chat's write actions go through /dtwin/nodes/action/request and /confirm,
-# which stay blocked for viewers. /sync/load stays blocked: it is one of the
-# data-refresh operations reserved for builders.
-_VIEWER_READ_ONLY_POSTS = frozenset({
-    "/dtwin/sync/filter",
-    "/dtwin/assistant/chat",
-    "/dtwin/assistant/chat/stream",
-})
+# Read-only endpoints that take their parameters as a POST body. Viewers
+# need them to search/expand the Explorer and to run Graph Chat (the agent
+# loopbacks ``query_graphql`` to ``/dtwin/graphql/execute``). None of them
+# persists domain content; Graph Chat write actions go through
+# ``/dtwin/nodes/action/request`` and ``/confirm``, which stay blocked.
+# ``/sync/load`` stays blocked: it is a builder-only data-refresh operation.
+_VIEWER_READ_ONLY_POSTS = frozenset(
+    {
+        "/dtwin/sync/filter",
+        "/dtwin/assistant/chat",
+        "/dtwin/assistant/chat/stream",
+        "/dtwin/graphql/execute",
+    }
+)
 
 _PERM_ADMIN_ONLY_PREFIXES = (
     "/settings",
@@ -296,6 +304,24 @@ _STATUS_GATE_OPEN_SUFFIXES = (
 # Status values that allow editing the version content.
 _STATUS_EDITABLE = "DRAFT"
 
+# Wizard sub-routes that are the exception to the blanket "/wizard/"
+# exemption below: unlike the rest of the staged-Generate wizard (detect,
+# draft read/update/discard), which only stages a session-scoped draft and
+# never touches the persisted ontology, `.../generate/complete` runs the
+# deterministic append-only merge and calls `domain.save()` — a genuine
+# design mutation. It must be gated exactly like any other `/ontology/`
+# write, so it is checked (and matched) before the wizard exemption.
+_STATUS_GATE_WIZARD_EDIT_SUFFIXES = (
+    "/wizard/generate/complete",
+)
+
+
+def _viewer_write_blocked(method: str, path: str) -> bool:
+    """True when a Viewer must not use this method/path."""
+    if method not in _VIEWER_BLOCKED_METHODS:
+        return False
+    return not (method == "POST" and path in _VIEWER_READ_ONLY_POSTS)
+
 
 def _is_status_gated_edit(path: str, method: str) -> bool:
     """True when *path*/*method* mutates the loaded version's content."""
@@ -303,6 +329,8 @@ def _is_status_gated_edit(path: str, method: str) -> bool:
         return False
     if any(path.endswith(suffix) for suffix in _STATUS_GATE_OPEN_SUFFIXES):
         return False
+    if any(path.endswith(suffix) for suffix in _STATUS_GATE_WIZARD_EDIT_SUFFIXES):
+        return True
     if "/wizard/" in path:
         return False
     if any(path.startswith(p) for p in _STATUS_GATE_EDIT_PREFIXES):
@@ -327,7 +355,9 @@ class PermissionMiddleware(BaseHTTPMiddleware):
       ``/mapping``, ``/dtwin``) additionally requires a non-empty entry
       in the domain's ``.domain_permissions.json``.  Admins bypass this.
     - **Viewer write-block**: a viewer team entry allows GETs on domain
-      routes but not writes.
+      routes but not writes, except POST to the exact paths in
+      :data:`_VIEWER_READ_ONLY_POSTS` (Explorer filter, Graph Chat, and
+      GraphQL execute).
     - **Admin-only prefix** (`/settings`) is gated to admins even for
       app users. A small allow-list (see
       :data:`_PERM_ADMIN_ONLY_EXCEPTIONS` and
@@ -366,16 +396,44 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 request.state.user_email = get_local_user_email()
             request.state.user_role = "admin"
             request.state.user_domain_role = "admin"
-            return await call_next(request)
+            request.state.user_token = ""
+            _tok = set_request_identity(
+                RequestIdentity(
+                    email=request.state.user_email,
+                    user_token="",
+                    app_role="admin",
+                    domain_role="admin",
+                )
+            )
+            try:
+                return await call_next(request)
+            finally:
+                reset_request_identity(_tok)
 
         # Raw routed path, not request.url.path: the latter is reconstructed
         # from the Host header and could be poisoned (BadHost / CVE-2026-48710).
         path = request.scope["path"]
 
         if any(path.startswith(p) for p in _PERM_BYPASS_PREFIXES):
+            # These prefixes skip the session role gate (programmatic /api,
+            # GraphQL, static, health, docs) so M2M / MCP callers are not
+            # 302-redirected to /access-denied. We still stamp the forwarded
+            # end-user identity so Lakehouse / Unity Catalog reads run
+            # on-behalf-of the caller (OBO) when a Databricks Apps user token
+            # is attached — e.g. the MCP companion forwarding the signed-in
+            # user's x-forwarded-access-token. This mirrors Explorer / Graph
+            # Chat on the internal routes. No token → SP fallback, unchanged.
+            user_token = request.headers.get("x-forwarded-access-token", "") or ""
             request.state.user_role = ""
             request.state.user_domain_role = ""
-            return await call_next(request)
+            request.state.user_token = user_token
+            _tok = set_request_identity(
+                RequestIdentity(email=email, user_token=user_token)
+            )
+            try:
+                return await call_next(request)
+            finally:
+                reset_request_identity(_tok)
 
         try:
             role, domain_role = self._resolve_roles(request, email)
@@ -437,10 +495,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             if (
                 is_domain_scoped
                 and domain_role == ROLE_VIEWER
-                and request.method in _VIEWER_BLOCKED_METHODS
-                and not (
-                    request.method == "POST" and path in _VIEWER_READ_ONLY_POSTS
-                )
+                and _viewer_write_blocked(request.method, path)
             ):
                 return self._forbidden_json(
                     request, "Viewer role does not allow write operations"
@@ -490,7 +545,20 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                     "read-only access. Take over editing to make changes.",
                 )
 
-        return await call_next(request)
+        user_token = request.headers.get("x-forwarded-access-token", "") or ""
+        request.state.user_token = user_token
+        _tok = set_request_identity(
+            RequestIdentity(
+                email=email,
+                user_token=user_token,
+                app_role=role,
+                domain_role=domain_role,
+            )
+        )
+        try:
+            return await call_next(request)
+        finally:
+            reset_request_identity(_tok)
 
     @staticmethod
     def _session_edit_lock_holder(request: Request) -> str:
@@ -503,7 +571,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         """
         try:
             from back.objects.session import SessionManager
-            from back.objects.registry.lockmgt import EditLockService
+            from back.objects.registry.collab import EditLockService
 
             session_mgr = SessionManager(request)
             return EditLockService.blocking_holder(

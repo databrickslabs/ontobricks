@@ -1,0 +1,132 @@
+{# Settings → GitHub section body (admin only).
+
+   One GitHub repository per OntoBricks instance. Every registry save is
+   mirrored (one commit, coalesced) as a domain/version file tree including
+   the OWL and R2RML Turtle files. Driven by
+   /static/config/js/settings-github.js (GET/POST /settings/github,
+   POST /settings/github/test, POST /settings/github/sync-all).
+#}
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-github me-2"></i>GitHub</h4>
+        <p class="text-muted mb-0 small">Mirror every domain (OWL, R2RML, layouts, options) into this instance's GitHub repository</p>
+    </div>
+    <button type="button" class="btn btn-sm btn-primary text-nowrap" id="btnSaveGithub" disabled>
+        <i class="bi bi-check-circle me-1"></i> Save
+    </button>
+</div>
+
+<div id="githubLoading" class="text-muted small py-3">
+    <span class="spinner-border spinner-border-sm me-1"></span> Loading GitHub settings…
+</div>
+
+<div id="githubLoaded" class="d-none">
+<form id="githubConfigForm" autocomplete="off">
+    <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="githubEnabled">
+        <label class="form-check-label small fw-semibold" for="githubEnabled">Enable GitHub mirror</label>
+    </div>
+
+    <div id="githubDetails" class="d-none">
+<div class="alert alert-info border-0 mb-3 small">
+    <strong>One repository per instance.</strong> Lakebase stays the source of truth;
+    each save pushes one commit to
+    <code>domains/&lt;Domain&gt;/versions/V&lt;n&gt;/</code> (JSON sources +
+    <code>&lt;Domain&gt;.owl.ttl</code> and <code>&lt;Domain&gt;.r2rml.ttl</code>).
+    Published versions are tagged <code>&lt;Domain&gt;/V&lt;n&gt;</code>.
+    Restore with <em>Registry &rarr; Import &rarr; Load from GitHub</em>.
+</div>
+
+    <div class="row g-3">
+        <div class="col-12">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="githubPushOnSave" checked>
+                <label class="form-check-label small" for="githubPushOnSave">Push on every save</label>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <label for="githubOwner" class="form-label small fw-semibold mb-1">Owner <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-sm" id="githubOwner" placeholder="my-org" maxlength="100">
+        </div>
+        <div class="col-md-4">
+            <label for="githubRepo" class="form-label small fw-semibold mb-1">Repository <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-sm" id="githubRepo" placeholder="ontobricks-ontologies" maxlength="100">
+        </div>
+        <div class="col-md-4">
+            <label for="githubBranch" class="form-label small fw-semibold mb-1">Branch</label>
+            <input type="text" class="form-control form-control-sm" id="githubBranch" placeholder="main">
+        </div>
+        <div class="col-md-12">
+            <label for="githubBasePath" class="form-label small fw-semibold mb-1">Base path</label>
+            <input type="text" class="form-control form-control-sm" id="githubBasePath" placeholder="(repository root)">
+            <div class="form-text small text-muted">Optional sub-folder holding <code>domains/</code> and <code>.ontobricks/</code>.</div>
+        </div>
+
+        <div class="col-md-6">
+            <label for="githubSecretScope" class="form-label small fw-semibold mb-1">
+                Token secret scope
+                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle ms-1"
+                      title="The token is resolved live from this Databricks secret using the app's own identity — never stored in clear.">
+                    <i class="bi bi-shield-check me-1"></i>Databricks secret
+                </span>
+            </label>
+            <div class="input-group input-group-sm">
+                <select class="form-select form-select-sm" id="githubSecretScope">
+                    <option value="">— Select a scope —</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary" id="btnRefreshGithubScopes" title="Refresh scope list">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <label for="githubSecretKey" class="form-label small fw-semibold mb-1">Token secret name</label>
+            <select class="form-select form-select-sm" id="githubSecretKey">
+                <option value="">— Select a key —</option>
+            </select>
+        </div>
+        <div class="col-12">
+            <div class="form-text small text-muted">
+                Use a fine-grained personal access token (or GitHub App token) limited to this repository
+                with <strong>Contents: read and write</strong>.
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <label for="githubAuthorName" class="form-label small fw-semibold mb-1">Commit author name</label>
+            <input type="text" class="form-control form-control-sm" id="githubAuthorName" placeholder="OntoBricks">
+        </div>
+        <div class="col-md-6">
+            <label for="githubAuthorEmail" class="form-label small fw-semibold mb-1">Commit author email</label>
+            <input type="email" class="form-control form-control-sm" id="githubAuthorEmail" placeholder="ontobricks@example.com">
+        </div>
+    </div>
+
+<hr class="my-4">
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <button type="button" class="btn btn-sm btn-outline-primary" id="btnTestGithub">
+        <i class="bi bi-plug me-1"></i> Test connection
+    </button>
+    <div class="form-check mb-0 small">
+        <input class="form-check-input" type="checkbox" id="githubTakeOver">
+        <label class="form-check-label" for="githubTakeOver" title="Claim a repository already used by another OntoBricks instance">Take over</label>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="btnSyncAllGithub">
+        <i class="bi bi-cloud-arrow-up me-1"></i> Sync all now
+    </button>
+</div>
+<div id="githubResult" class="small d-none"></div>
+
+<div class="mt-3">
+    <span class="small fw-semibold me-2">Last sync</span>
+    <span id="githubStatus" class="small text-muted">—</span>
+    <div class="small text-muted mt-1">
+        <i class="bi bi-journal-text me-1"></i>Each push (commit, tag, generation warnings) is logged in
+        <em>Domain &rarr; Audit trail &rarr; GitHub</em>.
+    </div>
+</div>
+    </div>
+</form>
+</div>

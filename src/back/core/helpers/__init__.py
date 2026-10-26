@@ -9,6 +9,8 @@ from back.core.helpers.DatabricksHelpers import (  # noqa: F401
 from back.core.helpers.SQLHelpers import (  # noqa: F401
     SAFE_COL_IDENT,
     SAFE_SQL_IDENT,
+    SQL_DIALECT_POSTGRES,
+    SQL_DIALECT_SPARK,
     SQLHelpers,
 )
 from back.core.helpers.URIHelpers import URIHelpers  # noqa: F401
@@ -16,16 +18,22 @@ from back.core.helpers.UIBranding import (  # noqa: F401
     BrandPalette,
     UIBranding,
     DEFAULT_APP_TITLE,
+    DEFAULT_AURORA_COLOR,
     DEFAULT_PRIMARY_COLOR,
     DEFAULT_LOGO_PATH,
     derive_brand_palette,
     normalize_ui_branding,
+    validate_optional_hex_color,
 )
 
 # SQL / URI helpers must be bound before importing databricks: transitive
 # imports can pull ``back.core.helpers`` again while this module is still
 # initializing (e.g. triplestore → helpers for ``sql_escape``).
 sql_escape = SQLHelpers.sql_escape
+sql_literal = SQLHelpers.sql_literal
+is_sql_numeric = SQLHelpers.is_sql_numeric
+sql_like_escape = SQLHelpers.sql_like_escape
+LIKE_ESCAPE = SQLHelpers.LIKE_ESCAPE
 sql_numeric = SQLHelpers.sql_numeric
 sql_cast = SQLHelpers.sql_cast
 validate_table_name = SQLHelpers.validate_table_name
@@ -47,19 +55,25 @@ from back.core.databricks import (  # noqa: F401  — re-exported for backward c
 # Backward-compatible function wrappers
 run_blocking = DatabricksHelpers.run_blocking
 resolve_warehouse_id = DatabricksHelpers.resolve_warehouse_id
+resolve_build_warehouse_id = DatabricksHelpers.resolve_build_warehouse_id
 resolve_delta_warehouse_id = DatabricksHelpers.resolve_delta_warehouse_id
 resolve_default_base_uri = DatabricksHelpers.resolve_default_base_uri
+build_auto_base_uri = DatabricksHelpers.build_auto_base_uri
 resolve_default_emoji = DatabricksHelpers.resolve_default_emoji
 resolve_use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch
+resolve_lakehouse_use_sea = DatabricksHelpers.resolve_lakehouse_use_sea
+resolve_build_use_sea = DatabricksHelpers.resolve_build_use_sea
 resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 resolve_analytics_job_name = DatabricksHelpers.resolve_analytics_job_name
 resolve_app_registry_context = DatabricksHelpers.resolve_app_registry_context
 get_databricks_client = DatabricksHelpers.get_databricks_client
+get_data_plane_client = DatabricksHelpers.get_data_plane_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
+get_build_sql_credentials = DatabricksHelpers.get_build_sql_credentials
 get_delta_databricks_credentials = DatabricksHelpers.get_delta_databricks_credentials
 get_triplestore_sql_credentials = DatabricksHelpers.get_triplestore_sql_credentials
 get_databricks_host_and_token = DatabricksHelpers.get_databricks_host_and_token
-require_serving_llm = DatabricksHelpers.require_serving_llm
+require_domain_llm = DatabricksHelpers.require_domain_llm
 
 __all__ = [
     "DatabricksHelpers",
@@ -67,23 +81,35 @@ __all__ = [
     "URIHelpers",
     "run_blocking",
     "resolve_warehouse_id",
+    "resolve_build_warehouse_id",
     "resolve_delta_warehouse_id",
     "resolve_default_base_uri",
+    "build_auto_base_uri",
     "resolve_default_emoji",
     "resolve_use_cloud_fetch",
+    "resolve_lakehouse_use_sea",
+    "resolve_build_use_sea",
     "resolve_analytics_job_enabled",
     "resolve_analytics_job_name",
     "resolve_app_registry_context",
     "get_databricks_client",
+    "get_data_plane_client",
     "get_databricks_credentials",
+    "get_build_sql_credentials",
     "get_delta_databricks_credentials",
     "get_triplestore_sql_credentials",
     "get_databricks_host_and_token",
     "make_volume_file_service",
     "get_blocking_pool_stats",
-    "require_serving_llm",
+    "require_domain_llm",
     "effective_uc_version_path",
     "sql_escape",
+    "sql_literal",
+    "is_sql_numeric",
+    "SQL_DIALECT_SPARK",
+    "SQL_DIALECT_POSTGRES",
+    "sql_like_escape",
+    "LIKE_ESCAPE",
     "sql_numeric",
     "sql_cast",
     "validate_table_name",
@@ -98,8 +124,10 @@ __all__ = [
     "BrandPalette",
     "UIBranding",
     "DEFAULT_APP_TITLE",
+    "DEFAULT_AURORA_COLOR",
     "DEFAULT_PRIMARY_COLOR",
     "DEFAULT_LOGO_PATH",
     "derive_brand_palette",
     "normalize_ui_branding",
+    "validate_optional_hex_color",
 ]

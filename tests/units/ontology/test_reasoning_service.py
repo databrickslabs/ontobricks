@@ -10,7 +10,9 @@ import importlib
 import pytest
 from unittest.mock import MagicMock, PropertyMock, patch
 
-from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
+from back.core.reasoning.results.InferredTriple import InferredTriple
+from back.core.reasoning.results.ReasoningResult import ReasoningResult
+from back.core.reasoning.results.RuleViolation import RuleViolation
 from back.core.reasoning.ReasoningService import ReasoningService
 
 _local_name = ReasoningService._local_name
@@ -525,6 +527,88 @@ class TestMaterializeInferred:
         store.optimize_inferred_companion.assert_called_once_with(
             store.insert_triples.call_args[0][0]
         )
+
+    def test_rebuilds_adjacency_when_store_supports_it(self):
+        store = MagicMock()
+        store.insert_triples.return_value = 1
+        store.supports_adjacency = True
+        svc = ReasoningService(_domain_session(), triplestore_backend=store)
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+            ]
+        )
+        svc.materialize_inferred(result)
+        store.rebuild_adjacency.assert_called_once_with(
+            store.insert_triples.call_args[0][0]
+        )
+
+    def test_optimizes_before_adjacency_rebuild(self):
+        store = MagicMock()
+        store.insert_triples.return_value = 1
+        store.supports_adjacency = True
+        svc = ReasoningService(_domain_session(), triplestore_backend=store)
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+            ]
+        )
+        svc.materialize_inferred(result)
+
+        method_names = [call[0] for call in store.method_calls]
+        optimize_index = method_names.index("optimize_inferred_companion")
+        rebuild_index = method_names.index("rebuild_adjacency")
+        assert optimize_index < rebuild_index
+
+    def test_skips_adjacency_rebuild_when_insert_is_empty(self):
+        store = MagicMock()
+        store.insert_triples.return_value = 0
+        store.supports_adjacency = True
+        svc = ReasoningService(_domain_session(), triplestore_backend=store)
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+            ]
+        )
+        svc.materialize_inferred(result)
+        store.rebuild_adjacency.assert_not_called()
+
+    def test_skips_adjacency_rebuild_when_store_does_not_support_it(self):
+        store = MagicMock()
+        store.insert_triples.return_value = 1
+        store.supports_adjacency = False
+        svc = ReasoningService(_domain_session(), triplestore_backend=store)
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+            ]
+        )
+        svc.materialize_inferred(result)
+        store.rebuild_adjacency.assert_not_called()
+
+    def test_surfaces_adjacency_rebuild_failure(self):
+        store = MagicMock()
+        store.insert_triples.return_value = 1
+        store.supports_adjacency = True
+        store.rebuild_adjacency.side_effect = RuntimeError("adjacency rebuild failed")
+        svc = ReasoningService(_domain_session(), triplestore_backend=store)
+        result = ReasoningResult(
+            inferred_triples=[
+                InferredTriple(
+                    "http://ex.org/a", "http://ex.org/p", "http://ex.org/b", "test"
+                ),
+            ]
+        )
+        with pytest.raises(RuntimeError, match="adjacency rebuild failed"):
+            svc.materialize_inferred(result)
 
     def test_skips_optimize_when_store_has_no_companion_hook(self):
         store = MagicMock(spec=["insert_triples"])

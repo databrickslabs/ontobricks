@@ -9,11 +9,12 @@ Tests cover:
 - Full generation pipeline
 """
 
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
 
 from back.core.errors import InfrastructureError
-from back.core.sqlwizard import SQLWizardService, SchemaContext
+from back.core.sqlwizard import SchemaContext, SQLWizardService
 
 
 class TestSchemaContext:
@@ -71,6 +72,34 @@ class TestSchemaContext:
         context = SchemaContext(tables=[])
         result = context.to_yaml_like()
         assert result == "tables:"
+
+
+class TestLlmTransport:
+    @patch("requests.post")
+    def test_call_llm_endpoint_routes_gateway(self, mock_post):
+        client = Mock()
+        client.host = "https://test.databricks.com"
+        client.has_valid_auth.return_value = True
+        client.get_auth_headers.return_value = {
+            "Authorization": "Bearer test-token"
+        }
+        mock_post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "SELECT 1"}}]
+        }
+        mock_post.return_value.content = b"{}"
+        wizard = SQLWizardService(client)
+
+        result = wizard.call_llm_endpoint(
+            "main.ai.mine",
+            {"system": "s", "user": "u"},
+            endpoint_kind="ai_gateway",
+        )
+
+        url = mock_post.call_args.args[0]
+        payload = mock_post.call_args.kwargs["json"]
+        assert url.endswith("/ai-gateway/mlflow/v1/chat/completions")
+        assert payload["model"] == "main.ai.mine"
+        assert result == "SELECT 1"
 
 
 class TestPromptComposer:
@@ -415,6 +444,29 @@ class TestIntegration:
         assert "SELECT" in result["sql"]
         assert "customers" in result["sql"]
 
+    def test_generate_sql_forwards_endpoint_kind(self, wizard):
+        context = {
+            "tables": [
+                {
+                    "name": "customers",
+                    "full_name": "main.sales.customers",
+                    "columns": [],
+                }
+            ]
+        }
+        with patch.object(
+            wizard, "call_llm_endpoint", return_value="SELECT * FROM customers"
+        ) as call_llm:
+            wizard.generate_sql(
+                endpoint_name="main.ai.saved",
+                endpoint_kind="ai_gateway",
+                user_prompt="List customers",
+                schema_context_data=context,
+                validate_plan=False,
+            )
+
+        assert call_llm.call_args.kwargs["endpoint_kind"] == "ai_gateway"
+
     @patch("requests.post")
     def test_generate_sql_handles_timeout(self, mock_post, wizard, mock_client):
         import requests
@@ -429,6 +481,43 @@ class TestIntegration:
                 user_prompt="Get all customers",
             )
         assert "timed out" in str(exc_info.value.message).lower()
+
+
+@pytest.mark.asyncio
+async def test_generate_sql_route_uses_saved_domain_target():
+    from api.routers.internal import mapping
+
+    request = Mock()
+    request.json = AsyncMock(
+        return_value={
+            "endpoint_name": "request.override",
+            "endpoint_kind": "serving",
+            "prompt": "List customers",
+            "schema_context": {"tables": [{"name": "customers"}]},
+        }
+    )
+    session_mgr = Mock()
+    settings = Mock()
+    domain = Mock()
+    client = Mock()
+    service = Mock()
+    service.generate_sql.return_value = {"success": True, "sql": "SELECT 1"}
+
+    with patch.object(mapping, "get_domain", return_value=domain), patch.object(
+        mapping, "require_domain_llm",
+        return_value=("https://h", "t", "main.ai.saved", "ai_gateway"),
+        create=True,
+    ), patch.object(
+        mapping, "get_databricks_client", return_value=client
+    ), patch(
+        "back.core.sqlwizard.SQLWizardService", return_value=service
+    ):
+        result = await mapping.generate_sql_from_prompt(request, session_mgr, settings)
+
+    assert result["success"] is True
+    service.generate_sql.assert_called_once()
+    assert service.generate_sql.call_args.kwargs["endpoint_name"] == "main.ai.saved"
+    assert service.generate_sql.call_args.kwargs["endpoint_kind"] == "ai_gateway"
 
 
 class TestForbiddenKeywords:

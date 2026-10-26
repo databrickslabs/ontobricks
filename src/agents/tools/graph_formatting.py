@@ -334,9 +334,8 @@ def format_find_response(
 
     triples = data.get("triples", [])
     depth = data.get("depth", 1)
-    page_count = data.get("count", len(triples))
     total = data.get("total", len(triples))
-    has_more = data.get("has_more", total > page_count)
+    has_more = bool(data.get("has_more", False))
 
     by_subject: dict[str, list[dict]] = {}
     for t in triples:
@@ -370,11 +369,10 @@ def format_find_response(
             by_object.setdefault(obj, []).append(t)
 
     unique_entities = len(by_subject)
-    entity_count = data.get("entity_count", unique_entities)
     parts: list[str] = []
     parts.append(
         f"Found {seed_count} matching entit{'y' if seed_count == 1 else 'ies'} "
-        f"({page_count} of {total} triples across {entity_count} entities, depth={depth})\n"
+        f"({total} triples across {unique_entities} entities, depth={depth})\n"
     )
 
     parts.append("── Matching Entities ──")
@@ -408,8 +406,8 @@ def format_find_response(
 
     if has_more:
         parts.append(
-            f"(Showing the first {len(triples)} triples — more exist; "
-            f"increase limit or use pagination for the rest)"
+            f"(Showing {len(triples)} of {total} triples — "
+            f"increase limit or use pagination for more)"
         )
 
     return "\n".join(parts)

@@ -1,0 +1,40 @@
+================================================================================
+## MCP client reference implementation and optimization guide (PR #193)
+================================================================================
+
+Context:
+A generic MCP client for Databricks-hosted OntoBricks deployments, a benchmark
+harness, and an optimization guide. Five client-side optimizations (curated tool
+descriptions, domain pre-selection, GraphQL schema pre-load, per-tool result
+caps, entity-block summarization) cut average latency by 51% and prompt tokens
+by 52% on Databricks Claude Haiku 4.5. One Databricks OAuth token serves both the
+MCP server and the LLM endpoint. Review fixups by benoitcayladbx are included.
+
+Changes:
+1. examples/mcp_client.py (new)
+   Reference MCP client (httpx only) with the five optimizations, each
+   switchable for comparison; strips extended-thinking `reasoning` blocks
+   before echoing assistant messages.
+   Review fixups: description for the `run_entity_business_rule` tool (the
+   server exposes 14 tools); MCP initialize failures print a stderr warning
+   instead of being swallowed.
+2. examples/mcp_bench.py (new)
+   Benchmark harness: per-question, per-round and per-tool timing plus token
+   counts, baseline vs optimized. Review fixup: initialize failures warn on
+   stderr.
+3. docs/mcp.md
+   New "Client Optimization" section (problem, fix, code and measured gain for
+   each optimization, plus a which-to-apply table); TOC regenerated. Folded in
+   from the proposed standalone docs/mcp-client-optimization.md to follow the
+   one-guide-per-category docs layout. Examples anonymized to a neutral sales
+   domain (no customer domain or company names in this public repo).
+
+Modified files:
+- examples/mcp_client.py (new)
+- examples/mcp_bench.py (new)
+- docs/mcp.md
+- changelogs/v0.9.0/LaurentPRAT-DB_2026-10-11.log (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 8939 passed, 326 skipped,
+6 deselected, 1 xfailed (pre-existing), 40 warnings in 116.46s. Both example
+scripts compile; docs TOC check passes.

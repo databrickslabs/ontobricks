@@ -4,6 +4,7 @@
  */
 
 const SYNC_TASK_KEY = 'ontobricks_sync_task';
+const ADJ_REFRESH_TASK_KEY = 'ontobricks_adjacency_refresh_task';
 
 function _syncTripleStoreBackend() {
     try {
@@ -20,6 +21,7 @@ let syncIsReady = false;
 
 /** Whether a sync task is currently running */
 let syncIsRunning = false;
+let adjacencyRefreshRunning = false;
 
 /** Whether the triple store table has data */
 let tripleStoreHasData = false;
@@ -32,15 +34,23 @@ let tripleStoreHasData = false;
  */
 let tripleStoreStatusUnknown = false;
 
+/**
+ * Whether `/dtwin/sync/info` served the graph status as a "pending" skeleton
+ * (cache miss) so the page could paint without waiting on the ~4-8s COUNT(*)
+ * probe. While true, the KG badges show a "checking" spinner and the real
+ * state is confirmed by a background `checkTripleStoreStatus(true)` call.
+ */
+let tripleStoreStatusPending = false;
+
 /** Whether the current caller may refresh graph data for the loaded version. */
 function _canStartBuild() {
     const permitted = !(window.OB && typeof window.OB.canRefreshGraph === 'function'
         && !window.OB.canRefreshGraph());
-    return syncIsReady && permitted;
+    return syncIsReady && permitted && !adjacencyRefreshRunning;
 }
 
 /**
- * Fetch all Information-page data in a single round-trip and distribute
+ * Fetch all Knowledge Graph Overview data in a single round-trip and distribute
  * results to the individual rendering functions.
  *
  * The caller is responsible for showing/hiding the loading overlay so that
@@ -58,11 +68,26 @@ async function loadSyncInfo() {
 
         // --- Triplestore status ---
         var tsStatus = payload.triplestore_status || {};
-        tripleStoreStatusUnknown = !!(tsStatus.success && tsStatus.has_data === null);
-        tripleStoreHasData = !!(tsStatus.success && tsStatus.has_data);
-        console.log('[Sync] Consolidated triplestore status -> hasData:', tripleStoreHasData,
-            tripleStoreStatusUnknown ? '(probe inconclusive)' : '');
-        renderTripleStoreStatus(tsStatus);
+
+        // Cache miss: status was served as a non-blocking "pending" skeleton to
+        // keep the ~4-8s COUNT(*) probe off the first paint. Show a "checking"
+        // state and confirm the live count in the background — do NOT decide
+        // hasData / unknown yet, or the badge would flash "Graph not built".
+        // The rest of loadSyncInfo (rebuild warning, dt_existence, menus) still
+        // runs below; only the status verdict is deferred.
+        var statusPending = !!(payload.triplestore_status_pending || tsStatus.pending);
+        tripleStoreStatusPending = statusPending;
+        if (statusPending) {
+            console.log('[Sync] Triplestore status pending — confirming in background');
+            renderTripleStoreStatus({ success: true, has_data: null, pending: true });
+            setTimeout(function () { checkTripleStoreStatus(true); }, 50);
+        } else {
+            tripleStoreStatusUnknown = !!(tsStatus.success && tsStatus.has_data === null);
+            tripleStoreHasData = !!(tsStatus.success && tsStatus.has_data);
+            console.log('[Sync] Consolidated triplestore status -> hasData:', tripleStoreHasData,
+                tripleStoreStatusUnknown ? '(probe inconclusive)' : '');
+            renderTripleStoreStatus(tsStatus);
+        }
 
         // Guard against cache-staleness inconsistency: the shared cache timestamp
         // can make an old dt_existence entry (graph_has_data=true) appear fresh
@@ -564,32 +589,9 @@ async function initSyncSection() {
         if (typeof refreshNavbarIndicators === 'function') refreshNavbarIndicators();
 
         await checkAndResumeSyncTask();
+        await checkAndResumeAdjacencyRefreshTask();
     } finally {
         if (overlay) overlay.classList.add('d-none');
-    }
-}
-
-/**
- * Check whether the ontology or assignments have changed since the last
- * Knowledge Graph build. Shows a warning banner when a rebuild is recommended.
- */
-async function checkConfigChanges() {
-    var warning = document.getElementById('syncRebuildWarning');
-    if (!warning) return;
-    try {
-        var resp = await fetch('/dtwin/sync/changes', { credentials: 'same-origin' });
-        var data = await resp.json();
-        if (data.needs_rebuild) {
-            warning.classList.remove('d-none');
-            warning.classList.add('d-flex');
-        } else {
-            warning.classList.remove('d-flex');
-            warning.classList.add('d-none');
-        }
-    } catch (e) {
-        console.warn('[Sync] Failed to check config changes:', e);
-        warning.classList.remove('d-flex');
-        warning.classList.add('d-none');
     }
 }
 
@@ -610,6 +612,9 @@ async function checkTripleStoreStatus(refresh) {
     try {
         const response = await fetch(url, { credentials: 'same-origin' });
         const data = await response.json();
+        // The live probe has answered — clear the "pending" (background-confirm)
+        // state set by loadSyncInfo's cache-miss skeleton.
+        tripleStoreStatusPending = false;
         tripleStoreStatusUnknown = !!(data.success && data.has_data === null);
         tripleStoreHasData = !!(data.success && data.has_data);
         console.log('[Sync] Triple store status:', data, '-> hasData:', tripleStoreHasData);
@@ -617,6 +622,7 @@ async function checkTripleStoreStatus(refresh) {
     } catch (e) {
         console.error('[Sync] Error checking triple store status:', e);
         // The request itself failed, so the graph's state is equally unknown.
+        tripleStoreStatusPending = false;
         tripleStoreStatusUnknown = true;
         tripleStoreHasData = false;
         renderTripleStoreStatus(null);
@@ -645,6 +651,16 @@ function renderTripleStoreStatus(data) {
     if (!area) return;
 
     area.classList.remove('d-none');
+
+    // Pending: status served as a non-blocking skeleton; the live count is
+    // being confirmed in the background. Show a spinner instead of a verdict.
+    if (data && data.pending) {
+        area.innerHTML =
+            '<div class="small mb-0 py-1 px-2 text-muted">' +
+            '<span class="spinner-border spinner-border-sm me-1" style="width:.8rem;height:.8rem;"></span>' +
+            'Checking graph status…</div>';
+        return;
+    }
 
     if (!data || !data.success) {
         // Error checking status (e.g. Databricks not configured)
@@ -692,6 +708,23 @@ function renderTripleStoreStatus(data) {
     }
 }
 
+function _syncAdjacencyRefreshVisible(backend) {
+    return backend === 'lakebase';
+}
+
+function _updateSyncAdjacencyActionState() {
+    var btn = document.getElementById('syncAdjacencyRefreshBtn');
+    if (!btn) return;
+    var backend = String(_syncTripleStoreBackend() || 'lakebase').toLowerCase();
+    var visible = _syncAdjacencyRefreshVisible(backend);
+    btn.classList.toggle('d-none', !visible);
+    btn.disabled = !visible
+        || !syncIsReady
+        || !tripleStoreHasData
+        || syncIsRunning
+        || adjacencyRefreshRunning;
+}
+
 /**
  * Enable or disable the Data section sidebar menus (Quality, Triples, Graph Viewer).
  *
@@ -701,9 +734,10 @@ function renderTripleStoreStatus(data) {
  *   3. The triple store has data (tripleStoreHasData)
  */
 function updateDataMenus() {
-    const canAccess = syncIsReady && !syncIsRunning && tripleStoreHasData;
+    const canAccess = syncIsReady && !syncIsRunning && !adjacencyRefreshRunning && tripleStoreHasData;
     console.log('[Sync] updateDataMenus: syncIsReady=' + syncIsReady +
                 ', syncIsRunning=' + syncIsRunning +
+                ', adjacencyRefreshRunning=' + adjacencyRefreshRunning +
                 ', tripleStoreHasData=' + tripleStoreHasData +
                 ' -> canAccess=' + canAccess);
 
@@ -721,8 +755,12 @@ function updateDataMenus() {
             // Set a tooltip explaining why the menu is disabled
             if (syncIsRunning) {
                 link.setAttribute('title', 'Synchronization in progress…');
+            } else if (adjacencyRefreshRunning) {
+                link.setAttribute('title', 'Adjacency refresh in progress…');
             } else if (!syncIsReady) {
                 link.setAttribute('title', 'Ontology and mapping assignments must be configured first');
+            } else if (tripleStoreStatusPending) {
+                link.setAttribute('title', 'Checking graph status…');
             } else if (!tripleStoreHasData) {
                 link.setAttribute('title', 'Triple store is empty — run Sync first');
             }
@@ -730,6 +768,7 @@ function updateDataMenus() {
     });
 
     updateKgReadyIndicators();
+    _updateSyncAdjacencyActionState();
 }
 
 /**
@@ -785,6 +824,11 @@ function updateKgReadyIndicators() {
     if (syncIsRunning) {
         html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal">'
             + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Building…</span>';
+    } else if (tripleStoreStatusPending) {
+        // Status probe deferred off the first paint; confirming in background.
+        html = '<span class="badge bg-secondary-subtle text-secondary border fw-normal" '
+            + 'title="Confirming the graph status in the background…">'
+            + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Checking…</span>';
     } else if (tripleStoreHasData) {
         html = '<span class="badge bg-success bg-opacity-10 text-success border border-success fw-normal" '
             + 'title="The Knowledge Graph is built and ready to use (backend: ' + backend + ').">'
@@ -858,6 +902,119 @@ async function checkAndResumeSyncTask() {
         }
     } catch (e) {
         sessionStorage.removeItem(SYNC_TASK_KEY);
+    }
+}
+
+async function checkAndResumeAdjacencyRefreshTask() {
+    const taskId = sessionStorage.getItem(ADJ_REFRESH_TASK_KEY);
+    if (!taskId) return;
+    try {
+        const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
+        const data = await response.json();
+        if (!data.success || !data.task) {
+            sessionStorage.removeItem(ADJ_REFRESH_TASK_KEY);
+            return;
+        }
+        const task = data.task;
+        if (task.status === 'running' || task.status === 'pending') {
+            adjacencyRefreshRunning = true;
+            showSyncProgress();
+            updateSyncProgress(task.progress || 0, task.current_step_description || task.message || '');
+            updateDataMenus();
+            monitorAdjacencyRefreshTask(taskId);
+            return;
+        }
+    } catch (_) {
+        // best effort resume only
+    }
+    sessionStorage.removeItem(ADJ_REFRESH_TASK_KEY);
+}
+
+async function startSyncAdjacencyRefresh() {
+    const backend = String(_syncTripleStoreBackend() || 'lakebase').toLowerCase();
+    if (!_syncAdjacencyRefreshVisible(backend)) {
+        return;
+    }
+    if (!syncIsReady || !tripleStoreHasData || syncIsRunning || adjacencyRefreshRunning) {
+        return;
+    }
+
+    adjacencyRefreshRunning = true;
+    updateDataMenus();
+    showSyncProgress();
+    updateSyncProgress(0, 'Starting adjacency refresh...');
+
+    try {
+        const response = await fetch('/dtwin/adjacency/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            credentials: 'same-origin',
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success || !data.task_id) {
+            throw new Error(data.message || data.detail || 'Adjacency refresh failed to start');
+        }
+        sessionStorage.setItem(ADJ_REFRESH_TASK_KEY, data.task_id);
+        if (typeof refreshTasks === 'function') refreshTasks();
+        monitorAdjacencyRefreshTask(data.task_id);
+    } catch (error) {
+        adjacencyRefreshRunning = false;
+        hideSyncProgress();
+        updateDataMenus();
+        showNotification('Adjacency refresh failed to start: ' + (error.message || error), 'error');
+    }
+}
+
+async function monitorAdjacencyRefreshTask(taskId) {
+    const pollInterval = 1500;
+    while (true) {
+        try {
+            await new Promise(r => setTimeout(r, pollInterval));
+            const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
+            const data = await response.json();
+            if (!data.success || !data.task) throw new Error('Task not found');
+            const task = data.task;
+            updateSyncProgress(task.progress || 0, task.current_step_description || task.message || '');
+            if (task.status === 'completed') {
+                sessionStorage.removeItem(ADJ_REFRESH_TASK_KEY);
+                adjacencyRefreshRunning = false;
+                hideSyncProgress();
+                showNotification('Adjacency refreshed successfully!', 'success');
+                checkTripleStoreStatus(true);
+                _loadDtExistence();
+                if (typeof refreshDigitalTwinStatus === 'function') refreshDigitalTwinStatus();
+                if (typeof refreshTasks === 'function') refreshTasks();
+                updateDataMenus();
+                break;
+            }
+            if (task.status === 'failed') {
+                sessionStorage.removeItem(ADJ_REFRESH_TASK_KEY);
+                adjacencyRefreshRunning = false;
+                hideSyncProgress();
+                showNotification(
+                    'Adjacency refresh failed: ' + (task.error || task.message || 'Unknown error'),
+                    'error'
+                );
+                updateDataMenus();
+                break;
+            }
+            if (task.status === 'cancelled') {
+                sessionStorage.removeItem(ADJ_REFRESH_TASK_KEY);
+                adjacencyRefreshRunning = false;
+                hideSyncProgress();
+                showNotification('Adjacency refresh was cancelled', 'warning');
+                updateDataMenus();
+                break;
+            }
+        } catch (error) {
+            sessionStorage.removeItem(ADJ_REFRESH_TASK_KEY);
+            adjacencyRefreshRunning = false;
+            hideSyncProgress();
+            showNotification('Adjacency refresh monitoring failed: ' + (error.message || error), 'error');
+            updateDataMenus();
+            break;
+        }
     }
 }
 
@@ -935,6 +1092,10 @@ async function startTripleStoreSync() {
             'Build is unavailable — builder access and an unlocked domain are required.',
             'warning'
         );
+        return;
+    }
+    if (adjacencyRefreshRunning) {
+        showNotification('Adjacency refresh is running. Wait for it to finish first.', 'warning');
         return;
     }
 
@@ -1146,277 +1307,30 @@ function updateSyncProgress(percent, stepText) {
 // =====================================================
 // BUILDING DIGITAL TWIN — live log
 // =====================================================
+const _syncTimedBuildLog = TimedTaskLog.create({
+    cardId: "syncBuildLogCard",
+    listId: "syncBuildLogList",
+    totalId: "syncBuildLogTotal",
+    badgeId: "syncBuildLogBadge",
+    exportButtonId: "syncBuildLogExport",
+    title: "OntoBricks — Knowledge Graph Build Log",
+    filenamePrefix: "digital-twin-build",
+});
 
-let _syncBuildLogTickerStarted = false;
-// Latest task payload rendered into the build-log panel. Cached so the
-// Export button can dump it without re-fetching, and so users can save
-// the log of a finished build before navigating away.
-let _syncBuildLogLastTask = null;
-
-/**
- * Show the live build-log card and wipe any previous content. Called when
- * the user clicks Build so the panel slides in next to the Knowledge Graph
- * card and grows row-by-row as the backend reports each phase.
- */
 function showBuildLog() {
-    const card = document.getElementById('syncBuildLogCard');
-    const list = document.getElementById('syncBuildLogList');
-    const total = document.getElementById('syncBuildLogTotal');
-    const badge = document.getElementById('syncBuildLogBadge');
-    const exportBtn = document.getElementById('syncBuildLogExport');
-    if (!card) return;
-    card.classList.remove('d-none');
-    if (list) list.innerHTML = '<div class="text-muted small py-2"><i class="bi bi-hourglass-split me-1"></i>Waiting for the build to start…</div>';
-    if (total) total.textContent = '';
-    if (badge) {
-        badge.textContent = 'running';
-        badge.className = 'badge bg-primary ms-1';
-    }
-    _syncBuildLogLastTask = null;
-    if (exportBtn) exportBtn.disabled = true;
-    _ensureBuildLogTicker();
+    _syncTimedBuildLog.show();
 }
 
 function hideBuildLog() {
-    const card = document.getElementById('syncBuildLogCard');
-    if (card) card.classList.add('d-none');
+    _syncTimedBuildLog.hide();
 }
 
-/**
- * Render the per-step rows from a Task payload. Steps already include
- * description / status / started_at / completed_at — this function only
- * decorates them with icons, elapsed time and the running sub-message.
- */
 function renderBuildLog(task) {
-    const list = document.getElementById('syncBuildLogList');
-    const total = document.getElementById('syncBuildLogTotal');
-    const badge = document.getElementById('syncBuildLogBadge');
-    const exportBtn = document.getElementById('syncBuildLogExport');
-    if (!list || !task) return;
-    _syncBuildLogLastTask = task;
-    if (exportBtn) exportBtn.disabled = false;
-
-    const steps = Array.isArray(task.steps) ? task.steps : [];
-    if (steps.length === 0) {
-        list.innerHTML = '<div class="text-muted small py-2">No build steps reported.</div>';
-        return;
-    }
-
-    const runningMessage = task.message || '';
-    const rows = steps.map(function (step, idx) {
-        return _renderBuildStepRow(step, idx, runningMessage, task);
-    });
-    list.innerHTML = rows.join('');
-
-    if (total) {
-        const dur = computeTaskDuration(task);
-        total.textContent = dur ? 'Total: ' + dur : '';
-    }
-    if (badge) {
-        if (task.status === 'completed') {
-            badge.textContent = 'done';
-            badge.className = 'badge bg-success ms-1';
-        } else if (task.status === 'failed') {
-            badge.textContent = 'failed';
-            badge.className = 'badge bg-danger ms-1';
-        } else if (task.status === 'cancelled') {
-            badge.textContent = 'cancelled';
-            badge.className = 'badge bg-warning text-dark ms-1';
-        } else {
-            badge.textContent = 'running';
-            badge.className = 'badge bg-primary ms-1';
-        }
-    }
+    _syncTimedBuildLog.render(task);
 }
 
-/**
- * Build the HTML for a single step row. The running step also shows the
- * live ``task.message`` so users see fine-grained progress like
- * "Written 4500/15000 triples…".
- */
-function _renderBuildStepRow(step, idx, runningMessage, task) {
-    const cfg = _getStepConfig(step.status);
-    const desc = escapeHtml(step.description || step.name || ('Step ' + (idx + 1)));
-
-    let detailHtml = '';
-    if (step.status === 'running' && runningMessage) {
-        detailHtml = '<div class="sync-step-detail">' + escapeHtml(runningMessage) + '</div>';
-    } else if (step.status === 'skipped') {
-        detailHtml = '<div class="sync-step-detail text-muted">Not needed for this build</div>';
-    } else if (step.status === 'failed' && runningMessage) {
-        detailHtml = '<div class="sync-step-detail text-danger">' + escapeHtml(runningMessage) + '</div>';
-    }
-
-    const timeHtml = _renderStepTime(step, task);
-
-    return (
-        '<div class="sync-build-row sync-step-' + step.status + '">' +
-            '<span class="sync-step-icon"><i class="bi ' + cfg.icon + ' ' + cfg.colorClass + '"></i></span>' +
-            '<div class="sync-step-body">' +
-                '<div class="sync-step-title">' + desc + '</div>' +
-                detailHtml +
-            '</div>' +
-            '<div class="sync-step-time">' + timeHtml + '</div>' +
-        '</div>'
-    );
-}
-
-/**
- * Pick icon + colour for a step status. ``skipped`` mirrors Bootstrap's
- * muted dash so the row reads as "we didn't need this".
- */
-function _getStepConfig(status) {
-    const map = {
-        pending:   { icon: 'bi-circle',           colorClass: 'text-muted' },
-        running:   { icon: 'bi-arrow-repeat spin-animation', colorClass: 'text-primary' },
-        completed: { icon: 'bi-check-circle-fill', colorClass: 'text-success' },
-        skipped:   { icon: 'bi-dash-circle',       colorClass: 'text-muted' },
-        failed:    { icon: 'bi-x-circle-fill',     colorClass: 'text-danger' }
-    };
-    return map[status] || map.pending;
-}
-
-/**
- * Registry backup is kicked off in a background thread; the TaskManager
- * marks the archive step completed immediately so the build can finish.
- * ``started_at`` and ``completed_at`` are therefore the same tick — show
- * an honest label instead of "0ms".
- */
-/**
- * Render the right-hand time column. Running steps get a live timer so
- * users see the seconds tick during the slower poll cadence; finished
- * steps show their wall-clock duration.
- */
-function _renderStepTime(step, task) {
-    if (step.status === 'completed' || step.status === 'failed' || step.status === 'skipped') {
-        const start = step.started_at;
-        const end = step.completed_at || step.started_at;
-        if (!start) return '<span class="text-muted">—</span>';
-        return '<span class="text-muted small">' + escapeHtml(formatDuration(start, end) || '—') + '</span>';
-    }
-    if (step.status === 'running' && step.started_at) {
-        return '<span class="text-primary small" data-step-elapsed="' + escapeHtml(step.started_at) + '">'
-            + escapeHtml(formatDuration(step.started_at, null) || '0s')
-            + '</span>';
-    }
-    return '<span class="text-muted small">—</span>';
-}
-
-/**
- * Tick the running-step elapsed label every second so the timer advances
- * smoothly between the 1.5s polls. Cheap because it only updates one
- * text node per running row, not the entire list.
- */
-function _ensureBuildLogTicker() {
-    if (_syncBuildLogTickerStarted) return;
-    _syncBuildLogTickerStarted = true;
-    setInterval(function () {
-        document.querySelectorAll('#syncBuildLogList [data-step-elapsed]').forEach(function (el) {
-            const startISO = el.getAttribute('data-step-elapsed');
-            const txt = formatDuration(startISO, null);
-            if (txt) el.textContent = txt;
-        });
-    }, 1000);
-}
-
-/**
- * Build a plain-text dump of the last rendered task and trigger a
- * browser download. The format is intentionally human-readable so users
- * can paste it into a support ticket without any tooling.
- */
 function exportBuildLog() {
-    const task = _syncBuildLogLastTask;
-    if (!task) {
-        showNotification('No build log to export yet', 'warning');
-        return;
-    }
-
-    const text = _formatBuildLogAsText(task);
-    const stamp = (task.started_at || task.created_at || new Date().toISOString())
-        .replace(/[:.]/g, '-')
-        .replace('T', '_')
-        .slice(0, 19);
-    const fname = 'digital-twin-build_' + stamp + '.log';
-
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fname;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-}
-
-/**
- * Format a Task payload as a human-readable, copy-paste-friendly log.
- * One header block (task metadata + final result), one section per
- * step with status, timestamps, duration and the running message.
- */
-function _formatBuildLogAsText(task) {
-    const lines = [];
-    const sep = '─'.repeat(60);
-
-    lines.push(sep);
-    lines.push('OntoBricks — Knowledge Graph Build Log');
-    lines.push(sep);
-    lines.push('Task ID         : ' + (task.id || ''));
-    lines.push('Name            : ' + (task.name || ''));
-    lines.push('Status          : ' + (task.status || ''));
-    if (task.created_at)   lines.push('Created at      : ' + task.created_at);
-    if (task.started_at)   lines.push('Started at      : ' + task.started_at);
-    if (task.completed_at) lines.push('Completed at    : ' + task.completed_at);
-    const totalDur = computeTaskDuration(task);
-    if (totalDur) lines.push('Total duration  : ' + totalDur);
-    if (task.progress != null) lines.push('Progress        : ' + task.progress + '%');
-    if (task.message) lines.push('Last message    : ' + task.message);
-    if (task.error)   lines.push('Error           : ' + task.error);
-    lines.push('');
-
-    const steps = Array.isArray(task.steps) ? task.steps : [];
-    if (steps.length > 0) {
-        lines.push('Steps');
-        lines.push(sep);
-        steps.forEach(function (step, idx) {
-            const num = String(idx + 1).padStart(2, ' ');
-            const status = (step.status || 'pending').toUpperCase().padEnd(9, ' ');
-            const desc = step.description || step.name || ('Step ' + (idx + 1));
-            lines.push('[' + num + '] ' + status + ' ' + desc);
-            if (step.started_at)   lines.push('     started   : ' + step.started_at);
-            if (step.completed_at) lines.push('     completed : ' + step.completed_at);
-            if (step.started_at) {
-                const dur = formatDuration(step.started_at, step.completed_at || null);
-                if (dur) {
-                    const label = step.completed_at ? '     duration  : ' : '     elapsed   : ';
-                    lines.push(label + dur);
-                }
-            }
-            if (step.status === 'running' && task.message) {
-                lines.push('     detail    : ' + task.message);
-            }
-            lines.push('');
-        });
-    }
-
-    if (task.result && typeof task.result === 'object') {
-        lines.push('Result');
-        lines.push(sep);
-        const r = task.result;
-        if (r.triple_count != null)     lines.push('Triples         : ' + r.triple_count);
-        if (r.diff && typeof r.diff === 'object') {
-            lines.push('Diff            : +' + (r.diff.added || 0) + ' / -' + (r.diff.removed || 0));
-        }
-        if (r.view_table)               lines.push('View table      : ' + r.view_table);
-        if (r.graph_name)               lines.push('Graph name      : ' + r.graph_name);
-        if (r.duration_seconds != null) lines.push('Duration (s)    : ' + r.duration_seconds);
-        lines.push('');
-    }
-
-    lines.push(sep);
-    lines.push('Exported at     : ' + new Date().toISOString());
-    lines.push(sep);
-    return lines.join('\n');
+    _syncTimedBuildLog.export();
 }
 
 /**
@@ -1506,31 +1420,6 @@ async function loadTripleStore(options = {}) {
         // Update triple store data flag
         tripleStoreHasData = count > 0;
         updateDataMenus();
-
-        // Populate global query state (same as after a query execution)
-        if (typeof queryResults !== 'undefined') {
-            queryResults = data.results;
-        }
-        if (typeof generatedSql !== 'undefined') {
-            generatedSql = data.generated_sql || `SELECT * FROM ${triplestoreTable}`;
-        }
-
-        // Update badges
-        const badge = document.getElementById('resultCountBadge');
-        if (badge) badge.textContent = count;
-        const resultCount = document.getElementById('resultCount');
-        if (resultCount) resultCount.textContent = count + ' results';
-
-        // Display results in the Results section
-        if (typeof displayResults === 'function') {
-            displayResults({
-                success: true,
-                results: data.results,
-                columns: data.columns || ['subject', 'predicate', 'object'],
-                count: count,
-                generated_sql: data.generated_sql || ''
-            });
-        }
 
         // Flag for visualization to rebuild graph
         if (typeof graphJustBuilt !== 'undefined') {
@@ -1844,6 +1733,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             var act = btn.getAttribute('data-sync-action');
             if (act === 'refresh-triple-store') checkTripleStoreStatus(true);
             else if (act === 'start-triple-store-sync') startTripleStoreSync();
+            else if (act === 'refresh-adjacency-only') startSyncAdjacencyRefresh();
         });
     }
 

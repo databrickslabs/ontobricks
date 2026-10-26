@@ -43,76 +43,57 @@ router = APIRouter(tags=["Help"], prefix="/api/help")
 
 _DOC_CATEGORIES: List[Dict] = [
     {
-        "id": "getting-started",
-        "label": "Getting Started",
+        "id": "start",
+        "label": "Start here",
         "docs": [
             {"slug": "readme", "file": "README.md", "title": "Overview"},
             {
-                "slug": "get-started",
-                "file": "get-started.md",
+                "slug": "getting-started",
+                "file": "getting-started.md",
                 "title": "Get Started",
             },
-            {"slug": "info", "file": "INFO.md", "title": "Project Info"},
+            {"slug": "examples", "file": "examples.md", "title": "Examples"},
         ],
     },
     {
-        "id": "guides",
-        "label": "Guides",
+        "id": "using",
+        "label": "Using OntoBricks",
         "docs": [
             {"slug": "user-guide", "file": "user-guide.md", "title": "User Guide"},
-            {"slug": "examples", "file": "examples.md", "title": "Examples"},
-            {"slug": "features", "file": "features.md", "title": "Features"},
-            {"slug": "product", "file": "product.md", "title": "Product"},
             {
-                "slug": "graphdb-integration",
-                "file": "graphdb-integration.md",
-                "title": "GraphDB Integration",
-            },
-            {
-                "slug": "lakebase-graphdb",
-                "file": "lakebase-graphdb.md",
-                "title": "Lakebase GraphDB",
-            },
-            {
-                "slug": "neo4j-requirements",
-                "file": "neo4j-requirements.md",
-                "title": "Neo4j Backend",
-            },
-            {
-                "slug": "cohort-discovery",
-                "file": "cohort_discovery.md",
-                "title": "Cohort Discovery",
-            },
-            {
-                "slug": "import-export",
-                "file": "import-export.md",
-                "title": "Import / Export",
+                "slug": "advanced-features",
+                "file": "advanced_features.md",
+                "title": "Advanced features",
             },
             {"slug": "mcp", "file": "mcp.md", "title": "MCP"},
         ],
     },
     {
-        "id": "reference-ops",
-        "label": "Reference & Ops",
+        "id": "platform",
+        "label": "Platform",
         "docs": [
+            {"slug": "backend", "file": "backend.md", "title": "Graph backends"},
             {
                 "slug": "architecture",
                 "file": "architecture.md",
                 "title": "Architecture",
             },
             {"slug": "api", "file": "api.md", "title": "API Reference"},
-            {
-                "slug": "data-access",
-                "file": "data-access.md",
-                "title": "Data Access",
-            },
-            {"slug": "development", "file": "development.md", "title": "Development"},
-            {
-                "slug": "code-organization",
-                "file": "code_organization.md",
-                "title": "Code Map",
-            },
+        ],
+    },
+    {
+        "id": "ops",
+        "label": "Deploy & develop",
+        "docs": [
             {"slug": "deployment", "file": "deployment.md", "title": "Deployment"},
+            {"slug": "development", "file": "development.md", "title": "Development"},
+        ],
+    },
+    {
+        "id": "about",
+        "label": "About",
+        "docs": [
+            {"slug": "product", "file": "product.md", "title": "Product"},
         ],
     },
 ]

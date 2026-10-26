@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 
 pytestmark = pytest.mark.unit
 
@@ -81,7 +81,7 @@ def _save(enabled: bool, domain, *, ok: bool = True):
         "_resolve_context",
         return_value=(domain, "https://h", "tok", RCFG),
     ), patch(
-        "back.objects.domain.SettingsService.global_config_service"
+        "back.objects.domain.settings.SettingsService.global_config_service"
         ".set_analytics_job_enabled",
         return_value=(ok, "saved" if ok else "disk full"),
     ):

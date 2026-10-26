@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.task_manager import get_task_manager
-from back.core.graphdb.lakebase.provisioner import (
+from back.core.graphdb.lakebase.LakebaseGraphProvisioner import (
     LakebaseGraphProvisioner,
     provision_steps,
 )
@@ -237,6 +237,23 @@ class TestProvisioner:
         assert any("CREATE SCHEMA IF NOT EXISTS" in s for s in sql_log)
         on_success.assert_called_once()
 
+    def test_local_provision_skips_app_service_principal_grants(self):
+        api = _FakeApi()
+        sql_log = []
+        prov, task, patcher = _make_provisioner(
+            api,
+            sql_log,
+            app_names=[],
+            pg_user="developer@databricks.com",
+        )
+
+        with patcher:
+            prov.run()
+
+        assert task.status.value == "completed"
+        assert not any(path.startswith("/api/2.0/apps/") for _, path, _ in api.calls)
+        assert api.permission_calls == []
+
     def test_existing_instance_and_database_are_idempotent(self):
         api = _FakeApi(existing_instance=True)
         api.databases.append("ontobricks_graph_db")
@@ -304,7 +321,7 @@ class TestProvisioner:
         prov, _, _ = _make_provisioner(api, [])
 
         with patch(
-            "back.core.graphdb.lakebase.provisioner.time.sleep",
+            "back.core.graphdb.lakebase.LakebaseGraphProvisioner.time.sleep",
             return_value=None,
         ):
             prov._resolve_project_path(api)
@@ -449,9 +466,9 @@ class TestProvisionService:
 
         from back.core.errors import AuthorizationError
 
-        # ``back.objects.domain.SettingsService`` resolves to the *class*
+        # ``back.objects.domain.settings.SettingsService`` resolves to the *class*
         # (re-exported in the package __init__), so patch the module object.
-        ss = importlib.import_module("back.objects.domain.SettingsService")
+        ss = importlib.import_module("back.objects.domain.settings.SettingsService")
         SettingsService = ss.SettingsService
 
         monkeypatch.setenv("PGUSER", "app-sp")
@@ -470,7 +487,7 @@ class TestProvisionService:
     def test_admin_starts_task_and_returns_id(self, monkeypatch):
         import importlib
 
-        ss = importlib.import_module("back.objects.domain.SettingsService")
+        ss = importlib.import_module("back.objects.domain.settings.SettingsService")
         SettingsService = ss.SettingsService
 
         monkeypatch.setenv("PGUSER", "app-sp")
@@ -490,7 +507,7 @@ class TestProvisionService:
              ), \
              patch.object(ss, "global_config_service", gcs), \
              patch(
-                 "back.core.graphdb.lakebase.provisioner.LakebaseGraphProvisioner"
+                 "back.core.graphdb.lakebase.LakebaseGraphProvisioner.LakebaseGraphProvisioner"
              ) as prov_cls:
             prov_cls.return_value.run.return_value = None
             out = SettingsService.graph_engine_lakebase_provision_result(
@@ -499,3 +516,4 @@ class TestProvisionService:
 
         assert out["success"] is True
         assert out["task_id"]
+        assert prov_cls.call_args.kwargs["app_names"] == []

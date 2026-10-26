@@ -4,12 +4,14 @@ import re
 from typing import Optional
 
 from back.core.errors import ValidationError
-from back.core.helpers import extract_local_name as _extract_local
-from back.core.helpers import sql_cast as _sql_cast
-from back.core.helpers import sql_escape as _escape_sql
 from back.core.logging import get_logger
-from back.core.w3c.sparql.constants import DIALECT_SPARK
+from back.core.helpers import (
+    sql_escape as _escape_sql,
+    extract_local_name as _extract_local,
+    sql_cast as _sql_cast,
+)
 from back.core.w3c.sparql.SparqlCapabilityValidator import SparqlCapabilityValidator
+from back.core.w3c.sparql.constants import DIALECT_SPARK
 
 logger = get_logger(__name__)
 
@@ -746,7 +748,7 @@ class SparqlTranslator:
                 continue
             col_ref = f"{column_qualifier}{column}" if column_qualifier else column
             operator = vf["operator"]
-            value = vf["value"].replace("'", "''")
+            value = _escape_sql(vf["value"], dialect)
             if operator == "contains":
                 where_conditions.append(f"LOWER({col_ref}) LIKE '%{value}%'")
             elif operator == "equals":

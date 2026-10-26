@@ -85,3 +85,33 @@ def test_check_pitfalls_returns_error_gracefully_when_deps_missing(monkeypatch):
     ctx = ToolContext(host="h", token="t")
     result = json.loads(tools_mod.tool_check_pitfalls(ctx))
     assert "error" in result
+
+
+def test_run_agent_forwards_domain_endpoint_kind(monkeypatch):
+    """The assistant must invoke the exact LLM target selected by the domain."""
+    import agents.agent_ontology_assistant.engine as engine_mod
+
+    calls = []
+
+    def _call_llm(*args, **kwargs):
+        calls.append(kwargs)
+        return {
+            "choices": [{"message": {"content": "Done"}}],
+            "usage": {},
+        }
+
+    monkeypatch.setattr(engine_mod, "call_serving_endpoint", _call_llm)
+
+    result = engine_mod.run_agent(
+        host="https://workspace",
+        token="token",
+        endpoint_name="main.ai.custom",
+        endpoint_kind="ai_gateway",
+        classes=[],
+        properties=[],
+        base_uri="https://example.com/",
+        user_message="List the ontology",
+    )
+
+    assert result.success is True
+    assert calls[0]["endpoint_kind"] == "ai_gateway"

@@ -3,9 +3,12 @@
 import importlib
 import json
 import time
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
+import requests
+
+from back.core.errors import InfrastructureError
 
 # Work around __init__.py re-export shadowing the module path.
 _PS_MOD = importlib.import_module("back.objects.registry.PermissionService")
@@ -239,6 +242,40 @@ class TestExtractCanManage:
         assert svc._extract_can_manage({}) == []
 
 
+class TestCanManagePrincipalsRest:
+    def test_forbidden_fallback_does_not_emit_warning(self, svc):
+        response = Mock(status_code=403)
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "403 Client Error: Forbidden", response=response
+        )
+        with (
+            patch("requests.get", return_value=response),
+            patch.object(_PS_MOD.logger, "debug") as debug,
+            patch.object(_PS_MOD.logger, "warning") as warning,
+        ):
+            assert svc._can_manage_principals_rest("https://host", "token", "app") is None
+
+        debug.assert_called_once_with(
+            "REST admin check forbidden for app %s; using fallback",
+            "app",
+        )
+        warning.assert_not_called()
+
+    def test_unexpected_http_failure_still_emits_warning(self, svc):
+        response = Mock(status_code=500)
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "500 Server Error", response=response
+        )
+        with (
+            patch("requests.get", return_value=response),
+            patch.object(_PS_MOD.logger, "warning") as warning,
+        ):
+            assert svc._can_manage_principals_rest("https://host", "token", "app") is None
+
+        warning.assert_called_once()
+        assert warning.call_args[0][0] == "REST admin check failed: %s"
+
+
 class TestGetUserGroups:
     def test_scim_me_is_preferred_when_user_token_present(self, svc):
         with (
@@ -382,6 +419,7 @@ class TestLoadDomainPermissions:
 
     def test_load_empty_when_missing(self, svc):
         store = type("S", (), {})()
+        store.backend = "memory"
         store.load_domain_permissions = lambda folder: {
             "version": 1,
             "permissions": [],
@@ -404,6 +442,7 @@ class TestLoadDomainPermissions:
 
     def test_caching(self, svc):
         store = type("S", (), {})()
+        store.backend = "memory"
         calls = {"n": 0}
 
         def _load(_folder):
@@ -415,6 +454,99 @@ class TestLoadDomainPermissions:
             svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
             svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
         assert calls["n"] == 1
+
+
+class TestDomainPermissionReadFailure:
+    """A failed read must never be mistaken for "no grants"."""
+
+    GRANTS = {
+        "version": 1,
+        "permissions": [
+            {"principal": "a@b.com", "principal_type": "user", "role": "builder"},
+            {"principal": "c@d.com", "principal_type": "user", "role": "viewer"},
+        ],
+    }
+
+    @staticmethod
+    def _store(*results):
+        """Store whose successive reads raise or return the given *results*."""
+        store = type("S", (), {"backend": "lakebase"})()
+        queue = list(results)
+
+        def _load(_folder):
+            item = queue.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        store.load_domain_permissions = _load
+        return store
+
+    def test_failed_read_is_not_cached(self, svc):
+        store = self._store(InfrastructureError("down"), self.GRANTS)
+        with patch.object(PermissionService, "_store_for", return_value=store):
+            first = svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
+            assert first["permissions"] == []
+            assert DOMAIN not in svc._domain_perm_cache
+            second = svc.load_domain_permissions("h", "t", REGISTRY_CFG, DOMAIN)
+        assert len(second["permissions"]) == 2
+
+    def test_authorization_read_fails_closed(self, svc):
+        store = self._store(RuntimeError("down"))
+        with patch.object(PermissionService, "_store_for", return_value=store):
+            role = svc.get_domain_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, "app", DOMAIN,
+                app_role=ROLE_APP_USER,
+            )
+        assert role == ROLE_NONE
+
+    def test_add_raises_and_does_not_save(self, svc):
+        store = self._store(InfrastructureError("down"))
+        with (
+            patch.object(PermissionService, "_store_for", return_value=store),
+            patch.object(svc, "save_domain_permissions") as save,
+        ):
+            with pytest.raises(InfrastructureError):
+                svc.add_or_update_domain_entry(
+                    "h", "t", REGISTRY_CFG, DOMAIN, "x@y.com", "user", "X", "editor"
+                )
+        save.assert_not_called()
+
+    def test_remove_raises_and_does_not_save(self, svc):
+        store = self._store(RuntimeError("down"))
+        with (
+            patch.object(PermissionService, "_store_for", return_value=store),
+            patch.object(svc, "save_domain_permissions") as save,
+        ):
+            with pytest.raises(InfrastructureError):
+                svc.remove_domain_entry("h", "t", REGISTRY_CFG, DOMAIN, "a@b.com")
+        save.assert_not_called()
+
+    def test_batch_reports_failure_and_does_not_save(self, svc):
+        store = self._store(InfrastructureError("down"))
+        with (
+            patch.object(PermissionService, "_store_for", return_value=store),
+            patch.object(svc, "save_domain_permissions") as save,
+        ):
+            saved, failed = svc.save_domain_permissions_batch(
+                "h", "t", REGISTRY_CFG,
+                [{"domain_folder": DOMAIN, "principal": "x@y.com", "role": "viewer"}],
+            )
+        save.assert_not_called()
+        assert saved == [] and failed[0]["domain"] == DOMAIN
+
+    def test_add_after_successful_read_keeps_other_grants(self, svc):
+        store = self._store(json.loads(json.dumps(self.GRANTS)))
+        with (
+            patch.object(PermissionService, "_store_for", return_value=store),
+            patch.object(svc, "save_domain_permissions", return_value=(True, "ok")) as save,
+        ):
+            ok, _ = svc.add_or_update_domain_entry(
+                "h", "t", REGISTRY_CFG, DOMAIN, "x@y.com", "user", "X", "editor"
+            )
+        assert ok is True
+        principals = [e["principal"] for e in save.call_args[0][4]["permissions"]]
+        assert principals == ["a@b.com", "c@d.com", "x@y.com"]
 
 
 class TestSaveDomainPermissions:
@@ -720,7 +852,7 @@ class TestSaveDomainPermissionsBatch:
         }
         saved_payloads: dict[str, dict] = {}
 
-        def fake_load(_h, _t, _cfg, domain_folder, force=False):
+        def fake_load(_h, _t, _cfg, domain_folder, for_update=False):
             return json.loads(json.dumps(initial[domain_folder]))
 
         def fake_save(_h, _t, _cfg, domain_folder, data):
@@ -798,7 +930,7 @@ class TestSaveDomainPermissionsBatch:
     def test_partial_failure(self, svc):
         dp = {"version": 1, "permissions": []}
 
-        def fake_load(_h, _t, _cfg, _df, force=False):
+        def fake_load(_h, _t, _cfg, _df, for_update=False):
             return dict(dp)
 
         def fake_save(_h, _t, _cfg, domain_folder, _data):

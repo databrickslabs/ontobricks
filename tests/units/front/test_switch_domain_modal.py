@@ -51,3 +51,30 @@ def test_navbar_js_confirm_skips_save_when_checkbox_disabled():
     js = _read(NAVBAR_JS)
     assert "!saveCheckbox.disabled" in js
     assert "&& isSwitchSaveAllowed()" in js
+
+
+def test_switch_popup_exposes_shared_new_version_action():
+    """The global popup must offer the same create action as Domain → Versions."""
+    js = _read(NAVBAR_JS)
+    popup = js.split("function showSwitchDomainDialog")[1].split(
+        "\nfunction configureSwitchSaveOption"
+    )[0]
+
+    assert 'id="btnCreateVersionFromSwitch"' in popup
+    assert "bi-plus-circle" in popup
+    assert "New Version" in popup
+    assert popup.index('id="btnCreateVersionFromSwitch"') < popup.index(
+        'data-bs-dismiss="modal">Cancel'
+    )
+    assert popup.index('data-bs-dismiss="modal">Cancel') < popup.index(
+        'id="btnConfirmSwitch"'
+    )
+    assert (
+        "document.getElementById('btnCreateVersionFromSwitch')"
+        ".addEventListener('click', () => createNewDomainVersion({"
+    ) in popup
+    assert "closeSourceModal: () => modal.hide()" in popup
+    assert (
+        "restoreSourceModal: () => showSwitchDomainDialog("
+        "domainSlug, domainName, currentVersion)"
+    ) in popup

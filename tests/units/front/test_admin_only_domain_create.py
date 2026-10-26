@@ -16,7 +16,7 @@ def test_home_new_domain_button_requires_admin():
 
 def test_registry_modal_new_domain_button_requires_admin():
     html = (
-        FRONT / "templates" / "partials" / "layout" / "registry_modal.html"
+        FRONT / "templates" / "partials" / "registry" / "_registry_domains.html"
     ).read_text(encoding="utf-8")
     button_start = html.index('id="btnRegistryModalNewDomain"')
     button = html[button_start : html.index("</button>", button_start)]
@@ -33,6 +33,20 @@ def test_home_empty_cta_requires_admin_and_calls_domain_new():
     )
     assert "window.domainNew()" in js
     assert "fetch('/reset-session'" not in js
+
+
+def test_admin_dropdown_items_restore_flex_not_block():
+    """Settings gear rows are flex icon+label; ``display: block`` un-aligns labels."""
+    css = (
+        FRONT / "static" / "global" / "css" / "permissions.css"
+    ).read_text(encoding="utf-8")
+    selector = (
+        'body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"]'
+    )
+    rule_start = css.index(selector)
+    rule = css[rule_start : css.index("}", rule_start)]
+    assert "display: flex !important;" in rule
+    assert "display: block !important;" not in rule
 
 
 def test_empty_cta_display_restored_for_admin():

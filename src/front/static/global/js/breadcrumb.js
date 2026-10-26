@@ -24,6 +24,11 @@ const Breadcrumb = {
         // offset even on pages where the breadcrumb stays hidden.
         this._updateChromeHeight();
 
+        // Settings owns the L2 slot with its domain-return control. Keep the
+        // breadcrumb hidden from first paint instead of revealing it until
+        // the asynchronous navbar state applies the Settings presentation.
+        if (document.body.dataset.page === 'settings') return;
+
         if (!wrap || !list) return;
 
         const path = window.location.pathname;

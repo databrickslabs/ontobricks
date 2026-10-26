@@ -10,6 +10,7 @@ from typing import Optional
 
 from .DatabricksAuth import DatabricksAuth
 from .SQLWarehouse import SQLWarehouse
+from .StatementExecutionWarehouse import StatementExecutionWarehouse
 from .uc import UnityCatalog, VolumeFileService
 from .WorkspaceService import WorkspaceService
 from .DashboardService import DashboardService
@@ -35,14 +36,19 @@ class DatabricksClient:
         token: Optional[str] = None,
         warehouse_id: Optional[str] = None,
         use_cloud_fetch: Optional[bool] = None,
+        use_sea: Optional[bool] = None,
     ) -> None:
         self.auth = DatabricksAuth(
             host=host,
             token=token,
             warehouse_id=warehouse_id,
             use_cloud_fetch=use_cloud_fetch,
+            use_sea=use_sea,
         )
-        self.sql = SQLWarehouse(self.auth)
+        if self.auth.is_app_mode and self.auth.use_kernel:
+            self.sql = StatementExecutionWarehouse(self.auth)
+        else:
+            self.sql = SQLWarehouse(self.auth)
         self.catalog = UnityCatalog(self.auth)
         self.volumes = VolumeFileService(auth=self.auth)
         self.workspace = WorkspaceService(self.auth)
@@ -100,6 +106,12 @@ class DatabricksClient:
     def get_schemas(self, catalog):
         return self.catalog.get_schemas(catalog)
 
+    def get_ai_gateway_model_services(self):
+        """Return AI Gateway model services executable by this principal."""
+        from .ModelServiceCatalog import ModelServiceCatalog
+
+        return ModelServiceCatalog(self).list_executable()
+
     def get_tables(self, catalog, schema):
         return self.catalog.get_tables(catalog, schema)
 
@@ -112,8 +124,13 @@ class DatabricksClient:
     def probe_schema_has_tables(self, catalog, schema):
         return self.catalog.probe_schema_has_tables(catalog, schema)
 
-    def check_table_select_permission(self, catalog, schema, table):
-        return self.catalog.check_table_select_permission(catalog, schema, table)
+    def check_table_select_permission(self, catalog, schema, table, **kwargs):
+        return self.catalog.check_table_select_permission(
+            catalog, schema, table, **kwargs
+        )
+
+    def get_metric_view_columns_with_roles(self, catalog, schema, name):
+        return self.catalog.get_metric_view_columns_with_roles(catalog, schema, name)
 
     def get_table_columns(self, catalog, schema, table):
         return self.catalog.get_table_columns(catalog, schema, table)
@@ -165,9 +182,6 @@ class DatabricksClient:
 
     def list_secret_keys(self, scope):
         return self.secrets.list_keys(scope)
-
-    def get_secret(self, scope, key):
-        return self.secrets.get_secret_value(scope, key)
 
     @property
     def last_app_permissions_status(self) -> int:

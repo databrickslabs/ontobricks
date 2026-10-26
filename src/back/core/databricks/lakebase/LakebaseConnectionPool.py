@@ -42,14 +42,11 @@ from back.core.databricks.lakebase.constants import (
 )
 from back.core.databricks.lakebase.psycopg_gate import require_psycopg
 from back.core.logging import get_logger
+from back.core.databricks.lakebase.LakebaseConnectionError import LakebaseConnectionError
 
 logger = get_logger(__name__)
 
 ErrorFactory = Callable[[str], Exception]
-
-
-class LakebaseConnectionError(RuntimeError):
-    """Raised when the pool cannot serve a Lakebase connection."""
 
 
 class LakebaseConnectionPool:

@@ -18,8 +18,13 @@ from back.core.errors import (
 )
 from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
-from back.objects.digitaltwin.NodeContextService import NodeContextService
-from back.objects.digitaltwin.VirtualAttributeService import VirtualAttributeService
+from back.objects.digitaltwin.node.NodeContextService import NodeContextService
+from back.objects.digitaltwin.node.NodeBusinessRuleService import (
+    BUSINESS_RULES_FEATURE,
+    NodeBusinessRuleService,
+)
+from back.objects.digitaltwin.node.NodeShaclService import NodeShaclService
+from back.objects.digitaltwin.node.VirtualAttributeService import VirtualAttributeService
 from back.objects.registry import RegistryCfg, RegistryService
 from back.objects.session import SessionManager, get_domain, get_session_manager
 
@@ -143,7 +148,9 @@ class ClassActionsItem(BaseModel):
     dataset: Optional[dict] = None
     bridges: List[dict] = Field(default_factory=list)
     actions: List[dict] = Field(default_factory=list)
+    business_rules: List[dict] = Field(default_factory=list)
     virtualAttributes: List[dict] = Field(default_factory=list)
+    shacl_shape_count: int = 0
 
 
 class ClassActionsResponse(BaseModel):
@@ -347,9 +354,7 @@ async def get_domain_design_status(
         has_owl=has_owl,
     )
 
-    meta = domain._data.get("domain", domain._data.get("project", {})).get(
-        "metadata", {}
-    )
+    meta = domain._data["domain"].get("metadata", {})
     tables = meta.get("tables", [])
     metadata_status = MetadataStatus(
         ready=len(tables) > 0,
@@ -518,6 +523,7 @@ async def get_domain_classes(
     # attachment is never handed to an MCP client.
     policy = NodeContextService.resolve_context_policy(domain)
     disabled = NodeContextService.context_feature_disabled
+    swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
 
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
@@ -535,6 +541,11 @@ async def get_domain_classes(
             )
         )
         actions = [] if disabled(policy, "actions") else cls.get("actions") or []
+        business_rules = (
+            []
+            if disabled(policy, BUSINESS_RULES_FEATURE)
+            else NodeBusinessRuleService.class_entries(cls, swrl_rules)
+        )
         virtual_attributes = (
             []
             if disabled(policy, "virtual_attributes")
@@ -547,7 +558,11 @@ async def get_domain_classes(
                 dataset=dataset,
                 bridges=bridges,
                 actions=actions,
+                business_rules=business_rules,
                 virtualAttributes=virtual_attributes,
+                shacl_shape_count=NodeShaclService.count_applicable(
+                    domain, cls.get("name", "")
+                ),
             )
         )
 

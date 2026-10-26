@@ -90,6 +90,50 @@ class TestUiBrandingSettingsApi:
         assert saver.call_args.kwargs["logo_content"] == b"png-bytes"
         assert saver.call_args.kwargs["logo_mime"] == "image/png"
 
+    def test_save_ui_branding_accepts_explicit_aurora(self, client):
+        payload = {
+            "success": True,
+            "branding": {
+                "app_title": "Acme",
+                "primary_color": "#4F46E5",
+                "aurora_color": "#22A7C8",
+                "palette": {"primary_rgb": "79, 70, 229"},
+            },
+        }
+        with patch(
+            "api.routers.internal.settings.config_service.save_ui_branding_result",
+            return_value=payload,
+        ) as saver:
+            response = client.post(
+                "/settings/ui-branding",
+                data={
+                    "app_title": "Acme",
+                    "primary_color": "#4F46E5",
+                    "aurora_color": "#22A7C8",
+                    "reset_logo": "false",
+                },
+            )
+        assert response.status_code == 200
+        assert response.json()["branding"]["aurora_color"] == "#22A7C8"
+        saver.assert_called_once()
+        assert saver.call_args.kwargs["aurora_color"] == "#22A7C8"
+
+    def test_save_ui_branding_rejects_malformed_aurora(self, client):
+        with patch(
+            "api.routers.internal.settings.config_service.save_ui_branding_result",
+            side_effect=ValidationError("Invalid aurora color: expected #RRGGBB"),
+        ):
+            response = client.post(
+                "/settings/ui-branding",
+                data={
+                    "app_title": "Acme",
+                    "primary_color": "#4F46E5",
+                    "aurora_color": "not-a-color",
+                    "reset_logo": "false",
+                },
+            )
+        assert response.status_code == 400
+
     def test_save_ui_branding_reset_flag_is_forwarded(self, client):
         payload = {"success": True, "branding": {"app_title": "OntoBricks"}}
         with patch(

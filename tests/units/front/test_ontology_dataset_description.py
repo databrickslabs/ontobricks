@@ -15,7 +15,7 @@ def _source() -> str:
 
 def test_dataset_description_textarea_and_handler_exist():
     source = _source()
-    assert 'id="datasetDescriptionInput"' in source
+    assert "id: 'datasetDescriptionInput'" in source
     assert "function onDatasetDescriptionChange" in source
     assert "sharedPanelDataset.description" in source
     assert "Purpose of this dataset" in source or "purpose of this dataset" in source
@@ -49,4 +49,4 @@ def test_description_has_right_aligned_uc_metadata_button():
     body = source[start : start + 2200]
     assert "match.comment || match.description" in body
     assert "onDatasetDescriptionChange" in body or "sharedPanelDataset.description" in body
-    assert "Data Sources" in body
+    assert "Data Assets" in body

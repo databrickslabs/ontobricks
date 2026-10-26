@@ -52,7 +52,7 @@ body.full-width-layout {
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: 0.5rem;
+    padding: 0.25rem 0.5rem 0.5rem;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -129,7 +129,7 @@ body.full-width-layout {
     bottom: 5px;
     width: 3px;
     border-radius: 0 3px 3px 0;
-    background: var(--db-primary);
+    background: var(--db-gradient-rail);
 }
 
 .sidebar-nav .nav-link.active i {
@@ -369,12 +369,11 @@ body.full-width-layout {
     margin-bottom: 0.5rem !important;
 }
 
-/* Section headers inherit 1rem of global top padding. Remove that structural
-   inset on desktop so the complete title box, including its icon, meets the
-   sidebar card's top border without overlapping the L2 navbar. */
+/* The space above the title equals the space below the subtitle
+   (``margin-bottom`` above), so the title block is vertically balanced. */
 @media (min-width: 769px) {
     .sidebar-layout .section-header {
-        padding-top: 0;
+        padding-top: 0.5rem;
     }
 }
 

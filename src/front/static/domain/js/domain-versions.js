@@ -3,87 +3,334 @@
  * Version list management for the Domain > Versions submenu.
  */
 
-let _versionsLoaded = false;
+var versionsGithubEnabled = false;
 
-async function loadVersionsList() {
+function githubDomainDeleteExtras(enabled) {
+    return enabled
+        ? { checkboxLabel: 'Also delete this domain from GitHub', checkboxChecked: false }
+        : {};
+}
+
+function deleteGithubQuery(options) {
+    return options && options.checkboxChecked ? '?delete_github=1' : '';
+}
+
+const VERSION_STATUS_MAP = {
+    'DRAFT': {
+        cls: 'bg-warning-subtle text-dark border-warning',
+        icon: 'pencil',
+        label: 'Draft'
+    },
+    'IN-REVIEW': {
+        cls: 'bg-info-subtle text-dark border-info',
+        icon: 'eye',
+        label: 'In Review'
+    },
+    'PUBLISHED': {
+        cls: 'bg-success-subtle text-dark border-success',
+        icon: 'broadcast',
+        label: 'Published'
+    }
+};
+
+function setVersionsState(visibleState) {
     const loading = document.getElementById('versionsLoading');
     const empty = document.getElementById('versionsEmpty');
     const error = document.getElementById('versionsError');
-    const wrapper = document.getElementById('versionsTableWrapper');
-    const tbody = document.getElementById('versionsTableBody');
+    const list = document.getElementById('versionsCardList');
 
-    if (!loading || !tbody) return;
+    [
+        ['loading', loading],
+        ['empty', empty],
+        ['error', error],
+        ['list', list]
+    ].forEach(function (entry) {
+        if (entry[1]) entry[1].classList.toggle('ob-hidden', entry[0] !== visibleState);
+    });
+}
 
-    loading.style.display = '';
-    empty.style.display = 'none';
-    error.style.display = 'none';
-    wrapper.style.display = 'none';
+async function loadVersionsList() {
+    const list = document.getElementById('versionsCardList');
+    const errorMessage = document.getElementById('versionsErrorMessage');
+    if (!list || !errorMessage) return;
+
+    setVersionsState('loading');
 
     try {
         const response = await fetch('/domain/versions-list', { credentials: 'same-origin' });
         const data = await response.json();
 
-        loading.style.display = 'none';
-
-        if (!data.success) {
-            document.getElementById('versionsErrorMessage').textContent = data.message || 'Failed to load versions';
-            error.style.display = '';
-            return;
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Failed to load versions');
         }
 
+        versionsGithubEnabled = !!data.github_enabled;
         if (!data.versions || data.versions.length === 0) {
-            empty.style.display = '';
+            list.replaceChildren();
+            setVersionsState('empty');
             return;
         }
 
-        tbody.innerHTML = '';
-        data.versions.forEach(function (v) {
-            const row = document.createElement('tr');
-            if (v.is_current) row.classList.add('table-primary');
-
-            const versionBadge = v.is_current
-                ? '<span class="badge bg-primary"><i class="bi bi-check-circle me-1"></i>v' + escapeHtml(v.version) + '</span>'
-                : '<span class="badge bg-secondary">v' + escapeHtml(v.version) + '</span>';
-
-            // Lifecycle status is read-only here — transitions are made from
-            // Registry → Browse (see registry.js). Color map matches the
-            // shared badge convention (DRAFT amber / IN-REVIEW blue /
-            // PUBLISHED green).
-            const STATUS_MAP = {
-                'DRAFT': { cls: 'bg-warning-subtle text-dark border-warning', icon: 'pencil', label: 'Draft' },
-                'IN-REVIEW': { cls: 'bg-info-subtle text-dark border-info', icon: 'eye', label: 'In Review' },
-                'PUBLISHED': { cls: 'bg-success-subtle text-dark border-success', icon: 'broadcast', label: 'Published' }
-            };
-            const st = STATUS_MAP[String(v.status || 'DRAFT').toUpperCase()] || STATUS_MAP['DRAFT'];
-            const mcpBadge = '<span class="badge border ' + st.cls
-                + '" title="Lifecycle status"><i class="bi bi-' + st.icon + ' me-1"></i>'
-                + st.label + '</span>';
-
-            const loadBtn = v.is_current
-                ? ''
-                : '<button class="btn btn-sm btn-outline-primary" onclick="loadVersionFromList(\''
-                  + escapeHtml(v.version) + '\')" title="Load this version">'
-                  + '<i class="bi bi-box-arrow-in-down"></i></button>';
-
-            row.innerHTML = '<td class="text-center">' + versionBadge + '</td>'
-                + '<td class="small">' + escapeHtml(v.description || '—') + '</td>'
-                + '<td class="text-center">' + mcpBadge + '</td>'
-                + '<td class="small text-muted">' + escapeHtml(v.author || '') + '</td>'
-                + '<td class="text-center">' + loadBtn + '</td>';
-
-            tbody.appendChild(row);
+        const cards = data.versions.map(function (version) {
+            return renderVersionCard(version, data.domain_folder || '');
         });
-
-        wrapper.style.display = '';
-        _versionsLoaded = true;
+        list.replaceChildren(...cards);
+        setVersionsState('list');
     } catch (err) {
-        loading.style.display = 'none';
-        document.getElementById('versionsErrorMessage').textContent = err.message;
-        error.style.display = '';
+        errorMessage.textContent = err.message || 'Failed to load versions';
+        setVersionsState('error');
+        showNotification(errorMessage.textContent, 'error');
     }
 }
 
-async function loadVersionFromList(version) {
+function createVersionElement(tagName, className = '', text = null) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    if (text !== null) element.textContent = String(text);
+    return element;
+}
+
+function prependVersionIcon(element, iconName) {
+    const icon = createVersionElement('i', 'bi bi-' + iconName + ' me-1');
+    icon.setAttribute('aria-hidden', 'true');
+    element.prepend(icon);
+}
+
+function createVersionActionButton(options) {
+    const button = createVersionElement(
+        'button',
+        'btn btn-sm ' + options.buttonClass,
+        options.label
+    );
+    button.type = 'button';
+    button.dataset.action = options.action;
+    button.dataset.version = String(options.version);
+    if (options.domain !== undefined) {
+        button.dataset.domain = String(options.domain);
+    }
+    if (options.targetStatus !== undefined) {
+        button.dataset.targetStatus = String(options.targetStatus);
+    }
+    if (options.deletesDomain) {
+        button.dataset.deletesDomain = '1';
+    }
+    button.disabled = Boolean(options.disabled);
+    if (options.icon) prependVersionIcon(button, options.icon);
+    return button;
+}
+
+function wrapDisabledVersionAction(button, reason) {
+    if (!button.disabled) return button;
+
+    const wrapper = createVersionElement('span', 'dm-version-action-blocked');
+    wrapper.setAttribute('tabindex', '0');
+    wrapper.setAttribute('title', String(reason || 'This action is unavailable.'));
+    wrapper.append(button);
+    return wrapper;
+}
+
+let versionHeadingSequence = 0;
+
+function renderVersionCard(version, domainFolder) {
+    const status = VERSION_STATUS_MAP[String(version.status || 'DRAFT').toUpperCase()]
+        || VERSION_STATUS_MAP.DRAFT;
+    const versionValue = String(version.version || '');
+    const article = createVersionElement(
+        'article',
+        'card dm-version-card' + (version.is_current ? ' is-loaded' : '')
+    );
+    article.setAttribute('role', 'listitem');
+
+    const body = createVersionElement('div', 'card-body');
+    const header = createVersionElement('div', 'dm-version-card-header');
+    const heading = createVersionElement('h5', 'mb-0', 'v' + versionValue);
+    heading.id = 'dmVersionHeading' + (++versionHeadingSequence);
+    article.setAttribute('aria-labelledby', heading.id);
+    const statusBadge = createVersionElement(
+        'span',
+        'badge border ' + status.cls,
+        status.label
+    );
+    prependVersionIcon(statusBadge, status.icon);
+    header.append(heading, statusBadge);
+    if (version.is_current) {
+        header.append(createVersionElement('span', 'badge bg-primary', 'Loaded'));
+    }
+    if (version.is_active) {
+        header.append(createVersionElement('span', 'badge bg-secondary', 'Latest'));
+    }
+
+    const description = createVersionElement(
+        'p',
+        'dm-version-card-description mt-2 mb-2',
+        version.description || 'No description'
+    );
+    const metadata = createVersionElement('div', 'dm-version-card-meta mb-3');
+    [
+        ['person', version.author || 'Unknown author'],
+        ['clock', version.last_update || 'No update date'],
+        ['hammer', version.last_build || 'Not built']
+    ].forEach(function (item) {
+        const value = createVersionElement('span', '', item[1]);
+        prependVersionIcon(value, item[0]);
+        metadata.append(value);
+    });
+
+    const actions = createVersionElement('div', 'dm-version-card-actions');
+    const transitionGroup = createVersionElement('div', 'dm-version-action-group');
+    (version.transitions || []).forEach(function (transition) {
+        const button = createVersionActionButton({
+            action: 'transition',
+            version: versionValue,
+            domain: domainFolder,
+            targetStatus: transition.target_status,
+            label: transition.label,
+            buttonClass: 'btn-outline-primary',
+            disabled: !transition.enabled
+        });
+        transitionGroup.append(
+            wrapDisabledVersionAction(button, transition.blocked_reason)
+        );
+    });
+
+    const directActions = createVersionElement('div', 'dm-version-action-group');
+    if (!version.is_current) {
+        directActions.append(createVersionActionButton({
+            action: 'load',
+            version: versionValue,
+            label: 'Load',
+            icon: 'box-arrow-in-down',
+            buttonClass: 'btn-outline-primary',
+            disabled: false
+        }));
+    }
+
+    if (version.delete_control_visible) {
+        const title = String(
+            version.delete_block_reason || ('Delete version v' + version.version)
+        );
+        const deleteWrapper = createVersionElement('span');
+        const deleteButton = createVersionActionButton({
+            action: 'delete',
+            version: versionValue,
+            domain: domainFolder,
+            label: 'Delete',
+            icon: 'trash',
+            buttonClass: 'btn-outline-danger',
+            disabled: !version.can_delete,
+            deletesDomain: Boolean(version.deletes_domain)
+        });
+        if (deleteButton.disabled) {
+            deleteWrapper.className = 'dm-version-action-blocked';
+            deleteWrapper.setAttribute('tabindex', '0');
+            deleteWrapper.setAttribute('title', title);
+        } else {
+            deleteButton.setAttribute('title', title);
+        }
+        deleteWrapper.append(deleteButton);
+        directActions.append(deleteWrapper);
+    }
+
+    actions.append(transitionGroup, directActions);
+    body.append(header, description, metadata, actions);
+    article.append(body);
+    return article;
+}
+
+function restoreVersionActionFocus(triggerButton) {
+    if (triggerButton
+        && triggerButton.isConnected
+        && !triggerButton.disabled
+        && typeof triggerButton.focus === 'function') {
+        triggerButton.focus();
+    }
+}
+
+async function transitionVersion(
+    domainFolder,
+    version,
+    targetStatus,
+    triggerButton = null,
+    isLoaded = false
+) {
+    const confirmed = await showConfirmDialog({
+        title: 'Update Lifecycle Status',
+        message: 'Change version v' + escapeHtml(version) + ' to '
+            + escapeHtml(targetStatus) + '?',
+        confirmText: 'Update Status',
+        confirmClass: 'btn-primary',
+        icon: 'arrow-repeat'
+    });
+    if (!confirmed) {
+        restoreVersionActionFocus(triggerButton);
+        return;
+    }
+
+    const response = await fetch('/domain/set-version-status', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            domain_name: domainFolder,
+            version: version,
+            status: targetStatus
+        })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Version status update failed');
+    }
+    showNotification(data.message || 'Version status updated', 'success');
+    await loadVersionsList();
+    if (typeof refreshNavbarIndicators === 'function') {
+        await refreshNavbarIndicators();
+    }
+    if (isLoaded && typeof refreshVersionStatusState === 'function') {
+        await refreshVersionStatusState();
+    }
+}
+
+async function deleteVersionFromList(domainFolder, version, triggerButton = null, deletesDomain = false) {
+    const options = {
+        title: deletesDomain ? 'Delete last version and domain' : 'Delete Version',
+        message: deletesDomain
+            ? 'Version v' + escapeHtml(version)
+                + ' is the only version of "' + escapeHtml(domainFolder)
+                + '". Deleting it will also delete the domain and all Knowledge '
+                + 'Store content. This cannot be undone.'
+            : 'Permanently delete version v' + escapeHtml(version)
+                + ' from domain "' + escapeHtml(domainFolder)
+                + '"? This permanently removes its Knowledge Store content '
+                + 'and cannot be undone.',
+        confirmText: 'Delete Version',
+        confirmClass: 'btn-danger',
+        icon: 'trash',
+        ...githubDomainDeleteExtras(deletesDomain && versionsGithubEnabled)
+    };
+    const confirmed = await showConfirmDialog(options);
+    if (!confirmed) {
+        restoreVersionActionFocus(triggerButton);
+        return;
+    }
+
+    const response = await fetch(
+        '/domain/versions/' + encodeURIComponent(version) + deleteGithubQuery(options),
+        { method: 'DELETE', credentials: 'same-origin' }
+    );
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        if (response.status === 409) await loadVersionsList();
+        throw new Error(data.message || 'Version deletion failed');
+    }
+    showNotification(data.message, 'success');
+    if (data.domain_deleted) {
+        window.location.href = '/';
+        return;
+    }
+    await loadVersionsList();
+}
+
+async function loadVersionFromList(version, triggerButton = null) {
     const confirmed = await showConfirmDialog({
         title: 'Load Version',
         message: 'Load version ' + version + '? Unsaved changes will be lost.',
@@ -91,7 +338,10 @@ async function loadVersionFromList(version) {
         confirmClass: 'btn-primary',
         icon: 'box-arrow-in-down'
     });
-    if (!confirmed) return;
+    if (!confirmed) {
+        restoreVersionActionFocus(triggerButton);
+        return;
+    }
 
     try {
         showNotification('Loading version ' + version + '…', 'info', 3000);
@@ -114,7 +364,12 @@ async function loadVersionFromList(version) {
         if (data.success) {
             showNotification(data.message || 'Version loaded!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            window.location.reload();
+            // Version load opens Domain → General rather than staying on Versions.
+            if (typeof navigateToDomainGeneral === 'function') {
+                navigateToDomainGeneral();
+            } else {
+                window.location.href = '/domain/?section=information';
+            }
         } else {
             showNotification('Error: ' + data.message, 'error');
         }
@@ -124,35 +379,7 @@ async function loadVersionFromList(version) {
 }
 
 async function addNewVersionFromList() {
-    const confirmed = await showConfirmDialog({
-        title: 'Create New Version',
-        message: 'This will copy the current version and increment the version number. Continue?',
-        confirmText: 'Create Version',
-        confirmClass: 'btn-primary',
-        icon: 'plus-circle'
-    });
-    if (!confirmed) return;
-
-    try {
-        showNotification('Creating new version…', 'info', 2000);
-
-        const response = await fetch('/domain/create-version', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            showNotification('Version ' + data.new_version + ' created!', 'success');
-            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            window.location.reload();
-        } else {
-            showNotification('Error: ' + data.message, 'error');
-        }
-    } catch (err) {
-        showNotification('Error: ' + err.message, 'error');
-    }
+    return window.createNewDomainVersion();
 }
 
 async function reloadLastSavedVersion() {
@@ -188,7 +415,11 @@ async function reloadLastSavedVersion() {
         if (data.success) {
             showNotification('Version ' + currentVersion + ' reloaded!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            window.location.reload();
+            if (typeof navigateToDomainGeneral === 'function') {
+                navigateToDomainGeneral();
+            } else {
+                window.location.href = '/domain/?section=information';
+            }
         } else {
             showNotification('Error: ' + data.message, 'error');
         }
@@ -197,8 +428,49 @@ async function reloadLastSavedVersion() {
     }
 }
 
-function escapeHtml(text) {
-    var div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+document.addEventListener('DOMContentLoaded', function () {
+    const versionsCardList = document.getElementById('versionsCardList');
+    const reloadButton = document.getElementById('btnReloadVersion');
+    const addButton = document.getElementById('btnAddVersion');
+    const retryButton = document.getElementById('versionsRetryBtn');
+
+    if (versionsCardList) {
+        versionsCardList.addEventListener('click', async function (event) {
+            const actionButton = event.target.closest('button[data-action]');
+            if (!actionButton || actionButton.disabled) return;
+
+            try {
+                if (actionButton.dataset.action === 'load') {
+                    await loadVersionFromList(
+                        actionButton.dataset.version,
+                        actionButton
+                    );
+                } else if (actionButton.dataset.action === 'transition') {
+                    await transitionVersion(
+                        actionButton.dataset.domain,
+                        actionButton.dataset.version,
+                        actionButton.dataset.targetStatus,
+                        actionButton,
+                        Boolean(actionButton.closest('.dm-version-card.is-loaded'))
+                    );
+                } else if (actionButton.dataset.action === 'delete') {
+                    await deleteVersionFromList(
+                        actionButton.dataset.domain,
+                        actionButton.dataset.version,
+                        actionButton,
+                        actionButton.dataset.deletesDomain === '1'
+                    );
+                }
+            } catch (err) {
+                showNotification(err.message || 'Version action failed', 'error');
+            }
+        });
+    }
+    if (reloadButton) reloadButton.addEventListener('click', reloadLastSavedVersion);
+    if (addButton) addButton.addEventListener('click', addNewVersionFromList);
+    if (retryButton) {
+        retryButton.addEventListener('click', function () {
+            loadVersionsList();
+        });
+    }
+});

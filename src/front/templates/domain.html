@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-metadata.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-validation.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-review.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-versions.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-audit.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-collaboration.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
@@ -25,7 +26,7 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
-            <!-- Information Section -->
+            <!-- General section (id remains information) -->
             <div id="information-section" class="sidebar-section active">
                 {% include "partials/domain/_domain_information.html" %}
             </div>

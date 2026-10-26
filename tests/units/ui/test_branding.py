@@ -6,6 +6,7 @@ import pytest
 
 from back.core.helpers.UIBranding import (
     DEFAULT_APP_TITLE,
+    DEFAULT_AURORA_COLOR,
     DEFAULT_LOGO_PATH,
     DEFAULT_PRIMARY_COLOR,
     derive_brand_palette,
@@ -116,3 +117,65 @@ def test_serialization_is_immutable_and_complete():
     assert payload["app_title"] == "Acme"
     assert payload["primary_color"] == "#123456"
     assert payload["palette"]["primary_rgb"] == "18, 52, 86"
+
+
+def test_aurora_is_derived_from_primary_when_omitted():
+    branding = normalize_ui_branding({"primary_color": "#4F46E5"})
+    assert branding.aurora_color != ""
+    assert branding.palette.aurora == branding.aurora_color
+    # Acceptance from the design spec: for the factory primary, the derived
+    # hue must land close to the factory Aurora constant's hue (~192 deg).
+    factory_hue, _, _ = _rgb_to_hsl_for_test(DEFAULT_AURORA_COLOR)
+    derived_hue, _, _ = _rgb_to_hsl_for_test(branding.aurora_color)
+    diff = abs(factory_hue - derived_hue)
+    assert min(diff, 360 - diff) <= 15
+
+
+def _rgb_to_hsl_for_test(hex_color: str) -> tuple[float, float, float]:
+    from back.core.helpers.UIBranding import _hex_to_rgb, _rgb_to_hsl
+
+    return _rgb_to_hsl(_hex_to_rgb(hex_color))
+
+
+def test_explicit_aurora_is_normalized_and_preserved():
+    branding = normalize_ui_branding(
+        {"primary_color": "#4F46E5", "aurora_color": "#22a7c8"}
+    )
+    assert branding.aurora_color == "#22A7C8"
+    assert branding.palette.aurora == "#22A7C8"
+
+
+def test_invalid_stored_aurora_is_treated_as_missing_not_fatal():
+    branding = normalize_ui_branding(
+        {"primary_color": "#4F46E5", "aurora_color": "not-a-color"}
+    )
+    # Falls back to derivation instead of raising.
+    assert branding.aurora_color != ""
+
+
+def test_derive_brand_palette_rejects_malformed_explicit_aurora():
+    with pytest.raises(ValueError, match="aurora"):
+        derive_brand_palette("#4F46E5", "not-a-color")
+
+
+def test_gradient_end_meets_contrast_against_on_primary():
+    for primary in ("#4F46E5", "#111111", "#F5E642", "#0E9F6E"):
+        palette = derive_brand_palette(primary)
+        assert contrast_ratio(palette.on_primary, palette.gradient_end) >= 4.5
+
+
+def test_canvas_tint_is_a_pale_composite_of_primary_on_white():
+    palette = derive_brand_palette("#4F46E5")
+    r, g, b = _hex_to_rgb(palette.canvas_tint)
+    # 5% composite of a saturated primary on white must stay near-white.
+    assert r > 235 and g > 235 and b > 235
+
+
+def test_validate_optional_hex_color_accepts_blank_and_rejects_garbage():
+    from back.core.helpers.UIBranding import validate_optional_hex_color
+
+    assert validate_optional_hex_color("", "aurora color") == ""
+    assert validate_optional_hex_color("  ", "aurora color") == ""
+    assert validate_optional_hex_color("#22A7C8", "aurora color") == "#22A7C8"
+    with pytest.raises(ValueError, match="Invalid aurora color"):
+        validate_optional_hex_color("nope", "aurora color")

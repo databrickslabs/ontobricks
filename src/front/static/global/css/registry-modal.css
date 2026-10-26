@@ -39,6 +39,15 @@
     flex-shrink: 0;
 }
 
+.registry-modal-status {
+    max-width: min(36rem, 55vw);
+    text-align: right;
+}
+
+.registry-modal-status p {
+    margin-bottom: 0;
+}
+
 .registry-modal-content .modal-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -51,15 +60,24 @@
     flex-shrink: 0;
 }
 
+/*
+ * The tab-content is a flex column so the active pane can size with
+ * `flex: 1` instead of `height: 100%`. A percentage height collapses
+ * unless every ancestor carries a definite height; flex sizing is
+ * robust and lets the Bridges D3 canvas fill down to the modal bottom.
+ */
 #registryModalTabContent {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Browse: scroll the tab pane itself */
 #registry-pane-browse.tab-pane.active {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
 }
 
@@ -71,7 +89,8 @@
 #registry-pane-bridges.tab-pane.active {
     display: flex !important;
     flex-direction: column;
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -80,7 +99,6 @@
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
-    height: 100%;
     overflow: hidden;
     padding: 0;
 }
@@ -132,5 +150,10 @@
         height: calc(100vh - 1rem);
         min-height: calc(100vh - 1rem);
         max-height: calc(100vh - 1rem);
+    }
+
+    .registry-modal-status {
+        max-width: min(16rem, calc(100vw - 8rem));
+        text-align: right;
     }
 }

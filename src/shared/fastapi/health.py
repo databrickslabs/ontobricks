@@ -1,8 +1,21 @@
-"""Readiness probe for OntoBricks — ``GET /health``.
+"""Health probes for OntoBricks.
 
-This endpoint replaces the previous static dummy with a real
-end-to-end check of every external dependency the application needs
-to operate correctly:
+Two surfaces with different audiences:
+
+* ``GET /health`` — anonymous liveness probe for load balancers and
+  uptime monitors (:func:`run_liveness_checks`). Local filesystem checks
+  only; no network, no DDL, and the payload is limited to
+  ``{status, version, service, timestamp}`` so it leaks no host,
+  catalog, schema or exception text. ``/health`` is in the bypass list of
+  :class:`PermissionMiddleware`, :class:`CSRFMiddleware` and
+  :class:`RequestTimingMiddleware`.
+* ``GET /settings/diagnostics/readiness`` (admin-only, in
+  ``api/routers/internal/settings.py``) — the full readiness probe
+  (:func:`run_readiness_checks`), alongside the grouped deep-dive
+  ``GET /settings/diagnostics`` (:func:`run_diagnostics_checks`).
+
+The readiness probe checks every external dependency the application
+needs to operate correctly:
 
 * local filesystem — ``/tmp``, the session directory and the log
   directory must be writable, with enough free disk space;
@@ -23,14 +36,6 @@ to operate correctly:
 
 Each probe returns ``{name, label, status, detail, duration_ms}``;
 the top-level ``status`` is the worst severity across all probes.
-``GET /health/detailed`` was removed — its information is now part of
-``GET /health``.
-
-The endpoint stays anonymous: ``/health`` is in the bypass list of
-:class:`PermissionMiddleware`, :class:`CSRFMiddleware` and
-:class:`RequestTimingMiddleware`, so external uptime probes (load
-balancer, k8s liveness/readiness, Datadog) can call it without a
-session cookie.
 """
 
 from __future__ import annotations
@@ -40,6 +45,7 @@ import shutil
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends
@@ -85,6 +91,15 @@ def _safely_run(name: str, label: str, fn: Callable[[], Tuple[str, str]]) -> Dic
         "detail": detail,
         "duration_ms": int((time.monotonic() - started) * 1000),
     }
+
+
+def _worst_status(checks: List[Dict[str, Any]]) -> str:
+    """Roll up the most severe ``status`` across *checks* (``ok`` when empty)."""
+    return max(
+        (c["status"] for c in checks),
+        key=lambda s: _SEVERITY_RANK.get(s, 0),
+        default=_OK,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -258,69 +273,16 @@ def _resolve_registry_cfg(settings: Settings):
 
 def _check_registry_cfg(settings: Settings) -> Tuple[str, str]:
     cfg = _resolve_registry_cfg(settings)
-    if not (cfg.catalog and cfg.schema and cfg.volume):
+    if not (cfg.catalog and cfg.schema):
         return (
             _WARNING,
-            "Registry catalog/schema/volume not fully resolved — set REGISTRY_VOLUME_PATH "
-            "or bind a Volume resource to the Databricks App",
+            "Registry catalog/schema not fully resolved — set REGISTRY_CATALOG / "
+            "REGISTRY_SCHEMA or bind them in app.yaml",
         )
     return (
         _OK,
-        f"catalog={cfg.catalog} schema={cfg.schema} volume={cfg.volume} "
+        f"catalog={cfg.catalog} schema={cfg.schema} "
         f"lakebase_schema={cfg.lakebase_schema}",
-    )
-
-
-def _check_registry_volume_read(settings: Settings) -> Tuple[str, str]:
-    cfg = _resolve_registry_cfg(settings)
-    if not (cfg.catalog and cfg.schema and cfg.volume):
-        return _WARNING, "Registry volume not configured — skipped"
-
-    from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.uc import VolumeFileService
-
-    svc = VolumeFileService(auth=DatabricksAuth())
-    if not svc.is_configured():
-        return _ERROR, "Databricks credentials not available for Files API"
-    vol_path = f"/Volumes/{cfg.catalog}/{cfg.schema}/{cfg.volume}"
-    ok, items, msg = svc.list_directory(vol_path)
-    if ok:
-        return _OK, f"Listed {vol_path} — {len(items)} entries"
-    return _ERROR, f"Cannot list {vol_path}: {msg}"
-
-
-def _check_registry_volume_write(settings: Settings) -> Tuple[str, str]:
-    """End-to-end write probe — write a tiny sentinel and delete it.
-
-    Far stronger than ``SHOW GRANTS`` because it actually exercises the
-    same Files API code path that the registry uses to persist
-    ``.global_config.json`` and binary archives.
-    """
-    cfg = _resolve_registry_cfg(settings)
-    if not (cfg.catalog and cfg.schema and cfg.volume):
-        return _WARNING, "Registry volume not configured — skipped"
-
-    from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.uc import VolumeFileService
-
-    svc = VolumeFileService(auth=DatabricksAuth())
-    if not svc.is_configured():
-        return _ERROR, "Databricks credentials not available for Files API"
-
-    sentinel = (
-        f"/Volumes/{cfg.catalog}/{cfg.schema}/{cfg.volume}"
-        f"/.health_check_{uuid.uuid4().hex[:8]}.txt"
-    )
-    ok, msg = svc.write_file(sentinel, "ok")
-    if not ok:
-        return _ERROR, f"Volume write failed ({sentinel}): {msg}"
-    # Best-effort cleanup; a leftover file is harmless but noisy.
-    deleted, _del_msg = svc.delete_file(sentinel)
-    if deleted:
-        return _OK, f"Wrote+deleted sentinel at {sentinel}"
-    return (
-        _WARNING,
-        f"Wrote sentinel but cleanup failed (please remove manually): {sentinel}",
     )
 
 
@@ -659,14 +621,20 @@ def _check_lakebase_accelerated_sync(settings: Optional[Settings] = None) -> Tup
 # ---------------------------------------------------------------------------
 
 
+def _exc_text(exc: Exception) -> str:
+    """Message plus ``detail`` — UC errors keep the raw cause in ``detail``."""
+    detail = getattr(exc, "detail", None)
+    return f"{exc}: {detail}" if detail else str(exc)
+
+
 def _check_uc_catalog_privileges(settings: Settings) -> Tuple[str, str]:
     """Verify the app identity can USE the registry UC catalog (list its schemas)."""
     cfg = _resolve_registry_cfg(settings)
     if not cfg.catalog:
         return (
             _WARNING,
-            "Registry catalog not configured — set REGISTRY_VOLUME_PATH or bind a UC Volume "
-            "resource in app.yaml",
+            "Registry catalog not configured — set REGISTRY_CATALOG or bind it "
+            "in app.yaml",
         )
     client = _build_health_client(settings)
     if client is None:
@@ -681,7 +649,7 @@ def _check_uc_catalog_privileges(settings: Settings) -> Tuple[str, str]:
             )
         return _WARNING, "Could not determine catalog access — unexpected response from UC API"
     except Exception as exc:
-        err = str(exc)
+        err = _exc_text(exc)
         if any(k in err.upper() for k in ("PERMISSION_DENIED", "CATALOG_NOT_FOUND", "UNAUTHORIZED")):
             return (
                 _ERROR,
@@ -711,7 +679,7 @@ def _check_uc_schema_privileges(settings: Settings) -> Tuple[str, str]:
             )
         return _WARNING, "Could not determine schema access — unexpected response from UC API"
     except Exception as exc:
-        err = str(exc)
+        err = _exc_text(exc)
         if any(k in err.upper() for k in ("PERMISSION_DENIED", "SCHEMA_NOT_FOUND", "UNAUTHORIZED")):
             return (
                 _ERROR,
@@ -1396,16 +1364,6 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
             "CREATE TABLE in schema (Delta build probe)",
             lambda: _check_uc_create_table_privilege(settings),
         ),
-        _safely_run(
-            "uc.volume_read",
-            "UC Volume — list (READ VOLUME)",
-            lambda: _check_registry_volume_read(settings),
-        ),
-        _safely_run(
-            "uc.volume_write",
-            "UC Volume — write sentinel (WRITE VOLUME)",
-            lambda: _check_registry_volume_write(settings),
-        ),
     ]
     groups.append(
         {
@@ -1417,10 +1375,8 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
                 "Required grants: USE CATALOG (to navigate the catalog), "
                 "USE SCHEMA (to list objects in the registry schema), "
                 "CREATE (to materialise R2RML VIEWs and Delta tables during Knowledge Graph builds — "
-                "tested separately for VIEWs and TABLEs since a grant may allow one but not the other), "
-                "READ VOLUME + WRITE VOLUME (to store .obx exports, document uploads, "
-                "and the global config blob on the UC Volume). "
-                "Missing any of these grants will cause builds or registry saves to fail."
+                "tested separately for VIEWs and TABLEs since a grant may allow one but not the other). "
+                "Missing any of these grants will cause builds to fail."
             ),
             "checks": uc_checks,
         }
@@ -1584,11 +1540,7 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
         "warnings": sum(1 for c in all_checks if c["status"] == _WARNING),
         "errors": sum(1 for c in all_checks if c["status"] == _ERROR),
     }
-    overall = max(
-        (c["status"] for c in all_checks),
-        key=lambda s: _SEVERITY_RANK.get(s, 0),
-        default=_OK,
-    )
+    overall = _worst_status(all_checks)
     return {
         "status": overall,
         "version": APP_VERSION,
@@ -1660,20 +1612,6 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
     )
     checks.append(
         _safely_run(
-            "registry.volume_read",
-            "Registry UC volume — list",
-            lambda: _check_registry_volume_read(settings),
-        )
-    )
-    checks.append(
-        _safely_run(
-            "registry.volume_write",
-            "Registry UC volume — write",
-            lambda: _check_registry_volume_write(settings),
-        )
-    )
-    checks.append(
-        _safely_run(
             "registry.uc_schema_ddl",
             "Registry catalog/schema — view DDL",
             _check_registry_uc_schema_ddl,
@@ -1714,11 +1652,7 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
         "warnings": sum(1 for c in checks if c["status"] == _WARNING),
         "errors": sum(1 for c in checks if c["status"] == _ERROR),
     }
-    overall = max(
-        (c["status"] for c in checks),
-        key=lambda s: _SEVERITY_RANK.get(s, 0),
-        default=_OK,
-    )
+    overall = _worst_status(checks)
     return {
         "status": overall,
         "version": APP_VERSION,
@@ -1729,6 +1663,29 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
     }
 
 
+def run_liveness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
+    """Cheap, anonymous-safe probe: local filesystem checks only.
+
+    Per-check details (paths, disk sizes, exception text) are dropped so
+    the public payload exposes nothing about the deployment.
+    """
+    settings = settings or get_settings()
+    checks = [
+        _safely_run("filesystem.tmp", "/tmp writable", _check_tmp),
+        _safely_run(
+            "filesystem.session_dir",
+            "Session directory writable",
+            lambda: _check_session_dir(settings),
+        ),
+    ]
+    return {
+        "status": _worst_status(checks),
+        "version": APP_VERSION,
+        "service": "OntoBricks",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Route
 # ---------------------------------------------------------------------------
@@ -1736,12 +1693,10 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
 
 @router.get("/health")
 async def health_check(settings: Settings = Depends(get_settings)):
-    """Readiness probe — returns ``200`` even when individual checks fail.
+    """Public liveness probe — returns ``200`` even when a local check fails.
 
-    External probes / load balancers should look at the top-level
-    ``status`` field (``ok`` / ``warning`` / ``error``) and the
-    ``summary.errors`` count. Returning a non-200 HTTP status would
-    take the app out of rotation as soon as a *single* dependency
-    flickered, which is rarely what you want for an analytical app.
+    Probes should read the top-level ``status`` (``ok`` / ``warning`` /
+    ``error``). Dependency readiness (warehouse, Lakebase, UC DDL) is
+    admin-only at ``GET /settings/diagnostics/readiness``.
     """
-    return await run_blocking(run_readiness_checks, settings)
+    return await run_blocking(run_liveness_checks, settings)

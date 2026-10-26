@@ -157,7 +157,7 @@ window.AutoAssignModule = {
                 <div class="d-flex align-items-start gap-2">
                     <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
                     <div class="flex-grow-1">
-                        <strong>Incomplete data source descriptions may reduce mapping accuracy.</strong>
+                        <strong>Incomplete data asset descriptions may reduce mapping accuracy.</strong>
                         <span class="ms-1">${tablesNoDesc.length} table(s) and ${columnsNoDesc.length} column(s) are missing descriptions.</span>
                         <button class="btn btn-link btn-sm py-0 px-1 ms-1 text-warning-emphasis text-decoration-none"
                                 type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}">

@@ -76,6 +76,14 @@ window.BusinessRulesModule = {
             else if (el.id === 'dtOutputAction') this._dtSyncOutputValue();
             else if (el.id === 'aggTargetClass') this._aggTargetClassChanged();
             else if (el.name === 'dtRowLogic') this._dtRowLogicChanged();
+            if (el.closest('#aggEditorModal')) this._aggRenderPreview();
+            else if (el.closest('#dtEditorModal')) this._dtRenderPreview();
+        });
+
+        root.addEventListener('input', (e) => {
+            const el = e.target;
+            if (el.id === 'aggThreshold') this._aggRenderPreview();
+            else if (el.closest('#dtEditorModal')) this._dtRenderPreview();
         });
     },
 
@@ -98,6 +106,15 @@ window.BusinessRulesModule = {
                 this._dtCellChanged(ri, ci, 'op', t.value);
                 return;
             }
+            if (t.matches && t.matches('input[data-dt-cell-val]')) {
+                const ri = parseInt(t.getAttribute('data-dt-r'), 10);
+                const ci = parseInt(t.getAttribute('data-dt-c'), 10);
+                this._dtCellChanged(ri, ci, 'value', t.value);
+            }
+        });
+
+        modal.addEventListener('input', (e) => {
+            const t = e.target;
             if (t.matches && t.matches('input[data-dt-cell-val]')) {
                 const ri = parseInt(t.getAttribute('data-dt-r'), 10);
                 const ci = parseInt(t.getAttribute('data-dt-c'), 10);
@@ -416,9 +433,12 @@ window.BusinessRulesModule = {
 
         this._populateClassSelect('dtTargetClass', dt.target_class || '');
         const targetCls = dt.target_class || '';
-        this._populatePropertySelect('dtOutputProperty', (dt.output_column || {}).property || '', targetCls);
-        document.getElementById('dtOutputAction').value = (dt.output_column || {}).action || 'set_value';
-        document.getElementById('dtOutputValue').value = (dt.output_column || {}).value || '';
+        const out = dt.output_column || {};
+        const assign = out.action === 'assign_class';
+        this._populatePropertySelect('dtOutputProperty', assign ? '' : (out.property || ''), targetCls);
+        this._populateClassSelect('dtOutputClass', assign ? (out.value || '') : '');
+        document.getElementById('dtOutputAction').value = assign ? 'assign_class' : 'set_value';
+        document.getElementById('dtOutputValue').value = assign ? '' : (out.value || '');
         this._dtSyncOutputValue();
 
         this._dtColumns = (dt.input_columns || []).map(c => ({ ...c }));
@@ -445,8 +465,8 @@ window.BusinessRulesModule = {
         if (!hint) return;
         const isAnd = this._dtGetRowLogic() === 'and';
         hint.innerHTML = isAnd
-            ? 'Rows match if <strong>all</strong> rows fire'
-            : 'Rows match if <strong>any</strong> row fires';
+            ? 'An instance matches only if it satisfies <strong>every</strong> row'
+            : 'An instance matches if it satisfies <strong>at least one</strong> row';
     },
 
     _dtRenderGrid() {
@@ -499,6 +519,7 @@ window.BusinessRulesModule = {
             tr += '</tr>';
             tbody.innerHTML += tr;
         });
+        this._dtRenderPreview();
     },
 
     _dtOpOptions(selected) {
@@ -524,12 +545,10 @@ window.BusinessRulesModule = {
     },
 
     _dtSyncOutputValue() {
-        const action = document.getElementById('dtOutputAction')?.value;
-        const grp = document.getElementById('dtOutputValueGroup');
-        if (grp) {
-            if (action === 'set_value') grp.classList.remove('d-none');
-            else grp.classList.add('d-none');
-        }
+        const assign = document.getElementById('dtOutputAction')?.value === 'assign_class';
+        document.getElementById('dtOutputPropertyGroup')?.classList.toggle('d-none', assign);
+        document.getElementById('dtOutputValueGroup')?.classList.toggle('d-none', assign);
+        document.getElementById('dtOutputClassGroup')?.classList.toggle('d-none', !assign);
     },
 
     dtAddColumn() {
@@ -553,22 +572,106 @@ window.BusinessRulesModule = {
         this._dtRenderGrid();
     },
 
-    async dtSave() {
-        const index = parseInt(document.getElementById('dtEditIndex').value, 10);
-        const rule = {
+    _dtFormRule() {
+        const assign = document.getElementById('dtOutputAction').value === 'assign_class';
+        return {
             name: document.getElementById('dtName').value.trim(),
             target_class: document.getElementById('dtTargetClass').value,
             hit_policy: document.getElementById('dtHitPolicy').value,
             row_logic: this._dtGetRowLogic(),
             input_columns: this._dtColumns.map(c => ({ property: c.property, label: c.label || c.property })),
-            output_column: {
-                property: document.getElementById('dtOutputProperty').value,
-                action: document.getElementById('dtOutputAction').value,
-                value: (document.getElementById('dtOutputValue')?.value || '').trim(),
-            },
+            output_column: assign
+                ? { property: '', action: 'assign_class', value: document.getElementById('dtOutputClass').value }
+                : {
+                    property: document.getElementById('dtOutputProperty').value,
+                    action: 'set_value',
+                    value: (document.getElementById('dtOutputValue')?.value || '').trim(),
+                },
             rows: this._dtRows,
-            enabled: true,
         };
+    },
+
+    /** Plain-English reading of a decision table, mirroring DecisionTableEngine (SQL + hit policy). */
+    dtDescribeTable(dt) {
+        const target = dt.target_class || '';
+        if (!target) return { text: 'Pick a target entity to see what this table does.', warnings: [] };
+
+        const opWords = {
+            eq: '=', neq: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤',
+            startsWith: 'starts with', endsWith: 'ends with', contains: 'contains',
+        };
+        const isNum = (v) => v !== '' && !isNaN(Number(v));
+        const cols = (dt.input_columns || []).map(c => c.property || '');
+        const warnings = [];
+        cols.forEach((p, i) => {
+            if (!p) warnings.push(`Column ${i + 1} has no attribute selected: pick one or remove the column.`);
+        });
+
+        const rowTexts = (dt.rows || []).map(row => (row.conditions || [])
+            .map((c, j) => {
+                const v = String((c && c.value) ?? '').trim();
+                if (!c || c.op === 'any' || !v || !cols[j] || !opWords[c.op]) return '';
+                return `${cols[j]} ${opWords[c.op]} ${isNum(v) ? v : `"${v}"`}`;
+            })
+            .filter(Boolean))
+            .filter(parts => parts.length)
+            .map(parts => `(${parts.join(' AND ')})`);
+
+        if (!rowTexts.length) {
+            warnings.push('Every cell is empty or "any": the table matches nothing.');
+            return { text: `For each ${target}: no condition set yet.`, warnings };
+        }
+
+        const logic = dt.row_logic === 'and' ? 'AND' : 'OR';
+        let text = `For each ${target}: it matches when ${rowTexts.join(` ${logic} `)}.`;
+
+        const out = dt.output_column || {};
+        const assign = out.action === 'assign_class';
+        const prop = assign ? '' : (out.property || '');
+        const value = out.value || '';
+        const rowValues = (dt.rows || []).some(r => r.action_value);
+        let effect = '';
+        if (assign && (value || rowValues)) {
+            effect = value ? `typed as ${value}` : "typed as the matching row's entity";
+        } else if (prop && (value || rowValues)) {
+            effect = value ? `get ${prop} = "${value}"` : `get ${prop} from the matching row's value`;
+        }
+
+        if (effect) {
+            text += ` Matching instances are reported and, when reasoning materializes inferences, ${effect}.`;
+            if (logic === 'OR' && rowTexts.length > 1) {
+                text += {
+                    first: ' When several rows match the same instance, only the first matching row counts.',
+                    all: ' When several rows match the same instance, every matching row fires.',
+                    unique: ' An instance matching several rows is reported as a conflict and gets no output.',
+                }[dt.hit_policy || 'first'] || '';
+            }
+        } else {
+            text += ' Matching instances are reported as matches (Data Quality and Reasoning).';
+            if (assign) warnings.push('Pick the entity to assign, otherwise matches are only reported.');
+            else if (value && !prop) warnings.push('Pick an output property, otherwise the value is not written.');
+            else if (prop && !value) warnings.push(`Set a value to write on ${prop}.`);
+        }
+        return { text, warnings };
+    },
+
+    _dtRenderPreview() {
+        const textEl = document.getElementById('dtPreviewText');
+        const warnEl = document.getElementById('dtPreviewWarning');
+        if (!textEl || !warnEl) return;
+        const { text, warnings } = this.dtDescribeTable(this._dtFormRule());
+        textEl.textContent = text;
+        warnEl.replaceChildren(...warnings.map(w => {
+            const li = document.createElement('li');
+            li.textContent = w;
+            return li;
+        }));
+        warnEl.classList.toggle('d-none', !warnings.length);
+    },
+
+    async dtSave() {
+        const index = parseInt(document.getElementById('dtEditIndex').value, 10);
+        const rule = { ...this._dtFormRule(), enabled: true };
         if (index >= 0 && this.dtRules[index]) rule.enabled = this.dtRules[index].enabled;
 
         const result = await this._saveRule('decision_tables', rule, index);
@@ -695,6 +798,7 @@ window.BusinessRulesModule = {
         this._populateClassSelect('aggResultClass', r.result_class || '');
         this._populatePropertySelect('aggGroupBy', r.group_by_property || '', targetCls);
         this._populatePropertySelect('aggAggProp', r.aggregate_property || '', targetCls);
+        this._aggRenderPreview();
         new bootstrap.Modal(document.getElementById('aggEditorModal')).show();
     },
 
@@ -704,19 +808,77 @@ window.BusinessRulesModule = {
         this._populatePropertySelect('aggAggProp', '', cls);
     },
 
+    _aggFormRule() {
+        const val = (id) => document.getElementById(id).value;
+        return {
+            name: val('aggName').trim(),
+            target_class: val('aggTargetClass'),
+            group_by_property: val('aggGroupBy'),
+            aggregate_property: val('aggAggProp'),
+            aggregate_function: val('aggFunction'),
+            operator: val('aggOperator'),
+            threshold: parseFloat(val('aggThreshold')) || 0,
+            result_class: val('aggResultClass') || '',
+        };
+    },
+
+    /** Plain-English reading of an aggregate rule, mirroring AggregateRuleEngine.build_sql's four shapes. */
+    aggDescribeRule(rule) {
+        const target = rule.target_class || '';
+        if (!target) return { text: 'Pick a target entity to see what this rule checks.', warning: '' };
+
+        const opWords = {
+            gt: 'greater than', gte: 'greater than or equal to', eq: 'equal to',
+            lt: 'less than', lte: 'less than or equal to', neq: 'different from',
+        };
+        const func = (rule.aggregate_function || 'count').toLowerCase();
+        const FUNC = func.toUpperCase();
+        const cond = `${opWords[rule.operator || 'gt'] || rule.operator} ${rule.threshold ?? 0}`;
+        const group = rule.group_by_property || '';
+        const agg = rule.aggregate_property || '';
+        const result = rule.result_class || '';
+        let text;
+        let warning = '';
+
+        if (group && agg) {
+            const what = func === 'count' ? `count their "${agg}" values` : `take the ${FUNC} of their "${agg}" values`;
+            text = `For each ${target}, follow "${group}" to the linked entities, ${what}, and flag the ${target} when the result is ${cond}.`;
+        } else if (agg) {
+            const what = func === 'count' ? `count its own "${agg}" values` : `take the ${FUNC} of its own "${agg}" values`;
+            text = `For each ${target}, ${what} and flag it when the result is ${cond}.`;
+        } else if (group) {
+            text = func === 'count'
+                ? `For each ${target}, count its "${group}" links and flag it when the count is ${cond}.`
+                : `For each ${target}, take the ${FUNC} of its "${group}" values (read as numbers) and flag it when the result is ${cond}.`;
+        } else {
+            text = `Count all ${target} instances and report one finding for the entity as a whole when the total is ${cond}.`;
+            if (func !== 'count') {
+                warning = 'Only COUNT works without a Group-by or Aggregate property: pick one, or switch the function to COUNT.';
+            } else if (result) {
+                warning = 'Result entity does not apply without a Group-by or Aggregate property: there are no individual instances to classify.';
+            }
+            return { text, warning };
+        }
+
+        text += result
+            ? ` Flagged instances are reported as violations and, when reasoning materializes inferences, typed as ${result}.`
+            : ' Flagged instances are reported as violations (Data Quality and Reasoning).';
+        return { text, warning };
+    },
+
+    _aggRenderPreview() {
+        const textEl = document.getElementById('aggPreviewText');
+        const warnEl = document.getElementById('aggPreviewWarning');
+        if (!textEl || !warnEl) return;
+        const { text, warning } = this.aggDescribeRule(this._aggFormRule());
+        textEl.textContent = text;
+        warnEl.textContent = warning;
+        warnEl.classList.toggle('d-none', !warning);
+    },
+
     async aggSave() {
         const index = parseInt(document.getElementById('aggEditIndex').value, 10);
-        const rule = {
-            name: document.getElementById('aggName').value.trim(),
-            target_class: document.getElementById('aggTargetClass').value,
-            group_by_property: document.getElementById('aggGroupBy').value,
-            aggregate_property: document.getElementById('aggAggProp').value,
-            aggregate_function: document.getElementById('aggFunction').value,
-            operator: document.getElementById('aggOperator').value,
-            threshold: parseFloat(document.getElementById('aggThreshold').value) || 0,
-            result_class: document.getElementById('aggResultClass').value || '',
-            enabled: true,
-        };
+        const rule = { ...this._aggFormRule(), enabled: true };
         if (index >= 0 && this.aggRules[index]) rule.enabled = this.aggRules[index].enabled;
 
         const result = await this._saveRule('aggregate_rules', rule, index);

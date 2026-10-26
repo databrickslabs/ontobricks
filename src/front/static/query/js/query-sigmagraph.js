@@ -34,10 +34,63 @@ var SigmaGraph = (function () {
     var _graph = null;
     var _hoveredNode = null;
     var _selectedNode = null;
+    // Search response-time readout. The stopwatch pauses immediately before
+    // the seed modal opens and resumes only after an Explore action closes it,
+    // excluding all time spent choosing an entity. `_searchTimerPending` gates
+    // updates to search-driven renders only (not filter/group toggles).
+    var _searchTimerPending = false;
+    var _searchTimerRunning = false;
+    var _searchElapsedMs = 0;
+    var _searchSegmentStart = 0;
+    var _searchTiming = {
+        previewMs: null,
+        expansionMs: null,
+        displayMs: null,
+        totalMs: null
+    };
+
+    function _searchTimerStart() {
+        _searchElapsedMs = 0;
+        _searchSegmentStart = performance.now();
+        _searchTimerRunning = true;
+        _searchTimerPending = true;
+    }
+    function _searchTimerPause() {
+        if (_searchTimerRunning) {
+            _searchElapsedMs += performance.now() - _searchSegmentStart;
+            _searchTimerRunning = false;
+        }
+    }
+    function _searchTimerResume() {
+        if (_searchTimerPending && !_searchTimerRunning) {
+            _searchSegmentStart = performance.now();
+            _searchTimerRunning = true;
+        }
+    }
+    function _searchTimerStop() {
+        if (_searchTimerRunning) {
+            _searchElapsedMs += performance.now() - _searchSegmentStart;
+            _searchTimerRunning = false;
+        }
+        return _searchElapsedMs;
+    }
+    function _resetSearchTiming() {
+        _searchTiming = {
+            previewMs: null,
+            expansionMs: null,
+            displayMs: null,
+            totalMs: null
+        };
+        _setSearchTimingExpanded(false);
+        var timingButton = document.getElementById('sgSearchTiming');
+        if (timingButton) timingButton.hidden = true;
+    }
     var _visibleTypes = new Set();
     var _visibleEdgeTypes = new Set();
     var _searchMatched = null;   // null = no search active; Set of directly matched node IDs
     var _searchNeighbors = null; // Set of neighbor node IDs of matched nodes
+    var _pathHighlightNodes = null; // null = no path highlight; Set of node IDs on shortest path(s)
+    var _pathHighlightEdges = null; // Set of undirected edge keys (nodeA\0nodeB)
     var _highlightedSeeds = null; // Set of node IDs to visually emphasize (ring effect)
     var _pendingHighlightTerm = null; // term to auto-highlight after next filter execution
     var _graphFilterActive = false;
@@ -58,6 +111,7 @@ var SigmaGraph = (function () {
     var _clusterAssignments = null;  // node ID → cluster integer, or null
     var _clusterCount = 0;
     var _clusterColorByActive = false;
+    var _showQualityRings = true;  // SHACL facet ring on checked nodes
     var _clusterResolution = 1.0;
     var _collapsedClusters = new Set();
     var _clusterCollapseActive = false;
@@ -760,15 +814,46 @@ var SigmaGraph = (function () {
     // -----------------------------------------------------------
     // Render / Re-render
     // -----------------------------------------------------------
-    function _hideLoading() {
+    function _setGraphLoadingStep(label) {
+        var loadingLabel = document.getElementById('sgLoadingLabel');
+        if (loadingLabel) loadingLabel.textContent = label;
+    }
+
+    function _showGraphLoading(label) {
         var loading = document.getElementById('sgLoading');
-        if (loading) loading.style.display = 'none';
+        var container = document.getElementById('sgContainer');
+        var searchButton = document.getElementById('sgGraphSearchBtn');
+        _setGraphLoadingStep(label || 'Loading graph data…');
+        if (loading) loading.classList.add('is-active');
+        if (container) container.setAttribute('aria-busy', 'true');
+        if (searchButton) searchButton.disabled = true;
+    }
+
+    function _waitForGraphLoadingPaint() {
+        return new Promise(function (resolve) {
+            if (typeof window.requestAnimationFrame !== 'function') {
+                setTimeout(resolve, 0);
+                return;
+            }
+            window.requestAnimationFrame(function () {
+                setTimeout(resolve, 0);
+            });
+        });
+    }
+
+    function _hideGraphLoading() {
+        var loading = document.getElementById('sgLoading');
+        var container = document.getElementById('sgContainer');
+        var searchButton = document.getElementById('sgGraphSearchBtn');
+        if (loading) loading.classList.remove('is-active');
+        if (container) container.setAttribute('aria-busy', 'false');
+        if (searchButton) searchButton.disabled = false;
     }
 
     function _render(filterIds, isGroupToggle) {
         var container = document.getElementById('sgContainer');
-        var loading = document.getElementById('sgLoading');
-        if (!container) { console.warn('[SigmaGraph] container #sgContainer not found'); _hideLoading(); return; }
+        if (!container) { console.warn('[SigmaGraph] container #sgContainer not found'); _hideGraphLoading(); return; }
+        _setGraphLoadingStep('Rendering graph…');
         _hideEmptyState();
 
         // Ensure groups are loaded before first render
@@ -778,9 +863,9 @@ var SigmaGraph = (function () {
         }
 
         var SigmaModule = (typeof Sigma !== 'undefined') ? Sigma : null;
-        if (!SigmaModule) { console.error('[SigmaGraph] Sigma library not loaded'); _hideLoading(); return; }
+        if (!SigmaModule) { console.error('[SigmaGraph] Sigma library not loaded'); _hideGraphLoading(); return; }
         var SigmaClass = (typeof SigmaModule === 'function') ? SigmaModule : (SigmaModule.Sigma || SigmaModule.default || null);
-        if (!SigmaClass) { console.error('[SigmaGraph] Could not find Sigma constructor in', Object.keys(SigmaModule)); _hideLoading(); return; }
+        if (!SigmaClass) { console.error('[SigmaGraph] Could not find Sigma constructor in', Object.keys(SigmaModule)); _hideGraphLoading(); return; }
 
         var savedCamera = null;
         if (isGroupToggle) {
@@ -798,15 +883,15 @@ var SigmaGraph = (function () {
         _graph = _buildGraph(filterIds);
         if (!_graph || _graph.order === 0) {
             console.warn('[SigmaGraph] graph is empty (0 nodes)');
-            _hideLoading();
+            _searchTimerPending = false;
+            _searchTimerRunning = false;
+            _hideGraphLoading();
             return;
         }
 
         console.log('[SigmaGraph] graph built:', _graph.order, 'nodes,', _graph.size, 'edges');
 
         _applyLayout(_graph, isGroupToggle);
-
-        if (loading) loading.style.display = 'none';
 
         // Ensure container has actual dimensions
         var rect = container.getBoundingClientRect();
@@ -841,18 +926,20 @@ var SigmaGraph = (function () {
             _renderer = new SigmaClass(_graph, container, sigmaSettings);
         } catch (err) {
             console.error('[SigmaGraph] Sigma constructor error:', err);
-            _hideLoading();
+            _hideGraphLoading();
             return;
         }
 
         _renderer.on('clickNode', function (e) {
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = e.node;
             _hoveredNode = null;
             _switchToTab('sgTabDetails');
             _showNodeDetails(e.node);
             _renderer.refresh();
+            _focusCameraOnNodes(_nodeSetWithNeighbors(new Set([e.node])));
         });
 
         _renderer.on('doubleClickNode', function (e) {
@@ -874,6 +961,7 @@ var SigmaGraph = (function () {
         _renderer.on('clickStage', function () {
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = null;
             _hoveredNode = null;
             _showPlaceholder();
@@ -920,12 +1008,141 @@ var SigmaGraph = (function () {
             try { _renderer.getCamera().setState(savedCamera); } catch (_) {}
         }
 
+        _hideGraphLoading();
         console.log('[SigmaGraph] render complete');
+    }
+
+    function _formatSearchTiming(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return '—';
+        return (ms / 1000).toFixed(2) + 's';
+    }
+
+    function _setSearchTimingExpanded(expanded) {
+        var el = document.getElementById('sgSearchTiming');
+        var details = document.getElementById('sgSearchTimingDetails');
+        if (!el || !details) return;
+        var isExpanded = !!expanded;
+        el.setAttribute('aria-expanded', String(isExpanded));
+        details.hidden = !isExpanded;
+    }
+
+    function _appendSearchTimingRow(list, label, ms) {
+        var term = document.createElement('dt');
+        term.textContent = label;
+        var value = document.createElement('dd');
+        value.textContent = _formatSearchTiming(ms);
+        list.appendChild(term);
+        list.appendChild(value);
+    }
+
+    /**
+     * Show the latest search's total time and an accessible phase breakdown.
+     * Updated only on completed search-driven renders; ordinary canvas refreshes
+     * leave the latest record untouched.
+     */
+    function _showSearchTiming(timing) {
+        var container = document.getElementById('sgContainer');
+        if (!container) return;
+
+        var el = document.getElementById('sgSearchTiming');
+        var details = document.getElementById('sgSearchTimingDetails');
+        if (!el) {
+            el = document.createElement('button');
+            el.id = 'sgSearchTiming';
+            el.type = 'button';
+            el.className = 'sg-search-timing';
+            el.setAttribute('aria-controls', 'sgSearchTimingDetails');
+            el.setAttribute('aria-expanded', 'false');
+
+            var icon = document.createElement('i');
+            icon.className = 'bi bi-stopwatch';
+            icon.setAttribute('aria-hidden', 'true');
+            var total = document.createElement('span');
+            total.className = 'sg-search-timing-total';
+            el.appendChild(icon);
+            el.appendChild(total);
+            container.appendChild(el);
+
+            details = document.createElement('div');
+            details.id = 'sgSearchTimingDetails';
+            details.className = 'sg-search-timing-details';
+            details.setAttribute('role', 'region');
+            details.setAttribute('aria-label', 'Latest search timing details');
+            details.hidden = true;
+            container.appendChild(details);
+
+            el.addEventListener('click', function (event) {
+                event.stopPropagation();
+                _setSearchTimingExpanded(
+                    el.getAttribute('aria-expanded') !== 'true'
+                );
+            });
+            details.addEventListener('click', function (event) {
+                event.stopPropagation();
+            });
+            document.addEventListener('click', function (event) {
+                if (
+                    !container.contains(event.target)
+                    || (!el.contains(event.target) && !details.contains(event.target))
+                ) {
+                    _setSearchTimingExpanded(false);
+                }
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    var wasExpanded = el.getAttribute('aria-expanded') === 'true';
+                    _setSearchTimingExpanded(false);
+                    if (wasExpanded) el.focus();
+                }
+            });
+        }
+
+        el.hidden = false;
+        var totalText = _formatSearchTiming(timing.totalMs);
+        var totalEl = el.querySelector('.sg-search-timing-total');
+        if (totalEl) totalEl.textContent = totalText;
+        el.setAttribute(
+            'aria-label',
+            'Latest search total ' + totalText + '. Show timing details'
+        );
+        el.title = 'Show latest search timing details';
+
+        details.replaceChildren();
+        var heading = document.createElement('div');
+        heading.className = 'sg-search-timing-heading';
+        heading.textContent = 'Latest search';
+        details.appendChild(heading);
+        var list = document.createElement('dl');
+        _appendSearchTimingRow(list, 'Preview request', timing.previewMs);
+        _appendSearchTimingRow(list, 'Expansion request', timing.expansionMs);
+        _appendSearchTimingRow(list, 'Display', timing.displayMs);
+        _appendSearchTimingRow(list, 'Total', timing.totalMs);
+        details.appendChild(list);
+        _setSearchTimingExpanded(false);
     }
 
     // -----------------------------------------------------------
     // Camera helpers
     // -----------------------------------------------------------
+    // Sigma camera `ratio` is inverse zoom (1 = full graph). Tight values
+    // make a single node fill the canvas and hide its neighbourhood.
+    var CAMERA_FIT_PADDING = 2.4;
+    var CAMERA_MIN_RATIO = 0.22;
+    var CAMERA_MAX_RATIO = 1;
+
+    function _nodeSetWithNeighbors(nodeSet) {
+        var expanded = new Set();
+        if (!_graph || !nodeSet) return expanded;
+        nodeSet.forEach(function (nodeId) {
+            if (!_graph.hasNode(nodeId)) return;
+            expanded.add(nodeId);
+            _graph.forEachNeighbor(nodeId, function (neighbor) {
+                expanded.add(neighbor);
+            });
+        });
+        return expanded;
+    }
+
     function _focusCameraOnNodes(nodeSet) {
         if (!_renderer || !_graph || !nodeSet || nodeSet.size === 0) return;
 
@@ -948,7 +1165,10 @@ var SigmaGraph = (function () {
         var cam = _renderer.getCamera();
 
         if (fgPositions.length === 1) {
-            cam.animate({ x: fgPositions[0].x, y: fgPositions[0].y, ratio: 0.08 }, { duration: 400 });
+            cam.animate(
+                { x: fgPositions[0].x, y: fgPositions[0].y, ratio: CAMERA_MIN_RATIO },
+                { duration: 400 }
+            );
             return;
         }
 
@@ -964,8 +1184,8 @@ var SigmaGraph = (function () {
         var centerY = (minY + maxY) / 2;
         var spanX = (maxX - minX) || 0.001;
         var spanY = (maxY - minY) || 0.001;
-        var ratio = Math.max(spanX, spanY) * 1.5;
-        ratio = Math.min(1, Math.max(0.02, ratio));
+        var ratio = Math.max(spanX, spanY) * CAMERA_FIT_PADDING;
+        ratio = Math.min(CAMERA_MAX_RATIO, Math.max(CAMERA_MIN_RATIO, ratio));
 
         cam.animate({ x: centerX, y: centerY, ratio: ratio }, { duration: 400 });
     }
@@ -1018,6 +1238,16 @@ var SigmaGraph = (function () {
             res.color = _metricPalette[tier];
         }
 
+        // SHACL facet ring: set before the seed / path highlights so they win.
+        if (_showQualityRings && typeof getShaclFacetStatus === 'function'
+            && !data._isGroup && !data._isClusterNode) {
+            var qStatus = getShaclFacetStatus(node);
+            if (qStatus && typeof shaclStatusColor === 'function') {
+                res.borderColor = shaclStatusColor(qStatus);
+                res.borderSize = 3;
+            }
+        }
+
         if (_highlightedSeeds && _highlightedSeeds.has(node)) {
             res.highlighted = true;
             res.size = (data.size || 6) * 1.5;
@@ -1027,6 +1257,19 @@ var SigmaGraph = (function () {
             res.labelWeight = 'bold';
             res.forceLabel = true;
             res.zIndex = 10;
+        }
+
+        // Find Path: nodes on a shortest path stay bright; everything else is dimmed
+        if (_pathHighlightNodes !== null) {
+            if (_pathHighlightNodes.has(node)) {
+                res.highlighted = true;
+                res.size = data.size * 1.6;
+            } else {
+                res.color = '#e0e0e0';
+                res.label = '';
+                res.size = 3;
+            }
+            return res;
         }
 
         // Search filter: matched nodes get highlighted, neighbors stay visible, rest dimmed
@@ -1069,6 +1312,23 @@ var SigmaGraph = (function () {
         // Edge type filter
         if (_visibleEdgeTypes.size > 0 && pred && !_visibleEdgeTypes.has(pred)) {
             res.hidden = true;
+            return res;
+        }
+
+        // Find Path: only edges that sit on a reconstructed shortest path
+        if (_pathHighlightNodes !== null) {
+            var pathSrc = _graph.source(edge);
+            var pathTgt = _graph.target(edge);
+            var pathKey = (typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.undirectedEdgeKey)
+                ? ExplorerFindPath.undirectedEdgeKey(pathSrc, pathTgt)
+                : (pathSrc < pathTgt ? pathSrc + '\0' + pathTgt : pathTgt + '\0' + pathSrc);
+            if (_pathHighlightEdges && _pathHighlightEdges.has(pathKey)) {
+                res.color = '#333';
+                res.size = 2.5;
+            } else {
+                res.color = '#f0f0f0';
+                res.label = '';
+            }
             return res;
         }
 
@@ -1330,10 +1590,9 @@ var SigmaGraph = (function () {
             '</div></div>';
 
         var _secIdx = 0;
-        function _sec(icon, title, body, startOpen) {
+        function _sec(icon, title, body) {
             var id = 'sgSec' + (_secIdx++);
-            var cls = startOpen ? 'entity-detail-section' : 'entity-detail-section collapsed';
-            return '<div class="' + cls + '" id="' + id + '">' +
+            return '<div class="entity-detail-section collapsed" id="' + id + '">' +
                 '<h6 onclick="this.parentElement.classList.toggle(\'collapsed\')">' +
                 '<i class="' + icon + '"></i> ' + title +
                 '<i class="bi bi-chevron-down entity-section-chevron"></i></h6>' +
@@ -1352,7 +1611,7 @@ var SigmaGraph = (function () {
                 '<span class="detail-value"><span class="sg-cluster-dot" style="background:' + _clusterColor(_cid) + ';width:10px;height:10px;display:inline-block;border-radius:50%;vertical-align:middle;margin-right:4px;"></span>' +
                 'Cluster #' + _cid + '</span></div>';
         }
-        html += _sec('bi bi-card-list', 'Entity Info', infoBody, true);
+        html += _sec('bi bi-card-list', 'Entity Info', infoBody);
 
         var customAttrs = {};
         if (entityMapping && entityMapping.attributeMappings) {
@@ -1379,7 +1638,7 @@ var SigmaGraph = (function () {
         } else {
             attrBody = '<p class="small text-muted mb-0">No custom attributes found for this entity.</p>';
         }
-        html += _sec('bi bi-tags', 'Attributes', attrBody, true);
+        html += _sec('bi bi-tags', 'Attributes', attrBody);
 
         // Virtual attributes — declarations only. Values cost a warehouse
         // round-trip, so they are computed when the user clicks, never here.
@@ -1389,7 +1648,13 @@ var SigmaGraph = (function () {
                 return n + ((g.attributes || []).length);
             }, 0);
             html += _sec('bi bi-magic', 'Virtual Attributes (' + vaCount + ')',
-                renderVirtualAttributeSection(entity.id, virtualGroups), true);
+                renderVirtualAttributeSection(entity.id, virtualGroups));
+        }
+
+        var shaclCount = (classInfo && classInfo.shaclShapeCount) || 0;
+        if (shaclCount > 0 && typeof renderShaclFacetSection === 'function') {
+            html += _sec('bi bi-shield-check', 'Data quality',
+                renderShaclFacetSection(entity.id, shaclCount));
         }
 
         if (dashboardUrl && typeof buildDashboardUrl === 'function') {
@@ -1405,7 +1670,7 @@ var SigmaGraph = (function () {
             var dashUrl = buildDashboardUrl(dashboardUrl, actualIdValue, paramValues);
             var dashBody = '<div class="entity-detail-item"><button onclick="openDashboardModal(\'' + esc(dashUrl) + '\', \'' + esc(ontologyTypeName) + '\', \'' + esc(actualIdValue || '') + '\')" ' +
                 'class="btn btn-sm btn-outline-info w-100" title="Open dashboard"><i class="bi bi-speedometer2 me-1"></i>View Dashboard</button></div>';
-            html += _sec('bi bi-speedometer2', 'Dashboard', dashBody, true);
+            html += _sec('bi bi-speedometer2', 'Dashboard', dashBody);
         }
 
         var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
@@ -1433,7 +1698,7 @@ var SigmaGraph = (function () {
                     'class="btn btn-sm btn-outline-info w-100" title="Key column is not configured — preview unavailable">' +
                     '<i class="bi bi-table me-1"></i>Preview rows</button></div>';
             }
-            html += _sec('bi bi-table', 'Dataset', dsBody, true);
+            html += _sec('bi bi-table', 'Dataset', dsBody);
         }
 
         // Unity Catalog function actions — each takes the entity ID as its only argument
@@ -1441,19 +1706,30 @@ var SigmaGraph = (function () {
         if (nodeActions.length > 0) {
             var actionBody = '';
             nodeActions.forEach(function (action) {
+                var isJob = typeof _entityActionIsJob === 'function' && _entityActionIsJob(action);
                 var actFullName = action.fullName
-                    || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
+                    || (isJob ? ('job:' + action.job_id) : [action.catalog, action.schema, action.function].filter(Boolean).join('.'));
                 if (!actFullName) return;
-                var actLabel = action.function || actFullName;
+                var actLabel = action.job_name || action.function || actFullName;
                 var actTitle = action.description || ('Run ' + actFullName);
                 var actDesc = action.description || '';
+                var icon = isJob ? 'bi bi-play-circle' : 'bi bi-lightning-charge';
                 actionBody += '<div class="entity-detail-item"><button type="button" onclick="openEntityActionModal(\'' +
                     esc(entity.id) + '\', \'' + esc(actFullName) + '\', \'' + esc(actLabel) + '\', \'' + esc(actDesc) +
                     '\')" class="btn btn-sm btn-outline-primary w-100" title="' + esc(actTitle) + '">' +
-                    '<i class="bi bi-lightning-charge me-1"></i>' + esc(actLabel) + '</button></div>';
+                    '<i class="' + icon + ' me-1"></i>' + esc(actLabel) + '</button></div>';
             });
             if (actionBody) {
-                html += _sec('bi bi-lightning-charge', 'Actions (' + nodeActions.length + ')', actionBody, true);
+                html += _sec('bi bi-lightning-charge', 'Actions (' + nodeActions.length + ')', actionBody);
+            }
+        }
+
+        // SWRL business rules declared on the class — applied to this entity only
+        var nodeRules = (classInfo && classInfo.businessRules) || [];
+        if (nodeRules.length > 0 && typeof renderBusinessRuleSection === 'function') {
+            var ruleBody = renderBusinessRuleSection(entity.id, nodeRules);
+            if (ruleBody) {
+                html += _sec('bi bi-diagram-3', 'Inference rules (' + nodeRules.length + ')', ruleBody);
             }
         }
 
@@ -1478,7 +1754,7 @@ var SigmaGraph = (function () {
                     '<i class="bi bi-box-arrow-up-right ms-auto float-end mt-1"></i>' +
                     '</a></div>';
             });
-            html += _sec('bi bi-signpost-2', 'Bridges (' + bridges.length + ')', bridgeBody, true);
+            html += _sec('bi bi-signpost-2', 'Bridges (' + bridges.length + ')', bridgeBody);
         }
 
         var outgoingRels = (typeof d3LinksData !== 'undefined' && d3LinksData) ? d3LinksData.filter(function (l) {
@@ -1503,7 +1779,7 @@ var SigmaGraph = (function () {
                     '<span class="rel-direction">→</span> ' +
                     '<span class="rel-target" onclick="SigmaGraph.selectEntity(\'' + esc(targetId) + '\')">' + targetIcon + ' ' + esc(targetLabel) + '</span></div>';
             });
-            html += _sec('bi bi-arrow-right-circle', 'Outgoing (' + outgoingRels.length + ')', outBody, false);
+            html += _sec('bi bi-arrow-right-circle', 'Outgoing (' + outgoingRels.length + ')', outBody);
         }
 
         if (incomingRels.length > 0) {
@@ -1521,7 +1797,7 @@ var SigmaGraph = (function () {
                     '<span class="rel-predicate">' + esc(inPredLabel) + '</span> ' +
                     '<span class="rel-direction">→</span></div>';
             });
-            html += _sec('bi bi-arrow-left-circle', 'Incoming (' + incomingRels.length + ')', inBody, false);
+            html += _sec('bi bi-arrow-left-circle', 'Incoming (' + incomingRels.length + ')', inBody);
         }
 
         var _dNid = esc(nodeId).replace(/'/g, "\\'");
@@ -1706,24 +1982,46 @@ var SigmaGraph = (function () {
             }
         }
 
-        // Always query the triple store live (with refresh=true to bypass server cache)
+        // Fill from the ontology first: instant, no graph query. Then narrow to
+        // the types that have instances from the server's cached stats. The
+        // cache is cleared by every build, so it matches the current graph;
+        // forcing a refresh here recounted the whole store on every open.
         sel.innerHTML = '<option value="">Loading types...</option>';
+        var ontologyTypes = await _ontologyEntityTypes();
+        if (ontologyTypes.length > 0) _renderStatsDropdown(sel, ontologyTypes);
         try {
-            var resp = await fetch('/dtwin/sync/stats?refresh=true', { credentials: 'same-origin' });
+            var resp = await fetch('/dtwin/sync/stats', { credentials: 'same-origin' });
             var stats = await resp.json();
-            if (stats.success && stats.entity_types) {
+            if (stats.success && stats.entity_types && stats.entity_types.length > 0) {
                 _cachedStats = stats.entity_types;
                 _renderStatsDropdown(sel, _cachedStats);
-            } else {
+            } else if (ontologyTypes.length === 0) {
                 sel.innerHTML = '<option value="">All</option>';
             }
         } catch (err) {
             console.warn('[SigmaGraph] Failed to load stats for entity types:', err);
-            sel.innerHTML = '<option value="">All</option>';
+            if (ontologyTypes.length === 0) sel.innerHTML = '<option value="">All</option>';
+        }
+    }
+
+    async function _ontologyEntityTypes() {
+        try {
+            var resp = await fetch('/ontology/get-loaded-ontology', { credentials: 'same-origin' });
+            if (!resp.ok) return [];
+            var data = await resp.json();
+            var classes = (data.ontology && data.ontology.classes) || [];
+            return classes
+                .filter(function (c) { return c && c.uri; })
+                .map(function (c) { return { uri: c.uri }; })
+                .sort(function (a, b) { return a.uri.localeCompare(b.uri); });
+        } catch (err) {
+            return [];
         }
     }
 
     function _renderStatsDropdown(sel, entityTypes) {
+        // Re-rendered when the stats arrive: keep what the user already picked.
+        var previous = sel.value;
         var html = '<option value="">All</option>';
         entityTypes.forEach(function (et) {
             var uri = et.uri || '';
@@ -1732,6 +2030,9 @@ var SigmaGraph = (function () {
             html += '<option value="' + _esc(uri) + '">' + _iconForType(uri) + ' ' + _esc(shortName) + '</option>';
         });
         sel.innerHTML = html;
+        if (previous && Array.prototype.some.call(sel.options, function (o) { return o.value === previous; })) {
+            sel.value = previous;
+        }
     }
 
     // -- Seed preview modal state ---------------------------------------
@@ -1895,17 +2196,20 @@ var SigmaGraph = (function () {
     // -- Phase 1: preview search ----------------------------------------
     async function _executeGraphSearch() {
         var entityType = (document.getElementById('sgFilterEntityType')?.value || '').trim();
-        var matchType = document.getElementById('sgFilterMatchType')?.value || 'contains';
+        var matchType = document.getElementById('sgFilterMatchType')?.value || 'starts';
         var searchValue = (document.getElementById('sgFilterValue')?.value || '').trim();
 
         if (!searchValue && !entityType) return;
 
-        var info = document.getElementById('sgGraphFilterInfo');
-        var text = document.getElementById('sgGraphFilterInfoText');
-        if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
+        // Start at Search; the seed-selection modal lifecycle pauses this timer.
+        _resetSearchTiming();
+        _searchTimerStart();
+        _showGraphLoading('Searching…');
+        _clearPathHighlight(false);
 
         var includeInferredPreview = document.getElementById('sgShowInferred')?.checked !== false;
         try {
+            var previewStartedAt = performance.now();
             var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1920,16 +2224,20 @@ var SigmaGraph = (function () {
                 credentials: 'same-origin'
             }, 45000, 'Search request timed out');
             var data = await _parseJsonResponse(resp, 'Search request failed');
+            _searchTiming.previewMs = performance.now() - previewStartedAt;
 
             if (!data.success) {
-                if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'Search failed.'; }
+                _hideGraphLoading();
+                if (typeof showNotification === 'function') {
+                    showNotification(data.message || 'Search failed.', 'error');
+                }
                 return;
             }
 
             var seeds = data.seeds || [];
             if (seeds.length === 0) {
                 var noResultMsg = data.message || 'No entities found matching the filter criteria.';
-                if (info && text) { info.classList.remove('d-none'); text.textContent = noResultMsg; }
+                _hideGraphLoading();
                 if (typeof showInfoDialog === 'function') {
                     showInfoDialog({ title: 'No results', message: noResultMsg, icon: 'search' });
                 }
@@ -1938,12 +2246,15 @@ var SigmaGraph = (function () {
 
             // Single result: skip the selection modal and render directly
             if (seeds.length === 1) {
-                if (info && text) { info.classList.remove('d-none'); text.textContent = '1 entity found — loading graph...'; }
+                _setGraphLoadingStep('1 entity found — expanding…');
                 try {
                     await _expandAndRenderGraph([seeds[0].uri]);
                 } catch (err) {
                     console.error('[SigmaGraph] single-seed expand error:', err);
-                    if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
+                    _hideGraphLoading();
+                    if (typeof showNotification === 'function') {
+                        showNotification('Graph expansion failed: ' + err.message, 'error');
+                    }
                 }
                 return;
             }
@@ -1972,19 +2283,19 @@ var SigmaGraph = (function () {
             _renderSeedTable();
 
             var modalEl = document.getElementById('sgSeedPreviewModal');
+            _hideGraphLoading();
             if (modalEl) {
                 var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                _searchTimerPause();
                 modal.show();
-            }
-
-            if (info && text) {
-                info.classList.remove('d-none');
-                text.textContent = seeds.length + ' entities found' + (data.capped ? ' (showing first 500 of ' + data.total + ')' : '') + '. Select entities to explore.';
             }
 
         } catch (err) {
             console.error('[SigmaGraph] _executeGraphSearch error:', err);
-            if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
+            _hideGraphLoading();
+            if (typeof showNotification === 'function') {
+                showNotification('Search failed: ' + err.message, 'error');
+            }
         }
     }
 
@@ -1996,15 +2307,11 @@ var SigmaGraph = (function () {
         var maxEntities = parseInt(document.getElementById('sgMaxEntities')?.value || '5000');
         var highlightTerm = opts.highlightTerm || (document.getElementById('sgFilterValue')?.value || '').trim();
 
-        var info = document.getElementById('sgGraphFilterInfo');
-        var text = document.getElementById('sgGraphFilterInfoText');
-        if (info && text) { info.classList.remove('d-none'); text.textContent = 'Expanding ' + uris.length + ' entities...'; }
-
-        var loading = document.getElementById('sgLoading');
-        if (loading) loading.style.display = 'flex';
+        _showGraphLoading('Expanding ' + uris.length + ' entities…');
         _hideEmptyState();
 
         var includeInferred = document.getElementById('sgShowInferred')?.checked !== false;
+        var expansionStartedAt = performance.now();
         var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2019,25 +2326,33 @@ var SigmaGraph = (function () {
             credentials: 'same-origin'
         }, 90000, 'Graph expansion timed out');
         var data = await _parseJsonResponse(resp, 'Graph expansion failed');
+        _searchTiming.expansionMs = performance.now() - expansionStartedAt;
 
         if (!data.success) {
-            _hideLoading();
-            if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'Expansion failed.'; }
+            _hideGraphLoading();
+            if (typeof showNotification === 'function') {
+                showNotification(data.message || 'Expansion failed.', 'error');
+            }
             return null;
         }
 
         if (!data.results || data.results.length === 0) {
-            _hideLoading();
-            if (info && text) { info.classList.remove('d-none'); text.textContent = 'No triples found for the selected entities.'; }
+            _hideGraphLoading();
+            if (typeof showNotification === 'function') {
+                showNotification('No triples found for the selected entities.', 'info');
+            }
             return null;
         }
 
+        var displayStartedAt = performance.now();
         lastQueryResults = { results: data.results, columns: data.columns };
 
         var libsOk = await _waitForGraphLibs(10000);
         if (!libsOk) {
-            _hideLoading();
-            if (info && text) { info.classList.remove('d-none'); text.textContent = 'Graph libraries failed to load. Check your network and reload.'; }
+            _hideGraphLoading();
+            if (typeof showNotification === 'function') {
+                showNotification('Graph libraries failed to load. Check your network and reload.', 'error');
+            }
             return null;
         }
 
@@ -2051,26 +2366,19 @@ var SigmaGraph = (function () {
         _selectedNode = null;
         _hoveredNode = null;
         if (highlightTerm) _pendingHighlightTerm = highlightTerm;
+        _setGraphLoadingStep('Rendering graph…');
+        await _waitForGraphLoadingPaint();
         _render();
+
+        if (_searchTimerPending) {
+            _searchTiming.displayMs = performance.now() - displayStartedAt;
+            _searchTiming.totalMs = _searchTimerStop();
+            _searchTimerPending = false;
+            _showSearchTiming(_searchTiming);
+        }
 
         setTimeout(function () { _applyPendingHighlight(); }, 200);
 
-        var initialCount = data.initial_count || 0;
-        var expandedCount = data.expanded_count || 0;
-        var relatedCount = expandedCount - initialCount;
-        if (info && text) {
-            info.classList.remove('d-none');
-            var msg;
-            if (relatedCount > 0) {
-                msg = expandedCount + ' entities (' + initialCount + ' selected, ' + relatedCount + ' related at ' + maxDepth + ' level' + (maxDepth > 1 ? 's' : '') + ').';
-            } else {
-                msg = initialCount + ' entities (' + (data.count || 0) + ' triples).';
-            }
-            if (data.capped) {
-                msg += ' Results capped at ' + maxEntities.toLocaleString() + ' entities.';
-            }
-            text.textContent = msg;
-        }
         var clearBtn = document.getElementById('sgClearGraphFilterBtn');
         if (clearBtn) {
             clearBtn.classList.remove('d-none');
@@ -2080,25 +2388,37 @@ var SigmaGraph = (function () {
         return data;
     }
 
+    function _hideSeedPreviewModal() {
+        var modalEl = document.getElementById('sgSeedPreviewModal');
+        if (!modalEl) return Promise.resolve();
+
+        var modal = bootstrap.Modal.getInstance(modalEl);
+        if (!modal || !modalEl.classList.contains('show')) {
+            return Promise.resolve();
+        }
+
+        return new Promise(function (resolve) {
+            modalEl.addEventListener('hidden.bs.modal', resolve, { once: true });
+            modal.hide();
+        });
+    }
+
     // -- Phase 2: expand selected seeds ---------------------------------
     async function _expandSelectedSeeds() {
         var selectedUris = _getSelectedSeedUris();
         if (selectedUris.length === 0) return;
 
-        var modalEl = document.getElementById('sgSeedPreviewModal');
-        if (modalEl) {
-            var modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) modal.hide();
-        }
+        await _hideSeedPreviewModal();
+        _searchTimerResume();
 
         try {
             await _expandAndRenderGraph(selectedUris);
         } catch (err) {
             console.error('[SigmaGraph] _expandSelectedSeeds error:', err);
-            _hideLoading();
-            var info = document.getElementById('sgGraphFilterInfo');
-            var text = document.getElementById('sgGraphFilterInfoText');
-            if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
+            _hideGraphLoading();
+            if (typeof showNotification === 'function') {
+                showNotification('Graph expansion failed: ' + err.message, 'error');
+            }
         }
     }
 
@@ -2106,6 +2426,8 @@ var SigmaGraph = (function () {
         _graphFilterActive = false;
         _searchMatched = null;
         _searchNeighbors = null;
+        _pathHighlightNodes = null;
+        _pathHighlightEdges = null;
         _highlightedSeeds = null;
         _pendingHighlightTerm = null;
         _selectedNode = null;
@@ -2119,8 +2441,6 @@ var SigmaGraph = (function () {
         d3NodesData = [];
         d3LinksData = [];
 
-        var info = document.getElementById('sgGraphFilterInfo');
-        if (info) info.classList.add('d-none');
         var clearBtn = document.getElementById('sgClearGraphFilterBtn');
         if (clearBtn) {
             clearBtn.classList.add('d-none');
@@ -2179,9 +2499,11 @@ var SigmaGraph = (function () {
         var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
         var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
         var actions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
+        var businessRules = (classInfo && classInfo.businessRules) || [];
         var virtualAttributes = (entityMapping && entityMapping.virtualAttributes) || (classInfo && classInfo.virtualAttributes) || [];
+        var shaclShapeCount = (classInfo && classInfo.shaclShapeCount) || 0;
 
-        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, virtualAttributes: virtualAttributes, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, businessRules: businessRules, virtualAttributes: virtualAttributes, shaclShapeCount: shaclShapeCount, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
     }
 
     function _showNodeContextMenu(nodeId, mouseEvent) {
@@ -2195,8 +2517,13 @@ var SigmaGraph = (function () {
         var nodeAttrs = _graph ? _graph.getNodeAttributes(nodeId) : null;
         var isVirtualNode = !!(nodeAttrs && (nodeAttrs._isGroup || nodeAttrs._isClusterNode));
         if (!isVirtualNode) {
+            items += '<div class="ctx-item" data-sg-node-action="find-path-from" data-uri="' + esc(nodeId) + '">' +
+                '<i class="bi bi-signpost-split"></i> Find path (From)</div>';
+            items += '<div class="ctx-item" data-sg-node-action="find-path-to" data-uri="' + esc(nodeId) + '">' +
+                '<i class="bi bi-signpost-2"></i> Find path (To)</div>';
             var menuDepth = 1;
             var hopLabel = menuDepth + ' hop' + (menuDepth > 1 ? 's' : '');
+            items += '<div class="ctx-divider"></div>';
             items += '<div class="ctx-header">Graph</div>';
             items += '<div class="ctx-item" data-sg-node-action="expandHop" ' +
                 'data-uri="' + esc(nodeId) + '" data-depth="' + menuDepth + '">' +
@@ -2237,20 +2564,35 @@ var SigmaGraph = (function () {
         if (ctxActions.length > 0 && meta.entity && meta.entity.id) {
             var actionItems = '';
             ctxActions.forEach(function (action) {
+                var isJob = typeof _entityActionIsJob === 'function' && _entityActionIsJob(action);
                 var actFullName = action.fullName
-                    || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
+                    || (isJob ? ('job:' + action.job_id) : [action.catalog, action.schema, action.function].filter(Boolean).join('.'));
                 if (!actFullName) return;
-                var actLabel = action.function || actFullName;
+                var actLabel = action.job_name || action.function || actFullName;
                 var actDesc = action.description || '';
+                var icon = isJob ? 'bi bi-play-circle' : 'bi bi-lightning-charge';
                 actionItems += '<div class="ctx-item" data-sg-node-action="action-invoke" data-uri="' + esc(meta.entity.id) +
                     '" data-action="' + esc(actFullName) + '" data-label="' + esc(actLabel) +
                     '" data-description="' + esc(actDesc) + '">' +
-                    '<i class="bi bi-lightning-charge"></i> ' + esc(actLabel) + '</div>';
+                    '<i class="' + icon + '"></i> ' + esc(actLabel) + '</div>';
             });
             if (actionItems) {
                 if (items) items += '<div class="ctx-divider"></div>';
                 items += '<div class="ctx-header">Actions</div>' + actionItems;
             }
+        }
+
+        var ctxRules = meta.businessRules || [];
+        if (ctxRules.length > 0 && meta.entity && meta.entity.id
+            && (typeof canRunBusinessRules !== 'function' || canRunBusinessRules())) {
+            if (items) items += '<div class="ctx-divider"></div>';
+            items += '<div class="ctx-header">Inference rules</div>';
+            ctxRules.forEach(function (rule) {
+                if (!rule || !rule.name) return;
+                items += '<div class="ctx-item" data-sg-node-action="business-rule" data-uri="' + esc(meta.entity.id) +
+                    '" data-rule="' + esc(rule.name) + '">' +
+                    '<i class="bi bi-diagram-3"></i> ' + esc(rule.name) + '</div>';
+            });
         }
 
         // Shortcut to the detail panel's "Compute all": right-click does not
@@ -2262,6 +2604,13 @@ var SigmaGraph = (function () {
             items += '<div class="ctx-header">Virtual attributes</div>';
             items += '<div class="ctx-item" data-sg-node-action="virtual-attributes" data-uri="' + esc(meta.entity.id) + '">' +
                 '<i class="bi bi-magic"></i> Compute virtual attributes (' + vaCount + ')</div>';
+        }
+
+        if (meta.shaclShapeCount > 0 && meta.entity && meta.entity.id) {
+            if (items) items += '<div class="ctx-divider"></div>';
+            items += '<div class="ctx-header">Data quality</div>';
+            items += '<div class="ctx-item" data-sg-node-action="shacl-facets" data-uri="' + esc(meta.entity.id) + '">' +
+                '<i class="bi bi-shield-check"></i> Data Quality Checks (' + meta.shaclShapeCount + ')</div>';
         }
 
         if (meta.bridges.length > 0) {
@@ -2285,12 +2634,38 @@ var SigmaGraph = (function () {
 
         nodeMenu.innerHTML = items;
         if (mouseEvent) {
-            nodeMenu.style.left = mouseEvent.clientX + 'px';
-            nodeMenu.style.top = mouseEvent.clientY + 'px';
             _lastNodeMenuX = mouseEvent.clientX;
             _lastNodeMenuY = mouseEvent.clientY;
+            _placeContextMenu(nodeMenu, mouseEvent.clientX, mouseEvent.clientY);
+        } else {
+            nodeMenu.style.display = 'block';
         }
-        nodeMenu.style.display = 'block';
+    }
+
+    var MENU_MARGIN = 8;
+
+    /**
+     * Show *menu* at the click point, flipped up / left when it would cross
+     * the bottom / right edge and clamped inside the viewport. A menu taller
+     * than the viewport is capped and scrolls, so every item stays reachable.
+     */
+    function _placeContextMenu(menu, x, y) {
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        menu.style.visibility = 'hidden';
+        menu.style.display = 'block';
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+        menu.style.maxHeight = (vh - 2 * MENU_MARGIN) + 'px';
+        var w = menu.offsetWidth;
+        var h = Math.min(menu.offsetHeight, vh - 2 * MENU_MARGIN);
+        var left = (x + w + MENU_MARGIN > vw) ? x - w : x;
+        var top = (y + h + MENU_MARGIN > vh) ? y - h : y;
+        left = Math.max(MENU_MARGIN, Math.min(left, vw - w - MENU_MARGIN));
+        top = Math.max(MENU_MARGIN, Math.min(top, vh - h - MENU_MARGIN));
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        menu.style.visibility = '';
     }
 
     function _showExpandInfoBubble(message) {
@@ -2332,10 +2707,10 @@ var SigmaGraph = (function () {
         var menu = document.getElementById('sgContextMenu');
         if (!menu) return;
         if (mouseEvent) {
-            menu.style.left = mouseEvent.clientX + 'px';
-            menu.style.top = mouseEvent.clientY + 'px';
+            _placeContextMenu(menu, mouseEvent.clientX, mouseEvent.clientY);
+        } else {
+            menu.style.display = 'block';
         }
-        menu.style.display = 'block';
     }
 
     function _hideContextMenu() {
@@ -2375,6 +2750,67 @@ var SigmaGraph = (function () {
         if (popup) popup.classList.add('d-none');
     }
 
+    function _clearPathHighlight(refreshCamera) {
+        var hadPath = _pathHighlightNodes !== null;
+        _pathHighlightNodes = null;
+        _pathHighlightEdges = null;
+        if (hadPath && _renderer) {
+            if (refreshCamera) _renderer.getCamera().animatedReset({ duration: 300 });
+            _renderer.refresh();
+        }
+    }
+
+    function _applyHighlightQuery(query) {
+        if (!_graph) return;
+        var typeFilter = '';
+
+        _clearPathHighlight(false);
+
+        if (!query) {
+            SigmaGraph.clearSearch();
+            return;
+        }
+
+        _searchMatched = new Set();
+        _searchNeighbors = new Set();
+        _graph.forEachNode(function (node, attrs) {
+            var matchType = !typeFilter || attrs.entityType === typeFilter;
+            var rawLabel = (attrs._data && attrs._data.label) ? attrs._data.label : (attrs.label || '');
+            var matchQuery = !query || rawLabel.toLowerCase().includes(query);
+            if (matchType && matchQuery) _searchMatched.add(node);
+        });
+
+        _searchMatched.forEach(function (node) {
+            _graph.forEachNeighbor(node, function (neighbor) {
+                if (!_searchMatched.has(neighbor)) _searchNeighbors.add(neighbor);
+            });
+        });
+
+        var info = document.getElementById('sgSearchInfo');
+        var infoText = document.getElementById('sgSearchInfoText');
+        if (info && infoText) {
+            info.classList.remove('d-none');
+            infoText.textContent = 'Found ' + _searchMatched.size + ' entit' + (_searchMatched.size === 1 ? 'y' : 'ies');
+        }
+        var clearBtn = document.getElementById('sgClearSearchBtn');
+        if (clearBtn) {
+            clearBtn.classList.remove('d-none');
+            clearBtn.classList.add('d-inline-block');
+        }
+
+        _selectedNode = null;
+        _hoveredNode = null;
+
+        _closeFindPopup();
+
+        if (_renderer) {
+            _renderer.refresh();
+            var allVisible = new Set(_searchMatched);
+            if (_searchNeighbors) _searchNeighbors.forEach(function (n) { allVisible.add(n); });
+            _focusCameraOnNodes(allVisible);
+        }
+    }
+
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
@@ -2393,13 +2829,18 @@ var SigmaGraph = (function () {
             _graph = null;
             if (focusUri) {
                 _hideEmptyState();
-                var loading = document.getElementById('sgLoading');
-                if (loading) loading.style.display = 'flex';
+                _showGraphLoading('Loading graph data…');
             } else {
                 _showEmptyState();
             }
         } else {
-            _render();
+            _showGraphLoading('Loading graph data…');
+            _waitForGraphLoadingPaint()
+                .then(function () {
+                    _setGraphLoadingStep('Rendering graph…');
+                    return _waitForGraphLoadingPaint();
+                })
+                .then(function () { _render(); });
         }
         _initialized = true;
 
@@ -2418,7 +2859,7 @@ var SigmaGraph = (function () {
 
     function _showEmptyState() {
         if (_pendingFocusLoad) return;
-        _hideLoading();
+        _hideGraphLoading();
         var container = document.getElementById('sgContainer');
         if (container) {
             var placeholder = document.getElementById('sgEmptyState');
@@ -2430,7 +2871,7 @@ var SigmaGraph = (function () {
                     '<div class="text-muted">' +
                     '<i class="bi bi-share" style="font-size:2.5rem;"></i>' +
                     '<p class="mt-2 mb-1 fw-semibold">Graph Viewer</p>' +
-                    '<p class="small">Use the filter panel to search and explore entities.</p>' +
+                    '<p class="small">Use the Search tab to search and explore entities.</p>' +
                     '</div>';
                 container.appendChild(placeholder);
             }
@@ -2471,23 +2912,102 @@ var SigmaGraph = (function () {
 
     return {
         init: init,
-        reload: function () { if (_hasData()) { _render(); } else { _showEmptyState(); } },
+        // Explicit bridge used by the SPARQL playground's "Show in
+        // Explorer" action. Only triple-shaped rows reach this call — the
+        // caller is responsible for that check and for switching to the
+        // sigmagraph section before invoking it. No implicit navigation
+        // happens here, and this function is self-sufficient: it kicks off
+        // `_loadGraphLibs()` itself and does not rely on `SigmaGraph.init()`
+        // having been scheduled elsewhere.
+        //
+        // Race note: `query.js` wires a `sidebarSectionChanged` listener
+        // that schedules `SigmaGraph.init()` ~100ms after the section
+        // becomes active (see `initQueryPlayground`'s `onSectionChange`).
+        // Because the caller switches to the sigmagraph section and then
+        // calls this function with no artificial delay, that scheduled
+        // `init()` can run concurrently with the awaits below. `init()`
+        // only wipes `d3NodesData`/`d3LinksData`/`_graph` when
+        // `_graphFilterActive` is falsy, so we flip that flag (and cache
+        // the rows into `lastQueryResults`) synchronously, before the first
+        // `await`, so a concurrent `init()` always takes its "already
+        // active" branch and never clears the rows we are about to render.
+        // On failure we restore the prior flag/cache so a genuine load
+        // failure cannot mask an existing, already-rendered graph as
+        // "active" when nothing new was actually built.
+        loadQueryResults: async function (results, columns) {
+            if (!Array.isArray(results) || results.length === 0) return false;
+
+            var priorFilterActive = _graphFilterActive;
+            var priorQueryResults = lastQueryResults;
+
+            _graphFilterActive = true;
+            lastQueryResults = {
+                results: results.slice(),
+                columns: (columns || []).slice(),
+            };
+            _searchMatched = null;
+            _searchNeighbors = null;
+            _selectedNode = null;
+            _hoveredNode = null;
+
+            _hideEmptyState();
+            _showGraphLoading('Loading SPARQL results…');
+            _loadGraphLibs();
+            await _waitForGraphLoadingPaint();
+
+            var librariesReady = await _waitForGraphLibs(10000);
+            if (!librariesReady || typeof buildGraph !== 'function') {
+                console.error('[SigmaGraph] loadQueryResults: graph libraries unavailable');
+                _hideGraphLoading();
+                _graphFilterActive = priorFilterActive;
+                lastQueryResults = priorQueryResults;
+                return false;
+            }
+
+            await buildGraph(lastQueryResults.results, lastQueryResults.columns);
+            _setGraphLoadingStep('Rendering graph…');
+            await _waitForGraphLoadingPaint();
+            _render();
+            return true;
+        },
+        reload: async function () {
+            _clearPathHighlight(false);
+            if (_hasData()) {
+                _showGraphLoading('Loading graph data…');
+                await _waitForGraphLoadingPaint();
+                _setGraphLoadingStep('Rendering graph…');
+                await _waitForGraphLoadingPaint();
+                _render();
+            } else {
+                _showEmptyState();
+            }
+        },
         refresh: function (isGroupToggle) { _render(undefined, isGroupToggle); },
         refreshCurrentExpansion: async function () {
             if (!_graphFilterActive || !_lastExpandedSeedUris || !_lastExpandedSeedUris.length) return false;
-            try { await _expandAndRenderGraph(_lastExpandedSeedUris); return true; } catch (_) { return false; }
+            try {
+                await _expandAndRenderGraph(_lastExpandedSeedUris);
+                return true;
+            } catch (error) {
+                _hideGraphLoading();
+                if (typeof showNotification === 'function') {
+                    showNotification('Graph refresh failed: ' + error.message, 'error');
+                }
+                return false;
+            }
         },
 
         selectEntity: function (entityId) {
             if (!_graph || !_graph.hasNode(entityId)) return;
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = entityId;
             _hoveredNode = null;
             _showNodeDetails(entityId);
             if (_renderer) {
                 _renderer.refresh();
-                _focusCameraOnNodes(new Set([entityId]));
+                _focusCameraOnNodes(_nodeSetWithNeighbors(new Set([entityId])));
             }
         },
 
@@ -2524,10 +3044,7 @@ var SigmaGraph = (function () {
             if (filterInput) filterInput.value = localName;
             var matchSel = document.getElementById('sgFilterMatchType');
             if (matchSel) matchSel.value = 'contains';
-
-            var info = document.getElementById('sgGraphFilterInfo');
-            var text = document.getElementById('sgGraphFilterInfoText');
-            if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
+            _showGraphLoading('Searching…');
 
             try {
                 var previewResp = await _fetchWithTimeout('/dtwin/sync/filter', {
@@ -2546,7 +3063,7 @@ var SigmaGraph = (function () {
                 var previewData = await _parseJsonResponse(previewResp, 'Search request failed');
 
                 if (!previewData.success || !(previewData.seeds || []).length) {
-                    if (info && text) { info.classList.remove('d-none'); text.textContent = previewData.message || 'No entities found.'; }
+                    _hideGraphLoading();
                     return false;
                 }
 
@@ -2576,8 +3093,10 @@ var SigmaGraph = (function () {
                 return true;
             } catch (err) {
                 console.error('[SigmaGraph] focusEntityByUri error:', err);
-                _hideLoading();
-                if (info && text) { info.classList.remove('d-none'); text.textContent = 'Error: ' + err.message; }
+                _hideGraphLoading();
+                if (typeof showNotification === 'function') {
+                    showNotification('Entity focus failed: ' + err.message, 'error');
+                }
                 return false;
             }
         },
@@ -2609,6 +3128,87 @@ var SigmaGraph = (function () {
         openFindPopup: function () { _openFindPopup(); },
         closeFindPopup: function () { _closeFindPopup(); },
 
+        openFindPathModal: function () {
+            if (typeof ExplorerFindPath !== 'undefined') ExplorerFindPath.open();
+        },
+        applyFindPath: function () {
+            if (typeof ExplorerFindPath !== 'undefined') ExplorerFindPath.apply();
+        },
+        getGraph: function () { return _graph; },
+        getSelectedNodeId: function () { return _selectedNode; },
+        getFilterAnchorNodeId: function (excludeId) {
+            if (!_graph) return null;
+            var resolve = (typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.resolveDisplayedNodeId)
+                ? ExplorerFindPath.resolveDisplayedNodeId
+                : function (graph, id) { return graph.hasNode(id) ? id : null; };
+            function usable(id) {
+                if (!id || id === excludeId) return null;
+                var displayed = resolve(_graph, id);
+                if (!displayed || displayed === excludeId) return null;
+                return displayed;
+            }
+            if (_lastExpandedSeedUris && _lastExpandedSeedUris.length) {
+                if (_lastExpandedSeedUris.length === 1) {
+                    var onlySeed = usable(_lastExpandedSeedUris[0]);
+                    if (onlySeed) return onlySeed;
+                }
+                for (var i = 0; i < _lastExpandedSeedUris.length; i++) {
+                    var mappedSeed = usable(_lastExpandedSeedUris[i]);
+                    if (mappedSeed) return mappedSeed;
+                }
+            }
+            if (_highlightedSeeds && _highlightedSeeds.size === 1) {
+                var only = null;
+                _highlightedSeeds.forEach(function (id) { only = id; });
+                var mappedHighlight = usable(only);
+                if (mappedHighlight) return mappedHighlight;
+            }
+            var term = (document.getElementById('sgFilterValue')?.value || '').trim();
+            if (term && typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.searchLoadedNodes) {
+                var hits = ExplorerFindPath.searchLoadedNodes(_graph, term, 20).filter(function (hit) {
+                    return usable(hit.id);
+                });
+                var needle = term.toLowerCase();
+                var exact = hits.filter(function (hit) {
+                    return (hit.label || '').toLowerCase() === needle;
+                });
+                if (exact.length === 1) return usable(exact[0].id);
+                if (hits.length === 1) return usable(hits[0].id);
+                if (hits.length > 0) return usable(hits[0].id);
+            }
+            return null;
+        },
+        applyPathHighlight: function (result) {
+            if (!result || !result.nodes || !result.nodes.length) return;
+            _searchMatched = null;
+            _searchNeighbors = null;
+            _pathHighlightNodes = new Set(result.nodes);
+            _pathHighlightEdges = new Set();
+            var keyFn = (typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.undirectedEdgeKey)
+                ? ExplorerFindPath.undirectedEdgeKey
+                : function (a, b) { return a < b ? a + '\0' + b : b + '\0' + a; };
+            (result.edges || []).forEach(function (edge) {
+                if (!edge || !edge.source || !edge.target) return;
+                _pathHighlightEdges.add(keyFn(edge.source, edge.target));
+            });
+            _selectedNode = null;
+            _hoveredNode = null;
+            if (_renderer) {
+                _renderer.refresh();
+                _focusCameraOnNodes(_pathHighlightNodes);
+            }
+            if (typeof showNotification === 'function') {
+                var hops = result.hopCount || 0;
+                var paths = result.pathCount || 1;
+                showNotification(
+                    'Highlighted ' + paths + ' shortest path' + (paths === 1 ? '' : 's') +
+                    ' (' + hops + ' hop' + (hops === 1 ? '' : 's') + ').',
+                    'success'
+                );
+            }
+        },
+        clearFindPath: function () { _clearPathHighlight(true); },
+
         toggleType: function (type) {
             if (_visibleTypes.has(type)) _visibleTypes.delete(type);
             else _visibleTypes.add(type);
@@ -2639,61 +3239,17 @@ var SigmaGraph = (function () {
         },
 
         applySearch: function () {
-            if (!_graph) return;
-            var typeFilter = '';
-            var query = (document.getElementById('sgSearchValue')?.value || '').toLowerCase().trim();
+            _applyHighlightQuery((document.getElementById('sgSearchValue')?.value || '').toLowerCase().trim());
+        },
 
-            if (!query) {
-                SigmaGraph.clearSearch();
-                return;
-            }
-
-            // Find directly matched nodes
-            _searchMatched = new Set();
-            _searchNeighbors = new Set();
-            _graph.forEachNode(function (node, attrs) {
-                var matchType = !typeFilter || attrs.entityType === typeFilter;
-                var rawLabel = (attrs._data && attrs._data.label) ? attrs._data.label : (attrs.label || '');
-                var matchQuery = !query || rawLabel.toLowerCase().includes(query);
-                if (matchType && matchQuery) _searchMatched.add(node);
-            });
-
-            // Expand to neighbors of matched nodes
-            _searchMatched.forEach(function (node) {
-                _graph.forEachNeighbor(node, function (neighbor) {
-                    if (!_searchMatched.has(neighbor)) _searchNeighbors.add(neighbor);
-                });
-            });
-
-            var info = document.getElementById('sgSearchInfo');
-            var infoText = document.getElementById('sgSearchInfoText');
-            if (info && infoText) {
-                info.classList.remove('d-none');
-                infoText.textContent = 'Found ' + _searchMatched.size + ' entit' + (_searchMatched.size === 1 ? 'y' : 'ies');
-            }
-            var clearBtn = document.getElementById('sgClearSearchBtn');
-            if (clearBtn) {
-                clearBtn.classList.remove('d-none');
-                clearBtn.classList.add('d-inline-block');
-            }
-
-            // Clear click/hover selection so search focus takes over
-            _selectedNode = null;
-            _hoveredNode = null;
-
-            _closeFindPopup();
-
-            if (_renderer) {
-                _renderer.refresh();
-                var allVisible = new Set(_searchMatched);
-                if (_searchNeighbors) _searchNeighbors.forEach(function (n) { allVisible.add(n); });
-                _focusCameraOnNodes(allVisible);
-            }
+        highlightFilterValue: function () {
+            _applyHighlightQuery((document.getElementById('sgFilterValue')?.value || '').toLowerCase().trim());
         },
 
         clearSearch: function () {
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = null;
             _hoveredNode = null;
             var info = document.getElementById('sgSearchInfo');
@@ -2765,12 +3321,19 @@ var SigmaGraph = (function () {
         toggleInferred: async function () {
             // Re-fetch from the appropriate table (union view or _sync only) so
             // the graph reflects the real data state rather than client-side hiding.
-            if (_graphFilterActive && _lastExpandedSeedUris && _lastExpandedSeedUris.length) {
-                await _expandAndRenderGraph(_lastExpandedSeedUris);
-            } else if (_hasData()) {
-                if (typeof loadTripleStore === 'function') {
+            _showGraphLoading('Loading graph data…');
+            try {
+                if (_graphFilterActive && _lastExpandedSeedUris && _lastExpandedSeedUris.length) {
+                    await _expandAndRenderGraph(_lastExpandedSeedUris);
+                } else if (_hasData() && typeof loadTripleStore === 'function') {
                     await loadTripleStore({ silent: true, navigate: false });
                 }
+            } catch (error) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Graph refresh failed: ' + error.message, 'error');
+                }
+            } finally {
+                _hideGraphLoading();
             }
         },
 
@@ -2797,39 +3360,20 @@ var SigmaGraph = (function () {
             var url = '/dtwin/neighbors?uri=' + encodeURIComponent(seedUri) +
                 '&depth=' + encodeURIComponent(depth) + '&limit=2000' +
                 '&include_inferred=' + includeInferredHop;
-            var info = document.getElementById('sgGraphFilterInfo');
-            var text = document.getElementById('sgGraphFilterInfoText');
-            if (info && text) {
-                info.classList.remove('d-none');
-                text.textContent = 'Expanding neighbours (' + depth + ' hop)...';
-            }
-
-            var spinner = document.getElementById('sgExpandSpinner');
-            var spinnerLabel = document.getElementById('sgExpandSpinnerLabel');
-            if (spinner) {
-                if (spinnerLabel) spinnerLabel.textContent = 'Expanding ' + depth + '-hop neighbours…';
-                spinner.classList.remove('d-none');
-            }
+            _showGraphLoading('Expanding neighbours (' + depth + ' hop)…');
+            await _waitForGraphLoadingPaint();
             try {
                 var resp = await fetch(url, { credentials: 'same-origin' });
                 var data = await resp.json();
                 if (!resp.ok || !data.success) {
                     var msg = (data && (data.message || data.detail)) || 'Neighbour expansion failed.';
-                    if (info && text) {
-                        info.classList.remove('d-none');
-                        text.textContent = msg;
-                    }
-                    if (typeof showNotification === 'function') showNotification(msg, 'danger');
+                    if (typeof showNotification === 'function') showNotification(msg, 'error');
                     return;
                 }
 
                 var fetched = data.triples || [];
                 if (fetched.length === 0) {
                     var emptyMsg = 'No related entities found at ' + depth + ' hop.';
-                    if (info && text) {
-                        info.classList.remove('d-none');
-                        text.textContent = emptyMsg + ' The node may have no typed neighbours in the graph DB.';
-                    }
                     _showExpandInfoBubble(emptyMsg);
                     if (typeof showNotification === 'function') {
                         showNotification(emptyMsg, 'info');
@@ -2878,10 +3422,6 @@ var SigmaGraph = (function () {
                     var dupDetail = 'All ' + fetched.length + ' triple' +
                         (fetched.length > 1 ? 's are' : ' is') +
                         ' already loaded (depth ' + depth + ').';
-                    if (info && text) {
-                        info.classList.remove('d-none');
-                        text.textContent = dupDetail;
-                    }
                     _showExpandInfoBubble(dupMsg);
                     if (typeof showNotification === 'function') {
                         showNotification(dupDetail, 'info');
@@ -2891,6 +3431,8 @@ var SigmaGraph = (function () {
 
                 if (typeof d3NodesData !== 'undefined') d3NodesData = [];
                 if (typeof d3LinksData !== 'undefined') d3LinksData = [];
+                _setGraphLoadingStep('Rendering graph…');
+                await _waitForGraphLoadingPaint();
                 if (typeof buildGraph === 'function') {
                     await buildGraph(lastQueryResults.results, lastQueryResults.columns);
                 }
@@ -2920,21 +3462,13 @@ var SigmaGraph = (function () {
                         'success'
                     );
                 }
-                if (info && text) {
-                    info.classList.remove('d-none');
-                    text.textContent = 'Expanded: +' + newNodeIds.size + ' entities, +' + addedTriples + ' triples.';
-                }
             } catch (e) {
                 console.error('[SigmaGraph] expandHop error:', e);
-                if (info && text) {
-                    info.classList.remove('d-none');
-                    text.textContent = 'Neighbour expansion failed: ' + (e && e.message ? e.message : e);
-                }
                 if (typeof showNotification === 'function') {
-                    showNotification('Neighbour expansion failed: ' + (e && e.message ? e.message : e), 'danger');
+                    showNotification('Neighbour expansion failed: ' + (e && e.message ? e.message : e), 'error');
                 }
             } finally {
-                if (spinner) spinner.classList.add('d-none');
+                _hideGraphLoading();
             }
         },
 
@@ -3038,6 +3572,11 @@ var SigmaGraph = (function () {
             var colorCheck = document.getElementById('sgClusterColorBy');
             if (colorCheck) colorCheck.checked = false;
             if (typeof showNotification === 'function') showNotification('Clusters cleared.', 'info');
+        },
+
+        toggleQualityRings: function () {
+            _showQualityRings = document.getElementById('sgShowQualityRings')?.checked || false;
+            if (_renderer) _renderer.refresh();
         },
 
         toggleClusterColorBy: function () {
@@ -3390,7 +3929,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!node) return false;
         var sec = document.getElementById('sigmagraph-section');
         var seedModal = document.getElementById('sgSeedPreviewModal');
-        return (sec && sec.contains(node)) || (seedModal && seedModal.contains(node));
+        var pathModal = document.getElementById('sgFindPathModal');
+        return (sec && sec.contains(node))
+            || (seedModal && seedModal.contains(node))
+            || (pathModal && pathModal.contains(node));
     }
 
     var sgContainer = document.getElementById('sgContainer');
@@ -3420,6 +3962,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (m && typeof SigmaGraph !== 'undefined' && typeof SigmaGraph[m] === 'function') {
             SigmaGraph[m]();
         }
+    });
+
+    document.addEventListener('shacl-facets:updated', function () {
+        if (_renderer) _renderer.refresh();
     });
 
     document.addEventListener('input', function (e) {
@@ -3458,7 +4004,15 @@ document.addEventListener('DOMContentLoaded', function () {
             var nodeMenu = document.getElementById('sgNodeContextMenu');
             if (nodeMenu) nodeMenu.style.display = 'none';
             var action = nodeItem.getAttribute('data-sg-node-action');
-            if (action === 'expandHop') {
+            if (action === 'find-path-from' || action === 'find-path-to') {
+                var pathUri = nodeItem.getAttribute('data-uri');
+                if (typeof ExplorerFindPath !== 'undefined' && typeof ExplorerFindPath.open === 'function') {
+                    ExplorerFindPath.open({
+                        selectedId: pathUri,
+                        role: action === 'find-path-to' ? 'to' : 'from'
+                    });
+                }
+            } else if (action === 'expandHop') {
                 var seedUri = nodeItem.getAttribute('data-uri');
                 var depth = parseInt(nodeItem.getAttribute('data-depth') || '1', 10);
                 if (!depth || depth < 1) depth = 1;
@@ -3491,12 +4045,27 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else if (typeof showNotification === 'function') {
                     showNotification('Action execution is unavailable.', 'warning');
                 }
+            } else if (action === 'business-rule') {
+                var brUri = nodeItem.getAttribute('data-uri');
+                var brName = nodeItem.getAttribute('data-rule');
+                if (brUri && brName && typeof openEntityBusinessRuleModal === 'function') {
+                    openEntityBusinessRuleModal(brUri, brName);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('Business rule execution is unavailable.', 'warning');
+                }
             } else if (action === 'virtual-attributes') {
                 var vaUri = nodeItem.getAttribute('data-uri');
                 if (vaUri && typeof computeVirtualAttributesForNode === 'function') {
                     computeVirtualAttributesForNode(vaUri);
                 } else if (typeof showNotification === 'function') {
                     showNotification('Virtual attribute computation is unavailable.', 'warning');
+                }
+            } else if (action === 'shacl-facets') {
+                var shUri = nodeItem.getAttribute('data-uri');
+                if (shUri && typeof openShaclFacetsModal === 'function') {
+                    openShaclFacetsModal(shUri);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('Data quality checks are unavailable.', 'warning');
                 }
             } else if (action === 'bridge') {
                 var url = nodeItem.getAttribute('data-url');

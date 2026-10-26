@@ -28,14 +28,14 @@ from back.objects.registry.PermissionService import (
     ROLE_NONE,
     ROLE_VIEWER,
 )
-from back.objects.registry.ReviewService import (
+from back.objects.registry.collab.ReviewService import (
     ACTION_APPROVED,
     ACTION_PUBLISHED,
     ACTION_SUBMITTED,
     ReviewService,
 )
 
-_mod = importlib.import_module("back.objects.registry.ReviewService")
+_mod = importlib.import_module("back.objects.registry.collab.ReviewService")
 
 
 # ----------------------------------------------------------------------

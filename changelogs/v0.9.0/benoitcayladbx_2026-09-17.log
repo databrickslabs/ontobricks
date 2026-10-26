@@ -1,0 +1,704 @@
+## Prevent duplicate cache-refresh notifications
+
+Context: A slow adjacency-refresh status request could outlive the 1.5-second
+poll interval. Multiple overlapping requests then observed the same completed
+task and each displayed an "Adjacency refreshed successfully" notification.
+
+Changes:
+
+1. src/front/static/query/js/query-databricks-build.js
+   Replace the asynchronous interval with sequential polling that schedules the
+   next request only after the current request completes.
+2. tests/units/front/test_adjacency_refresh_ui.py
+   Add a regression contract that rejects overlapping interval polling and
+   requires sequential refresh polling.
+
+Modified files:
+- src/front/static/query/js/query-databricks-build.js
+- tests/units/front/test_adjacency_refresh_ui.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6184 passed, 304 skipped,
+6 deselected, 1 xfailed in 52.55s.
+
+## Isolate Delta cache rebuild jobs
+
+Context: Parallel cache-refresh work (Task 1) needs isolated adjacency and
+props rebuild helpers before concurrency can be added. Extracted the serial
+rebuild bodies into dedicated methods without changing runtime behavior.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Add `_rebuild_adjacency_table` and `_rebuild_props_table`; refactor
+   `rebuild_adjacency` to delegate to them.
+2. tests/units/graphdb/delta/test_delta_flat_store.py
+   Add focused tests for props missing-cache invalidation on success and
+   preservation when CTAS fails.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_flat_store.py → 21 passed in 0.83s.
+
+## Task 1 review fixes for isolated rebuild helpers
+
+Context: Code review requested direct adjacency-helper coverage, props-cache
+invalidation when OPTIMIZE fails, a clarifying comment before
+`forget_missing_props`, and less fragile SQL assertions.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Document that missing-props cache is cleared only after successful CTAS.
+2. tests/units/graphdb/delta/test_delta_flat_store.py
+   Add adjacency-table isolation test, OPTIMIZE-failure props-cache test, and
+   `_executed_statements` helper for SQL assertions.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_flat_store.py → 23 passed in 1.07s.
+
+## Task 3: Document, verify, and benchmark parallel cache refresh
+
+Context: Document and validate the parallel Lakehouse companion rebuild
+introduced in Task 2 (commit e5e6ced7). Run the mandatory test suite, run IDE
+diagnostics on the modified files, and measure actual wall-time improvement on
+the BIGCustomers Lakehouse domain against the prior serial baseline of 128.62
+seconds.
+
+Changes:
+
+1. docs/optimizations.md
+   Expand the companion-snapshot paragraph (§1) to state that rebuilds are
+   full snapshots (not incremental), that Lakehouse rebuilds four or five
+   companions concurrently via `ThreadPoolExecutor(max_workers=min(5, N))` where
+   N is the scheduled companion count (five when `entity_search_asserted`
+   resolves, four otherwise), that each worker uses the stateless per-request
+   SQL client so the CTAS statements run in true parallel, and that per-companion
+   and total timings are logged at INFO. Document that Lakebase runs DDL
+   outside a transaction, replaces all companion data in a single Postgres
+   transaction, and runs ANALYZE in a separate non-transactional step.
+   Add new §18 "Parallel companion rebuild — measured performance" with the
+   before/after benchmark table, per-companion timing breakdown, and smoke-check
+   confirmation.
+
+Modified files:
+- docs/optimizations.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Diagnostics: no new linter errors on DeltaFlatStore.py or
+test_delta_flat_store.py.
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6190 passed, 304 skipped,
+6 deselected, 1 xfailed in 50.92s.
+
+Benchmark (BIGCustomers Lakehouse, parallel, 2026-09-17, indicative):
+- Serial baseline: 128.62 s (recorded 2026-09-16; exact data equality not
+  confirmed — speedup is indicative, not a controlled benchmark)
+- Parallel wall time: 45.0 s, N=5 workers (entity_search_asserted resolved)
+  using ThreadPoolExecutor(max_workers=min(5, 5))
+- adj_in: 37.3 s | adj_out: 38.6 s | entity_search_asserted: 44.4 s |
+  props: 44.5 s | entity_search: 45.0 s
+- Indicative speedup: ~2.86× / ~65% wall-time reduction
+- Post-rebuild: adjacency_ready=True, search OK, expansion OK (6 entities,
+  30 triples at depth 1).
+
+## Task 3 documentation review corrections
+
+Context: Post-commit review identified four imprecisions in the Task 3 docs.
+Corrected in both docs/optimizations.md and the changelog without re-running
+the already-green Python suite.
+
+Changes:
+
+1. docs/optimizations.md §1
+   - "five companion tables" → "four or five companion tables"; explain that
+     entity_search_asserted is conditional on asserted-SPO resolution.
+   - "max_workers=5" → "ThreadPoolExecutor(max_workers=min(5, N))" with N
+     defined as the number of companions scheduled.
+   - "five CTAS statements" → "the statements"; new sentence retains the N=5
+     fact but scopes it to the specific benchmark run.
+   - Lakebase transaction description corrected: DDL runs outside a
+     transaction; only the data-rebuild phase is transactional; ANALYZE runs
+     in a separate non-transactional step.
+2. docs/optimizations.md §18
+   - Benchmark caveat added: baseline was 2026-09-16, parallel run 2026-09-17;
+     exact data equality not recorded; speedup is indicative, not controlled.
+   - Benchmark table label updated to "N=5 workers" with
+     "ThreadPoolExecutor(max_workers=min(5, 5))".
+   - "all five workers" sentence qualified with N=5 context.
+3. changelogs/v0.9.0/benoitcayladbx_2026-09-17.log (Task 3 section)
+   - Same max_workers and companion-count corrections applied.
+   - Benchmark line updated with indicative caveat and data-equality note.
+
+Modified files:
+- docs/optimizations.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Verification: rg checks confirm zero remaining instances of "max_workers=5"
+(literal), "within a single Postgres transaction", or "five companion[s]" as
+a general claim. "indicative" appears in both files.
+
+## Final-fix wave: three minor findings from parallel cache-refresh review
+
+Context: Post-implementation review of the parallel companion rebuild (Task 2)
+identified three minor findings that were addressed in a single focused fix wave.
+
+Changes:
+
+1. docs/optimizations.md
+   Corrected thread-safety attribution in §1: replaced the incorrect claim that
+   the Statement Execution API (SEA) enables parallel CTAS workers with the
+   accurate statement that the DDL/write rebuild path uses the Databricks SQL
+   connector's thread-safe connection pool (each worker borrows a separate
+   pooled connection). Added a parenthetical clarifying that SEA is used only
+   for real-time reads.
+
+2. docs/superpowers/plans/2026-09-17-cache-refresh-parallel-rebuild.md
+   Same SEA correction applied to the Architecture paragraph that previously
+   said "Statement Execution mode uses stateless HTTP requests". Replaced with
+   accurate connector/connection-pool wording.
+
+3. src/back/objects/digitaltwin/DigitalTwin.py
+   `run_adjacency_refresh_task`: progress message at pct=70 is now
+   backend-specific — Databricks says "Rebuilding graph indexes in parallel
+   for <graph>", Lakebase says "Rebuilding graph indexes sequentially for
+   <graph>". The Lakebase wording correctly reflects the single-transaction
+   sequential path.
+
+4. tests/units/api/test_dtwin_adjacency_refresh.py
+   `_TaskManager.update_progress` now records messages in
+   `progress_messages`. Added `TestAdjacencyRefreshProgressWording` with two
+   focused tests: one asserting "in parallel" appears for Databricks, one
+   asserting "sequentially" appears for Lakebase.
+
+5. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Extracted `_try_optimize(self, table_fqn, kind)` private helper that wraps
+   `materialize.optimize_table` in a best-effort try/except and logs the
+   failure with the supplied *kind* label for context. Replaced the three
+   duplicated inline OPTIMIZE try/except blocks in `_rebuild_adjacency_table`,
+   `_rebuild_props_table`, and `_rebuild_entity_search_table` with calls to
+   this helper. All best-effort semantics and per-table warning messages are
+   preserved.
+
+6. tests/units/graphdb/delta/test_delta_flat_store.py
+   Added three focused tests for the `_try_optimize` helper:
+   - `test_try_optimize_calls_optimize_table`: verifies the delegate call.
+   - `test_try_optimize_logs_kind_on_failure_and_does_not_raise`: verifies
+     the kind label appears in the warning and no exception escapes.
+   - `test_each_rebuild_helper_passes_correct_kind_to_try_optimize` (parametrized
+     over adjacency/props/entity-search): verifies each rebuild helper passes
+     the correct kind string.
+
+Modified files:
+- docs/optimizations.md
+- docs/superpowers/plans/2026-09-17-cache-refresh-parallel-rebuild.md
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/units/api/test_dtwin_adjacency_refresh.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+
+Tests:
+- Focused: uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_flat_store.py tests/units/api/test_dtwin_adjacency_refresh.py → 39 passed in 1.29s
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6197 passed, 304 skipped, 6 deselected, 1 xfailed in 54.83s
+
+## Add scheduled graph cache refresh
+
+Context: Operators can rebuild Lakehouse or Lakebase graph companion indexes
+on a recurring schedule without running a full Knowledge Graph Build.
+
+Changes:
+
+1. src/back/objects/registry/scheduler_tasks/cache_refresh.py
+   Add the headless scheduled cache-refresh executor.
+2. src/back/objects/registry/scheduler_tasks/__init__.py
+   Register Graph Cache Refresh as a scheduler task type.
+3. src/front/templates/partials/settings/_settings_schedule.html
+   Add the Cache type to the Scheduler modal.
+4. src/front/static/config/js/schedule.js
+   Add rendering and configuration metadata for cache-refresh schedules.
+5. tests/units/registry/test_scheduler_tasks.py
+   Cover registration, validation, backend selection, and rebuild execution.
+6. tests/units/front/test_settings_schedule_page.py
+   Cover Scheduler radio and descriptor wiring.
+7. tests/units/settings/test_schedule_endpoints.py
+   Cover the expanded task-type catalogue.
+8. docs/optimizations.md
+   Document scheduled companion-index refresh behavior.
+
+Modified files:
+- src/back/objects/registry/scheduler_tasks/cache_refresh.py
+- src/back/objects/registry/scheduler_tasks/__init__.py
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/static/config/js/schedule.js
+- tests/units/registry/test_scheduler_tasks.py
+- tests/units/front/test_settings_schedule_page.py
+- tests/units/settings/test_schedule_endpoints.py
+- docs/optimizations.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → === 6206 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.55s ===
+
+## Persist mapping location updates automatically
+
+Context: Updating entity and relationship mappings from Domain Data Sources
+only saved the rewritten locations to the active session. The registry version
+could therefore remain unchanged after the UI reported success.
+
+Changes:
+
+1. src/front/static/domain/js/domain-metadata.js
+   Chain the canonical registry save after a successful mapping update and keep
+   the action disabled until both writes finish.
+2. tests/units/front/test_domain_metadata_save.py
+   Add a regression contract proving the registry save follows the mapping
+   update success path.
+3. docs/user-guide.md
+   Document automatic registry persistence for Update Mappings.
+
+Modified files:
+- src/front/static/domain/js/domain-metadata.js
+- tests/units/front/test_domain_metadata_save.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- Focused: uv run --frozen pytest -q tests/units/front/test_domain_metadata_save.py → 2 passed, 1 warning in 0.13s
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6207 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.80s
+
+## Add AI Gateway model services to the LLM picker
+
+Context: Domain configuration only exposed legacy Model Serving endpoints, so
+executable Unity Catalog AI Gateway services could not be selected or invoked.
+
+Changes:
+
+1. src/shared/llm_target.py and LLM transports
+   Add the shared target-kind contract and route Unity AI Gateway requests
+   through MLflow chat completions while preserving legacy Serving behavior.
+2. src/back/core/databricks/ModelServiceCatalog.py and mapping API
+   Paginate the global model-service catalog, filter by effective EXECUTE with
+   bounded concurrent probes and rate-limit retry, and merge Gateway-first
+   results with legacy endpoints.
+3. Domain persistence and Graph Chat discovery
+   Persist `llm_endpoint_kind`, infer legacy values, and prefer system, custom
+   Gateway, then READY Serving targets during automatic discovery.
+4. Shared frontend picker
+   Replace native LLM selects with a searchable, grouped modal reused by Domain
+   Information and New Domain, including refresh, clear, safe nested-modal
+   layering, stale-response protection, footer clearance, and a stacked mobile
+   search/refresh toolbar.
+5. Tests and documentation
+   Add contract, persistence, discovery, routing, API, and frontend regression
+   coverage; update the README, user guide, design, and implementation plan.
+
+Modified files:
+- README.md
+- docs/superpowers/plans/2026-09-17-ai-gateway-llm-picker.md
+- docs/superpowers/specs/2026-09-17-ai-gateway-llm-picker-design.md
+- docs/user-guide.md
+- src/agents/engine_base.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/mapping.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/databricks/ModelServiceCatalog.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- src/front/static/global/css/llm-endpoint-picker.css
+- src/front/static/global/js/llm-endpoint-picker.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/utils.js
+- src/front/templates/base.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/layout/llm_endpoint_picker_modal.html
+- src/shared/llm_target.py
+- tests/units/agents/test_agent_engine_base.py
+- tests/units/api/test_llm_endpoints.py
+- tests/units/core/test_model_service_catalog.py
+- tests/units/core/test_sql_wizard.py
+- tests/units/domain/test_domain_service.py
+- tests/units/domain/test_domain_session.py
+- tests/units/dtwin/test_llm_auto_discovery.py
+- tests/units/front/test_llm_endpoint_picker.py
+- tests/units/shared/test_llm_target.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- Focused Gateway/picker suite: 184 passed, 2 warnings.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6238 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.20s.
+- Ruff checks: passed for all new Python modules and tests.
+- JavaScript syntax checks: passed for all changed picker/domain scripts.
+- Live API: HTTP 200 in 13.70s; 48 AI Gateway and 60 Serving targets; `benoit_cayla.ontobricks-todrop.monclaudesonnetamoi` present.
+- Browser: Domain Information and New Domain picker flows passed, including search, refresh, selection, clear, cancel, Escape, nested modal layering, full footer clearance, and an unclipped 375 px toolbar.
+
+## Gate ontology and mapping AI routes
+
+Context: Ontology and Mapping LLM entry points used serving-only or inline
+endpoint checks. They now share the domain-level LLM guard, and SQL generation
+uses the saved domain target instead of request overrides.
+
+Changes:
+
+1. src/api/routers/internal/ontology.py
+   Migrate ontology generation, icon assignment, and assistant routes to the
+   domain-level LLM guard before starting work, and force assistant invoke to
+   use the saved endpoint.
+2. src/api/routers/internal/mapping.py
+   Guard SQL and auto-assignment routes and make the saved endpoint authoritative.
+3. src/back/core/sqlwizard/SQLWizardService.py
+   Route saved endpoint kinds through the Gateway/Serving request builder.
+4. src/shared/llm_target.py
+   Add the shared endpoint-kind normalization and request-building contract.
+5. tests/units/api/test_no_llm_route_contract.py
+   Add a source-order contract for every migrated LLM route.
+6. tests/units/api/test_routes.py
+   Cover the four-value guard and saved assistant endpoint precedence.
+7. tests/units/core/test_sql_wizard.py
+   Cover saved-target precedence, endpoint-kind forwarding, and Gateway transport.
+8. tests/units/shared/test_llm_target.py
+   Cover target normalization and Gateway/Serving request construction.
+
+Modified files:
+- src/api/routers/internal/ontology.py
+- src/api/routers/internal/mapping.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/shared/llm_target.py
+- tests/units/api/test_no_llm_route_contract.py
+- tests/units/api/test_routes.py
+- tests/units/core/test_sql_wizard.py
+- tests/units/shared/test_llm_target.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- Focused: uv run --frozen pytest -q tests/units/api/test_no_llm_route_contract.py tests/units/api/test_routes.py tests/units/core/test_sql_wizard.py tests/units/shared/test_llm_target.py → 133 passed, 1 warning in 8.65s
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6249 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.92s
+
+## Require a saved LLM for Graph AI
+
+Context: Graph metrics interpretation and Graph Chat silently discovered an
+LLM when the active domain had no saved target. They now follow the common
+No-LLM gate and return actionable guidance before invoking an agent.
+
+Changes:
+
+1. src/api/routers/internal/dtwin.py
+   Guard metrics interpretation, blocking Graph Chat, and streaming Graph Chat
+   with the saved domain LLM target and remove endpoint auto-discovery.
+2. src/back/core/helpers/DatabricksHelpers.py and src/back/core/helpers/__init__.py
+   Remove the obsolete serving-only compatibility guard and re-export.
+3. tests/units/dtwin/test_no_llm_gating.py
+   Replace auto-discovery preference coverage with strict route guard contracts.
+4. tests/units/api/test_dtwin_assistant_chat.py
+   Verify an empty domain returns the shared HTTP 400 guidance without running
+   the Graph Chat agent.
+5. tests/units/core/test_domain_llm_guard.py
+   Remove compatibility coverage for the deleted serving-only guard.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- tests/units/dtwin/test_no_llm_gating.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- tests/units/core/test_domain_llm_guard.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- Focused: uv run --frozen pytest -q tests/units/dtwin/test_no_llm_gating.py tests/units/api/test_dtwin_assistant_chat.py tests/units/core/test_domain_llm_guard.py → 9 passed, 1 warning in 1.41s
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6246 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.35s
+- Ruff: the requested command reports 54 existing violations in the legacy modules; the new strict-gating test is clean.
+
+## Add the global No-LLM UI gate
+
+Context: LLM-backed controls need to remain discoverable while preventing
+execution when the active domain has no saved LLM target. The global gate
+starts fail-closed, follows navbar state, and preserves control-owned ARIA and
+native disabled state.
+
+Changes:
+
+1. src/front/templates/base.html
+   Start every page with the fail-closed LLM availability class.
+2. src/front/static/global/js/permissions.js
+   Add the global availability writer, capture-phase interaction guards, ARIA
+   restoration, and dynamic-control observer.
+3. src/front/static/global/js/navbar.js
+   Drive LLM availability from the saved domain endpoint and remain fail-closed
+   when navbar state loading fails.
+4. src/front/static/global/css/permissions.css
+   Add declarative unavailable styling without suppressing pointer events.
+5. tests/units/front/test_no_llm_ui_gate.py
+   Cover initial state, state ownership, interaction guards, dynamic controls,
+   and navbar fail-closed behavior.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/js/permissions.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_no_llm_ui_gate.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- RED: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py → 6 failed, 1 warning in 0.46s.
+- GREEN: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py → 6 passed, 1 warning in 0.16s.
+- JavaScript syntax: node --check permissions.js and navbar.js → passed.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6252 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.47s.
+- Browser: dynamic ARIA, capture blocking, native disabled preservation, and restoration passed at 1280 px and 375 px.
+
+## Fix the No-LLM permission cascade
+
+Context: Authorized role rules followed the No-LLM availability selector with
+equal specificity and important declarations, allowing role styling to
+override the fail-closed opacity and cursor.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   Move the dedicated LLM availability block after all role, version, and
+   edit-lock rules so source order deterministically preserves the gate.
+2. tests/units/front/test_no_llm_ui_gate.py
+   Add a regression contract that enforces the required cascade order.
+
+Modified files:
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_no_llm_ui_gate.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- RED: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py → 1 failed, 6 passed, 1 warning in 0.24s.
+- GREEN: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py → 7 passed, 1 warning in 0.16s.
+- JavaScript syntax: node --check permissions.js and navbar.js → passed.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6253 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.36s.
+- Browser: authorized admin and builder controls both resolved to opacity 0.5 / cursor not-allowed while unconfigured, then opacity 1 / cursor auto when configured.
+
+## Mark domain LLM actions
+
+Context: Domain-scoped AI controls must participate in the global fail-closed
+No-LLM gate while deterministic, history, confirmation, cancellation, and LLM
+configuration controls remain available.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_wizard.html
+   Mark ontology generation as requiring a configured LLM.
+2. src/front/templates/partials/ontology/_ontology_map.html
+   Mark icon assignment, assistant launch, assistant suggestions, and send.
+3. src/front/templates/partials/ontology/_ontology_business_rules.html
+   Mark AI business-rule generation without gating deterministic rule controls.
+4. src/front/templates/partials/mapping/_mapping_autoassign.html
+   Mark full and missing-attribute AI mapping actions while preserving Cancel.
+5. src/front/templates/partials/mapping/_mapping_design.html and src/front/templates/partials/mapping/_mapping_manual.html
+   Mark the static AI auto-map actions while preserving deterministic panel controls.
+6. src/front/templates/partials/dtwin/_query_chat.html and src/front/templates/partials/dtwin/_query_analytics.html
+   Mark Graph Chat turns and AI interpretation without gating graph computation or history.
+7. src/front/static/mapping/js/mapping-shared.js
+   Declaratively mark dynamically configured entity and relationship SQL generate buttons.
+8. tests/units/front/test_no_llm_ui_gate.py
+   Inventory required markers and enforce the Domain Information and picker exclusions.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/partials/mapping/_mapping_autoassign.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/static/mapping/js/mapping-shared.js
+- tests/units/front/test_no_llm_ui_gate.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- RED: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py tests/units/front/test_llm_endpoint_picker.py → 2 failed, 17 passed, 1 warning in 0.26s.
+- GREEN: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py tests/units/front/test_llm_endpoint_picker.py tests/units/front/test_no_backend_ui.py → 52 passed, 1 warning in 0.26s.
+- JavaScript syntax: node --check src/front/static/mapping/js/mapping-shared.js → passed.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6256 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.31s.
+
+## Complete domain LLM interaction gating
+
+Context: Review found two alternate LLM invocation paths outside the initial
+marker inventory: Mapping Designer context-menu Auto-Map and Enter-to-send in
+both chat textareas. These paths now use declarative capture-phase gating
+without blocking spaces or Shift+Enter newlines.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Mark the dynamically rendered context-menu Auto-Map item as LLM-dependent.
+2. src/front/templates/partials/ontology/_ontology_map.html and src/front/templates/partials/dtwin/_query_chat.html
+   Add submit-only LLM markers to both chat textareas.
+3. src/front/static/global/js/permissions.js
+   Block unmodified Enter on submit-only markers while preserving normal typing and Shift+Enter.
+4. tests/units/front/test_no_llm_ui_gate.py
+   Cover the dynamic context item, textarea marker isolation, and dedicated Enter branch.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/static/global/js/permissions.js
+- tests/units/front/test_no_llm_ui_gate.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- RED: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py → 3 failed, 10 passed, 1 warning in 0.22s.
+- GREEN: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py → 13 passed, 1 warning in 0.15s.
+- Focused: uv run --frozen pytest -q tests/units/front/test_no_llm_ui_gate.py tests/units/front/test_llm_endpoint_picker.py tests/units/front/test_no_backend_ui.py → 55 passed, 1 warning in 0.23s.
+- JavaScript syntax: node --check src/front/static/global/js/permissions.js; node --check src/front/static/global/js/navbar.js; node --check src/front/static/mapping/js/mapping-shared.js; node --check src/front/static/mapping/js/mapping-design.js → passed.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6259 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.33s.
+- Browser: not run; neither Playwright nor Puppeteer is installed in this worktree.
+
+## Document strict No-LLM behavior
+
+Context: Complete the No-LLM AI gating work by documenting that an empty saved
+domain target is a strict opt-out. LLM actions stay visible but unavailable
+until a model is selected and saved in Domain Information → AI, while
+deterministic reasoning and validation remain available.
+
+Changes:
+
+1. Backend domain guard and routes
+   Reject every scoped Ontology, Mapping, Graph Chat, and Analytics LLM request
+   before task creation or model invocation, use the saved target as authority,
+   and remove Graph LLM auto-discovery.
+2. Global frontend availability gate
+   Start fail-closed, follow saved domain state, block mouse and keyboard
+   activation with common guidance, and preserve independent permission,
+   lifecycle, ARIA, and native-disabled state.
+3. Domain-scoped LLM controls
+   Mark Ontology generation, Assistant, automatic icons, AI Business Rules,
+   Mapping Auto-Map/SQL, Graph Chat, and Analytics Interpret while leaving the
+   AI tab, Browse picker, and deterministic actions usable.
+4. README.md and docs/user-guide.md
+   Document the strict opt-out, visible unavailable actions, re-enable path,
+   live availability refresh, and deterministic reasoning and validation.
+5. Tests
+   Cover the backend guard and route contract, saved-target precedence,
+   fail-closed UI behavior, complete trigger inventory, and picker exclusions.
+
+Modified files:
+- README.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+- docs/superpowers/plans/2026-09-17-no-llm-ai-gating.md
+- docs/superpowers/specs/2026-09-17-no-llm-ai-gating-design.md
+- docs/user-guide.md
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/mapping.py
+- src/api/routers/internal/ontology.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/permissions.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-shared.js
+- src/front/templates/base.html
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/mapping/_mapping_autoassign.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_manual.html
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/shared/llm_target.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- tests/units/api/test_no_llm_route_contract.py
+- tests/units/api/test_routes.py
+- tests/units/core/test_domain_llm_guard.py
+- tests/units/core/test_sql_wizard.py
+- tests/units/dtwin/test_no_llm_gating.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/shared/test_llm_target.py
+
+Tests:
+- Focused: uv run --frozen pytest -q tests/units/core/test_domain_llm_guard.py tests/units/api/test_no_llm_route_contract.py tests/units/api/test_routes.py tests/units/api/test_dtwin_assistant_chat.py tests/units/core/test_sql_wizard.py tests/units/dtwin/test_no_llm_gating.py tests/units/front/test_no_llm_ui_gate.py tests/units/front/test_llm_endpoint_picker.py → 159 passed, 1 warning in 8.04s.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6259 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.43s.
+- Ruff: the exact requested scoped command exited 1 with 61 existing violations (41 fixable) in committed implementation files; no Ruff findings apply to this documentation-only Task 6 change.
+- JavaScript syntax: node --check permissions.js, navbar.js, and mapping-shared.js → passed.
+- Diff and diagnostics: git diff --check passed; README.md and docs/user-guide.md have no IDE diagnostics.
+- Browser: PASS at desktop and 375 px — marked controls were visibly gated; click, Enter, and Space were blocked with no action request and the exact warning `No LLM selected. Select one in Domain Information → AI.`; textarea spaces and Shift+Enter remained available; the AI picker remained usable; and successful `/domain/info` saves immediately disabled and re-enabled controls on the same page.
+
+## Synchronize the LLM gate after domain save
+
+Context: Saving No LLM or restoring a model in Domain Information left the
+global LLM availability gate stale until the asynchronous navbar refresh
+completed. The Information form's actual Save path auto-saved through the
+navbar flow without parsing its response, so an LLM-dependent action could
+still issue a request after No LLM had been persisted.
+
+Changes:
+
+1. src/front/static/domain/js/domain.js
+   Apply the saved response's LLM endpoint to the existing global availability
+   gate synchronously on successful fallback saves.
+2. src/front/static/global/js/navbar.js
+   Parse and validate the actual pre-registry auto-save response, then update
+   the gate from authoritative saved data before cache invalidation.
+3. tests/units/front/test_no_llm_save_gate_sync.py
+   Execute both real save handlers under Node and cover empty, whitespace,
+   configured, ordering, HTTP failure, and application failure behavior.
+
+Modified files:
+- src/front/static/domain/js/domain.js
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_no_llm_save_gate_sync.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- RED: uv run --frozen pytest -q tests/units/front/test_no_llm_save_gate_sync.py → 3 failed, 1 passed, 1 warning in 0.48s.
+- GREEN/focused: uv run --frozen pytest -q tests/units/front/test_no_llm_save_gate_sync.py tests/units/front/test_no_llm_ui_gate.py tests/units/front/test_llm_endpoint_picker.py → 26 passed, 1 warning in 0.44s.
+- JavaScript syntax: node --check src/front/static/domain/js/domain.js; node --check src/front/static/domain/js/domain-information.js → passed.
+- Relevant API: uv run --frozen pytest -q tests/units/api/test_routes.py -k "domain_info" → 4 passed, 76 deselected, 1 warning in 1.48s.
+- Relevant persistence: uv run --frozen pytest -q tests/units/domain/test_domain_service.py -k "save_llm_endpoint_kind or legacy_llm_endpoint_kind_is_inferred" → 2 passed, 46 deselected, 1 warning in 0.85s.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6263 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.14s.
+- Actual-path RED: uv run --frozen pytest -q tests/units/front/test_no_llm_save_gate_sync.py → 5 failed, 4 passed, 1 warning in 0.77s.
+- Actual-path GREEN/focused: uv run --frozen pytest -q tests/units/front/test_no_llm_save_gate_sync.py tests/units/front/test_no_llm_ui_gate.py tests/units/front/test_domain_save_no_confirm.py tests/units/front/test_llm_endpoint_picker.py → 33 passed, 1 warning in 0.75s.
+- Actual-path JavaScript syntax: node --check src/front/static/domain/js/domain.js; node --check src/front/static/domain/js/domain-information.js; node --check src/front/static/global/js/navbar.js → passed.
+- Actual-path relevant API: uv run --frozen pytest -q tests/units/api/test_routes.py -k "domain_info" → 4 passed, 76 deselected, 1 warning in 1.44s.
+- Actual-path relevant persistence: uv run --frozen pytest -q tests/units/domain/test_domain_service.py -k "save_llm_endpoint_kind or legacy_llm_endpoint_kind_is_inferred" → 2 passed, 46 deselected, 1 warning in 0.95s.
+- Actual-path mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6268 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.39s.
+- Browser: PASS — a successful No LLM save added `llm-unconfigured` before navigation and blocked Mapping Re-Assign with no `POST /mapping/auto-assign/start`; restoring `databricks-claude-opus-4-6` removed the class immediately on the same page; the original model state was restored.
+
+## Harden final No-LLM contracts
+
+Context: Final review found caller-controlled credentials at the internal
+Ontology Assistant trust boundary and several test-contract cleanup issues.
+
+Changes:
+
+1. src/api/routers/internal/ontology.py
+   Make saved guard host, token, and endpoint authoritative for assistant invoke.
+2. src/api/routers/internal/mapping.py
+   Document why SQL generation retains the configuration-aware client factory.
+3. tests/units/
+   Add credential precedence coverage; correct the null-info helper, Graph Chat
+   mock, CSS source-order assertion, and feature-test import ordering.
+
+Modified files:
+- src/api/routers/internal/ontology.py
+- src/api/routers/internal/mapping.py
+- tests/units/api/test_routes.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- tests/units/api/test_no_llm_route_contract.py
+- tests/units/core/test_domain_llm_guard.py
+- tests/units/core/test_sql_wizard.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_no_llm_save_gate_sync.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-17.log
+
+Tests:
+- RED: saved credential precedence test → 1 failed in 2.08s.
+- Focused: complete No-LLM feature suite → 159 passed, 1 warning in 13.55s.
+- Ruff: all eight No-LLM feature test files → passed.
+- JavaScript syntax: five affected contract scripts → passed.
+- Mandatory suite: uv run --frozen pytest -q -m "not scenario" → 6268 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.14s.

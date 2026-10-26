@@ -4,16 +4,19 @@ Internal API -- Domain management JSON endpoints.
 Moved from app/frontend/project/routes.py during the front/back split.
 """
 
-import io
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Request, Depends, Query
-from fastapi.responses import StreamingResponse
 
 from shared.config.settings import get_settings, Settings
-from back.core.databricks import is_databricks_app
+from back.core.databricks import (
+    DocumentExtractor,
+    DocumentParseService,
+    ParseStatus,
+    is_databricks_app,
+)
 from back.core.errors import (
     InfrastructureError,
     NotFoundError,
@@ -22,10 +25,10 @@ from back.core.errors import (
 )
 from back.core.helpers import (
     get_databricks_client,
-    make_volume_file_service,
     resolve_warehouse_id,
 )
 from back.core.logging import get_logger
+from back.core.task_manager import get_task_manager
 from back.objects.session import (
     SessionManager,
     get_domain,
@@ -236,7 +239,7 @@ async def close_domain(
     the caller is only a viewer the release is a harmless no-op (the lock is
     keyed by holder e-mail).
     """
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     EditLockService.release_for_session(request, session_mgr, settings)
     domain = get_domain(session_mgr)
@@ -494,7 +497,7 @@ async def load_domain_from_uc(
     lock after the load to avoid a needless release/re-acquire when reopening
     the same version.)
     """
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     data = await request.json()
     domain_name = data.get("domain", data.get("project"))
@@ -576,13 +579,49 @@ async def get_version_status(
 
 @router.get("/versions-list")
 async def list_version_details(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List all versions with per-version description, mcp_enabled flag, and status."""
+    """List all versions with card metadata and allowed actions."""
+    from back.objects.registry.gitsync.GitHubConfig import GitHubConfig
+
     domain = get_domain(session_mgr)
     p = Domain(domain, settings)
-    return p.list_version_details(p.build_registry_service())
+    svc = p.build_registry_service()
+    result = p.list_version_details(
+        svc,
+        user_role=getattr(request.state, "user_role", "") or "",
+        user_domain_role=getattr(request.state, "user_domain_role", "") or "",
+    )
+    result["github_enabled"] = GitHubConfig.ready_for(svc.store)
+    return result
+
+
+@router.delete("/versions/{version}")
+async def delete_domain_version(
+    version: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+    delete_github: bool = Query(False),
+):
+    domain = get_domain(session_mgr)
+    # Deletion is session-scoped: only a domain identity persisted by an
+    # actual registry load/save may select the target. ``uc_domain_folder``
+    # falls back to the editable display name and can therefore alias an
+    # unrelated saved domain from an unsaved same-name session.
+    folder = (domain.domain_folder or "").strip()
+    if not folder:
+        raise ValidationError("Domain not saved to the registry")
+    return SettingsService.delete_registry_version_result(
+        folder,
+        version,
+        user_role=getattr(request.state, "user_role", "") or "",
+        session_mgr=session_mgr,
+        settings=settings,
+        delete_github=delete_github,
+    )
 
 
 @router.get("/build-runs")
@@ -655,7 +694,7 @@ async def set_version_status(
         and result.get("success")
         and new_status.upper() != "DRAFT"
     ):
-        from back.objects.registry.lockmgt import EditLockService
+        from back.objects.registry.collab import EditLockService
 
         EditLockService.force_release(
             session_mgr, settings, domain_name, version
@@ -680,7 +719,7 @@ async def get_edit_lock(
     acquired_at, is_self, is_admin, can_take_over}``. A non-forcing acquire
     is performed so the editor keeps the lock across page reloads.
     """
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     return EditLockService.status(request, session_mgr, settings)
 
@@ -692,7 +731,7 @@ async def acquire_edit_lock(
     settings: Settings = Depends(get_settings),
 ):
     """(Re)acquire the lock. ``force`` (admin-only) is the "Take over" action."""
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     try:
         data = await request.json()
@@ -711,7 +750,7 @@ async def release_edit_lock(
     settings: Settings = Depends(get_settings),
 ):
     """Release the current user's lock (the "Close" button)."""
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     return EditLockService.release(request, session_mgr, settings)
 
@@ -727,7 +766,7 @@ async def renew_edit_lock(
     Returns ``{success, renewed}``; ``renewed=false`` tells the client its
     editing session expired (the stale lease was reclaimed by another user).
     """
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     return EditLockService.renew(request, session_mgr, settings)
 
@@ -910,30 +949,107 @@ async def update_metadata(
 # ===========================================
 
 
+def _make_document_parse_service(
+    domain: Any,
+    settings: Settings,
+    store: Any = None,
+) -> DocumentParseService:
+    """Build the Knowledge Store parse service (Lakebase store + extractor)."""
+    if store is None:
+        store = Domain(domain, settings).build_registry_service().store
+    client = get_databricks_client(domain, settings)
+    extractor = (
+        DocumentExtractor(client=client) if client is not None else DocumentExtractor()
+    )
+    return DocumentParseService(store, extractor)
+
+
+def _resolve_document_scope(domain: Any) -> Tuple[str, str]:
+    """Resolve ``(folder, version)`` for the loaded domain's Knowledge Store."""
+    folder = (
+        getattr(domain, "uc_domain_folder", "")
+        or getattr(domain, "domain_folder", "")
+        or ""
+    ).strip()
+    version = str(getattr(domain, "current_version", "") or "1")
+    return folder, version
+
+
+def _run_document_parse_task(
+    task: Any,
+    service: DocumentParseService,
+    folder: str,
+    version: str,
+    filename: str,
+) -> None:
+    """Background worker that keeps TaskManager and the parse row aligned."""
+    manager = get_task_manager()
+    manager.start_task(task.id, message=f"Parsing {filename}")
+    try:
+        row = service.parse_pending(folder, version, filename)
+        if row.get("status") == ParseStatus.READY.value:
+            manager.complete_task(
+                task.id,
+                result=row,
+                message=f"Parsed {filename}",
+            )
+        else:
+            manager.fail_task(
+                task.id, row.get("error") or "Document parsing failed"
+            )
+    except Exception as exc:
+        logger.exception("Document parse worker failed for %s: %s", filename, exc)
+        manager.fail_task(task.id, "Document parsing failed")
+
+
+def _schedule_document_parse(
+    service: DocumentParseService,
+    folder: str,
+    version: str,
+    filename: str,
+) -> str:
+    task = get_task_manager().run_background_task(
+        name=f"Parse {filename}",
+        task_type="document_parse",
+        target=_run_document_parse_task,
+        service=service,
+        folder=folder,
+        version=version,
+        filename=filename,
+        steps=[
+            {
+                "name": "Parse document",
+                "description": f"Extracting text from {filename}",
+            }
+        ],
+    )
+    return task.id
+
+
 @router.get("/documents/list")
 async def list_documents(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List files in the domain volume's documents directory."""
+    """List the domain's Knowledge Store documents (metadata only, no text)."""
     try:
         domain = get_domain(session_mgr)
-        base_path = Domain(domain).get_documents_volume_path()
-        if not base_path:
-            raise ValidationError("Domain not saved to Unity Catalog")
+        folder, version = _resolve_document_scope(domain)
+        if not folder:
+            raise ValidationError("Domain not saved to the registry")
 
-        uc = make_volume_file_service(domain, settings)
-
-        success, items, message = uc.list_directory(base_path)
-
-        if not success and "not found" in message.lower():
-            return {"success": True, "files": [], "message": "No documents yet"}
-
-        if not success:
-            logger.warning("List documents failed for %s: %s", base_path, message)
-            raise InfrastructureError("Failed to list documents", detail=message)
-
-        return {"success": True, "files": items, "message": f"{len(items)} file(s)"}
+        parse_service = _make_document_parse_service(domain, settings)
+        rows = parse_service.list_documents(folder, version)
+        # Backward-compatible aliases (``name``/``size``) for the current UI.
+        files = [
+            {**row, "name": row.get("filename"), "size": row.get("size_bytes", 0)}
+            for row in rows
+        ]
+        return {
+            "success": True,
+            "files": files,
+            "message": f"{len(files)} file(s)",
+        }
     except (ValidationError, InfrastructureError, NotFoundError):
         raise
     except Exception as e:
@@ -947,33 +1063,26 @@ async def upload_documents(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Upload one or more files to the domain volume's documents directory.
+    """Upload one or more files to the domain's Knowledge Store.
 
-    Accepts multipart/form-data with field name ``files``.
+    Accepts multipart/form-data with field name ``files``. Files are parsed
+    Volume-free; each upload is capped at ``MAX_UPLOAD_BYTES`` (10 MB).
     """
     try:
         domain = get_domain(session_mgr)
-        base_path = Domain(domain).get_documents_volume_path()
-        if not base_path:
-            raise ValidationError("Domain not saved to Unity Catalog")
+        folder, version = _resolve_document_scope(domain)
+        if not folder:
+            raise ValidationError("Domain not saved to the registry")
 
-        uc = make_volume_file_service(domain, settings)
-        if not uc.is_configured():
-            raise ValidationError("Databricks authentication not configured")
+        parse_service = _make_document_parse_service(domain, settings)
 
         form = await request.form()
         uploaded_files = form.getlist("files")
-
         if not uploaded_files:
             raise ValidationError("No files provided")
 
-        # Ensure …/domains/<folder>/documents exists (mkdir -p); required before first upload.
-        ok_mk, mk_msg = uc.create_directory(base_path)
-        if not ok_mk:
-            logger.warning("Documents directory could not be created: %s", mk_msg)
-            raise InfrastructureError(
-                "Documents directory could not be created", detail=mk_msg
-            )
+        max_bytes = DocumentParseService.MAX_UPLOAD_BYTES
+        max_mb = max_bytes // (1024 * 1024)
 
         results: List[Dict[str, Any]] = []
         for upload in uploaded_files:
@@ -990,17 +1099,40 @@ async def upload_documents(
                 continue
 
             content = await upload.read()
-            file_path = f"{base_path}/{filename}"
-
-            try:
-                ok, wmsg = uc.write_binary_file(file_path, content, overwrite=True)
+            if len(content) > max_bytes:
                 results.append(
                     {
                         "filename": filename,
-                        "success": ok,
-                        "message": "Uploaded" if ok else wmsg,
+                        "success": False,
+                        "parse_status": ParseStatus.FAILED.value,
+                        "message": f"File exceeds the {max_mb} MB upload limit",
                     }
                 )
+                continue
+
+            try:
+                submission = parse_service.prepare_upload(
+                    folder, version, filename, content
+                )
+                item = {
+                    "filename": filename,
+                    "success": True,
+                    "uploaded": submission.uploaded,
+                    "no_op": submission.no_op,
+                    "parse_status": submission.parse_status.value,
+                }
+                if submission.should_parse:
+                    item["task_id"] = _schedule_document_parse(
+                        parse_service, folder, version, filename
+                    )
+                    item["message"] = "Uploaded; parsing started"
+                elif submission.no_op:
+                    item["message"] = "Already uploaded and parsed"
+                elif submission.parse_status is ParseStatus.READY:
+                    item["message"] = "Uploaded and ready"
+                else:
+                    item["message"] = submission.error or "Document parsing failed"
+                results.append(item)
             except Exception as exc:
                 results.append(
                     {
@@ -1030,29 +1162,93 @@ async def upload_documents(
         raise InfrastructureError("Upload documents failed", detail=str(e))
 
 
+@router.post("/documents/retry-parse")
+async def retry_document_parse(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Retry parsing an existing failed or stale binary document."""
+    try:
+        data = await request.json()
+        raw_filename = str(data.get("filename", "")).strip()
+        filename = os.path.basename(raw_filename.replace("\\", "/"))
+        if not filename or filename in (".", "..") or filename != raw_filename:
+            raise ValidationError("Filename is required")
+
+        domain = get_domain(session_mgr)
+        folder, version = _resolve_document_scope(domain)
+        if not folder:
+            raise ValidationError("Domain not saved to the registry")
+        parse_service = _make_document_parse_service(domain, settings)
+        try:
+            submission = parse_service.retry(folder, version, filename)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
+        result = {
+            "success": True,
+            "filename": filename,
+            "parse_status": submission.parse_status.value,
+            "message": (
+                "Parsing already in progress"
+                if submission.no_op
+                else "Document parsing restarted"
+            ),
+        }
+        if submission.should_parse:
+            result["task_id"] = _schedule_document_parse(
+                parse_service, folder, version, filename
+            )
+        return result
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("Retry document parse failed: %s", e)
+        raise InfrastructureError(
+            "Retry document parse failed", detail=str(e)
+        ) from e
+
+
 @router.post("/documents/delete")
 async def delete_document(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Delete a file from the domain volume's documents directory."""
+    """Purge one or several documents from the domain's Knowledge Store.
+
+    Accepts ``{"filenames": [...]}`` (multi-purge) or the legacy
+    ``{"filename": "..."}`` (single).
+    """
     try:
         data = await request.json()
-        filename = data.get("filename", "").strip()
-        if not filename:
-            raise ValidationError("Filename is required")
+        filenames = data.get("filenames")
+        if not isinstance(filenames, list):
+            single = str(data.get("filename", "")).strip()
+            filenames = [single] if single else []
+        filenames = [str(f).strip() for f in filenames if str(f).strip()]
+        if not filenames:
+            raise ValidationError("At least one filename is required")
 
         domain = get_domain(session_mgr)
-        base_path = Domain(domain).get_documents_volume_path()
-        if not base_path:
-            raise ValidationError("Domain not saved to Unity Catalog")
+        folder, version = _resolve_document_scope(domain)
+        if not folder:
+            raise ValidationError("Domain not saved to the registry")
 
-        uc = make_volume_file_service(domain, settings)
+        parse_service = _make_document_parse_service(domain, settings)
+        try:
+            errors = parse_service.delete_documents(folder, version, filenames)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
-        file_path = f"{base_path}/{filename}"
-        success, message = uc.delete_file(file_path)
-        return {"success": success, "message": message}
+        if errors:
+            logger.warning("Document purge reported errors: %s", errors)
+            return {"success": False, "message": "; ".join(errors)}
+        return {
+            "success": True,
+            "message": f"{len(filenames)} document(s) deleted",
+        }
 
     except (ValidationError, InfrastructureError, NotFoundError):
         raise
@@ -1061,93 +1257,40 @@ async def delete_document(
         raise InfrastructureError("Delete document failed", detail=str(e))
 
 
-_PREVIEW_CONTENT_TYPES = {
-    "pdf": "application/pdf",
-    "png": "image/png",
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "gif": "image/gif",
-    "svg": "image/svg+xml",
-}
-
-_TEXT_EXTENSIONS = {
-    "txt",
-    "md",
-    "json",
-    "csv",
-    "xml",
-    "ttl",
-    "owl",
-    "rdf",
-    "yaml",
-    "yml",
-    "toml",
-    "ini",
-    "cfg",
-    "log",
-    "sql",
-    "py",
-    "js",
-    "ts",
-    "html",
-    "css",
-}
-
-
 @router.get("/documents/preview/{filename:path}")
 async def preview_document(
     filename: str,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Stream a document from the domain volume for in-browser preview.
+    """Return the parsed text of a Knowledge Store document as JSON.
 
-    Binary files (PDF, images) are streamed with the appropriate content-type.
-    Text files are returned as JSON with a ``content`` field.
+    The original binary is never retained, so preview always serves the
+    extracted corpus text (never a streamed binary).
     """
     try:
         domain = get_domain(session_mgr)
-        base_path = Domain(domain).get_documents_volume_path()
-        if not base_path:
-            raise ValidationError("Domain not saved to Unity Catalog")
+        folder, version = _resolve_document_scope(domain)
+        if not folder:
+            raise ValidationError("Domain not saved to the registry")
 
-        uc = make_volume_file_service(domain, settings)
-        if not uc.is_configured():
-            raise ValidationError("Databricks authentication not configured")
+        parse_service = _make_document_parse_service(domain, settings)
+        doc = parse_service.read_document(folder, version, filename)
 
-        file_path = f"{base_path}/{filename}"
-        ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
-
-        content_type = _PREVIEW_CONTENT_TYPES.get(ext)
-        if content_type:
-            ok, data, pmsg = uc.read_binary_file(file_path)
-            if not ok:
-                if "not found" in pmsg.lower():
-                    raise NotFoundError(f"File not found: {filename}")
-                if "denied" in pmsg.lower():
-                    raise InfrastructureError("Access denied", detail=pmsg)
-                raise InfrastructureError(
-                    "Failed to read file for preview", detail=pmsg
-                )
-            return StreamingResponse(
-                io.BytesIO(data),
-                media_type=content_type,
-                headers={"Content-Disposition": f'inline; filename="{filename}"'},
-            )
-
-        if ext in _TEXT_EXTENSIONS:
-            ok, text, pmsg = uc.read_file(file_path)
-            if not ok:
-                if "not found" in pmsg.lower():
-                    raise NotFoundError(f"File not found: {filename}")
-                if "denied" in pmsg.lower():
-                    raise InfrastructureError("Access denied", detail=pmsg)
-                raise InfrastructureError(
-                    "Failed to read file for preview", detail=pmsg
-                )
-            return {"success": True, "content": text, "filename": filename, "ext": ext}
-
-        raise ValidationError(f"Preview not supported for .{ext} files")
+        if doc.get("parse_status") != ParseStatus.READY.value:
+            return {
+                "success": False,
+                "filename": filename,
+                "parse_status": doc.get("parse_status"),
+                "error": doc.get("error") or "Document is not ready",
+            }
+        return {
+            "success": True,
+            "filename": filename,
+            "content": doc.get("content", ""),
+            "parser": doc.get("parsed_with", ""),
+            "parse_status": ParseStatus.READY.value,
+        }
 
     except (ValidationError, InfrastructureError, NotFoundError):
         raise

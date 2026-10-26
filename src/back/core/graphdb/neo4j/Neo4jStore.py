@@ -269,7 +269,7 @@ class Neo4jStore(GraphDBBackend):
         reports zero violations / zero inferences instead of crashing.
         Full SWRL → Cypher translation is a follow-up PR.
         """
-        from back.core.reasoning.SWRLFlatCypherTranslator import (
+        from back.core.reasoning.swrl.SWRLFlatCypherTranslator import (
             SWRLFlatCypherTranslator,
         )
 
@@ -375,6 +375,21 @@ class Neo4jStore(GraphDBBackend):
         self, table_name: str, subjects: List[str]
     ) -> List[Dict[str, str]]:
         return self._reads.get_triples_for_subjects(table_name, subjects)
+
+    def get_triples_page_for_subjects(
+        self,
+        table_name: str,
+        subjects: List[str],
+        *,
+        limit: int,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        return self._reads.get_triples_page_for_subjects(
+            table_name,
+            subjects,
+            limit=limit,
+            offset=offset,
+        )
 
     def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         return self._reads.get_predicates_for_type(table_name, type_uri)

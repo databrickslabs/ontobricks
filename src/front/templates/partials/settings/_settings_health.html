@@ -1,7 +1,7 @@
 {# Settings → Health section.
    Two tabs:
-     1. Databricks — existing readiness probes from GET /health
-        (runtime, filesystem, auth, warehouse, CloudFetch, registry config)
+     1. Databricks — readiness probes from GET /settings/diagnostics/readiness
+        (admin-only: runtime, filesystem, auth, warehouse, CloudFetch, registry config)
      2. Diagnostics — grouped deep-dive: UC privileges, Lakebase registry tables,
         Graph DB, Delta.  Powered by GET /settings/diagnostics (admin-only).
    Both tabs are lazy-loaded on first show.
@@ -30,7 +30,7 @@
         <div class="tab-content p-3" id="healthTabContent">
 
             <!-- ══════════════════════════════════════════════════════
-                 TAB 1 · Databricks — readiness probes (GET /health)
+                 TAB 1 · Databricks — readiness probes (GET /settings/diagnostics/readiness)
                  ══════════════════════════════════════════════════════ -->
             <div class="tab-pane fade show active" id="hpane-databricks" role="tabpanel"
                  aria-labelledby="htab-databricks">
@@ -40,11 +40,10 @@
                     <div>
                         Live readiness probes for every dependency the application needs to run:
                         <code>/tmp</code>, session and log directories, Databricks authentication,
-                        SQL warehouse, CloudFetch capability, registry UC volume (read + write),
+                        SQL warehouse, CloudFetch capability,
                         registry catalog/schema DDL and Lakebase.
-                        This is the same payload that <code>GET /health</code> returns to external
-                        load-balancer and uptime probes — overall <code>status</code> is the worst
-                        severity across all probes.
+                        Overall <code>status</code> is the worst severity across all probes.
+                        These probes are admin-only.
                     </div>
                 </div>
 
@@ -99,10 +98,10 @@
 
                 <p class="text-muted small mt-3 mb-0">
                     <i class="bi bi-info-circle me-1"></i>
-                    The same JSON is available at
-                    <a href="/health" target="_blank"><code>/health</code></a>
-                    for external uptime probes; <code>/health</code> is anonymous and bypasses
-                    permission, CSRF and timing middleware.
+                    External uptime probes should use
+                    <a href="/health" target="_blank"><code>/health</code></a>: an anonymous,
+                    local-only liveness check (status, version, timestamp) that runs no
+                    warehouse, Lakebase or DDL probes.
                 </p>
             </div><!-- /#hpane-databricks -->
 

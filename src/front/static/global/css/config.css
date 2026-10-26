@@ -228,6 +228,11 @@
     color: var(--ui-preview-on-primary);
 }
 
+.ui-branding-swatch-aurora {
+    background: var(--ui-preview-aurora, var(--db-aurora));
+    color: var(--db-on-primary);
+}
+
 .ui-branding-preview {
     border: 1px solid var(--db-border-light);
     border-radius: var(--db-radius-control);

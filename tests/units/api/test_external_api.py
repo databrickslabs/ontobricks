@@ -327,7 +327,7 @@ class TestDomainDesignStatus:
         domain.is_ontology_valid.return_value = False
         domain.ensure_generated_content.return_value = None
         domain.generated = {}
-        domain._data = {}
+        domain._data = {"domain": {}}
         domain.get_entity_mappings.return_value = []
         domain.get_relationship_mappings.return_value = []
         domain.shacl_shapes = []
@@ -368,7 +368,7 @@ class TestDomainDesignStatus:
         domain.is_ontology_valid.return_value = True
         domain.ensure_generated_content.return_value = None
         domain.generated = {"owl": "<owl/>"}
-        domain._data = {}
+        domain._data = {"domain": {}}
         domain.get_entity_mappings.return_value = []
         domain.get_relationship_mappings.return_value = []
         domain.shacl_shapes = []

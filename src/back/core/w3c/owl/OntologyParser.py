@@ -2,10 +2,12 @@
 
 import json
 from rdflib import Graph, RDF, RDFS, OWL, BNode
-from typing import List, Dict
+from rdflib.namespace import SKOS
+from typing import Any, Dict, List
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
+from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
 from shared.config.constants import DEFAULT_BASE_URI, ONTOBRICKS_NS
 
 logger = get_logger(__name__)
@@ -230,14 +232,25 @@ class OntologyParser:
 
             # Get label
             label = None
+            label_lang = None
             for lbl in self.graph.objects(cls, RDFS.label):
                 label = str(lbl)
+                label_lang = getattr(lbl, "language", None)
                 break
+
+            # Get synonyms (alternate labels) from the standard SKOS
+            # altLabel vocabulary (task 4 review finding #4) — first-class
+            # ontology data, not an OntoBricks custom property.
+            alternate_labels = sorted(
+                {str(alt) for alt in self.graph.objects(cls, SKOS.altLabel)}
+            )
 
             # Get comment
             comment = None
+            comment_lang = None
             for cmt in self.graph.objects(cls, RDFS.comment):
                 comment = str(cmt)
+                comment_lang = getattr(cmt, "language", None)
                 break
 
             # Get emoji/icon from OntoBricks custom property
@@ -288,6 +301,15 @@ class OntologyParser:
                     pass
                 break
 
+            # Get referenced SWRL business rules from OntoBricks property
+            business_rules = []
+            for br in self.graph.objects(cls, ONTOBRICKS_NS.businessRules):
+                try:
+                    business_rules = json.loads(str(br))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                break
+
             # Get virtual attribute declarations from OntoBricks property
             virtual_attributes = []
             for va in self.graph.objects(cls, ONTOBRICKS_NS.virtualAttributes):
@@ -299,12 +321,14 @@ class OntologyParser:
 
             # Get parent class (subClassOf)
             parent = None
+            parent_uri = ""
             for parent_cls in self.graph.objects(cls, RDFS.subClassOf):
-                parent_uri = str(parent_cls)
+                candidate_parent_uri = str(parent_cls)
                 # Skip blank nodes and Thing
-                if not isinstance(parent_cls, BNode) and not parent_uri.endswith(
-                    "Thing"
-                ):
+                if not isinstance(
+                    parent_cls, BNode
+                ) and not candidate_parent_uri.endswith("Thing"):
+                    parent_uri = candidate_parent_uri
                     parent = self._extract_local_name(parent_uri)
                     break
 
@@ -319,15 +343,20 @@ class OntologyParser:
                     "uri": uri,
                     "name": name,
                     "label": label or name,
+                    "label_lang": label_lang,
+                    "alternate_labels": alternate_labels,
                     "comment": comment or "",
+                    "comment_lang": comment_lang,
                     "emoji": emoji or "",
                     "parent": parent or "",
+                    "parent_uri": parent_uri,
                     "group": group,
                     "dashboard": dashboard or "",
                     "dashboardParams": dashboard_params,
                     "bridges": bridges,
                     "dataset": dataset,
                     "actions": actions,
+                    "business_rules": business_rules,
                     "virtualAttributes": virtual_attributes,
                     "dataProperties": data_properties,
                 }
@@ -512,26 +541,34 @@ class OntologyParser:
 
                 # Get label
                 label = None
+                label_lang = None
                 for lbl in self.graph.objects(prop, RDFS.label):
                     label = str(lbl)
+                    label_lang = getattr(lbl, "language", None)
                     break
 
                 # Get comment
                 comment = None
+                comment_lang = None
                 for cmt in self.graph.objects(prop, RDFS.comment):
                     comment = str(cmt)
+                    comment_lang = getattr(cmt, "language", None)
                     break
 
                 # Get domain - extract local name
                 domain = None
+                domain_uri = ""
                 for dom in self.graph.objects(prop, RDFS.domain):
-                    domain = self._extract_local_name(str(dom))
+                    domain_uri = str(dom)
+                    domain = self._extract_local_name(domain_uri)
                     break
 
                 # Get range - extract local name
                 range_val = None
+                range_uri = ""
                 for rng in self.graph.objects(prop, RDFS.range):
-                    range_val = self._extract_local_name(str(rng))
+                    range_uri = str(rng)
+                    range_val = self._extract_local_name(range_uri)
                     break
 
                 properties.append(
@@ -539,16 +576,20 @@ class OntologyParser:
                         "uri": uri,
                         "name": name,
                         "label": label or name,
+                        "label_lang": label_lang,
                         "comment": comment or "",
+                        "comment_lang": comment_lang,
                         "type": prop_type,
                         "domain": domain or "",
+                        "domain_uri": domain_uri,
                         "range": range_val or "",
+                        "range_uri": range_uri,
                     }
                 )
 
         return sorted(properties, key=lambda x: x["name"])
 
-    def get_ontology_info(self) -> Dict[str, str]:
+    def get_ontology_info(self) -> Dict[str, Any]:
         """Get basic ontology information.
 
         Returns:
@@ -560,14 +601,18 @@ class OntologyParser:
 
             # Get label
             label = None
+            label_lang = None
             for lbl in self.graph.objects(onto, RDFS.label):
                 label = str(lbl)
+                label_lang = getattr(lbl, "language", None)
                 break
 
             # Get comment
             comment = None
+            comment_lang = None
             for cmt in self.graph.objects(onto, RDFS.comment):
                 comment = str(cmt)
+                comment_lang = getattr(cmt, "language", None)
                 break
 
             # Determine namespace (add # if not present)
@@ -578,20 +623,42 @@ class OntologyParser:
             return {
                 "uri": uri,
                 "label": label or self._extract_local_name(uri) or "Ontology",
+                "label_lang": label_lang,
                 "comment": comment or "",
+                "comment_lang": comment_lang,
                 "namespace": namespace,
             }
 
         # No owl:Ontology declaration in the file. Fall back to the default
         # base URI for BOTH ``uri`` and ``namespace`` — never the literal
         # "Unknown", which used to leak into the domain's stored base_uri and
-        # surface on the Registry Browse page.
+        # surface on the Registry Browse page. The empty label lets importers
+        # fall back to the domain name.
         return {
             "uri": DEFAULT_BASE_URI,
-            "label": "Unknown Ontology",
+            "label": "",
+            "label_lang": None,
             "comment": "",
+            "comment_lang": None,
             "namespace": DEFAULT_BASE_URI,
         }
+
+    def get_rdf_extras(
+        self,
+        ontology_info: Dict[str, Any] = None,
+        classes: List[Dict] = None,
+        properties: List[Dict] = None,
+    ) -> dict:
+        """Extract unmodeled RDF triples without repeating supplied parse work."""
+        ontology_info = ontology_info or self.get_ontology_info()
+        classes = classes if classes is not None else self.get_classes()
+        properties = properties if properties is not None else self.get_properties()
+        return OntologyRdfExtras().extract(
+            self.graph,
+            ontology_uri=ontology_info["uri"],
+            class_uris={item["uri"] for item in classes if item.get("uri")},
+            property_uris={item["uri"] for item in properties if item.get("uri")},
+        )
 
     def get_constraints(self) -> List[Dict]:
         """Extract property constraints from the ontology.

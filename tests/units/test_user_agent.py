@@ -9,7 +9,7 @@ Databricks auth (OAuth)             DatabricksAuth.get_auth_headers  – OAuth b
 Databricks auth (no creds)          DatabricksAuth.get_auth_headers  – fallback branch
 Volume file service                 VolumeFileService._headers
 Synced table manager (fallback)     SyncedTableManager._call_api  – raw-requests path
-Mapping documents                   Mapping.fetch_documents_for_agent (requests.get)
+Mapping documents                   Mapping.fetch_documents_for_agent (VolumeFileService)
 Health accelerated-sync probe       _check_lakebase_accelerated_sync (requests.get)
 Agent document tools                agents.tools.documents._headers
 LLM utility                         agents.llm_utils.call_llm_with_retry (requests.post)
@@ -135,24 +135,6 @@ class TestSyncedTableManagerHeaders:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Mapping.fetch_documents_for_agent
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestMappingDocumentHeaders:
-    def test_user_agent_in_documents_request(self, monkeypatch):
-        from back.objects.mapping.Mapping import Mapping
-
-        domain = MagicMock()
-        with patch(
-            "back.core.helpers.effective_uc_version_path",
-            return_value="/Volumes/cat/sch/vol/v1",
-        ), patch("requests.get", return_value=_ok_response({"contents": []})) as mock_get:
-            Mapping.fetch_documents_for_agent(domain, "https://ws.example.com", "tok")
-
-        assert _headers_kwarg(mock_get).get("User-Agent") == HTTP_USER_AGENT
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # health._check_lakebase_accelerated_sync
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -173,19 +155,6 @@ class TestHealthAcceleratedSyncHeaders:
             _check_lakebase_accelerated_sync()
 
         assert _headers_kwarg(mock_get).get("User-Agent") == HTTP_USER_AGENT
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# agents/tools/documents._headers
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestDocumentToolHeaders:
-    def test_user_agent_present(self):
-        from agents.tools.documents import _headers
-        from agents.tools.context import ToolContext
-
-        ctx = ToolContext(host="https://ws.example.com", token="tok")
-        assert _headers(ctx).get("User-Agent") == HTTP_USER_AGENT
 
 
 # ──────────────────────────────────────────────────────────────────────────────

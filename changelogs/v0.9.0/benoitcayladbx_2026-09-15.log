@@ -1,0 +1,1082 @@
+## Improve OBX import naming
+
+Context: Registry imports could only rename a domain when its source folder
+already conflicted with an existing domain. Import now exposes an explicit
+CamelCase target name for every domain and safely resets graph runtime when
+creating a renamed copy.
+
+Changes:
+
+1. src/back/core/helpers/DatabricksHelpers.py
+   Added the shared automatic ontology base URI builder.
+2. src/back/core/helpers/__init__.py
+   Exported the automatic base URI builder through the helper facade.
+3. src/back/objects/domain/Domain.py
+   Reused the shared URI builder for new-domain identity generation.
+4. src/back/objects/domain/SettingsService.py
+   Added CamelCase import-name suggestions and rewrote identity while clearing graph runtime for renamed OBX versions.
+5. src/front/templates/partials/registry/_import_obx_modal.html
+   Added the Import as column and Bootstrap-managed visibility states.
+6. src/front/static/registry/js/registry.js
+   Added Import-as rendering, validation, duplicate detection, decision derivation, and target-aware action controls.
+7. src/front/static/registry/css/registry.css
+   Kept the Import as field readable on desktop and mobile table layouts.
+8. tests/units/domain/test_domain_service.py
+   Covered the shared automatic URI contract.
+9. tests/units/settings/test_settings_obx.py
+   Covered renamed document preparation, graph reset, suggestions, conflicts, and unchanged overwrite behavior.
+10. tests/units/front/test_registry_obx_import_rename.py
+    Added structural contracts for the Import-as workflow and responsive field sizing.
+11. docs/import-export.md
+    Documented Import-as behavior and the graph rebuild requirement.
+12. docs/superpowers/specs/2026-09-15-obx-import-rename-design.md
+    Recorded the approved user experience and backend behavior.
+13. docs/superpowers/plans/2026-09-15-obx-import-rename.md
+    Recorded the test-first implementation plan.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/partials/registry/_import_obx_modal.html
+- src/front/static/registry/js/registry.js
+- src/front/static/registry/css/registry.css
+- tests/units/domain/test_domain_service.py
+- tests/units/settings/test_settings_obx.py
+- tests/units/front/test_registry_obx_import_rename.py
+- docs/import-export.md
+- docs/superpowers/specs/2026-09-15-obx-import-rename-design.md
+- docs/superpowers/plans/2026-09-15-obx-import-rename.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6103 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.56s
+
+## Skip app grants during local Lakebase provisioning
+
+Context: The Settings Lakebase provisioning flow always attempted to resolve
+Databricks App service principals. Local development authenticates as the
+developer identity, so the fallback MCP app lookup failed and stopped provisioning.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Limited App and MCP service-principal resolution and Unity Catalog grants to Databricks App mode.
+2. src/back/core/graphdb/lakebase/provisioner.py
+   Made app-principal grant steps optional while preserving user superuser setup.
+3. tests/units/settings/test_lakebase_provision.py
+   Added regression coverage proving local provisioning completes without resolving or granting app principals.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/back/core/graphdb/lakebase/provisioner.py
+- tests/units/settings/test_lakebase_provision.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6104 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 42.90s
+
+## Group Lakebase graph indexes by domain
+
+Context: Settings → Lakebase → Objects grouped each graph's reader view,
+`_sync`, and `__app` objects, but displayed `_adj_in`, `_adj_out`, and
+`_entity_search` as unrelated cards. These rebuildable indexes now follow
+their owning domain/version for display and grouped deletion.
+
+Changes:
+
+1. `src/front/static/config/js/settings.js`
+   Normalizes graph-index suffixes to the same domain/version key used by the
+   existing Lakebase storage objects.
+2. `tests/units/front/test_lakebase_object_grouping.py`
+   Adds regression contracts for recognized suffixes, unrelated names, card
+   counts, and grouped-deletion registration.
+3. `docs/user-guide.md`
+   Documents Lakebase object grouping and whole-domain deletion behavior.
+4. `docs/superpowers/plans/2026-09-15-lakebase-domain-object-grouping.md`
+   Records the approved test-first implementation plan.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- tests/units/front/test_lakebase_object_grouping.py
+- docs/user-guide.md
+- docs/superpowers/plans/2026-09-15-lakebase-domain-object-grouping.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `1 failed, 2 passed` as expected before implementation.
+- Focused: `17 passed, 0 failed`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6108 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.59s`.
+- Live UI: one `cust360auto_v5` card grouped the reader view, `__app`,
+  `_adj_in`, `_adj_out`, `_entity_search`, and `_sync` with count `6`;
+  desktop and 375 px mobile layouts passed with no console errors.
+
+## Move Lakehouse Save onto the title row
+
+Context: Settings → Lakehouse persisted the SQL warehouse with an Apply
+control next to the warehouse select. Other Settings pages keep Save on the
+section title row.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Renamed the Lakehouse action to Save and placed it on the section-header
+   title row; left Refresh list next to the warehouse select.
+2. tests/units/front/test_button_design_contract.py
+   Added a structural contract that the Lakehouse Save lives in the title row.
+
+Modified files:
+- src/front/templates/settings.html
+- tests/units/front/test_button_design_contract.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6108 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.39s
+
+## Restrict Lakehouse objects by domain backend
+
+Context: Settings → Lakehouse → Objects listed every `triplestore_*` object
+from the Registry UC schema, including objects owned by Lakebase and Neo4j
+domain versions. The inventory now includes only known Lakehouse versions.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Filters triple-store and analytics groups against registry versions whose
+   graph backend is `databricks`.
+2. src/front/templates/settings.html
+   Clarifies that the Objects inventory is restricted to Lakehouse versions.
+3. tests/units/settings/test_delta_objects.py
+   Covers mixed-backend filtering and exclusion of unattributed analytics objects.
+4. docs/user-guide.md
+   Documents the backend-specific Lakehouse object inventory.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/settings.html
+- tests/units/settings/test_delta_objects.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6109 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 44.51s
+
+## Define Lakehouse build task-step contract
+
+Context: Task 1 of the Lakehouse build-progress plan requires a backend-owned,
+materialization-aware step contract so later pipeline execution and UI progress
+rendering share one ordered source of truth.
+
+Changes:
+
+1. `tests/units/graphdb/delta/test_delta_build_pipeline.py`
+   Added a parameterized contract test asserting the seven ordered step names
+   and the mode-specific materialization description for `table` vs `view`.
+2. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+   Added `lakehouse_build_steps(materialization)` returning the exact seven-step
+   backend contract with verbatim descriptions.
+3. `src/api/routers/internal/dtwin.py`
+   Resolved Lakehouse materialization once in
+   `start_databricks_triplestore_build` and delegated `tm.create_task(..., steps=...)`
+   to the shared step factory.
+
+Modified files:
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/api/routers/internal/dtwin.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py` →
+  `ImportError: cannot import name 'lakehouse_build_steps'` (collection failure, expected).
+- GREEN: `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py` →
+  `6 passed, 1 warning in 0.83s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6111 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 42.39s`.
+
+## Align Lakehouse runtime stage transitions
+
+Context: Task 2 of the Lakehouse build-progress plan requires runtime
+`TaskManager` transitions to match the seven-stage contract introduced in Task 1,
+including a view-mode optimization skip signal.
+
+Changes:
+
+1. `tests/units/graphdb/delta/test_delta_build_pipeline.py`
+   Added RED-first transition assertions for table mode post-materialization
+   stages and view-mode optimization skip behavior; also fixed a missing
+   top-level blank line near the new Task 1 parameterized test block.
+2. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+   Advanced explicit stage transitions for inferred preparation, graph-view
+   creation, optimization, and adjacency rebuild; moved adjacency stage
+   activation to the orchestrator; added view-mode `skip_step` reporting with a
+   backward-compatible fallback when `skip_step` is not implemented.
+
+Modified files:
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py` →
+  `2 failed, 6 passed` (missing inferred/graph_view/optimize transitions and
+  view-mode `skip_step`, expected before implementation).
+- GREEN (focused): `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py` →
+  `8 passed, 1 warning in 0.88s`.
+- GREEN (full required suite): `uv run --frozen pytest -q -m "not scenario"` →
+  `6113 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 42.38s`.
+
+## Task 2 review fix: remove skip fallback
+
+Context: Task 2 review flagged `_skip_step()` as unnecessary compatibility code.
+The view-mode optimization branch now uses the exact specified
+`TaskManager.skip_step` semantics directly.
+
+Changes:
+
+1. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+   Removed `_skip_step()` helper and direct-fallback logic; switched view-mode
+   optimization branch to call
+   `self.tm.skip_step(self.task_id, "Optimization not needed for pass-through view")`
+   directly.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- Focused: `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py` →
+  `8 passed, 1 warning in 0.90s`.
+
+## Task 2 regression follow-up: stub skip_step
+
+Context: After restoring direct `TaskManager.skip_step` semantics in Task 2, the
+lightweight `_StubTM` used by
+`tests/units/objects/test_build_pipeline_materialize.py` lacked `skip_step`,
+causing a focused full-suite regression in view-mode reporting coverage.
+
+Changes:
+
+1. `tests/units/objects/test_build_pipeline_materialize.py`
+   Added a minimal `_StubTM.skip_step(task_id, msg="")` method that records the
+   message in `steps`, consistent with the stub's existing progress/step
+   recording behavior.
+
+Modified files:
+- tests/units/objects/test_build_pipeline_materialize.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/objects/test_build_pipeline_materialize.py::TestWhatABuildReports::test_a_view_only_build_reports_its_mode` →
+  `1 passed, 1 warning in 0.97s`.
+- `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py tests/units/objects/test_build_pipeline_materialize.py` →
+  `21 passed, 1 warning in 0.93s`.
+
+## Extract shared timed task-log renderer
+
+Context: Task 3 of the Lakehouse build-progress plan requires moving the
+existing Lakebase timed build-log renderer into a reusable Digital Twin frontend
+component, while preserving Lakebase behavior and public wrappers. This prepares
+Task 4 to reuse the same log component for Lakehouse without changing build
+semantics.
+
+Changes:
+
+1. `tests/units/front/test_timed_build_log_contract.py`
+   Added RED-first contracts for script load order, shared component wiring, and generic CSS scoping.
+2. `src/front/static/query/js/timed-task-log.js`
+   Extracted the full timed task-log renderer with `TimedTaskLog.create(config)` and `show/hide/render/export` instance methods.
+3. `src/front/static/query/js/query-sync.js`
+   Replaced Lakebase inline build-log implementation with wrapper delegation to a configured `TimedTaskLog` instance.
+4. `src/front/static/query/css/query-sync.css`
+   Re-scoped build-log styles from `#syncBuildLogCard` to the shared `.timed-task-log-card` class.
+5. `src/front/templates/partials/dtwin/_query_sync.html`
+   Added `.timed-task-log-card` to the Lakebase build-log card without changing IDs or markup structure.
+6. `src/front/templates/dtwin.html`
+   Loaded `query/js/timed-task-log.js` before `query-databricks-build.js` and `query-sync.js`.
+
+Modified files:
+- tests/units/front/test_timed_build_log_contract.py
+- src/front/static/query/js/timed-task-log.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/css/query-sync.css
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/dtwin.html
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_timed_build_log_contract.py` →
+  `4 failed` (expected before implementation).
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_timed_build_log_contract.py tests/units/front/test_button_design_contract.py` →
+  `25 passed, 1 warning in 0.23s`.
+- Required full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `1 failed, 6116 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.26s`
+  (existing unrelated failure in `tests/units/objects/test_build_pipeline_materialize.py::TestWhatABuildReports::test_a_view_only_build_reports_its_mode`,
+  `_StubTM` missing `skip_step`).
+
+## Add Lakehouse timed build-log card
+
+Context: Task 4 of the Lakehouse build-progress plan requires the Databricks
+Build panel to reuse the shared timed task-log renderer introduced in Task 3.
+Lakehouse now renders the full log card and keeps start/poll/resume/terminal
+states aligned with the same shared behavior used by the Lakebase build panel.
+
+Changes:
+
+1. `tests/units/front/test_timed_build_log_contract.py`
+   Added RED-first Lakehouse contracts for timed-log card markup IDs and shared renderer polling wiring.
+2. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Added the full timed task-log card with Lakehouse-specific IDs, shared card class, intro text, Export, and Hide controls.
+3. `src/front/static/query/js/query-databricks-build.js`
+   Wired `TimedTaskLog.create(...)` and delegated start, poll rendering, resume rendering, terminal-state rendering, hide, and export handlers through the shared renderer instance.
+
+Modified files:
+- tests/units/front/test_timed_build_log_contract.py
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/static/query/js/query-databricks-build.js
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_timed_build_log_contract.py` →
+  `2 failed, 4 passed, 1 warning in 0.16s` (missing Lakehouse card/wiring before implementation).
+- GREEN (focused): `uv run --frozen pytest -q tests/units/front/test_timed_build_log_contract.py tests/units/front/test_lakehouse_materialization_ui.py tests/units/front/test_adjacency_refresh_ui.py` →
+  `39 passed, 1 warning in 0.17s`.
+- GREEN (full required suite): `uv run --frozen pytest -q -m "not scenario"` →
+  `6119 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.03s`.
+
+## Finalize Lakehouse build-progress documentation
+
+Context: Task 5 of the Lakehouse build-progress plan closes the workstream by
+updating the user-facing guidance for timed build stages and log export, then
+capturing diagnostics and full verification evidence without modifying the
+existing implementation or prior changelog sections.
+
+Changes:
+
+1. `docs/user-guide.md`
+   Added a Lakehouse build-progress subsection documenting ordered stage names,
+   live elapsed timers, completed step durations, total duration, and text-log
+   export/hide actions.
+2. `changelogs/v0.9.0/benoitcayladbx_2026-09-15.log`
+   Appended the Task 5 completion entry with exact diagnostics, focused test,
+   full non-scenario suite, and final diff verification outputs.
+
+Modified files:
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- Diagnostics: `ReadLints` on changed Python/JS/HTML files →
+  `No linter errors found.`
+- Focused: `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py tests/units/front/test_timed_build_log_contract.py tests/units/front/test_lakehouse_materialization_ui.py tests/units/front/test_adjacency_refresh_ui.py` →
+  `47 passed, 1 warning in 0.98s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6119 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.16s`.
+- Final diff checks: `git diff --check` (no output, no whitespace errors) and
+  `git status --short` (only intended doc change plus pre-existing unrelated edits).
+- Browser evidence: previously validated in Task 4 at `1440x900` and `375x812`
+  with no feature-related console or asset errors.
+
+## Fix Lakehouse view optimize-step sequencing
+
+Context: Final Lakehouse build-progress review found a blocking sequencing bug
+in `DeltaTripleStoreBuildPipeline.run` for view materialization. The pipeline
+was calling `skip_step` while `graph_view` was current, which incorrectly
+produced `graph_view=skipped` and `optimize=completed` in terminal task states.
+
+Changes:
+
+1. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+   Advanced from `graph_view` into `optimize` for both modes, then used
+   `skip_step` only on the `optimize` stage in view mode; kept table-mode
+   optimize execution and adjacency activation sequence aligned with the
+   approved stage contract and existing messages.
+2. `tests/units/graphdb/delta/test_delta_build_pipeline.py`
+   Added a real-`TaskManager` reduced-pipeline regression test that asserts
+   terminal stage statuses for view (`graph_view=completed`, `optimize=skipped`,
+   `adjacency=completed`) and table (`optimize=completed`) modes; preserved
+   existing call-contract coverage and fixed top-level blank-line spacing.
+3. `changelogs/v0.9.0/benoitcayladbx_2026-09-15.log`
+   Appended this review-fix entry with required verification evidence.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py -k "terminal_step_statuses_with_real_task_manager"` →
+  `1 failed, 1 passed` (view mode asserted `optimize=skipped`, got `completed` before fix).
+- Focused delta pipeline: `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_build_pipeline.py` →
+  `10 passed, 1 warning in 0.83s`.
+- Materialization regression: `uv run --frozen pytest -q tests/units/objects/test_build_pipeline_materialize.py` →
+  `13 passed, 1 warning in 0.81s`.
+- Full non-scenario suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6121 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.29s`.
+
+## Align Registry modal tabs with the shared rail
+
+Context: The Registry popup already used Bootstrap tabs for Browse and
+Bridges, but wrapped the panes in the independent `.ob-tab-content` card
+and kept the page-level 12px rail inset. That made the strip read as a
+nested boxed surface instead of the shared transparent underline rail
+used by Domain / Ontology / Settings tabs.
+
+Changes:
+
+1. src/front/templates/partials/layout/registry_modal.html
+   Wrapped Browse/Bridges in `ob-tabs-wrap` and a plain padded
+   `tab-content`, flush with the modal body.
+2. src/front/static/global/css/components.css
+   Zeroed the rail inset inside modals and `ob-tabs-wrap`, and let a
+   modal-body wrap fill remaining height.
+3. tests/units/front/test_clarity_design_contract.py
+   Added a structural contract for the Registry modal tab rail.
+4. tests/units/api/test_ui_rendering.py
+   Asserted rendered home HTML uses `ob-tabs` and not `ob-tab-content`.
+
+Modified files:
+- src/front/templates/partials/layout/registry_modal.html
+- src/front/static/global/css/components.css
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/api/test_ui_rendering.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` →
+`6122 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.41s`.
+
+## Make the Registry Bridges canvas fill the modal height
+
+Context: After moving the Registry modal onto the shared tab rail, the
+Bridges D3 canvas stayed near its 280px floor with a large empty gap
+below it. The pane sized with `height: 100%`, which collapses unless
+every ancestor carries a definite height — inside the nested modal flex
+chain it did not resolve.
+
+Changes:
+
+1. src/front/static/global/css/registry-modal.css
+   Made `#registryModalTabContent` a flex column and switched the Browse
+   and Bridges panes from `height: 100%` to `flex: 1` sizing, so the
+   canvas fills down to the modal bottom regardless of ancestor height.
+
+Modified files:
+- src/front/static/global/css/registry-modal.css
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` →
+`6125 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.62s`.
+
+## Publish Lakehouse build progress promptly
+
+Context: Lakehouse build stages were timestamped correctly on the server, but
+the browser waited 1.5 seconds before its first task request and between later
+requests. Early transitions could therefore appear together instead of
+updating as the build advanced.
+
+Changes:
+
+1. `src/front/static/query/js/query-databricks-build.js`
+   Replaced delayed interval polling with an immediate, non-overlapping
+   recursive monitor that refreshes every 300 milliseconds through setup and
+   every 1 second during adjacency construction.
+2. `tests/units/front/test_timed_build_log_contract.py`
+   Added contracts for immediate startup, adaptive delays, non-interval
+   scheduling, and terminal/error stop behavior.
+3. `docs/user-guide.md`
+   Documented the responsive Lakehouse build-monitoring cadence.
+4. `docs/superpowers/specs/2026-09-15-lakehouse-build-progress-design.md`
+   Recorded the diagnosed batching cause and approved real-time behavior.
+5. `docs/superpowers/plans/2026-09-15-lakehouse-build-progress.md`
+   Added the test-first adaptive polling implementation task.
+
+Modified files:
+- src/front/static/query/js/query-databricks-build.js
+- tests/units/front/test_timed_build_log_contract.py
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-15-lakehouse-build-progress-design.md
+- docs/superpowers/plans/2026-09-15-lakehouse-build-progress.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_timed_build_log_contract.py` →
+  `3 failed, 6 passed` before implementation.
+- Focused: `uv run --frozen pytest -q tests/units/front/test_timed_build_log_contract.py tests/units/front/test_lakehouse_materialization_ui.py tests/units/front/test_adjacency_refresh_ui.py` →
+  `42 passed, 1 warning in 0.18s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6125 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.36s`.
+- Browser: the first task request began in 1.3 milliseconds; measured polling
+  delays were 301–304 milliseconds before adjacency and 1003 milliseconds
+  during adjacency; maximum concurrent requests was 1; terminal and failed
+  responses scheduled no retry; desktop and 375-pixel layouts passed.
+
+## Relocate Registry Create and operational status
+
+Context: The Registry modal put Create a New Domain in the header, while
+Import/Export lived in the Browse section toolbar and the operational
+status sat above the domain list. Users look for domain actions together
+and want the health line in the header.
+
+Changes:
+
+1. src/front/templates/partials/layout/registry_modal.html
+   Replaced the header Create button with `#registryStatus`.
+2. src/front/templates/partials/registry/_registry_domains.html
+   Placed Create a New Domain before Export and Import in the Browse
+   section header.
+3. src/front/static/global/css/registry-modal.css
+   Constrained the header status so it stays right-aligned without
+   crowding the close control.
+4. tests/units/front/test_registry_operational_status.py
+   Asserted status in the modal header and Create-before-Export/Import
+   order.
+
+Modified files:
+- src/front/templates/partials/layout/registry_modal.html
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/static/global/css/registry-modal.css
+- tests/units/front/test_registry_operational_status.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` →
+`6126 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.07s`.
+
+## Reduce Registry modal loading waits
+
+Context: Opening the Registry modal started another Browse request even when
+the page-load request had just completed or remained in flight. Bridges did
+not begin loading until its tab was selected, and rapid open/switch actions
+could start duplicate aggregation requests.
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   Added in-flight deduplication and a 15-second freshness window for Browse,
+   deduplicated Bridges loads, prefetched Bridges on modal open, preserved
+   forced Refresh behavior, and invalidated prefetched Bridges after domain
+   mutations.
+2. src/front/static/global/js/registry-modal.js
+   Identified modal-originated section events so Registry loading can prefetch
+   only for the popup interaction.
+3. tests/units/front/test_registry_modal_loading.py
+   Added contracts for modal event sourcing, Browse caching, Bridges prefetch
+   deduplication, explicit refreshes, and mutation invalidation.
+4. tests/units/front/test_registry_backend_column.py
+   Updated the Backend-column contract for the extracted internal Browse
+   loader.
+5. docs/user-guide.md
+   Documented short-lived Browse reuse, background Bridges loading, and
+   explicit Refresh behavior.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- src/front/static/global/js/registry-modal.js
+- tests/units/front/test_registry_modal_loading.py
+- tests/units/front/test_registry_backend_column.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_registry_modal_loading.py`
+  → `3 failed` before implementation.
+- Focused: `uv run --frozen pytest -q tests/units/front/test_registry_modal_loading.py tests/units/front/test_registry_operational_status.py tests/units/front/test_registry_stacked_obx_modals.py tests/units/api/test_ui_rendering.py::TestSettingsPage::test_registry_modal_on_home`
+  → `13 passed, 1 warning in 1.40s`.
+- Full non-scenario suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6130 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.12s`.
+
+## Gate Lakehouse Build content while loading
+
+Context: The Lakehouse Build page displayed placeholder object information and
+action buttons underneath its loading message. Users could see and potentially
+focus controls before the initial triple-store state was known.
+
+Changes:
+
+1. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Added distinct initial Loading, retryable Error, and hidden Content
+   containers so server-rendered placeholders and actions cannot flash.
+2. `src/front/static/query/js/query-databricks-build.js`
+   Added explicit initial-state transitions, strict info-response handling,
+   atomic Content reveal, and Retry behavior while preserving visible content
+   during later refreshes and preventing stale failures from hiding content.
+3. `tests/units/front/test_lakehouse_build_loading_state.py`
+   Added contracts for default visibility, accessibility, state transitions,
+   strict success handling, failure behavior, and Retry wiring.
+4. `docs/user-guide.md`
+   Documented spinner-only initial loading and retryable failure behavior.
+5. `docs/superpowers/specs/2026-09-15-lakehouse-build-loading-state-design.md`
+   Recorded the approved Loading, Ready, and Error state contract.
+6. `docs/superpowers/plans/2026-09-15-lakehouse-build-loading-state.md`
+   Recorded the test-first implementation and verification procedure.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/static/query/js/query-databricks-build.js
+- tests/units/front/test_lakehouse_build_loading_state.py
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-15-lakehouse-build-loading-state-design.md
+- docs/superpowers/plans/2026-09-15-lakehouse-build-loading-state.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_lakehouse_build_loading_state.py` →
+  `5 failed, 1 warning in 0.17s` before implementation.
+- Focused: `uv run --frozen pytest -q tests/units/front/test_lakehouse_build_loading_state.py tests/units/front/test_lakehouse_materialization_ui.py tests/units/front/test_timed_build_log_contract.py tests/units/front/test_adjacency_refresh_ui.py` →
+  `48 passed, 1 warning in 0.21s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6136 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.05s`.
+- Diagnostics: IDE lint inspection reported no errors in the changed HTML,
+  JavaScript, or Python files; `git diff --check` reported no whitespace errors.
+- Browser: 34 checks passed across delayed Loading, initial Error, Retry,
+  successful Ready, and subsequent Refresh states at `1440x900` and `375x812`;
+  hidden controls were not focusable and no unexpected console or asset errors
+  remained after success.
+
+## Keep build SQL on Thrift
+
+Context: Deployed builds could inherit the legacy SEA/Kernel setting and then
+attempt CloudFetch downloads through the Kernel transport, producing repeated
+network failures. Build DDL and writes now always use Thrift, while the separate
+Lakehouse//RT query warehouse retains its required SEA/Kernel path. Expected
+403 responses from the app-permission REST probe also fall back quietly.
+
+Changes:
+
+1. `src/back/objects/session/GlobalConfigService.py`
+   Ignores stale build SEA values and always persists the compatibility flag as false.
+2. `src/back/core/helpers/DatabricksHelpers.py`
+   Resolves the build transport unconditionally to Thrift.
+3. `src/back/objects/domain/SettingsService.py`
+   Ignores legacy build SEA requests and reports the disabled transport.
+4. `src/api/routers/internal/settings.py`
+   Stops forwarding client-provided SEA values for the build warehouse.
+5. `src/back/objects/registry/PermissionService.py`
+   Downgrades the expected REST 403 fallback from warning to debug while retaining warnings for unexpected failures.
+6. `src/front/templates/settings.html`
+   Removes the obsolete build SEA/Kernel checkbox.
+7. `src/front/static/config/js/settings.js`
+   Removes build SEA hydration and request payload wiring.
+8. `tests/units/settings/test_delta_warehouse_config.py`
+   Covers stale settings, API compatibility, persistence, and fixed-Thrift resolution.
+9. `tests/units/settings/test_cloud_fetch_toggle.py`
+   Verifies CloudFetch remains independently configurable without build SEA controls.
+10. `tests/units/api/test_ui_rendering.py`
+    Verifies the obsolete checkbox is absent from rendered Settings.
+11. `tests/units/auth/test_permissions.py`
+    Covers quiet 403 fallback and warning retention for unexpected REST failures.
+12. `docs/user-guide.md`
+    Documents the fixed build transport and separate Lakehouse//RT query role.
+13. `docs/architecture.md`
+    Marks `warehouse_use_sea` as a disabled legacy compatibility key.
+
+Modified files:
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/objects/registry/PermissionService.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_delta_warehouse_config.py
+- tests/units/settings/test_cloud_fetch_toggle.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/auth/test_permissions.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- Focused regressions: `266 passed, 1 warning in 3.16s`.
+- Permission fallback: `2 passed, 67 deselected, 1 warning in 1.04s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6139 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.51s`.
+- Diagnostics: IDE lint inspection reported no errors in changed files.
+
+## Enable Lakehouse/RT reads in Databricks Apps
+
+Context: Databricks Apps could not download result files emitted by the
+SQL connector's Kernel backend, so graph reads temporarily fell back to the
+slower Build warehouse. Apps now query the configured Lakehouse/RT warehouse
+through direct INLINE Statement Execution responses while local development
+keeps Kernel and Build operations keep Thrift.
+
+Changes:
+
+1. `src/back/core/databricks/StatementExecutionWarehouse.py`
+   Adds the Apps-only INLINE JSON Statement Execution transport, internal chunk
+   pagination, typed row decoding, timeout cancellation, and guarded failures
+   for external or truncated results.
+2. `src/back/core/databricks/DatabricksClient.py`
+   Selects INLINE Statement Execution for Apps with SEA enabled and preserves
+   the existing SQL Warehouse service for local Kernel and Thrift clients.
+3. `src/back/core/databricks/__init__.py`
+   Exports the new Statement Execution service.
+4. `src/back/core/helpers/DatabricksHelpers.py`
+   Restores the configured RT warehouse and SEA setting in Databricks Apps
+   instead of substituting the Build warehouse.
+5. `tests/units/core/test_statement_execution_warehouse.py`
+   Covers request shape, scalar decoding, polling, chunk pagination, terminal
+   failures, truncation, external links, cancellation, and connection probes.
+6. `tests/units/core/test_databricks_client.py`
+   Covers Apps INLINE, local Kernel, and Apps Thrift service selection.
+7. `tests/units/settings/test_delta_warehouse_config.py`
+   Covers Apps RT warehouse and SEA setting resolution.
+8. `docs/user-guide.md`
+   Documents Apps INLINE routing, local Kernel behavior, and the 24 MiB limit.
+9. `docs/architecture.md`
+   Documents runtime routing and the new transport component.
+10. `docs/sphinx/api/app.core.databricks.rst`
+    Adds API documentation for the Statement Execution service.
+11. `docs/superpowers/specs/2026-09-15-apps-graph-read-latency-design.md`
+    Records the approved Apps Lakehouse/RT transport design.
+12. `docs/superpowers/plans/2026-09-15-apps-graph-read-latency.md`
+    Records the TDD implementation plan.
+
+Modified files:
+- src/back/core/databricks/StatementExecutionWarehouse.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/databricks/__init__.py
+- src/back/core/helpers/DatabricksHelpers.py
+- tests/units/core/test_statement_execution_warehouse.py
+- tests/units/core/test_databricks_client.py
+- tests/units/settings/test_delta_warehouse_config.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/sphinx/api/app.core.databricks.rst
+- docs/superpowers/specs/2026-09-15-apps-graph-read-latency-design.md
+- docs/superpowers/plans/2026-09-15-apps-graph-read-latency.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- TDD RED: new transport module missing; routing tests failed on the Apps
+  Build fallback and disabled SEA behavior.
+- Focused RT transport suite → `61 passed, 1 warning in 1.15s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6158 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.45s`.
+- Sphinx: `ci/build_docs.sh` → built successfully with pre-existing warnings.
+- Diagnostics: IDE lint inspection and `git diff --check` reported no errors.
+- Browser: Settings passed at 1440 and 375 pixels with Build and CloudFetch
+  controls intact, build SEA absent, Lakehouse//RT query controls intact, and
+  no console errors or failed requests.
+
+## Skip Kernel/RT SQL inside Databricks Apps
+
+Context: After forcing build SQL onto Thrift, deployed Apps logs still showed
+Kernel CloudFetch NetworkError on `GET /dtwin/` and `GET /mapping/load`. The
+Kernel backend ignores `use_cloud_fetch=False` and always downloads result
+files from `storage.cloud.databricks.com`, which Databricks Apps cannot reach.
+Runtime now falls back to the Build warehouse and Thrift in App mode.
+
+Changes:
+
+1. `src/back/core/helpers/DatabricksHelpers.py`
+   Disables Lakehouse Kernel in Apps and substitutes the Build warehouse when
+   the query warehouse is configured for SEA/RT.
+2. `tests/units/settings/test_delta_warehouse_config.py`
+   Covers the Apps Kernel disable and RT-to-build warehouse substitution.
+3. `docs/user-guide.md`
+   Documents the Apps CloudFetch/Kernel limitation and runtime fallback.
+4. `docs/architecture.md`
+   Notes that Apps skip Kernel/RT at warehouse resolution time.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- tests/units/settings/test_delta_warehouse_config.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` →
+  `6141 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.81s`.
+
+## Add the property companion for Explorer expansion
+
+Context: Adjacency indexes removed full-SPO scans from hop discovery, but the
+final Explorer payload fetch still joined discovered entities against the
+reader-facing SPO union. A typed-subject `_props` snapshot now serves that
+join through a subject-clustered/indexed physical table.
+
+Changes:
+
+1. `src/back/core/graphdb/props.py`
+   Adds shared typed-subject property projection SQL and guarded missing-table detection.
+2. `src/back/core/graphdb/adjacency.py`
+   Allows the final expansion payload to use a relation distinct from the SPO hop source.
+3. `src/back/core/graphdb/GraphDBBackend.py`
+   Adds the default property-companion capability and table-ID contract.
+4. `src/back/core/graphdb/delta/_table_naming.py`
+   Defines the Delta `_props` FQN and suffix.
+5. `src/back/core/graphdb/delta/materialize.py`
+   Adds `_props` CTAS with `CLUSTER BY (subject)`.
+6. `src/back/core/graphdb/delta/DeltaFlatStore.py`
+   Rebuilds and optimizes `_props`, uses it for expansion payloads, and retries
+   against SPO only when the companion is missing.
+7. `src/back/core/graphdb/lakebase/_adjacency_ddl.py`
+   Adds `_props` DDL, subject index, transactional data refresh, and analysis.
+8. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Integrates `_props` into the atomic graph-index rebuild and optimized expansion path.
+9. `src/back/core/graphdb/_starter_kit/ExampleStore.py`
+   Generalizes the extension-point documentation to all graph-index companions.
+10. `src/back/objects/digitaltwin/DigitalTwin.py`
+    Uses future-proof graph-index wording in refresh progress.
+11. `src/front/static/config/js/settings.js`
+    Groups Lakebase `_props` tables with their domain/version objects.
+12. `tests/units/graphdb/test_props_sql.py`
+    Covers the typed-subject projection without filtering literal or IRI payloads.
+13. `tests/units/graphdb/test_adjacency_sql.py`
+    Covers the separate property relation in the final payload join.
+14. `tests/units/graphdb/test_graphdb_adjacency_contract.py`
+    Covers the default property table-ID contract.
+15. `tests/units/graphdb/delta/test_delta_flat_store.py`
+    Covers Delta rebuild, optimized fetch, guarded fallback, and error propagation.
+16. `tests/units/graphdb/test_lakebase_adjacency.py`
+    Covers Lakebase naming, DDL, transaction lifecycle, optimized fetch, and fallback.
+17. `tests/units/front/test_lakebase_object_grouping.py`
+    Covers `_props` grouping in Settings.
+18. `docs/graphdb-integration.md`
+    Documents the four-index lifecycle and expansion fallback.
+19. `docs/architecture.md`
+    Adds `_props` to the backend object and refresh matrices.
+20. `docs/user-guide.md`
+    Documents property snapshots, consistency, and Settings grouping.
+21. `docs/superpowers/specs/2026-09-15-property-companion-design.md`
+    Defines the approved property-companion design.
+22. `docs/superpowers/plans/2026-09-15-property-companion.md`
+    Records the TDD implementation plan.
+
+Modified files:
+- src/back/core/graphdb/props.py
+- src/back/core/graphdb/adjacency.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/lakebase/_adjacency_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/core/graphdb/_starter_kit/ExampleStore.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/front/static/config/js/settings.js
+- tests/units/graphdb/test_props_sql.py
+- tests/units/graphdb/test_adjacency_sql.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/test_lakebase_adjacency.py
+- tests/units/front/test_lakebase_object_grouping.py
+- docs/graphdb-integration.md
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-15-property-companion-design.md
+- docs/superpowers/plans/2026-09-15-property-companion.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- TDD RED: focused property-companion suite → `10 failed, 38 passed`.
+- Focused property-companion suite → `48 passed, 1 warning in 0.94s`.
+- Graph/index and Settings grouping suite → `245 passed, 1 warning in 1.29s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6148 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.05s`.
+- Diagnostics: IDE lint inspection reported no errors in changed files.
+
+## Document the property companion in Sphinx and Lakebase schema docs
+
+Context: `_props` shipped without Sphinx autodoc, Lakebase object-layout
+coverage, README mention, or Delta naming/CTAS tests. Docs and API pages now
+match the four-index Explorer snapshot.
+
+Changes:
+
+1. `docs/sphinx/api/app.core.graphdb.rst`
+   Autodoc for shared `adjacency`, `entity_search`, and `props` SQL modules.
+2. `docs/sphinx/api/app.core.graphdb.lakebase.rst`
+   Autodoc for `_adjacency_ddl` (adj, entity search, props).
+3. `docs/graphdb-integration.md`
+   Fixes the Lakebase suffix list wording.
+4. `docs/lakebase-graphdb.md`
+   Lists the four graph-index tables next to the 3-object triple layout.
+5. `docs/superpowers/specs/2026-09-15-property-companion-design.md`
+   Marks the spec implemented.
+6. `src/back/core/graphdb/GraphDBBackend.py`
+   Documents the four companions on `rebuild_adjacency`.
+7. `README.md`
+   Mentions Explorer indexes on Lakehouse/Lakebase Build.
+8. `tests/units/graphdb/delta/test_delta_package.py`
+   Covers `_props` FQN and subject-clustered CTAS.
+
+Modified files:
+- docs/sphinx/api/app.core.graphdb.rst
+- docs/sphinx/api/app.core.graphdb.lakebase.rst
+- docs/graphdb-integration.md
+- docs/lakebase-graphdb.md
+- docs/superpowers/specs/2026-09-15-property-companion-design.md
+- src/back/core/graphdb/GraphDBBackend.py
+- README.md
+- tests/units/graphdb/delta/test_delta_package.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- `ci/build_docs.sh` and `sphinx -W` completed with no warnings.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6160 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.43s`.
+
+## Rename the graph-index refresh action
+
+Context: The Knowledge Graph Build action refreshes all graph-index companions,
+not only adjacency tables. Its user-facing label now describes that broader
+cache refresh while internal IDs and API paths remain unchanged.
+
+Changes:
+
+1. `src/front/templates/partials/dtwin/_query_sync.html`
+   Renames the Lakebase Build action and permission tooltip to Refresh cache.
+2. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Renames the Lakehouse Build action and permission tooltip to Refresh cache.
+3. `tests/units/front/test_adjacency_refresh_ui.py`
+   Adds a contract covering both role-gated button labels.
+4. `docs/user-guide.md`
+   Uses the new button label in user-facing instructions and matrices.
+5. `docs/architecture.md`
+   Aligns graph-index lifecycle descriptions with the new label.
+6. `docs/graphdb-integration.md`
+   Renames the user action while preserving adjacency terminology internally.
+7. `docs/lakebase-graphdb.md`
+   Aligns the Lakebase cache-refresh guidance.
+8. `docs/superpowers/specs/2026-09-15-property-companion-design.md`
+   Records the final label without changing the refresh API.
+9. `docs/superpowers/plans/2026-09-15-property-companion.md`
+   Clarifies that only the API identity remains unchanged.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- tests/units/front/test_adjacency_refresh_ui.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/graphdb-integration.md
+- docs/lakebase-graphdb.md
+- docs/superpowers/specs/2026-09-15-property-companion-design.md
+- docs/superpowers/plans/2026-09-15-property-companion.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- TDD RED: label contract failed with `0 == 2`.
+- Focused UI contracts → `9 passed, 1 warning in 0.13s`.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6161 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.07s`.
+- Diagnostics: IDE lint inspection reported no errors.
+
+## Document graph query optimizations
+
+Context: Graph-query performance techniques were spread across backend,
+architecture, and implementation-plan documentation. A single guide now
+explains the implemented read path, operational trade-offs, backend
+differences, and optimizations that remain planned.
+
+Changes:
+
+1. `docs/optimizations.md`
+   Documents Delta materialization, Preview indexing, bidirectional adjacency,
+   bounded BFS/fallbacks, `_props`, aggregate/analysis pushdown, query-shape
+   reductions, refresh/statistics, query limits, retry/RT transport, Neo4j
+   native traversal, connection efficiency, timings, and operations.
+2. `docs/sphinx/guides/optimizations.md`
+   Includes the guide in the Sphinx documentation.
+3. `docs/sphinx/index.rst`
+   Adds Graph Query Optimizations to the topic-guide navigation.
+4. `README.md`
+   Links the new optimization guide from the graph-engine overview.
+5. `docs/architecture.md`
+   Removes a broken Sphinx link to the repository-root license.
+6. `docs/superpowers/plans/2026-09-15-search-transversal-next.md`
+   Sequences the remaining Preview and traversal optimization backlog.
+
+Modified files:
+- docs/optimizations.md
+- docs/sphinx/guides/optimizations.md
+- docs/sphinx/index.rst
+- README.md
+- docs/architecture.md
+- docs/superpowers/plans/2026-09-15-search-transversal-next.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests:
+- Sphinx: `.venv/bin/python -m sphinx -b html docs/sphinx
+  docs/sphinx/_build/html -W --keep-going -q` → passed with no warnings.
+- Full suite: `uv run --frozen pytest -q -m "not scenario"` →
+  `6161 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.96s`.
+- Diagnostics: IDE lint inspection reported no errors.
+
+## Ship remaining Explorer search/traversal optimizations
+
+Context: The Search / transversal Asana backlog still had Preview warehouse
+`ORDER BY`, a Contains default, asserted-only SPO Preview, no `pg_trgm` / Bloom,
+and adj clustered only by endpoint. Waves 1–2 plus adj clustering are now in
+code. Types-on-adjacency stays open (Explorer has no hop-type filter).
+
+Changes:
+
+1. src/back/core/graphdb/entity_search.py
+   Dropped warehouse ORDER BY and sort Preview rows in Python.
+2. src/back/core/graphdb/GraphDBBackend.py
+   Preview uses `_entity_search_asserted` when Inferred is off.
+3. src/back/core/graphdb/delta/_table_naming.py
+   Added `_entity_search_asserted` FQN helpers.
+4. src/back/core/graphdb/delta/materialize.py
+   Clustered search on `(type_uri, label_lc)`, adj on `(src|dst, predicate)`, Bloom TBLPROPERTIES.
+5. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Rebuilds asserted search from `_data` and resolves synced FQN via the domain.
+6. src/back/core/graphdb/lakebase/_adjacency_ddl.py
+   Added asserted search table, `pg_trgm` GIN, composite adj btrees.
+7. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Rebuilds asserted search from `_sync`.
+8. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Defaulted Match to Starts with.
+9. src/front/static/query/js/query-sigmagraph.js
+   Defaulted the Search fallback to starts; local-name lookup still uses contains.
+10. tests/units/graphdb/test_entity_search_sql.py
+    Covered LIMIT without ORDER BY and in-app sort.
+11. tests/units/graphdb/test_graphdb_adjacency_contract.py
+    Covered asserted-index Preview.
+12. tests/units/graphdb/delta/test_delta_package.py
+    Covered new cluster keys, asserted FQN, and Bloom SQL.
+13. tests/units/graphdb/delta/test_delta_flat_store.py
+    Covered asserted CTAS and extra OPTIMIZE.
+14. tests/units/graphdb/test_lakebase_adjacency.py
+    Covered asserted DDL, GIN skip/apply, composite indexes.
+15. tests/units/front/test_explorer_match_default.py
+    Covered Starts-with default vs programmatic contains.
+16. docs/optimizations.md
+    Documented the new Preview and layout techniques.
+17. docs/graphdb-integration.md
+    Listed `_entity_search_asserted` and updated cluster keys.
+18. docs/architecture.md
+    Matched the graph-index object table.
+19. docs/lakebase-graphdb.md
+    Documented asserted search and `pg_trgm`.
+20. docs/user-guide.md
+    Noted Starts-with default and asserted Preview index.
+21. README.md
+    Mentioned `_entity_search_asserted`.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/lakebase/_adjacency_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/graphdb/test_entity_search_sql.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/test_lakebase_adjacency.py
+- tests/units/front/test_explorer_match_default.py
+- docs/optimizations.md
+- docs/graphdb-integration.md
+- docs/architecture.md
+- docs/lakebase-graphdb.md
+- docs/user-guide.md
+- README.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6173 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.64s
+

@@ -167,6 +167,58 @@ else
     echo "  [cross-app] SKIP — could not resolve both app service principals"
 fi
 
+# ── SQL warehouse CAN_USE for both SPs ───────────────────────────────────────
+# DAB declares ``resources.sql-warehouse.permission: CAN_USE``, but switching
+# the bound warehouse (empty DEFAULT_WAREHOUSE_ID → Serverless Starter) can
+# leave the app SP without CAN_USE on the new endpoint. Builds then fail
+# with "not authorized to use this SQL Endpoint" before any DDL runs.
+bound_warehouse_id() {
+    local app="$1"
+    databricks apps get "$app" -o json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for r in d.get('resources') or []:
+    wid = ((r.get('sql_warehouse') or {}).get('id') or '').strip()
+    if wid:
+        print(wid)
+        break
+" 2>/dev/null || true
+}
+
+_WH_APP="${APP_FOR_CAN_USE:-${FIRST_APP:-}}"
+_WH_ID=""
+if [[ -n "$_WH_APP" ]]; then
+    _WH_ID="$(bound_warehouse_id "$_WH_APP")"
+fi
+if [[ -n "$_WH_ID" ]]; then
+    echo
+    echo "=== SQL warehouse CAN_USE: ${_WH_ID} (from ${_WH_APP}) ==="
+    _WH_SP_COUNT=0
+    for sp in "${APP_SP_ID:-}" "${MCP_SP_ID:-}"; do
+        [[ -z "$sp" ]] && continue
+        _WH_SP_COUNT=$((_WH_SP_COUNT + 1))
+        if databricks warehouses update-permissions "$_WH_ID" \
+            --json "{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_USE\"}]}" \
+            >/dev/null 2>&1; then
+            echo "  ✓ CAN_USE on warehouse ${_WH_ID} → $sp"
+        else
+            echo "  ✗ warehouse grant failed for $sp — run manually:"
+            echo "    databricks warehouses update-permissions ${_WH_ID} \\"
+            echo "      --json '{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_USE\"}]}'"
+            FAILED=$((FAILED + 1))
+        fi
+    done
+    if [[ $_WH_SP_COUNT -eq 0 ]]; then
+        echo "  ✗ no app service principals resolved — cannot grant CAN_USE on warehouse ${_WH_ID}"
+        FAILED=$((FAILED + 1))
+    fi
+else
+    echo "  [warehouse] SKIP — no sql-warehouse binding on '${_WH_APP:-<none>}'"
+fi
+
 # ── Graph analytics job CAN_MANAGE_RUN for both SPs ──────────────────────────
 # The app triggers the serverless analytics job with ``jobs.run_now`` and
 # resolves it by listing jobs (LakeflowRunner.resolve_job_id). ``jobs.list()``

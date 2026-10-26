@@ -6,42 +6,40 @@
                 <h5 class="modal-title mb-0" id="registryModalLabel">
                     <i class="bi bi-boxes me-2"></i>Registry
                 </h5>
-                <div class="d-flex align-items-center gap-2 ms-auto">
-                    <button type="button" class="btn btn-sm btn-primary" id="btnRegistryModalNewDomain"
-                            data-requires-app="admin"
-                            title="Create a new domain">
-                        <i class="bi bi-file-earmark-plus me-1"></i> Create a New Domain
-                    </button>
+                <div class="d-flex align-items-center gap-3 ms-auto">
+                    <div id="registryStatus" class="registry-modal-status" style="display:none;"></div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
             </div>
-            <div class="modal-body pt-2">
-                <ul class="nav nav-tabs ob-tabs" id="registryModalTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="registry-tab-browse" data-bs-toggle="tab"
-                                data-bs-target="#registry-pane-browse" type="button" role="tab"
-                                aria-controls="registry-pane-browse" aria-selected="true"
-                                data-registry-section="domains">
-                            <i class="bi bi-search me-1"></i> Browse
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="registry-tab-bridges" data-bs-toggle="tab"
-                                data-bs-target="#registry-pane-bridges" type="button" role="tab"
-                                aria-controls="registry-pane-bridges" aria-selected="false"
-                                data-registry-section="bridges">
-                            <i class="bi bi-signpost-split me-1"></i> Bridges
-                        </button>
-                    </li>
-                </ul>
-                <div class="tab-content ob-tab-content" id="registryModalTabContent">
-                    <div class="tab-pane fade show active" id="registry-pane-browse" role="tabpanel"
-                         aria-labelledby="registry-tab-browse">
-                        {% include "partials/registry/_registry_domains.html" %}
-                    </div>
-                    <div class="tab-pane fade" id="registry-pane-bridges" role="tabpanel"
-                         aria-labelledby="registry-tab-bridges">
-                        {% include "partials/registry/_registry_bridges.html" %}
+            <div class="modal-body p-0 d-flex flex-column">
+                <div class="ob-tabs-wrap">
+                    <ul class="nav nav-tabs ob-tabs" id="registryModalTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="registry-tab-browse" data-bs-toggle="tab"
+                                    data-bs-target="#registry-pane-browse" type="button" role="tab"
+                                    aria-controls="registry-pane-browse" aria-selected="true"
+                                    data-registry-section="domains">
+                                <i class="bi bi-search me-1"></i> Browse
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="registry-tab-bridges" data-bs-toggle="tab"
+                                    data-bs-target="#registry-pane-bridges" type="button" role="tab"
+                                    aria-controls="registry-pane-bridges" aria-selected="false"
+                                    data-registry-section="bridges">
+                                <i class="bi bi-signpost-split me-1"></i> Bridges
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content p-3" id="registryModalTabContent">
+                        <div class="tab-pane fade show active" id="registry-pane-browse" role="tabpanel"
+                             aria-labelledby="registry-tab-browse">
+                            {% include "partials/registry/_registry_domains.html" %}
+                        </div>
+                        <div class="tab-pane fade" id="registry-pane-bridges" role="tabpanel"
+                             aria-labelledby="registry-tab-bridges">
+                            {% include "partials/registry/_registry_bridges.html" %}
+                        </div>
                     </div>
                 </div>
             </div>

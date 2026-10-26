@@ -218,52 +218,65 @@ class TestRoundTripParity:
         assert RDFS_LABEL in preds
         assert f"{NS}city" in preds
 
-    def test_find_triples_bfs_page_includes_folded_metadata_and_aliases(self):
-        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
 
-        class _DummyConn:
-            def run(self, cypher: str, **params: Any) -> List[Dict[str, Any]]:
-                raise AssertionError(f"Unexpected cypher in test: {cypher} / {params}")
+def test_get_triples_page_for_subjects_is_distinct_sorted_and_exact_total():
+    from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
 
-        read_ops = Neo4jReadOps(_DummyConn())
-        captured_subjects: Dict[str, List[str]] = {"value": []}
-        read_ops.bfs_traversal = lambda *args, **kwargs: [  # type: ignore[method-assign]
-            {"entity": f"{NS}Customer/CUST-1007", "min_lvl": 0},
-            {"entity": f"{NS}Policy/POL-20008", "min_lvl": 1},
-        ]
-        read_ops.find_subjects_by_patterns = lambda table_name, patterns: {  # type: ignore[method-assign]
-            f"{NS}Policy/POL-20008",
-            f"{NS}PolicyType/POL-20008",
-        }
+    r = Neo4jReadOps(FakeGraph())
+    r.get_triples_for_subjects = lambda _table, _subjects: [  # type: ignore[method-assign]
+        {"subject": "s2", "predicate": "p1", "object": "o1"},
+        {"subject": "s1", "predicate": "p2", "object": "o1"},
+        {"subject": "s1", "predicate": "p1", "object": "o2"},
+        {"subject": "s1", "predicate": "p1", "object": "o2"},  # duplicate
+        {"subject": "s1", "predicate": "p1", "object": "o1"},
+        {"subject": "s2", "predicate": "p1", "object": "o1"},  # duplicate
+    ]
 
-        def _triples_stub(table_name: str, subjects: List[str]) -> List[Dict[str, str]]:
-            captured_subjects["value"] = list(subjects)
-            return [
-                {"subject": f"{NS}Customer/CUST-1007", "predicate": f"{NS}holds", "object": f"{NS}Policy/POL-20008"},
-                {"subject": f"{NS}PolicyType/POL-20008", "predicate": RDF_TYPE, "object": f"{NS}PolicyType"},
-                {"subject": f"{NS}PolicyType/POL-20008", "predicate": RDFS_LABEL, "object": "Policy Type"},
-                {"subject": f"{NS}PolicyType/POL-20008", "predicate": f"{NS}kind", "object": "MOTOR"},
-                {"subject": f"{NS}PolicyType/POL-20008", "predicate": RDF_TYPE, "object": f"{NS}PolicyType"},
-            ]
+    got = r.get_triples_page_for_subjects(
+        "InsurBricks_V1",
+        ["s1", "s2"],
+        limit=2,
+        offset=1,
+    )
 
-        read_ops.get_triples_for_subjects = _triples_stub  # type: ignore[method-assign]
+    assert got["total"] == 4
+    assert got["rows"] == [
+        {"subject": "s1", "predicate": "p1", "object": "o2"},
+        {"subject": "s1", "predicate": "p2", "object": "o1"},
+    ]
+    assert len(got["rows"]) <= 2
 
-        result = read_ops.find_triples_bfs_page(
-            "InsurBricks_V1",
-            "",
-            2,
-            limit=1,
-            offset=0,
-            search="CUST-1007",
-            entity_type=f"{NS}Customer",
-        )
 
-        assert result["seed_count"] == 1
-        assert result["entity_count"] == 3
-        assert result["total"] == 4
-        assert result["has_more"] is True
-        assert len(result["triples"]) == 1
-        assert result["triples"] == sorted(
-            result["triples"], key=lambda r: (r["subject"], r["predicate"], r["object"])
-        )
-        assert f"{NS}PolicyType/POL-20008" in captured_subjects["value"]
+def test_neo4j_store_delegates_get_triples_page_for_subjects():
+    from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+
+    class _Reads:
+        def __init__(self) -> None:
+            self.args = None
+
+        def get_triples_page_for_subjects(self, table_name, subjects, *, limit, offset):
+            self.args = (table_name, subjects, limit, offset)
+            return {"rows": [{"subject": "s", "predicate": "p", "object": "o"}], "total": 1}
+
+    store = object.__new__(Neo4jStore)
+    store._reads = _Reads()  # type: ignore[attr-defined]
+
+    got = store.get_triples_page_for_subjects("g", ["s"], limit=10, offset=3)
+
+    assert got == {"rows": [{"subject": "s", "predicate": "p", "object": "o"}], "total": 1}
+    assert store._reads.args == ("g", ["s"], 10, 3)
+
+
+def test_get_triples_page_for_subjects_empty_subjects_short_circuits():
+    from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+
+    r = Neo4jReadOps(FakeGraph())
+
+    def _must_not_fetch(_table, _subjects):
+        raise AssertionError("get_triples_for_subjects must not be called for empty subjects")
+
+    r.get_triples_for_subjects = _must_not_fetch  # type: ignore[method-assign]
+
+    got = r.get_triples_page_for_subjects("InsurBricks_V1", [], limit=10, offset=0)
+
+    assert got == {"rows": [], "total": 0}

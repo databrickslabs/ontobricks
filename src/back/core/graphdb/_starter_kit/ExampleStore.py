@@ -3,7 +3,7 @@
 Copy this file, rename it to ``<EngineName>Store.py``, and replace every
 ``TODO`` marker with your engine's native API calls.
 
-See ``docs/graphdb-integration.md`` for the full integration guide.
+See ``docs/backend.md`` (Engine integration) for the full integration guide.
 
 Triples are stored as ``(subject, predicate, object)`` rows.  If your engine
 speaks SQL, the inherited named-query defaults from ``GraphDBBackend``
@@ -87,6 +87,20 @@ class ExampleStore(GraphDBBackend):
     def query_dialect(self) -> str:
         """Query language identifier (``'sql'``, ``'cypher'``, ``'gremlin'``, …)."""
         return "sql"  # TODO: change to your engine's dialect
+
+    # supports_adjacency = False  # inherited default; set True if you materialise adj tables
+    #
+    # def sql_flavor(self) -> Optional[Literal["spark", "postgres"]]:
+    #     """Return ``'postgres'`` or ``'spark'`` when adjacency SQL applies."""
+    #     ...
+    #
+    # def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+    #     """Return ``(adj_out, adj_in)`` identifiers for neighbour expansion."""
+    #     ...
+    #
+    # def rebuild_adjacency(self, table_name: str) -> None:
+    #     """Build graph-index companions from the readable SPO relation."""
+    #     ...
 
     # ======================================================================
     #  GraphDBBackend — connection management  (MUST implement)

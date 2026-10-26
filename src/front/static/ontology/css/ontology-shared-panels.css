@@ -7,9 +7,9 @@
    SPLIT PANEL STYLES
 
    Same layout as the Knowledge Graph Explorer (query-sigmagraph.css):
-   content | 8px drag handle | permanently visible 320px panel, separated
-   by a 0.5rem gutter. The panel is part of the layout, not a drawer — it
-   shows a placeholder until something is selected.
+   content | 1px drag handle (overlaps half the 0.5rem gutter) | panel.
+   The panel is part of the layout, not a drawer — it shows a placeholder
+   until something is selected.
    ============================================================ */
 
 /* Make sidebar-section a flex container for split layout */
@@ -90,39 +90,57 @@
     order: 1;
 }
 
-/* Resize Handle (vertical divider) — mirrors #sgResizeHandle */
+/* Resize Handle (vertical divider) — 1px track, 0.5px grip, half-gutter overlap */
 .detail-panel-resize-handle {
-    width: 8px;
+    position: relative;
+    width: 1px;
+    margin-left: -0.25rem;
+    margin-right: -0.25rem;
     cursor: col-resize;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    z-index: 1;
     -webkit-user-select: none;
     user-select: none;
     order: 998;
 }
 
+.detail-panel-resize-handle::before {
+    content: "";
+    position: absolute;
+    inset: 0 -4px;
+}
+
 .detail-panel-resize-handle .resize-handle-bar {
-    width: 3px;
+    width: 0.5px;
     height: 40px;
     background: var(--db-border);
-    border-radius: 2px;
+    border-radius: 1px;
     transition: background 0.15s ease;
 }
 
 .ob-split-shell--column > .detail-panel-resize-handle {
     width: 100%;
-    height: 8px;
+    height: 1px;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: -0.25rem;
+    margin-bottom: -0.25rem;
     cursor: row-resize;
     /* Override the row-split handle's order:998 so DOM order wins:
        canvas, handle, panel. */
     order: 0;
 }
 
+.ob-split-shell--column > .detail-panel-resize-handle::before {
+    inset: -4px 0;
+}
+
 .ob-split-shell--column > .detail-panel-resize-handle .resize-handle-bar {
     width: 40px;
-    height: 3px;
+    height: 0.5px;
 }
 
 .detail-panel-resize-handle:hover .resize-handle-bar,
@@ -203,32 +221,364 @@
     flex: 1 0 auto;
 }
 
-.shared-detail-panel .panel-body #sharedEntityAttributes {
-    min-height: 60px;
-    max-height: none !important;
-}
-
-/* White content box inside a form tab (attribute lists, dataset, actions,
-   bridges, virtual attributes). Replaces per-box inline backgrounds. */
-.shared-detail-panel .panel-box {
-    background: var(--db-bg-secondary);
-}
-
-/* ---- Virtual attributes ---- */
-.shared-detail-panel .va-group + .va-group {
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
+/* ---- Entity panel sections (panelSectionHeader & co.) ----
+   One layout for every section of every tab: header, one-line subtitle,
+   then flat rows split by hairlines. No framed boxes, no resting shadows. */
+.shared-detail-panel .panel-section {
+    padding: 0.75rem 0;
     border-top: 1px solid var(--db-border-light);
 }
 
+.shared-detail-panel .panel-section:first-of-type {
+    padding-top: 0.25rem;
+    border-top: 0;
+}
+
+.shared-detail-panel .panel-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-height: 1.625rem;
+}
+
+.shared-detail-panel .panel-section-header > .btn,
+.shared-detail-panel .panel-section-header > .dropdown {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.shared-detail-panel .panel-section-heading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.shared-detail-panel .panel-section-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+.shared-detail-panel .panel-section-count {
+    min-width: 1.125rem;
+    padding: 0 0.35rem;
+    border-radius: var(--db-radius-chip);
+    background: var(--db-bg-secondary);
+    border: 1px solid var(--db-border-light);
+    color: var(--db-text-muted);
+    font-size: 0.6875rem;
+    line-height: 1.1rem;
+    text-align: center;
+}
+
+.shared-detail-panel .panel-section-count:empty {
+    display: none;
+}
+
+.shared-detail-panel .entity-effect-chip {
+    font-size: 0.6875rem;
+    line-height: 1.2;
+}
+
+.shared-detail-panel .panel-section-subtitle,
+.shared-detail-panel .panel-pane-intro {
+    margin: 0.1rem 0 0.4rem;
+    color: var(--db-text-muted);
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
+.shared-detail-panel .panel-pane-intro {
+    margin-bottom: 0.25rem;
+}
+
+.shared-detail-panel .panel-section-help {
+    color: var(--db-text-muted);
+    font-size: 0.75rem;
+    line-height: 1;
+    vertical-align: baseline;
+}
+
+.shared-detail-panel .panel-section-help:hover,
+.shared-detail-panel .panel-section-help:focus-visible {
+    color: var(--db-primary);
+}
+
+/* Actionable empty state: says what is missing and how to add it. */
+.shared-detail-panel .panel-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border: 1px dashed var(--db-border);
+    border-radius: var(--db-radius-sm, 6px);
+    color: var(--db-text-muted);
+    font-size: 0.75rem;
+}
+
+.shared-detail-panel .panel-empty-state .btn-link {
+    font-size: 0.75rem;
+    text-decoration: none;
+}
+
+/* Item rows: icon, title + kind badge, muted identifier, remove; any
+   description or sub-rows sit underneath, aligned with the title. */
+.shared-detail-panel .panel-item {
+    padding: 0.5rem 0;
+}
+
+.shared-detail-panel .panel-item + .panel-item {
+    border-top: 1px solid var(--db-border-light);
+}
+
+.shared-detail-panel .panel-item-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.shared-detail-panel .panel-item-icon {
+    flex-shrink: 0;
+    width: 1rem;
+    line-height: 1.35rem;
+    text-align: center;
+}
+
+.shared-detail-panel .panel-item-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.shared-detail-panel .panel-item-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.35rem;
+    overflow-wrap: anywhere;
+}
+
+.shared-detail-panel .panel-item-meta {
+    color: var(--db-text-muted);
+    font-size: 0.7rem;
+    overflow-wrap: anywhere;
+}
+
+.shared-detail-panel .panel-item-head ~ * {
+    margin-left: 1.5rem;
+}
+
+.shared-detail-panel .panel-item-desc {
+    margin-top: 0.15rem;
+    color: var(--db-text-secondary, var(--db-text-muted));
+    font-size: 0.75rem;
+}
+
+.shared-detail-panel .panel-item-link {
+    font-size: 0.7rem;
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.shared-detail-panel .panel-kind-badge {
+    display: inline-block;
+    margin-left: 0.15rem;
+    padding: 0 0.35rem;
+    border: 1px solid var(--db-border-light);
+    border-radius: var(--db-radius-chip);
+    color: var(--db-text-muted);
+    font-size: 0.65rem;
+    font-weight: 500;
+    line-height: 1.1rem;
+    vertical-align: 0.05rem;
+}
+
+.shared-detail-panel .panel-item-sub {
+    margin-top: 0.35rem;
+}
+
+.shared-detail-panel .panel-item-sub-label {
+    color: var(--db-text-muted);
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.shared-detail-panel .panel-param-row,
+.shared-detail-panel .panel-key-row,
+.shared-detail-panel .panel-desc-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.shared-detail-panel .panel-key-row .form-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.shared-detail-panel .panel-desc-row .panel-inline-field {
+    flex: 1;
+}
+
+/* Borderless always-editable field: reads as text at rest, shows its border
+   on hover and the shared focus ring on focus. */
+.shared-detail-panel .panel-inline-field {
+    margin-top: 0.15rem;
+    padding: 0.15rem 0.35rem;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0.75rem;
+    resize: vertical;
+    field-sizing: content;
+    min-height: 1.6rem;
+}
+
+.shared-detail-panel .panel-inline-field::placeholder {
+    color: var(--db-text-muted);
+    font-style: italic;
+}
+
+.shared-detail-panel .panel-inline-field:hover:not(:disabled) {
+    border-color: var(--db-border);
+}
+
+.shared-detail-panel .panel-inline-field:focus {
+    border-color: var(--db-primary);
+    background: #fff;
+    box-shadow: var(--db-focus-ring);
+}
+
+/* Attribute rows (mapped and virtual) */
+.shared-detail-panel .panel-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.shared-detail-panel .panel-attr-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 1.75rem;
+    font-size: 0.8rem;
+}
+
+.shared-detail-panel .panel-attr-row + .panel-attr-row {
+    border-top: 1px solid var(--db-border-light);
+}
+
+.shared-detail-panel .panel-attr-row .panel-inline-field {
+    flex: 1;
+    min-width: 0;
+    margin-top: 0;
+    font-size: 0.8rem;
+}
+
+.shared-detail-panel .panel-attr-row--inherited {
+    color: var(--db-text-muted);
+}
+
+.shared-detail-panel .panel-attr-name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.shared-detail-panel .panel-attr-origin {
+    color: var(--db-text-muted);
+    font-size: 0.65rem;
+    font-style: italic;
+}
+
+/* Inherited relationships under "Inherits from" */
+.shared-detail-panel .panel-inherited:not(:empty) {
+    margin-top: 0.5rem;
+}
+
+.shared-detail-panel .panel-inherited-title {
+    color: var(--db-text-muted);
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.shared-detail-panel .panel-inherited-link {
+    display: block;
+    padding: 0.1rem 0;
+    font-size: 0.75rem;
+    text-align: left;
+    text-decoration: none;
+}
+
+/* Equivalent To / Disjoint With chip pickers */
+.shared-detail-panel .panel-axiom-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.4rem;
+}
+
+.shared-detail-panel .panel-axiom-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    max-width: 100%;
+    padding: 0.1rem 0.25rem 0.1rem 0.5rem;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-chip);
+    background: var(--db-bg-secondary);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
+}
+
+.shared-detail-panel .panel-axiom-chip .btn-close {
+    width: 0.5rem;
+    height: 0.5rem;
+    padding: 0.2rem;
+    background-size: 0.5rem;
+}
+
+.shared-detail-panel .panel-axiom-none {
+    color: var(--db-text-muted);
+    font-size: 0.75rem;
+}
+
+/* General tab: icon picker and name on one row */
+.shared-detail-panel .panel-identity-row {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.shared-detail-panel .panel-identity-icon {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.shared-detail-panel .panel-identity-icon .form-control {
+    flex: 0 0 2.5rem;
+    width: 2.5rem;
+    text-align: center;
+}
+
+.shared-detail-panel .panel-identity-row > .form-control {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ---- Virtual attributes ---- */
 .va-function-list {
     max-height: 320px;
     overflow-y: auto;
 }
 
 .shared-detail-panel .va-group-attrs {
-    margin-top: 0.25rem;
-    padding-left: 0.85rem;
+    margin-top: 0.35rem;
+    padding-left: 0.6rem;
     border-left: 2px solid var(--db-border-light);
 }
 

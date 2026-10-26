@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from .base import RegistryStore
 
 if TYPE_CHECKING:  # pragma: no cover -- typing only
-    from back.objects.registry.RegistryService import RegistryCfg
+    from back.objects.registry.RegistryCfg import RegistryCfg
 
 
 _DEFAULT_LAKEBASE_SCHEMA = "ontobricks_registry"

@@ -475,9 +475,6 @@ class _InMemoryStore(RegistryStore):
         self._global.update(updates)
         return True, "ok"
 
-    def domain_folder_id(self, folder: str):
-        return folder
-
 
 # ---------------------------------------------------------------------
 # RegistryFactory — single facing entry point for store construction

@@ -152,6 +152,7 @@ def run_agent(
     user_message: str,
     conversation_history: Optional[List[dict]] = None,
     on_step: Optional[Callable[[str], None]] = None,
+    endpoint_kind: str = "",
 ) -> AgentResult:
     """Run one turn of the ontology assistant conversation.
 
@@ -208,6 +209,7 @@ def run_agent(
                 temperature=0.2,
                 timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,
+                endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
             error_msg = f"LLM request failed: {exc}"

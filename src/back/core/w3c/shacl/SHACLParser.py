@@ -4,8 +4,9 @@ Reads SHACL Turtle (or other RDF serialisations) and extracts internal
 shape dicts compatible with ``SHACLService``.
 """
 
+import hashlib
+import json
 import re
-import uuid
 from typing import Dict, List, Optional, Tuple
 
 from rdflib import Graph
@@ -22,6 +23,14 @@ _SPARQL_TARGET_CLASS_RE = re.compile(r"\$this\s+a\s+<([^>]+)>")
 
 class SHACLParser:
     """Parse a SHACL shapes graph into internal shape dicts."""
+
+    @staticmethod
+    def _with_stable_id(prefix: str, shape: dict) -> dict:
+        """Suffix *prefix* with a content hash so re-imports keep the same id."""
+        digest = hashlib.sha1(
+            json.dumps(shape, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:6]
+        return {"id": f"{prefix}_{digest}", **shape}
 
     @staticmethod
     def _local_name(uri: str) -> str:
@@ -100,20 +109,22 @@ class SHACLParser:
                     closed = True
             if closed:
                 shapes.append(
-                    {
-                        "id": f"shape_structural_{target_class or 'global'}_closed_{uuid.uuid4().hex[:6]}",
-                        "category": "structural",
-                        "label": f"{target_class or 'Global'} is a closed shape",
-                        "target_class": target_class,
-                        "target_class_uri": target_class_uri,
-                        "property_path": "",
-                        "property_uri": "",
-                        "shacl_type": "sh:closed",
-                        "parameters": {},
-                        "severity": "sh:Violation",
-                        "message": f"{target_class or 'Shape'} does not allow unexpected properties",
-                        "enabled": True,
-                    }
+                    self._with_stable_id(
+                        f"shape_structural_{target_class or 'global'}_closed",
+                        {
+                            "category": "structural",
+                            "label": f"{target_class or 'Global'} is a closed shape",
+                            "target_class": target_class,
+                            "target_class_uri": target_class_uri,
+                            "property_path": "",
+                            "property_uri": "",
+                            "shacl_type": "sh:closed",
+                            "parameters": {},
+                            "severity": "sh:Violation",
+                            "message": f"{target_class or 'Shape'} does not allow unexpected properties",
+                            "enabled": True,
+                        },
+                    )
                 )
 
         return shapes, {"conditions_dropped": conditions_dropped}
@@ -193,20 +204,22 @@ class SHACLParser:
 
         label = message or f"{shacl_type} on {target_class}.{prop_path}"
 
-        return {
-            "id": f"shape_{category}_{target_class}_{prop_path}_{uuid.uuid4().hex[:6]}",
-            "category": category or "conformance",
-            "label": label,
-            "target_class": target_class,
-            "target_class_uri": target_class_uri,
-            "property_path": prop_path,
-            "property_uri": prop_uri,
-            "shacl_type": shacl_type,
-            "parameters": params,
-            "severity": severity,
-            "message": message,
-            "enabled": True,
-        }
+        return self._with_stable_id(
+            f"shape_{category}_{target_class}_{prop_path}",
+            {
+                "category": category or "conformance",
+                "label": label,
+                "target_class": target_class,
+                "target_class_uri": target_class_uri,
+                "property_path": prop_path,
+                "property_uri": prop_uri,
+                "shacl_type": shacl_type,
+                "parameters": params,
+                "severity": severity,
+                "message": message,
+                "enabled": True,
+            },
+        )
 
     def _parse_sparql_constraint(
         self,
@@ -234,20 +247,22 @@ class SHACLParser:
 
         category = self._infer_sparql_category(query, message)
 
-        return {
-            "id": f"shape_{category}_{target_class or 'global'}_sparql_{uuid.uuid4().hex[:6]}",
-            "category": category,
-            "label": message or f"SPARQL constraint on {target_class or 'graph'}",
-            "target_class": target_class,
-            "target_class_uri": target_class_uri,
-            "property_path": "",
-            "property_uri": "",
-            "shacl_type": "sh:sparql",
-            "parameters": {"sh:select": query},
-            "severity": severity,
-            "message": message,
-            "enabled": True,
-        }
+        return self._with_stable_id(
+            f"shape_{category}_{target_class or 'global'}_sparql",
+            {
+                "category": category,
+                "label": message or f"SPARQL constraint on {target_class or 'graph'}",
+                "target_class": target_class,
+                "target_class_uri": target_class_uri,
+                "property_path": "",
+                "property_uri": "",
+                "shacl_type": "sh:sparql",
+                "parameters": {"sh:select": query},
+                "severity": severity,
+                "message": message,
+                "enabled": True,
+            },
+        )
 
     @staticmethod
     def _refine_category(category: str, params: Dict) -> str:

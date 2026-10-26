@@ -17,10 +17,10 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from back.core.errors import ValidationError
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 from back.objects.registry import obx_format
 
-_svc_module = importlib.import_module("back.objects.domain.SettingsService")
+_svc_module = importlib.import_module("back.objects.domain.settings.SettingsService")
 
 
 REGISTRY_CFG_OK = MagicMock(is_configured=True)
@@ -218,7 +218,8 @@ class TestPreviewObxImport:
         assert d["exists"] is True
         assert d["conflicting_versions"] == ["1"]
         assert d["incoming_versions"] == ["2", "1"]
-        assert d["suggested_new_name"].startswith("claims_imported")
+        assert d["display_name"] == "Claims"
+        assert d["suggested_new_name"] == "ClaimsImported"
 
     def test_preview_new_domain_has_no_conflicts(self):
         session_mgr, settings = _mock_session_settings()
@@ -237,7 +238,8 @@ class TestPreviewObxImport:
         d = result["domains"][0]
         assert d["exists"] is False
         assert d["conflicting_versions"] == []
-        assert d["suggested_new_name"] == "new_one"
+        assert d["display_name"] == "NewOne"
+        assert d["suggested_new_name"] == "NewOne"
 
     def test_preview_rejects_malformed_json(self):
         session_mgr, settings = _mock_session_settings()
@@ -318,7 +320,7 @@ class TestImportRegistryObx:
             rs_cls.from_context.return_value = registry_svc
             result = SettingsService.import_registry_obx_result(
                 file_bytes,
-                [{"name": "claims", "action": "rename", "new_name": "claims_copy"}],
+                [{"name": "claims", "action": "rename", "new_name": "ClaimsCopy"}],
                 session_mgr,
                 settings,
             )
@@ -327,12 +329,119 @@ class TestImportRegistryObx:
         assert result["imported_versions"] == 1
         registry_svc.write_version.assert_called_once()
         args, _ = registry_svc.write_version.call_args
-        assert args[0] == "claims_copy"
+        assert args[0] == "claimscopy"
+
+    def test_rename_new_domain_rewrites_identity_and_clears_graph_runtime(self):
+        session_mgr, settings = _mock_session_settings()
+        registry_svc = _make_registry_svc(exists={})
+        doc = _fake_doc("Claims", "2")
+        doc["info"]["last_build"] = "2026-09-01T10:00:00Z"
+        doc["triplestore"] = {"stats": {"triples": 42}}
+        doc["assignment"] = {"entities": [{"name": "Claim"}]}
+        file_bytes = self._build_obx_bytes(
+            domains=[
+                {
+                    "name": "claims",
+                    "info": doc["info"],
+                    "versions": {"2": doc},
+                }
+            ]
+        )
+
+        with patch.object(_svc_module, "RegistryService") as rs_cls, patch.object(
+            _svc_module,
+            "resolve_default_base_uri",
+            return_value="https://example.org",
+        ):
+            rs_cls.from_context.return_value = registry_svc
+            SettingsService.import_registry_obx_result(
+                file_bytes,
+                [
+                    {
+                        "name": "claims",
+                        "action": "rename",
+                        "new_name": "ClaimsCopy",
+                    }
+                ],
+                session_mgr,
+                settings,
+            )
+
+        folder, version, raw_doc = registry_svc.write_version.call_args.args
+        written = json.loads(raw_doc)
+        assert (folder, version) == ("claimscopy", "2")
+        assert written["info"]["name"] == "ClaimsCopy"
+        renamed_ontology = written["versions"]["2"]["ontology"]
+        assert renamed_ontology["base_uri"] == (
+            "https://example.org/ClaimsCopy#"
+        )
+        assert renamed_ontology["base_uri_auto"] is True
+        assert written["info"]["last_build"] == ""
+        assert written["triplestore"]["stats"] == {}
+        assert written["assignment"] == doc["assignment"]
+
+    def test_overwrite_preserves_identity_and_build_metadata(self):
+        session_mgr, settings = _mock_session_settings()
+        registry_svc = _make_registry_svc(
+            exists={"claims": True}, listing={"claims": ["1"]}
+        )
+        doc = _fake_doc("Claims", "1")
+        doc["info"]["last_build"] = "2026-09-01T10:00:00Z"
+        doc["ontology"] = {"base_uri": "https://source.example/Claims#"}
+        file_bytes = self._build_obx_bytes(
+            domains=[
+                {
+                    "name": "claims",
+                    "info": doc["info"],
+                    "versions": {"1": doc},
+                }
+            ]
+        )
+
+        with patch.object(_svc_module, "RegistryService") as rs_cls:
+            rs_cls.from_context.return_value = registry_svc
+            SettingsService.import_registry_obx_result(
+                file_bytes,
+                [{"name": "claims", "action": "overwrite"}],
+                session_mgr,
+                settings,
+            )
+
+        written = json.loads(registry_svc.write_version.call_args.args[2])
+        assert written["info"]["name"] == "Claims"
+        assert (
+            written["ontology"]["base_uri"]
+            == "https://source.example/Claims#"
+        )
+        assert written["info"]["last_build"] == "2026-09-01T10:00:00Z"
+
+    def test_preview_suggests_free_camelcase_import_name(self):
+        session_mgr, settings = _mock_session_settings()
+        registry_svc = _make_registry_svc(exists={"claims": True})
+        file_bytes = self._build_obx_bytes(
+            domains=[
+                {
+                    "name": "claims",
+                    "info": {"name": "Claims"},
+                    "versions": {"1": _fake_doc("Claims", "1")},
+                }
+            ]
+        )
+
+        with patch.object(_svc_module, "RegistryService") as rs_cls:
+            rs_cls.from_context.return_value = registry_svc
+            result = SettingsService.preview_obx_import_result(
+                file_bytes, session_mgr, settings
+            )
+
+        preview = result["domains"][0]
+        assert preview["display_name"] == "Claims"
+        assert preview["suggested_new_name"] == "ClaimsImported"
 
     def test_rename_conflict_falls_back_to_skip(self):
         session_mgr, settings = _mock_session_settings()
         registry_svc = _make_registry_svc(
-            exists={"claims": True, "claims_copy": True},
+            exists={"claims": True, "claimscopy": True},
             listing={"claims": ["1"]},
         )
         doc1 = _fake_doc("claims", "1")
@@ -344,7 +453,7 @@ class TestImportRegistryObx:
             rs_cls.from_context.return_value = registry_svc
             result = SettingsService.import_registry_obx_result(
                 file_bytes,
-                [{"name": "claims", "action": "rename", "new_name": "claims_copy"}],
+                [{"name": "claims", "action": "rename", "new_name": "ClaimsCopy"}],
                 session_mgr,
                 settings,
             )

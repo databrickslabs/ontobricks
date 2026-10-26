@@ -15,7 +15,7 @@ from unittest.mock import patch
 import pytest
 
 from back.core.databricks.lakebase.grants import resolve_mcp_app_name
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 
 
 class TestResolveMcpAppName:

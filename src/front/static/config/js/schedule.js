@@ -133,6 +133,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 return '';
             },
         },
+        cache_refresh: {
+            label: 'graph cache refresh',
+            badge: () => badge('secondary', 'arrow-repeat', 'Cache'),
+            details: (s) => versionBadge(s.version),
+            historyColumns: [],
+            readConfig: () => ({}),
+            applyConfig: () => {},
+        },
     };
 
     const DEFAULT_TYPE = {

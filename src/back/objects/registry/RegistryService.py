@@ -33,14 +33,13 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
 from back.core.databricks import VolumeFileService
 from back.objects.registry.registry_cache import (
-    registry_cache_key,
     get_cached_registry_details,
     set_cached_registry_details,
     get_cached_registry_names,
@@ -49,12 +48,11 @@ from back.objects.registry.registry_cache import (
     set_cached_published_domain,
     invalidate_registry_cache,
 )
+from back.objects.registry.RegistryCfg import RegistryCfg
 
 logger = get_logger(__name__)
 
 _SCHEME_RE = re.compile(r"^https?:/[^/]")
-_DEFAULT_VOLUME = "OntoBricksRegistry"
-_REGISTRY_MARKER = ".registry"
 _DOMAINS_FOLDER = "domains"
 _LEGACY_DOMAINS_FOLDER = "projects"
 
@@ -62,246 +60,6 @@ _LEGACY_DOMAINS_FOLDER = "projects"
 # ------------------------------------------------------------------
 # RegistryCfg — lightweight value object
 # ------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class RegistryCfg:
-    """Immutable registry location triplet (catalog, schema, volume).
-
-    Lakebase is the sole registry backend. ``lakebase_schema`` is the
-    Postgres schema for registry tables.
-
-    ``lakebase_database`` (optional) overrides the bound Postgres
-    database name. When empty (the default), the runtime uses the
-    ``PGDATABASE`` env var auto-injected by the Databricks Apps
-    runtime from the ``database`` resource binding. Setting this lets
-    an admin point the registry at any other database that lives on
-    the same Lakebase instance — provided the app's service principal
-    has ``CONNECT`` on it. The Lakebase JWT scope is per-instance, so
-    no token re-mint is required.
-
-    The ``catalog``/``schema``/``volume`` triplet locates the Unity
-    Catalog Volume where domain-scoped binary artefacts (the
-    ``documents/`` uploads imported by the ontology designer) live; it
-    is not used for registry rows.
-    """
-
-    catalog: str
-    schema: str
-    volume: str
-    lakebase_schema: str = "ontobricks_registry"
-    lakebase_database: str = ""
-
-    # -- constructors ------------------------------------------------
-
-    @classmethod
-    def from_volume_path(
-        cls,
-        path: str,
-        *,
-        lakebase_schema: str = "ontobricks_registry",
-        lakebase_database: str = "",
-    ) -> RegistryCfg:
-        """Parse ``/Volumes/<catalog>/<schema>/<volume>`` into a RegistryCfg."""
-        parts = path.strip("/").split("/")
-        if len(parts) >= 4 and parts[0].lower() == "volumes":
-            return cls(
-                catalog=parts[1],
-                schema=parts[2],
-                volume=parts[3],
-                lakebase_schema=lakebase_schema,
-                lakebase_database=lakebase_database,
-            )
-        logger.warning(
-            "Cannot parse volume path '%s'; expected /Volumes/<c>/<s>/<v>", path
-        )
-        return cls(
-            catalog="",
-            schema="",
-            volume="",
-            lakebase_schema=lakebase_schema,
-            lakebase_database=lakebase_database,
-        )
-
-    @classmethod
-    def from_domain(
-        cls,
-        domain,
-        settings,
-        *,
-        prefer_volume_binding: bool = False,
-    ) -> RegistryCfg:
-        """Build from a *DomainSession* and *Settings* with env-var fallbacks.
-
-        Resolution order (highest priority first):
-
-        1. ``domain.settings["registry"]`` — admin choices made from the
-           Settings UI for the Lakebase-side knobs (``lakebase_schema`` /
-           ``lakebase_database``). These win even on a Databricks Apps
-           deployment where the Volume is bound by the platform.
-        2. **Lakebase ``registries`` row** — when reachable, the
-           catalog/schema/volume triplet is read from the row so binary
-           archive paths and Delta view names follow where artefacts
-           were archived. **However**, when step 3's bound Volume path
-           is present and parses successfully, its catalog/schema/volume
-           **replace** the row values for the UC triplet. Otherwise a
-           Databricks Apps deployment whose bundle Volume name changed
-           (or whose ``registries`` row still holds the env default
-           ``OntoBricksRegistry``) would keep resolving binary paths
-           against the wrong Volume while the platform had mounted the
-           resource named in ``REGISTRY_VOLUME_PATH``.
-        3. ``settings.registry_volume_path`` — when present (Databricks
-           Apps with a bound Volume resource) and parses as
-           ``/Volumes/<c>/<s>/<v>``, that triplet is the authoritative UC
-           location for this process (merged into step 2 when the
-           registries row is found; used alone when step 2 does not
-           return a row).
-        4. ``settings.*`` env vars — last-resort fallback for catalog,
-           schema, volume. When those are empty, the session
-           ``domain.settings["registry"]`` catalog/schema/volume is used.
-           A volume equal to the seeded default ``OntoBricksRegistry``
-           (DomainSession and ``Settings.registry_volume``) is treated
-           as unset so ``REGISTRY_VOLUME`` can override it; a custom
-           session volume still wins when env is that default.
-
-        ``prefer_volume_binding`` (Initialize path only): when ``True``
-        the Lakebase row read in step 2 is skipped. Lets the Initialize
-        flow re-pin the registry triplet to the *current* Volume
-        binding so a re-bind + re-init cycle propagates the new
-        catalog/schema/volume into the ``registries`` row. Without this
-        flag, re-initialising on a re-bound app silently re-upserts the
-        stale triplet that was already in the row, leaving downstream
-        artefact paths pointing at the previous Volume.
-        """
-        env_lb_schema = (
-            getattr(settings, "lakebase_schema", "ontobricks_registry")
-            or "ontobricks_registry"
-        )
-        env_lb_database = getattr(settings, "lakebase_database", "") or ""
-
-        reg = domain.settings.get("registry", {}) if domain is not None else {}
-        lb_schema = reg.get("lakebase_schema") or env_lb_schema
-        lb_database = reg.get("lakebase_database") or env_lb_database
-
-        vol_path = getattr(settings, "registry_volume_path", "")
-        bound_cfg: Optional[RegistryCfg] = None
-        if vol_path:
-            parsed = cls.from_volume_path(
-                vol_path,
-                lakebase_schema=lb_schema,
-                lakebase_database=lb_database,
-            )
-            if parsed.catalog and parsed.schema and parsed.volume:
-                bound_cfg = parsed
-
-        # Read catalog/schema/volume from the Lakebase ``registries`` row
-        # so binary-archive paths and Delta view names point where
-        # artefacts actually live. When ``bound_cfg`` is set (Databricks
-        # Apps Volume resource binding), its triplet replaces the row's
-        # so UC paths match the mounted Volume. Fail-soft — if Lakebase
-        # is unreachable we fall through to the bound-Volume / env-var
-        # chain. Skipped when ``prefer_volume_binding`` is True
-        # (Initialize path) so re-binding the Volume + re-running
-        # Initialize propagates the new triplet into the row.
-        if not prefer_volume_binding:
-            try:
-                from back.objects.registry.store.lakebase.store import (
-                    fetch_lakebase_registry_triplet,
-                )
-
-                triplet = fetch_lakebase_registry_triplet(lb_schema, lb_database)
-            except Exception:  # noqa: BLE001 -- best-effort, Lakebase may be unreachable
-                triplet = None
-            if triplet:
-                cat, sch, vol = triplet
-                if bound_cfg is not None:
-                    cat, sch, vol = (
-                        bound_cfg.catalog,
-                        bound_cfg.schema,
-                        bound_cfg.volume,
-                    )
-                return cls(
-                    catalog=cat,
-                    schema=sch,
-                    volume=vol or _DEFAULT_VOLUME,
-                    lakebase_schema=lb_schema,
-                    lakebase_database=lb_database,
-                )
-
-        if vol_path:
-            return cls.from_volume_path(
-                vol_path,
-                lakebase_schema=lb_schema,
-                lakebase_database=lb_database,
-            )
-
-        return cls(
-            catalog=cls._first_nonempty(
-                getattr(settings, "registry_catalog", ""),
-                reg.get("catalog"),
-            ),
-            schema=cls._first_nonempty(
-                getattr(settings, "registry_schema", ""),
-                reg.get("schema"),
-            ),
-            volume=cls._first_named_volume(
-                getattr(settings, "registry_volume", ""),
-                reg.get("volume"),
-            ),
-            lakebase_schema=lb_schema,
-            lakebase_database=lb_database,
-        )
-
-    @staticmethod
-    def _first_nonempty(*values: object) -> str:
-        for raw in values:
-            text = str(raw or "").strip()
-            if text:
-                return text
-        return ""
-
-    @staticmethod
-    def _first_named_volume(*values: object) -> str:
-        """Last-resort volume: skip the seeded ``OntoBricksRegistry`` sentinel."""
-        for raw in values:
-            text = str(raw or "").strip()
-            if text and text != _DEFAULT_VOLUME:
-                return text
-        return _DEFAULT_VOLUME
-
-    @classmethod
-    def from_session(cls, session_mgr, settings) -> RegistryCfg:
-        """Build from *SessionManager* and *Settings*."""
-        from back.objects.session.DomainSession import get_domain
-
-        return cls.from_domain(get_domain(session_mgr), settings)
-
-    @classmethod
-    def from_dict(cls, d: Dict[str, str]) -> RegistryCfg:
-        """Build from a plain dict (e.g. an existing ``registry_cfg``)."""
-        return cls(
-            catalog=d.get("catalog", ""),
-            schema=d.get("schema", ""),
-            volume=d.get("volume", "") or _DEFAULT_VOLUME,
-            lakebase_schema=d.get("lakebase_schema") or "ontobricks_registry",
-            lakebase_database=d.get("lakebase_database") or "",
-        )
-
-    # -- helpers -----------------------------------------------------
-
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.catalog and self.schema and self.volume)
-
-    def as_dict(self) -> Dict[str, str]:
-        """Dict representation for backward compatibility with legacy callers."""
-        return {
-            "catalog": self.catalog,
-            "schema": self.schema,
-            "volume": self.volume,
-            "lakebase_schema": self.lakebase_schema,
-            "lakebase_database": self.lakebase_database,
-        }
 
 
 # ------------------------------------------------------------------
@@ -447,18 +205,6 @@ class RegistryService:
     def version_path(self, folder: str, version: str) -> str:
         """Return the version directory: ``.../domains/{folder}/V{version}``."""
         return f"{self.domain_path(folder)}/V{version}"
-
-    def version_file_path(self, folder: str, version: str) -> str:
-        return f"{self.version_path(folder, version)}/V{version}.json"
-
-    def marker_path(self) -> str:
-        return f"{self.volume_root()}/{_REGISTRY_MARKER}"
-
-    def config_file_path(self) -> str:
-        return f"{self.volume_root()}/.global_config.json"
-
-    def history_file_path(self, folder: str) -> str:
-        return f"{self.domain_path(folder)}/.schedule_history.json"
 
     # -- registry lifecycle ------------------------------------------
 
@@ -860,13 +606,38 @@ class RegistryService:
         return ok, msg
 
     def delete_version(self, folder: str, version: str) -> Tuple[bool, str]:
-        """Delete a version (rows + binary directory)."""
+        """Delete a version (rows + Knowledge Store documents + binary dir)."""
         ok, msg = self._store.delete_version(folder, version)
         if not ok:
             return False, msg
-        # Also remove the binary version dir on the Volume (documents/
-        # uploads). Errors are non-fatal — the JSON side is the source
-        # of truth.
+        # Purge the version's Knowledge Store documents (Lakebase). Rows are
+        # keyed by (domain_id, version) with no version FK, so an explicit
+        # purge is needed — the domain-level FK cascade only fires on a full
+        # domain delete.
+        try:
+            doc_rows = self._store.list_documents(folder, version, strict=True)
+            filenames = [r.get("filename") for r in doc_rows if r.get("filename")]
+            if filenames:
+                errors = self._store.delete_documents(folder, version, filenames)
+                if errors:
+                    raise InfrastructureError(
+                        "Registry version metadata was deleted, but Knowledge "
+                        "Store cleanup failed",
+                        detail="; ".join(errors),
+                    )
+        except InfrastructureError:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Knowledge Store cleanup raised for %s/V%s", folder, version
+            )
+            raise InfrastructureError(
+                "Registry version metadata was deleted, but Knowledge Store "
+                "cleanup failed",
+                detail=str(exc),
+            ) from exc
+        # Also remove any legacy binary version dir on the Volume. Errors are
+        # non-fatal — Lakebase is the source of truth.
         try:
             errors = self.recursive_delete(self.version_path(folder, version))
             if errors:
@@ -1238,35 +1009,20 @@ class RegistryService:
         src_version: str,
         dst_version: str,
     ) -> Tuple[int, List[str]]:
-        """Copy all documents from one version directory to another.
+        """Carry the Knowledge Store corpus forward to a new version.
 
+        Copies the parsed document rows (text, not the transient bytes) from
+        ``src_version`` to ``dst_version`` in Lakebase — no UC Volume I/O.
         Returns ``(copied_count, error_messages)``.
         """
-        src_docs = f"{self.version_path(folder, src_version)}/documents"
-        dst_docs = f"{self.version_path(folder, dst_version)}/documents"
-        ok, items, msg = self._uc.list_directory(src_docs)
+        before = self._store.count_documents(folder, dst_version)
+        ok, msg = self._store.copy_documents_to_version(
+            folder, src_version, dst_version
+        )
         if not ok:
-            if "not found" in msg.lower():
-                return 0, []
-            return 0, [msg]
-        errors: List[str] = []
-        copied = 0
-        for item in items:
-            if item.get("is_directory"):
-                continue
-            name = item["name"]
-            src_file = f"{src_docs}/{name}"
-            dst_file = f"{dst_docs}/{name}"
-            r_ok, content, r_msg = self._uc.read_binary_file(src_file)
-            if not r_ok:
-                errors.append(f"Read {name}: {r_msg}")
-                continue
-            w_ok, w_msg = self._uc.write_binary_file(dst_file, content)
-            if not w_ok:
-                errors.append(f"Write {name}: {w_msg}")
-                continue
-            copied += 1
-        return copied, errors
+            return 0, [msg or "Document copy failed"]
+        after = self._store.count_documents(folder, dst_version)
+        return max(after - before, 0), []
 
     # -- bridge aggregation ---------------------------------------------
 
@@ -1333,91 +1089,3 @@ class RegistryService:
 
         return True, result, ""
 
-    # -- one-time layout migration -------------------------------------
-
-    def migrate_domain_layout(self, folder: str) -> Tuple[bool, str]:
-        """Migrate a single domain from the flat layout to the versioned layout.
-
-        Flat layout (old)::
-
-            domains/{folder}/v1.json
-            domains/{folder}/v2.json
-            domains/{folder}/documents/
-
-        Versioned layout (new)::
-
-            domains/{folder}/V1/V1.json
-            domains/{folder}/V1/documents/
-            domains/{folder}/V2/V2.json
-            domains/{folder}/V2/documents/
-
-        Returns ``(ok, message)``.
-        """
-        base = self.domain_path(folder)
-
-        ok, items, msg = self._uc.list_directory(base)
-        if not ok:
-            return False, f"Cannot list {base}: {msg}"
-
-        flat_versions: List[str] = []
-        has_documents = False
-
-        for item in items:
-            name = item["name"]
-            if name.startswith("v") and name.endswith(".json"):
-                flat_versions.append(name[1:-5])  # "v1.json" -> "1"
-            elif name == "documents" and item.get("is_directory"):
-                has_documents = True
-
-        if not flat_versions:
-            return True, "No flat version files found — nothing to migrate"
-
-        flat_versions.sort(
-            key=lambda v: [int(x) for x in v.split(".")],
-            reverse=True,
-        )
-        latest_version = flat_versions[0]
-        errors: List[str] = []
-
-        for ver in flat_versions:
-            old_file = f"{base}/v{ver}.json"
-            new_file = self.version_file_path(folder, ver)
-            r_ok, content, r_msg = self._uc.read_file(old_file)
-            if not r_ok:
-                errors.append(f"Read v{ver}.json: {r_msg}")
-                continue
-            w_ok, w_msg = self._uc.write_file(new_file, content)
-            if not w_ok:
-                errors.append(f"Write V{ver}/V{ver}.json: {w_msg}")
-                continue
-            d_ok, d_msg = self._uc.delete_file(old_file)
-            if not d_ok:
-                errors.append(f"Delete old v{ver}.json: {d_msg}")
-
-        if has_documents:
-            src_docs = f"{base}/documents"
-            dst_docs = f"{self.version_path(folder, latest_version)}/documents"
-            doc_ok, doc_items, doc_msg = self._uc.list_directory(src_docs)
-            if doc_ok:
-                for item in doc_items:
-                    if item.get("is_directory"):
-                        continue
-                    name = item["name"]
-                    r_ok, content, r_msg = self._uc.read_binary_file(
-                        f"{src_docs}/{name}"
-                    )
-                    if not r_ok:
-                        errors.append(f"Read doc {name}: {r_msg}")
-                        continue
-                    w_ok, w_msg = self._uc.write_binary_file(
-                        f"{dst_docs}/{name}", content
-                    )
-                    if not w_ok:
-                        errors.append(f"Write doc {name}: {w_msg}")
-                        continue
-                    self._uc.delete_file(f"{src_docs}/{name}")
-                self._uc.delete_directory(src_docs)
-
-        if errors:
-            return False, f"Migration completed with errors: {'; '.join(errors)}"
-        return True, f"Migrated {len(flat_versions)} version(s) to versioned layout"

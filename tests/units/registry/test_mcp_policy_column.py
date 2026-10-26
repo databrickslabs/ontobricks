@@ -16,6 +16,12 @@ from back.objects.registry.store.lakebase.store import LakebaseRegistryStore
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_SQL = ROOT / "src/back/objects/registry/store/lakebase/schema.sql"
 STORE_PY = ROOT / "src/back/objects/registry/store/lakebase/store.py"
+CATALOG_PY = (
+    ROOT / "src/back/objects/registry/store/lakebase/Catalog.py"
+)
+BOOTSTRAP_PY = (
+    ROOT / "src/back/objects/registry/store/lakebase/Bootstrap.py"
+)
 MIGRATION = ROOT / "scripts/migrations/upgrade_0.7_to_0.8.sql"
 BOOTSTRAP = ROOT / "scripts/bootstrap/lakebase-perms.sh"
 DEPLOY_PREFLIGHT = ROOT / "scripts/_internal/_deploy-preflight.sh"
@@ -29,10 +35,11 @@ def test_canonical_schema_declares_the_column() -> None:
 def test_store_self_heals_the_column() -> None:
     """A workspace upgraded without running the migration must recover."""
     assert hasattr(LakebaseRegistryStore, "_ensure_domains_mcp_policy_column")
-    body = STORE_PY.read_text()
-    assert "ADD COLUMN IF NOT EXISTS mcp_policy jsonb" in body
+    catalog = CATALOG_PY.read_text()
+    store = STORE_PY.read_text()
+    assert "ADD COLUMN IF NOT EXISTS mcp_policy jsonb" in catalog
     # Memoised, like every other lazy column guard.
-    assert "self._mcp_policy_column_ready = False" in body
+    assert "self._mcp_policy_column_ready = False" in store
 
 
 def test_self_heal_runs_at_every_call_site_that_reads_the_column() -> None:
@@ -40,7 +47,7 @@ def test_self_heal_runs_at_every_call_site_that_reads_the_column() -> None:
 
     Namely list_domains_with_metadata, read_version and write_version.
     """
-    body = STORE_PY.read_text()
+    body = STORE_PY.read_text() + CATALOG_PY.read_text() + BOOTSTRAP_PY.read_text()
     assert body.count("self._ensure_domains_mcp_policy_column()") == 4
 
 
@@ -69,7 +76,7 @@ def test_domain_summary_carries_the_policy() -> None:
 
 def test_write_path_persists_and_read_path_restores_the_policy() -> None:
     """The column is written in the domains UPSERT and re-injected on read."""
-    body = STORE_PY.read_text()
+    body = CATALOG_PY.read_text()
     write = body[body.index("def write_version") : body.index("def delete_version")]
     assert "review_quorum, mcp_policy)" in write
     assert "json.dumps(mcp_policy)" in write

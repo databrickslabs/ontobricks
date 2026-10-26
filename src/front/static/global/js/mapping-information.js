@@ -41,12 +41,12 @@ async function updateMetadataStatus() {
         } else {
             prereqAlert.className = 'alert alert-warning';
             checkIcon.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
-            checkStatus.innerHTML = '<strong>No data sources loaded</strong> — Data sources are required before creating mappings. Please load data sources first.';
+            checkStatus.innerHTML = '<strong>No data assets loaded</strong> — Data assets are required before creating mappings. Please load data assets first.';
         }
     } catch (e) {
         prereqAlert.className = 'alert alert-danger';
         checkIcon.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>';
-        checkStatus.textContent = 'Error checking data sources status';
+        checkStatus.textContent = 'Error checking data assets status';
     }
 }
 
@@ -416,89 +416,6 @@ function _bindExcludeCheckboxes(container) {
     });
 }
 
-// Show validation result modal (kept for potential future use)
-function showValidationResult(issues, warnings) {
-    let modalHtml = `
-        <div class="modal fade" id="validationResultModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <i class="bi bi-x-circle text-danger"></i> Validation Incomplete
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-danger">
-                            <h6><i class="bi bi-exclamation-triangle"></i> Issues Found</h6>
-                            <ul class="mb-0">
-                                ${issues.map(i => `<li>${i}</li>`).join('')}
-                            </ul>
-                        </div>
-                        <p class="text-muted small mb-0">
-                            <i class="bi bi-lightbulb"></i> Complete all mappings before validating.
-                        </p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const existingModal = document.getElementById('validationResultModal');
-    if (existingModal) existingModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('validationResultModal'));
-    modal.show();
-}
-
-// Show validation success modal
-function showValidationSuccessModal(stats) {
-    const modalHtml = `
-        <div class="modal fade" id="validationSuccessModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header bg-success text-white">
-                        <h5 class="modal-title">
-                            <i class="bi bi-patch-check-fill"></i> Mapping Validated!
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="text-center mb-3">
-                            <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                        </div>
-                        <div class="alert alert-success">
-                            <h6><i class="bi bi-check-circle"></i> Success</h6>
-                            <p class="mb-0">All mappings validated. R2RML has been generated.</p>
-                        </div>
-                        <table class="table table-sm">
-                            <tr><td><strong>Entity Mappings:</strong></td><td>${stats?.entities || 0}</td></tr>
-                            <tr><td><strong>Relationship Mappings:</strong></td><td>${stats?.relationships || 0}</td></tr>
-                        </table>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-outline-secondary" onclick="SidebarNav.switchTo('r2rml'); bootstrap.Modal.getInstance(document.getElementById('validationSuccessModal')).hide();">
-                            <i class="bi bi-file-earmark-code"></i> View R2RML
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const existingModal = document.getElementById('validationSuccessModal');
-    if (existingModal) existingModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('validationSuccessModal'));
-    modal.show();
-}
-
 // Reset all mappings
 async function confirmResetMappings() {
     // View / viewer / lock mode: CSS already greys the button; refuse here
@@ -527,8 +444,8 @@ async function confirmResetMappings() {
 }
 
 async function resetAllMappings() {
-    // The button exists on both the Mapping/Information and Mapping/Designer
-    // pages; target whichever one is currently rendered for the spinner.
+    // The button exists on both Mapping → General and Mapping → Studio;
+    // target whichever one is currently rendered for the spinner.
     const btn = document.getElementById('resetMappingsBtn')
         || document.getElementById('resetMappingsDesignBtn');
     const originalHTML = btn ? btn.innerHTML : '';
@@ -894,8 +811,8 @@ async function exportR2RMLToUC() {
 
 function _initMappingInformationButtons() {
     setupImportExportButtons();
-    // "Unmap all" appears on both Mapping/Information (#resetMappingsBtn) and
-    // Mapping/Designer (#resetMappingsDesignBtn); both open the same confirm
+    // "Unmap all" appears on both Mapping → General (#resetMappingsBtn) and
+    // Mapping → Studio (#resetMappingsDesignBtn); both open the same confirm
     // dialog before clearing mappings.
     ['resetMappingsBtn', 'resetMappingsDesignBtn'].forEach(function(_id) {
         var _btn = document.getElementById(_id);

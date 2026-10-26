@@ -31,8 +31,10 @@ from __future__ import annotations
 
 import json
 
+from tests.e2e.scenarios._harness import LIFECYCLE_DOMAIN_NAME
 
-_DOMAIN_NAME = "SalesDomain"
+
+_DOMAIN_NAME = LIFECYCLE_DOMAIN_NAME
 
 # URIs come from the ``sample_owl_content`` fixture (base http://test.org/ontology#)
 # and line up with ``sample_mapping_config`` so the mapping step references
@@ -71,16 +73,8 @@ class TestFullDomainLifecycle:
         headers = _csrf_headers(page.context)
 
         # ── 2. Create a domain from scratch ──────────────────────────────────
-        page.goto(f"{live_server}/domain")
-        page.wait_for_load_state("domcontentloaded")
-        page.wait_for_timeout(400)
-
-        # Real DOM: the name field renders and is editable.
-        name_field = page.locator("#domainName")
-        assert name_field.is_visible()
-        name_field.fill(_DOMAIN_NAME)
-
-        # Persist via the same endpoint the page uses.
+        # Workspace pages bounce an unloaded session to Home, so name the
+        # domain first (as the Home "New Domain" flow does), then open it.
         resp = page.context.request.post(
             f"{live_server}/domain/info",
             headers=headers,
@@ -97,6 +91,14 @@ class TestFullDomainLifecycle:
 
         info = _json(page.request.get(f"{live_server}/domain/info"))
         assert info.get("info", {}).get("name") == _DOMAIN_NAME
+
+        # Real DOM: the Domain page renders the saved name in an editable field.
+        page.goto(f"{live_server}/domain")
+        page.wait_for_load_state("domcontentloaded")
+        name_field = page.locator("#domainName")
+        name_field.wait_for(state="visible", timeout=10_000)
+        assert name_field.input_value() == _DOMAIN_NAME
+        assert name_field.is_editable()
 
         # ── 3. Import an ontology through the real file-input UI ─────────────
         page.goto(f"{live_server}/ontology")
@@ -149,16 +151,11 @@ class TestFullDomainLifecycle:
         assert len(mapping["relationships"]) >= 1
 
         # ── 6. Generate R2RML through the real "Regenerate" button ───────────
-        # Reload so mapping-init.js hydrates MappingState from /mapping/load.
-        page.goto(f"{live_server}/mapping")
+        # R2RML lives under Domain → W3C Standards.
+        page.goto(f"{live_server}/domain")
         page.wait_for_load_state("domcontentloaded")
-        page.wait_for_function(
-            "() => typeof MappingState !== 'undefined' && MappingState.config"
-            " && (MappingState.config.entities || []).length > 0",
-            timeout=10000,
-        )
         page.evaluate('SidebarNav.switchTo("r2rml")')
-        page.wait_for_timeout(300)
+        page.locator("#regenerateR2RMLBtn").wait_for(state="visible", timeout=10_000)
         page.click("#regenerateR2RMLBtn")
 
         page.wait_for_function(

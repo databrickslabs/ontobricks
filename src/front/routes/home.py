@@ -27,7 +27,7 @@ async def about_page(request: Request):
 async def settings_page(request: Request):
     """Settings page.
 
-    The graph backend *selection* now lives per-domain (Domain Information ->
+    The graph backend *selection* now lives per-domain (Domain → General →
     Knowledge Graph tab); this page only configures the shared engine
     connections, so no engine value is resolved server-side.
     """

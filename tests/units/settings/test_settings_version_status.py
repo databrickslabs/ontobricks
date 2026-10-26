@@ -24,9 +24,9 @@ from back.objects.registry.PermissionService import (
     ROLE_EDITOR,
     ROLE_NONE,
 )
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 
-_svc_module = importlib.import_module("back.objects.domain.SettingsService")
+_svc_module = importlib.import_module("back.objects.domain.settings.SettingsService")
 
 
 def _run(

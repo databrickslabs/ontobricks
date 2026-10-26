@@ -39,25 +39,25 @@ def test_accepts_optional_pattern_left_join_shape() -> None:
         (
             "SELECT ?s WHERE { "
             "?s <http://ex/name> ?name "
-            "FILTER(CONTAINS(LCASE(STR(?name)), \"ann\")) "
+            'FILTER(CONTAINS(LCASE(STR(?name)), "ann")) '
             "}"
         ),
         (
             "SELECT ?s WHERE { "
             "?s <http://ex/name> ?name "
-            "FILTER(STR(?name) = \"Ann\") "
+            'FILTER(STR(?name) = "Ann") '
             "}"
         ),
         (
             "SELECT ?s WHERE { "
             "?s <http://ex/name> ?name "
-            "FILTER(STRSTARTS(LCASE(STR(?name)), \"an\")) "
+            'FILTER(STRSTARTS(LCASE(STR(?name)), "an")) '
             "}"
         ),
         (
             "SELECT ?s WHERE { "
             "?s <http://ex/name> ?name "
-            "FILTER(STRENDS(LCASE(STR(?name)), \"nn\")) "
+            'FILTER(STRENDS(LCASE(STR(?name)), "nn")) '
             "}"
         ),
         (
@@ -108,14 +108,14 @@ def test_accepts_specialized_relationship_union_shape() -> None:
         (
             "SELECT ?s WHERE { "
             "?s <http://ex/name> ?name "
-            "FILTER(CONTAINS(LCASE(STR(?name)), \"an\") && STRSTARTS(LCASE(STR(?name)), \"a\")) "
+            'FILTER(CONTAINS(LCASE(STR(?name)), "an") && STRSTARTS(LCASE(STR(?name)), "a")) '
             "}",
             "complex FILTER",
         ),
         (
             "SELECT ?s WHERE { "
             "?s <http://ex/name> ?name "
-            "FILTER(STR(?name) != \"Ann\") "
+            'FILTER(STR(?name) != "Ann") '
             "}",
             "complex FILTER",
         ),

@@ -1,0 +1,62 @@
+================================================================================
+## Bump package and README version to 0.9.1
+================================================================================
+
+Context: Open the 0.9.1 line after 0.9.0. Product metadata and the README
+title must match the worktree / branch version.
+
+Changes:
+
+1. pyproject.toml
+   Set project.version to 0.9.1.
+2. uv.lock
+   Record the editable ontobricks package as 0.9.1.
+3. README.md
+   Set the centered heading to OntoBricks 0.9.1.
+
+Modified files:
+- pyproject.toml
+- uv.lock
+- README.md
+
+Tests: not run — version metadata only; no product code changed.
+
+================================================================================
+## Keep Lakebase quality SQL on the Build warehouse
+================================================================================
+
+Context: Deployed data-quality checks on a Lakebase domain failed with
+"Could not read the knowledge graph — is it built?" wrapping
+`use_kernel=True does not support a custom credentials_provider`. Quality
+SQL always used `engine="view"`, which followed the Lakehouse//RT query
+warehouse even when the domain graph lives in Lakebase. Thrift then
+rejected RT and the Apps OAuth retry kept `credentials_provider` next to
+`use_kernel`.
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBFactory.py
+   Bind `engine="view"` to the Build SQL Warehouse with `use_sea=False`.
+2. src/back/core/databricks/SQLWarehouse.py
+   On a Thrift-to-Kernel retry, drop `credentials_provider` and pass
+   Apps M2M `oauth_client_id` / `oauth_client_secret`.
+3. tests/units/dtwin/test_triplestore_factory.py
+   Assert view-store clients ignore the RT query warehouse.
+4. tests/units/core/test_sql_warehouse.py
+   Assert the Apps Kernel retry does not keep `credentials_provider`.
+5. docs/backend.md
+   Document that `engine="view"` uses the Build warehouse.
+6. docs/architecture.md
+   Note that quality SQL never follows the RT query warehouse.
+
+Modified files:
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/databricks/SQLWarehouse.py
+- tests/units/dtwin/test_triplestore_factory.py
+- tests/units/core/test_sql_warehouse.py
+- docs/backend.md
+- docs/architecture.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-22.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9518 passed, 326 skipped, 8 deselected in 76.54s
+

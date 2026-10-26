@@ -9,7 +9,7 @@ Exports:
         review and save in the cohort form.
 
 Stage 2 of the Cohort Discovery feature (see
-``releasereq/cohort_design.md`` §12 and ``docs/cohort_discovery.md``).
+``releasereq/cohort_design.md`` §12 and the Cohort discovery section of ``docs/advanced_features.md``).
 """
 
 from agents.agent_cohort.engine import run_agent, AgentResult  # noqa: F401

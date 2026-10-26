@@ -45,6 +45,7 @@ other tokens are **fixed** — they are not overridden at runtime.
 | Brand primary *(configurable)* | `--db-primary` | `#4F46E5` |
 | Primary dark / darker *(configurable)* | `--db-primary-dark`, `--db-primary-darker` | `#4338CA`, `#3730A3` |
 | Primary tint *(configurable)* | `--db-primary-light` | `rgba(79, 70, 229, 0.1)` |
+| Primary soft fill *(derived from RGB)* | `--db-primary-soft`, `--db-primary-soft-hover` | `rgba(var(--db-primary-rgb), 0.18)` / `0.28` |
 | Primary RGB components *(configurable)* | `--db-primary-rgb` | `79, 70, 229` |
 | Hover well *(configurable)* | `--db-hover-indigo` | `rgba(79, 70, 229, 0.08)` |
 | Focus ring *(configurable)* | `--db-focus-ring` | `0 0 0 0.2rem rgba(79, 70, 229, 0.35)` |
@@ -126,6 +127,29 @@ surface: `#obSubnav` is transparent and its segmented workspace control uses
   preview to reflect the current resolved color. The component preview block is
   `aria-hidden="true"` (decorative).
 
+**Aurora accent and cinematic gradient tokens (Aurora Pro)**
+
+- The **Aurora** accent hex is a second admin-configurable input, alongside
+  Primary, exposed in Settings → Configuration → UI → Theme (`aurora_color`,
+  stored in the `ui_branding` global-config document). When omitted it is
+  deterministically derived from Primary via an HSL hue rotation (see
+  `back.core.helpers.UIBranding._derive_aurora_hex`) — there is no unstyled or
+  undefined state.
+- `--db-gradient-primary` (`linear-gradient(120deg, var(--db-primary),
+  var(--db-gradient-end))`) is the only gradient used on filled CTAs
+  (`.btn-primary`, `.ob-subnav-save-btn`) and the selected L2 workspace chip.
+  `--db-gradient-end` is Primary mixed 45% toward Aurora, contrast-corrected
+  server-side against `--db-on-primary` — never hardcode a second color on a
+  button.
+- `--db-gradient-rail` (`linear-gradient(180deg, var(--db-primary),
+  var(--db-aurora))`) is reserved for the sidebar's 3px active-row leading bar
+  only.
+- `--db-halo` and `--db-canvas-warm` are the only Aurora-aware page-level
+  treatments; forms, tables, and modals stay flat `--db-surface-warm` with no
+  gradients.
+- Resting cards (`.card`) now carry `--db-shadow-sm` in addition to their
+  1px border — previously the shadow was overlay-only.
+
 ### Accent Use and Button Hierarchy
 
 The Clarity indigo accent (`--db-primary`) is used for high-signal moments:
@@ -203,13 +227,14 @@ the entire app chrome — never duplicate or substitute any of it:
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
 | L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
-| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the segmented Domain / Ontology / Mapping / KG workspace control, breadcrumb, Save, Switch Version and Close actions | a second nav element |
+| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain identity launcher, segmented Domain / Ontology / Mapping / KG workspace control, breadcrumb, and Versions → Close → Save actions | a second nav element |
 | Breadcrumb | `#obBreadcrumb` inside `#obBreadcrumbWrap` (`<li>` in the L2 subnav row), populated by `breadcrumb.js` | a per-page breadcrumb |
 | Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
 | Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
 | Task Tracker dropdown | `#taskTrackerDropdown` (hourglass) | a per-page task panel |
 | Help Center modal | included via `partials/layout/help_modal.html` | a custom help dialog |
+| Workspace Map modal | included via `partials/layout/_workspace_map_modal.html`, opened from `#domainContextTrigger` | a duplicate workspace launcher |
 | UC File Browser modal | included via `partials/layout/uc_file_browser_modal.html` | another file picker |
 | Body data attributes | `data-app-role`, `data-domain-role`, `data-app-mode` | re-fetching them |
 | Bootstrap JS bundle | loaded after `{% block content %}` | re-loading Bootstrap |
@@ -410,21 +435,22 @@ and `global/css/sidebar-layout.css`.
 
 **Shell.** On desktop, `.sidebar-layout` is
 `height` / `max-height: calc(100vh - var(--ob-chrome-height, 60px))`,
-`padding: 0.5rem`, `gap: 0.5rem`, `box-sizing: border-box`,
+`padding: 0.25rem 0.5rem 0.5rem`, `gap: 0.5rem`, `box-sizing: border-box`,
 `overflow: hidden`. `--ob-chrome-height` remains navbar + L2, written only
 by `breadcrumb.js`.
 
-**Gutter.** `.ob-subnav-nav` owns only the `0.5rem` space above the visible L2
-workspace rail (`padding: 0.5rem 0 0`); `.sidebar-layout` owns the matching
-`0.5rem` space below it. Therefore the visible L1→L2 and L2→page gaps are both
-8px. `.sidebar-nav` fills the shell (`margin: 0; height: 100%`), while
+**Gutter.** `.ob-subnav-nav` owns only the `0.25rem` space above the visible L2
+workspace rail (`padding: 0.25rem 0 0`); `.sidebar-layout` owns the matching
+`0.25rem` space below it. Therefore the visible L1→L2 and L2→page gaps are both
+4px. `.sidebar-nav` fills the shell (`margin: 0; height: 100%`), while
 `.sidebar-content` uses `padding: 0 0.5rem`: no second vertical inset, and a
 0.5rem horizontal inset. Page-specific fixed panes may change horizontal
 padding but must keep a zero top/bottom inset. Do not restore vertical content
 padding that shifts the title below the sidebar or shortens the pane.
-Every `.sidebar-layout .section-header` uses `margin-bottom: 0.5rem !important`
-so title/subtitle-to-content spacing is identical across sections, including
-Ontology Designer and Business Views.
+Every `.sidebar-layout .section-header` uses `padding-top: 0.5rem` and
+`margin-bottom: 0.5rem !important`, so the space above the title equals the
+space below the subtitle, identically across sections (including Ontology
+Studio and Business Views). The top inset must not be zeroed on desktop.
 
 **Flex chain.** `.sidebar-content` is a column flex container with
 `min-height: 0`. `.sidebar-section.active` is `flex: 1 1 0; min-height: 0`.
@@ -441,10 +467,10 @@ main surface vs the menu, not stuffing every form field into one viewport.
 
 **Rendered invariant.** At 1600×1000, `.sidebar-nav` and the visible
 primary pane share `getBoundingClientRect().bottom` within **1px**.
-The visible section title box (`.section-header h4`, including its icon) shares
-the sidebar's top edge within **1px**; desktop sidebar headers therefore reset
-the global `padding-top` to zero and must not use a negative transform. The
-visible L1→L2 and L2→sidebar gaps are both **8px ±1px**. The gap from subtitle
+The visible section title box (`.section-header h4`, including its icon) sits
+**0.5rem (8px ±1px)** below the sidebar content top — the same gap as subtitle
+→ content. Desktop headers must not use a negative transform. The
+visible L1→L2 and L2→sidebar gaps are both **4px ±1px**. The gap from subtitle
 to primary content is **8px ±1px**.
 Fixed-height routes must not grow the document past the viewport by more
 than 1px.
@@ -457,6 +483,10 @@ reset `#dataquality-section.active` to `height: auto; overflow: visible`
 after its desktop rule. Graph Chat must likewise reset the same desktop
 selector, `#chat-section.sidebar-section.active`, to
 `height: auto; overflow: visible` in a later mobile rule.
+For the compact L2 domain identity on this breakpoint, the leading icon must
+return to normal flow (`position: static`, no translate transform) and the
+trigger keeps explicit icon-control sizing (`width: auto`, bounded min width,
+and `0.5rem` horizontal padding) so `scrollWidth <= clientWidth` remains true.
 
 **Excluded.** Home, About, and Access Denied stay on Layout 2. True
 modals are not the measured pane.
@@ -468,10 +498,10 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 #### L1 Navbar
 
 - Standard Bootstrap `<nav class="navbar navbar-expand-lg">`.
-- Shows: brand logo, Registry link, a `·` separator, a `›` path
-  separator, and the Domain link (`#domainL1Link`).
-- `#domainL1Link` is disabled (`.ob-nav-disabled`, `pointer-events: none`)
-  when no domain is loaded. Do not enable it from page code.
+- L1 is global app chrome: brand, icon-only Registry launcher, and global
+  utilities (warehouse, tasks, notifications, help, user menu).
+- L1 no longer carries a Domain link target. Domain identity and the workspace
+  map launcher live in L2 as `#domainContextTrigger`.
 - Other menus (Knowledge Graph / digitaltwin) may be hidden via
   `"navbar_hidden": true` in `menu_config.json`.
 - Visual contract: white L1 surface, warm one-pixel divider, dark text, indigo
@@ -498,16 +528,27 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 - `<nav id="obSubnav" class="ob-subnav d-none">` — hidden by default.
 - Revealed by `updateDomainMenuVisibility(true)` in `navbar.js` when
   `hasDomain` becomes true (domain has a name or content in session).
+- The slot remains singular and mutually exclusive:
+  - **Non-Settings + loaded domain:** show the normal domain context rail.
+  - **Settings + loaded domain:** show only the return link
+    (`#settingsDomainReturnLink`) inside `#settingsDomainReturnNav`.
+  - **Any page + no loaded domain:** hide all L2 chrome.
+- `breadcrumb.js` must never reveal `#obBreadcrumbWrap` on Settings pages.
+  The guard runs before removing `d-none`, preventing a transient breadcrumb
+  while asynchronous navbar state resolves.
 - Layout (left → right inside `.ob-subnav-nav`):
-  1. **Workspace segmented control** (`.ob-subnav-workspaces` containing
+  1. **Domain identity launcher** (`#domainContextTrigger`): current domain
+     status → name → version, opens `#workspaceMapModal`, and updates its
+     accessible label from `/navbar/state`.
+  2. **Workspace segmented control** (`.ob-subnav-workspaces` containing
      `.ob-subnav-workspace-list`): Domain, divider, Ontology, Mapping, and
      Knowledge Graph. The current workspace is a static `aria-current="page"`
      target; only the other workspace targets retain Bootstrap dropdowns.
-  2. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
-  3. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
-  4. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
-  5. **Switch Version button** (`.ob-subnav-switch-btn`).
+  3. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
+  4. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
+  5. **Versions button** (`.ob-subnav-switch-btn`, icon `bi-123`).
   6. **Close Domain button** (`.ob-subnav-close-btn`).
+  7. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
 - The three tab toggles (Ontology/Mapping/KG) do **not** carry
   `nav-requires-domain`. They are enabled whenever the subnav is
   visible. Specific dropdown items that truly need a UC-saved domain
@@ -533,9 +574,39 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
   use the same hover as the left sidebar (`--db-hover-indigo` well,
   `9px` radius) — not a solid indigo invert, not a grey well. L1/L2
   structure, order, and ownership are immutable.
+- Domain context geometry is fixed on desktop/tablet: `.ob-subnav-context-trigger`
+  stays exactly `200px` wide (matching expanded `.sidebar-nav` width), keeps
+  one-line ellipsis for long names, and shares the exact same fixed height as
+  `.ob-subnav-workspace-list` via one shared CSS source of truth. The shared
+  control height is `3rem`. Domain-name length must not change the row
+  height.
+- Workspace target geometry: `.ob-subnav-workspace-list` keeps its `0.2rem`
+  inset while direct `.ob-subnav-item` children and their `.ob-subnav-link`
+  targets stretch with `height: 100%`. Hover and selected backgrounds therefore
+  occupy the near-full inner rail height (approximately `40px` inside the
+  `48px` / `3rem` outer rail) without touching the segmented-control border.
+  The same stretch rule applies to all four workspace targets at every width.
+- The full `.ob-subnav-context-trigger` reads as a filled Domain badge:
+  `--db-primary-soft` background (darker than `--db-primary-light`) with
+  primary-darker text and **no** hard primary outline. Hover darkens the
+  wash (`--db-primary-soft-hover`); keyboard focus keeps `--db-focus-ring`.
+- Inside `.ob-subnav-context-copy`, status and labels are centered against the
+  full `200px` control. The leading `bi-box` icon may be absolutely positioned
+  at the left so copy remains visually centered. The copy is a two-row grid:
+  lifecycle status in row 1 of the main text area, domain name (ellipsized) in
+  row 2 of the main text area, and the raw numeric version in a right-side
+  column spanning both rows. The version cell is emphasized with a darker
+  themed fill (`--db-primary-darker`), contrast-safe text (`--db-on-primary`),
+  larger bold numerals, and shared control-radius tokens. Keep a small explicit
+  row gap between status and name in that scoped grid to improve legibility
+  without increasing the shared rail height. The scoped
+  `.ob-subnav-context-copy .domain-status-badge` removes Bootstrap's `ms-2`
+  offset only in this context, and `.ob-subnav-context-name` remains
+  constrained as a grid item (`min-width: 0` with bounded width) so long names
+  cannot blow out the 200px control or overlap the icon/version cells.
 - The segmented control's left edge aligns exactly with the framed sidebar
-  panel's left edge. Both use the shell's `0.5rem` outer gutter:
-  `.sidebar-layout { padding: 0.5rem; }` and
+  panel's left edge. Both use the shell's `0.5rem` horizontal outer gutter:
+  `.sidebar-layout { padding: 0.25rem 0.5rem 0.5rem; }` and
   `#obSubnav .container-fluid { padding-left: 0.5rem !important; }`. The ID
   specificity and priority are required because the later-loaded legacy
   full-width body rule zeroes nested `.container-fluid` padding with
@@ -545,22 +616,36 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
   (`calc(var(--db-radius-control) - 2px)`), not a square tab and not an
   underlined tab. Keyboard focus uses `--db-focus-ring` plus a transparent
   outline for forced-colour support.
-- Domain-action hierarchy is fixed: Save is the only filled primary control
-  (`--db-primary` / `--db-on-primary`); Switch Version remains a neutral white
-  outline with an indigo-soft hover; Close remains a neutral white outline
-  with danger text and a soft-danger hover. Preserve their existing IDs,
-  permission classes, action handlers and order.
+- Domain-action styles are fixed, and the rendered order is owned explicitly by
+  sequential Jinja blocks in `templates/base.html` (Versions → Close → Save).
+  `menu_config.json` supplies each action's metadata and IDs, but its
+  `navbar_actions` array order does not control render order. Save is the only
+  filled primary control (`--db-primary` / `--db-on-primary`); Versions
+  remains a neutral white outline with an indigo-soft hover; Close remains a
+  neutral white outline with danger text and a soft-danger hover. Preserve
+  existing IDs, permission classes, and handlers.
 - Shared ownership: L2 markup stays in `templates/base.html`, styling stays in
   `static/global/css/main.css`, active behavior stays in
   `static/global/js/navbar.js`, and menu contents stay driven by
   `menu_config.json`. Never add per-page L2 CSS or JS.
+- Stable IDs for the Settings/domain switch contract are mandatory:
+  `#domainWorkspaceSubnavNav`, `#settingsDomainReturnNav`, and
+  `#settingsDomainReturnLink`. On desktop/tablet, the settings return control
+  (`#settingsDomainReturnLink` / `.ob-settings-domain-return-link`) keeps
+  exact `200px` width/min-width/max-width so it aligns with the expanded
+  `200px` sidebar width and same shell left gutter.
 - Mobile contract (below `768px`): keep all four workspace targets plus
-  Save / Switch Version / Close, but show them as titled icons by hiding
+  Save / Versions / Close, but show them as titled icons by hiding
   only their `.ob-subnav-label`. Hide the redundant inline breadcrumb and
-  flex spacer, and compact horizontal padding. Do not make the subnav
-  horizontally scrollable: Bootstrap dropdowns must remain able to escape
-  the row without clipping. The text stays in the DOM for accessible names,
-  and every workspace target carries a `title` tooltip.
+  flex spacer, and compact horizontal padding. Reset
+  `.ob-subnav-context-trigger` and `#settingsDomainReturnLink`
+  width/min-width/max-width so desktop `200px` fixed widths do not force
+  overflow. Do not make the subnav horizontally scrollable: Bootstrap dropdowns
+  must remain able to escape the row without clipping. Mobile keeps the
+  selected-color domain trigger as an icon-only control and hides
+  status/name/version details
+  (`.ob-subnav-context-copy` stays hidden). The text stays in the DOM for
+  accessible names, and every workspace target carries a `title` tooltip.
 
 **Tokens**
 
@@ -568,6 +653,7 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 |-------|-------|-------|
 | L1 navbar background | `--db-navbar-bg` | `#FFFFFF` |
 | L2 workspace control | `--db-surface-warm` + `--db-border` | white segmented surface on the transparent row |
+| L2 Domain badge | `--db-primary-soft` / `--db-primary-soft-hover` | filled wash, no primary outline |
 | Breadcrumb strip | `.ob-subnav-breadcrumb-wrap` | muted text + one-pixel left separator |
 
 **New Domain flow**
@@ -597,7 +683,7 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
   stay inside `.ob-subnav-workspaces > .ob-subnav-workspace-list`.
 - ❌ Giving L2 a different left gutter from `.sidebar-layout`; the segmented
   control and sidebar panel must remain vertically aligned.
-- ❌ Filling Switch Version or Close with the primary colour. Save is the only
+- ❌ Filling Versions or Close with the primary colour. Save is the only
   filled primary action in L2.
 - ❌ Hard-coding `.active`, `aria-current`, dropdown removal, or route-prefix
   checks in `base.html` or page code — `navbar.js` owns that state.
@@ -805,7 +891,7 @@ rounded surface. `.ob-tabs` never owns card borders or corner geometry.
 
 #### Card-integrated page tabs
 
-This is the canonical page-level pattern used by Domain → Information,
+This is the canonical page-level pattern used by Domain → General,
 Ontology → Generate, Ontology → Data Quality, Ontology → Business Rules, and
 Ontology → Axioms:
 
@@ -891,13 +977,13 @@ surfaces:
   `ob-tabs`. The catalogued combinations are:
   - `nav nav-tabs ob-tabs mb-0` — independent Domain / Settings surfaces.
   - `nav nav-tabs ob-tabs` — Import / Registry modal.
-  - `nav nav-tabs ob-tabs nav-fill` — Domain Information / Ontology Generate /
+  - `nav nav-tabs ob-tabs nav-fill` — Domain → General / Ontology Generate /
     Ontology DQ / Business Rules / Axioms.
   - `nav nav-tabs ob-tabs nav-fill flex-shrink-0` —
     DT-DataQuality / DT-Inference (the `flex-shrink-0` keeps the
     tab strip a fixed-size header inside their flex card body).
-  - `nav nav-tabs ob-tabs ob-tabs--compact` — Ontology Designer and Mapping
-    Designer generated forms.
+  - `nav nav-tabs ob-tabs ob-tabs--compact` — Ontology Studio and Mapping
+    Studio generated forms.
   - `nav nav-tabs ob-tabs ob-tabs--compact sg-panel-tabs` — KG Explorer.
 - Do not add `.small` or per-area font/padding declarations. Select the
   standard or compact density instead.
@@ -912,7 +998,7 @@ surfaces:
 - **Full-height pattern (preferred for tabbed pages).** Tabs +
   body should fill the page from below the section header to the
   shared sidebar/shell bottom (the 0.5rem viewport gutter),
-  exactly like the single card on Ontology > Information. Two
+  exactly like the single card on Ontology > General. Two
   ways to achieve this:
   1. Place the `<ul ob-tabs>` and the body card as **direct
      children of `.content-section`**. The existing
@@ -952,7 +1038,7 @@ surfaces:
   height. Use the *Full-height pattern* above (direct children of
   `.content-section`, or `.ob-tabs-wrap`) so the tabs reach the
   shared sidebar/shell bottom (the 0.5rem viewport gutter) like
-  the Ontology > Information card.
+  the Ontology > General card.
 - ❌ Inline `style="gap:…"` or `style="font-size:…"` on the tab
   `<ul>`.
 - ❌ New hand-rolled tab engines. Use Bootstrap's `data-bs-toggle="tab"`. The
@@ -968,7 +1054,7 @@ surfaces:
 
 Every screen that pairs a canvas or a browsable list with a contextual
 right-hand panel uses one layout, defined by the Knowledge Graph Explorer
-(`query/css/query-sigmagraph.css`) and shared by Ontology Designer /
+(`query/css/query-sigmagraph.css`) and shared by Ontology Studio /
 Entities / Relationships (`ontology/css/ontology-shared-panels.css`).
 
 The contract:
@@ -983,29 +1069,31 @@ The contract:
 - **The panel is permanent, not a drawer.** `min-width: 200px`,
   `max-width: 50%`; the default width is `320px` for a read-only details
   panel (Explorer) and `420px` where the panel hosts edit forms (Ontology),
-  which gives the four compact tabs a comfortable default. The shared rail
+  which gives the compact tabs a comfortable default. The shared rail
   remains on one line and scrolls horizontally when the panel is narrower.
   It is created *before* the view renders — canvases read their width once
   (D3 / Sigma size from `container.clientWidth`), so a panel that appears
   later leaves the graph centred on the wrong axis.
 - **Empty state instead of collapsing.** With nothing selected the panel
-  title is **Select Item** with no leading icon (same copy as Mapping Designer) and the body
+  title is **Select Item** with no leading icon (same copy as Mapping Studio) and the body
   holds a centred placeholder (`bi-cursor` icon at `3rem`,
   `--db-text-muted`, "Click on an entity or relationship to view
   details"). Clicking the empty canvas returns to that placeholder — and
   flushes any pending edit first, since it is the only way out.
+  A selected entity or relationship title has no pencil icon.
   Tabs inside the panel use `.ob-tabs.ob-tabs--compact`; area styles may retain
   only layout rules such as `flex-shrink`. Typography, spacing, overflow,
   focus, hover, and active states remain owned by the shared component.
 - **No close button.** The panel can't be dismissed, so a cross would be a
   dead control.
-- **Drag handle**: an `8px` hit area holding a `3px × 40px` bar,
+- **Drag handle**: a `1px` track holding a `0.5px × 40px` bar,
+  overlapping `0.25rem` of the `0.5rem` gutter on each side,
   `--db-border` at rest and `--db-primary` on hover or while dragging. The
   drag clamp must span the default width (Ontology: `200px`–`900px`).
 - **Host the panel on the wrapper, not on the canvas.** It is a *sibling*
   of the content pane; making the canvas container the flex parent means it
   can no longer be framed as a pane.
-- **Mapping Designer uses the same split cards as Ontology**, but in
+- **Mapping Studio uses the same split cards as Ontology**, but in
   `.ob-split-shell--column`: content pane on top and an always-visible bottom
   detail panel with the shared `detail-panel-resize-handle`.
 
@@ -1241,7 +1329,7 @@ Every modal that's not produced by a helper above must:
 Before adding a new modal, check whether one of these can be reused:
 
 - `partials/layout/uc_file_browser_modal.html` — Unity Catalog file
-  picker (`window.openUCFileBrowser(...)`).
+  picker (`UCFileDialog.open({ mode: 'load' | 'save', ... })`).
 - `partials/layout/help_modal.html` — Help Center.
 - `DocumentPreview.open(filename)` — generic document viewer
   (PDF / image / text).

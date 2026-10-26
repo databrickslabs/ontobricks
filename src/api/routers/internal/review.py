@@ -18,7 +18,7 @@ from shared.config.settings import get_settings, Settings
 from back.core.errors import ValidationError
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_session_manager
-from back.objects.registry.ReviewService import ReviewService
+from back.objects.registry.collab.ReviewService import ReviewService
 from api.routers.internal._helpers import (
     resolve_roles as _roles,
     read_json_body as _body,

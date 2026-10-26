@@ -1,0 +1,42 @@
+## Restrict domain creation to administrators
+
+Context: Domain creation must be reserved for Databricks App administrators
+with CAN_MANAGE. Non-admin users must not see create-domain controls, while
+Editors and Builders must retain the ability to save assigned domains.
+
+Changes:
+
+1. src/api/routers/internal/_permissions.py
+   Added a request-aware guard that distinguishes a new domain from an existing-domain save and rejects non-admin creation.
+2. src/api/routers/internal/domain.py
+   Enforced the creation guard before persisting a domain to the registry.
+3. src/front/templates/home.html
+   Marked the Home New Domain action as admin-only.
+4. src/front/templates/partials/registry/_registry_domains.html
+   Marked the Registry Create a New Domain action as admin-only.
+5. src/front/static/home/js/home.js
+   Marked the empty-state create action as admin-only and routed it through the canonical domain creation flow.
+6. src/front/static/global/css/permissions.css
+   Preserved the empty-state button's inline-flex layout when visible to admins.
+7. src/front/templates/partials/layout/help_modal.html
+   Documented the Admin-only creation policy and the assigned-domain workflow for Editors and Builders.
+8. docs/development.md
+   Updated the role capability matrix to reserve domain creation for Admin.
+9. tests/units/api/test_admin_only_domain_create.py
+   Added create-versus-save authorization coverage.
+10. tests/units/front/test_admin_only_domain_create.py
+    Added contracts for all admin-only create controls and the canonical empty-state action.
+
+Modified files:
+- src/api/routers/internal/_permissions.py
+- src/api/routers/internal/domain.py
+- src/front/templates/home.html
+- src/front/templates/partials/registry/_registry_domains.html
+- src/front/static/home/js/home.js
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/development.md
+- tests/units/api/test_admin_only_domain_create.py
+- tests/units/front/test_admin_only_domain_create.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6329 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.00s.

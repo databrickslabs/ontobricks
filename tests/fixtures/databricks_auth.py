@@ -26,15 +26,22 @@ class DatabricksAuth:
     """
 
     @staticmethod
-    def mint_token(profile: Optional[str] = None) -> Optional[str]:
+    def mint_token(
+        profile: Optional[str] = None, *, force_refresh: bool = False
+    ) -> Optional[str]:
         """Return a workspace ``access_token`` or ``None`` on any failure.
 
         When ``profile`` is ``None`` the CLI uses ``DATABRICKS_CONFIG_PROFILE``
         (or the default profile) — this is the live_integration behaviour.
+        ``force_refresh`` maps to ``databricks auth token --force-refresh`` so
+        a long live-e2e run does not keep serving a cached token the Apps
+        gateway already treats as expired.
         """
-        cmd = ["databricks", "auth", "token"]
+        cmd = ["databricks", "auth", "token", "-o", "json"]
         if profile:
             cmd += ["--profile", profile]
+        if force_refresh:
+            cmd.append("--force-refresh")
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=30, check=True

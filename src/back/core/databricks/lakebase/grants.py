@@ -4,7 +4,7 @@ In-app equivalents of the ``GRANT`` statements in
 ``scripts/bootstrap-lakebase-perms.sh``. Two call sites share them so the
 grant logic lives in exactly one place:
 
-- :class:`~back.core.graphdb.lakebase.provisioner.LakebaseGraphProvisioner`
+- :class:`~back.core.graphdb.lakebase.LakebaseGraphProvisioner.LakebaseGraphProvisioner`
   — the *Create graph DB* flow (graph schema).
 - :meth:`~back.objects.registry.store.lakebase.store.LakebaseRegistryStore.grant_app_permissions`
   — the *Initialize* / *Repair permissions* flow (registry schema).

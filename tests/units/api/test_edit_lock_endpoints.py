@@ -17,7 +17,7 @@ import pytest
 _domain = importlib.import_module("api.routers.internal.domain")
 _settings = importlib.import_module("api.routers.internal.settings")
 _svc = importlib.import_module(
-    "back.objects.registry.lockmgt.EditLockService"
+    "back.objects.registry.collab.EditLockService"
 )
 
 pytestmark = pytest.mark.unit

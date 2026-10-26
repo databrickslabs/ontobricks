@@ -12,6 +12,14 @@ from back.core.mcp_tools import (
 )
 
 
+def test_shacl_facet_tool_is_a_configurable_graph_tool() -> None:
+    """Per-domain toggle governs it, and it needs a built graph."""
+    from back.core.mcp_tools import MCP_GRAPH_TOOL_NAMES
+
+    assert "check_entity_shacl_facets" in MCP_DOMAIN_TOOL_NAMES
+    assert "check_entity_shacl_facets" in MCP_GRAPH_TOOL_NAMES
+
+
 def test_registry_and_domain_tool_sets_are_disjoint() -> None:
     """A tool is either always-on or configurable, never both."""
     assert not (MCP_REGISTRY_TOOLS & MCP_DOMAIN_TOOL_NAMES)
@@ -97,7 +105,7 @@ def test_every_domain_tool_is_labelled_and_described() -> None:
     """The MCP settings panel renders the catalog directly."""
     from back.core.mcp_tools import MCP_DOMAIN_TOOLS
 
-    assert len(MCP_DOMAIN_TOOLS) == 9
+    assert len(MCP_DOMAIN_TOOLS) == 11
     for tool in MCP_DOMAIN_TOOLS:
         assert tool["label"].strip()
         assert tool["description"].strip()

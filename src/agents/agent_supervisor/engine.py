@@ -1,23 +1,30 @@
 """Supervisor engine - assess complexity, then dispatch to the right engine.
 
 This is the in-process brain the Agent Bricks Supervisor delegates to. Given a
-task ("mapping" or "ontology") plus the domain's metadata and ontology, it runs
-the deterministic ``ComplexityAssessor``, picks the engine, and invokes it via
-``AgentClient``.
+task (only ``"mapping"`` — see below) plus the domain's metadata and ontology,
+it runs the deterministic ``ComplexityAssessor``, picks the engine, and
+invokes it via ``AgentClient``.
 
 Engine selection (deterministic):
 
 * "mapping" - the genuine two-engine choice. PGE: ``agent_mapping_pge``;
   simple: ``agent_auto_assignment`` (the original single-agent engine from
   ``master``). This is what the complexity score routes between.
-* "ontology" - a single engine, ``agent_owl_generator`` (its PGE Evaluator stage
-  is bounded internally; there is no separate "simple ontology engine"). The
-  complexity report is still produced for observability, but dispatch is
-  unconditional.
 
 The mapping selection can be forced via ``engine_override`` for callers that
 already know which engine they want (e.g. the supervisor acting on its own
 routing decision).
+
+An ``"ontology"`` task used to dispatch to the deprecated one-shot
+``agent_owl_generator`` bridge (``AgentClient.run_owl_generator`` ->
+``agents.agent_owl_generator.engine.run_agent``). That bridge contained the
+post-generation pitfall-rewrite loop the three-stage Generate design
+(``docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md``)
+replaces; it was never wired to a production Model Serving endpoint (only
+``task="mapping"`` is exposed via ``responses_agent.py``) and has been removed
+outright rather than left dormant. Ontology generation now goes exclusively
+through the staged workflow (``back.objects.ontology.generate.GenerateWorkflow`` +
+``agents.agent_owl_generator.staged``), which this supervisor does not front.
 """
 
 from __future__ import annotations
@@ -32,7 +39,7 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_VALID_TASKS = ("mapping", "ontology")
+_VALID_TASKS = ("mapping",)
 _VALID_ENGINES = ("pge", "simple")
 
 
@@ -92,15 +99,13 @@ class SupervisorEngine:
         client: Any = None,
         entity_mappings: Any = None,
         relationship_mappings: Any = None,
-        base_uri: str = "",
-        selected_tables: Optional[list] = None,
         documents: Any = None,
         on_step: Optional[Callable] = None,
     ) -> SupervisorResult:
         """Assess complexity, choose an engine, and run it.
 
-        ``task`` is ``"mapping"`` or ``"ontology"``. Engine-specific arguments are
-        forwarded to the chosen engine via :class:`AgentClient`.
+        ``task`` must be ``"mapping"`` (the only supervised task). Engine-specific
+        arguments are forwarded to the chosen engine via :class:`AgentClient`.
         """
         if task not in _VALID_TASKS:
             raise ValueError(f"task must be one of {_VALID_TASKS}, got {task!r}")
@@ -110,49 +115,27 @@ class SupervisorEngine:
         )
         agent = get_agent_client()
 
-        if task == "mapping":
-            engine_used = engine
-            logger.info("Supervisor routing - task=mapping engine=%s", engine)
-        else:
-            # Ontology generation has a single engine; report.recommended_engine
-            # is advisory only.
-            engine_used = "owl_generator"
-            logger.info(
-                "Supervisor routing - task=ontology engine=owl_generator "
-                "(complexity tier=%s, advisory)",
-                report.tier,
-            )
+        engine_used = engine
+        logger.info("Supervisor routing - task=mapping engine=%s", engine)
 
         try:
-            if task == "mapping":
-                run_engine = (
-                    agent.run_mapping_pge
-                    if engine == "pge"
-                    else agent.run_auto_assignment
-                )
-                result = run_engine(
-                    host=host,
-                    token=token,
-                    endpoint_name=endpoint_name,
-                    client=client,
-                    metadata=metadata,
-                    ontology=ontology,
-                    entity_mappings=entity_mappings or [],
-                    relationship_mappings=relationship_mappings or [],
-                    documents=documents,
-                    on_step=on_step,
-                )
-            else:
-                result = agent.run_owl_generator(
-                    host=host,
-                    token=token,
-                    endpoint_name=endpoint_name,
-                    base_uri=base_uri,
-                    selected_tables=selected_tables or [],
-                    metadata=metadata,
-                    ontology=ontology,
-                    on_step=on_step,
-                )
+            run_engine = (
+                agent.run_mapping_pge
+                if engine == "pge"
+                else agent.run_auto_assignment
+            )
+            result = run_engine(
+                host=host,
+                token=token,
+                endpoint_name=endpoint_name,
+                client=client,
+                metadata=metadata,
+                ontology=ontology,
+                entity_mappings=entity_mappings or [],
+                relationship_mappings=relationship_mappings or [],
+                documents=documents,
+                on_step=on_step,
+            )
         except Exception as exc:  # surfaced to the caller; never swallowed silently
             logger.error(
                 "Supervisor run failed (task=%s engine=%s): %s", task, engine_used, exc

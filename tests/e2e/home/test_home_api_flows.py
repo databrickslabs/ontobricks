@@ -17,6 +17,14 @@ by the ``home`` router:
 from __future__ import annotations
 
 import json
+import os
+
+import pytest
+
+
+def _skip_if_fake_databricks() -> None:
+    if os.environ.get("ONTOBRICKS_E2E_FAKE_CREDS") == "1":
+        pytest.skip("Databricks-backed route hangs with ONTOBRICKS_E2E_FAKE_CREDS=1")
 
 
 def _csrf_headers(context) -> dict:
@@ -96,12 +104,14 @@ class TestOntologyValidation:
         assert isinstance(payload, dict)
 
     def test_validate_detailed_not_5xx(self, page, live_server):
+        _skip_if_fake_databricks()
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
         resp = page.request.get(f"{live_server}/validate/detailed")
         assert resp.status < 500, f"validate/detailed returned 5xx: {resp.text()}"
 
     def test_validate_detailed_is_json(self, page, live_server):
+        _skip_if_fake_databricks()
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
         resp = page.request.get(f"{live_server}/validate/detailed")
@@ -126,6 +136,7 @@ class TestDebugEndpoints:
 
     def test_validate_detailed_has_categories(self, page, live_server):
         """validate/detailed should return a structured report dict."""
+        _skip_if_fake_databricks()
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
         resp = page.request.get(f"{live_server}/validate/detailed")

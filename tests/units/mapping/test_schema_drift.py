@@ -160,6 +160,19 @@ class TestEntityDrift:
         result = Mapping(domain).run_diagnostics(client=client)
         assert result["entities"] == []
 
+    def test_excluded_attribute_is_not_drifted(self):
+        domain = _mock_domain(
+            entities=[
+                _entity(
+                    attribute_mappings={"email": "email_addr", "name": "name"},
+                    excluded_attributes=["email"],
+                )
+            ]
+        )
+        client = _client({"customers": ["id", "name"]})
+        result = Mapping(domain).run_diagnostics(client=client)
+        assert [c["check"] for c in _drift_checks(result["entities"][0])] == []
+
 
 class TestRelationshipDrift:
     def _rel(self, **overrides):

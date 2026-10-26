@@ -11,6 +11,29 @@ let loadMetadataModal = null; // Bootstrap modal instance
 let loadMetadataWidgetInitialized = false; // Track if widget is initialized
 let pendingLoadCatalog = ''; // Catalog selected in the load metadata modal
 let pendingLoadSchema = ''; // Schema selected in the load metadata modal
+let dataAssetsImportLimit = 40;
+
+// Visual metadata for a data-source object kind (table | view | metric_view).
+// Returns the row icon, its color class, and an optional inline badge.
+function objectKindMeta(objectKind) {
+    switch (objectKind) {
+        case 'metric_view':
+            return {
+                icon: 'bi-graph-up-arrow',
+                iconClass: 'text-info',
+                badge: '<span class="badge bg-info ms-1">Metric View</span>',
+            };
+        case 'view':
+            return {
+                icon: 'bi-eye',
+                iconClass: 'text-secondary',
+                badge: '<span class="badge bg-secondary ms-1">View</span>',
+            };
+        case 'table':
+        default:
+            return { icon: 'bi-table', iconClass: 'text-primary', badge: '' };
+    }
+}
 
 const _metadataGauges = {};
 
@@ -125,7 +148,7 @@ async function loadMetadataStatus() {
     const previewDiv = document.getElementById('metadataPreview');
     
     statusDiv.className = 'alert alert-secondary mb-4';
-    statusText.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading data sources…';
+    statusText.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Loading data assets…';
     
     try {
         const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
@@ -147,7 +170,7 @@ async function loadMetadataStatus() {
             
             statusDiv.className = 'alert alert-success mb-4';
             statusText.innerHTML = `
-                <strong>Data sources loaded:</strong> 
+                <strong>Data assets loaded:</strong> 
                 ${locationDisplay ? `<strong>${locationDisplay}</strong> - ` : ''}
                 ${tableCount} table${tableCount !== 1 ? 's' : ''}
             `;
@@ -168,7 +191,7 @@ async function loadMetadataStatus() {
             metadataCache = null;
             tableSelections = {};
             statusDiv.className = 'alert alert-secondary mb-4';
-            statusText.innerHTML = '<i class="bi bi-info-circle"></i> No data sources loaded';
+            statusText.innerHTML = '<i class="bi bi-info-circle"></i> No data assets loaded';
             previewDiv.classList.add('d-none');
             const warningEl = document.getElementById('metadataDescriptionWarning');
             if (warningEl) warningEl.style.display = 'none';
@@ -178,7 +201,7 @@ async function loadMetadataStatus() {
     } catch (error) {
         console.error('Error loading metadata status:', error);
         statusDiv.className = 'alert alert-warning mb-4';
-        statusText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error loading data sources status';
+        statusText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error loading data assets status';
     }
 }
 
@@ -228,6 +251,9 @@ async function loadMetadataFromUC() {
         if (data.success) {
             // Store available tables and permission info
             allAvailableTables = data.tables || [];
+            if (typeof data.import_limit === 'number' && data.import_limit > 0) {
+                dataAssetsImportLimit = data.import_limit;
+            }
             const perms = data.permissions || {};
 
             if (allAvailableTables.length === 0) {
@@ -247,10 +273,13 @@ async function loadMetadataFromUC() {
                 showNotification(perms.permission_warning, 'warning');
             }
 
-            // Initialize import selections (select all new tables by default)
+            // Initialize import selections (select new tables up to the import limit)
             importTableSelections = {};
+            let remaining = _remainingImportSlots();
             allAvailableTables.forEach(table => {
-                importTableSelections[table.name] = !table.already_loaded;
+                const take = !table.already_loaded && remaining > 0;
+                importTableSelections[table.name] = take;
+                if (take) remaining -= 1;
             });
 
             // Show the selection modal, pass permissions for the status banner
@@ -277,6 +306,11 @@ function showTableSelectionModal(catalog, schema, perms) {
     infoSpan.innerHTML = `<code>${catalog}.${schema}</code> - ${allAvailableTables.length} table(s) found`;
     if (existingCount > 0) {
         infoSpan.innerHTML += ` <span class="badge bg-info">${existingCount} already loaded</span>`;
+    }
+    const remaining = _remainingImportSlots();
+    infoSpan.innerHTML += ` <span class="badge bg-secondary">Import limit ${dataAssetsImportLimit} (${remaining} slot${remaining !== 1 ? 's' : ''} left)</span>`;
+    if (newCount > remaining) {
+        infoSpan.innerHTML += ` <span class="badge bg-warning text-dark">${newCount - remaining} new asset(s) skipped</span>`;
     }
 
     // Permission status banner
@@ -318,6 +352,7 @@ function showTableSelectionModal(catalog, schema, perms) {
         const statusBadge = table.already_loaded 
             ? '<span class="badge bg-info">Already loaded</span>' 
             : '<span class="badge bg-success">New</span>';
+        const kind = objectKindMeta(table.object_kind);
         
         html += `
             <tr class="import-table-row ${table.already_loaded ? 'table-light' : ''}" data-table="${table.name}">
@@ -327,8 +362,9 @@ function showTableSelectionModal(catalog, schema, perms) {
                            ${isSelected ? 'checked' : ''}>
                 </td>
                 <td>
-                    <i class="bi bi-table text-primary me-1"></i>
+                    <i class="bi ${kind.icon} ${kind.iconClass} me-1"></i>
                     <strong>${table.name}</strong>
+                    ${kind.badge}
                 </td>
                 <td>${statusBadge}</td>
             </tr>
@@ -345,20 +381,53 @@ function showTableSelectionModal(catalog, schema, perms) {
     modal.show();
 }
 
+function _alreadyLoadedCount() {
+    return allAvailableTables.filter(t => t.already_loaded).length;
+}
+
+function _remainingImportSlots() {
+    return Math.max(0, dataAssetsImportLimit - _alreadyLoadedCount());
+}
+
+function _selectedNewCount() {
+    return allAvailableTables.filter(t => !t.already_loaded && importTableSelections[t.name]).length;
+}
+
 function toggleImportTableSelection(tableName, isSelected) {
+    const table = allAvailableTables.find(t => t.name === tableName);
+    if (isSelected && table && !table.already_loaded && _selectedNewCount() >= _remainingImportSlots()) {
+        importTableSelections[tableName] = false;
+        const checkbox = document.querySelector(`.import-table-checkbox[data-table="${tableName}"]`);
+        if (checkbox) checkbox.checked = false;
+        showNotification(
+            `Import limit is ${dataAssetsImportLimit} data assets (Settings → Global). Deselect another asset first.`,
+            'warning'
+        );
+        updateImportSelectionCount();
+        updateSelectAllImportCheckbox();
+        return;
+    }
     importTableSelections[tableName] = isSelected;
     updateImportSelectionCount();
     updateSelectAllImportCheckbox();
 }
 
 function selectAllImportTables(isSelected) {
-    // Only affect visible (non-filtered) rows
+    // Only affect visible (non-filtered) rows; never exceed remaining slots.
     const visibleRows = document.querySelectorAll('.import-table-row:not(.d-none)');
+    let remaining = _remainingImportSlots();
     visibleRows.forEach(row => {
         const tableName = row.dataset.table;
-        importTableSelections[tableName] = isSelected;
+        const table = allAvailableTables.find(t => t.name === tableName);
+        let take = isSelected;
+        if (take && table && !table.already_loaded) {
+            if (remaining <= 0) take = false;
+            else remaining -= 1;
+        }
+        if (take && table && table.already_loaded) take = false;
+        importTableSelections[tableName] = take;
         const checkbox = row.querySelector('.import-table-checkbox');
-        if (checkbox) checkbox.checked = isSelected;
+        if (checkbox) checkbox.checked = take;
     });
     
     updateImportSelectionCount();
@@ -366,9 +435,11 @@ function selectAllImportTables(isSelected) {
 }
 
 function selectNewTablesOnly() {
-    // Select only tables that are not already loaded
+    let remaining = _remainingImportSlots();
     allAvailableTables.forEach(table => {
-        importTableSelections[table.name] = !table.already_loaded;
+        const take = !table.already_loaded && remaining > 0;
+        importTableSelections[table.name] = take;
+        if (take) remaining -= 1;
     });
     
     // Update checkboxes
@@ -408,7 +479,7 @@ function updateImportSelectionCount() {
     
     if (importBtn) {
         importBtn.disabled = selectedCount === 0;
-        importBtn.innerHTML = `<i class="bi bi-download"></i> Import ${selectedCount} Table${selectedCount !== 1 ? 's' : ''}`;
+        importBtn.innerHTML = `<i class="bi bi-download"></i> Add ${selectedCount} asset${selectedCount !== 1 ? 's' : ''}`;
     }
 }
 
@@ -435,6 +506,22 @@ async function importSelectedTables() {
         showNotification('No tables selected for import', 'warning');
         return;
     }
+
+    const remaining = _remainingImportSlots();
+    if (selectedTables.length > remaining) {
+        showNotification(
+            `Import limit is ${dataAssetsImportLimit}. Only the first ${remaining} selected asset(s) will be imported.`,
+            'warning'
+        );
+        selectedTables = selectedTables.slice(0, remaining);
+    }
+    if (selectedTables.length === 0) {
+        showNotification(
+            `Data assets import limit of ${dataAssetsImportLimit} reached. Raise it in Settings → Global or remove existing assets.`,
+            'warning'
+        );
+        return;
+    }
     
     // Use the catalog/schema stored when the load metadata modal was confirmed
     const catalog = pendingLoadCatalog;
@@ -450,7 +537,7 @@ async function importSelectedTables() {
     
     loadBtn.disabled = true;
     progressDiv.classList.remove('d-none');
-    statusSpan.textContent = `Loading data sources for ${selectedTables.length} table(s)...`;
+    statusSpan.textContent = `Loading data assets for ${selectedTables.length} table(s)...`;
     
     try {
         // Start async task
@@ -477,7 +564,7 @@ async function importSelectedTables() {
         const taskId = startResult.task_id;
         sessionStorage.setItem(METADATA_LOAD_TASK_KEY, taskId);
         
-        showNotification('Data sources loading started...', 'info');
+        showNotification('Data assets loading started...', 'info');
         
         // Trigger refresh of task tracker
         if (typeof refreshTasks === 'function') refreshTasks();
@@ -634,7 +721,7 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
                     }
                 }
                 
-                showNotification(task.message || 'Data sources operation completed!', 'success');
+                showNotification(task.message || 'Data assets operation completed!', 'success');
                 
                 // Refresh metadata display
                 await loadMetadataStatus();
@@ -710,10 +797,11 @@ function displayMetadataPreview(metadata) {
                            ${isMarked ? 'checked' : ''}>
                 </td>
                 <td class="meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}" title="${fullName}">
-                    <i class="bi bi-table text-primary me-1"></i>
+                    <i class="bi ${objectKindMeta(table.object_kind).icon} ${objectKindMeta(table.object_kind).iconClass} me-1"></i>
                     <strong>${displayName}</strong>
+                    ${objectKindMeta(table.object_kind).badge}
                 </td>
-                <td class="meta-cursor-pointer" data-meta-action="open-ds-modal" data-table-index="${index}" title="Click to change data source">
+                <td class="meta-cursor-pointer" data-meta-action="open-ds-modal" data-table-index="${index}" title="Click to change data asset">
                     ${dataSource
                         ? `<code>${dataSource}</code>`
                         : '<span class="text-muted fst-italic">Click to set...</span>'}
@@ -881,7 +969,7 @@ async function confirmRemovalWithImpact(identifiers, plain) {
     const mappingCount = new Set(Object.values(impact).flat()).size;
     return showConfirmDialog({
         ...plain,
-        title: 'Data Sources Still In Use',
+        title: 'Data Assets Still In Use',
         size: 'modal-lg',
         headerClass: 'bg-danger text-white',
         icon: 'exclamation-triangle',
@@ -889,7 +977,7 @@ async function confirmRemovalWithImpact(identifiers, plain) {
             ${plain.message}
             <div class="alert alert-danger mt-3 mb-0">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>Warning:</strong> ${affectedTables} of these data source(s)
+                <strong>Warning:</strong> ${affectedTables} of these data asset(s)
                 are still mapped by ${mappingCount} entity/relationship mapping(s).
                 Removing them leaves those mappings pointing at a missing table,
                 which will fail at build time. Generated R2RML/SQL will be cleared.
@@ -902,7 +990,7 @@ async function confirmRemovalWithImpact(identifiers, plain) {
 
 async function removeSelectedTables() {
     if (!metadataCache) {
-        showNotification('No data sources loaded', 'warning');
+        showNotification('No data assets loaded', 'warning');
         return;
     }
     
@@ -926,10 +1014,10 @@ async function removeSelectedTables() {
     const confirmed = await confirmRemovalWithImpact(
         tablesToRemove.map(t => t.full_name || t.name),
         {
-            title: isRemovingAll ? 'Clear All Data Sources' : 'Remove Tables',
+            title: isRemovingAll ? 'Clear All Data Assets' : 'Remove Tables',
             message: isRemovingAll
-                ? 'Are you sure you want to remove all tables? This will clear the data sources.'
-                : `Are you sure you want to remove ${toRemoveCount} table${toRemoveCount !== 1 ? 's' : ''} from the data sources?`,
+                ? 'Are you sure you want to remove all tables? This will clear the data assets.'
+                : `Are you sure you want to remove ${toRemoveCount} table${toRemoveCount !== 1 ? 's' : ''} from the data assets?`,
             confirmText: isRemovingAll ? 'Clear All' : 'Remove',
             confirmClass: 'btn-danger',
             icon: 'trash'
@@ -949,7 +1037,7 @@ async function removeSelectedTables() {
             const data = await response.json();
             
             if (data.success) {
-                showNotification('Data sources cleared', 'success');
+                showNotification('Data assets cleared', 'success');
                 metadataCache = null;
                 tableSelections = {};
                 await loadMetadataStatus();
@@ -989,7 +1077,7 @@ async function removeSelectedTables() {
 
 async function saveMetadataChanges(silent = false) {
     if (!metadataCache) {
-        if (!silent) showNotification('No data sources to save', 'warning');
+        if (!silent) showNotification('No data assets to save', 'warning');
         return;
     }
     
@@ -1014,7 +1102,7 @@ async function saveMetadataChanges(silent = false) {
         const data = await response.json();
         
         if (data.success) {
-            if (!silent) showNotification(`Saved data sources for ${allTables.length} tables`, 'success');
+            if (!silent) showNotification(`Saved data assets for ${allTables.length} tables`, 'success');
             updateMetadataGauges(metadataCache);
         } else {
             showNotification('Error: ' + data.message, 'error');
@@ -1104,8 +1192,8 @@ async function saveTableDetails() {
 async function clearMetadata() {
     const allTables = (metadataCache?.tables || []).map(t => t.full_name || t.name);
     const confirmed = await confirmRemovalWithImpact(allTables, {
-        title: 'Clear Data Sources',
-        message: 'Are you sure you want to clear the loaded data sources?',
+        title: 'Clear Data Assets',
+        message: 'Are you sure you want to clear the loaded data assets?',
         confirmText: 'Clear',
         confirmClass: 'btn-danger',
         icon: 'trash'
@@ -1125,7 +1213,7 @@ async function clearMetadata() {
             metadataCache = null;
             tableSelections = {};
             currentEditingTableIndex = null;
-            showNotification('Data sources cleared', 'success');
+            showNotification('Data assets cleared', 'success');
             await loadMetadataStatus();
         } else {
             showNotification('Error: ' + data.message, 'error');
@@ -1220,13 +1308,13 @@ async function confirmDataSourceChange() {
 
 async function updateMappingsFromMetadata() {
     if (!metadataCache || !metadataCache.tables || metadataCache.tables.length === 0) {
-        showNotification('No data sources loaded', 'warning');
+        showNotification('No data assets loaded', 'warning');
         return;
     }
     
     const confirmed = await showConfirmDialog({
         title: 'Update Mappings',
-        message: 'This will update entity and relationship mappings with the catalog.schema from each data source table. Continue?',
+        message: 'This will update entity and relationship mappings with the catalog.schema from each data asset. Continue?',
         confirmText: 'Update Mappings',
         confirmClass: 'btn-success',
         icon: 'arrow-right-circle'
@@ -1247,18 +1335,19 @@ async function updateMappingsFromMetadata() {
         
         const data = await response.json();
         
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-        
         if (data.success) {
-            showNotification(data.message, 'success');
+            const persisted = await doDomainSave();
+            if (persisted) {
+                showNotification(`${data.message}. Changes saved to registry.`, 'success');
+            }
         } else {
             showNotification('Error: ' + data.message, 'error');
         }
     } catch (error) {
+        showNotification('Error: ' + error.message, 'error');
+    } finally {
         btn.disabled = false;
         btn.innerHTML = originalHtml;
-        showNotification('Error: ' + error.message, 'error');
     }
 }
 
@@ -1266,7 +1355,7 @@ async function updateMetadataFromUC() {
     console.log('[Metadata] Update from UC called');
     
     if (!metadataCache || !metadataCache.tables || metadataCache.tables.length === 0) {
-        showNotification('No data sources loaded to update', 'warning');
+        showNotification('No data assets loaded to update', 'warning');
         return;
     }
     

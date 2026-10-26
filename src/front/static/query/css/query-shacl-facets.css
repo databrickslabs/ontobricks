@@ -1,0 +1,166 @@
+/* SHACL facets of one entity — popup, detail panel (query-shacl-facets.js) */
+
+.shacl-facets-heading {
+    min-width: 0;
+}
+
+.shacl-facets-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.shacl-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.625rem;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--db-text-secondary);
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: var(--db-radius-lg);
+}
+
+button.shacl-chip {
+    cursor: pointer;
+}
+
+button.shacl-chip:focus-visible {
+    outline: 2px solid var(--db-status-info);
+    outline-offset: 2px;
+}
+
+.shacl-chip[aria-pressed="true"] {
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.shacl-chip-count {
+    font-weight: 600;
+}
+
+.shacl-tone-success { color: var(--db-status-success); }
+.shacl-tone-warning { color: var(--db-status-warning); }
+.shacl-tone-danger  { color: var(--db-status-danger); }
+.shacl-tone-info    { color: var(--db-status-info); }
+.shacl-tone-draft   { color: var(--db-status-draft); }
+
+.shacl-chip.shacl-tone-success { background: var(--db-status-success-soft-bg); }
+.shacl-chip.shacl-tone-warning { background: var(--db-status-warning-soft-bg); }
+.shacl-chip.shacl-tone-danger  { background: var(--db-status-danger-soft-bg); }
+.shacl-chip.shacl-tone-info    { background: var(--db-status-info-soft-bg); }
+.shacl-chip.shacl-tone-draft   { background: var(--db-status-draft-soft-bg); }
+
+.shacl-status {
+    flex-shrink: 0;
+    font-size: 1.05rem;
+    line-height: 1.4;
+}
+
+.shacl-facet-main {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.shacl-facet-message {
+    color: var(--db-text-secondary);
+}
+
+.shacl-severity {
+    font-weight: 500;
+    border: 1px solid currentColor;
+    background: transparent;
+}
+
+.shacl-severity-violation { color: var(--db-status-danger); }
+.shacl-severity-warning   { color: var(--db-status-warning); }
+.shacl-severity-info      { color: var(--db-status-info); }
+
+/* Per-dimension gauges (popup) */
+.shacl-gauges {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    gap: 0.5rem;
+}
+
+.shacl-gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem 0.375rem;
+    color: var(--db-text-secondary);
+    background: transparent;
+    border: 0;
+    border-radius: var(--db-radius-md);
+    cursor: pointer;
+}
+
+.shacl-gauge:hover {
+    background: var(--db-border-light);
+}
+
+.shacl-gauge:focus-visible {
+    outline: 2px solid var(--db-status-info);
+    outline-offset: 2px;
+}
+
+.shacl-gauge-arc {
+    width: 5.5rem;
+    height: auto;
+}
+
+.shacl-gauge-track,
+.shacl-gauge-value {
+    fill: none;
+    stroke-width: 10;
+    stroke-linecap: round;
+}
+
+.shacl-gauge-track { stroke: var(--db-border); }
+.shacl-gauge-value { stroke: currentColor; }
+
+.shacl-gauge-score {
+    margin-top: -1.25rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.shacl-gauge-label {
+    margin-top: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--db-text);
+}
+
+.shacl-gauge-detail {
+    font-size: 0.75rem;
+    color: var(--db-text-secondary);
+}
+
+.shacl-gauge--success { color: var(--db-status-success); }
+.shacl-gauge--warning { color: var(--db-status-warning); }
+.shacl-gauge--danger  { color: var(--db-status-danger); }
+.shacl-gauge--muted   { color: var(--db-status-draft); }
+
+/* Dedicated scrollport: global .task-activity-log uses overlay scrollbars. */
+#shaclFacetsProgressLog {
+    min-height: 6.5rem;
+    max-height: 9.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--db-text-muted) var(--db-surface-warm);
+}
+#shaclFacetsProgressLog::-webkit-scrollbar {
+    width: 8px;
+}
+#shaclFacetsProgressLog::-webkit-scrollbar-track {
+    background: var(--db-line-soft);
+    border-radius: var(--db-radius-control);
+}
+#shaclFacetsProgressLog::-webkit-scrollbar-thumb {
+    background: var(--db-text-muted);
+    border-radius: var(--db-radius-control);
+}

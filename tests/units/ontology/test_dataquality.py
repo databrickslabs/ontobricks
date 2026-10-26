@@ -1134,7 +1134,7 @@ class TestPopulationHelpers:
 
 class TestCompleteDQTask:
     def test_complete_dq_task(self):
-        from back.objects.digitaltwin import complete_dq_task
+        from back.objects.digitaltwin import DigitalTwin
 
         tm = MagicMock()
         task = MagicMock()
@@ -1145,7 +1145,7 @@ class TestCompleteDQTask:
             {"status": "error"},
             {"status": "warning"},
         ]
-        complete_dq_task(tm, task, results, 1.5)
+        DigitalTwin.complete_dq_task(tm, task, results, 1.5)
         tm.complete_task.assert_called_once()
         call_kw = tm.complete_task.call_args
         summary = (

@@ -74,6 +74,29 @@
     height: 20px;
 }
 
+/* Dedicated scrollport: global .task-activity-log is overlay-scrollbar and
+   the progress card was hidden on complete, so the track never appeared. */
+#dataquality-section #dqExecProgressLog {
+    min-height: 6.5rem;
+    max-height: 9.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--db-text-muted) var(--db-surface-warm);
+}
+#dataquality-section #dqExecProgressLog::-webkit-scrollbar {
+    width: 8px;
+}
+#dataquality-section #dqExecProgressLog::-webkit-scrollbar-track {
+    background: var(--db-line-soft);
+    border-radius: var(--db-radius-control);
+}
+#dataquality-section #dqExecProgressLog::-webkit-scrollbar-thumb {
+    background: var(--db-text-muted);
+    border-radius: var(--db-radius-control);
+}
+
 .dq-progress-bar-start {
     width: 0%;
 }

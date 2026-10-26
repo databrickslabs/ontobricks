@@ -9,16 +9,28 @@
         <div id="importObxStep1">
           <p class="small text-muted">Select a <code>.obx</code> file to inspect before writing anything to the registry.</p>
           <input type="file" class="form-control" id="importObxFile" accept=".obx,.json,application/json">
-          <div id="importObxPreviewError" class="small text-danger mt-2" style="display:none;"></div>
+          <div class="text-center small text-muted my-2">or</div>
+          <button type="button" class="btn btn-outline-secondary w-100" id="btnImportFromGithub">
+            <i class="bi bi-github me-1"></i> Load from GitHub repository
+          </button>
+          <div id="importObxPreviewBusy" class="d-none text-center text-muted small py-3">
+            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            Listing GitHub repository…
+          </div>
+          <div id="importObxPreviewError" class="small text-danger mt-2 d-none"></div>
         </div>
 
-        <div id="importObxStep2" style="display:none;">
+        <div id="importObxStep2" class="d-none">
           <div class="alert alert-info py-2 small mb-3" id="importObxMeta"></div>
           <div class="table-responsive">
             <table class="table table-sm table-hover align-middle">
               <thead>
                 <tr>
+                  <th class="registry-th-import-obx-check text-center">
+                    <input type="checkbox" class="form-check-input" id="importObxSelectAll" checked aria-label="Select all domains">
+                  </th>
                   <th>Domain</th>
+                  <th class="registry-th-import-obx-name">Import as</th>
                   <th class="registry-th-import-obx-versions">Versions</th>
                   <th class="registry-th-import-obx-status">Status</th>
                   <th class="registry-th-import-obx-action">Action</th>

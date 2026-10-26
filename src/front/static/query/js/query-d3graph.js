@@ -1583,90 +1583,6 @@ function renderD3Graph(hideWhileRendering = false) {
     isRenderingGraph = false;
 }
 
-function resetD3Graph() {
-    if (d3Simulation && d3NodesData.length > 0) {
-        // Reset pinned state
-        d3NodesData.forEach(d => {
-            d.fx = null;
-            d.fy = null;
-            d.pinned = false;
-        });
-        d3.selectAll('.d3-node').classed('pinned', false);
-        
-        // Recompute layout synchronously
-        d3Simulation.alpha(1);
-        const numTicks = Math.ceil(Math.log(d3Simulation.alphaMin()) / Math.log(1 - d3Simulation.alphaDecay()));
-        for (let i = 0; i < numTicks; i++) {
-            d3Simulation.tick();
-        }
-        
-        // Update all positions immediately
-        d3.selectAll('.d3-node').attr('transform', d => `translate(${d.x},${d.y})`);
-        d3.selectAll('.d3-link')
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-        d3.selectAll('.d3-link-label')
-            .attr('x', d => (d.source.x + d.target.x) / 2)
-            .attr('y', d => (d.source.y + d.target.y) / 2);
-        d3.selectAll('.d3-link-hitarea')
-            .attr('cx', d => (d.source.x + d.target.x) / 2)
-            .attr('cy', d => (d.source.y + d.target.y) / 2);
-    }
-    if (d3Svg && d3Zoom) {
-        d3Svg.transition().duration(500).call(d3Zoom.transform, d3.zoomIdentity);
-    }
-}
-
-async function refreshVisualization() {
-    // Show loading state
-    const loadingMsg = document.getElementById('graphLoading');
-    const noGraphMsg = document.getElementById('noGraphMessage');
-    const svgElement = document.getElementById('graphSvg');
-    
-    if (noGraphMsg) noGraphMsg.style.display = 'none';
-    if (loadingMsg) loadingMsg.style.display = 'block';
-    if (svgElement) svgElement.style.opacity = '0';
-    
-    // Clear existing graph data
-    d3NodesData = [];
-    d3LinksData = [];
-    d3.select('#graphSvg').selectAll('*').remove();
-    
-    // Rebuild graph from cached results
-    if (lastQueryResults && lastQueryResults.results && lastQueryResults.results.length > 0) {
-        if (typeof buildGraph === 'function') {
-            await buildGraph(lastQueryResults.results, lastQueryResults.columns);
-        }
-    }
-    
-    // If no data, show no graph message
-    if (d3NodesData.length === 0) {
-        if (loadingMsg) loadingMsg.style.display = 'none';
-        if (svgElement) svgElement.style.opacity = '1';
-        if (noGraphMsg) noGraphMsg.style.display = 'block';
-    }
-}
-
-function unpinAllNodes() {
-    if (d3Simulation) {
-        d3NodesData.forEach(d => {
-            d.fx = null;
-            d.fy = null;
-            d.pinned = false;
-        });
-        d3.selectAll('.d3-node').classed('pinned', false);
-        // No animation - nodes stay in place when unpinned
-    }
-}
-
-function zoomD3Graph(factor) {
-    if (d3Svg && d3Zoom) {
-        d3Svg.transition().duration(300).call(d3Zoom.scaleBy, factor);
-    }
-}
-
 // Flag to prevent recursive fitD3Graph calls
 let isFittingGraph = false;
 
@@ -1743,23 +1659,6 @@ function applyGraphFilters() {
 // Visual Filter State
 let visualFilterEntityTypes = new Set();
 let visualFilterRelationships = new Set();
-
-function toggleVisualFiltersPanel() {
-    const panel = document.getElementById('visualFiltersPanel');
-    const btn = document.getElementById('toggleVisualFiltersBtn');
-    if (!panel) return;
-
-    const isVisible = panel.style.display !== 'none';
-    panel.style.display = isVisible ? 'none' : 'block';
-
-    if (btn) {
-        btn.classList.toggle('active', !isVisible);
-    }
-
-    if (!isVisible) {
-        populateVisualFilters();
-    }
-}
 
 function toggleFilterPane() {
     const pane = document.getElementById('filterPane');
@@ -1924,26 +1823,6 @@ function toggleVisualRelationshipFilter(rel) {
     applyGraphFilters();
 }
 
-function selectAllVisualFilters() {
-    // Select all entity types
-    d3NodesData.forEach(node => {
-        if (node.type) visualFilterEntityTypes.add(node.type);
-    });
-    // Select all relationships
-    d3LinksData.forEach(link => {
-        if (link.predicate) visualFilterRelationships.add(link.predicate);
-    });
-    populateVisualFilters();
-    applyGraphFilters();
-}
-
-function clearAllVisualFilters() {
-    visualFilterEntityTypes.clear();
-    visualFilterRelationships.clear();
-    populateVisualFilters();
-    applyGraphFilters();
-}
-
 function getEntityIconByType(type) {
     // Try to find a matching icon from taxonomyIcons
     if (!type) return '📦';
@@ -2018,42 +1897,6 @@ function getFilteredData() {
 // Height is now handled by CSS flexbox - this just triggers a re-render
 function updateQueryGraphHeight() {
     // CSS handles the height via flexbox, no manual calculation needed
-}
-
-// Check entity limit when user changes the dropdown
-function checkEntityLimit() {
-    if (!d3NodesData || d3NodesData.length === 0) return;
-    
-    const entityLimitSelect = document.getElementById('entityLimit');
-    const entityLimit = entityLimitSelect ? parseInt(entityLimitSelect.value) : 100;
-    const tooManyMsg = document.getElementById('tooManyEntitiesMessage');
-    const svgElement = document.getElementById('graphSvg');
-    const graphStats = document.getElementById('graphStats');
-    
-    console.log(`[Graph] Checking entity limit: ${d3NodesData.length} entities, limit: ${entityLimit}`);
-    
-    if (entityLimit > 0 && d3NodesData.length > entityLimit) {
-        // Still exceeds limit - show message
-        entityLimitExceeded = true;
-        
-        const entityCountDisplay = document.getElementById('entityCountDisplay');
-        const entityLimitDisplay = document.getElementById('entityLimitDisplay');
-        if (entityCountDisplay) entityCountDisplay.textContent = d3NodesData.length;
-        if (entityLimitDisplay) entityLimitDisplay.textContent = entityLimit;
-        
-        if (tooManyMsg) tooManyMsg.style.display = 'block';
-        if (svgElement) svgElement.style.opacity = '0';
-        if (graphStats) graphStats.style.display = 'none';
-        
-        d3.select('#graphSvg').selectAll('*').remove();
-    } else {
-        // Under limit - render the graph
-        entityLimitExceeded = false;
-        if (tooManyMsg) tooManyMsg.style.display = 'none';
-        
-        // Render the graph
-        renderD3Graph(true);
-    }
 }
 
 // Rerender on window resize (debounced with longer delay)

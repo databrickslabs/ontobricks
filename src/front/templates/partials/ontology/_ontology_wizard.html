@@ -1,10 +1,11 @@
 <!-- Ontology Wizard Section -->
 <!-- CSS: /static/ontology/css/ontology-wizard.css -->
+<!-- JS:  /static/ontology/js/ontology-wizard.js, /static/ontology/js/ontology-wizard-review.js -->
 <div class="content-section">
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div class="me-auto">
         <h4 class="mb-1"><i class="bi bi-magic me-2"></i>Generate Ontology</h4>
-        <p class="text-muted mb-0 small">Auto-generate an ontology from your data sources using AI</p>
+        <p class="text-muted mb-0 small">Detect candidate entities from your data assets, review them, then complete relations, attributes, and axioms.</p>
     </div>
     <div class="d-flex gap-2">
         <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
@@ -12,12 +13,48 @@
                 onclick="openOntologyDiscussion()">
             <i class="bi bi-chat-dots"></i>
         </button>
-        <button type="button" class="btn btn-sm btn-primary" id="wizardTopGenerateBtn" data-action="wizard-generate">
-            <i class="bi bi-magic me-1"></i> Generate Ontology
+        <button type="button" class="btn btn-sm btn-primary" id="wizardTopGenerateBtn"
+                data-action="wizard-generate" data-requires-llm
+                title="Detect candidate entities from the configured sources">
+            <i class="bi bi-magic me-1"></i> Detect Entities
         </button>
     </div>
 </div>
 
+<!-- Stage stepper: Configure/Detect -> Review Entities -> Complete -->
+<div id="wizardStepperRow" class="wizard-stepper-row mb-3">
+    <nav class="wizard-stepper" aria-label="Generate ontology steps">
+        <ol class="wizard-stepper-list">
+            <li class="wizard-step active" id="wizardStepConfigure" data-wizard-step="configure" aria-current="step">
+                <span class="wizard-step-icon"><i class="bi bi-1-circle-fill" aria-hidden="true"></i></span>
+                <span class="wizard-step-label">Configure &amp; Detect</span>
+            </li>
+            <li class="wizard-step" id="wizardStepReview" data-wizard-step="review">
+                <span class="wizard-step-icon"><i class="bi bi-2-circle-fill" aria-hidden="true"></i></span>
+                <span class="wizard-step-label">Review Entities</span>
+            </li>
+            <li class="wizard-step" id="wizardStepComplete" data-wizard-step="complete">
+                <span class="wizard-step-icon"><i class="bi bi-3-circle-fill" aria-hidden="true"></i></span>
+                <span class="wizard-step-label">Complete</span>
+            </li>
+        </ol>
+    </nav>
+    <div id="wizardReviewActions" class="wizard-stepper-actions ob-hidden">
+        <button type="button" class="btn btn-sm btn-outline-danger" data-action="wizard-review-discard">
+            <i class="bi bi-trash me-1"></i>Discard Draft &amp; Start Over
+        </button>
+        <button type="button" class="btn btn-sm btn-primary" id="wizardReviewContinueBtn"
+                data-action="wizard-review-continue" data-requires-llm disabled>
+            Continue to Complete <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STAGE 1: Configure & Detect                                   -->
+<!-- ============================================================ -->
+<div id="wizardConfigurePane" class="wizard-stage-pane">
+    <h2 id="wizardConfigureHeading" class="visually-hidden" tabindex="-1">Configure &amp; Detect</h2>
     <div class="card h-100">
         <div class="card-body p-0 ob-tabs-wrap">
         <!-- Tab Navigation -->
@@ -25,25 +62,19 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="wizard-tab-metadata" data-bs-toggle="tab" data-bs-target="#wizard-pane-metadata"
                         type="button" role="tab" aria-controls="wizard-pane-metadata" aria-selected="true">
-                    <i class="bi bi-database"></i> Data Sources
+                    <i class="bi bi-database"></i> Data Assets
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="wizard-tab-documents" data-bs-toggle="tab" data-bs-target="#wizard-pane-documents"
                         type="button" role="tab" aria-controls="wizard-pane-documents" aria-selected="false">
-                    <i class="bi bi-file-earmark-text"></i> Documents
+                    <i class="bi bi-file-earmark-text"></i> Knowledge Store
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="wizard-tab-guidelines" data-bs-toggle="tab" data-bs-target="#wizard-pane-guidelines"
                         type="button" role="tab" aria-controls="wizard-pane-guidelines" aria-selected="false">
                     <i class="bi bi-lightbulb"></i> Guidelines
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="wizard-tab-options" data-bs-toggle="tab" data-bs-target="#wizard-pane-options"
-                        type="button" role="tab" aria-controls="wizard-pane-options" aria-selected="false">
-                    <i class="bi bi-gear"></i> Options
                 </button>
             </li>
         </ul>
@@ -53,19 +84,19 @@
 
             <!-- Data Sources Tab -->
             <div class="tab-pane fade show active" id="wizard-pane-metadata" role="tabpanel" aria-labelledby="wizard-tab-metadata">
-                <h6 class="mb-2"><i class="bi bi-database"></i> Data Sources</h6>
-                <p class="text-muted small mb-3">Select the tables whose schema will be sent to the AI model for ontology generation.</p>
+                <h6 class="mb-2"><i class="bi bi-database"></i> Data Assets</h6>
+                    <p class="text-muted small mb-3">Select the tables, views, and metric views whose schema will be sent to the AI model for entity detection.</p>
                 <div id="wizardMetadataStatus">
                     <div class="d-flex align-items-center text-muted">
                         <div class="spinner-border spinner-border-sm me-2" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        Checking data sources...
+                        Checking data assets...
                     </div>
                 </div>
                 <div id="wizardMetadataPreview" class="mt-3 ob-hidden">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small text-muted">Select tables to include in ontology generation:</span>
+                        <span class="small text-muted">Select tables to include in entity detection:</span>
                         <div class="btn-group btn-group-sm">
                             <button type="button" class="btn btn-outline-secondary" data-action="wizard-tables-bulk" data-select-all="true">
                                 <i class="bi bi-check-all me-1"></i>Select All
@@ -81,7 +112,8 @@
                                 <tr>
                                     <th class="wizard-metadata-th-check text-center">
                                         <input type="checkbox" class="form-check-input" id="wizardSelectAllCheckbox"
-                                               checked title="Select / deselect all tables">
+                                               checked title="Select / deselect all tables"
+                                               aria-label="Select or deselect all tables">
                                     </th>
                                     <th>Table</th>
                                     <th class="wizard-metadata-th-cols text-center">Columns</th>
@@ -96,14 +128,14 @@
                 </div>
                 <div id="wizardNoMetadata" class="alert alert-info mt-3 ob-hidden">
                     <i class="bi bi-info-circle me-2"></i>
-                    No data sources loaded. You can still generate an ontology from documents or guidelines alone, or load data sources in <a href="/domain/#metadata">Data Sources</a>.
+                    No data assets loaded. You can still detect entities from documents or guidelines alone, or load data assets in <a href="/domain/#metadata">Data Assets</a>.
                 </div>
             </div>
 
             <!-- Documents Tab -->
             <div class="tab-pane fade" id="wizard-pane-documents" role="tabpanel" aria-labelledby="wizard-tab-documents">
-                <h6 class="mb-2"><i class="bi bi-file-earmark-text"></i> Domain Documents</h6>
-                <p class="text-muted small mb-3">Select documents from the domain volume to include as additional context for ontology generation.</p>
+                <h6 class="mb-2"><i class="bi bi-file-earmark-text"></i> Knowledge Store</h6>
+                <p class="text-muted small mb-3">Select documents from the domain's Knowledge Store to include as additional context for entity detection.</p>
                 <div id="wizardDocsStatus">
                     <div class="d-flex align-items-center text-muted">
                         <div class="spinner-border spinner-border-sm me-2" role="status">
@@ -112,9 +144,9 @@
                         Checking documents...
                     </div>
                 </div>
-                <div id="wizardDocsPreview" class="mt-3" style="display: none;">
+                <div id="wizardDocsPreview" class="mt-3 ob-hidden">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="small text-muted">Select documents to include as context for ontology generation:</span>
+                        <span class="small text-muted">Select documents to include as context for entity detection:</span>
                         <div class="btn-group btn-group-sm">
                             <button type="button" class="btn btn-outline-secondary" data-action="wizard-docs-bulk" data-select-all="true">
                                 <i class="bi bi-check-all me-1"></i>Select All
@@ -129,9 +161,9 @@
                     </div>
                     <div id="wizardDocsSelectedCount" class="mt-2 small text-muted"></div>
                 </div>
-                <div id="wizardNoDocs" class="mt-3" style="display: none;">
+                <div id="wizardNoDocs" class="mt-3 ob-hidden">
                     <div class="text-muted small fst-italic">
-                        <i class="bi bi-info-circle me-1"></i>No documents uploaded. You can upload documents in <a href="/domain/?section=documents">Domain &gt; Documents</a>.
+                        <i class="bi bi-info-circle me-1"></i>No documents uploaded. You can upload documents in <a href="/domain/?section=documents">Domain &gt; Knowledge Store</a>.
                     </div>
                 </div>
             </div>
@@ -140,18 +172,16 @@
             <div class="tab-pane fade" id="wizard-pane-guidelines" role="tabpanel" aria-labelledby="wizard-tab-guidelines">
                 <h6 class="mb-2"><i class="bi bi-lightbulb"></i> Ontology Guidelines</h6>
                 <p class="text-muted small mb-3">
-                    Provide guidelines and instructions for generating your ontology. Be specific about the domain,
-                    entity naming conventions, relationships to create, and any business rules to consider.
+                    Provide guidelines and instructions for detecting entities. Be specific about the domain,
+                    entity naming conventions, and any business rules to consider.
                 </p>
                 <textarea id="wizardGuidelines" class="form-control" rows="8" placeholder="Example guidelines:
 
-- Create an ontology for a customer relationship management (CRM) domain
+- Detect entities for a customer relationship management (CRM) domain
 - Use CamelCase for entity names (e.g., Customer, SalesOrder, Product)
-- Include relationships like 'hasOrder', 'belongsTo', 'contains'
 - Consider that customers can have multiple orders
 - Products belong to categories
-- Include properties for common attributes like name, date, status
-- Focus on the main business entities and their core relationships"></textarea>
+- Focus on the main business entities"></textarea>
 
                 <div class="mt-3">
                     <label class="form-label small text-muted">Quick Templates:</label>
@@ -161,57 +191,116 @@
                 </div>
             </div>
 
-            <!-- Options Tab -->
-            <div class="tab-pane fade" id="wizard-pane-options" role="tabpanel" aria-labelledby="wizard-tab-options">
-                <h6 class="mb-2"><i class="bi bi-gear"></i> Generation Options</h6>
-                <p class="text-muted small mb-3">Fine-tune what the AI model should include in the generated ontology.</p>
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="wizardIncludeDataProps" checked>
-                            <label class="form-check-label" for="wizardIncludeDataProps">
-                                Include data properties (attributes)
-                            </label>
-                        </div>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="wizardIncludeRelationships" checked>
-                            <label class="form-check-label" for="wizardIncludeRelationships">
-                                Generate relationships between entities
-                            </label>
-                        </div>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="wizardIncludeInheritance" checked>
-                            <label class="form-check-label" for="wizardIncludeInheritance">
-                                Suggest entity hierarchy (inheritance)
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="wizardUseTableNames" checked>
-                            <label class="form-check-label" for="wizardUseTableNames">
-                                Use table names as entity basis
-                            </label>
-                        </div>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="wizardUseColumnComments">
-                            <label class="form-check-label" for="wizardUseColumnComments">
-                                Use column comments for descriptions
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
 
         <!-- Info note -->
-        <div class="text-muted small mb-3 mt-3">
+        <div class="text-muted small mb-3 mt-3 px-3">
             <i class="bi bi-info-circle me-1"></i>
-            Generation uses AI and may take a few seconds. The ontology will be applied automatically when ready.
+            Detection only identifies entities. Relationships and attributes are inferred after entity review.
         </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STAGE 2: Review Entities                                      -->
+<!-- ============================================================ -->
+<div id="wizardReviewPane" class="wizard-stage-pane ob-hidden">
+    <h2 id="wizardReviewHeading" class="visually-hidden" tabindex="-1">Review Entities</h2>
+
+    <div id="wizardStaleBanner" class="alert alert-warning d-flex align-items-center justify-content-between ob-hidden" role="alert">
+        <span><i class="bi bi-exclamation-triangle me-2"></i>The data assets or ontology changed since detection. Re-run detection to refresh candidates.</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-action="wizard-review-restart">
+            <i class="bi bi-arrow-repeat me-1"></i>Re-detect
+        </button>
+    </div>
+
+    <div id="wizardReviewValidation" class="alert alert-danger ob-hidden" role="alert" aria-live="polite"></div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="mb-2"><i class="bi bi-lock-fill me-2"></i>Existing Entities <span class="text-muted small">(locked)</span></h6>
+            <p class="text-muted small mb-3">Already part of your ontology. Their identity can't be changed here — completion may relate to or enrich them, never rename or delete them.</p>
+            <div id="wizardLockedAnchorsList" class="wizard-entity-list wizard-locked-grid"></div>
+            <div id="wizardNoLockedAnchors" class="text-muted small fst-italic ob-hidden">No existing entities yet — this will be a brand-new ontology.</div>
         </div>
     </div>
 
-        <!-- Progress overlay is now dynamically created by JavaScript -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0"><i class="bi bi-stars me-2"></i>Candidate Entities</h6>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="wizard-review-add-candidate-toggle">
+                    <i class="bi bi-plus-circle me-1"></i>Add Entity
+                </button>
+            </div>
+            <p class="text-muted small mb-3">Detected candidates are included by default. Exclude, remove, or edit them before completing.</p>
+
+            <div id="wizardAddCandidateForm" class="wizard-add-candidate-form ob-hidden">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label small text-muted" for="wizardNewCandidateLabel">Canonical label</label>
+                        <input type="text" class="form-control form-control-sm" id="wizardNewCandidateLabel" placeholder="e.g. Carrier">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small text-muted" for="wizardNewCandidateDescription">Description</label>
+                        <textarea class="form-control form-control-sm" id="wizardNewCandidateDescription" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-2">
+                    <button type="button" class="btn btn-sm btn-primary" data-action="wizard-review-add-candidate-submit">
+                        <i class="bi bi-check-lg me-1"></i>Add
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-action="wizard-review-add-candidate-cancel">Cancel</button>
+                </div>
+            </div>
+
+            <div id="wizardCandidatesList" class="wizard-entity-list wizard-candidate-grid"></div>
+            <div id="wizardNoCandidates" class="text-muted small fst-italic ob-hidden">No candidate entities. Add one manually or re-run detection.</div>
+        </div>
     </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- STAGE 3: Complete (relations -> attributes -> axioms -> merge) -->
+<!-- ============================================================ -->
+<div id="wizardCompletePane" class="wizard-stage-pane ob-hidden">
+    <div class="card">
+        <div class="card-body">
+            <h6 id="wizardCompleteHeading" class="mb-3" tabindex="-1"><i class="bi bi-check2-square me-2"></i>Completing Ontology Generate</h6>
+            <ul id="wizardCompleteChecklist" class="list-group list-group-flush mb-3">
+                <li class="list-group-item bg-transparent px-0 wizard-complete-step" data-substage="relations">
+                    <span class="wizard-complete-step-icon"><i class="bi bi-circle text-muted" aria-hidden="true"></i></span>
+                    <span class="wizard-complete-step-label">Inferring relations</span>
+                </li>
+                <li class="list-group-item bg-transparent px-0 wizard-complete-step" data-substage="attributes">
+                    <span class="wizard-complete-step-icon"><i class="bi bi-circle text-muted" aria-hidden="true"></i></span>
+                    <span class="wizard-complete-step-label">Inferring attributes</span>
+                </li>
+                <li class="list-group-item bg-transparent px-0 wizard-complete-step" data-substage="axioms">
+                    <span class="wizard-complete-step-icon"><i class="bi bi-circle text-muted" aria-hidden="true"></i></span>
+                    <span class="wizard-complete-step-label">Inferring axioms</span>
+                </li>
+                <li class="list-group-item bg-transparent px-0 wizard-complete-step" data-substage="merge">
+                    <span class="wizard-complete-step-icon"><i class="bi bi-circle text-muted" aria-hidden="true"></i></span>
+                    <span class="wizard-complete-step-label">Merging into ontology</span>
+                </li>
+            </ul>
+            <div id="wizardCompleteSummary" class="ob-hidden mb-3"></div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-primary ob-hidden" id="wizardCompleteRetryBtn"
+                        data-action="wizard-complete-retry" data-requires-llm>
+                    <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                </button>
+                <button type="button" class="btn btn-outline-danger" id="wizardCompleteDiscardBtn"
+                        data-action="wizard-complete-discard">
+                    <i class="bi bi-trash me-1"></i>Start Over
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Progress overlay is dynamically created by JavaScript -->
+</div>

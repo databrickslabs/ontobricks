@@ -43,6 +43,18 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def assert_public_graph_read(request, domain, settings) -> None:
+    """Team gate for the public GraphQL graph-read surface.
+
+    Imported lazily to avoid an import cycle with the ``api.routers.internal``
+    package (which transitively imports the external routers)."""
+    from api.routers.internal._graph_access import (
+        assert_public_graph_read as _impl,
+    )
+
+    _impl(request, domain, settings)
+
+
 def _graphql_safe_error_message(exc: BaseException) -> str:
     """Return a client-safe GraphQL error message (no raw exception strings)."""
     if isinstance(exc, OntoBricksError):
@@ -351,12 +363,18 @@ async def graphql_playground(
     "/{domain_name}",
     summary="Execute GraphQL query",
     description="Execute a GraphQL query against a domain's knowledge graph. "
-    "The schema is auto-generated from the domain's ontology.",
+    "The schema is auto-generated from the domain's ontology. "
+    "Query param ``cache`` (true/false) overrides the domain Search cache switch.",
 )
 async def graphql_execute(
     request: Request,
     domain_name: str,
     body: GraphQLRequest,
+    cache: Optional[str] = Query(
+        None,
+        description="true/false: force search companions on or off. "
+        "Omitted uses Domain → General → Backend Search cache.",
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -364,7 +382,16 @@ async def graphql_execute(
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
+    assert_public_graph_read(request, domain, settings)
     schema, context = _get_schema_and_context(domain, settings)
+    store = context.get("triplestore")
+    if store is not None:
+        from back.core.graphdb.search_cache import (
+            apply_search_cache_to_store,
+            parse_cache_param,
+        )
+
+        apply_search_cache_to_store(store, domain, parse_cache_param(cache))
 
     if body.depth is not None:
         context["depth"] = min(max(body.depth, 1), MAX_DEPTH)
@@ -462,6 +489,7 @@ async def graphql_debug(
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
+    assert_public_graph_read(request, domain, settings)
     schema, context = _get_schema_and_context(domain, settings)
 
     from back.core.graphql import build_schema_for_domain

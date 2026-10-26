@@ -1,11 +1,14 @@
 """Tests for FastAPI routes."""
 
 import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
 
 from shared.fastapi.main import app
+from tests.units.api.test_ui_rendering import ensure_loaded_domain
 
 
 @pytest.fixture
@@ -16,27 +19,27 @@ def client():
 
 class TestHealthRoutes:
     def test_health_check(self, client):
-        # ``/health`` is now a comprehensive readiness probe.  Individual
-        # checks may fail (no warehouse / no Lakebase in the test env)
-        # but the route always returns 200 and a stable shape so external
-        # probes can keep parsing the top-level ``status`` and
-        # ``summary.errors`` fields.
+        # ``/health`` is an anonymous, local-only liveness probe; the
+        # heavy readiness probes live behind the admin-only
+        # ``/settings/diagnostics/readiness`` route.
         response = client.get("/health")
         assert response.status_code == 200
         data = response.json()
+        assert set(data) == {"status", "version", "service", "timestamp"}
         assert data["status"] in ("ok", "warning", "error")
-        assert data["framework"] == "FastAPI"
         assert data["service"] == "OntoBricks"
-        assert "summary" in data
-        assert "checks" in data
+
+    def test_readiness_route_returns_checks(self, client):
+        # The test env resolves the caller as admin (local mode).
+        response = client.get("/settings/diagnostics/readiness")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] in ("ok", "warning", "error")
         assert isinstance(data["checks"], list) and data["checks"]
         for c in data["checks"]:
             assert {"name", "label", "status", "detail", "duration_ms"} <= c.keys()
-            assert c["status"] in ("ok", "warning", "error")
 
     def test_detailed_health_removed(self, client):
-        # ``/health/detailed`` was retired — its information now lives in
-        # ``/health``.  FastAPI returns 404 for the removed route.
         response = client.get("/health/detailed")
         assert response.status_code == 404
 
@@ -107,6 +110,7 @@ class TestSettingsRoutes:
 
 class TestOntologyRoutes:
     def test_ontology_page(self, client):
+        ensure_loaded_domain(client)
         response = client.get("/ontology/")
         assert response.status_code == 200
 
@@ -208,6 +212,84 @@ class TestOntologyRoutes:
         response = client.get("/ontology/axioms/list")
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
+    async def test_assistant_chat_passes_saved_endpoint_kind(self):
+        from api.routers.internal import ontology
+
+        request = MagicMock()
+        request.json = AsyncMock(return_value={"message": "Show all relationships"})
+        domain = MagicMock()
+        domain.ontology = {}
+        domain.get_classes.return_value = []
+        domain.get_properties.return_value = []
+        agent_result = SimpleNamespace(
+            success=True,
+            reply="No relationships found.",
+            ontology_changed=False,
+        )
+
+        with patch.object(ontology, "get_domain", return_value=domain), patch.object(
+            ontology,
+            "require_domain_llm",
+            return_value=("https://h", "t", "main.ai.saved", "ai_gateway"),
+        ), patch(
+            "agents.agent_ontology_assistant.run_agent",
+            return_value=agent_result,
+        ) as run_assistant:
+            result = await ontology.ontology_assistant_chat(
+                request, MagicMock(), MagicMock()
+            )
+
+        assert result["success"] is True
+        assert run_assistant.call_args.kwargs["endpoint_kind"] == "ai_gateway"
+
+    @pytest.mark.asyncio
+    async def test_assistant_invoke_uses_saved_credentials_and_endpoint(self):
+        from api.routers.internal import ontology
+
+        request = MagicMock()
+        request.json = AsyncMock(
+            return_value={
+                "input": [{"role": "user", "content": "Add Vehicle"}],
+                "custom_inputs": {
+                    "host": "https://caller.example.com",
+                    "token": "caller-token",
+                    "endpoint_name": "request.override",
+                },
+            }
+        )
+        domain = MagicMock()
+        domain.ontology = {}
+        domain.get_classes.return_value = []
+        domain.get_properties.return_value = []
+        agent = MagicMock()
+        agent.predict.return_value = SimpleNamespace(
+            custom_outputs={},
+            model_dump=lambda: {"success": True},
+        )
+
+        with patch.object(ontology, "get_domain", return_value=domain), patch.object(
+            ontology,
+            "require_domain_llm",
+            return_value=("https://h", "t", "main.ai.saved", "ai_gateway"),
+        ), patch(
+            "agents.agent_ontology_assistant.OntologyAssistantResponsesAgent",
+            return_value=agent,
+        ), patch(
+            "mlflow.types.responses.ResponsesAgentRequest",
+            side_effect=lambda **kwargs: kwargs,
+        ):
+            result = await ontology.ontology_assistant_invoke(
+                request, MagicMock(), MagicMock()
+            )
+
+        assert result == {"success": True}
+        custom_inputs = agent.predict.call_args.args[0]["custom_inputs"]
+        assert custom_inputs["host"] == "https://h"
+        assert custom_inputs["token"] == "t"
+        assert custom_inputs["endpoint_name"] == "main.ai.saved"
+        assert custom_inputs["endpoint_kind"] == "ai_gateway"
+
 
 class TestAutoAssignIconsAsync:
     """The icon-assignment endpoint must be non-blocking and task-tracked.
@@ -249,8 +331,8 @@ class TestAutoAssignIconsAsync:
         )
 
         with patch(
-            "api.routers.internal.ontology.require_serving_llm",
-            return_value=("https://h", "t", "ep"),
+            "api.routers.internal.ontology.require_domain_llm",
+            return_value=("https://h", "t", "main.ai.model", "ai_gateway"),
         ), patch.object(
             __import__(
                 "api.routers.internal.ontology", fromlist=["Ontology"]
@@ -291,8 +373,8 @@ class TestAutoAssignIconsAsync:
         )
 
         with patch(
-            "api.routers.internal.ontology.require_serving_llm",
-            return_value=("https://h", "t", "ep"),
+            "api.routers.internal.ontology.require_domain_llm",
+            return_value=("https://h", "t", "main.ai.model", "ai_gateway"),
         ), patch.object(
             __import__(
                 "api.routers.internal.ontology", fromlist=["Ontology"]
@@ -313,6 +395,7 @@ class TestAutoAssignIconsAsync:
 
 class TestMappingRoutes:
     def test_mapping_page(self, client):
+        ensure_loaded_domain(client)
         response = client.get("/mapping/")
         assert response.status_code == 200
 
@@ -393,6 +476,7 @@ class TestMappingRoutes:
 
 class TestDomainRoutes:
     def test_domain_page(self, client):
+        ensure_loaded_domain(client)
         response = client.get("/domain/")
         assert response.status_code == 200
 
@@ -463,6 +547,7 @@ class TestDomainRoutes:
 
 class TestQueryRoutes:
     def test_query_page(self, client):
+        ensure_loaded_domain(client)
         response = client.get("/dtwin/")
         assert response.status_code == 200
 

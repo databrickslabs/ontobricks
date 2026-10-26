@@ -6,6 +6,7 @@ import re
 from typing import Any, Dict, List
 
 from back.core.errors import InfrastructureError
+from back.core.graphdb.delta._table_naming import strip_graph_leaf_suffix
 
 _TRIPLESTORE_PREFIX = "triplestore_"
 _ANALYTICS_PREFIX = "graph_metrics_"
@@ -19,19 +20,14 @@ _WORK_RE = re.compile(r"_work(?:_.*)?$")
 _VIEW_NAME_RE = re.compile(r"^triplestore_(?P<safe>.+)_V(?P<version>[^_]+)$", re.I)
 
 
-#: Suffixes of the per-domain companions, stripped to recover the group key.
-#: ``_analytics`` is the disposable snapshot of a view-only build: it only
-#: outlives its run when that run died, and grouping it here is what lets an
-#: admin see and purge the leftover.
-_COMPANION_SUFFIXES = ("_graph", "_inferred", "_analytics", "_data")
-
-
 def object_base(name: str) -> str:
-    """Strip a companion suffix to get the domain group key."""
-    for suffix in _COMPANION_SUFFIXES:
-        if name.endswith(suffix):
-            return name[: -len(suffix)]
-    return name
+    """Strip a companion suffix to get the domain group key.
+
+    Delegates to :func:`strip_graph_leaf_suffix` so Settings → Lakehouse
+    Delete groups adjacency, entity-search, and props tables with the
+    gateway view they belong to.
+    """
+    return strip_graph_leaf_suffix(name)
 
 
 def uc_object_kind(table_type: str) -> str:

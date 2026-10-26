@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 import time
@@ -18,7 +19,7 @@ from shared.config.constants import (
     DEFAULT_BASE_URI,
     HTTP_USER_AGENT,
 )
-from back.core.databricks import VolumeFileService
+from back.core.databricks import DocumentParseService
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.errors import InfrastructureError, ValidationError
@@ -34,7 +35,6 @@ _MAX_MAPPING_RUN_LOG_ENTRIES = 500
 
 if TYPE_CHECKING:
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
-    from agents.agent_mapping_pge.engine import AgentResult as MappingPGEAgentResult
 
 SINGLE_ITEM_MAX_ITERATIONS = 15
 
@@ -141,48 +141,6 @@ class Mapping:
         started from HTTP.
         """
         from agents.agent_auto_assignment import run_agent
-
-        return run_agent(
-            host=host,
-            token=token,
-            endpoint_name=endpoint_name,
-            client=client,
-            metadata=metadata,
-            ontology=ontology,
-            entity_mappings=entity_mappings,
-            relationship_mappings=relationship_mappings,
-            documents=documents,
-            on_step=on_step,
-            max_iterations=max_iterations,
-        )
-
-    def auto_assign_with_pge_agent(
-        self,
-        *,
-        host: str,
-        token: str,
-        endpoint_name: str,
-        client: Any,
-        metadata: dict,
-        ontology: dict,
-        entity_mappings: Optional[list] = None,
-        relationship_mappings: Optional[list] = None,
-        documents: Optional[list] = None,
-        on_step: Optional[Callable[[str, int], None]] = None,
-        max_iterations: Optional[int] = None,
-    ) -> "MappingPGEAgentResult":
-        """Run the mapping-PGE agent (``agent_mapping_pge``) — blocking.
-
-        Returns an :class:`AgentResult` with the standard ``entity_mappings``
-        and ``relationship_mappings`` plus three PGE-specific extras
-        (``source_model``, ``mapping_evaluations``, ``mapping_run_log``) that
-        the caller can persist on the session via :meth:`save_mappings_to_session`.
-
-        Prefer :meth:`auto_assign_with_agent` for the legacy single-agent loop;
-        use this method (or :meth:`~back.core.agents.AgentClient.run_mapping_pge`)
-        when the orchestrator selects the PGE engine.
-        """
-        from agents.agent_mapping_pge import run_agent
 
         return run_agent(
             host=host,
@@ -798,10 +756,12 @@ class Mapping:
         new_mapping = Mapping.build_entity_mapping(data)
 
         was_update = False
+        old_mapping = None
         for i, m in enumerate(mappings):
             if m.get("ontology_class") == new_mapping["ontology_class"]:
                 if m.get("excluded") and "excluded" not in new_mapping:
                     new_mapping["excluded"] = True
+                old_mapping = dict(m)
                 mappings[i] = new_mapping
                 was_update = True
                 break
@@ -811,12 +771,15 @@ class Mapping:
 
         domain.assignment["entities"] = mappings
         domain.clear_generated_content()
-        domain.record_change(
-            "mapping_entity_updated" if was_update else "mapping_entity_added",
-            entity_type="mapping_entity",
-            entity_ref=new_mapping.get("ontology_class", ""),
-            summary=new_mapping.get("ontology_class", ""),
-        )
+        meta = domain.diff_meta(old_mapping if was_update else {}, new_mapping)
+        if not was_update or meta:
+            domain.record_change(
+                "mapping_entity_updated" if was_update else "mapping_entity_added",
+                entity_type="mapping_entity",
+                entity_ref=new_mapping.get("ontology_class", ""),
+                summary=new_mapping.get("ontology_class", ""),
+                meta=meta,
+            )
         domain.save()
 
         return was_update, new_mapping
@@ -846,10 +809,12 @@ class Mapping:
         new_mapping = Mapping.build_relationship_mapping(data)
 
         was_update = False
+        old_mapping = None
         for i, m in enumerate(mappings):
             if m.get("property") == new_mapping["property"]:
                 if m.get("excluded") and "excluded" not in new_mapping:
                     new_mapping["excluded"] = True
+                old_mapping = dict(m)
                 mappings[i] = new_mapping
                 was_update = True
                 break
@@ -859,13 +824,16 @@ class Mapping:
 
         domain.assignment["relationships"] = mappings
         domain.clear_generated_content()
-        domain.record_change(
-            "mapping_relationship_updated" if was_update
-            else "mapping_relationship_added",
-            entity_type="mapping_relationship",
-            entity_ref=new_mapping.get("property", ""),
-            summary=new_mapping.get("property", ""),
-        )
+        meta = domain.diff_meta(old_mapping if was_update else {}, new_mapping)
+        if not was_update or meta:
+            domain.record_change(
+                "mapping_relationship_updated" if was_update
+                else "mapping_relationship_added",
+                entity_type="mapping_relationship",
+                entity_ref=new_mapping.get("property", ""),
+                summary=new_mapping.get("property", ""),
+                meta=meta,
+            )
         domain.save()
 
         return was_update, new_mapping
@@ -937,12 +905,27 @@ class Mapping:
             ("mapping_relationship", "property", old_rels, new_rels),
         ):
             added, updated, removed = self._diff_mappings(old, new, key)
+            old_map = {m.get(key): m for m in (old or []) if m.get(key)}
+            new_map = {m.get(key): m for m in (new or []) if m.get(key)}
             for verb, refs in (("added", added), ("updated", updated),
                                ("removed", removed)):
                 for ref in refs:
-                    domain.record_change(f"{entity_type}_{verb}",
-                                         entity_type=entity_type,
-                                         entity_ref=ref, summary=ref)
+                    meta = {}
+                    if verb == "updated":
+                        meta = domain.diff_meta(old_map.get(ref), new_map.get(ref))
+                        if not meta:
+                            continue
+                    elif verb == "added":
+                        meta = domain.diff_meta({}, new_map.get(ref))
+                    elif verb == "removed":
+                        meta = domain.diff_meta(old_map.get(ref), {})
+                    domain.record_change(
+                        f"{entity_type}_{verb}",
+                        entity_type=entity_type,
+                        entity_ref=ref,
+                        summary=ref,
+                        meta=meta,
+                    )
 
     def reset_mapping(self) -> None:
         domain = self._domain
@@ -1096,52 +1079,62 @@ class Mapping:
 
     @staticmethod
     def fetch_documents_for_agent(
-        domain: Any, host: str, token: str
+        domain: Any, host: str = "", token: str = ""
     ) -> List[Dict[str, Any]]:
-        from back.core.helpers import effective_uc_version_path
+        """Preload the domain's ready parsed corpus from the Knowledge Store.
 
-        base_path = effective_uc_version_path(domain)
-        if not base_path:
+        Reads document metadata + ready text from the Lakebase document store
+        (no UC Volume). ``host``/``token`` are accepted for signature parity
+        but unused — the corpus never re-parses here.
+        """
+        folder = (
+            getattr(domain, "uc_domain_folder", "")
+            or getattr(domain, "domain_folder", "")
+            or ""
+        ).strip()
+        if not folder:
             logger.debug(
-                "fetch_documents_for_agent: no registry path — skipping documents"
+                "fetch_documents_for_agent: no registry folder — skipping documents"
             )
             return []
-        base_path = f"{base_path}/documents"
-        host_url = host.rstrip("/")
-        if not host_url.startswith("http"):
-            host_url = f"https://{host_url}"
-        headers = {"Authorization": f"Bearer {token}", "User-Agent": HTTP_USER_AGENT}
+        version = str(getattr(domain, "current_version", "") or "1")
+
         try:
-            resp = requests.get(
-                f"{host_url}/api/2.0/fs/directories{base_path}",
-                headers=headers,
-                timeout=30,
-            )
-            if resp.status_code == 404:
-                logger.info("fetch_documents_for_agent: documents dir not found")
-                return []
-            resp.raise_for_status()
-            entries = resp.json().get("contents", [])
-            files = [e for e in entries if not e.get("is_directory", False)]
-        except Exception as e:
-            logger.warning("fetch_documents_for_agent: list failed — %s", e)
+            from back.objects.registry import RegistryService
+
+            store = RegistryService.from_context(domain, get_settings()).store
+            service = DocumentParseService(store)
+            rows = service.list_documents(folder, version)
+        except Exception as exc:  # noqa: BLE001 — best-effort preload
+            logger.warning("fetch_documents_for_agent: store unavailable — %s", exc)
             return []
-        uc_service = VolumeFileService(host=host, token=token)
+
         result: List[Dict[str, Any]] = []
-        for f in files[:20]:
-            name = f.get("name", "").rstrip("/")
+        for row in rows[:20]:
+            name = (row.get("filename") or "").rstrip("/")
             if not name:
                 continue
-            file_path = f"{base_path}/{name}"
-            ok, content, _ = uc_service.read_file(file_path)
-            if not ok or not content or not isinstance(content, str):
-                continue
-            if len(content) > _MAX_DOC_CHARS:
-                content = (
-                    content[:_MAX_DOC_CHARS]
-                    + f"\n\n[…truncated, {len(content)} total chars]"
+            if row.get("parse_status") == "ready":
+                payload = service.read_document(
+                    folder, version, name, max_chars=_MAX_DOC_CHARS
                 )
-            result.append({"name": name, "content": content})
+                result.append(
+                    {
+                        "name": name,
+                        "content": payload.get("content", ""),
+                        "parse_status": "ready",
+                    }
+                )
+            else:
+                result.append(
+                    {
+                        "name": name,
+                        "content": "",
+                        "parse_status": row.get("parse_status") or "failed",
+                        "error": row.get("error")
+                        or "Document parsing is not ready",
+                    }
+                )
         logger.info("fetch_documents_for_agent: loaded %d document(s)", len(result))
         return result
 
@@ -1386,7 +1379,13 @@ class Mapping:
         if session_path is None:
             return
         try:
-            if session_path.exists():
+            if session_ref is not None and isinstance(session_ref, dict) and (
+                session_ref.get("domain_data") or session_ref.get("project_data")
+            ):
+                # In-memory cache is newer than disk after background Generate
+                # complete: merging from the file would drop ontology.classes.
+                data = deepcopy(session_ref)
+            elif session_path.exists():
                 data = json.loads(session_path.read_text())
             else:
                 logger.warning(
@@ -1941,7 +1940,7 @@ class Mapping:
 
         One ``get_table_columns`` round-trip per table, not per attribute.
         Tables that cannot be read (missing, no privilege — the client
-        returns an empty list rather than raising) are omitted, so callers
+        raises ``InfrastructureError``) are omitted, so callers
         treat them as "unknown" and skip drift reporting instead of
         flagging every column as dropped.
         """
@@ -2022,9 +2021,11 @@ class Mapping:
             ("id_column", ent.get("id_column", "")),
             ("label_column", ent.get("label_column", "")),
         ]
+        excluded_attrs = set(ent.get("excluded_attributes") or [])
         bound += [
             (f"attribute:{attr}", col)
             for attr, col in (ent.get("attribute_mappings") or {}).items()
+            if attr not in excluded_attrs
         ]
         return [
             check
@@ -2060,12 +2061,15 @@ class Mapping:
                 available |= live_columns[triple]
             return available, ", ".join(".".join(t) for t in triples)
 
+        excluded_attrs = set(rel.get("excluded_attributes") or [])
         checks: List[Dict[str, str]] = []
         for side, key, legacy in (
             ("source", "source_id_column", "source_column"),
             ("target", "target_id_column", "target_column"),
         ):
             column = rel.get(key) or rel.get(legacy, "")
+            if not column or column in excluded_attrs:
+                continue
             available, label = _columns_for(side)
             if check := self._drift_check(key, column, available, label):
                 checks.append(check)
@@ -2251,8 +2255,9 @@ class Mapping:
         Checks column existence in source SQL, entity-relationship
         cross-references, ontology consistency, and — when *client* is
         provided — verifies that the app's SQL principal has SELECT on
-        every distinct source table referenced by the mapping, and that
-        each SQL query actually returns at least one row.
+        every distinct source table referenced by the mapping. Row counts
+        are recorded on each item; an empty source is a warning, a
+        successful query with rows is not treated as an issue.
 
         The body is composed of small, focused helpers (``_diagnose_entity``,
         ``_diagnose_relationship``, ``_build_entity_lookup``,
@@ -2301,8 +2306,10 @@ class Mapping:
                 sql = (ent.get("sql_query") or "").strip()
                 if sql:
                     data_check, count = self._probe_query_rows(sql, client)
-                    result["checks"].append(data_check)
                     result["row_count"] = count
+                    # Rows present is informational (row_count badge), not an issue.
+                    if data_check["status"] != "ok":
+                        result["checks"].append(data_check)
                 # A parseable projection is already validated above; the drift
                 # checks skip those mappings themselves.
                 result["checks"].extend(self._entity_drift_checks(ent, live_columns))
@@ -2312,8 +2319,9 @@ class Mapping:
                 sql = (rel.get("sql_query") or "").strip()
                 if sql:
                     data_check, count = self._probe_query_rows(sql, client)
-                    result["checks"].append(data_check)
                     result["row_count"] = count
+                    if data_check["status"] != "ok":
+                        result["checks"].append(data_check)
                 result["checks"].extend(
                     self._relationship_drift_checks(rel, live_columns)
                 )
@@ -2419,6 +2427,27 @@ class Mapping:
         return worst
 
     @staticmethod
+    def _column_in_output(column: str, available_cols: Optional[Set[str]]) -> bool:
+        """Return True when *column* is one of the SELECT output names.
+
+        Matches the bare name and Spark implicit aliases (``obj_id s`` → ``s``)
+        so leftover excluded columns and ``AS``-less aliases are not reported
+        as missing.
+        """
+        if not column:
+            return True
+        if not available_cols:
+            return True
+        needle = column.strip().strip('`"')
+        if needle in available_cols or column in available_cols:
+            return True
+        for name in available_cols:
+            token = str(name).replace("`", "").strip().split()[-1]
+            if token == needle:
+                return True
+        return False
+
+    @staticmethod
     def _diagnose_entity(
         ent: Dict[str, Any], ont_index: Dict[str, Dict]
     ) -> Dict[str, Any]:
@@ -2438,6 +2467,7 @@ class Mapping:
         id_col = ent.get("id_column", "")
         label_col = ent.get("label_column", "")
         attr_map = ent.get("attribute_mappings", {})
+        excluded_attrs = set(ent.get("excluded_attributes") or [])
 
         checks: List[Dict[str, str]] = []
         available_cols = (
@@ -2465,7 +2495,7 @@ class Mapping:
                     "detail": "No ID column defined",
                 }
             )
-        elif available_cols and id_col not in available_cols:
+        elif available_cols and not Mapping._column_in_output(id_col, available_cols):
             checks.append(
                 {
                     "check": "id_column",
@@ -2483,7 +2513,7 @@ class Mapping:
             )
 
         if label_col:
-            if available_cols and label_col not in available_cols:
+            if available_cols and not Mapping._column_in_output(label_col, available_cols):
                 checks.append(
                     {
                         "check": "label_column",
@@ -2501,9 +2531,9 @@ class Mapping:
                 )
 
         for attr_name, col_name in attr_map.items():
-            if not col_name:
+            if not col_name or attr_name in excluded_attrs:
                 continue
-            if available_cols and col_name not in available_cols:
+            if available_cols and not Mapping._column_in_output(col_name, available_cols):
                 checks.append(
                     {
                         "check": f"attribute:{attr_name}",
@@ -2581,6 +2611,8 @@ class Mapping:
         tgt_label = rel.get("target_class_label", "")
         src_id_col = rel.get("source_id_column") or rel.get("source_column", "")
         tgt_id_col = rel.get("target_id_column") or rel.get("target_column", "")
+        attr_map = rel.get("attribute_mappings") or {}
+        excluded_attrs = set(rel.get("excluded_attributes") or [])
 
         checks: List[Dict[str, str]] = []
         available_cols = (
@@ -2600,39 +2632,67 @@ class Mapping:
                 {"check": "source", "status": "ok", "detail": "SQL query defined"}
             )
 
-        if src_id_col and available_cols and src_id_col not in available_cols:
-            checks.append(
-                {
-                    "check": "source_id_column",
-                    "status": "error",
-                    "detail": f"Column '{src_id_col}' not in source output {sorted(available_cols)}",
-                }
-            )
-        elif src_id_col:
-            checks.append(
-                {
-                    "check": "source_id_column",
-                    "status": "ok",
-                    "detail": f"Column '{src_id_col}' found",
-                }
-            )
+        if src_id_col and src_id_col not in excluded_attrs:
+            if available_cols and not Mapping._column_in_output(
+                src_id_col, available_cols
+            ):
+                checks.append(
+                    {
+                        "check": "source_id_column",
+                        "status": "error",
+                        "detail": f"Column '{src_id_col}' not in source output {sorted(available_cols)}",
+                    }
+                )
+            else:
+                checks.append(
+                    {
+                        "check": "source_id_column",
+                        "status": "ok",
+                        "detail": f"Column '{src_id_col}' found",
+                    }
+                )
 
-        if tgt_id_col and available_cols and tgt_id_col not in available_cols:
-            checks.append(
-                {
-                    "check": "target_id_column",
-                    "status": "error",
-                    "detail": f"Column '{tgt_id_col}' not in source output {sorted(available_cols)}",
-                }
-            )
-        elif tgt_id_col:
-            checks.append(
-                {
-                    "check": "target_id_column",
-                    "status": "ok",
-                    "detail": f"Column '{tgt_id_col}' found",
-                }
-            )
+        if tgt_id_col and tgt_id_col not in excluded_attrs:
+            if available_cols and not Mapping._column_in_output(
+                tgt_id_col, available_cols
+            ):
+                checks.append(
+                    {
+                        "check": "target_id_column",
+                        "status": "error",
+                        "detail": f"Column '{tgt_id_col}' not in source output {sorted(available_cols)}",
+                    }
+                )
+            else:
+                checks.append(
+                    {
+                        "check": "target_id_column",
+                        "status": "ok",
+                        "detail": f"Column '{tgt_id_col}' found",
+                    }
+                )
+
+        for attr_name, col_name in attr_map.items():
+            if not col_name or attr_name in excluded_attrs or col_name in excluded_attrs:
+                continue
+            if available_cols and not Mapping._column_in_output(
+                col_name, available_cols
+            ):
+                checks.append(
+                    {
+                        "check": f"attribute:{attr_name}",
+                        "status": "error",
+                        "detail": f"Column '{col_name}' not in source output {sorted(available_cols)}",
+                    }
+                )
+            elif available_cols:
+                checks.append(
+                    {
+                        "check": f"attribute:{attr_name}",
+                        "status": "ok",
+                        "detail": f"Column '{col_name}' found",
+                    }
+                )
 
         resolved_src = cls._resolve_entity(entity_lookup, src_class, src_label)
         if resolved_src:

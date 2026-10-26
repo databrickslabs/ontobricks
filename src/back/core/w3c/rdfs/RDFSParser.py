@@ -4,6 +4,8 @@ Parses RDFS (RDF Schema) files to extract classes and properties.
 RDFS is simpler than OWL and uses rdfs:Class instead of owl:Class.
 """
 
+from collections import Counter
+
 from rdflib import Graph, RDF, RDFS, Namespace
 from typing import List, Dict
 
@@ -46,27 +48,31 @@ class RDFSParser:
         return extract_local_name(uri)
 
     def _get_base_uri(self) -> str:
-        """Try to determine the base URI from the graph.
+        """Return the namespace most declared classes and properties live in.
 
-        Returns:
-            Base URI string
+        Bound prefixes are not a reliable signal: rdflib pre-binds dozens of
+        well-known vocabularies (brick, dcat, ...) that the file never uses.
         """
-        # Try to find from namespace bindings
+        term_namespaces = Counter()
+        for term_type in (RDFS.Class, RDF.Property):
+            for term in self.graph.subjects(RDF.type, term_type):
+                uri = str(term)
+                if "#" in uri:
+                    term_namespaces[uri.rsplit("#", 1)[0] + "#"] += 1
+                elif "/" in uri:
+                    term_namespaces[uri.rsplit("/", 1)[0] + "/"] += 1
+        if term_namespaces:
+            return term_namespaces.most_common(1)[0][0]
+
+        subjects = {str(s) for s in self.graph.subjects()}
         for prefix, namespace in self.graph.namespaces():
             ns_str = str(namespace)
-            # Skip common prefixes
             if prefix in ["rdf", "rdfs", "owl", "xsd", "xml"]:
                 continue
-            if ns_str and (ns_str.endswith("#") or ns_str.endswith("/")):
+            if ns_str.endswith(("#", "/")) and any(
+                s.startswith(ns_str) for s in subjects
+            ):
                 return ns_str
-
-        # Try to extract from first class or property URI
-        for cls in self.graph.subjects(RDF.type, RDFS.Class):
-            uri = str(cls)
-            if "#" in uri:
-                return uri.rsplit("#", 1)[0] + "#"
-            elif "/" in uri:
-                return uri.rsplit("/", 1)[0] + "/"
 
         return "http://example.org/schema#"
 

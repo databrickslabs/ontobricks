@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/emoji-picker.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/help-modal.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/registry-modal.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/llm-endpoint-picker.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/review-modals.css') }}?v={{ asset_version }}">
     <!-- permissions.css must load LAST so its !important gates win over
@@ -40,23 +41,25 @@
     <script defer src="{{ url_for('static', filename='global/js/comments-panel.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/uc_file_dialog.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/uc-location-widget.js') }}?v={{ asset_version }}"></script>
-    <script defer src="{{ url_for('static', filename='home/js/uc-file-browser-modal.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/navbar.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/sidebar-nav.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/task-tracker.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/base-ui-handlers.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/breadcrumb.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/emoji-picker.js') }}?v={{ asset_version }}"></script>
-    <!-- Markdown renderer (used by the Help Center Documentation tab) -->
-    <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Markdown renderer + sanitiser (renderMarkdown in utils.js, Help Center docs) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js" integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js" integrity="sha384-P0JNneQf81HOl9VwNXK76cQ9VMD6Nfsnepxb0cCOg8+UzEdzgPHAPV4wVQrvYQSx" crossorigin="anonymous"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-modal.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/help-docs.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/registry-modal.js') }}?v={{ asset_version }}"></script>
+    <script defer src="{{ url_for('static', filename='global/js/llm-endpoint-picker.js') }}?v={{ asset_version }}"></script>
     
     {% block extra_css %}{% endblock %}
 </head>
-<body data-app-role="{{ get_user_role() or 'admin' }}"
+<body class="llm-unconfigured"
+      data-app-role="{{ get_user_role() or 'admin' }}"
       data-domain-role="{{ get_user_domain_role() or 'admin' }}"
       data-app-mode="{{ 'true' if is_app_mode() else 'false' }}"
       data-page="{% block page_id %}{% endblock %}">
@@ -77,9 +80,6 @@
                     <li class="nav-item ob-nav-dot-sep" aria-hidden="true">·</li>
                     {% for menu in menu_config.menus %}
                     {% if not menu.navbar_hidden|default(false) %}
-                    {% if menu.id == 'domain' %}
-                    <li class="nav-item ob-nav-path-sep d-none" id="domainL1PathSep" aria-hidden="true">›</li>
-                    {% endif %}
                     {% if menu.navbar_modal|default(false) and menu.id == 'registry' %}
                     <li class="nav-item">
                         <a class="nav-link" href="#" id="registryModalToggle"
@@ -87,14 +87,7 @@
                             <i class="bi {{ menu.icon }}"></i>
                         </a>
                     </li>
-                    {% elif menu.id == 'domain' %}
-                    <li class="nav-item d-none" id="domainL1NavItem">
-                        {# Domain shown as a plain link in L1 — navigation is in the L2 subnav #}
-                        <a class="nav-link" href="{{ menu.route }}" id="domainL1Link">
-                            <i class="bi {{ menu.icon }}"></i> <span id="currentDomainName">{{ menu.label }}</span>
-                        </a>
-                    </li>
-                    {% else %}
+                    {% elif menu.id != 'domain' %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle{% if menu.requires_domain_saved %} nav-requires-domain{% endif %}" href="#" id="{{ menu.id }}Dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi {{ menu.icon }}"></i> <span>{{ menu.label }}</span>
@@ -206,13 +199,17 @@
                                 <a class="dropdown-item"
                                    href="{{ menu.route }}?section={{ item.id }}"
                                    {% if item.admin_only|default(false) %}data-requires-app="admin"{% endif %}>
-                                    <i class="bi {{ item.icon }} me-1"></i> {{ item.label }}
+                                    <span class="ob-dropdown-icon" aria-hidden="true">{% if 'ob-brand-icon' in item.icon %}<i class="{{ item.icon }}"></i>{% else %}<i class="bi {{ item.icon }}"></i>{% endif %}</span><span class="ob-dropdown-label">{{ item.label }}</span>
                                 </a>
                             </li>
                             {% endfor %}
                             {% endfor %}
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ menu.route }}"><i class="bi bi-arrow-right-circle me-1"></i> Open full settings</a></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ menu.route }}">
+                                    <span class="ob-dropdown-icon" aria-hidden="true"><i class="bi bi-arrow-right-circle"></i></span><span class="ob-dropdown-label">Open full settings</span>
+                                </a>
+                            </li>
                         </ul>
                     </li>
                     {% endif %}
@@ -262,7 +259,24 @@
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
         <div class="container-fluid">
             <ul class="ob-subnav-nav">
-                <li class="ob-subnav-workspaces">
+                {% if domain_m.v %}
+                <li class="ob-subnav-item ob-subnav-context" data-subnav-domain-chrome>
+                    <a class="ob-subnav-context-trigger"
+                       href="{{ domain_m.v.route }}"
+                       id="domainContextTrigger"
+                       title="Open workspace map"
+                       aria-label="Open workspace map for Domain">
+                        <i class="bi {{ domain_m.v.icon }}"></i>
+                        <span class="ob-subnav-context-copy">
+                            <span id="currentDomainName"
+                                  class="ob-subnav-context-name">{{ domain_m.v.label }}</span>
+                            <span id="domainContextVersion"
+                                  class="ob-subnav-context-version"></span>
+                        </span>
+                    </a>
+                </li>
+                {% endif %}
+                <li class="ob-subnav-workspaces" id="domainWorkspaceSubnavNav" data-subnav-domain-chrome>
                     <ul class="ob-subnav-workspace-list">
                 {% if domain_m.v %}
                 <li class="ob-subnav-item dropdown">
@@ -270,6 +284,7 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ domain_m.v.route }}"
                        title="Domain">
+                        <span class="ob-subnav-ordinal" aria-hidden="true">1</span>
                         <i class="bi {{ domain_m.v.icon }}"></i>
                         <span class="ob-subnav-label">Domain</span>
                     </a>
@@ -297,6 +312,7 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ ontology_m.v.route }}"
                        title="{{ ontology_m.v.label }}">
+                        <span class="ob-subnav-ordinal" aria-hidden="true">2</span>
                         <i class="bi {{ ontology_m.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ ontology_m.v.label }}</span>
                     </a>
@@ -323,6 +339,7 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ mapping_m.v.route }}"
                        title="{{ mapping_m.v.label }}">
+                        <span class="ob-subnav-ordinal" aria-hidden="true">3</span>
                         <i class="bi {{ mapping_m.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ mapping_m.v.label }}</span>
                     </a>
@@ -349,6 +366,7 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ kg_m.v.route }}"
                        title="{{ kg_m.v.label }}">
+                        <span class="ob-subnav-ordinal" aria-hidden="true">4</span>
                         <i class="bi {{ kg_m.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ kg_m.v.label }}</span>
                     </a>
@@ -370,29 +388,20 @@
                     </ul>
                 </li>
                 <!-- Flex spacer — always pushes breadcrumb + Save button to the right -->
-                <li class="ob-subnav-flex-spacer" aria-hidden="true"></li>
+                <li class="ob-subnav-flex-spacer" aria-hidden="true" data-subnav-domain-chrome></li>
 
                 <!-- Breadcrumb — inline between tabs and Save button -->
-                <li class="ob-subnav-item ob-subnav-breadcrumb-wrap d-none" id="obBreadcrumbWrap">
+                <li class="ob-subnav-item ob-subnav-breadcrumb-wrap d-none" id="obBreadcrumbWrap" data-subnav-domain-chrome>
                     <nav id="obBreadcrumb" aria-label="breadcrumb">
                         <ol class="breadcrumb mb-0" id="obBreadcrumbList"></ol>
                     </nav>
                 </li>
 
-                <li class="ob-subnav-item">
+                <li class="ob-subnav-item" data-subnav-domain-chrome>
                     {% set save_action = namespace(v=none) %}
                     {% set switch_action = namespace(v=none) %}
                     {% set close_action = namespace(v=none) %}
                     {% if domain_m.v %}{% for a in domain_m.v.navbar_actions %}{% if a.action == 'domainSave' %}{% set save_action.v = a %}{% elif a.action == 'domainSwitch' %}{% set switch_action.v = a %}{% elif a.action == 'domainClose' %}{% set close_action.v = a %}{% endif %}{% endfor %}{% endif %}
-                    {% if save_action.v %}
-                    <a class="ob-subnav-save-btn btn-requires-domain" href="#"
-                       data-navbar-action="{{ save_action.v.action }}"
-                       {% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}
-                       title="Save domain to Unity Catalog">
-                        <i class="bi {{ save_action.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ save_action.v.label }}</span>
-                    </a>
-                    {% endif %}
                     {% if switch_action.v %}
                     <a class="ob-subnav-switch-btn btn-requires-domain" href="#"
                        data-navbar-action="{{ switch_action.v.action }}"
@@ -411,6 +420,26 @@
                         <span class="ob-subnav-label">{{ close_action.v.label }}</span>
                     </a>
                     {% endif %}
+                    {% if save_action.v %}
+                    <a class="ob-subnav-save-btn btn-requires-domain" href="#"
+                       data-navbar-action="{{ save_action.v.action }}"
+                       {% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}
+                       title="Save domain to Unity Catalog">
+                        <i class="bi {{ save_action.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ save_action.v.label }}</span>
+                    </a>
+                    {% endif %}
+                </li>
+                <li id="settingsDomainReturnNav" class="ob-subnav-item d-none">
+                    <a id="settingsDomainReturnLink"
+                       class="ob-subnav-settings-return-link ob-settings-domain-return-link"
+                       href="/domain/"
+                       title="Back to domain"
+                       aria-label="Back to domain">
+                        <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                        <i class="bi bi-box" aria-hidden="true"></i>
+                        <span>Back to domain</span>
+                    </a>
                 </li>
             </ul>
         </div>
@@ -462,6 +491,12 @@
 
     <!-- Registry Modal (Browse + Bridges) -->
     {% include "partials/layout/registry_modal.html" %}
+
+    <!-- LLM endpoint picker -->
+    {% include "partials/layout/llm_endpoint_picker_modal.html" %}
+
+    <!-- Workspace Map Modal (Domain + version badge) -->
+    {% include "partials/layout/_workspace_map_modal.html" %}
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

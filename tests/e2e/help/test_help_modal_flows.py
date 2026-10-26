@@ -104,4 +104,6 @@ class TestHelpDocsApi:
         response = page.request.get(
             f"{live_server}/api/help/docs/images/..%2Fetc%2Fpasswd"
         )
-        assert response.status == 404
+        # Local uvicorn 404s; the Apps gateway rejects the traversal with 400
+        # before the app handler runs. Either way the file is not served.
+        assert response.status in (400, 404)

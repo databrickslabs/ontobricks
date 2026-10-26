@@ -143,83 +143,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(autoValidateOntology, 500);
 });
 
-// Show validation summary in a modal
-function showValidationSummary(config, issues, warnings) {
-    const hasIssues = issues.length > 0;
-    const hasWarnings = warnings.length > 0;
-    const isValid = !hasIssues;
-    
-    let modalHtml = `
-        <div class="modal fade" id="validationModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header ${isValid ? 'bg-success' : 'bg-danger'} text-white">
-                        <h5 class="modal-title">
-                            <i class="bi bi-${isValid ? 'check-circle' : 'x-circle'}"></i> 
-                            Ontology Validation ${isValid ? 'Successful' : 'Failed'}
-                        </h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <h6><i class="bi bi-info-circle"></i> Summary</h6>
-                        <table class="table table-sm">
-                            <tr><td><strong>Name:</strong></td><td>${config.name}</td></tr>
-                            <tr><td><strong>Base URI:</strong></td><td><code>${config.base_uri}</code></td></tr>
-                            <tr><td><strong>Entities:</strong></td><td>${config.classes.length}</td></tr>
-                            <tr><td><strong>Relationships:</strong></td><td>${config.properties.length}</td></tr>
-                        </table>
-    `;
-    
-    if (hasIssues) {
-        modalHtml += `
-                        <div class="alert alert-danger mt-3">
-                            <h6><i class="bi bi-x-circle"></i> Issues</h6>
-                            <ul class="mb-0">
-                                ${issues.map(i => `<li>${i}</li>`).join('')}
-                            </ul>
-                        </div>
-        `;
-    }
-    
-    if (hasWarnings) {
-        modalHtml += `
-                        <div class="alert alert-warning mt-3">
-                            <h6><i class="bi bi-exclamation-triangle"></i> Warnings</h6>
-                            <ul class="mb-0">
-                                ${warnings.map(w => `<li>${w}</li>`).join('')}
-                            </ul>
-                        </div>
-        `;
-    }
-    
-    if (isValid && !hasWarnings) {
-        modalHtml += `
-                        <div class="alert alert-success mt-3">
-                            <i class="bi bi-check-circle"></i> Ontology is valid and ready to use!
-                        </div>
-        `;
-    }
-    
-    modalHtml += `
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const existingModal = document.getElementById('validationModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('validationModal'));
-    modal.show();
-}
-
 // Import OWL Button - shows dropdown for import source
 document.getElementById('importOwlBtn')?.addEventListener('click', function(e) {
     // Create dropdown menu if not exists
@@ -381,6 +304,7 @@ async function parseAndLoadOwl(content, filename) {
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
                     actions: cls.actions || [],
+                    business_rules: cls.business_rules || [],
                     virtualAttributes: cls.virtualAttributes || [],
                     dataProperties: merged
                 };
@@ -453,10 +377,10 @@ function showOwlImportReport(filename, onto, details) {
         const attrs = details.classAttributesMap[cls.name] || [];
         classDetailsHtml += `
             <tr>
-                <td><strong>${cls.name}</strong></td>
-                <td>${cls.label || cls.name}</td>
-                <td>${cls.parent || '<span class="text-muted">-</span>'}</td>
-                <td>${attrs.length > 0 ? attrs.map(a => `<span class="badge bg-secondary me-1">${a.name}</span>`).join('') : '<span class="text-muted">none</span>'}</td>
+                <td><strong>${escapeHtml(cls.name)}</strong></td>
+                <td>${escapeHtml(cls.label || cls.name)}</td>
+                <td>${cls.parent ? escapeHtml(cls.parent) : '<span class="text-muted">-</span>'}</td>
+                <td>${attrs.length > 0 ? attrs.map(a => `<span class="badge bg-secondary me-1">${escapeHtml(a.name)}</span>`).join('') : '<span class="text-muted">none</span>'}</td>
             </tr>
         `;
     });
@@ -467,9 +391,9 @@ function showOwlImportReport(filename, onto, details) {
         details.objectProperties.forEach(prop => {
             relationshipsHtml += `
                 <tr>
-                    <td><strong>${prop.name}</strong></td>
-                    <td>${prop.domain || '<span class="text-muted">?</span>'}</td>
-                    <td>${prop.range || '<span class="text-muted">?</span>'}</td>
+                    <td><strong>${escapeHtml(prop.name)}</strong></td>
+                    <td>${prop.domain ? escapeHtml(prop.domain) : '<span class="text-muted">?</span>'}</td>
+                    <td>${prop.range ? escapeHtml(prop.range) : '<span class="text-muted">?</span>'}</td>
                 </tr>
             `;
         });
@@ -485,7 +409,7 @@ function showOwlImportReport(filename, onto, details) {
                 <i class="bi bi-exclamation-triangle me-2"></i>
                 <strong>${details.orphanAttributes.length} attribute(s) without domain entity:</strong>
                 <ul class="mb-0 mt-2">
-                    ${details.orphanAttributes.map(a => `<li>${a.name} (range: ${a.range || 'unspecified'})</li>`).join('')}
+                    ${details.orphanAttributes.map(a => `<li>${escapeHtml(a.name)} (range: ${escapeHtml(a.range || 'unspecified')})</li>`).join('')}
                 </ul>
             </div>
         `;
@@ -502,10 +426,10 @@ function showOwlImportReport(filename, onto, details) {
                     <div class="modal-body">
                         <div class="alert alert-info">
                             <i class="bi bi-file-earmark-text me-2"></i>
-                            <strong>File:</strong> ${filename}
+                            <strong>File:</strong> ${escapeHtml(filename)}
                             <br>
-                            <strong>Ontology:</strong> ${onto.info.label || 'Unnamed'} 
-                            <small class="text-muted">(${onto.info.namespace || onto.info.uri || 'no namespace'})</small>
+                            <strong>Ontology:</strong> ${escapeHtml(onto.info.label || 'Unnamed')} 
+                            <small class="text-muted">(${escapeHtml(onto.info.namespace || onto.info.uri || 'no namespace')})</small>
                         </div>
                         
                         <!-- Summary -->
@@ -759,6 +683,7 @@ async function parseAndLoadRdfs(content, filename) {
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
                     actions: cls.actions || [],
+                    business_rules: cls.business_rules || [],
                     virtualAttributes: cls.virtualAttributes || [],
                     dataProperties: merged
                 };
@@ -831,10 +756,10 @@ function showRdfsImportReport(filename, onto, details) {
         const attrs = details.classAttributesMap[cls.name] || [];
         classDetailsHtml += `
             <tr>
-                <td><strong>${cls.name}</strong></td>
-                <td>${cls.label || cls.name}</td>
-                <td>${cls.parent || '<span class="text-muted">-</span>'}</td>
-                <td>${attrs.length > 0 ? attrs.map(a => `<span class="badge bg-secondary me-1">${a.name}</span>`).join('') : '<span class="text-muted">none</span>'}</td>
+                <td><strong>${escapeHtml(cls.name)}</strong></td>
+                <td>${escapeHtml(cls.label || cls.name)}</td>
+                <td>${cls.parent ? escapeHtml(cls.parent) : '<span class="text-muted">-</span>'}</td>
+                <td>${attrs.length > 0 ? attrs.map(a => `<span class="badge bg-secondary me-1">${escapeHtml(a.name)}</span>`).join('') : '<span class="text-muted">none</span>'}</td>
             </tr>
         `;
     });
@@ -845,9 +770,9 @@ function showRdfsImportReport(filename, onto, details) {
         details.objectProperties.forEach(prop => {
             relationshipsHtml += `
                 <tr>
-                    <td><strong>${prop.name}</strong></td>
-                    <td>${prop.domain || '<span class="text-muted">?</span>'}</td>
-                    <td>${prop.range || '<span class="text-muted">?</span>'}</td>
+                    <td><strong>${escapeHtml(prop.name)}</strong></td>
+                    <td>${prop.domain ? escapeHtml(prop.domain) : '<span class="text-muted">?</span>'}</td>
+                    <td>${prop.range ? escapeHtml(prop.range) : '<span class="text-muted">?</span>'}</td>
                 </tr>
             `;
         });
@@ -863,7 +788,7 @@ function showRdfsImportReport(filename, onto, details) {
                 <i class="bi bi-exclamation-triangle me-2"></i>
                 <strong>${details.orphanAttributes.length} attribute(s) without domain entity:</strong>
                 <ul class="mb-0 mt-2">
-                    ${details.orphanAttributes.map(a => `<li>${a.name} (range: ${a.range || 'unspecified'})</li>`).join('')}
+                    ${details.orphanAttributes.map(a => `<li>${escapeHtml(a.name)} (range: ${escapeHtml(a.range || 'unspecified')})</li>`).join('')}
                 </ul>
             </div>
         `;
@@ -880,10 +805,10 @@ function showRdfsImportReport(filename, onto, details) {
                     <div class="modal-body">
                         <div class="alert alert-info">
                             <i class="bi bi-file-earmark-text me-2"></i>
-                            <strong>File:</strong> ${filename}
+                            <strong>File:</strong> ${escapeHtml(filename)}
                             <br>
-                            <strong>Ontology:</strong> ${onto.info.label || 'Unnamed'} 
-                            <small class="text-muted">(${onto.info.namespace || onto.info.uri || 'no namespace'})</small>
+                            <strong>Ontology:</strong> ${escapeHtml(onto.info.label || 'Unnamed')} 
+                            <small class="text-muted">(${escapeHtml(onto.info.namespace || onto.info.uri || 'no namespace')})</small>
                         </div>
                         
                         <!-- Summary -->

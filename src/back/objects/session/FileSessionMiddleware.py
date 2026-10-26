@@ -191,9 +191,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             # deferring to it keeps a live cached session that lost its file.
             session_data = self._load_session(session_id)
             if session_data:
-                pd = session_data.get("domain_data") or session_data.get(
-                    "project_data", {}
-                )
+                pd = session_data.get("domain_data") or {}
                 ontology_classes = len(pd.get("ontology", {}).get("classes", []))
                 mapping_entities = len(pd.get("assignment", {}).get("entities", []))
                 mapping_rels = len(pd.get("assignment", {}).get("relationships", []))
@@ -219,9 +217,7 @@ class FileSessionMiddleware(BaseHTTPMiddleware):
             hasattr(request.state, "session_modified")
             and request.state.session_modified
         ):
-            pd = request.state.session.get("domain_data") or request.state.session.get(
-                "project_data", {}
-            )
+            pd = request.state.session.get("domain_data") or {}
             ontology_classes = len(pd.get("ontology", {}).get("classes", []))
             mapping_entities = len(pd.get("assignment", {}).get("entities", []))
             mapping_rels = len(pd.get("assignment", {}).get("relationships", []))

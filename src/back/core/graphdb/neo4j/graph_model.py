@@ -25,18 +25,16 @@ reconstruct exact SPO triples on read; they are persisted by
 :class:`Neo4jSchemaMap`. This module only *derives* the forward names.
 """
 
-from typing import Dict, List, NamedTuple, Tuple
+from typing import Dict, List
 
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.neo4j.PlannedWrites import EdgeOp, NodeOp, PlannedWrites
 
 __all__ = [
     "is_uri",
     "reltype_from_predicate",
     "label_from_class_uri",
-    "NodeOp",
-    "EdgeOp",
     "plan_writes",
-    "PlannedWrites",
 ]
 
 
@@ -76,35 +74,6 @@ def label_from_class_uri(class_uri: str) -> str:
 def reltype_from_predicate(predicate_uri: str) -> str:
     """Neo4j relationship type for an object-property predicate URI."""
     return _sanitise_ident(_local_name(predicate_uri))
-
-
-class NodeOp(NamedTuple):
-    """An upsert for one node, keyed on its full URI."""
-
-    uri: str
-    labels: Tuple[str, ...]          # class labels (from rdf:type), sanitised
-    label_uris: Tuple[str, ...]      # matching class URIs (for reverse map)
-    properties: Dict[str, str]       # literal predicates → values (incl. ``name``)
-    property_uris: Dict[str, str]    # sanitised prop key → full predicate URI
-
-
-class EdgeOp(NamedTuple):
-    """A relationship ``(subject)-[:reltype]->(object)``."""
-
-    subject: str
-    reltype: str
-    predicate_uri: str
-    object: str
-
-
-class PlannedWrites(NamedTuple):
-    """The full set of graph operations derived from a triple batch."""
-
-    nodes: List[NodeOp]
-    edges: List[EdgeOp]
-    label_map: Dict[str, str]        # sanitised label → class URI (reverse)
-    reltype_map: Dict[str, str]      # sanitised reltype → predicate URI (reverse)
-    prop_map: Dict[str, str]         # sanitised prop key → predicate URI (reverse)
 
 
 def plan_writes(triples: List[Dict[str, str]]) -> PlannedWrites:

@@ -90,6 +90,7 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
         host = ci.get("host", "")
         token = ci.get("token", "")
         endpoint_name = ci.get("endpoint_name", "")
+        endpoint_kind = ci.get("endpoint_kind", "")
         classes = copy.deepcopy(ci.get("classes", []))
         properties = copy.deepcopy(ci.get("properties", []))
         base_uri = ci.get("base_uri", "")
@@ -127,7 +128,12 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
             send_tools = TOOL_DEFINITIONS if not is_last else None
 
             llm_response = self._call_llm(
-                host, token, endpoint_name, messages, send_tools
+                host,
+                token,
+                endpoint_name,
+                endpoint_kind,
+                messages,
+                send_tools,
             )
             if llm_response is None:
                 yield self._error_event("LLM request failed.")
@@ -209,6 +215,7 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
             host=ci.get("host", ""),
             token=ci.get("token", ""),
             endpoint_name=ci.get("endpoint_name", ""),
+            endpoint_kind=ci.get("endpoint_kind", ""),
             classes=copy.deepcopy(ci.get("classes", [])),
             properties=copy.deepcopy(ci.get("properties", [])),
             base_uri=ci.get("base_uri", ""),
@@ -228,6 +235,7 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
         host: str,
         token: str,
         endpoint_name: str,
+        endpoint_kind: str,
         messages: list,
         tools: Optional[list],
     ) -> Optional[dict]:
@@ -242,6 +250,7 @@ class OntologyAssistantResponsesAgent(ResponsesAgent):
                 temperature=0.2,
                 timeout=LLM_TIMEOUT,
                 trace_name="responses_agent:llm",
+                endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
             # Streaming contract: the caller converts ``None`` into a

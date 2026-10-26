@@ -9,6 +9,9 @@ from back.core.databricks.lakebase import (  # noqa: F401
     get_lakebase_auth,
 )
 from back.core.databricks.SQLWarehouse import SQLWarehouse  # noqa: F401
+from back.core.databricks.StatementExecutionWarehouse import (  # noqa: F401
+    StatementExecutionWarehouse,
+)
 from back.core.databricks.uc import (  # noqa: F401
     MetadataService,
     UCDomainIO,
@@ -18,7 +21,10 @@ from back.core.databricks.uc import (  # noqa: F401
 from back.core.databricks.DatabricksClient import DatabricksClient  # noqa: F401
 from back.core.databricks.WorkspaceService import WorkspaceService  # noqa: F401
 from back.core.databricks.DashboardService import DashboardService  # noqa: F401
-from back.core.databricks.DocumentExtractor import DocumentExtractor  # noqa: F401
+from back.core.databricks.document.DocumentExtractor import DocumentExtractor  # noqa: F401
+from back.core.databricks.document.DocumentParseService import DocumentParseService  # noqa: F401
+from back.core.databricks.document.ParseStatus import ParseStatus  # noqa: F401
+from back.core.databricks.document.ParseSubmission import ParseSubmission  # noqa: F401
 
 # Backward-compatible wrappers for previously module-level functions
 is_databricks_app = DatabricksAuth.is_databricks_app
@@ -61,6 +67,7 @@ __all__ = [
     "get_lakebase_auth",
     "DatabricksClient",
     "SQLWarehouse",
+    "StatementExecutionWarehouse",
     "UnityCatalog",
     "VolumeFileService",
     "WorkspaceService",
@@ -68,6 +75,9 @@ __all__ = [
     "MetadataService",
     "UCDomainIO",
     "DocumentExtractor",
+    "DocumentParseService",
+    "ParseStatus",
+    "ParseSubmission",
     "is_databricks_app",
     "get_local_user_email",
     "normalize_host",

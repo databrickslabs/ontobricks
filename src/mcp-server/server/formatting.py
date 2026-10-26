@@ -88,8 +88,10 @@ def _format_class_context_block(
     dataset = cls_actions.get("dataset")
     bridges = cls_actions.get("bridges") or []
     actions = cls_actions.get("actions") or []
+    business_rules = cls_actions.get("business_rules") or []
     virtual = cls_actions.get("virtualAttributes") or []
-    if not dataset and not bridges and not actions and not virtual:
+    shacl_count = cls_actions.get("shacl_shape_count") or 0
+    if not (dataset or bridges or actions or business_rules or virtual or shacl_count):
         return ""
 
     lines: list[str] = []
@@ -144,9 +146,7 @@ def _format_class_context_block(
         )
 
     if actions:
-        lines.append("  Actions:")
-        for a in actions:
-            lines.append(f"    → {a.get('fullName', '')}: {a.get('description', '')}")
+        lines.extend(_class_action_lines(actions))
         lines.append(
             _hint(
                 context_policy,
@@ -158,29 +158,60 @@ def _format_class_context_block(
             )
         )
 
-    if virtual:
-        names = [
-            attr.get("name", "")
-            for group in virtual
-            for attr in (group.get("attributes") or [])
-        ]
-        lines.append(
-            f"  Virtual attributes ({len(names)}, computed on demand): "
-            + ", ".join(n for n in names if n)
-        )
+    if business_rules:
+        lines.append("  Business rules:")
+        for br in business_rules:
+            lines.append(f"    → {br.get('name', '')}: {br.get('description') or ''}")
         lines.append(
             _hint(
                 context_policy,
-                "virtual_attributes",
-                directive="    → ALWAYS call compute_virtual_attributes("
-                "entity_uri) before answering — these values are not in the "
-                "graph and are computed live",
-                neutral="    → call compute_virtual_attributes(entity_uri) "
-                "to compute their values",
+                "business_rules",
+                directive="    → when the user asks to apply or evaluate one of "
+                "these rules, call run_entity_business_rule(entity_uri, rule) — it "
+                "writes the inferred facts to the graph",
+                neutral="    → call run_entity_business_rule(entity_uri, rule) to "
+                "apply one (writes inferred facts to the graph)",
             )
         )
 
+    if virtual:
+        lines.extend(_class_virtual_lines(virtual, context_policy))
+
+    if shacl_count:
+        lines.extend(_shacl_hint_lines(shacl_count, "  "))
+
     return "\n".join(lines)
+
+
+def _class_virtual_lines(virtual: list, context_policy: Optional[dict]) -> list[str]:
+    """List a class's virtual attributes and point at their computation."""
+    names = [
+        attr.get("name", "")
+        for group in virtual
+        for attr in (group.get("attributes") or [])
+    ]
+    return [
+        f"  Virtual attributes ({len(names)}, computed on demand): "
+        + ", ".join(n for n in names if n),
+        _hint(
+            context_policy,
+            "virtual_attributes",
+            directive="    → ALWAYS call compute_virtual_attributes("
+            "entity_uri) before answering — these values are not in the "
+            "graph and are computed live",
+            neutral="    → call compute_virtual_attributes(entity_uri) "
+            "to compute their values",
+        ),
+    ]
+
+
+def _shacl_hint_lines(count: int, indent: str) -> list[str]:
+    """Advertise the SHACL shapes an entity's class is checked against."""
+    return [
+        f"{indent}SHACL shapes ({count}) apply to this class.",
+        f"{indent}  → call check_entity_shacl_facets(entity_uri) to check this "
+        "entity against them",
+    ]
 
 
 def _format_node_context_response(
@@ -251,12 +282,7 @@ def _format_node_context_response(
 
     actions = data.get("actions") or []
     if actions:
-        lines.append("Actions (Unity Catalog functions):")
-        for a in actions:
-            lines.append(f"  → {a.get('fullName', '')}")
-            desc = (a.get("description") or "").strip()
-            if desc:
-                lines.append(f"    Description: {desc}")
+        lines.extend(_node_action_lines(actions))
         lines.append(
             _hint(
                 context_policy,
@@ -270,11 +296,122 @@ def _format_node_context_response(
         )
         lines.append("")
 
+    business_rules = data.get("business_rules") or []
+    if business_rules:
+        lines.extend(_node_business_rule_lines(business_rules, context_policy))
+        lines.append("")
+
     virtual = data.get("virtual_attributes") or []
     if virtual:
         lines.extend(_format_virtual_attribute_lines(virtual, context_policy))
         lines.append("")
 
+    shacl_count = data.get("shacl_shape_count") or 0
+    if shacl_count:
+        lines.extend(_shacl_hint_lines(shacl_count, ""))
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _node_business_rule_lines(
+    business_rules: list, context_policy: Optional[dict]
+) -> list[str]:
+    """Render a node's SWRL business rules and point at their execution."""
+    lines = ["Business rules (SWRL):"]
+    for br in business_rules:
+        lines.append(f"  → {br.get('name', '')}")
+        desc = (br.get("description") or "").strip()
+        if desc:
+            lines.append(f"    Description: {desc}")
+        lines.append(
+            f"    Rule: {br.get('antecedent', '')} -> {br.get('consequent', '')}"
+        )
+    lines.append(
+        _hint(
+            context_policy,
+            "business_rules",
+            directive="  → when asked to apply a rule, call "
+            "run_entity_business_rule(entity_uri, rule) — it writes the "
+            "inferred facts to the graph",
+            neutral="  → call run_entity_business_rule(entity_uri, rule) to "
+            "apply one (writes inferred facts to the graph)",
+        )
+    )
+    return lines
+
+
+_SHACL_STATUS_TEXT = {
+    "fail": "FAIL",
+    "pass": "PASS",
+    "not_applicable": "NOT APPLICABLE",
+    "not_evaluated": "NOT EVALUATED",
+    "error": "ERROR",
+}
+
+
+def _format_shacl_facets_response(data: dict) -> str:
+    """Format the /nodes/shacl JSON response as LLM-friendly text.
+
+    Only ``pass`` means the entity was checked and conforms: shapes that
+    could not be evaluated or errored are named as such, never as passing.
+    """
+    if not data.get("success"):
+        return data.get("message") or "Could not check the SHACL facets."
+
+    entity_uri = data.get("entity_uri", "")
+    local_id = data.get("entity_local_id", "") or _local_name(entity_uri)
+    class_names = [c.get("name", "") for c in data.get("classes") or []]
+    class_str = ", ".join(n for n in class_names if n) or "Unknown"
+
+    lines: list[str] = [
+        f"SHACL Facets — {local_id}  ({class_str})",
+        f"URI: {entity_uri}",
+    ]
+    label = data.get("entity_label")
+    if label:
+        lines.append(f"Label: {label}")
+    lineage = data.get("lineage") or []
+    if len(lineage) > 1:
+        lines.append("Lineage: " + " → ".join(lineage))
+    lines.append("")
+
+    facets = data.get("facets") or []
+    if not facets:
+        lines.append(f"No SHACL shape applies to {class_str}.")
+        return "\n".join(lines)
+
+    s = data.get("summary") or {}
+    lines.append(
+        f"{s.get('fail', 0)} failed, {s.get('pass', 0)} passed, "
+        f"{s.get('not_applicable', 0)} not applicable, "
+        f"{s.get('not_evaluated', 0)} not evaluated, {s.get('error', 0)} errors"
+    )
+    lines.append("")
+
+    for f in facets:
+        status = f.get("status", "")
+        head = _SHACL_STATUS_TEXT.get(status, status.upper())
+        if status == "fail":
+            severity = (f.get("severity") or "sh:Violation").removeprefix("sh:")
+            head = f"{head}  [{severity}]"
+        lines.append(f"{head}  {f.get('label') or f.get('shape_id', '')}")
+
+        target = f.get("property_path") or ""
+        constraint = f.get("constraint") or ""
+        if target or constraint:
+            lines.append("  " + "  ".join(p for p in (target, constraint) if p))
+        if f.get("inherited_from"):
+            lines.append(f"  inherited from {f['inherited_from']}")
+        if status in ("fail", "pass") and target:
+            values = f.get("values") or []
+            found = ", ".join(f'"{v}"' for v in values) if values else "(none)"
+            if f.get("values_truncated"):
+                found += " (more values not shown)"
+            lines.append(f"  found: {found}")
+        message = (f.get("message") or "").strip()
+        if message and status in ("fail", "not_evaluated", "error", "not_applicable"):
+            lines.append(f"  {message}")
     return "\n".join(lines)
 
 
@@ -357,6 +494,58 @@ def _format_virtual_attributes_response(
     return "\n".join(lines)
 
 
+def _class_action_lines(actions: list) -> list[str]:
+    uc_actions, job_actions = _split_class_actions(actions)
+    lines: list[str] = []
+    if uc_actions:
+        lines.append("  Actions:")
+        lines.extend(
+            f"    → {a.get('fullName', '')}: {a.get('description', '')}"
+            for a in uc_actions
+        )
+    if job_actions:
+        lines.append("  Jobs:")
+        lines.extend(
+            f"    → {a.get('fullName', '')}: {a.get('description', '')}"
+            for a in job_actions
+        )
+    return lines
+
+
+def _node_action_lines(actions: list) -> list[str]:
+    uc_actions, job_actions = _split_class_actions(actions)
+    lines: list[str] = []
+    if uc_actions:
+        lines.append("Actions (Unity Catalog functions):")
+        for a in uc_actions:
+            lines.append(f"  → {a.get('fullName', '')}")
+            desc = (a.get("description") or "").strip()
+            if desc:
+                lines.append(f"    Description: {desc}")
+    if job_actions:
+        lines.append("Jobs (Databricks Job run_now, tracked in Background Tasks):")
+        for a in job_actions:
+            lines.append(f"  → {a.get('fullName', '')}")
+            desc = (a.get("description") or "").strip()
+            if desc:
+                lines.append(f"    Description: {desc}")
+    return lines
+
+
+def _split_class_actions(actions: list) -> tuple[list, list]:
+    """Partition class actions into UC functions vs Databricks Jobs."""
+    uc: list = []
+    jobs: list = []
+    for action in actions or []:
+        kind = str(action.get("kind") or "")
+        full_name = str(action.get("fullName") or "")
+        if kind == "job" or full_name.startswith("job:"):
+            jobs.append(action)
+        else:
+            uc.append(action)
+    return uc, jobs
+
+
 def _format_node_action_response(data: dict) -> str:
     """Format the /nodes/action JSON response as LLM-friendly text."""
     if not data.get("success"):
@@ -373,6 +562,17 @@ def _format_node_action_response(data: dict) -> str:
         "",
     ]
 
+    if data.get("kind") == "job" or str(data.get("action") or "").startswith("job:"):
+        lines.append(data.get("message") or "Running in Background Tasks")
+        if data.get("task_id"):
+            lines.append(f"task_id: {data['task_id']}")
+        if data.get("run_id") is not None:
+            lines.append(f"run_id: {data['run_id']}")
+        if data.get("run_page_url"):
+            lines.append(f"run_page_url: {data['run_page_url']}")
+        lines.append("Watch progress in the OntoBricks navbar Background Tasks list.")
+        return "\n".join(lines)
+
     rows = data.get("rows") or []
     if not rows:
         lines.append("Completed — no result rows returned.")
@@ -381,6 +581,42 @@ def _format_node_action_response(data: dict) -> str:
     lines.append(f"Result ({len(rows)} row{'s' if len(rows) != 1 else ''}):")
     for row in rows:
         lines.append("  " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
+    return "\n".join(lines)
+
+
+def _format_node_business_rule_response(data: dict, max_triples: int = 20) -> str:
+    """Format the /nodes/business-rule JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return (
+            data.get("message")
+            or (data.get("error") if isinstance(data.get("error"), str) else None)
+            or "Could not run the business rule."
+        )
+
+    written = int(data.get("materialized_count") or 0)
+    inferred = int(data.get("inferred_count") or 0)
+    lines: list[str] = [
+        f"Business rule: {data.get('rule', '')}",
+        f"Entity: {data.get('entity_local_id', '')}  ({data.get('class_name', 'Unknown')})",
+        "",
+    ]
+    if not inferred:
+        lines.append("Completed — the rule produced no new facts for this entity.")
+        return "\n".join(lines)
+
+    lines.append(
+        f"Inferred {inferred} triple{'s' if inferred != 1 else ''}, "
+        f"{written} written to the graph:"
+    )
+    triples = data.get("triples") or []
+    for t in triples[:max_triples]:
+        lines.append(
+            f"  • {_local_name(t.get('subject', ''))}  "
+            f"{_local_name(t.get('predicate', ''))}  {_local_name(t.get('object', ''))}"
+        )
+    hidden = inferred - min(len(triples), max_triples)
+    if hidden > 0:
+        lines.append(f"  … {hidden} more")
     return "\n".join(lines)
 
 
@@ -428,9 +664,8 @@ def _format_find_response(
 
     triples = data.get("triples", [])
     depth = data.get("depth", 1)
-    page_count = data.get("count", len(triples))
     total = data.get("total", len(triples))
-    has_more = data.get("has_more", total > page_count)
+    has_more = bool(data.get("has_more", False))
 
     by_subject: dict[str, list[dict]] = {}
     for t in triples:
@@ -455,11 +690,10 @@ def _format_find_response(
         related_uris = set(by_subject.keys()) - seed_uris
 
     unique_entities = len(by_subject)
-    entity_count = data.get("entity_count", unique_entities)
     parts: list[str] = []
     parts.append(
         f"Found {seed_count} matching entit{'y' if seed_count == 1 else 'ies'} "
-        f"({page_count} of {total} triples across {entity_count} entities, depth={depth})\n"
+        f"({total} triples across {unique_entities} entities, depth={depth})\n"
     )
 
     parts.append("── Matching Entities ──")
@@ -488,8 +722,8 @@ def _format_find_response(
 
     if has_more:
         parts.append(
-            f"(Showing the first {len(triples)} triples — more exist; "
-            f"increase limit or use pagination for the rest)"
+            f"(Showing {len(triples)} of {total} triples — "
+            f"increase limit or use pagination for more)"
         )
 
     return "\n".join(parts)

@@ -1,0 +1,137 @@
+#graphql-section.active,
+.query-language-content,
+.query-language-content > .tab-pane.active {
+    min-height: 0;
+}
+
+.query-language-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.query-language-content > .tab-pane.active {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+.query-pane-toolbar {
+    flex: 0 0 auto;
+    padding: 0.625rem 0;
+}
+
+.sparql-playground {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    background: var(--db-surface-warm);
+}
+
+.sparql-editor-pane,
+.sparql-results-pane {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    flex-direction: column;
+    padding: 0.75rem;
+}
+
+.sparql-editor-pane {
+    border-right: 1px solid var(--db-border);
+}
+
+.sparql-limit-control {
+    width: 6rem;
+}
+
+.sparql-editor {
+    flex: 1 1 auto;
+    min-height: 15rem;
+    resize: none;
+}
+
+.sparql-results-container .results-empty-state {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.sparql-sql-pane {
+    display: flex;
+    flex: 0 0 12rem;
+    min-height: 0;
+    flex-direction: column;
+    border-top: 1px solid var(--db-border);
+    background: var(--db-surface-warm);
+    color: var(--db-text);
+    margin-top: 0.75rem;
+    padding-top: 0.5rem;
+}
+
+.sparql-sql-pane pre {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    margin: 0.5rem 0 0;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    background: var(--db-canvas-warm);
+    color: var(--db-text);
+    padding: 0.75rem;
+}
+
+.sparql-sql-pane pre code {
+    background: transparent;
+    color: var(--db-text);
+}
+
+.nav-tabs.ob-tabs.query-language-tabs .nav-link:focus-visible {
+    outline: 2px solid var(--db-primary);
+    outline-offset: -3px;
+    box-shadow: none;
+}
+
+#sparqlSample:focus-visible,
+#sparqlResultLimit:focus-visible,
+#sparqlDownloadBtn:focus-visible,
+#sparqlExploreBtn:focus-visible,
+#sparqlPlaygroundQuery:focus-visible {
+    outline: 2px solid var(--db-primary);
+    outline-offset: -3px;
+    box-shadow: var(--db-focus-ring);
+}
+
+@media (max-width: 991.98px) {
+    .query-language-content:has(> #querySparqlPane.active) {
+        flex: none;
+        overflow: visible;
+    }
+
+    #querySparqlPane.active {
+        flex: none;
+    }
+
+    .sparql-playground {
+        flex: none;
+        grid-template-columns: 1fr;
+        overflow: visible;
+    }
+
+    .sparql-editor-pane {
+        border-right: 0;
+        border-bottom: 1px solid var(--db-border);
+    }
+
+    .sparql-playground #sparqlResultsContainer {
+        min-height: 15rem;
+        overflow: auto;
+    }
+}

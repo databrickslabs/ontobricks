@@ -4,12 +4,7 @@
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1"><i class="bi bi-shield-check me-2"></i>Data Quality{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
-        <p class="text-muted mb-0 small">Validate SHACL shapes against the triple store<br>
-            <i class="bi bi-box"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 dq-version-badge">v{{ current_version }}</span> <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning" style="font-size:0.6rem;">Draft</span>
-            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" data-dq-action="open-graph-switcher" title="Switch to another domain graph">
-                <i class="bi bi-arrow-left-right me-1"></i>Switch domain
-            </button>
-        </p>
+        <p class="text-muted mb-0 small">Validate SHACL shapes against the triple store</p>
     </div>
     <div class="d-flex align-items-center gap-2">
         <div class="d-inline-flex align-items-center gap-1">
@@ -65,7 +60,7 @@
                         <div id="dqExecProgressBar" class="progress-bar progress-bar-striped progress-bar-animated dq-progress-bar-start"
                              role="progressbar">0%</div>
                     </div>
-                    <small id="dqExecProgressDetail" class="text-muted mt-1 d-block text-center"></small>
+                    <div id="dqExecProgressLog" class="task-activity-log mt-2 text-start" aria-live="polite"></div>
                 </div>
             </div>
         </div>

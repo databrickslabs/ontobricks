@@ -377,6 +377,21 @@ class TestUCTarget:
         assert out["ok"] is False
         assert out["checks"][0]["status"] == "error"
 
+    @pytest.mark.parametrize(
+        "target",
+        [
+            {"catalog": "c`; DROP TABLE x; --", "schema": "s", "table_name": "t"},
+            {"catalog": "c", "schema": "s`.`evil", "table_name": "t"},
+            {"catalog": "c", "schema": "s", "table_name": "t` --"},
+            {"catalog": "c", "schema": "s", "table_name": "a.b"},
+        ],
+    )
+    def test_probe_rejects_unsafe_identifiers(self, target):
+        client = MagicMock()
+        with pytest.raises(ValidationError):
+            DigitalTwin.cohort_probe_uc_write(target, client)
+        client.execute_query.assert_not_called()
+
     def test_probe_catalog_missing(self):
         client = MagicMock()
         client.execute_query.side_effect = Exception("catalog not found")

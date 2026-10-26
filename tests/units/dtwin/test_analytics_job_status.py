@@ -145,12 +145,7 @@ class TestTheProbeClassifiesTheFailure:
 
     def _probe(self, exc):
         with patch(
-            "back.core.helpers.get_databricks_host_and_token",
-            return_value=("https://h", "t"),
-        ), patch(
-            "back.core.helpers.resolve_delta_warehouse_id", return_value="w"
-        ), patch(
-            "back.core.databricks.DatabricksClient.DatabricksClient"
+            "back.core.graphdb.delta.DeltaBase.create_databricks_client"
         ) as client:
             client.return_value.execute_query.side_effect = exc
             return probe_data_table(object(), _Settings(), "cat.sch.t_data")
@@ -184,12 +179,7 @@ class TestTheProbeClassifiesTheFailure:
 
     def test_rows_answer_true(self):
         with patch(
-            "back.core.helpers.get_databricks_host_and_token",
-            return_value=("https://h", "t"),
-        ), patch(
-            "back.core.helpers.resolve_delta_warehouse_id", return_value="w"
-        ), patch(
-            "back.core.databricks.DatabricksClient.DatabricksClient"
+            "back.core.graphdb.delta.DeltaBase.create_databricks_client"
         ) as client:
             client.return_value.execute_query.return_value = [{"ok": 1}]
             assert probe_data_table(object(), _Settings(), "cat.sch.t_data") == (
@@ -231,13 +221,14 @@ class TestCauseOrdering:
 ROOT = Path(__file__).resolve().parents[3]
 PANEL = ROOT / "src/front/static/query/js/query-analytics.js"
 ROUTER = ROOT / "src/api/routers/internal/dtwin.py"
+STATS = ROOT / "src/back/objects/digitaltwin/TwinGraphStats.py"
 
 
 class TestTheReasonReachesTheBanner:
     """A reason computed and then dropped on the floor helps nobody."""
 
     def test_the_endpoint_returns_the_field(self):
-        assert '"analytics_job_blocked_reason": job_blocked_reason' in ROUTER.read_text()
+        assert '"analytics_job_blocked_reason": job_blocked_reason' in STATS.read_text()
 
     def test_the_panel_reads_it(self):
         assert "data.analytics_job_blocked_reason" in PANEL.read_text()
@@ -263,9 +254,9 @@ class TestStatsCacheDoesNotHideTheField:
     """A cache entry predating the field would mask a just-changed setting."""
 
     def test_a_payload_without_the_field_is_treated_as_stale(self):
-        router = ROUTER.read_text()
-        assert '"analytics_job_blocked_reason" in cached' in router
-        assert "has_kind and has_job_reason" in router
+        stats = STATS.read_text()
+        assert '"analytics_job_blocked_reason" in cached' in stats
+        assert "has_kind and has_job_reason" in stats
 
 
 class TestStoredResultsBackwardCompat:

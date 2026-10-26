@@ -303,7 +303,7 @@ def test_default_schema_constant():
 
 def test_find_subjects_by_type_delegates(auth):
     store = LakebaseFlatStore(auth, schema="g")
-    with patch.object(
+    with patch.object(store, "table_exists", return_value=False), patch.object(
         store,
         "execute_query",
         return_value=[{"subject": "http://ex/1"}, {"subject": "http://ex/2"}],
@@ -317,15 +317,46 @@ def test_find_subjects_by_type_delegates(auth):
     assert subs == ["http://ex/1", "http://ex/2"]
 
 
+def test_find_subjects_by_type_uses_entity_search_when_ready(auth):
+    store = LakebaseFlatStore(auth, schema="g")
+    with patch.object(store, "table_exists", return_value=True), patch.object(
+        store,
+        "execute_query",
+        return_value=[{"uri": "http://ex/1"}],
+    ) as execute:
+        subs = store.find_subjects_by_type(
+            "G_V1", "http://ex.org/Customer", limit=10, offset=0
+        )
+    assert subs == ["http://ex/1"]
+    assert "g_v1_entity_search" in execute.call_args.args[0]
+
+
 def test_bfs_traversal_sql_path(auth):
     store = LakebaseFlatStore(auth, schema="g")
-    with patch.object(
+    with patch.object(store, "table_exists", return_value=False), patch.object(
         store,
         "execute_query",
         return_value=[{"entity": "http://seed", "min_lvl": 0}],
     ):
         rows = store.bfs_traversal("G_V1", " WHERE subject = 'http://seed'", depth=3)
     assert rows == [{"entity": "http://seed", "min_lvl": 0}]
+
+
+def test_bfs_traversal_uses_companions_when_ready(auth):
+    store = LakebaseFlatStore(auth, schema="g")
+    with patch.object(store, "table_exists", return_value=True), patch.object(
+        store,
+        "execute_query",
+        return_value=[{"entity": "http://ex/1", "min_lvl": 0}],
+    ) as execute:
+        rows = store.bfs_traversal(
+            "G_V1", " WHERE subject = 'http://seed'", depth=1, entity_type="Customer"
+        )
+    assert rows == [{"entity": "http://ex/1", "min_lvl": 0}]
+    sql = execute.call_args.args[0]
+    assert "g_v1_entity_search" in sql
+    assert "g_v1_adj_out" in sql
+    assert "g_v1_adj_in" in sql
 
 
 # ---------------------------------------------------------------
@@ -582,7 +613,7 @@ class TestResolveLakebaseGraphSchema:
         domain = SimpleNamespace(settings={"registry": {}})
         settings = SimpleNamespace()
         with patch(
-            "back.objects.registry.RegistryCfg.from_domain",
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
             return_value=MagicMock(catalog="c", schema="volume_sch", volume="v"),
         ):
             out = resolve_lakebase_graph_schema(
@@ -603,7 +634,7 @@ class TestResolveLakebaseGraphSchema:
         domain = SimpleNamespace(settings={"registry": {}})
         settings = SimpleNamespace()
         with patch(
-            "back.objects.registry.RegistryCfg.from_domain",
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
             return_value=MagicMock(catalog="c", schema="volume_sch", volume="v"),
         ):
             out = resolve_lakebase_graph_schema(domain, settings, "")
@@ -619,7 +650,7 @@ class TestResolveLakebaseGraphSchema:
         domain = SimpleNamespace()
         settings = SimpleNamespace()
         with patch(
-            "back.objects.registry.RegistryCfg.from_domain",
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
             return_value=MagicMock(catalog="c", schema="", volume="v"),
         ):
             out = resolve_lakebase_graph_schema(domain, settings, "custom_g")
@@ -637,7 +668,7 @@ class TestResolveSyncUcFallbackCatalog:
         domain = SimpleNamespace(settings={"registry": {}})
         settings = SimpleNamespace()
         with patch(
-            "back.objects.registry.RegistryCfg.from_domain",
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
             return_value=MagicMock(catalog="team_catalog", schema="s", volume="v"),
         ):
             out = resolve_sync_uc_fallback_catalog(
@@ -657,7 +688,7 @@ class TestResolveSyncUcFallbackCatalog:
         domain = SimpleNamespace()
         settings = SimpleNamespace()
         with patch(
-            "back.objects.registry.RegistryCfg.from_domain",
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
             return_value=MagicMock(catalog="", schema="", volume=""),
         ):
             out = resolve_sync_uc_fallback_catalog(
@@ -680,7 +711,7 @@ class TestResolveSyncUcFallbackCatalog:
         domain = SimpleNamespace(settings={"registry": {}})
         settings = SimpleNamespace()
         with patch(
-            "back.objects.registry.RegistryCfg.from_domain",
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
             return_value=MagicMock(catalog="team_catalog", schema="s", volume="v"),
         ):
             out = resolve_sync_uc_fallback_catalog(
@@ -704,7 +735,7 @@ class TestResolveSyncUcFallbackCatalog:
         domain = SimpleNamespace(settings={"registry": {}})
         settings = SimpleNamespace()
         with patch(
-            "back.objects.registry.RegistryCfg.from_domain",
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
             return_value=MagicMock(catalog="team_catalog", schema="s", volume="v"),
         ):
             out = resolve_sync_uc_fallback_catalog(
@@ -783,7 +814,7 @@ def test_create_triple_table_migrates_legacy_before_indexes():
 
 
 def test_scheduled_view_sql_wraps_object_hash_for_managed_synced():
-    from back.objects.registry.scheduler_tasks.build import _view_sql_for_graph_store
+    from back.objects.registry.schedule.build import _view_sql_for_graph_store
 
     inner = "SELECT subject, predicate, object FROM t"
     managed = MagicMock()
@@ -850,3 +881,42 @@ def test_find_subjects_by_patterns_escapes_quotes(auth):
         store.find_subjects_by_patterns("MyGraph_V1", ["%/O'Brien"])
     sql = mock_eq.call_args[0][0]
     assert "O''Brien" in sql
+
+
+def test_get_triples_page_for_subjects_uses_props_table(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(
+        store,
+        "execute_query",
+        return_value=[
+            {
+                "subject": "s",
+                "predicate": "p",
+                "object": "o",
+                "_ob_total": 4,
+            }
+        ],
+    ) as execute:
+        got = store.get_triples_page_for_subjects(
+            "G_V1",
+            ["http://ex/1"],
+            limit=2,
+            offset=1,
+        )
+    assert got == {"rows": [{"subject": "s", "predicate": "p", "object": "o"}], "total": 4}
+    sql = execute.call_args.args[0]
+    assert "g_v1_props" in sql
+    assert "COUNT(*) AS _ob_total" in sql
+
+
+def test_get_triples_page_for_subjects_empty_subjects_skips_query(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "execute_query") as execute:
+        got = store.get_triples_page_for_subjects(
+            "G_V1",
+            [],
+            limit=2,
+            offset=1,
+        )
+    assert got == {"rows": [], "total": 0}
+    execute.assert_not_called()

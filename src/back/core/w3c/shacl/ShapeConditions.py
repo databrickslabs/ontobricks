@@ -17,7 +17,7 @@ Operators are the decision-table vocabulary (``DT_OP_SQL``) plus ``exists`` /
 from typing import Callable, Dict, List, Optional, Sequence, Set
 
 from back.core.graphdb.constants import RDF_TYPE
-from back.core.helpers import sql_numeric
+from back.core.helpers import is_sql_numeric, sql_numeric
 from back.core.reasoning.constants import (
     DT_NUMERIC_OPS,
     DT_OP_SQL,
@@ -40,12 +40,7 @@ CONDITION_LOGICS = ("and", "or")
 _XSD_DOUBLE = f"<{NS_PREFIX_MAP['xsd']}double>"
 
 
-def _is_numeric(value: str) -> bool:
-    try:
-        float(value)
-        return True
-    except (ValueError, TypeError):
-        return False
+_is_numeric = is_sql_numeric
 
 
 def get_conditions(shape: Dict) -> List[Dict]:

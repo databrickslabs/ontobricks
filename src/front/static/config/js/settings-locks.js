@@ -168,13 +168,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function escapeHtml(text) {
-        if (text == null) return '';
-        const div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
-    }
-
     function escapeAttr(text) {
         return escapeHtml(text).replace(/"/g, '&quot;');
     }

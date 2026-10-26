@@ -37,24 +37,22 @@ if app is None:
     
     app = FastAPI(title="OntoBricks - Error")
     
+    # The traceback goes to the app logs only; these routes are anonymous.
     @app.get("/", response_class=HTMLResponse)
     def error_page():
-        error_html = startup_error.replace('\n', '<br>') if startup_error else "Unknown error"
-        return f"""
+        return """
         <html>
         <head><title>OntoBricks - Startup Error</title></head>
-        <body style="font-family: monospace; padding: 20px;">
-            <h1 style="color: red;">OntoBricks Failed to Start</h1>
-            <h3>Error:</h3>
-            <pre style="background: #f0f0f0; padding: 15px; overflow: auto;">{error_html}</pre>
-            <p>Please check the logs for more details.</p>
+        <body>
+            <h1>OntoBricks Failed to Start</h1>
+            <p>Please check the app logs for details.</p>
         </body>
         </html>
         """
     
     @app.get("/health")
     def health():
-        return {"status": "error", "message": "App failed to start", "error": startup_error}
+        return {"status": "error", "message": "App failed to start"}
 
 if __name__ == '__main__':
     import logging

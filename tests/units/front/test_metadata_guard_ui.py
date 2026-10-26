@@ -70,7 +70,7 @@ class TestRemovalImpactDialog:
 
     def test_impact_escalates_to_a_danger_detail_dialog(self):
         body = _function_body(_js(), "confirmRemovalWithImpact")
-        assert "title: 'Data Sources Still In Use'" in body
+        assert "title: 'Data Assets Still In Use'" in body
         assert "headerClass: 'bg-danger text-white'" in body
         assert "detailHtml: buildRemovalImpactHtml(impact)" in body
         assert "confirmText: 'Remove Anyway'" in body

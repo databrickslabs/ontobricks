@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 
 pytestmark = pytest.mark.unit
 
-SETTINGS_MODULE = "back.objects.domain.SettingsService"
+SETTINGS_MODULE = "back.objects.domain.settings.SettingsService"
 
 BUILD_PATH = "/settings/runs/build"
 ANALYTICS_PATH = "/settings/runs/analytics"

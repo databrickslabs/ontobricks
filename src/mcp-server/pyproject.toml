@@ -23,7 +23,9 @@ constraint-dependencies = [
     # cryptography 50.0.0 removes the PKCS#7 Bleichenbacher oracle. The
     # standalone MCP graph has no MLflow upper bound blocking this release.
     "cryptography>=50.0.0",
-    "mcp>=1.28.1",
+    # mcp>=1.30.0: unbounded StreamableHTTP session accumulation
+    # (GHSA-84m7-p3x7-pcfv / CVE-2026-59951, Dependabot #201).
+    "mcp>=1.30.0",
     "pyasn1>=0.6.4",
     # pyjwt>=2.15.0: HMAC/JWK confusion series + RecursionError + options-dict
     # mutation (GHSA-gvp8-978c-rx2q). Transitive via databricks-sdk.

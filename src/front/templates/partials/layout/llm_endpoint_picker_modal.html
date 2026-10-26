@@ -1,0 +1,51 @@
+<div class="modal fade llm-endpoint-picker-modal" id="llmEndpointPickerModal" tabindex="-1"
+     aria-labelledby="llmEndpointPickerTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="llmEndpointPickerTitle">
+                    <i class="bi bi-robot me-2"></i>Select an LLM
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body pb-4">
+                <div class="llm-picker-toolbar d-flex gap-2 mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="search" class="form-control" id="llmEndpointSearch"
+                               placeholder="Search models or endpoints"
+                               autocomplete="off">
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary"
+                            id="llmEndpointRefresh">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                    </button>
+                </div>
+                <div id="llmEndpointPickerStatus"
+                     class="small text-muted mb-3" role="status"></div>
+
+                <section class="llm-picker-group" aria-labelledby="llmGatewayHeading">
+                    <h6 id="llmGatewayHeading">
+                        <i class="bi bi-shield-check me-1"></i>AI Gateway
+                    </h6>
+                    <div id="llmGatewayList" class="list-group mb-4"></div>
+                </section>
+
+                <section class="llm-picker-group" aria-labelledby="llmServingHeading">
+                    <h6 id="llmServingHeading">
+                        <i class="bi bi-hdd-network me-1"></i>Model Serving
+                        <span class="badge text-bg-secondary ms-1">Legacy</span>
+                    </h6>
+                    <div id="llmServingList" class="list-group"></div>
+                </section>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary"
+                        id="llmEndpointClear">No LLM</button>
+                <button type="button" class="btn btn-secondary"
+                        data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>

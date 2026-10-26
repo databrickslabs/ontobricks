@@ -88,6 +88,87 @@
     });
 
     /*
+     * LLM controls start fail-closed until navbar.js resolves the active
+     * domain's saved endpoint. This state is independent of native disabled
+     * ownership: page validation remains free to enable or disable controls.
+     */
+    const llmAriaState = new WeakMap();
+
+    function syncLlmControl(control, configured) {
+        if (!configured && !llmAriaState.has(control)) {
+            llmAriaState.set(control, control.getAttribute('aria-disabled'));
+            control.setAttribute('aria-disabled', 'true');
+            return;
+        }
+        if (configured && llmAriaState.has(control)) {
+            const previous = llmAriaState.get(control);
+            if (previous === null) control.removeAttribute('aria-disabled');
+            else control.setAttribute('aria-disabled', previous);
+            llmAriaState.delete(control);
+        }
+    }
+
+    function updateLlmAvailability(configured) {
+        document.body.classList.toggle('llm-unconfigured', !configured);
+        document.querySelectorAll('[data-requires-llm]').forEach((control) => {
+            syncLlmControl(control, configured);
+        });
+    }
+
+    function blockUnavailableLlmInteraction(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        showNotification(
+            'No LLM selected. Select one in Domain → General → AI.',
+            'warning'
+        );
+    }
+
+    function blockUnavailableLlmControl(event) {
+        if (!document.body.classList.contains('llm-unconfigured')) return;
+
+        const target = event.target;
+        if (event.type === 'keydown') {
+            const submitControl = target && target.closest
+                ? target.closest('[data-requires-llm-submit]') : null;
+            if (submitControl && document.body.contains(submitControl)
+                && event.key === 'Enter' && !event.shiftKey) {
+                blockUnavailableLlmInteraction(event);
+                return;
+            }
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+        }
+
+        const control = target && target.closest
+            ? target.closest('[data-requires-llm]') : null;
+        if (!control || !document.body.contains(control)) return;
+
+        blockUnavailableLlmInteraction(event);
+    }
+
+    function observeLlmControls() {
+        const observer = new MutationObserver((mutations) => {
+            const configured = !document.body.classList.contains('llm-unconfigured');
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType !== Node.ELEMENT_NODE) return;
+                    if (node.matches('[data-requires-llm]')) {
+                        syncLlmControl(node, configured);
+                    }
+                    node.querySelectorAll('[data-requires-llm]').forEach((control) => {
+                        syncLlmControl(control, configured);
+                    });
+                });
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    document.addEventListener('click', blockUnavailableLlmControl, true);
+    document.addEventListener('keydown', blockUnavailableLlmControl, true);
+
+    /*
      * Selector matching every interactive design surface (mapping map,
      * ontology map, Business Views OntoViz canvas, …) where right-
      * click menus would trigger writes. We block ``contextmenu`` on
@@ -103,6 +184,10 @@
         if (window._readOnlyContextMenuBlockerInstalled) return;
         window._readOnlyContextMenuBlockerInstalled = true;
         document.addEventListener('contextmenu', function (event) {
+            const readOnlyNow = document.body.classList.contains('read-only-version')
+                || document.body.classList.contains('role-viewer');
+            if (!readOnlyNow) return;
+
             const target = event.target;
             if (target && target.closest
                 && target.closest(READ_ONLY_DESIGN_SURFACE_SELECTOR)) {
@@ -229,6 +314,10 @@
         setBadgeTooltip(badge, combined);
     }
 
+    function clearRoleNavBadgeAnnotation() {
+        showRoleNavBadge(effectiveRole());
+    }
+
     /*
      * (Re-)bind a Bootstrap tooltip on the role pill. Tooltips are
      * rendered as HTML so we can break the role description and the
@@ -306,12 +395,20 @@
     window.OB.installReadOnlyContextMenuBlocker = installReadOnlyContextMenuBlocker;
     window.OB.showRoleNavBadge = showRoleNavBadge;
     window.OB.annotateRoleNavBadge = annotateRoleNavBadge;
+    window.OB.clearRoleNavBadgeAnnotation = clearRoleNavBadgeAnnotation;
+    window.OB.updateLlmAvailability = updateLlmAvailability;
 
     // ``base.html`` loads this with ``defer`` so <body> is fully parsed
     // by now, but be safe in case the load order changes.
     if (document.body) {
+        updateLlmAvailability(false);
+        observeLlmControls();
         applyRoleIndicators();
     } else {
-        document.addEventListener('DOMContentLoaded', applyRoleIndicators);
+        document.addEventListener('DOMContentLoaded', function () {
+            updateLlmAvailability(false);
+            observeLlmControls();
+            applyRoleIndicators();
+        });
     }
 })();

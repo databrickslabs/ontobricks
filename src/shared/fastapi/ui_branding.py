@@ -11,6 +11,7 @@ from starlette.responses import Response
 from back.core.helpers import resolve_app_registry_context
 from back.core.helpers.UIBranding import (
     DEFAULT_APP_TITLE,
+    DEFAULT_AURORA_COLOR,
     DEFAULT_LOGO_PATH,
     DEFAULT_PRIMARY_COLOR,
     normalize_ui_branding,
@@ -94,6 +95,11 @@ def render_ui_branding_css_vars(branding: Mapping[str, Any]) -> str:
     focus = str(palette.get("focus") or "rgba(79, 70, 229, 0.18)")
     on_primary = str(palette.get("on_primary") or "#FFFFFF")
     selected_text = str(palette.get("selected_text") or "#3730A3")
+    aurora = str(palette.get("aurora") or DEFAULT_AURORA_COLOR)
+    aurora_rgb = str(palette.get("aurora_rgb") or "34, 167, 200")
+    aurora_dark = str(palette.get("aurora_dark") or "#1D8EAA")
+    gradient_end = str(palette.get("gradient_end") or "#3A79E2")
+    canvas_tint = str(palette.get("canvas_tint") or "#F6F6FE")
 
     return (
         ":root {\n"
@@ -108,7 +114,12 @@ def render_ui_branding_css_vars(branding: Mapping[str, Any]) -> str:
         f"  --db-on-primary: {on_primary};\n"
         f"  --db-primary-selected-text: {selected_text};\n"
         f"  --db-focus-ring: 0 0 0 0.2rem {focus};\n"
-        f"  --db-shadow-primary: 0 0 0 3px {focus};\n"
+        f"  --db-shadow-primary: 0 8px 20px rgba({primary_rgb}, 0.35);\n"
+        f"  --db-aurora: {aurora};\n"
+        f"  --db-aurora-rgb: {aurora_rgb};\n"
+        f"  --db-aurora-dark: {aurora_dark};\n"
+        f"  --db-gradient-end: {gradient_end};\n"
+        f"  --db-canvas-warm: {canvas_tint};\n"
         "}"
     )
 

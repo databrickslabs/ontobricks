@@ -19,6 +19,7 @@ pytestmark = pytest.mark.unit
 _HELP = Path("src/front/templates/partials/layout/help_modal.html")
 _MENU = Path("src/front/config/menu_config.json")
 _EXPLORER = Path("src/front/templates/partials/dtwin/_query_sigmagraph.html")
+_QUERY_SHELL = Path("src/front/templates/partials/dtwin/_query_query.html")
 _GRAPHQL = Path("src/front/templates/partials/dtwin/_query_graphql.html")
 _SIGMA_JS = Path("src/front/static/query/js/query-sigmagraph.js")
 _BUILD_LAKEBASE = Path("src/front/templates/partials/dtwin/_query_sync.html")
@@ -83,7 +84,7 @@ def test_explorer_uses_share_icon_consistently():
 
 
 def test_kg_viewer_buttons_use_menu_icons():
-    """Explorer canvas and Ontology buttons reuse the sidebar menu icons."""
+    """Explorer canvas and Query-shell Ontology button reuse menu icons."""
     explorer_icon = "bi-share"
     ontology_icon = _menus()["ontology"]["icon"]
 
@@ -97,9 +98,15 @@ def test_kg_viewer_buttons_use_menu_icons():
         and f'<i class="bi {ontology_icon}"></i> Ontology' in explorer_html
     )
 
+    query_shell_html = _QUERY_SHELL.read_text(encoding="utf-8")
+    assert (
+        'data-query-action="ontology"' in query_shell_html
+        and f'<i class="bi {ontology_icon}"></i> Ontology' in query_shell_html
+    )
+
     graphql_html = _GRAPHQL.read_text(encoding="utf-8")
-    assert f'<i class="bi {ontology_icon}"></i> Ontology' in graphql_html
-    assert "View Ontology" not in graphql_html
+    assert 'id="graphqlOpenNewTab"' in graphql_html
+    assert "data-query-action=\"ontology\"" not in graphql_html
 
 
 def test_build_uses_fast_forward_icon_consistently():
@@ -134,15 +141,15 @@ def test_ontology_and_mapping_designers_use_pencil_icon():
         if item["id"] == "design"
     )
 
-    assert ontology_designer["label"] == "Designer"
-    assert mapping_designer["label"] == "Designer"
+    assert ontology_designer["label"] == "Studio"
+    assert mapping_designer["label"] == "Studio"
     assert ontology_designer["icon"] == "bi-pencil"
     assert mapping_designer["icon"] == "bi-pencil"
-    assert '<i class="bi bi-pencil me-2"></i>Ontology Designer' in _ONTOLOGY_DESIGNER.read_text(
+    assert '<i class="bi bi-pencil me-2"></i>Ontology Studio' in _ONTOLOGY_DESIGNER.read_text(
         encoding="utf-8"
     )
     assert (
-        '<i class="bi bi-pencil me-2"></i>Visual Mapping Designer'
+        '<i class="bi bi-pencil me-2"></i>Mapping Studio'
         in _MAPPING_DESIGNER.read_text(encoding="utf-8")
     )
 
@@ -193,3 +200,35 @@ def test_ontology_advanced_list_matches_menu_items():
     for label in advanced_labels:
         escaped = html.escape(label)
         assert escaped in advanced_body, f"Ontology Advanced doc is missing '{label}'"
+
+
+def _menu_item_ids(menu_id: str) -> set[str]:
+    return {
+        item["id"]
+        for group in _menus()[menu_id]["groups"]
+        for item in group["items"]
+    }
+
+
+def test_owl_and_r2rml_are_designer_exports_not_sidebar_items():
+    """OWL and Mapping R2RML live on Studio toolbars, not as sidebar sections."""
+    ontology_ids = _menu_item_ids("ontology")
+    mapping_ids = _menu_item_ids("assignment")
+    ontology_group_ids = {g["id"] for g in _menus()["ontology"]["groups"]}
+
+    assert "owl" not in ontology_ids
+    assert "ontology-w3c" not in ontology_group_ids
+    assert "r2rml" not in mapping_ids
+    assert "sparksql" in mapping_ids
+
+    ontology_designer = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
+    mapping_designer = _MAPPING_DESIGNER.read_text(encoding="utf-8")
+    assert 'id="mapDownloadOwl"' in ontology_designer
+    assert "aria-label=\"Export OWL\"" in ontology_designer
+    assert 'id="mappingExportR2RMLBtn"' in mapping_designer
+    assert "aria-label=\"Export R2RML\"" in mapping_designer
+
+    help_html = _help_html()
+    assert "W3C Standards &rarr; OWL" not in help_html
+    assert "Download OWL" not in help_html
+    assert "Export</strong>" in help_html

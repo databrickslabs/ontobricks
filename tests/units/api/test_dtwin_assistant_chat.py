@@ -1,8 +1,10 @@
 """Response payload tests for Graph Chat assistant routes."""
 
-from agents.agent_dtwin_chat.engine import AgentResult, SYSTEM_PROMPT
-from api.routers.internal import dtwin
+from types import SimpleNamespace
+from unittest.mock import patch
 
+from agents.agent_dtwin_chat.engine import SYSTEM_PROMPT, AgentResult
+from api.routers.internal import dtwin
 
 _PENDING_ACTION = {
     "token": "confirm-token",
@@ -32,3 +34,19 @@ def test_chat_payload_includes_pending_action_for_json_and_sse_done():
     assert "type" not in blocking_payload
     assert stream_payload["type"] == "done"
     assert stream_payload["pending_action"] == _PENDING_ACTION
+
+
+def test_chat_rejects_empty_domain_llm_before_running_agent(client):
+    domain = SimpleNamespace(info={})
+
+    with (
+        patch.object(dtwin, "get_domain", return_value=domain),
+        patch("agents.agent_dtwin_chat.run_agent") as run_chat_agent,
+    ):
+        response = client.post("/dtwin/assistant/chat", json={"message": "Hello"})
+
+    assert response.status_code == 400
+    assert response.json()["message"] == (
+        "No LLM selected. Select one in Domain → General → AI."
+    )
+    run_chat_agent.assert_not_called()

@@ -1,0 +1,396 @@
+================================================================================
+## Keep Initialize DML running when the app SP cannot apply DDL
+================================================================================
+
+Context:
+Reliance (0.8.1) cannot Initialize because Lakebase tables are owned by a
+provisioning service principal. schema.sql raises "must be owner of table"
+and that failure aborted the DML that pins catalog/schema/volume, returning
+502. Document reads in 0.9.0 go through the Lakebase Knowledge Store, so the
+OntoBricksRegistry volume fallback on generate is not required here.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/Bootstrap.py
+   Treat `_apply_ddl()` as non-fatal; log a warning and still upsert the
+   registry row. DML failures still fail Initialize.
+2. tests/units/registry/test_v090_lakebase_bootstrap.py
+   Cover the non-owner DDL path and keep Initialize failing only on DML.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/Bootstrap.py
+- tests/units/registry/test_v090_lakebase_bootstrap.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9001 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 60.65s.
+
+================================================================================
+## Stop .gitignore from dropping digitaltwin.build at deploy
+================================================================================
+
+Context:
+The 0.9.0 app crashed on start with ``ModuleNotFoundError: No module named
+'back.objects.digitaltwin.build'``. DAB applies ``.gitignore``; the recursive
+``build/`` pattern matched ``src/back/objects/digitaltwin/build/`` and omitted
+TwinGraphBuild from the Apps workspace even though the files are in git.
+
+Changes:
+
+1. .gitignore
+   Anchor packaging artifacts as ``/build/`` and ``/dist/`` (repo root only).
+2. .databricksignore
+   Same root-only ``/build/`` / ``/dist/`` with a comment matching the
+   ``internal/`` warning.
+3. tests/units/api/test_help_api.py
+   Guard that ``.gitignore`` does not use a bare ``build/`` and that the
+   package ``__init__.py`` is tracked.
+
+Modified files:
+- .gitignore
+- .databricksignore
+- tests/units/api/test_help_api.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9002 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 60.12s.
+
+================================================================================
+## Re-check collab modules after a stale DAB sync snapshot
+================================================================================
+
+Context:
+The 0.9.0 app crashed on start with ``ModuleNotFoundError: No module named
+'back.objects.registry.collab.EditLockService'``. The file is git-tracked and
+not gitignored. The workspace ``collab/`` folder had CommentService,
+ReviewService, and ``__init__.py``, but not EditLockService. The local DAB
+sync snapshot still listed that path with the September mtime, so incremental
+``bundle deploy`` skipped the upload. Step 6b only probed run.py / pyproject,
+so auto-heal never fired.
+
+Changes:
+
+1. scripts/deploy.sh
+   Add the collab package modules and ``digitaltwin/build/__init__.py`` to
+   ``_CRITICAL_SYNCED_FILES`` so a missing boot module wipes the snapshot
+   and re-syncs.
+2. tests/units/api/test_help_api.py
+   Guard that those paths stay in the step-6b list.
+
+Modified files:
+- scripts/deploy.sh
+- tests/units/api/test_help_api.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9003 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 60.07s.
+
+## Mirror domain configuration to a per-instance GitHub repository
+================================================================================
+
+Context:
+Admins want every domain's configuration (OWL, R2RML, layouts, rules, options)
+versioned in a GitHub repository, one repository per OntoBricks instance.
+Lakebase stays the source of truth. Each registry write queues an async,
+coalesced push to GitHub. A manual "Load from GitHub repository" action in the
+Registry import modal restores domains through the existing OBX preview/import
+flow. Each version folder stores the split JSON sources plus generated OWL
+(Turtle), R2RML (Turtle) and SHACL files. A GitHub failure never fails a
+registry write.
+
+Repository layout:
+README.md, .ontobricks/{instance.json,global_config.json},
+domains/<Folder>/domain.json,
+domains/<Folder>/versions/V<n>/{manifest.json, info.json, ontology/*.json,
+ontology/<Folder>.owl.ttl, ontology/<Folder>.shacl.ttl, mapping/assignment.json,
+mapping/<Folder>.r2rml.ttl, layout/design.json, layout/views/*.json,
+layout/map.json, metadata/tables.json}.
+PUBLISHED versions are tagged ``<Folder>/V<n>``.
+
+Changes:
+
+1. src/back/core/github/{__init__.py,constants.py,GitHubClient.py}
+   New GitHub Git Data API client (httpx): atomic multi-file commits with
+   prefix replacement and deletes, fast-forward retry on 422, empty-repository
+   bootstrap, tree listing, blob reads, lightweight tags. Errors are mapped to
+   InfrastructureError / NotFoundError.
+2. src/back/objects/registry/gitsync/GitHubConfig.py
+   Settings dataclass (owner, repo, branch, base_path, token secret scope/key,
+   author, push_on_save, instance_uuid).
+3. src/back/objects/registry/gitsync/DomainRepoLayout.py
+   Pure split/merge between a registry version document and the repository
+   files. Produces stable sorted JSON and a manifest with sha256 hashes (no
+   wall clock, so unchanged versions produce no commit). Scrubs secrets from
+   info. Generates OWL/R2RML/SHACL Turtle, reporting failures instead of
+   raising. Refuses manifests with a newer format_version.
+4. src/back/objects/registry/gitsync/GitHubSyncService.py
+   push_version / delete_version / delete_domain / sync_all /
+   build_obx_envelope against the RegistryStore interface. Instance claim via
+   .ontobricks/instance.json (ConflictError unless take_over). Connection
+   test checks push permission. Token comes from a Databricks secret
+   (ONTOBRICKS_GITHUB_TOKEN env var as local fallback).
+5. src/back/objects/registry/gitsync/GitHubMirror.py
+   Process-wide daemon worker with a queue coalesced by (folder, version) and
+   a 2 s debounce. Mirror config is cached for 60 s. The commit actor comes
+   from the request identity ContextVar. Last status is kept in memory for
+   the Settings UI.
+6. src/back/objects/registry/gitsync/GitHubMirrorHooks.py,
+   src/back/objects/registry/store/lakebase/store.py
+   Mixin placed first in LakebaseRegistryStore's MRO. It notifies the mirror
+   after a successful write_version, update_version_status, delete_version
+   and delete_domain. Hooking at store level covers every write path and
+   keeps RegistryService / Domain / SettingsService within their size
+   budgets.
+7. src/back/objects/registry/gitsync/__init__.py
+   Package re-exports.
+8. src/back/objects/session/GlobalConfigService.py
+   github_config key, get_github_config / set_github_config (setter
+   normalises and invalidates the mirror config cache).
+9. src/back/objects/domain/settings/GitHubSettings.py,
+   src/back/objects/domain/settings/__init__.py
+   Get/save (validation, instance_uuid generation), test, sync-all and the
+   GitHub OBX envelope. Re-exported from the settings package.
+10. src/api/routers/internal/settings.py
+    Admin-only routes: GET/POST /settings/github, POST /settings/github/test,
+    POST /settings/github/sync-all, GET /settings/github/obx.
+11. src/front/config/menu_config.json,
+    src/front/templates/settings.html,
+    src/front/templates/partials/settings/_settings_github.html,
+    src/front/static/config/js/settings-github.js
+    New admin "GitHub" settings section: repository, branch, base path,
+    secret scope/key picker, author, push-on-save, save/test/sync-all and the
+    mirror status.
+12. src/front/templates/partials/registry/_import_obx_modal.html,
+    src/front/static/registry/js/registry.js
+    "Load from GitHub repository" button that feeds the GitHub OBX envelope
+    into the existing import preview/confirm flow.
+13. tests/fixtures/github.py, tests/units/registry/test_github_layout.py,
+    tests/units/registry/test_github_client.py,
+    tests/units/registry/test_github_sync.py,
+    tests/units/settings/test_github_settings.py
+    In-memory GitHub fake (httpx.MockTransport) and tests for layout round
+    trip, Turtle validity, client commits/retries/tags, sync, claim, mirror
+    coalescing/status, store hooks and settings validation.
+14. tests/units/front/test_sidebar_content_stretch_contract.py
+    Add the github section to the settings inventory.
+15. docs/user-guide.md, README.md, docs/sphinx/api/app.core.rst,
+    docs/sphinx/api/app.core.github.rst,
+    docs/sphinx/api/app.objects.registry.rst
+    User guide section (setup, claim, push behaviour, layout, restore),
+    README mention, and Sphinx API pages.
+
+Modified files:
+- src/back/core/github/__init__.py (new)
+- src/back/core/github/constants.py (new)
+- src/back/core/github/GitHubClient.py (new)
+- src/back/objects/registry/gitsync/__init__.py (new)
+- src/back/objects/registry/gitsync/GitHubConfig.py (new)
+- src/back/objects/registry/gitsync/DomainRepoLayout.py (new)
+- src/back/objects/registry/gitsync/GitHubSyncService.py (new)
+- src/back/objects/registry/gitsync/GitHubMirror.py (new)
+- src/back/objects/registry/gitsync/GitHubMirrorHooks.py (new)
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/settings/GitHubSettings.py (new)
+- src/back/objects/domain/settings/__init__.py
+- src/api/routers/internal/settings.py
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/templates/partials/settings/_settings_github.html (new)
+- src/front/static/config/js/settings-github.js (new)
+- src/front/templates/partials/registry/_import_obx_modal.html
+- src/front/static/registry/js/registry.js
+- tests/fixtures/github.py (new)
+- tests/units/registry/test_github_layout.py (new)
+- tests/units/registry/test_github_client.py (new)
+- tests/units/registry/test_github_sync.py (new)
+- tests/units/settings/test_github_settings.py (new)
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- docs/user-guide.md
+- README.md
+- docs/sphinx/api/app.core.rst
+- docs/sphinx/api/app.core.github.rst (new)
+- docs/sphinx/api/app.objects.registry.rst
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9049 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 53.71s.
+
+## GitHub settings: loading spinner and disabled-mirror warning
+================================================================================
+
+Context:
+After a successful "Test connection", saves were still not pushed: the saved
+config had "enabled": false. Test does not depend on that flag, so nothing in
+the UI showed that the mirror was off. The section also showed an empty form
+while the settings and secret scope/key lists were loading.
+
+Changes:
+
+1. src/front/static/config/js/settings-github.js
+   The status line shows a warning when the mirror is disabled or push-on-save
+   is off. A successful Test adds the same warning. Settings are reloaded
+   after Save and Test. The form shows on first load completion, and the
+   header Save button is enabled only after a successful load (prevents
+   posting an empty form over the saved settings).
+2. src/front/templates/partials/settings/_settings_github.html
+   Inline "Loading GitHub settings…" spinner. The form is hidden and Save is
+   disabled until the first load.
+
+Modified files:
+- src/front/static/config/js/settings-github.js
+- src/front/templates/partials/settings/_settings_github.html
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9049 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 60.99s.
+
+## OWL generation: percent-encode invalid IRIs instead of failing
+================================================================================
+
+Context:
+GitHub Sync all reported "OWL generation failed" for cafds/V1 and wrfmshell/V2.
+Their stored URIs contain spaces (".../cafds#Affected asset", base URI
+".../WRFM - Shell#"). rdflib refuses to serialize those as Turtle, so the OWL
+view/export and the mirrored <Domain>.owl.ttl failed for such domains.
+
+Changes:
+
+1. src/back/core/w3c/owl/iri.py (new)
+   escape_iri() percent-encodes the characters RFC 3987 forbids in an IRI
+   (whitespace, <>"{}|\^`). Valid and non-ASCII IRIs are left as they are.
+   serialize_turtle() serializes a graph as Turtle and rebuilds it with
+   escaped IRIs (terms and namespace bindings) only when needed, logging a
+   warning.
+2. src/back/core/w3c/owl/OntologyGenerator.py
+   generate() serializes through serialize_turtle() (no class growth).
+3. tests/units/ontology/test_owl_iri_escaping.py (new)
+   escape_iri cases, unchanged output for valid graphs, and generator output
+   with spaces in base and entity URIs that parses back.
+4. docs/sphinx/api/app.core.w3c.rst
+   Document the iri module.
+
+Modified files:
+- src/back/core/w3c/owl/iri.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- tests/units/ontology/test_owl_iri_escaping.py
+- docs/sphinx/api/app.core.w3c.rst
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9052 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 54.54s.
+
+## Log GitHub mirror pushes in the domain Audit trail
+================================================================================
+
+Context:
+GitHub push outcomes were only visible as an in-memory "Last sync" line in
+Settings → GitHub, lost on restart and not tied to a domain. They are now
+persisted per domain version and shown on a new GitHub tab of Domain → Audit
+trail. They reuse the existing domain_change_events log (source='github'), so
+there is no new table or migration. Review-state logic is untouched.
+
+Changes:
+
+1. src/back/objects/registry/gitsync/GitHubMirror.py
+   New best-effort audit() that writes one change event (actions
+   github_pushed, github_synced, github_version_deleted, github_push_failed)
+   with meta: repository, commit_sha, commit_url, tag, message, errors.
+   process() audits pushes that committed something or reported warnings,
+   plus failures. Unchanged pushes and domain deletions (the domain row is
+   gone) are not audited.
+2. src/back/objects/registry/gitsync/GitHubSyncService.py
+   sync_all() also returns "pushed" (folder, version, per-version
+   generation errors).
+3. src/back/objects/registry/gitsync/GitHubConfig.py
+   commit_url(sha) helper.
+4. src/back/objects/domain/settings/GitHubSettings.py
+   Sync all writes one github_synced audit row per mirrored version.
+5. src/front/templates/partials/domain/_domain_audit.html,
+   src/front/static/domain/js/domain-audit.js,
+   src/front/static/domain/css/domain-audit.css
+   New GitHub tab (commit link, tag, warnings or error, actor, repository).
+   GitHub rows are excluded from the Ontology/Mapping tabs. New
+   audit-marker-github style.
+6. src/front/templates/partials/settings/_settings_github.html
+   Pointer to Domain → Audit trail → GitHub under "Last sync".
+7. tests/units/registry/test_github_sync.py
+   Audit tests: push with commit link and tag, no-op not audited, failure
+   audited, audit errors never raise, sync_all per-version report.
+8. docs/user-guide.md
+   "History in the Audit trail" paragraph in the GitHub section.
+
+Modified files:
+- src/back/objects/registry/gitsync/GitHubMirror.py
+- src/back/objects/registry/gitsync/GitHubSyncService.py
+- src/back/objects/registry/gitsync/GitHubConfig.py
+- src/back/objects/domain/settings/GitHubSettings.py
+- src/front/templates/partials/domain/_domain_audit.html
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/css/domain-audit.css
+- src/front/templates/partials/settings/_settings_github.html
+- tests/units/registry/test_github_sync.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9057 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 54.42s.
+
+## GitHub mirror: per-domain README (plan completion check)
+================================================================================
+
+Context:
+Checking the GitHub mirror plan against the code: all seven todos were
+implemented. One item from the plan's repository tree was missing: the
+generated domains/<Folder>/README.md summary.
+
+Changes:
+
+1. src/back/objects/registry/gitsync/DomainRepoLayout.py
+   domain_readme() (name, description, base URI, status, class/property
+   counts, version links, class list) and domain_files(), which returns
+   domain.json + README.md for a domain folder.
+2. src/back/objects/registry/gitsync/GitHubSyncService.py
+   push_version, delete_version and sync_all write both domain files through
+   _domain_files().
+3. tests/units/registry/test_github_sync.py
+   test_push_writes_domain_readme.
+4. docs/user-guide.md
+   Add README.md to the repository layout tree.
+
+Modified files:
+- src/back/objects/registry/gitsync/DomainRepoLayout.py
+- src/back/objects/registry/gitsync/GitHubSyncService.py
+- tests/units/registry/test_github_sync.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9058 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 53.94s.
+
+## Navbar Save: spinner while the domain is being saved
+================================================================================
+
+Context:
+The top-right "Save" button gave no visual feedback during a registry save,
+apart from a transient toast, and could be clicked again mid-save.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   New setDomainSaveBusy(): hides the Save icon, shows a small spinner, sets
+   aria-busy and an is-saving state. domainSave() validates first, turns the
+   busy state on, and always restores it in finally. A re-entrancy guard
+   ignores extra clicks / Ctrl+S during a save.
+2. src/front/static/global/css/main.css
+   .ob-subnav-save-btn.is-saving (no pointer events, progress cursor) and
+   .ob-save-spinner sizing to match the icon. The existing .disabled fade is
+   left untouched.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/global/css/main.css
+- changelogs/v0.9.0/benoitcayladbx_2026-10-12.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9058 passed, 326 skipped,
+6 deselected, 1 xfailed, 40 warnings in 57.54s.

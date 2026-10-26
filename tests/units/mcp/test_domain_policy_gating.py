@@ -88,6 +88,25 @@ def mcp_env(monkeypatch):
                 }
             ],
         },
+        "shacl_facets": {
+            "success": True,
+            "entity_uri": "https://example.com/Customer/CUST001",
+            "entity_local_id": "CUST001",
+            "classes": [{"name": "Customer", "uri": "https://example.com/Customer"}],
+            "lineage": ["Customer"],
+            "summary": {
+                "total": 1, "pass": 0, "fail": 1, "not_applicable": 0,
+                "not_evaluated": 0, "error": 0,
+                "fail_by_severity": {"sh:Violation": 1, "sh:Warning": 0, "sh:Info": 0},
+            },
+            "facets": [{
+                "shape_id": "s_email", "label": "Customer.email must not be empty",
+                "category": "completeness", "severity": "sh:Violation",
+                "property_path": "email", "constraint": "sh:minCount 1",
+                "status": "fail", "values": [], "values_truncated": False,
+                "details": [], "inherited_from": None,
+            }],
+        },
         # Consumed by ``describe_ontology`` (and ``select_domain`` for the
         # class-action cache). Defaults empty so existing tests are unaffected.
         "classes": [],
@@ -101,6 +120,10 @@ def mcp_env(monkeypatch):
                 ":Customer a owl:Class .\n:Contract a owl:Class ."
             ),
         },
+        "status": {
+            "success": True, "has_data": True, "count": 3,
+            "graph_name": "g", "view_table": "v",
+        },
         "get_calls": [],
     }
 
@@ -109,10 +132,7 @@ def mcp_env(monkeypatch):
         if path == mcp_app.API_V1_DOMAINS:
             return {"success": True, "domains": state["domains"]}
         if path == mcp_app.API_V1_DT_STATUS:
-            return {
-                "success": True, "has_data": True, "count": 3,
-                "graph_name": "g", "view_table": "v",
-            }
+            return state["status"]
         if path == mcp_app.API_V1_DOMAIN_CLASSES:
             return {"success": True, "classes": state["classes"]}
         if path == mcp_app.API_V1_DOMAIN_ONTOLOGY:
@@ -121,9 +141,11 @@ def mcp_env(monkeypatch):
             return state["node_context"]
         if path == mcp_app.API_V1_DT_NODE_VIRTUAL_ATTRIBUTES:
             return state["virtual_attributes"]
+        if path == getattr(mcp_app, "API_V1_DT_NODE_SHACL", None):
+            return state["shacl_facets"]
         return {"success": True}
 
-    async def fake_post(client, path, json=None):
+    async def fake_post(client, path, json=None, params=None):
         state["get_calls"].append(path)
         return {"success": True, "entity_uri": "", "action": "", "rows": []}
 
@@ -131,7 +153,7 @@ def mcp_env(monkeypatch):
     # ``server.http_client`` module object (late binding), so patch them there.
     monkeypatch.setattr(mcp_http, "_get", fake_get)
     monkeypatch.setattr(mcp_http, "_post", fake_post)
-    monkeypatch.setenv("ONTOBRICKS_API_URL", "http://testserver")
+    monkeypatch.setenv("ONTOBRICKS_URL", "http://testserver")
 
     server = mcp_app.create_mcp_server("standalone")
     import asyncio
@@ -152,10 +174,11 @@ async def _select(tools, domain: str, ctx: FakeContext | None = None) -> str:
 # Registration contract
 
 
-def test_all_registered_tools_are_counted(mcp_env) -> None:
+def test_registered_tools_match_the_backend_catalogue(mcp_env) -> None:
+    from back.core.mcp_tools import MCP_DOMAIN_TOOL_NAMES, MCP_REGISTRY_TOOLS
+
     tools, _ = mcp_env
-    assert len(tools) == 13
-    assert "describe_ontology" in tools
+    assert set(tools) == MCP_REGISTRY_TOOLS | MCP_DOMAIN_TOOL_NAMES
 
 
 def test_select_domain_does_not_leak_ctx_into_the_client_schema(mcp_env) -> None:
@@ -169,6 +192,29 @@ def test_select_domain_does_not_leak_ctx_into_the_client_schema(mcp_env) -> None
     )
     schema = [t for t in listed if t.name == "select_domain"][0].parameters
     assert set(schema.get("properties", {})) == {"domain_name"}
+
+
+# ---------------------------------------------------------------------------
+# Status success flag
+
+
+async def test_select_domain_refuses_a_failed_status_without_message(mcp_env) -> None:
+    tools, state = mcp_env
+    state["status"] = {"success": False}
+
+    text = await _select(tools, "finance")
+    assert text.startswith("Error selecting domain")
+    assert "No domain selected" in await tools["list_entity_types"]()
+
+
+async def test_get_status_reports_a_failed_status(mcp_env) -> None:
+    tools, state = mcp_env
+    await _select(tools, "finance")
+    state["status"] = {"success": False, "message": "Graph unreachable"}
+
+    text = await tools["get_status"]()
+    assert "Status:  OK" not in text
+    assert "Graph unreachable" in text
 
 
 # ---------------------------------------------------------------------------
@@ -569,3 +615,79 @@ async def test_graph_domain_keeps_its_graph_tools(mcp_env) -> None:
     state["get_calls"].clear()
     await tools["list_entity_types"]()
     assert state["get_calls"] != []
+
+
+# ---------------------------------------------------------------------------
+# Entity SHACL facets (.planning/entity-shacl-facets/SPEC.md)
+
+_SHACL_OFF = {"disabled_tools": ["check_entity_shacl_facets"]}
+
+
+async def test_check_entity_shacl_facets_reaches_the_backend(mcp_env) -> None:
+    tools, state = mcp_env
+    await _select(tools, "finance")
+    state["get_calls"].clear()
+
+    message = await tools["check_entity_shacl_facets"](
+        entity_uri="https://example.com/Customer/CUST001"
+    )
+    from server.app import API_V1_DT_NODE_SHACL  # type: ignore[import-not-found]
+
+    assert state["get_calls"] == [API_V1_DT_NODE_SHACL]
+    assert "Customer.email must not be empty" in message
+
+
+async def test_disabled_shacl_tool_is_hidden_on_select(mcp_env) -> None:
+    tools, state = mcp_env
+    state["domains"] = [{"name": "d", "description": "", "mcp_policy": _SHACL_OFF}]
+    ctx = FakeContext()
+    await _select(tools, "d", ctx)
+
+    disables = [c for c in ctx.calls if c[0] == "disable"]
+    assert disables[0][1] == {"check_entity_shacl_facets"}
+
+
+async def test_disabled_shacl_tool_refuses_at_call_time(mcp_env) -> None:
+    """A stale client that still calls the hidden tool gets a refusal, not data."""
+    tools, state = mcp_env
+    state["domains"] = [{"name": "d", "description": "", "mcp_policy": _SHACL_OFF}]
+    await _select(tools, "d", FakeContext(explode=True))
+    state["get_calls"].clear()
+
+    message = await tools["check_entity_shacl_facets"](
+        entity_uri="https://example.com/Customer/CUST001"
+    )
+    assert "not available" in message
+    assert state["get_calls"] == []
+
+
+async def test_entity_context_hints_at_the_shacl_tool(mcp_env) -> None:
+    tools, state = mcp_env
+    state["node_context"] = {**state["node_context"], "shacl_shape_count": 3}
+    await _select(tools, "finance")
+
+    text = await tools["get_entity_context"](
+        entity_uri="https://example.com/Customer/CUST001"
+    )
+    assert "SHACL shapes (3)" in text
+    assert "check_entity_shacl_facets(entity_uri)" in text
+
+
+async def test_entity_context_omits_the_hint_when_the_tool_is_disabled(mcp_env) -> None:
+    """Pointing the model at a tool it cannot call wastes a turn."""
+    tools, state = mcp_env
+    state["domains"] = [{"name": "d", "description": "", "mcp_policy": _SHACL_OFF}]
+    state["node_context"] = {**state["node_context"], "shacl_shape_count": 3}
+    await _select(tools, "d")
+
+    text = await tools["get_entity_context"](
+        entity_uri="https://example.com/Customer/CUST001"
+    )
+    assert "check_entity_shacl_facets" not in text
+
+
+def test_shacl_tool_is_a_graph_tool(mcp_env) -> None:
+    """It reads the triple store, so an ontology-only domain must hide it."""
+    from server.app import GRAPH_TOOLS  # type: ignore[import-not-found]
+
+    assert "check_entity_shacl_facets" in GRAPH_TOOLS

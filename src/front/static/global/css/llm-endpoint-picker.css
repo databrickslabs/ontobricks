@@ -1,0 +1,54 @@
+.llm-endpoint-picker-modal {
+    z-index: 1070;
+}
+
+.llm-endpoint-picker-backdrop {
+    z-index: 1065;
+}
+
+.llm-picker-toolbar .input-group {
+    min-width: 0;
+}
+
+.llm-picker-group h6 {
+    color: var(--db-text);
+    font-weight: 600;
+}
+
+.llm-picker-item {
+    border-color: var(--db-border);
+    color: var(--db-text);
+    text-align: left;
+}
+
+.llm-picker-item:hover,
+.llm-picker-item:focus-visible {
+    background: var(--db-hover-indigo);
+    border-color: var(--db-primary);
+}
+
+.llm-picker-item.is-selected {
+    background: var(--db-primary-light);
+    border-color: var(--db-primary);
+}
+
+.llm-picker-item-name {
+    overflow-wrap: anywhere;
+}
+
+.llm-picker-empty {
+    padding: 0.75rem;
+    color: var(--db-text-muted);
+    border: 1px dashed var(--db-border);
+    border-radius: var(--db-radius-control);
+}
+
+@media (max-width: 575.98px) {
+    .llm-picker-toolbar {
+        flex-direction: column;
+    }
+
+    .llm-picker-toolbar > .btn {
+        width: 100%;
+    }
+}

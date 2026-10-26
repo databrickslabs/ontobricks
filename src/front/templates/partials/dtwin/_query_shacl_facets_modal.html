@@ -1,0 +1,38 @@
+<!-- JS: /static/query/js/query-shacl-facets.js -->
+<!-- Data Quality Checks (SHACL shapes) of one entity — Graph Explorer right-click / detail panel -->
+<div class="modal fade" id="shaclFacetsModal" tabindex="-1" aria-labelledby="shaclFacetsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-md-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="shacl-facets-heading">
+                    <h5 class="modal-title" id="shaclFacetsModalLabel">
+                        <i class="bi bi-shield-check me-2" aria-hidden="true"></i>Data Quality Checks — <span id="shaclFacetsEntity"></span>
+                    </h5>
+                    <div class="small text-muted text-truncate" id="shaclFacetsSubtitle"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="shacl-gauges mb-3" id="shaclFacetsGauges"></div>
+                <div class="shacl-facets-summary mb-3" id="shaclFacetsSummary" role="group" aria-label="Filter by status"></div>
+                <div id="shaclFacetsProgress" class="d-none mb-3">
+                    <div class="small text-muted mb-2" id="shaclFacetsProgressStep">
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Running data quality checks…
+                    </div>
+                    <div id="shaclFacetsProgressLog" class="task-activity-log text-start" aria-live="polite"></div>
+                </div>
+                <div id="shaclFacetsBody" aria-live="polite"></div>
+            </div>
+            <div class="modal-footer">
+                <span class="me-auto small text-muted" id="shaclFacetsCheckedAt"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="shaclFacetsOpenDq">
+                    <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>Open Data Quality
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" id="shaclFacetsRecheck">
+                    <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Re-check
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -27,8 +27,8 @@ class ToolContext:
     domain_folder: Optional[str] = None
     domain_version: Optional[str] = None
 
-    # SQL Warehouse id — enables binary document parsing (ai_parse_document).
-    # Empty string means no warehouse configured; binary docs are then skipped.
+    # SQL Warehouse id retained for agent-call compatibility. Document tools
+    # read durable sidecars and never use this field to start parsing.
     warehouse_id: str = ""
 
     # Auto-mapping fields

@@ -186,6 +186,9 @@
                     <span class="ob-spinner-label" id="${c.titleId || ''}">${escHtml(c.title || 'Working…')}</span>
                 </div>
                 <p id="${c.messageId || ''}" class="text-muted mt-2 mb-2 small">${escHtml(c.subtitle || '')}</p>
+                ${c.detectedListId ? `
+                <div id="${c.detectedListId}" class="wizard-detect-live-list mb-3"
+                     aria-live="polite" aria-label="Detected entities"></div>` : ''}
                 <div class="progress mb-3" style="height: 6px; max-width: 300px; margin: 0 auto;">
                     <div id="${c.progressBarId || ''}" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
                 </div>
@@ -239,6 +242,9 @@
         const stepLog = document.getElementById(cfg.stepLogId);
         const activityLog = document.getElementById(cfg.activityLogId);
         const activityPanel = document.getElementById(cfg.activityPanelId);
+        const detectedList = cfg.detectedListId
+            ? document.getElementById(cfg.detectedListId)
+            : null;
 
         if (progressBar) progressBar.style.width = (task.progress || 0) + '%';
 
@@ -254,6 +260,14 @@
         if (messageEl && !isStructured) {
             messageEl.textContent = msg || 'Processing...';
         }
+        if (detectedList) {
+            const entities = (task.result && task.result.detected_entities) || [];
+            detectedList.innerHTML = entities.map((label) =>
+                `<span class="wizard-detect-entity-chip">` +
+                `<i class="bi bi-check-circle-fill" aria-hidden="true"></i>` +
+                `${escHtml(label)}</span>`
+            ).join('');
+        }
 
         // Render agent steps as soon as the worker publishes them, not only at
         // completion: the auto-map task republishes its cumulative step log on
@@ -268,8 +282,12 @@
         const stepLog = document.getElementById(cfg.stepLogId);
         const activityLog = document.getElementById(cfg.activityLogId);
         const agentMount = document.getElementById(cfg.agentMountId);
+        const detectedList = cfg.detectedListId
+            ? document.getElementById(cfg.detectedListId)
+            : null;
         if (stepLog) stepLog.innerHTML = '';
         if (activityLog) activityLog.innerHTML = '';
+        if (detectedList) detectedList.innerHTML = '';
         if (agentMount) agentMount.remove();
     }
 

@@ -6,7 +6,7 @@
  *   - "All Domains" gateway grid (the open door to every domain)
  *   - My Tasks review worklist
  *
- * The current-domain KPI / health band lives on Domain → Information
+ * The current-domain KPI / health band lives on Domain → General
  * (see domain-information.js); it is no longer rendered here.
  */
 
@@ -150,7 +150,12 @@ async function openDomain(name, version) {
             return;
         }
         if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-        window.location.href = '/domain/';
+        // Open lands on Domain → General, not a Home reload.
+        if (typeof navigateToDomainGeneral === 'function') {
+            navigateToDomainGeneral();
+        } else {
+            window.location.href = '/domain/?section=information';
+        }
     } catch (err) {
         showNotification('Error opening domain: ' + err.message, 'error');
     }
@@ -181,15 +186,4 @@ function onHomePanelClick(e) {
             window.domainNew();
         }
     }
-}
-
-function escapeHtml(text) {
-    if (text == null) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
-
-function escapeAttr(text) {
-    return escapeHtml(text).replace(/"/g, '&quot;');
 }

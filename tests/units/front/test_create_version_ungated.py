@@ -22,6 +22,7 @@ VERSIONS_HTML = (
 )
 ACTIONS_JS = REPO_ROOT / "src/front/static/domain/js/domain-actions.js"
 VERSIONS_JS = REPO_ROOT / "src/front/static/domain/js/domain-versions.js"
+NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
 
 pytestmark = pytest.mark.unit
 
@@ -67,14 +68,45 @@ class TestNewVersionUiNotGatedOnReadiness:
         # non-DRAFT and would regress if reintroduced against btnAddVersion.
         assert "btnCreateVersion" not in js
 
-    def test_add_new_version_js_ignores_mapping_ontology_flags(self):
-        js = VERSIONS_JS.read_text(encoding="utf-8")
-        fn = js.split("async function addNewVersionFromList")[1].split(
-            "async function "
+    def test_shared_new_version_js_ignores_mapping_ontology_flags(self):
+        js = NAVBAR_JS.read_text(encoding="utf-8")
+        fn = js.split("async function createNewDomainVersion")[1].split(
+            "\nasync function "
         )[0]
         assert "mapping_valid" not in fn
         assert "ontology_valid" not in fn
         assert "/domain/create-version" in fn
+        assert "window.createNewDomainVersion = createNewDomainVersion" in js
+
+    def test_shared_action_manages_loading_and_failure_recovery(self):
+        js = NAVBAR_JS.read_text(encoding="utf-8")
+        fn = js.split("async function createNewDomainVersion")[1].split(
+            "\nasync function "
+        )[0]
+
+        assert fn.startswith("(options = {})")
+        assert "options.closeSourceModal" in fn
+        assert "options.restoreSourceModal" in fn
+        assert "showDomainLoading('Creating and loading new version…')" in fn
+        assert fn.index("if (!confirmed) return") < fn.index(
+            "options.closeSourceModal"
+        )
+        assert fn.index("options.closeSourceModal") < fn.index(
+            "showDomainLoading("
+        )
+        assert fn.index("showDomainLoading(") < fn.index(
+            "fetch('/domain/create-version'"
+        )
+        assert fn.count("hideDomainLoading()") >= 2
+        assert fn.count("options.restoreSourceModal()") >= 2
+
+    def test_domain_versions_delegates_to_shared_action(self):
+        js = VERSIONS_JS.read_text(encoding="utf-8")
+        fn = js.split("async function addNewVersionFromList")[1].split(
+            "\nasync function "
+        )[0]
+        assert "createNewDomainVersion()" in fn
+        assert "/domain/create-version" not in fn
 
 
 class TestCreateVersionBackendIgnoresReadiness:

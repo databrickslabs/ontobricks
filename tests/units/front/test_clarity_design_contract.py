@@ -57,6 +57,9 @@ ONTOLOGY_BUSINESS_RULES_CSS = (
 REGISTRY_TEAMS_CSS = (
     REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
 )
+REGISTRY_MODAL_TEMPLATE = (
+    REPO_ROOT / "src/front/templates/partials/layout/registry_modal.html"
+)
 FRONTEND_RULE = REPO_ROOT / ".cursor/11-frontend-design.mdc"
 CLAUDE_GUIDE = REPO_ROOT / "CLAUDE.md"
 FRONTEND_SKILL = REPO_ROOT / ".claude/skills/frontend-design/SKILL.md"
@@ -208,7 +211,10 @@ def test_components_css_keeps_only_primary_button_filled():
 
     assert primary_blocks, "No CSS rule targets .btn-primary"
     assert _any_block_has_declaration(
-        primary_blocks, r"(?:background|background-color)", r"var\(--db-primary\)"
+        primary_blocks, r"(?:background|background-color)", r"var\(--db-gradient-primary\)"
+    )
+    assert _any_block_has_declaration(
+        primary_blocks, r"box-shadow", r"var\(--db-shadow-primary\)"
     )
     assert _any_block_has_declaration(
         primary_blocks, r"color", r"var\(--db-on-primary\)"
@@ -376,6 +382,24 @@ def test_domain_runs_uses_the_card_integrated_tab_pattern():
     assert "ob-tab-content" not in content_tag
 
 
+def test_registry_modal_uses_the_shared_tab_rail():
+    template = _read(REGISTRY_MODAL_TEMPLATE)
+    assert '<div class="ob-tabs-wrap">' in template
+    assert (
+        'class="nav nav-tabs ob-tabs" id="registryModalTabs"'
+        in template
+    )
+    anchor = template.index('id="registryModalTabContent"')
+    content_tag = template[template.rindex("<div", 0, anchor) : anchor]
+    assert "tab-content p-3" in content_tag
+    assert "ob-tab-content" not in content_tag
+
+    css = _read(COMPONENTS_CSS)
+    assert ".ob-tabs-wrap > .nav-tabs.ob-tabs" in css
+    assert "margin-right: 0" in css
+    assert ".modal-body > .ob-tabs-wrap" in css
+
+
 def test_frontend_rule_defines_card_integrated_page_tabs():
     rule = _read(FRONTEND_RULE)
     assert "Card-integrated page tabs" in rule
@@ -383,7 +407,7 @@ def test_frontend_rule_defines_card_integrated_page_tabs():
     assert '<div class="card-body p-0 ob-tabs-wrap">' in rule
     assert 'class="nav nav-tabs ob-tabs nav-fill"' in rule
     assert 'class="tab-content p-3"' in rule
-    assert "Domain → Information" in rule
+    assert "Domain → General" in rule
     assert "Ontology → Generate" in rule
 
 
@@ -420,6 +444,20 @@ def test_sigmagraph_panel_uses_the_shared_compact_tab_rail():
 
     css = _read(SIGMAGRAPH_CSS)
     assert ".sg-panel-tabs .nav-link" not in css
+
+
+def test_sigmagraph_max_entities_matches_backend_clamp():
+    from back.objects.digitaltwin.explorer.GraphFilter import (
+        EXPLORER_MAX_ENTITIES_DEFAULT,
+        EXPLORER_MAX_ENTITIES_UI_MAX,
+    )
+
+    template = _read(SIGMAGRAPH_TEMPLATE)
+    select = template.split('id="sgMaxEntities"', 1)[1].split("</select>", 1)[0]
+    values = [int(v) for v in re.findall(r'<option value="(\d+)"', select)]
+    assert values
+    assert max(values) == EXPLORER_MAX_ENTITIES_UI_MAX
+    assert f'value="{EXPLORER_MAX_ENTITIES_DEFAULT}" selected' in select
 
 
 def test_mapping_designer_panels_use_the_shared_compact_tab_rail():
@@ -467,7 +505,7 @@ def test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection():
     css = _read(MAIN_CSS)
     assert re.search(
         r"\.ob-subnav-link\.active\s*\{"
-        r"[^}]*background\s*:\s*var\(--db-primary-light\)\s*;"
+        r"[^}]*background\s*:\s*var\(--db-gradient-primary\)\s*;"
         r"[^}]*border-radius\s*:\s*calc\(var\(--db-radius-control\)\s*-\s*2px\)\s*;",
         css,
         flags=re.DOTALL,
@@ -477,6 +515,45 @@ def test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection():
         css,
         flags=re.DOTALL,
     )
+
+
+def test_main_css_declares_aurora_gradient_tokens():
+    css = _read(MAIN_CSS)
+    for token in (
+        "--db-aurora:",
+        "--db-aurora-rgb:",
+        "--db-aurora-dark:",
+        "--db-gradient-end:",
+        "--db-gradient-primary:",
+        "--db-gradient-rail:",
+        "--db-halo:",
+    ):
+        assert token in css
+    assert re.search(
+        r"--db-gradient-primary\s*:\s*linear-gradient\(\s*120deg\s*,\s*"
+        r"var\(--db-primary\)\s*,\s*var\(--db-gradient-end\)\s*\)\s*;",
+        css,
+    )
+    assert re.search(
+        r"--db-gradient-rail\s*:\s*linear-gradient\(\s*180deg\s*,\s*"
+        r"var\(--db-primary\)\s*,\s*var\(--db-aurora\)\s*\)\s*;",
+        css,
+    )
+
+
+def test_resting_cards_now_carry_the_soft_shadow():
+    css = _read(MAIN_CSS)
+    card_blocks = _rule_blocks_for_exact_class(css, ".card")
+    assert _any_block_has_declaration(card_blocks, r"box-shadow", r"var\(--db-shadow-sm\)")
+
+
+def test_sidebar_active_rail_uses_the_aurora_gradient():
+    css = _read(SIDEBAR_LAYOUT_CSS)
+    before_block = _rule_blocks_for_exact_class(css, ".sidebar-nav .nav-link.active::before")
+    assert _any_block_has_declaration(before_block, r"background", r"var\(--db-gradient-rail\)")
+    # The well behind the bar is unchanged — still the soft primary tint.
+    active_block = _rule_blocks_for_exact_class(css, ".sidebar-nav .nav-link.active")
+    assert _any_block_has_declaration(active_block, r"background", r"var\(--db-primary-light\)")
 
 
 def test_nav_hover_indigo_token_is_lighter_than_active_fill():
@@ -597,8 +674,7 @@ def test_sidebar_is_a_framed_card_like_the_split_panel_panes():
 
 
 def test_sidebar_layout_centralizes_the_shared_outer_gutter():
-    """The shell owns the 0.5rem viewport gutter and content starts flush with
-    the sidebar top while retaining its horizontal inset.
+    """The shell owns asymmetric vertical gutters and a 0.5rem horizontal inset.
 
     Exact-selector parsing so a ``:has()`` page override cannot satisfy the
     base-layout contract.
@@ -609,7 +685,7 @@ def test_sidebar_layout_centralizes_the_shared_outer_gutter():
     content = _rule_blocks_for_exact_selector(css, ".sidebar-content")
 
     assert _any_block_has_declaration(layout, r"gap", r"0\.5rem")
-    assert _any_block_has_declaration(layout, r"padding", r"0\.5rem")
+    assert _any_block_has_declaration(layout, r"padding", r"0\.25rem\s+0\.5rem\s+0\.5rem")
     assert _any_block_has_declaration(layout, r"box-sizing", r"border-box")
     assert _any_block_has_declaration(sidebar, r"margin", r"0")
     assert _any_block_has_declaration(sidebar, r"height", r"100%")
@@ -626,11 +702,12 @@ def test_level_two_rail_and_content_share_the_same_vertical_gutter():
     assert _any_block_has_declaration(
         subnav,
         r"padding",
-        r"0\.5rem\s+0\s+0",
+        r"0\.25rem\s+0\s+0",
     )
 
 
-def test_desktop_sidebar_titles_remove_the_global_top_inset():
+def test_desktop_sidebar_titles_match_subtitle_to_content_gap():
+    """Space above the title equals the header's bottom margin."""
     css = _read(SIDEBAR_LAYOUT_CSS)
     desktop_rule = re.search(
         r"@media\s*\(\s*min-width\s*:\s*769px\s*\)\s*\{"
@@ -643,7 +720,7 @@ def test_desktop_sidebar_titles_remove_the_global_top_inset():
     body = desktop_rule.group("body")
     assert re.search(
         r"\.sidebar-layout\s+\.section-header\s*\{"
-        r"[^}]*padding-top\s*:\s*0\s*;",
+        r"[^}]*padding-top\s*:\s*0\.5rem\s*;",
         body,
         flags=re.DOTALL,
     )
@@ -658,6 +735,13 @@ def test_desktop_sidebar_titles_remove_the_global_top_inset():
         r"margin-bottom",
         r"0\.5rem\s*!important",
     )
+
+
+def test_section_header_top_inset_matches_subtitle_to_content_gap():
+    """``.section-header`` top padding equals its 0.5rem bottom margin."""
+    css = _read(MAIN_CSS)
+    blocks = _rule_blocks_for_exact_selector(css, ".section-header")
+    assert _any_block_has_declaration(blocks, r"padding-top", r"0\.5rem")
 
 
 def test_sidebar_layout_has_a_min_height_safe_flex_chain():
@@ -798,6 +882,10 @@ def test_frontend_design_rule_documents_new_palette_and_immutable_structure():
         "L1",
         "L2",
         "logo",
+        "Aurora",
+        "--db-gradient-primary",
+        "--db-gradient-rail",
+        "Settings → Configuration → UI",
     ]
     for statement in required_statements:
         assert statement in rule_text

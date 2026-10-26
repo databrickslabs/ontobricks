@@ -29,7 +29,29 @@ class _TagCollector(HTMLParser):
         self.tags.append((tag, d))
 
 
+_WORKSPACE_PAGE_PREFIXES = ("/ontology", "/mapping", "/domain", "/dtwin")
+
+
+def ensure_loaded_domain(client) -> None:
+    """Give the test session a named domain so workspace HTML pages render."""
+    if getattr(client, "_ob_workspace_domain_seeded", False):
+        return
+    resp = client.post("/domain/info", json={"name": "TestDomain"})
+    assert resp.status_code == 200, resp.text
+    client._ob_workspace_domain_seeded = True
+
+
+def _is_workspace_page(path: str) -> bool:
+    route = path.split("?", 1)[0]
+    return any(
+        route == prefix or route.startswith(prefix + "/")
+        for prefix in _WORKSPACE_PAGE_PREFIXES
+    )
+
+
 def _html(client, path: str) -> str:
+    if _is_workspace_page(path):
+        ensure_loaded_domain(client)
     resp = client.get(path, headers={"accept": "text/html"})
     assert resp.status_code == 200, f"GET {path} returned {resp.status_code}"
     return resp.text
@@ -133,13 +155,36 @@ class TestBaseTemplate:
         assert any("review-modals.js" in src for src in _script_srcs(html))
         assert "review-modals.css" in html
 
-    def test_navbar_has_domain_l1_link(self, client):
-        """Domain L1 link exists in the DOM (hidden until a domain is loaded)."""
+    def test_navbar_uses_l2_domain_context_trigger(self, client):
+        """Domain L1 item is replaced by the level-2 context trigger contract."""
         html = _html(client, "/")
-        assert _find(_tags(html), id_="domainL1Link") is not None
-        assert _find(_tags(html), id_="domainL1NavItem") is not None
-        nav = _find(_tags(html), id_="domainL1NavItem")
-        assert "d-none" in (nav.get("class") or "")
+        tags = _tags(html)
+
+        assert _find(tags, id_="domainL1NavItem") is None
+        context_trigger = _find(tags, id_="domainContextTrigger")
+        assert context_trigger is not None
+        trigger_match = re.search(
+            r'<a\b[^>]*id="domainContextTrigger"[^>]*>(.*?)</a>',
+            html,
+            flags=re.DOTALL,
+        )
+        assert trigger_match is not None
+        trigger_html = trigger_match.group(1)
+        assert 'id="currentDomainName"' in trigger_html
+
+        registry_toggle = _find(tags, id_="registryModalToggle")
+        assert registry_toggle is not None
+        assert registry_toggle.get("title") == "Registry"
+        assert registry_toggle.get("aria-label") == "Open Registry"
+        registry_match = re.search(
+            r'<a\b[^>]*id="registryModalToggle"[^>]*>(.*?)</a>',
+            html,
+            flags=re.DOTALL,
+        )
+        assert registry_match is not None
+        registry_inner = registry_match.group(1)
+        assert re.search(r'<i\b[^>]*class="[^"]*\bbi-boxes\b[^"]*"[^>]*>', registry_inner)
+        assert "<span" not in registry_inner
 
     def test_subnav_has_domain_dropdown(self, client):
         """Domain dropdown is in the L2 subnav."""
@@ -153,6 +198,18 @@ class TestBaseTemplate:
         kg_toggles = [t for t in tags if t[0] == "a" and t[1].get("data-subnav-route") == "/dtwin/"]
         assert len(kg_toggles) > 0
         assert _find(tags, id_="subnavKgDropdown") is not None
+
+    def test_subnav_has_mutually_exclusive_workspace_and_settings_slots(self, client):
+        html = _html(client, "/")
+        tags = _tags(html)
+        assert _find(tags, tag="nav", id_="obSubnav") is not None
+        assert _find(tags, id_="domainWorkspaceSubnavNav") is not None
+        assert _find(tags, id_="settingsDomainReturnNav") is not None
+        settings_return_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
+        assert settings_return_link is not None
+        assert settings_return_link.get("href") == "/domain/"
+        assert settings_return_link.get("title") == "Back to domain"
+        assert settings_return_link.get("aria-label") == "Back to domain"
 
     def test_subnav_has_ontology_and_mapping_dropdowns(self, client):
         """Ontology and Mapping are dropdowns in the L2 subnav."""
@@ -259,6 +316,15 @@ class TestSettingsPage:
     def test_warehouse_select(self, client):
         html = _html(client, "/settings")
         assert _find(_tags(html), id_="settingsWarehouseSelect") is not None
+        assert "Build SQL Warehouse" in html
+        assert _find(_tags(html), id_="buildUseSea") is None
+        assert _find(_tags(html), id_="useCloudFetch") is not None
+        assert "Query SQL Warehouse" in html
+        lakehouse_build = _find(
+            _tags(html), tag="select", id_="deltaBuildWarehouseSelect"
+        )
+        assert lakehouse_build is not None
+        assert "disabled" not in lakehouse_build
 
     def test_test_connection_button(self, client):
         html = _html(client, "/settings")
@@ -287,8 +353,13 @@ class TestSettingsPage:
         assert _find(tags, id_="registryModalToggle") is not None
         tabs = _find(tags, id_="registryModalTabs")
         assert tabs is not None
-        assert "mb-3" not in _class_tokens(tabs.get("class", ""))
-        assert _find(tags, id_="registryModalTabContent", class_="ob-tab-content") is not None
+        tab_classes = _class_tokens(tabs.get("class", ""))
+        assert "mb-3" not in tab_classes
+        assert "nav-tabs" in tab_classes
+        assert "ob-tabs" in tab_classes
+        content = _find(tags, id_="registryModalTabContent")
+        assert content is not None
+        assert "ob-tab-content" not in _class_tokens(content.get("class", ""))
         assert 'id="registryDropdown"' not in html
 
     def test_registry_legacy_url_redirects(self, client):
@@ -325,6 +396,32 @@ class TestSettingsPage:
         html = _html(client, "/settings")
         assert 'data-page="settings"' in html
 
+    def test_settings_subnav_has_only_return_link_markup(self, client):
+        html = _html(client, "/settings")
+        tags = _tags(html)
+        settings_nav = _find(tags, id_="settingsDomainReturnNav")
+        assert settings_nav is not None
+        workspace_nav = _find(tags, id_="domainWorkspaceSubnavNav")
+        assert workspace_nav is not None
+        settings_link = _find(tags, tag="a", id_="settingsDomainReturnLink")
+        assert settings_link is not None
+        assert settings_link.get("href") == "/domain/"
+        assert settings_link.get("title") == "Back to domain"
+        assert settings_link.get("aria-label") == "Back to domain"
+        settings_inner = re.search(
+            r'<a\b[^>]*id="settingsDomainReturnLink"[^>]*>(.*?)</a>',
+            html,
+            flags=re.DOTALL,
+        )
+        assert settings_inner is not None
+        assert "Back to domain" in settings_inner.group(1)
+        assert "Back to domain management" not in settings_inner.group(1)
+        assert re.search(
+            r'<a\b[^>]*id="settingsDomainReturnLink"[^>]*>.*\bbi-arrow-left\b.*</a>',
+            html,
+            flags=re.DOTALL,
+        )
+
 
 # =====================================================
 # ONTOLOGY PAGE
@@ -353,7 +450,6 @@ class TestOntologyPage:
             "dataquality",
             "swrl",
             "axioms",
-            "owl",
         ],
     )
     def test_sidebar_has_section_link(self, client, section):
@@ -416,7 +512,7 @@ class TestMappingPage:
 
     @pytest.mark.parametrize(
         "section",
-        ["information", "design", "manual", "autoassign", "r2rml", "sparksql"],
+        ["information", "design", "manual", "autoassign", "sparksql"],
     )
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/mapping")
@@ -496,7 +592,7 @@ class TestDomainPage:
 
     def test_kpi_band(self, client):
         """The current-domain KPI / health band, moved here from the Home
-        page, sits at the top of Domain → Information."""
+        page, sits at the top of Domain → General."""
         html = _html(client, "/domain")
         assert _find(_tags(html), id_="domainKpiPanel") is not None
         for kpi_id in (

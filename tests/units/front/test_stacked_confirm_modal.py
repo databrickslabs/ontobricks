@@ -12,6 +12,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 UTILS_JS = REPO_ROOT / "src/front/static/global/js/utils.js"
 COMPONENTS_CSS = REPO_ROOT / "src/front/static/global/css/components.css"
+PERMISSIONS_CSS = REPO_ROOT / "src/front/static/global/css/permissions.css"
 
 _STACK_CLASSES = (
     "ob-modal-underlying",
@@ -195,3 +196,15 @@ def test_css_raises_stacked_z_index():
     assert re.search(r"z-index\s*:\s*1060", backdrop_body), (
         ".ob-modal-stacked-backdrop must set z-index: 1060"
     )
+
+
+def test_confirm_checkbox_is_exempt_from_read_only_input_lock():
+    """Registry Delete Domain can open while a published domain is loaded."""
+    assert "ob-confirm-check" in _confirm_body()
+    css = PERMISSIONS_CSS.read_text(encoding="utf-8")
+    rule_start = css.index(
+        "body:is(.read-only-version, .role-viewer, .read-only-locked)"
+        ':not([data-page="digitaltwin"]):not([data-page="settings"]) input'
+    )
+    generic_field_rule = css[rule_start : css.index("}", rule_start)]
+    assert ":not(.ob-confirm-check)" in generic_field_rule

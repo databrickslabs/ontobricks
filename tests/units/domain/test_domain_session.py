@@ -21,6 +21,19 @@ class TestGetEmptyDomain:
         data = get_empty_domain()
         assert data["domain"]["info"]["name"] == "NewDomain"
 
+    def test_default_lakehouse_access_type_is_view(self):
+        data = get_empty_domain()
+        assert data["domain"]["info"]["lakehouse_materialization"] == "view"
+
+    def test_default_llm_endpoint_kind_is_empty(self):
+        data = get_empty_domain()
+        assert data["domain"]["info"]["llm_endpoint_kind"] == ""
+
+    def test_default_search_cache_is_on_and_pending(self):
+        info = get_empty_domain()["domain"]["info"]
+        assert info["graph_cache_enabled"] is True
+        assert info["graph_cache_state"] == "pending_refresh"
+
     def test_default_registry(self):
         data = get_empty_domain()
         reg = data["settings"]["registry"]
@@ -33,10 +46,17 @@ class TestGetEmptyDomain:
         assert "reasoning" not in data["ontology"]
         assert data["domain"]["metadata"] == {}
 
+    def test_load_drops_a_token_left_in_an_old_session(self, mock_session_mgr):
+        data = get_empty_domain()
+        data["settings"]["databricks"] = {"host": "https://ws", "token": "dapi"}
+        mock_session_mgr.set(DomainSession.SESSION_KEY, data)
+        ds = DomainSession(mock_session_mgr)
+        assert ds.databricks == {"host": "https://ws"}
+
     def test_migrates_root_metadata_and_reasoning(self, mock_session_mgr):
         empty = get_empty_domain()
         mock_session_mgr.set(
-            "project_data",
+            DomainSession.SESSION_KEY,
             {
                 "domain": {**empty["domain"]},
                 "ontology": {**empty["ontology"], "classes": []},
@@ -292,6 +312,105 @@ class TestSaveAndReset:
         assert domain_session.info["name"] == "NewDomain"
 
 
+class TestGenerateDraftIntegration:
+    """DomainSession is the durable persistence boundary for the Generate
+    draft (see ``back.objects.ontology.generate.GenerateDraft``); see
+    ``tests/units/ontology/test_generate_draft.py`` for the model's own
+    behavior tests. These only cover the DomainSession wiring itself.
+    """
+
+    def test_empty_domain_has_no_draft(self):
+        data = get_empty_domain()
+        assert data.get("generate_draft") is None
+
+    def test_generate_draft_store_property_returns_store(self, domain_session):
+        from back.objects.ontology.generate.GenerateDraftStore import GenerateDraftStore
+
+        assert isinstance(domain_session.generate_draft_store, GenerateDraftStore)
+
+    def test_new_session_has_no_persisted_draft(self, domain_session):
+        assert domain_session.generate_draft_store.load() is None
+
+    def test_save_persists_under_generate_draft_key(self, mock_session_mgr, domain_session):
+        from back.objects.ontology.generate.GenerateDraft import GenerateDraft
+
+        draft = GenerateDraft.new(source_fingerprint="sha256:abc")
+        domain_session.generate_draft_store.save(draft)
+        raw = mock_session_mgr.get("domain_data")
+        assert raw["generate_draft"]["source_fingerprint"] == "sha256:abc"
+        assert raw["generate_draft"]["draft_revision"] == 1
+
+    def test_reset_clears_persisted_draft(self, domain_session):
+        from back.objects.ontology.generate.GenerateDraft import GenerateDraft
+
+        domain_session.generate_draft_store.save(
+            GenerateDraft.new(source_fingerprint="sha256:abc")
+        )
+        domain_session.reset()
+        assert domain_session.generate_draft_store.load() is None
+
+    def test_reset_ontology_clears_persisted_draft(self, domain_session):
+        """A Generate draft snapshots the ontology's existing entities at
+        detection time; wiping the ontology via ``reset_ontology()`` (a
+        separate, narrower reset than the whole-session ``reset()``) must
+        not leave a draft around that references entities that no longer
+        exist — cross-ontology-reset leakage."""
+        from back.objects.ontology.generate.GenerateDraft import GenerateDraft
+
+        domain_session.generate_draft_store.save(
+            GenerateDraft.new(source_fingerprint="sha256:abc")
+        )
+        domain_session.reset_ontology()
+        assert domain_session.generate_draft_store.load() is None
+
+    def test_reset_ontology_clears_import_fidelity_metadata(self, domain_session):
+        domain_session.ontology.update(
+            {
+                "rdf_extras": {"triples": [{"s": "stale"}]},
+                "label_lang": "en",
+                "comment_lang": "fr",
+            }
+        )
+
+        domain_session.reset_ontology()
+
+        assert domain_session.ontology["rdf_extras"] == {}
+        assert domain_session.ontology["label_lang"] is None
+        assert domain_session.ontology["comment_lang"] is None
+
+    def test_import_from_file_clears_persisted_draft(self, domain_session):
+        """Loading a different domain/version into the current session must
+        not resurrect a draft detected against the *previous* domain's
+        ontology/metadata — cross-domain/version leakage."""
+        from back.objects.ontology.generate.GenerateDraft import GenerateDraft
+
+        domain_session.generate_draft_store.save(
+            GenerateDraft.new(source_fingerprint="sha256:abc")
+        )
+        domain_session.import_from_file(
+            {
+                "info": {"name": "OtherDomain"},
+                "versions": {
+                    "1": {
+                        "ontology": {
+                            "name": "Other",
+                            "base_uri": "http://other.org#",
+                            "classes": [],
+                            "properties": [],
+                            "constraints": [],
+                            "swrl_rules": [],
+                            "axioms": [],
+                            "expressions": [],
+                        },
+                        "assignment": {"entities": [], "relationships": []},
+                        "design_layout": {"views": {}, "map": {}},
+                    }
+                },
+            }
+        )
+        assert domain_session.generate_draft_store.load() is None
+
+
 class TestExportImport:
     def test_export_for_save(self, domain_session):
         domain_session.info["name"] = "Export Test"
@@ -301,8 +420,37 @@ class TestExportImport:
         assert export["info"]["name"] == "Export Test"
         assert "versions" in export
 
+    def test_imported_rdf_metadata_round_trip(self, domain_session):
+        extras = {
+            "prefixes": {"dcterms": "http://purl.org/dc/terms/"},
+            "triples": [
+                {
+                    "subject": "http://test.org/ontology",
+                    "predicate": "http://purl.org/dc/terms/source",
+                    "object": {
+                        "type": "uri",
+                        "value": "http://example.org/source",
+                    },
+                }
+            ],
+        }
+        domain_session.ontology.update(
+            {
+                "name": "Test Ontology",
+                "label_lang": "en",
+                "rdf_extras": extras,
+            }
+        )
+
+        export = domain_session.export_for_save()
+        domain_session.reset()
+        domain_session.import_from_file(export)
+
+        assert domain_session.ontology["label_lang"] == "en"
+        assert domain_session.ontology["rdf_extras"] == extras
+
     def test_export_includes_graph_backend(self, domain_session):
-        """Per-domain graph backend must survive UC export (Domain → Information)."""
+        """Per-domain graph backend must survive UC export (Domain → General)."""
         domain_session.info["graph_backend"] = "neo4j"
         export = domain_session.export_for_save()
         assert export["info"]["graph_backend"] == "neo4j"
@@ -422,6 +570,44 @@ class TestExportImport:
         domain_session.import_from_file(export)
         assert domain_session.info["lakehouse_materialization"] == "view"
 
+    def test_new_session_defaults_lakehouse_materialization_to_view(self, domain_session):
+        """The Information picker defaults to Views only for a brand-new domain."""
+        assert domain_session.info["lakehouse_materialization"] == "view"
+
+    def test_new_session_search_cache_pending_until_rebuild(self, domain_session):
+        assert domain_session.info["graph_cache_enabled"] is True
+        assert domain_session.info["graph_cache_state"] == "pending_refresh"
+
+    def test_graph_cache_round_trip(self, domain_session):
+        domain_session.info["graph_cache_enabled"] = False
+        domain_session.info["graph_cache_state"] = "disabled"
+        export = domain_session.export_for_save()
+        assert export["info"]["graph_cache_enabled"] is False
+        assert export["info"]["graph_cache_state"] == "disabled"
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["graph_cache_enabled"] is False
+        assert domain_session.info["graph_cache_state"] == "disabled"
+
+    def test_legacy_import_enables_ready_cache(self, domain_session):
+        domain_data = {
+            "info": {"name": "Legacy", "graph_backend": "lakebase"},
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "O", "base_uri": "http://x#", "classes": [],
+                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "axioms": [], "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                }
+            },
+        }
+        domain_session.import_from_file(domain_data)
+        assert domain_session.info["graph_cache_enabled"] is True
+        assert domain_session.info["graph_cache_state"] == "ready"
+
     def test_lakehouse_materialization_defaults_to_table_on_import(self, domain_session):
         """A domain exported before the option existed keeps materialising."""
         domain_data = {
@@ -462,6 +648,7 @@ class TestExportImport:
         assert "neo4j_database" not in domain_session.info or not domain_session.info.get(
             "neo4j_database"
         )
+
     def test_import_from_file(self, domain_session):
         domain_data = {
             "info": {"name": "Imported", "description": "Test import"},
@@ -486,11 +673,58 @@ class TestExportImport:
         assert domain_session.info["name"] == "Imported"
         assert len(domain_session.get_classes()) == 1
 
+    def test_import_requested_v1_does_not_silently_take_latest(self, domain_session):
+        """Loading V1 must keep current_version and ontology slice on V1.
+
+        Registry load posts JSON ``version: 1`` (int). Version keys in the
+        document are strings, so a raw ``1 in versions`` miss used to pick
+        lexicographic latest and then query ``…_V2_graph``.
+        """
+        domain_data = {
+            "info": {"name": "BigCustomers100m"},
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "v1",
+                        "base_uri": "http://v1.org#",
+                        "classes": [{"name": "CustomerV1"}],
+                        "properties": [],
+                        "constraints": [],
+                        "swrl_rules": [],
+                        "axioms": [],
+                        "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                },
+                "2": {
+                    "ontology": {
+                        "name": "v2",
+                        "base_uri": "http://v2.org#",
+                        "classes": [{"name": "CustomerV2"}],
+                        "properties": [],
+                        "constraints": [],
+                        "swrl_rules": [],
+                        "axioms": [],
+                        "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                },
+            },
+        }
+        domain_session.import_from_file(domain_data, version=1)
+        assert domain_session.current_version == "1"
+        assert domain_session.get_classes()[0]["name"] == "CustomerV1"
+        assert domain_session.delta["table_name"] == (
+            "triplestore_bigcustomers100m_V1"
+        )
+
 
 class TestLegacyMigration:
     def test_migrates_flat_constraints(self, mock_session_mgr):
         mock_session_mgr.set(
-            "project_data",
+            DomainSession.SESSION_KEY,
             {
                 "ontology": {
                     "classes": [{"name": "A"}],
@@ -507,7 +741,7 @@ class TestLegacyMigration:
 
     def test_migrates_mapping_key(self, mock_session_mgr):
         mock_session_mgr.set(
-            "project_data",
+            DomainSession.SESSION_KEY,
             {
                 "ontology": {"classes": [], "properties": []},
                 "mapping": {

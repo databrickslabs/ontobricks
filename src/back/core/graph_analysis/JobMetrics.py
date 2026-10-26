@@ -117,7 +117,7 @@ def analytics_snapshot(domain: Any, settings: Any, source_table: str) -> Iterato
     from back.core.graphdb.delta.DeltaBase import create_databricks_client
 
     snapshot = _table_naming.analytics_snapshot_fqn(domain, settings)
-    client = create_databricks_client(domain, settings)
+    client = create_databricks_client(domain, settings, for_write=True)
     if not snapshot or client is None:
         raise InfrastructureError(
             "Graph analytics needs a temporary Delta snapshot for a view-only "

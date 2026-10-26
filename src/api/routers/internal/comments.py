@@ -18,7 +18,7 @@ from fastapi import APIRouter, Request, Depends
 from shared.config.settings import get_settings, Settings
 from back.core.logging import get_logger
 from back.objects.session import SessionManager, get_session_manager
-from back.objects.registry.CommentService import CommentService
+from back.objects.registry.collab.CommentService import CommentService
 from api.routers.internal._helpers import (
     resolve_roles as _roles,
     read_json_body as _body,

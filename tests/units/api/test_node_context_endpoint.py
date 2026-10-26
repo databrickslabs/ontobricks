@@ -207,10 +207,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             side_effect=_resolve_side_effect,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_graphdb",
+            "back.objects.digitaltwin.node.NodeContextService.get_graphdb",
             return_value=mock_target_store,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.effective_graph_query_table",
+            "back.objects.digitaltwin.node.NodeContextService.effective_graph_query_table",
             return_value="catalog.schema.graph",
         ):
             resp = client.get(
@@ -269,10 +269,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+            "back.objects.digitaltwin.node.NodeContextService.get_data_plane_client",
             return_value=mock_client,
         ) as mock_get_client, patch(
-            "back.objects.digitaltwin.NodeContextService.run_blocking",
+            "back.objects.digitaltwin.node.NodeContextService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -303,10 +303,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+            "back.objects.digitaltwin.node.NodeContextService.get_data_plane_client",
             return_value=mock_client,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.run_blocking",
+            "back.objects.digitaltwin.node.NodeContextService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -335,10 +335,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+            "back.objects.digitaltwin.node.NodeContextService.get_data_plane_client",
             return_value=mock_client,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.run_blocking",
+            "back.objects.digitaltwin.node.NodeContextService.run_blocking",
             side_effect=lambda fn, *a, **kw: fn(*a, **kw),
         ):
             resp = client.get(
@@ -384,10 +384,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             side_effect=_resolve_side_effect,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_graphdb",
+            "back.objects.digitaltwin.node.NodeContextService.get_graphdb",
             return_value=mock_target_store,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.effective_graph_query_table",
+            "back.objects.digitaltwin.node.NodeContextService.effective_graph_query_table",
             return_value="catalog.schema.graph",
         ):
             resp = client.get(
@@ -411,7 +411,7 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "back.objects.digitaltwin.node.NodeContextService.NodeContextService"
             "._load_mcp_target_descriptions",
             return_value={"Finance": "Finance ontology"},
         ):
@@ -437,7 +437,7 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "back.objects.digitaltwin.node.NodeContextService.NodeContextService"
             "._load_mcp_target_descriptions",
             return_value={"Other": "Some other domain"},
         ):
@@ -462,10 +462,10 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_graphdb",
+            "back.objects.digitaltwin.node.NodeContextService.get_graphdb",
             return_value=mock_target_store,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "back.objects.digitaltwin.node.NodeContextService.NodeContextService"
             "._load_mcp_target_descriptions",
             return_value={"OtherDomain": "not our target"},
         ):

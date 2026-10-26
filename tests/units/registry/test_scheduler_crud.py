@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.objects.registry.scheduler import BuildScheduler
+from back.objects.registry.schedule.BuildScheduler import BuildScheduler
 from back.objects.registry.store.base import schedule_key
 
 pytestmark = pytest.mark.unit
@@ -433,17 +433,17 @@ class TestHistory:
 
 class TestStatusWriteBack:
     def _update(self, sched, outcome, key="analytics::Acme::"):
-        from back.objects.registry.scheduler import _update_schedule_status
+        from back.objects.registry.schedule.BuildScheduler import _update_schedule_status
 
         with patch(
-            "back.objects.registry.scheduler.get_scheduler", return_value=sched
+            "back.objects.registry.schedule.BuildScheduler.get_scheduler", return_value=sched
         ):
             _update_schedule_status(
                 HOST, TOKEN, REG, key, outcome, duration_s=12.34, run_ts="2026-08-05T06:00:00+00:00"
             )
 
     def test_a_run_stamps_the_row_and_appends_history(self, sched, store):
-        from back.objects.registry.scheduler_tasks import RunOutcome
+        from back.objects.registry.schedule import RunOutcome
 
         _save(sched, task_type="analytics")
 
@@ -470,7 +470,7 @@ class TestStatusWriteBack:
     def test_a_run_for_a_deleted_schedule_still_records_history(self, sched, store):
         """The schedule can be deleted while a run is in flight; losing
         the history row as well would hide the failure entirely."""
-        from back.objects.registry.scheduler_tasks import RunOutcome
+        from back.objects.registry.schedule import RunOutcome
 
         self._update(sched, RunOutcome(status="error", message="domain gone"))
 

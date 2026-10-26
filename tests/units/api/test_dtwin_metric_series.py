@@ -21,17 +21,9 @@ def client():
 
 
 def test_service_serializes_metric_series_payload(monkeypatch):
-    from back.core import databricks
-    from back.core import helpers
-
     captured = {}
 
     class _FakeClient:
-        def __init__(self, *, host, token, warehouse_id):
-            captured["host"] = host
-            captured["token"] = token
-            captured["warehouse_id"] = warehouse_id
-
         def execute_query(self, sql):
             captured["sql"] = sql
             return [
@@ -40,10 +32,14 @@ def test_service_serializes_metric_series_payload(monkeypatch):
             ]
 
     monkeypatch.setattr(
-        helpers, "get_databricks_host_and_token", lambda _d, _s: ("https://h", "tok")
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings, *, for_write=False: (
+            captured.update(
+                {"domain": domain, "settings": settings, "for_write": for_write}
+            )
+            or _FakeClient()
+        ),
     )
-    monkeypatch.setattr(helpers, "resolve_delta_warehouse_id", lambda _d, _s: "wh")
-    monkeypatch.setattr(databricks, "DatabricksClient", _FakeClient)
 
     domain = SimpleNamespace(uc_domain_folder="acme", current_version="1")
     settings = SimpleNamespace(analytics_job_output_schema="cat.sch")
@@ -60,9 +56,9 @@ def test_service_serializes_metric_series_payload(monkeypatch):
         "labels": ["A", "B"],
         "scores": [0.9, 0.8],
     }
-    assert captured["host"] == "https://h"
-    assert captured["token"] == "tok"
-    assert captured["warehouse_id"] == "wh"
+    assert captured["domain"] is domain
+    assert captured["settings"] is settings
+    assert captured["for_write"] is True
     assert "FROM cat.sch.graph_metrics_acme_1" in captured["sql"]
     assert "ORDER BY pagerank DESC, node_uri ASC" in captured["sql"]
     assert "LIMIT " not in captured["sql"]
@@ -70,15 +66,11 @@ def test_service_serializes_metric_series_payload(monkeypatch):
 
 
 def test_service_validates_metric_before_creating_client(monkeypatch):
-    from back.core import databricks
-    from back.core import helpers
-
-    monkeypatch.setattr(
-        helpers, "get_databricks_host_and_token", lambda _d, _s: ("https://h", "tok")
-    )
-    monkeypatch.setattr(helpers, "resolve_delta_warehouse_id", lambda _d, _s: "wh")
     client_call = MagicMock()
-    monkeypatch.setattr(databricks, "DatabricksClient", client_call)
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        client_call,
+    )
 
     domain = SimpleNamespace(uc_domain_folder="acme", current_version="1")
     settings = SimpleNamespace(analytics_job_output_schema="cat.sch")

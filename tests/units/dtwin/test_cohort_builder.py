@@ -1336,6 +1336,128 @@ class TestMaterialisation:
         assert delete_args is not None
         assert delete_args.args[2] == expected_pred
 
+    def test_materialize_to_graph_rebuilds_adjacency_when_supported(self):
+        triples = _build_test_graph()
+        store = _store_with(triples)
+        store.delete_cohort_triples = MagicMock(return_value=0)
+        store.insert_triples = MagicMock(return_value=10)
+        store.supports_adjacency = True
+        store.rebuild_adjacency = MagicMock()
+
+        rule = CohortRule(
+            id="exempt-pool",
+            label="Exempt pool",
+            class_uri=PERSON,
+            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
+            compatibility=[
+                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
+            ],
+        )
+        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
+        result = b.build(rule)
+        b.materialize_to_graph(rule, result)
+
+        store.rebuild_adjacency.assert_called_once_with("graph")
+
+    def test_materialize_to_graph_skips_rebuild_when_inserted_zero(self):
+        triples = _build_test_graph()
+        store = _store_with(triples)
+        store.delete_cohort_triples = MagicMock(return_value=0)
+        store.insert_triples = MagicMock(return_value=0)
+        store.supports_adjacency = True
+        store.rebuild_adjacency = MagicMock()
+
+        rule = CohortRule(
+            id="exempt-pool",
+            label="Exempt pool",
+            class_uri=PERSON,
+            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
+            compatibility=[
+                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
+            ],
+        )
+        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
+        result = b.build(rule)
+        b.materialize_to_graph(rule, result)
+
+        store.rebuild_adjacency.assert_not_called()
+
+    def test_materialize_to_graph_rebuilds_adjacency_when_only_delete_changed(self):
+        triples = _build_test_graph()
+        store = _store_with(triples)
+        store.delete_cohort_triples = MagicMock(return_value=2)
+        store.insert_triples = MagicMock(return_value=0)
+        store.supports_adjacency = True
+        store.rebuild_adjacency = MagicMock()
+
+        # No new cohort triples generated => insert path is skipped,
+        # but delete removed stale cohort rows and must invalidate adjacency.
+        rule = CohortRule(
+            id="exempt-pool",
+            label="Exempt pool",
+            class_uri=PERSON,
+            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
+            compatibility=[
+                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
+            ],
+            min_size=999,
+        )
+        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
+        result = b.build(rule)
+        assert result.cohorts == []
+
+        inserted = b.materialize_to_graph(rule, result)
+
+        assert inserted == 0
+        store.insert_triples.assert_not_called()
+        store.rebuild_adjacency.assert_called_once_with("graph")
+
+    def test_materialize_to_graph_skips_rebuild_when_not_supported(self):
+        triples = _build_test_graph()
+        store = _store_with(triples)
+        store.insert_triples = MagicMock(return_value=10)
+        store.supports_adjacency = False
+        store.rebuild_adjacency = MagicMock()
+
+        rule = CohortRule(
+            id="exempt-pool",
+            label="Exempt pool",
+            class_uri=PERSON,
+            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
+            compatibility=[
+                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
+            ],
+        )
+        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
+        result = b.build(rule)
+        b.materialize_to_graph(rule, result)
+
+        store.rebuild_adjacency.assert_not_called()
+
+    def test_materialize_to_graph_surfaces_rebuild_failure(self):
+        triples = _build_test_graph()
+        store = _store_with(triples)
+        store.insert_triples = MagicMock(return_value=10)
+        store.supports_adjacency = True
+        store.rebuild_adjacency = MagicMock(
+            side_effect=RuntimeError("adjacency rebuild failed")
+        )
+
+        rule = CohortRule(
+            id="exempt-pool",
+            label="Exempt pool",
+            class_uri=PERSON,
+            links=[CohortLink(shared_class=PROJECT, via=ASSIGNED_TO)],
+            compatibility=[
+                CohortCompat(type="value_equals", property=STATUS, value="Exempt")
+            ],
+        )
+        b = CohortBuilder(store, "graph", base_uri=BASE_URI)
+        result = b.build(rule)
+
+        with pytest.raises(RuntimeError, match="adjacency rebuild failed"):
+            b.materialize_to_graph(rule, result)
+
     def test_materialize_to_uc_chunks_inserts_and_deletes_partition(self):
         triples = _build_test_graph()
         rule = CohortRule(

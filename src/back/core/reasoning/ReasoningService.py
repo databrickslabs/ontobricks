@@ -5,7 +5,8 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
-from back.core.reasoning.models import InferredTriple, ReasoningResult
+from back.core.reasoning.results.InferredTriple import InferredTriple
+from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
 logger = get_logger(__name__)
@@ -224,8 +225,13 @@ class ReasoningService:
         inference_limit: Optional[int] = None,
         progress_callback: Optional[Any] = None,
         rule_names: Optional[set] = None,
+        focus: Optional[Dict[str, Any]] = None,
     ) -> ReasoningResult:
-        """Execute SWRL rules against the triple store."""
+        """Execute SWRL rules against the triple store.
+
+        *focus* (``{"vars": [...], "uri": "..."}``) restricts inference to the
+        triples involving a single entity.
+        """
         rules = self._get_swrl_rules()
         if rule_names:
             rules = [r for r in rules if r.get("name") in rule_names]
@@ -248,7 +254,7 @@ class ReasoningService:
                 }
             )
 
-        from back.core.reasoning.SWRLEngine import SWRLEngine
+        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
 
         ontology = self._get_ontology_dict()
         engine = SWRLEngine(ontology=ontology)
@@ -260,6 +266,7 @@ class ReasoningService:
             materialize=materialize,
             inference_limit=inference_limit,
             progress_callback=progress_callback,
+            focus=focus,
         )
 
     def run_graph_reasoning(self, options: Optional[Dict] = None) -> ReasoningResult:
@@ -410,7 +417,7 @@ class ReasoningService:
                 }
             )
 
-        from back.core.reasoning.DecisionTableEngine import DecisionTableEngine
+        from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
 
         engine = DecisionTableEngine()
         table_name = self._get_graph_name()
@@ -447,7 +454,7 @@ class ReasoningService:
                 }
             )
 
-        from back.core.reasoning.SPARQLRuleEngine import SPARQLRuleEngine
+        from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
 
         engine = SPARQLRuleEngine()
         table_name = self._get_graph_name()
@@ -484,7 +491,7 @@ class ReasoningService:
                 }
             )
 
-        from back.core.reasoning.AggregateRuleEngine import AggregateRuleEngine
+        from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
 
         engine = AggregateRuleEngine()
         table_name = self._get_graph_name()
@@ -518,6 +525,15 @@ class ReasoningService:
             optimize_fn = getattr(self._store, "optimize_inferred_companion", None)
             if callable(optimize_fn):
                 optimize_fn(table_name)
+            if getattr(self._store, "supports_adjacency", False) is True:
+                from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
+
+                logger.info(
+                    "Rebuilding adjacency index after %d inferred triples", count
+                )
+                rebuild_graph_cache_if_enabled(
+                    self._store, table_name, self._domain
+                )
         logger.info("Materialised %d inferred triples into %s", count, table_name)
         return count
 

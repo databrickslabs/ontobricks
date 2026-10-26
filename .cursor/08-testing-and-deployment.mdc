@@ -54,5 +54,8 @@ When the user asks you to refactor:
    - Summarize which refactorings were applied (by name).
    - Explain how structure, readability, or testability improved.
    - Mention any remaining smells and potential follow-up refactorings.
+6. Run the architecture guardrails (`uv run --frozen pytest -q tests/units/architecture`) and tighten the shrink-only baseline with `uv run --frozen python -m tests.units.architecture.ratchet` (`.cursor/07 §Class-First Policy`).
+
+Prefer the simplest result: if a split adds more concepts than it removes, don't do it (`.cursor/01 §Key Principles`).
 
 Throughout, remember: refactoring means improving design while keeping externally observed behaviour the same, following Martin Fowler's "Refactoring: Improving the Design of Existing Code."

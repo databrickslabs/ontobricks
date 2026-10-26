@@ -16,7 +16,7 @@ connected journey:
                               removal itself still proceeds (guard informs,
                               doesn't block) and reports the same impact
 
-Unlike scenarios 1-3, this journey does **not** reuse ``testscenario1`` — it
+Unlike scenarios 1-3, this journey does **not** reuse ``zztestscenario1`` — it
 builds its own domain over two scratch Unity Catalog tables it creates and
 drops itself, so it can freely rename/drop columns without touching shared
 data. It is a sibling journey, not another chapter of scenario 1's story, so
@@ -24,7 +24,7 @@ it is intentionally left out of the campaign's dependency chain (registered
 under its own ``chain_marker`` name with no ``depends``, so campaign runs
 don't skip it, but nothing else is gated on it either).
 
-The domain (``TestMetadataIntegrity``) is intentionally **not** deleted at
+The domain (``ZzTestMetadataIntegrity``) is intentionally **not** deleted at
 the end, same rationale as scenario 1: open the app afterwards and inspect
 the (now partially broken, on purpose) mapping by hand.
 
@@ -55,6 +55,7 @@ import os
 import pytest
 
 from tests.e2e.scenarios._harness import (
+    METADATA_DOMAIN_NAME,
     chain_marker,
     csrf_headers,
     json_body,
@@ -70,10 +71,10 @@ pytestmark = [
         "(needs a running app + warehouse; writes a durable domain + two "
         "scratch UC tables it drops on teardown)",
     ),
-    *chain_marker("scenario_4"),
+    *chain_marker("scenario_4", depends=("scenario_0",)),
 ]
 
-_DOMAIN_NAME = "TestMetadataIntegrity"
+_DOMAIN_NAME = METADATA_DOMAIN_NAME
 _DOMAIN_FOLDER = _DOMAIN_NAME.lower()
 _BASE_URI = f"http://ontobricks.ai/{_DOMAIN_NAME}#"
 

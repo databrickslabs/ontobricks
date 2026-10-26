@@ -9,7 +9,7 @@
 # ┌─────────────────────────────────────────────────────────────────┐
 # │  TO DEPLOY A NEW INSTANCE (keeps existing apps):                │
 # │    1. Set DEFAULT_INSTANCE_ID (e.g. "07x").                     │
-# │    2. Set DEFAULT_LAKEBASE_DATABASE (existing Postgres datname).│
+# │    2. Set DEFAULT_LAKEBASE_DATABASE (created if missing).       │
 # │    3. Optionally set DEFAULT_DATABRICKS_PROFILE if you use a    │
 # │       non-default Databricks CLI profile.                       │
 # │    4. Optionally set DEFAULT_LAKEBASE_SCHEMA if you want a      │
@@ -36,7 +36,7 @@
 # Lowercase alphanumeric + hyphens only (becomes part of the app name
 # and the DAB target: ``dev-lakebase-<id>``).
 # Env-overridable: ``DEFAULT_INSTANCE_ID=080 make deploy``.
-DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-08x}"
+DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-09x}"
 
 # Optional: force a DAB target instead of the auto ``ontobricks-<id>``.
 # Use only to keep managing a pre-INSTANCE_ID deploy whose local state
@@ -51,26 +51,26 @@ DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-08x}"
 # `databricks` invocations when this file is sourced (make deploy, bootstrap, …).
 DEFAULT_DATABRICKS_PROFILE="${DEFAULT_DATABRICKS_PROFILE-DEFAULT}"
 
-# SQL Warehouse
+# SQL Warehouse. Leave empty to use the workspace Serverless Starter Warehouse
+# (resolved at deploy time). A set id is never replaced.
 DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
 
 # Unity Catalog
 DEFAULT_REGISTRY_CATALOG="benoit_cayla"
-# UC schema for the Volume registry
-DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_08_repository"
-DEFAULT_REGISTRY_VOLUME="registry"
+# UC schema for the registry Delta objects (Knowledge Graph builds)
+DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_09_repository"
 
 # Lakebase Autoscaling project + branch
-DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-08-registry"
+DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-09-registry"
 DEFAULT_LAKEBASE_BRANCH="production"
 # Postgres database (datname) on the shared Lakebase instance — the value of
 # status.postgres_database from list-databases (underscores OK). Do NOT copy the
 # hyphenated database_id from the resource path name; those differ when the
 # datname contains underscores (API uses hyphens only in database_id / RFC-1123).
 # Each app gets its own SCHEMA inside this database.
-DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_08_registry_db"
+DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_09_registry_db"
 # Postgres schema inside the Lakebase database, Each instance should have its own schema for isolation.
-DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_08_registry_sc"
+DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_09_registry_sc"
 # Example — reuse existing schema: DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
 
 # ── 0c. Derived defaults (auto-computed — do NOT edit) ────────────────
@@ -114,15 +114,18 @@ export MCP_APP_RESOURCE_KEY="${MCP_APP_RESOURCE_KEY:-$DEFAULT_MCP_APP_RESOURCE_K
 export DAB_TARGET="${DAB_TARGET:-$DEFAULT_DAB_TARGET}"
 
 # ── 3. DAB variable overrides (databricks.yml > variables:) ─────────
+# A quoted "#oldid" leftover is not a warehouse id — treat it as unset.
+if [[ "${WAREHOUSE_ID:-}" == \#* ]]; then
+    unset WAREHOUSE_ID
+fi
 export WAREHOUSE_ID="${WAREHOUSE_ID:-$DEFAULT_WAREHOUSE_ID}"
 
-# Unity Catalog Volume securable.
+# Unity Catalog registry catalog/schema (Delta objects for KG builds).
 export REGISTRY_CATALOG="${REGISTRY_CATALOG:-$DEFAULT_REGISTRY_CATALOG}"
 # Env-overridable so `scripts/update-deployed-app.sh` can pin the schema it
 # read back from a live app. `make deploy` `unset`s REGISTRY_SCHEMA first, so
 # the routine deploy still always uses DEFAULT_REGISTRY_SCHEMA.
 export REGISTRY_SCHEMA="${REGISTRY_SCHEMA:-$DEFAULT_REGISTRY_SCHEMA}"
-export REGISTRY_VOLUME="${REGISTRY_VOLUME:-$DEFAULT_REGISTRY_VOLUME}"
 
 # Lakebase project / branch.
 export LAKEBASE_PROJECT="${LAKEBASE_PROJECT:-$DEFAULT_LAKEBASE_PROJECT}"
@@ -149,10 +152,9 @@ export APP_SQL_WAREHOUSE_FALLBACK="${APP_SQL_WAREHOUSE_FALLBACK:-$WAREHOUSE_ID}"
 # Default triplestore table.
 export APP_TRIPLESTORE_TABLE="${APP_TRIPLESTORE_TABLE:-${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${DEFAULT_APP_TRIPLESTORE_TABLE_NAME}}"
 
-# Registry Volume runtime fallbacks (local dev / MCP without bound resource).
+# Registry catalog/schema runtime fallbacks (local dev / MCP without bound resource).
 export APP_REGISTRY_CATALOG="${APP_REGISTRY_CATALOG:-$REGISTRY_CATALOG}"
 export APP_REGISTRY_SCHEMA="${APP_REGISTRY_SCHEMA:-$REGISTRY_SCHEMA}"
-export APP_REGISTRY_VOLUME="${APP_REGISTRY_VOLUME:-$REGISTRY_VOLUME}"
 
 # Lakebase runtime values rendered into app.yaml — always from file.
 export APP_LAKEBASE_SCHEMA="${LAKEBASE_SCHEMA}"

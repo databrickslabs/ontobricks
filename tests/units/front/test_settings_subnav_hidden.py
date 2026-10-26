@@ -1,15 +1,11 @@
-"""The L2 subnav (Domain/Ontology/Mapping/Knowledge Graph tabs) must stay
-hidden on Settings pages, even when a domain is open in session.
+"""Settings-specific L2 behavior for the domain return control.
 
-Settings is a cross-domain area with its own left sidebar navigation
-(``get_menu('settings')``); the domain-contextual tabs above it are noise
-there and were leaking through whenever ``hasDomain`` was true.
-
-``<body data-page="settings">`` is already asserted server-side in
-``test_ui_rendering.py::test_body_has_page_id_settings`` (issue #78). These
-tests pin the client-side half: that ``updateDomainMenuVisibility`` reads
-that same attribute and forces the subnav closed on Settings regardless of
-``hasDomain``.
+The L2 (`#obSubnav`) remains a single shared slot with mutually exclusive
+presentations:
+- Settings + loaded domain: show only "Back to domain"
+- Settings + no domain: hide all L2
+- Non-settings + loaded domain: show normal workspace rail
+- Non-settings + no domain: hide all L2
 """
 
 from __future__ import annotations
@@ -19,10 +15,29 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
+BREADCRUMB_JS = REPO_ROOT / "src/front/static/global/js/breadcrumb.js"
+MAIN_CSS = REPO_ROOT / "src/front/static/global/css/main.css"
+BASE_HTML = REPO_ROOT / "src/front/templates/base.html"
 
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _rule(css: str, selector: str) -> str:
+    match = re.search(rf"{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.DOTALL)
+    assert match is not None, f"Missing CSS rule for {selector}"
+    return match.group(1)
+
+
+def _mobile_block(css: str) -> str:
+    match = re.search(
+        r"@media\s*\(max-width:\s*767\.98px\)\s*\{(.*?)\n\}",
+        css,
+        flags=re.DOTALL,
+    )
+    assert match is not None, "No mobile breakpoint in main.css"
+    return match.group(1)
 
 
 def _update_domain_menu_visibility_body() -> str:
@@ -37,23 +52,29 @@ def _update_domain_menu_visibility_body() -> str:
 
 
 def test_reads_settings_page_from_body_dataset():
-    """Must key off the same attribute the server renders for Settings."""
     body = _update_domain_menu_visibility_body()
     assert "document.body.dataset.page === 'settings'" in body
 
 
-def test_subnav_dnone_toggle_is_forced_on_settings_regardless_of_domain():
-    """The `d-none` toggle on #obSubnav must OR in the settings-page check,
-    so a truthy hasDomain cannot re-show the subnav on /settings."""
+def test_toggles_settings_return_link_for_settings_with_domain():
     body = _update_domain_menu_visibility_body()
-    toggle = re.search(
-        r"subnav\.classList\.toggle\(['\"]d-none['\"],\s*([^)]+)\)",
-        body,
-    )
-    assert toggle is not None, "subnav d-none toggle not found"
-    condition = toggle.group(1)
-    assert "isSettingsPage" in condition
-    assert "!hasDomain" in condition
+    assert "settingsDomainReturnNav" in body
+    assert "settingsDomainReturnNav.classList.toggle('d-none', !showSettingsReturn);" in body
+
+
+def test_toggles_workspace_rail_for_non_settings_with_domain():
+    body = _update_domain_menu_visibility_body()
+    assert "domainWorkspaceSubnavNav" in body
+    assert "domainWorkspaceSubnavNav.classList.toggle('d-none', !showWorkspaceRail);" in body
+
+
+def test_subnav_visibility_is_driven_by_the_four_state_combinations():
+    body = _update_domain_menu_visibility_body()
+    assert "const showSettingsReturn = isSettingsPage && hasDomain;" in body
+    assert "const showWorkspaceRail = !isSettingsPage && hasDomain;" in body
+    assert "subnav.classList.toggle('d-none', !showSettingsReturn && !showWorkspaceRail);" in body
+    assert "document.querySelectorAll('[data-subnav-domain-chrome]').forEach((el) => {" in body
+    assert "el.classList.toggle('d-none', !showWorkspaceRail);" in body
 
 
 def test_is_settings_page_flag_is_computed_once_at_function_top():
@@ -61,14 +82,41 @@ def test_is_settings_page_flag_is_computed_once_at_function_top():
     assert "const isSettingsPage = document.body.dataset.page === 'settings';" in body
 
 
-def test_l1_domain_nav_item_untouched_by_settings_check():
-    """Only the L2 subnav is settings-gated — the L1 Domain nav item (path
-    breadcrumb near the logo) keeps following hasDomain alone, since it is
-    not the "second level navbar" this guard targets."""
-    body = _update_domain_menu_visibility_body()
-    domain_nav_toggle = re.search(
-        r"domainNav\.classList\.toggle\(['\"]d-none['\"],\s*([^)]+)\)",
-        body,
+def test_breadcrumb_never_reveals_on_settings_pages():
+    js = _read(BREADCRUMB_JS)
+    init = re.search(r"init\(\) \{(.*?)\n    \},", js, re.DOTALL)
+    assert init is not None, "Breadcrumb.init not found"
+    body = init.group(1)
+
+    settings_guard = "if (document.body.dataset.page === 'settings') return;"
+    assert settings_guard in body
+    assert body.index(settings_guard) < body.index("wrap.classList.remove('d-none');")
+
+
+def test_settings_return_link_matches_sidebar_width_on_desktop():
+    css = _read(MAIN_CSS)
+    html = _read(BASE_HTML)
+    rule = _rule(css, ".ob-subnav-settings-return-link")
+
+    assert 'id="settingsDomainReturnLink"' in html
+    assert 'class="ob-subnav-settings-return-link ob-settings-domain-return-link"' in html
+    assert "width: 200px" in rule
+    assert "min-width: 200px" in rule
+    assert "max-width: 200px" in rule
+    assert "justify-content: center" in rule
+
+
+def test_settings_return_link_resets_fixed_width_on_mobile():
+    mobile = _mobile_block(_read(MAIN_CSS))
+    assert re.search(
+        r"\.ob-subnav-settings-return-link\s*\{[^}]*width\s*:\s*auto",
+        mobile,
     )
-    assert domain_nav_toggle is not None
-    assert "isSettingsPage" not in domain_nav_toggle.group(1)
+    assert re.search(
+        r"\.ob-subnav-settings-return-link\s*\{[^}]*min-width\s*:\s*0",
+        mobile,
+    )
+    assert re.search(
+        r"\.ob-subnav-settings-return-link\s*\{[^}]*max-width\s*:\s*none",
+        mobile,
+    )

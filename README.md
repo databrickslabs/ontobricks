@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.8.1</h1>
+<h1 align="center">OntoBricks 0.9.1</h1>
 
 <p align="center">
   <strong>Turn your Databricks tables into a living knowledge graph — in four clicks.</strong>
@@ -25,6 +25,33 @@
   <img src="https://img.shields.io/badge/AI-MCP%20ready-10B981.svg" alt="MCP ready">
 </p>
 
+<table>
+<tr>
+<td>
+
+### What's new in 0.9.0
+
+- **Lakehouse//RT graph queries**: Knowledge Graph reads can run on a serverless Lakehouse//RT warehouse, while builds keep a classic or serverless one.
+- **Three-stage Ontology Generate**: detect entities, lock the catalog, then complete relations, attributes and axioms. The result is appended to your ontology instead of replacing it.
+- **Knowledge Store**: parsed documents live in Lakebase and are shared by Generate and Mapping. No Volume grants are needed.
+- **Unity Catalog Metric Views**: Metric Views import as data assets with dimension/measure roles; Auto-Map emits `MEASURE(...)` SQL.
+- **Entity Data Quality Checks**: right-click a node in Explorer, or call it from MCP, to check that entity against every SHACL shape that applies, with gauges for each dimension.
+- **Entity business rules**: attach SWRL rules, aggregate rules and decision tables to a class, then run them on one entity from Explorer or MCP.
+- **Databricks Jobs as class actions**: trigger a workspace Job for an entity next to Unity Catalog functions.
+- **SPARQL playground**: query the graph in SPARQL and inspect the generated SQL.
+- **GitHub domain mirror**: push the domain configuration (OWL, R2RML, SHACL, rules) to a GitHub repository and restore it from there.
+- **OBX Import as**: rename a domain on import; a renamed copy does not reuse the previous graph objects.
+- **Faster Explorer**: indexed search, paged expansion and no blocking `COUNT(*)` on first load.
+- **Ontology Studio**: the renamed Designer adds multi-select, Business Views, cross-domain import, and OWL/R2RML export from the canvas.
+- **Load opens Domain → General**: opening a domain from Home, the navbar, Registry, or Versions lands on Domain → General instead of staying on the current page.
+- **Security hardening**: stricter CSRF, a `/health` that leaks no internals, dialect-aware SQL escaping and sanitised Markdown.
+
+Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.0.md).
+
+</td>
+</tr>
+</table>
+
 ---
 
 Every enterprise has the data. Almost none have the **meaning**. Your Lakehouse
@@ -44,7 +71,8 @@ months-long integration project.
   the whole pipeline — import metadata, generate the ontology, map the data,
   materialize the graph.
 - **Lives inside Databricks.** Deploys as a Databricks App and reuses what you
-  already have: Unity Catalog, SQL Warehouse, Model Serving, Lakebase. Your
+  already have: Unity Catalog, SQL Warehouse, AI Gateway or Model Serving,
+  and Lakebase. Your
   triples stay in your Lakehouse.
 - **Standards under the hood, simplicity on top.** OWL, R2RML and SPARQL power
   the engine; everything executes as Spark SQL. Your users never touch RDF.
@@ -53,19 +81,32 @@ months-long integration project.
   business semantics.
 - **Governed by design.** Versioned domains, DRAFT → IN-REVIEW → PUBLISHED
   lifecycle, single-editor locking, and an append-only review audit trail.
+- **Parse documents once, reuse them everywhere.** Uploaded PDF, Office, image,
+  and text sources are parsed into a versioned **Knowledge Store** (parsed text
+  in Lakebase; originals are not retained) shared by ontology Generate and
+  Mapping; failed parses are visible and retryable.
 
 ## From tables to a knowledge graph in four clicks
 
 | Step | Action | What happens | Powered by |
 |------|--------|--------------|------------|
 | **1** | **Import Metadata** — Domain &gt; Metadata | Fetches table &amp; column metadata from Unity Catalog | Unity Catalog |
-| **2** | **Generate Ontology** — Ontology &gt; Wizard | The LLM designs entities, relationships &amp; attributes from your metadata | Model Serving |
-| **3** | **Auto-Map** — Mapping &gt; Auto-Map | The LLM generates SQL mappings for every entity and relationship | Model Serving |
+| **2** | **Generate Ontology** — Ontology &gt; Wizard | The LLM designs entities, relationships &amp; attributes from your metadata | AI Gateway / Model Serving |
+| **3** | **Auto-Map** — Mapping &gt; Auto-Map | The LLM generates SQL mappings for every entity and relationship | AI Gateway / Model Serving |
 | **4** | **Synchronize** — Knowledge Graph &gt; Status | Executes the mappings and populates the triple store | SQL Warehouse |
 
 Prefer full control? Every step is also available as a guided **manual
 workflow** — design, map, build, query, and reason at column-level precision.
 See the [User Guide](docs/user-guide.md).
+
+### Run a domain without an LLM
+
+Selecting **No LLM** is a strict domain-level opt-out. LLM actions remain
+visible but unavailable and direct API calls are rejected with guidance to
+select a model in **Domain → General → AI**. Select and save an LLM there to
+make those actions available again without reloading the page. Deterministic
+reasoning and validation, including OWL/SWRL inference, ontology pitfalls, and
+SHACL data-quality checks, remain available while No LLM is selected.
 
 ## What's inside
 
@@ -75,6 +116,14 @@ or import industry standards in one click (FIBO, CDISC, IOF, HL7 FHIR
 R4/R4B/R5) and your own OWL/RDFS. A floating **AI Assistant** edits your
 ontology through natural language. Catch design issues early with the built-in
 **Ontology Pitfalls Detector** (19 structural, logical and semantic checks).
+
+**Generate** drives that AI design through a resumable, human-in-the-loop
+wizard — **Detect** candidate entities from metadata and your parsed document
+corpus, **Review** them (include/exclude, edit labels, add your own), then
+**Complete** relations, attributes, and axioms in that order. Every run
+**appends** to your existing ontology — locked entities are never renamed or
+removed — and a stale draft (source changed since detection) is flagged with
+a one-click **Re-detect** instead of silently reusing outdated candidates.
 
 ### Map to your data — automatically
 Let the LLM generate SQL and column mappings for every entity and relationship,
@@ -87,9 +136,18 @@ Materialize triples incrementally, then **reason** over the graph with OWL 2 RL
 inference, SWRL rules and SHACL validation. Explore interactively: two-phase
 search, N-hop neighbour expansion, cross-domain bridge navigation, community
 detection (Louvain, Label Propagation, Greedy Modularity), and explainable
-**cohort discovery**. Query everything through an auto-generated **GraphQL**
-API. Details in the [User Guide](docs/user-guide.md) and
-[Cohort Discovery](docs/cohort_discovery.md).
+**cohort discovery**. Right-click any entity to run its **Data Quality Checks**
+(every SHACL shape on its class, its parents and the global ones, with
+per-dimension gauges), one of its **SWRL business rules**, or a class action
+(Unity Catalog function or **Databricks Job**) — the same checks and actions are
+MCP tools. Lakehouse domains can optionally read from a **Lakehouse//RT**
+query warehouse while builds stay on a classic or serverless warehouse. Query
+everything through an auto-generated **GraphQL** API or open **Knowledge Graph
+→ Query → SPARQL** for read-only SELECT queries, sample queries, CSV export,
+generated SQL inspection, and triple-shaped results that open in Explorer.
+See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
+[Get Started](docs/getting-started.md), and
+[Cohort Discovery](docs/advanced_features.md#cohort-discovery).
 
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks
@@ -103,9 +161,16 @@ that expose a single `describe_ontology` tool. See
 Every domain version carries a **DRAFT / IN-REVIEW / PUBLISHED** status enforced
 server-side. A **single editor** holds a DRAFT at a time (auto-releasing leases,
 admin take-over), a business-friendly **review workflow** collects sign-offs
-with a configurable quorum, and every decision is persisted append-only. Move
+with a configurable quorum, and every decision is persisted append-only.
+Administrators can safely delete only older, unloaded Draft versions; deletion
+atomically rechecks Draft status before attempting permanent removal of that
+version's Knowledge Store content. Cleanup failures are reported as errors
+rather than false success. Move
 domains between environments with the **OBX** export/import (UI or
-[CLI](docs/import-export.md)).
+[CLI](docs/advanced_features.md#registry-import-and-export)), or mirror every
+save into the instance's **GitHub repository** — one commit per save, organised
+by domain and version, with OWL and R2RML Turtle files alongside the JSON
+sources ([Settings → GitHub](docs/user-guide.md#configuration--github-repository-mirror)).
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
@@ -113,16 +178,19 @@ Pick a backend **per domain**: **Lakebase (Postgres)** by default,
 **No Backend** for ontology-only domains that publish their ontology with no
 graph built (Mapping and Knowledge Graph are disabled and the MCP surface
 serves only ontology information).
-Connection config stays workspace-global. Full reference:
-[Lakebase Graph DB](docs/lakebase-graphdb.md) ·
-[Graph DB Integration](docs/graphdb-integration.md).
+Connection config stays workspace-global. Lakehouse and Lakebase Build also
+materialise Explorer indexes (`_adj_out` / `_adj_in`, `_entity_search`,
+`_entity_search_asserted`, `_props`); Neo4j keeps native traversal. Full reference:
+[Lakebase Graph DB](docs/backend.md#lakebase-graph-store) ·
+[Graph DB Integration](docs/backend.md#engine-integration) ·
+[Graph Query Optimizations](docs/backend.md#graph-query-optimizations).
 
 ## Runs entirely on your Databricks
 
 OntoBricks is not a separate platform. It deploys as a **Databricks App** and
 uses the services you already run — Unity Catalog for storage and metadata, a
-SQL Warehouse for execution, Model Serving for LLM automation, and Lakebase for
-the registry and graph store. Your data and your triples never leave your
+SQL Warehouse for execution, AI Gateway or Model Serving for LLM automation, and
+Lakebase for the registry and graph store. Your data and your triples never leave your
 workspace. Architecture deep-dive: [architecture.md](docs/architecture.md).
 
 ## Get started
@@ -150,15 +218,12 @@ make deploy
 ```
 
 Prerequisites (Databricks workspace with Apps enabled, a SQL Warehouse, a
-**Lakebase Autoscaling** database, and a Unity Catalog Volume) and the full,
+**Lakebase Autoscaling** database, and a Unity Catalog Volume for the registry
+identifier / export bundles) and the full,
 idempotent deploy checklist — including one-click graph-DB provisioning and
 permission bootstrap — are in the
-**[Get Started](docs/get-started.md)** and
+**[Get Started](docs/getting-started.md)** and
 **[Deployment Guide](docs/deployment.md)**.
-
-Existing 0.7.x operators should follow
-**[Updating to 0.8.0](update_to_0.8.md)** for backup, migration, deployment,
-verification, and rollback steps.
 
 The bundle syncs only runtime source, the MCP and graph-job files, dependency
 locks, and the in-app Help Center set. `databricks.yml` `sync.exclude` is
@@ -167,12 +232,13 @@ by the Databricks CLI.
 
 ## Documentation
 
-- **[Documentation hub](docs/README.md)** — start here
-- **[Value proposition](docs/product.md)** — the business case &amp; go-to-market
-- **[User Guide](docs/user-guide.md)** · **[Features](docs/features.md)** · **[Architecture](docs/architecture.md)** · **[API](docs/api.md)**
-- **[MCP](docs/mcp.md)** · **[Graph DB](docs/lakebase-graphdb.md)** · **[Import / Export](docs/import-export.md)**
-- **[Contributor Guide](docs/contributing.md)** — setup, style, tests, PRs
-- **[Developing OntoBricks](docs/development.md)** — dependencies, test campaign, permissions
+The [documentation hub](docs/README.md) groups pages the same way as in-app Help:
+
+- **Start here** — [Get Started](docs/getting-started.md) · [Examples](docs/examples.md) · [Feature inventory](docs/user-guide.md#feature-inventory)
+- **Using OntoBricks** — [User Guide](docs/user-guide.md) · [Advanced features](docs/advanced_features.md) · [MCP](docs/mcp.md)
+- **Platform** — [Graph backends](docs/backend.md) · [Architecture](docs/architecture.md) · [API](docs/api.md)
+- **Deploy & develop** — [Deployment](docs/deployment.md) · [Development](docs/development.md)
+- **About** — [Product / value proposition](docs/product.md)
 
 Product overview, screenshots and videos:
 [ontobricks.org](https://ontobricks.org/).

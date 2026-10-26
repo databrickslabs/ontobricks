@@ -5,13 +5,7 @@
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1"><i class="bi bi-share me-2"></i>Graph Explorer{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
-        <p class="text-muted mb-0 small">Interactive graph visualization<br>
-            <i class="bi bi-box"></i> Domain: <code class="text-primary">{{ domain_name }}</code> <span class="badge bg-secondary bg-opacity-50 ob-version-badge">v{{ current_version }}</span> <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning" style="font-size:0.6rem;">Draft</span><br>
-            <i class="bi bi-diagram-3"></i> Graph DB: <code id="sgGraphDbName" class="text-primary">{{ graph_name or 'Not configured' }}</code>
-            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-2" data-sg-action="openGraphSwitcher" title="Switch to another domain graph">
-                <i class="bi bi-arrow-left-right me-1"></i>Switch domain
-            </button>
-        </p>
+        <p class="text-muted mb-0 small">Interactive graph visualization</p>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="form-check form-check-inline mb-0">
@@ -30,9 +24,14 @@
             <input class="form-check-input" type="checkbox" id="sgShowInferred" checked data-sg-change="toggleInferred">
             <label class="form-check-label small" for="sgShowInferred">Inferred</label>
         </div>
+        <div class="form-check form-check-inline mb-0" title="Ring the entities whose SHACL facets were checked">
+            <input class="form-check-input" type="checkbox" id="sgShowQualityRings" checked data-sg-change="toggleQualityRings">
+            <label class="form-check-label small" for="sgShowQualityRings">Quality</label>
+        </div>
         <div class="d-inline-flex align-items-center gap-1 mb-0">
             <label class="form-label small mb-0 text-muted" for="sgMaxEntities"><i class="bi bi-speedometer2"></i></label>
             <select class="form-select form-select-sm py-0 sg-compact-select" id="sgMaxEntities" title="Max entities returned by graph search">
+                <!-- Option values must stay within GraphFilter.EXPLORER_MAX_ENTITIES_* -->
                 <option value="500">500</option>
                 <option value="1000">1 000</option>
                 <option value="2000">2 000</option>
@@ -41,6 +40,9 @@
                 <option value="20000">20 000</option>
             </select>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-sg-action="openFindPathModal" title="Find shortest path between two loaded entities">
+            <i class="bi bi-signpost-split me-1"></i> Find Path
+        </button>
         <button type="button" class="btn btn-sm btn-outline-primary" data-sg-action="openOntologyViewer" title="View ontology model">
             <i class="bi bi-bezier2"></i> Ontology
         </button>
@@ -72,45 +74,42 @@
             <div class="card">
                 <div class="card-body p-0">
                     <!-- Sigma Container -->
-                    <div id="sgContainer">
-                        <div id="sgLoading" class="position-absolute top-50 start-50 translate-middle text-center">
-                            <div class="ob-loading-spinner">
-                                <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
-                                    <g class="ob-ring">
-                                        <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
-                                            <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
-                                            <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
-                                            <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
-                                            <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
-                                        </g>
-                                        <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
-                                        <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
-                                        <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
-                                        <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                    <div id="sgContainer" aria-busy="false"></div>
+                    <div id="sgLoading" class="sg-loading-overlay">
+                        <div class="ob-loading-spinner" role="status" aria-live="polite">
+                            <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+                                <g class="ob-ring">
+                                    <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
+                                        <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
+                                        <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
+                                        <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
+                                        <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
                                     </g>
-                                    <g transform="translate(40,40)">
-                                        <g class="ob-center">
-                                            <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
-                                            <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
-                                            <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
-                                        </g>
+                                    <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
+                                    <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
+                                    <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
+                                    <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
+                                </g>
+                                <g transform="translate(40,40)">
+                                    <g class="ob-center">
+                                        <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
+                                        <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
+                                        <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
                                     </g>
-                                </svg>
-                                <span class="ob-spinner-label">Loading graph data...</span>
-                            </div>
+                                </g>
+                            </svg>
+                            <span class="ob-spinner-label" id="sgLoadingLabel">Loading graph data…</span>
                         </div>
-                    </div>
-                    <!-- Non-blocking expand spinner (top-right) -->
-                    <div id="sgExpandSpinner" class="sg-expand-spinner d-none" role="status" aria-live="polite">
-                        <div class="spinner-border spinner-border-sm text-primary me-2" aria-hidden="true"></div>
-                        <span class="small fw-semibold" id="sgExpandSpinnerLabel">Expanding…</span>
                     </div>
                     <!-- Node Context Menu (dynamic content) -->
                     <div id="sgNodeContextMenu" class="graph-context-menu"></div>
                     <!-- Canvas Context Menu -->
                     <div id="sgContextMenu" class="graph-context-menu">
                         <div class="ctx-item" data-sg-ctx="openFindPopup">
-                            <i class="bi bi-search"></i> Find in graph
+                            <i class="bi bi-geo-alt"></i> Find in graph
+                        </div>
+                        <div class="ctx-item" data-sg-ctx="openFindPathModal">
+                            <i class="bi bi-signpost-split"></i> Find Path
                         </div>
                         <div class="ctx-divider"></div>
                         <div class="ctx-item" data-sg-ctx="openGroupsPopup">
@@ -133,14 +132,14 @@
                     <!-- Find Popup (floating) -->
                     <div id="sgFindPopup" class="sg-canvas-popup d-none">
                         <div class="sg-find-popup-header">
-                            <span class="small fw-semibold"><i class="bi bi-search"></i> Find in graph</span>
+                            <span class="small fw-semibold"><i class="bi bi-geo-alt"></i> Find in graph</span>
                             <button type="button" class="btn-close btn-close-sm" data-sg-action="closeFindPopup" aria-label="Close"></button>
                         </div>
                         <div class="sg-find-popup-body">
                             <input type="text" class="form-control form-control-sm mb-2" id="sgSearchValue" placeholder="Search entities..." data-sg-keyenter="applySearch">
                             <div class="d-flex gap-1">
                                 <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="applySearch">
-                                    <i class="bi bi-highlighter"></i> Highlight
+                                    <i class="bi bi-geo-alt"></i> Highlight
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-warning d-none" data-sg-action="clearSearch" title="Clear" id="sgClearSearchBtn">
                                     <i class="bi bi-x-circle"></i>
@@ -211,7 +210,7 @@
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="sgTabFilter" data-bs-toggle="tab" data-bs-target="#sgTabFilterPane" type="button" role="tab" aria-selected="false">
-                            <i class="bi bi-funnel"></i> Filter
+                            <i class="bi bi-search"></i> Search
                         </button>
                     </li>
                 </ul>
@@ -297,36 +296,39 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Filter Tab -->
+                    <!-- Search Tab -->
                     <div class="tab-pane fade sg-tab-pane" id="sgTabFilterPane" role="tabpanel">
                         <div class="sg-tab-inner p-3">
-                            <span class="small fw-semibold"><i class="bi bi-funnel"></i> Filter Graph</span>
-                            <p class="text-muted small mt-1 mb-2">Search and filter entities from the graph viewer.</p>
+                            <span class="small fw-semibold"><i class="bi bi-search"></i> Search</span>
+                            <p class="text-muted small mt-1 mb-2">Search entities and load them onto the graph viewer.</p>
                             <label class="form-label small mb-1" for="sgFilterEntityType">Entity</label>
                             <select class="form-select form-select-sm mb-2" id="sgFilterEntityType" title="Restrict the search to a single entity type (All searches every type)">
                                 <option value="">All</option>
                             </select>
                             <label class="form-label small mb-1" for="sgFilterMatchType">Match</label>
                             <select class="form-select form-select-sm mb-2" id="sgFilterMatchType">
+                                <option value="starts" selected>Starts with</option>
                                 <option value="contains">Contains</option>
                                 <option value="exact">Exact</option>
-                                <option value="starts">Starts with</option>
                                 <option value="ends">Ends with</option>
                             </select>
                             <label class="form-label small mb-1" for="sgFilterValue">Search Value</label>
-                            <input type="text" class="form-control form-control-sm mb-2" id="sgFilterValue" placeholder="Enter search term..." data-sg-keyenter="executeGraphFilter">
+                            <div class="input-group input-group-sm mb-2">
+                                <input type="text" class="form-control" id="sgFilterValue" placeholder="Enter search term..." data-sg-keyenter="executeGraphFilter">
+                                <button type="button" class="btn btn-outline-primary" data-sg-action="highlightFilterValue" title="Locate matching entities" aria-label="Locate matching entities">
+                                    <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                                </button>
+                            </div>
                             <label class="form-label small mb-1" for="sgFilterDepth">Depth: <span id="sgFilterDepthValue">2</span></label>
                             <input type="range" class="form-range form-range-sm mb-2" id="sgFilterDepth" min="1" max="10" value="2" title="Number of relationship levels to traverse" data-sg-input="updateFilterDepthLabel">
                             <div class="d-flex gap-1">
-                                <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="executeGraphSearch">
+                                <button type="button" class="btn btn-sm btn-primary flex-grow-1"
+                                        id="sgGraphSearchBtn" data-sg-action="executeGraphSearch">
                                     <i class="bi bi-search"></i> Search
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-warning d-none" data-sg-action="clearGraphFilter" title="Clear" id="sgClearGraphFilterBtn">
                                     <i class="bi bi-x-circle"></i>
                                 </button>
-                            </div>
-                            <div id="sgGraphFilterInfo" class="mt-2 small d-none">
-                                <span class="text-info"><i class="bi bi-info-circle"></i> <span id="sgGraphFilterInfoText"></span></span>
                             </div>
                         </div>
                     </div>
@@ -376,10 +378,49 @@
             <div class="modal-footer py-2">
                 <span class="me-auto small text-muted"><span id="sgSeedSelectedCount">0</span> selected</span>
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-sm btn-primary" id="sgSeedExploreBtn" data-sg-action="expandSelectedSeeds">
-                    <i class="bi bi-diagram-3 me-1"></i>Explore selected
+            <button type="button" class="btn btn-sm btn-primary" id="sgSeedExploreBtn" data-sg-action="expandSelectedSeeds">
+                <i class="bi bi-diagram-3 me-1"></i>Explore selected
+            </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Find Path Modal -->
+<div class="modal fade" id="sgFindPathModal" tabindex="-1" aria-labelledby="sgFindPathModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sgFindPathModalLabel">
+                    <i class="bi bi-signpost-split me-2"></i>Find Path
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Highlight the shortest path(s) between two entities on the loaded graph. Edges are treated as undirected.</p>
+                <label class="form-label" for="sgFindPathSource">Source</label>
+                <div class="sg-find-path-picker mb-3">
+                    <input type="text" class="form-control" id="sgFindPathSource" placeholder="Search loaded entities…" autocomplete="off" aria-autocomplete="list" aria-controls="sgFindPathSourceList" aria-expanded="false">
+                    <input type="hidden" id="sgFindPathSourceId">
+                    <div id="sgFindPathSourceList" class="sg-find-path-suggest d-none" role="listbox"></div>
+                    <div id="sgFindPathSourcePicked" class="sg-find-path-picked d-none"></div>
+                </div>
+                <label class="form-label" for="sgFindPathTarget">Destination</label>
+                <div class="sg-find-path-picker mb-3">
+                    <input type="text" class="form-control" id="sgFindPathTarget" placeholder="Search loaded entities…" autocomplete="off" aria-autocomplete="list" aria-controls="sgFindPathTargetList" aria-expanded="false">
+                    <input type="hidden" id="sgFindPathTargetId">
+                    <div id="sgFindPathTargetList" class="sg-find-path-suggest d-none" role="listbox"></div>
+                    <div id="sgFindPathTargetPicked" class="sg-find-path-picked d-none"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="sgFindPathApplyBtn" data-sg-action="applyFindPath">
+                    <i class="bi bi-geo-alt me-1"></i>Highlight path
                 </button>
             </div>
         </div>
     </div>
 </div>
+
+{% include "partials/dtwin/_query_shacl_facets_modal.html" %}

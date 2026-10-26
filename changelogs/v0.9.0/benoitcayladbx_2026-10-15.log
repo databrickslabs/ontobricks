@@ -1,0 +1,256 @@
+================================================================================
+## Explorer Job actions: verify the run, show it in a popup, follow it in Background Tasks
+================================================================================
+
+Context:
+Triggering a class Job from Explorer gave no popup and no confirmation that
+the run had actually started: a toast appeared only after `run_now`
+returned, and Background Tasks showed a generic message. The user asked for
+a popup that verifies the job is running, informs the user immediately, and
+follows the run state through Background Tasks.
+
+Changes:
+
+1. src/back/core/databricks/jobs/JobActionRunner.py
+   New `run_state(run_id)`: one `get_run` returning `life_cycle_state`,
+   `result_state`, `message` and `run_page_url`; SDK errors become
+   InfrastructureError.
+2. src/back/objects/digitaltwin/node/JobActionService.py
+   After `run_now`, the run state is read once (`_verified_state`, never fails
+   the trigger; falls back to UNKNOWN). The response carries `run_state`,
+   `run_page_url` and a message naming the state ("Job X is running" /
+   "is queued" / "was started"). The Background Task starts with
+   "Databricks run N: Running", stores `life_cycle_state` and `run_page_url`
+   in its result, and each poll updates both (`_record_progress`).
+3. src/api/routers/digitaltwin.py
+   `NodeActionResponse.run_state` added.
+4. src/front/static/query/js/query-dashboard.js
+   - Shared `_showEntityActionModal` / `_actionSpinner` (UC functions and Jobs
+     use the same modal; `bootstrap.Modal.getOrCreateInstance`).
+   - Job actions open a popup immediately ("Starting job…"), then show the
+     verified state with an icon and a label (Running / Queued / Starting),
+     the run id, an "Open run in Databricks" link and a "Show Background
+     Tasks" button; a success notification fires at once.
+   - While the popup is open it polls `/tasks/<task_id>` every 3 s and moves
+     to Succeeded / Failed / Cancelled; closing the popup stops polling.
+   - `_jobRunStatus` maps task status + life-cycle state to icon/label.
+   - Job branch removed from `_runEntityAction` (UC functions only).
+5. src/front/static/global/js/task-tracker.js
+   Background Task items show "Open run in Databricks" when the task result
+   has an http(s) `run_page_url` (escaped, `rel="noopener"`).
+6. Docs: docs/api.md (`run_state`, verified message), docs/user-guide.md
+   (Job popup and Background Tasks), releases/ReleaseNotes_V0.9.0.md.
+7. Tests
+   - tests/units/core/test_job_action_runner.py: `run_state` read once, SDK
+     error wrapped.
+   - tests/units/dtwin/test_job_action_service.py: running / queued /
+     state-check-failure responses, live state recorded on the task.
+   - tests/units/api/test_node_job_action.py: `run_state` and `run_page_url`
+     in the API response.
+   - tests/units/front/test_class_actions_ui.py: Job popup contract, Node
+     check of the status mapping (icon + label for every state), run link in
+     Background Tasks.
+
+Modified files:
+- src/back/core/databricks/jobs/JobActionRunner.py
+- src/back/objects/digitaltwin/node/JobActionService.py
+- src/api/routers/digitaltwin.py
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/global/js/task-tracker.js
+- docs/api.md
+- docs/user-guide.md
+- releases/ReleaseNotes_V0.9.0.md
+- tests/units/core/test_job_action_runner.py
+- tests/units/dtwin/test_job_action_service.py
+- tests/units/api/test_node_job_action.py
+- tests/units/front/test_class_actions_ui.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9409 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 52.03s.
+
+================================================================================
+## Pin graph object FQNs to the loaded domain version
+================================================================================
+
+Context:
+Knowledge Graph Overview in the deployed app queried
+``triplestore_bigcustomers100m_V2_graph`` while the user had loaded V1
+(only V1 UC objects exist). Load posted JSON ``version: 1`` (int); document
+keys are strings, so ``1 in versions`` missed and ``import_from_file``
+silently selected lexicographic latest (``"2"``).
+
+Changes:
+
+1. src/back/objects/domain/payload.py
+   ``select_loaded_version`` / ``loaded_version_document``: stringify the
+   requested version, pin to it even if that slice is missing, and pick
+   numeric latest only when no version was requested.
+2. src/back/objects/session/DomainSession.py
+   Versioned import uses ``loaded_version_document`` instead of
+   ``version in versions`` + lexicographic ``sorted(..., reverse=True)``.
+3. src/back/core/helpers/SQLHelpers.py
+   ``effective_view_table`` / ``effective_graph_name`` stringify
+   ``current_version`` so FQNs stay ``…_V1`` when the session version is int 1.
+4. src/back/objects/domain/__init__.py
+   Export ``select_loaded_version``.
+5. tests/units/domain/test_payload_version_select.py
+   New. Int vs string keys, numeric latest, missing-slice pin.
+6. tests/units/domain/test_domain_session.py
+   Import of V1 with ``version=1`` keeps ontology and ``delta.table_name``
+   on V1.
+7. tests/units/core/test_uri_sql_helpers.py
+   Integer ``current_version`` still yields ``…_V1``.
+
+Modified files:
+- src/back/objects/domain/payload.py
+- src/back/objects/session/DomainSession.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/domain/__init__.py
+- tests/units/domain/test_payload_version_select.py
+- tests/units/domain/test_domain_session.py
+- tests/units/core/test_uri_sql_helpers.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9415 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 55.61s.
+
+================================================================================
+## Stop Overview and the KG status badge from scanning pass-through graph views
+================================================================================
+
+Context:
+After pinning the loaded domain to V1, Knowledge Graph Overview raised
+"Databricks SQL query timed out" and every KG page kept "Status
+unavailable · Lakehouse". Both probes ran COUNT(*) / aggregates on the
+pass-through ``…_V1_graph`` VIEW (100M-row R2RML). Explorer already used
+managed ``…_entity_search`` companions; a failed probe sets
+``has_data=None``, which the badge treats as unknown.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   ``table_exists`` uses ``DESCRIBE DETAIL`` (catalog, not a row scan).
+   ``get_status`` uses Delta ``numRecords`` on tables, otherwise
+   ``SELECT 1 … LIMIT 1`` on ``…_entity_search``. Overview methods
+   delegate to ``DeltaOverviewStats``.
+2. src/back/core/graphdb/delta/DeltaOverviewStats.py
+   New. Aggregate / type / predicate stats from ``_props``,
+   ``_entity_search``, and ``_adj_out`` when companions exist.
+3. tests/units/graphdb/delta/test_delta_status_probe.py
+   Existence and status never issue ``COUNT(*)`` on the graph VIEW.
+4. tests/units/graphdb/delta/test_delta_overview_stats.py
+   Overview SQL stays on companions.
+5. docs/sphinx/api/app.core.graphdb.rst
+   Automodule for ``DeltaOverviewStats``.
+6. docs/user-guide.md
+   Overview and the status badge read graph-index companions.
+7. docs/backend.md
+   Same contract for Overview / status probes.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/DeltaOverviewStats.py
+- tests/units/graphdb/delta/test_delta_status_probe.py
+- tests/units/graphdb/delta/test_delta_overview_stats.py
+- docs/sphinx/api/app.core.graphdb.rst
+- docs/user-guide.md
+- docs/backend.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9422 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 53.64s.
+
+================================================================================
+## Count Overview totals from companions; keep status off the graph VIEW
+================================================================================
+
+Context:
+After the companion-stats deploy, Overview type/predicate/label cards were
+correct but Total Triples and Distinct Subjects stayed 0, the empty-state
+copy still showed, and the badge remained Status unavailable. SEA
+``DESCRIBE DETAIL`` does not return usable ``numRecords``, and
+``DESCRIBE DETAIL`` on the pass-through ``…_graph`` VIEW still failed,
+so ``has_data`` stayed null.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaOverviewStats.py
+   ``COUNT(*)`` on ``_props`` / ``_entity_search`` for totals and
+   subjects (same path as type distribution). No ``DESCRIBE DETAIL``.
+2. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Graph existence and status probe ``…_entity_search`` only; never
+   describe or scan ``…_graph``.
+3. tests/units/graphdb/delta/test_delta_overview_stats.py
+   Aggregates use ``COUNT(*)``; ``DESCRIBE DETAIL`` is forbidden.
+4. tests/units/graphdb/delta/test_delta_status_probe.py
+   Graph status succeeds even if ``DESCRIBE`` of the VIEW would raise.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaOverviewStats.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_delta_overview_stats.py
+- tests/units/graphdb/delta/test_delta_status_probe.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9422 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 52.09s.
+
+================================================================================
+## Real triple count in graph status; drop stale zero-total Overview cache
+================================================================================
+
+Context:
+Follow-up before deploy. The graph status probe reported a placeholder
+count of 1 (``LIMIT 1``), and Overview payloads cached by the previous
+build (entity types present, ``total_triples`` 0) would keep being served.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaOverviewStats.py
+   ``triple_count``: ``COUNT(*)`` on ``…_props``.
+2. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Graph ``get_status`` uses ``triple_count``; ``LIMIT 1`` on
+   ``…_entity_search`` only when ``…_props`` is missing.
+3. src/back/objects/digitaltwin/TwinGraphStats.py
+   ``cache_is_fresh`` rejects payloads with entity types but zero triples.
+4. tests/units/graphdb/delta/test_delta_status_probe.py
+   Props count and missing-props fallback.
+5. tests/units/dtwin/test_v090_twin_build_prepare.py
+   Zero-total cached stats are stale.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaOverviewStats.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/objects/digitaltwin/TwinGraphStats.py
+- tests/units/graphdb/delta/test_delta_status_probe.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9424 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 46.69s.
+
+================================================================================
+## Explorer right-click menus always stay inside the viewport
+================================================================================
+
+Context:
+Right-clicking near the bottom (or right) of the Explorer canvas opened the
+node / canvas context menu at the raw cursor position, so its lower items
+were cut off by the window edge and could not be reached.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   New ``_placeContextMenu(menu, x, y)``: measures the menu off-screen, flips
+   it above / left of the cursor when it would cross the bottom / right edge,
+   clamps it inside the viewport (8px margin), and caps ``maxHeight`` to the
+   viewport height. Used by ``_showNodeContextMenu`` and ``_showContextMenu``.
+2. src/front/static/query/css/query-sigmagraph.css
+   ``#sgContextMenu`` / ``#sgNodeContextMenu``: ``overflow-y: auto`` so a
+   capped menu scrolls (the height cap is set in JS to honour the
+   root-shell-only ``100vh`` design contract).
+3. tests/units/front/test_explorer_context_menu_placement.py
+   Runs the helper in Node: default placement, bottom / right flip, clamp,
+   viewport cap; checks both menus use it and the CSS scrolls.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_explorer_context_menu_placement.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-15.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9431 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 54.87s.

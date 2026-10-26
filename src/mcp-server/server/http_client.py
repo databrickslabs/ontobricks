@@ -2,7 +2,8 @@
 
 Base-URL resolution, M2M OAuth header minting (with a module-level token
 cache), and retrying GET/POST wrappers that ride out Databricks Apps
-cold-start transients. Tests monkeypatch ``_get_auth_headers`` / ``_base_url``
+cold-start transients, plus the mapping of HTTP failures to short,
+URL-free tool text. Tests monkeypatch ``_get_auth_headers`` / ``_base_url``
 / ``_get`` / ``_post`` on this module, so call sites resolve them through the
 module object (late binding) rather than importing the names directly.
 """
@@ -10,9 +11,13 @@ module object (late binding) rather than importing the names directly.
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import functools
 import logging
 import os
 import time
+from collections.abc import Awaitable, Callable
+from urllib.parse import quote
 
 import httpx
 
@@ -23,6 +28,56 @@ logger = logging.getLogger(__name__)
 # Cached M2M OAuth token (module-level to survive across _get_auth_headers calls)
 _oauth_cache: dict = {"token": "", "ts": 0.0}
 _OAUTH_TOKEN_TTL = 3000  # refresh well before the typical 3600 s expiry
+
+# ── End-user identity forwarding (OBO) ────────────────────────────────────
+# The MCP server authenticates to the main app with its own M2M principal, but
+# data-plane (UC / graph) routes must resolve the *end user* so OBO + Team
+# gating apply. ``SessionScopeMiddleware`` captures the inbound
+# ``x-forwarded-*`` headers per tool call and binds them here; every outbound
+# ``_get`` / ``_post`` merges them alongside the M2M ``Authorization`` so the
+# main app can fail-closed when the user identity is absent.
+_FWD: "contextvars.ContextVar[dict]" = contextvars.ContextVar(
+    "mcp_fwd_identity", default={}
+)
+
+# Server mode (``local`` / ``mounted`` / ``databricks``). Set once by
+# ``MCPServerSession.__init__`` so the module-level ``_get`` / ``_post`` know
+# which auth strategy to mint without threading ``mode`` through every call.
+_current_mode: str = "local"
+
+
+def set_mode(mode: str) -> None:
+    """Record the server mode used to mint outbound auth headers."""
+    global _current_mode
+    _current_mode = mode
+
+
+def set_forwarded_identity(email: str = "", user_token: str = "") -> None:
+    """Bind the end-user identity to forward to the main app (per request)."""
+    fwd: dict = {}
+    if email:
+        fwd["x-forwarded-email"] = email
+    if user_token:
+        fwd["x-forwarded-access-token"] = user_token
+    _FWD.set(fwd)
+
+
+def clear_forwarded_identity() -> None:
+    """Drop any bound end-user identity (call in a request ``finally``)."""
+    _FWD.set({})
+
+
+def _merged_headers(mode: str | None = None) -> dict:
+    """M2M auth headers merged with the forwarded end-user identity.
+
+    Resolved through the module object so tests can monkeypatch
+    ``_get_auth_headers``. Forwarded ``x-forwarded-*`` headers never override
+    the M2M ``Authorization`` (they occupy distinct header names).
+    """
+    m = mode if mode is not None else _current_mode
+    headers = dict(_get_auth_headers(m))
+    headers.update(_FWD.get())
+    return headers
 
 
 def _base_url(mode: str) -> str:
@@ -172,7 +227,9 @@ async def _get(
             "GET %s%s params=%s (attempt %d)", client.base_url, path, params or {}, attempt + 1
         )
         started = time.monotonic()
-        resp = await client.get(path, params=params, timeout=120)
+        resp = await client.get(
+            path, params=params, headers=_merged_headers(), timeout=120
+        )
         elapsed_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
@@ -202,7 +259,10 @@ async def _get(
 
 
 async def _post(
-    client: httpx.AsyncClient, path: str, json: dict | None = None
+    client: httpx.AsyncClient,
+    path: str,
+    json: dict | None = None,
+    params: dict | None = None,
 ) -> dict:
     """POST *path* on *client* with optional JSON body and return the JSON response.
 
@@ -213,7 +273,13 @@ async def _post(
     while True:
         logger.info("POST %s%s (attempt %d)", client.base_url, path, attempt + 1)
         started = time.monotonic()
-        resp = await client.post(path, json=json or {}, timeout=120)
+        resp = await client.post(
+            path,
+            json=json or {},
+            params=params,
+            headers=_merged_headers(),
+            timeout=120,
+        )
         elapsed_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
@@ -240,3 +306,54 @@ async def _post(
             logger.info("POST %s%s → %s in %dms", client.base_url, path, resp.status_code, elapsed_ms)
         resp.raise_for_status()
         return resp.json()
+
+
+def _graphql_path(domain_name: str, suffix: str = "") -> str:
+    """In-app GraphQL route for *domain_name*, encoded as one path segment."""
+    return f"/graphql/{quote(domain_name, safe='')}{suffix}"
+
+
+def _json_body(resp: httpx.Response) -> dict:
+    """*resp*'s JSON object body, or ``{}`` when it is not a JSON object."""
+    try:
+        body = resp.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _http_error_message(exc: httpx.HTTPError, what: str) -> str:
+    """Short text for the LLM naming *what* failed.
+
+    Only the backend's own safe ``message`` / ``error`` field is passed on —
+    never ``str(exc)`` or a raw body, which carry the full URL (registry query
+    params included) and internal details.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        body = _json_body(exc.response)
+        message = body.get("message") or body.get("error")
+        if isinstance(message, str) and message:
+            return message
+        return f"Could not {what} (HTTP {exc.response.status_code})."
+    return f"Could not {what}: the OntoBricks API is unreachable."
+
+
+def http_errors_as_text(what: str) -> Callable:
+    """Decorate an async tool so an escaping ``httpx.HTTPError`` becomes text.
+
+    Without it FastMCP surfaces the exception string, i.e. the full request
+    URL, to the model.
+    """
+
+    def decorate(fn: Callable[..., Awaitable[str]]) -> Callable[..., Awaitable[str]]:
+        @functools.wraps(fn)
+        async def wrapper(*args, **kwargs) -> str:
+            try:
+                return await fn(*args, **kwargs)
+            except httpx.HTTPError as exc:
+                logger.warning("Tool %s could not %s: %s", fn.__name__, what, exc)
+                return _http_error_message(exc, what)
+
+        return wrapper
+
+    return decorate

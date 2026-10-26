@@ -1,7 +1,9 @@
 """Tests for agents.engine_base – shared agent infrastructure."""
 
+import copy
 import json
 import pytest
+import requests
 from unittest.mock import patch, MagicMock
 from dataclasses import asdict
 
@@ -92,6 +94,155 @@ class TestCallServingEndpoint:
         call_serving_endpoint("https://host.com/", "t", "ep", [])
         url = mock_retry.call_args[0][0]
         assert "//serving" not in url
+
+    @patch("agents.engine_base.call_llm_with_retry")
+    def test_gateway_uses_chat_completions_and_model(self, mock_retry):
+        mock_retry.return_value.json.return_value = {"choices": []}
+
+        call_serving_endpoint(
+            "https://host",
+            "tok",
+            "main.ai.mine",
+            [],
+            endpoint_kind="ai_gateway",
+        )
+
+        url, _, payload = mock_retry.call_args.args[:3]
+        assert url == "https://host/ai-gateway/mlflow/v1/chat/completions"
+        assert payload["model"] == "main.ai.mine"
+
+    @patch("agents.engine_base.call_llm_with_retry")
+    def test_explicit_serving_kind_allows_dotted_name(self, mock_retry):
+        mock_retry.return_value.json.return_value = {}
+
+        call_serving_endpoint(
+            "https://host",
+            "tok",
+            "legacy.with.dots",
+            [],
+            endpoint_kind="serving",
+        )
+
+        assert "/serving-endpoints/legacy.with.dots/invocations" in (
+            mock_retry.call_args.args[0]
+        )
+
+    # -----------------------------------------------------------------
+    # Transport-level structured output (response_format) — opt-in, with
+    # safe fallback/caching when the endpoint rejects it with a clear 400.
+    # Root cause this supports: prompt-only "JSON only" instructions cannot
+    # force a compliant model to skip a visible reasoning preamble; the
+    # user's own endpoint accepts response_format={"type": "json_schema",
+    # ...} and rejects combining it with `tools`. This is opt-in — every
+    # other existing caller (which never passes response_format) is
+    # unaffected, per the tests above.
+    # -----------------------------------------------------------------
+
+    @patch("agents.engine_base.call_llm_with_retry")
+    def test_includes_response_format_when_provided(self, mock_retry):
+        mock_retry.return_value.json.return_value = {}
+        response_format = {"type": "json_schema", "json_schema": {"name": "x", "schema": {}}}
+
+        call_serving_endpoint(
+            "https://host", "tok", "ep", [], response_format=response_format
+        )
+
+        payload = mock_retry.call_args[0][2]
+        assert payload["response_format"] == response_format
+
+    @patch("agents.engine_base.call_llm_with_retry")
+    def test_no_response_format_key_when_none(self, mock_retry):
+        mock_retry.return_value.json.return_value = {}
+
+        call_serving_endpoint("https://host", "tok", "ep", [])
+
+        payload = mock_retry.call_args[0][2]
+        assert "response_format" not in payload
+
+    def test_raises_when_tools_and_response_format_both_given(self):
+        # Enforced fail-fast, before any network call — never let a caller
+        # silently send the endpoint an invalid tools+response_format
+        # combination.
+        tools = [{"type": "function", "function": {"name": "lookup"}}]
+        response_format = {"type": "json_schema", "json_schema": {"name": "x", "schema": {}}}
+        with patch("agents.engine_base.call_llm_with_retry") as mock_retry:
+            with pytest.raises(ValueError):
+                call_serving_endpoint(
+                    "https://host",
+                    "tok",
+                    "ep",
+                    [],
+                    tools=tools,
+                    response_format=response_format,
+                )
+            mock_retry.assert_not_called()
+
+    @patch("agents.engine_base.call_llm_with_retry")
+    def test_unsupported_response_format_is_stripped_and_retried(self, mock_retry):
+        # First attempt: the endpoint rejects response_format with a 400
+        # naming it explicitly (mirrors the real
+        # "does not support the temperature parameter" 400 body shape this
+        # retry pattern already handles for `temperature`). Second attempt
+        # (payload with response_format stripped) succeeds. `payload` is
+        # mutated in place between attempts, so snapshot a deep copy on each
+        # call rather than reading it back from `call_args_list` afterwards.
+        rejection = MagicMock()
+        rejection.status_code = 400
+        rejection.text = (
+            '{"error_code":"BAD_REQUEST","message":"BAD_REQUEST: Model x '
+            'does not support the response_format parameter."}'
+        )
+        http_error = requests.exceptions.HTTPError(response=rejection)
+        success_resp = MagicMock()
+        success_resp.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        seen_payloads = []
+
+        def _record(_url, _headers, payload, timeout=None):
+            seen_payloads.append(copy.deepcopy(payload))
+            if len(seen_payloads) == 1:
+                raise http_error
+            return success_resp
+
+        mock_retry.side_effect = _record
+
+        response_format = {"type": "json_schema", "json_schema": {"name": "x", "schema": {}}}
+        result = call_serving_endpoint(
+            "https://host", "tok", "ep", [], response_format=response_format
+        )
+
+        assert result == {"choices": [{"message": {"content": "ok"}}]}
+        assert mock_retry.call_count == 2
+        assert seen_payloads[0]["response_format"] == response_format
+        assert "response_format" not in seen_payloads[1]
+
+    @patch("agents.engine_base.call_llm_with_retry")
+    def test_response_format_ban_is_cached_for_the_endpoint(self, mock_retry):
+        # After one endpoint discovers response_format is unsupported, a
+        # later call to the SAME endpoint proactively omits it instead of
+        # re-discovering the 400 every time (mirrors the existing
+        # per-endpoint `temperature` ban cache).
+        rejection = MagicMock()
+        rejection.status_code = 400
+        rejection.text = "does not support the response_format parameter"
+        http_error = requests.exceptions.HTTPError(response=rejection)
+        success_resp = MagicMock()
+        success_resp.json.return_value = {}
+        mock_retry.side_effect = [http_error, success_resp, success_resp]
+
+        response_format = {"type": "json_schema", "json_schema": {"name": "x", "schema": {}}}
+        call_serving_endpoint(
+            "https://host", "tok", "cached-ep", [], response_format=response_format
+        )
+        mock_retry.reset_mock()
+        mock_retry.side_effect = [success_resp]
+
+        call_serving_endpoint(
+            "https://host", "tok", "cached-ep", [], response_format=response_format
+        )
+
+        assert mock_retry.call_count == 1
+        payload = mock_retry.call_args[0][2]
+        assert "response_format" not in payload
 
 
 class TestDispatchTool:

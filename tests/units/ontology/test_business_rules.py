@@ -13,13 +13,16 @@ Covers:
 import pytest
 from unittest.mock import MagicMock, patch
 
-from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
-from back.core.reasoning.SWRLParser import SWRLParser
-from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
-from back.core.reasoning.SWRLBuiltinRegistry import SWRLBuiltin, SWRLBuiltinRegistry
-from back.core.reasoning.DecisionTableEngine import DecisionTableEngine
-from back.core.reasoning.SPARQLRuleEngine import SPARQLRuleEngine
-from back.core.reasoning.AggregateRuleEngine import AggregateRuleEngine
+from back.core.reasoning.results.InferredTriple import InferredTriple
+from back.core.reasoning.results.ReasoningResult import ReasoningResult
+from back.core.reasoning.results.RuleViolation import RuleViolation
+from back.core.reasoning.swrl.SWRLParser import SWRLParser
+from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+from back.core.reasoning.swrl.SWRLBuiltin import SWRLBuiltin
+from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
+from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
+from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
 from back.core.reasoning.ReasoningService import ReasoningService
 
 

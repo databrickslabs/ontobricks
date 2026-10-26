@@ -9,6 +9,8 @@ pytestmark = pytest.mark.unit
 
 _MENU = Path("src/front/config/menu_config.json")
 _SETTINGS = Path("src/front/templates/settings.html")
+_BASE = Path("src/front/templates/base.html")
+_NAV_CSS = Path("src/front/static/global/css/main.css")
 _CSS = Path("src/front/static/global/css/components.css")
 _IMG = Path("src/front/static/global/img")
 _BUILD = Path("src/front/templates/partials/dtwin/_query_sync.html")
@@ -63,6 +65,42 @@ def test_brand_icon_assets_are_local_and_colored():
             svg = asset.read_text(encoding="utf-8")
             assert "<svg" in svg
             assert "#" in svg, f"{filename} must define a brand color"
+
+
+def test_settings_gear_dropdown_does_not_prefix_bi_on_brand_icons():
+    """Brand marks in the top-right Settings menu must not get ``class="bi …"``.
+
+    ``.bi`` plus ``.ob-brand-icon`` fights Bootstrap Icons' ::before and the
+    20px icon column used by Registry / GitHub / Global, so Databricks sits
+    left of the other rows.
+    """
+    html = _BASE.read_text(encoding="utf-8")
+    start = html.index("settingsGearDropdown")
+    end = html.index("userMenuDropdown", start)
+    gear = html[start:end]
+    assert 'class="ob-dropdown-icon"' in gear
+    assert 'class="ob-dropdown-label"' in gear
+    assert "{% if 'ob-brand-icon' in item.icon %}" in gear
+    assert 'class="bi {{ item.icon }} me-1"' not in gear
+    nav_css = _NAV_CSS.read_text(encoding="utf-8")
+    slot = nav_css[
+        nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-icon {") :
+        nav_css.index(
+            "}",
+            nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-icon {"),
+        )
+    ]
+    assert "flex: 0 0 20px" in slot
+    assert "min-width: 20px" in slot
+    assert "overflow: hidden" in slot
+    label = nav_css[
+        nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-label {") :
+        nav_css.index(
+            "}",
+            nav_css.index(".navbar .dropdown-menu .dropdown-item .ob-dropdown-label {"),
+        )
+    ]
+    assert "line-height: 20px" in label
 
 
 def test_databricks_settings_uses_official_databricks_icon():

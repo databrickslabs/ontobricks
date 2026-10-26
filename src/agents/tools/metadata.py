@@ -56,6 +56,7 @@ def tool_get_metadata(ctx: ToolContext, **_kwargs) -> str:
                 "name": c.get("name"),
                 "type": c.get("type"),
                 "comment": (c.get("comment") or "")[:200],
+                "role": c.get("role") or "dimension",
             }
             for c in t.get("columns", [])[:_MAX_COLUMNS_PER_TABLE]
         ]
@@ -65,6 +66,7 @@ def tool_get_metadata(ctx: ToolContext, **_kwargs) -> str:
         entry = {
             "name": t.get("name"),
             "full_name": t.get("full_name", t.get("name")),
+            "object_kind": t.get("object_kind") or "table",
             "comment": (t.get("comment") or "")[:500],
             "column_count": len(cols),
             "columns": cols,
@@ -121,6 +123,7 @@ def tool_get_table_detail(ctx: ToolContext, *, table_name: str = "", **_kwargs) 
                     "name": c.get("name"),
                     "type": c.get("type"),
                     "comment": c.get("comment", ""),
+                    "role": c.get("role") or "dimension",
                 }
                 for c in t.get("columns", [])
             ]
@@ -136,6 +139,7 @@ def tool_get_table_detail(ctx: ToolContext, *, table_name: str = "", **_kwargs) 
                 {
                     "name": t.get("name"),
                     "full_name": t.get("full_name"),
+                    "object_kind": t.get("object_kind") or "table",
                     "comment": t.get("comment", ""),
                     "columns": cols,
                     "column_count": len(cols),
@@ -158,8 +162,10 @@ GET_METADATA_DEF: dict = {
     "function": {
         "name": "get_metadata",
         "description": (
-            "Get the domain's database table metadata: table names (full catalog.schema.table names), "
-            "column names, data types, and descriptions. Call this first to understand the available data."
+            "Get the domain's database source metadata: table/view/metric-view "
+            "names (full catalog.schema.table), object_kind, column names, "
+            "data types, column roles (dimension vs measure on metric views), "
+            "and descriptions. Call this first to understand the available data."
         ),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
@@ -171,8 +177,10 @@ METADATA_TOOL_DEFINITIONS: List[dict] = [
         "function": {
             "name": "get_metadata",
             "description": (
-                "Get the domain's database table metadata: table names (full catalog.schema.table names), "
-                "column names, data types, and descriptions. Call this first to understand the available data."
+                "Get the domain's database source metadata: table/view/metric-view "
+                "names (full catalog.schema.table), object_kind, column names, "
+                "data types, column roles (dimension vs measure on metric views), "
+                "and descriptions. Call this first to understand the available data."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -181,7 +189,10 @@ METADATA_TOOL_DEFINITIONS: List[dict] = [
         "type": "function",
         "function": {
             "name": "get_table_detail",
-            "description": "Get detailed metadata for a single table.",
+            "description": (
+                "Get detailed metadata for a single table, view, or metric view, "
+                "including object_kind and per-column role."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {

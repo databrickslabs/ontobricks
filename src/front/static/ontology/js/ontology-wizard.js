@@ -1,25 +1,43 @@
 /**
  * OntoBricks - ontology-wizard.js
- * Ontology Wizard - AI-powered ontology generation from metadata
+ * Ontology Wizard - staged three-step Generate: Configure & Detect -> Review
+ * Entities -> Complete (plan task 5 of `staged-ontology-generate`, see
+ * docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md).
+ *
+ * This module owns Stage 1 (Configure & Detect) and Stage 3 (Complete)
+ * orchestration plus the stepper. Stage 2 (Review Entities) rendering and
+ * mutation is delegated to ontology-wizard-review.js (`window.WizardReview`),
+ * which this file calls back into via `window.WizardCore`. Draft/entity/
+ * checkpoint state always comes from the server (GET .../draft) — never
+ * cached client-side. sessionStorage holds only the two active task ids.
  */
 
 // =====================================================
 // WIZARD STATE
 // =====================================================
 
+/**
+ * Escape a value for interpolation inside a *quoted HTML attribute*.
+ * `escapeHtml()` (utils.js) only escapes `&`/`<`/`>` in text-node content —
+ * the HTML serialization it relies on (`div.textContent` -> `div.innerHTML`)
+ * never escapes `"`, so it is not safe on its own inside `attr="${value}"`.
+ * Mirrors `escAttr` in ontology-wizard-review.js.
+ */
+function escWizardAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
+}
+
 let wizardMetadataCache = null;
-let wizardGeneratedOWL = null;
 let wizardSelectedTables = new Set();
 let wizardSelectedDocs = new Set();
 let wizardDocsCache = [];
-let wizardCurrentTaskId = null;  // Track running task
-let wizardNotificationShown = false;  // Prevent duplicate notifications
-let _wizardIterationLog = [];  // Per-round pitfall refinement data
+let wizardCurrentTaskId = null;  // Track running task (detect or complete)
 
-// Session storage keys for persisting state across navigation
-const WIZARD_TASK_KEY = 'ontobricks_wizard_task';
-const WIZARD_OWL_KEY = 'ontobricks_wizard_owl';
-const WIZARD_STATS_KEY = 'ontobricks_wizard_stats';
+// Session storage keys — task ids only. All draft/entity/checkpoint state
+// is server-authoritative (GET /ontology/wizard/generate/draft); nothing
+// about the draft itself is ever cached client-side.
+const WIZARD_DETECT_TASK_KEY = 'ontobricks_wizard_detect_task';
+const WIZARD_COMPLETE_TASK_KEY = 'ontobricks_wizard_complete_task';
 
 const WIZARD_PROGRESS_CFG = {
     hostId: 'wizard-section',
@@ -32,8 +50,9 @@ const WIZARD_PROGRESS_CFG = {
     activityPanelId: 'wizardActivityLogPanel',
     activityLogId: 'wizardActivityLog',
     agentMountId: 'wizardAgentStepsMount',
-    title: 'Generating ontology...',
-    subtitle: 'Your ontology is being generated...',
+    detectedListId: 'wizardDetectedEntities',
+    title: 'Detecting entities...',
+    subtitle: 'Waiting for the first entity...',
 };
 
 // =====================================================
@@ -41,64 +60,112 @@ const WIZARD_PROGRESS_CFG = {
 // =====================================================
 
 /**
- * Initialize the wizard section
+ * Initialize the wizard section: resume any running detect/complete task,
+ * load Stage 1 configure inputs, and resume/render whatever stage the
+ * durable draft says we're in (Review or Complete) on page load/reload.
  */
 async function initOntologyWizard() {
     console.log('[Wizard] Initializing...');
-    
-    // Check if there's a running task from previous session
-    const savedTaskId = sessionStorage.getItem(WIZARD_TASK_KEY);
-    if (savedTaskId) {
-        console.log('[Wizard] Found saved task:', savedTaskId);
-        await checkAndResumeTask(savedTaskId);
-    }
-    
+
     await loadWizardMetadata();
     await loadWizardDocuments();
     await loadWizardTemplatesFromServer();
+
+    const detectTaskId = sessionStorage.getItem(WIZARD_DETECT_TASK_KEY);
+    const completeTaskId = sessionStorage.getItem(WIZARD_COMPLETE_TASK_KEY);
+
+    if (detectTaskId) {
+        await checkAndResumeWizardTask(detectTaskId, 'detect');
+        return;
+    }
+    if (completeTaskId) {
+        await checkAndResumeWizardTask(completeTaskId, 'complete');
+        return;
+    }
+
+    // No running task — resume whatever the durable draft says (Review or
+    // Complete pane), or stay on Configure when there is no draft yet.
+    await resumeDraftFromServer();
 }
 
 /**
- * Check if a saved task is still running and resume monitoring
+ * Check if a saved detect/complete task is still running and resume
+ * monitoring it; otherwise fall back to resuming from the durable draft.
  */
-async function checkAndResumeTask(taskId) {
+async function checkAndResumeWizardTask(taskId, kind) {
+    const storageKey = kind === 'complete' ? WIZARD_COMPLETE_TASK_KEY : WIZARD_DETECT_TASK_KEY;
     try {
         const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
         const data = await response.json();
-        
+
         if (!data.success) {
-            // Task not found, clear storage
-            sessionStorage.removeItem(WIZARD_TASK_KEY);
+            sessionStorage.removeItem(storageKey);
+            await resumeDraftFromServer();
             return;
         }
-        
+
         const task = data.task;
-        
+
         if (task.status === 'running' || task.status === 'pending') {
-            // Task still running, resume monitoring
-            console.log('[Wizard] Resuming task monitoring:', taskId);
+            console.log('[Wizard] Resuming task monitoring:', taskId, kind);
             wizardCurrentTaskId = taskId;
+            setWizardStage(kind === 'complete' ? 'complete' : 'configure');
             disableWizardForm(true);
-            showWizardTaskProgress(task);
-            
-            // Continue polling
-            monitorWizardTask(taskId);
+            showWizardTaskProgress(task, kind);
+            monitorWizardTask(taskId, kind);
         } else if (task.status === 'completed' && task.result) {
-            // Task completed, show results
-            console.log('[Wizard] Task completed, showing results');
-            sessionStorage.removeItem(WIZARD_TASK_KEY);
-            showWizardResults(task.result);
+            sessionStorage.removeItem(storageKey);
+            await handleWizardTaskResult(kind, task.result);
         } else if (task.status === 'failed') {
-            // Task failed
-            sessionStorage.removeItem(WIZARD_TASK_KEY);
-            showNotification('Previous generation failed: ' + (task.error || 'Unknown error'), 'error');
+            sessionStorage.removeItem(storageKey);
+            showNotification(
+                (kind === 'complete' ? 'Completion' : 'Detection') +
+                ' failed: ' + (task.error || 'Unknown error'),
+                'error'
+            );
+            await resumeDraftFromServer();
         } else {
-            // Task cancelled or other status
-            sessionStorage.removeItem(WIZARD_TASK_KEY);
+            sessionStorage.removeItem(storageKey);
+            await resumeDraftFromServer();
         }
     } catch (error) {
         console.error('[Wizard] Error checking task:', error);
-        sessionStorage.removeItem(WIZARD_TASK_KEY);
+        sessionStorage.removeItem(storageKey);
+        await resumeDraftFromServer();
+    }
+}
+
+/**
+ * Fetch the durable draft and render whichever stage it puts us in.
+ * Called on init and whenever we return to a settled state (discard,
+ * task failure, page reload).
+ */
+async function resumeDraftFromServer() {
+    try {
+        const response = await fetch('/ontology/wizard/generate/draft', {
+            credentials: 'same-origin',
+        });
+        const data = await response.json();
+        const draft = data.success ? data.draft : null;
+
+        if (!draft) {
+            setWizardStage('configure');
+            if (window.WizardReview) window.WizardReview.reset();
+            return;
+        }
+
+        if (draft.stage === 'reviewing') {
+            setWizardStage('review');
+            if (window.WizardReview) window.WizardReview.render(draft);
+        } else {
+            // 'completing' (partial/failed checkpoints) or 'done' (already
+            // merged) both render on the Complete pane.
+            setWizardStage('complete');
+            renderCompleteChecklist(draft);
+        }
+    } catch (error) {
+        console.error('[Wizard] Error resuming draft:', error);
+        setWizardStage('configure');
     }
 }
 
@@ -108,8 +175,7 @@ async function checkAndResumeTask(taskId) {
 function disableWizardForm(disabled) {
     const form = document.getElementById('wizard-section');
     if (!form) return;
-    
-    // Disable all inputs and buttons
+
     const inputs = form.querySelectorAll('input, textarea, button, select');
     inputs.forEach(input => {
         if (disabled) {
@@ -121,8 +187,7 @@ function disableWizardForm(disabled) {
             input.removeAttribute('data-was-disabled');
         }
     });
-    
-    // Add/remove overlay
+
     if (disabled) {
         if (typeof TaskProgressUI !== 'undefined') {
             TaskProgressUI.setOverlayVisible(WIZARD_PROGRESS_CFG, true);
@@ -133,30 +198,28 @@ function disableWizardForm(disabled) {
 }
 
 /**
- * Show task progress in the overlay.
- * Detects "__iter__:{json}" messages emitted by the generation quality loop
- * and appends a row to the live refinement table instead of showing them as
- * the main status message.
+ * Show task progress in the overlay for either the detect or complete task.
  */
-function showWizardTaskProgress(task) {
-    const messageEl = document.getElementById('wizardOverlayMessage');
-    const msg = task.message || '';
-
-    if (typeof TaskProgressUI !== 'undefined') {
-        TaskProgressUI.updateFromTask(WIZARD_PROGRESS_CFG, task, {
-            skipMessagePrefixes: ['__iter__:'],
-        });
+function showWizardTaskProgress(task, kind) {
+    if (typeof TaskProgressUI === 'undefined') return;
+    const titleEl = document.getElementById(WIZARD_PROGRESS_CFG.titleId);
+    if (titleEl) {
+        titleEl.textContent = kind === 'complete'
+            ? 'Completing ontology Generate...'
+            : 'Detecting entities...';
     }
+    TaskProgressUI.updateFromTask(WIZARD_PROGRESS_CFG, task);
 
-    // Structured iteration event from the quality loop
-    if (msg.startsWith('__iter__:')) {
-        try {
-            const data = JSON.parse(msg.slice('__iter__:'.length));
-            _appendRefinementRow(data);
-            if (messageEl) {
-                messageEl.textContent = `Refining quality — round ${data.round}, score ${data.score}/100…`;
-            }
-        } catch (_e) { /* ignore malformed */ }
+    if (kind === 'detect') {
+        const detected = (task.result && task.result.detected_entities) || [];
+        const messageEl = document.getElementById(WIZARD_PROGRESS_CFG.messageId);
+        if (messageEl) {
+            messageEl.textContent = detected.length
+                ? `${detected.length} ${detected.length === 1 ? 'entity' : 'entities'} detected`
+                : 'Scanning selected sources for entities...';
+        }
+    } else if (kind === 'complete') {
+        renderCompleteChecklistFromTaskSteps(task);
     }
 }
 
@@ -164,243 +227,199 @@ function _clearWizardProgressPanels() {
     if (typeof TaskProgressUI !== 'undefined') {
         TaskProgressUI.clearPanels(WIZARD_PROGRESS_CFG);
     }
-    const refinement = document.getElementById('wizardRefinementPanel');
-    if (refinement) refinement.remove();
 }
 
 /**
- * Append one iteration block to the live refinement panel inside the overlay.
- * Each block shows: round header (score + status) + warnings list +
- * a "Asking agent to fix…" notice when status === 'challenged'.
+ * Monitor a wizard task (detect or complete) until completion.
  */
-function _appendRefinementRow(data) {
-    // Ensure the refinement panel exists inside the overlay
-    let panel = document.getElementById('wizardRefinementPanel');
-    if (!panel) {
-        const overlay = document.getElementById('wizardFormOverlay');
-        if (!overlay) return;
-        panel = document.createElement('div');
-        panel.id = 'wizardRefinementPanel';
-        panel.style.cssText = 'margin-top:14px; max-width:480px; width:100%; text-align:left;';
-        panel.innerHTML = `
-            <p class="small fw-semibold mb-2" style="color:#94a3b8;">
-                <i class="bi bi-arrow-repeat me-1"></i>Quality refinement
-            </p>
-            <div id="wizardIterBlocks"></div>`;
-        overlay.querySelector('.text-center').appendChild(panel);
-    }
+async function monitorWizardTask(taskId, kind) {
+    const storageKey = kind === 'complete' ? WIZARD_COMPLETE_TASK_KEY : WIZARD_DETECT_TASK_KEY;
+    // Detection publishes one label every 300ms; poll just below that
+    // cadence so the overlay reveals entities one by one instead of in a
+    // final batch. Completion remains on the lower-frequency cadence.
+    const pollInterval = kind === 'detect' ? 250 : 1500;
 
-    const container = document.getElementById('wizardIterBlocks');
-    if (!container) return;
-
-    _wizardIterationLog.push(data);
-
-    const scoreColor = data.score >= 70 ? '#22c55e' : data.score >= 40 ? '#f59e0b' : '#ef4444';
-    const statusCfg = {
-        passed:           { cls: 'text-bg-success',          label: 'Passed ✓' },
-        challenged:       { cls: 'text-bg-warning text-dark', label: 'Fixing…' },
-        max_rounds_reached: { cls: 'text-bg-secondary',        label: 'Max rounds' },
-    }[data.status] || { cls: 'text-bg-secondary', label: data.status };
-
-    // Build the warnings detail HTML
-    const warnings = data.warnings || [];
-    let warningsHtml = '';
-    if (warnings.length === 0 && (!data.pitfalls || data.pitfalls.length === 0)) {
-        warningsHtml = `<li style="color:#86efac;">No warnings — ontology is clean.</li>`;
-    } else if (warnings.length > 0) {
-        for (const w of warnings) {
-            const itemsHtml = w.items && w.items.length
-                ? w.items.map(it => `<span style="color:#cbd5e1;margin-left:10px;">• ${it}</span><br>`).join('')
-                : '';
-            const hintHtml = w.hint
-                ? `<span style="color:#93c5fd;font-style:italic;margin-left:10px;">→ ${w.hint}</span>`
-                : '';
-            warningsHtml += `
-                <li style="margin-bottom:6px;">
-                    <span class="badge" style="background:#374151;color:#fbbf24;font-size:0.65rem;">${w.id}</span>
-                    <span style="color:#e2e8f0;margin-left:4px;">${w.title}</span>
-                    <span style="color:#94a3b8;font-size:0.72rem;margin-left:4px;">(${w.count})</span>
-                    <br>${itemsHtml}${hintHtml}
-                </li>`;
-        }
-    } else {
-        // only IDs, no detail (old format fallback)
-        warningsHtml = data.pitfalls.map(id =>
-            `<li><span class="badge" style="background:#374151;color:#fbbf24;font-size:0.65rem;">${id}</span></li>`
-        ).join('');
-    }
-
-    // "Asking agent to fix" footer shown only when a fix round is triggered
-    const fixNotice = (data.status === 'challenged')
-        ? `<div style="margin-top:6px;padding:4px 8px;background:rgba(251,191,36,0.12);border-left:3px solid #fbbf24;border-radius:3px;font-size:0.72rem;color:#fde68a;">
-               <i class="bi bi-send me-1"></i>Asking agent to fix these warnings…
-           </div>`
-        : '';
-
-    const block = document.createElement('div');
-    block.style.cssText = 'margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:0.75rem;';
-    block.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-1">
-            <span style="color:#94a3b8;">Round ${data.round}</span>
-            <span>
-                <strong style="color:${scoreColor};">${data.score}<span style="color:#64748b;font-weight:400;">/100</span></strong>
-                ${data.critical > 0 ? `<span style="color:#ef4444;margin-left:6px;">⚠ ${data.critical} critical</span>` : ''}
-                <span class="badge ms-2 ${statusCfg.cls}" style="font-size:0.65rem;">${statusCfg.label}</span>
-            </span>
-        </div>
-        <ul style="list-style:none;padding:0;margin:0 0 4px 0;">${warningsHtml}</ul>
-        ${fixNotice}`;
-    container.appendChild(block);
-}
-
-/**
- * Monitor a wizard task until completion
- */
-async function monitorWizardTask(taskId) {
-    const pollInterval = 1500;
-    
     while (true) {
         try {
             await sleep(pollInterval);
-            
+
             const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
             const data = await response.json();
 
-            // In-memory tasks are lost when the dev server hot-reloads.
+            // In-memory tasks are lost when the dev server hot-reloads/restarts.
             if (response.status === 404 || (!data.success && data.error === 'not_found')) {
-                sessionStorage.removeItem(WIZARD_TASK_KEY);
+                sessionStorage.removeItem(storageKey);
                 wizardCurrentTaskId = null;
                 disableWizardForm(false);
                 showNotification(
-                    'Generation was interrupted (server restarted). Please try again.',
+                    (kind === 'complete' ? 'Completion' : 'Detection') +
+                    ' was interrupted (server restarted). Please try again.',
                     'warning'
                 );
+                await resumeDraftFromServer();
                 break;
             }
 
             if (!data.success) {
                 throw new Error(data.message || 'Task not found');
             }
-            
+
             const task = data.task;
-            showWizardTaskProgress(task);
-            
+            showWizardTaskProgress(task, kind);
+
             if (task.status === 'completed') {
-                sessionStorage.removeItem(WIZARD_TASK_KEY);
+                sessionStorage.removeItem(storageKey);
                 wizardCurrentTaskId = null;
                 disableWizardForm(false);
-                
                 if (task.result) {
-                    wizardNotificationShown = true;
-                    showWizardResults(task.result);
+                    await handleWizardTaskResult(kind, task.result);
                 }
                 break;
             } else if (task.status === 'failed') {
-                sessionStorage.removeItem(WIZARD_TASK_KEY);
+                sessionStorage.removeItem(storageKey);
                 wizardCurrentTaskId = null;
                 disableWizardForm(false);
-                showNotification('Generation failed: ' + (task.error || 'Unknown error'), 'error');
+                showNotification(
+                    (kind === 'complete' ? 'Completion' : 'Detection') +
+                    ' failed: ' + (task.error || 'Unknown error'),
+                    'error'
+                );
+                await resumeDraftFromServer();
                 break;
             } else if (task.status === 'cancelled') {
-                sessionStorage.removeItem(WIZARD_TASK_KEY);
+                sessionStorage.removeItem(storageKey);
                 wizardCurrentTaskId = null;
                 disableWizardForm(false);
-                showNotification('Generation was cancelled', 'warning');
+                showNotification(
+                    (kind === 'complete' ? 'Completion' : 'Detection') + ' was cancelled',
+                    'warning'
+                );
+                await resumeDraftFromServer();
                 break;
             }
         } catch (error) {
             console.error('[Wizard] Monitoring error:', error);
-            sessionStorage.removeItem(WIZARD_TASK_KEY);
+            sessionStorage.removeItem(storageKey);
             wizardCurrentTaskId = null;
             disableWizardForm(false);
             showNotification('Error monitoring task', 'error');
+            await resumeDraftFromServer();
             break;
         }
     }
-    
-    // Refresh task tracker
+
     if (typeof refreshTasks === 'function') {
         refreshTasks();
     }
 }
 
 /**
- * Show generation results and automatically apply the ontology (no user action required)
+ * Route a completed detect/complete task's result to the right stage.
  */
-async function showWizardResults(result) {
-    wizardGeneratedOWL = result.owl_content;
-    
-    // Persist OWL to sessionStorage so it survives page navigation (retry on failure)
-    try {
-        sessionStorage.setItem(WIZARD_OWL_KEY, result.owl_content);
-        sessionStorage.setItem(WIZARD_STATS_KEY, JSON.stringify(result.stats || {}));
-    } catch (e) {
-        console.warn('[Wizard] Could not persist OWL to sessionStorage:', e);
+async function handleWizardTaskResult(kind, result) {
+    if (kind === 'complete') {
+        await handleCompletionSuccess(result);
+        return;
     }
-    
-    const applied = await applyWizardOntologySilent();
-    if (applied) {
-        clearWizardPreview();
-        if (typeof refreshOntologyStatus === 'function') {
-            refreshOntologyStatus();
-        }
-        if (typeof loadOntologyFromSession === 'function') {
-            await loadOntologyFromSession();
-        }
-        if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.switchTo === 'function') {
-            SidebarNav.switchTo('map');
-        }
-
-        // Build convergence summary message from task result or local log
-        const iterLog = result.iteration_summary || _wizardIterationLog;
-        const finalScore = result.generation_score ?? null;
-        let successMsg = 'Ontology created successfully!';
-        if (iterLog && iterLog.length > 0) {
-            const lastRound = iterLog[iterLog.length - 1];
-            const score = finalScore ?? lastRound.score;
-            const rounds = iterLog.length;
-            if (lastRound.status === 'passed') {
-                successMsg = `Ontology ready — quality score ${score}/100, converged in ${rounds} round${rounds > 1 ? 's' : ''}.`;
-            } else if (lastRound.status === 'max_rounds_reached') {
-                successMsg = `Ontology applied — quality score ${score}/100 (max refinement rounds reached).`;
-            } else {
-                successMsg = `Ontology applied — quality score ${score}/100.`;
-            }
-        } else if (finalScore !== null) {
-            successMsg = `Ontology created successfully — quality score ${finalScore}/100.`;
-        }
-        showNotification(successMsg, 'success');
-    } else {
-        showNotification('Auto-apply failed. Click Generate again to retry.', 'warning');
-        clearWizardPreview();
-    }
+    // Detection completed — the durable draft is authoritative; fetch it
+    // fresh rather than trusting the task result payload's shape.
+    setWizardStage('review');
+    await resumeDraftFromServer();
+    showNotification(
+        `Detected ${((result.draft || {}).candidate_entities || []).length} candidate entity(ies) — review them below.`,
+        'success'
+    );
 }
 
 /**
- * Apply the generated OWL to the domain ontology (no confirmation dialog)
- * @returns {Promise<boolean>} true if applied successfully
+ * Helper function for delays
  */
-async function applyWizardOntologySilent() {
-    if (!wizardGeneratedOWL) return false;
-    try {
-        const response = await fetch('/ontology/parse-owl', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: wizardGeneratedOWL }),
-            credentials: 'same-origin'
-        });
-        const result = await response.json();
-        if (result.success) {
-            return true;
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// =====================================================
+// STEPPER (Configure & Detect -> Review Entities -> Complete)
+// =====================================================
+
+const WIZARD_STAGE_ORDER = ['configure', 'review', 'complete'];
+const WIZARD_STAGE_PANES = {
+    configure: 'wizardConfigurePane',
+    review: 'wizardReviewPane',
+    complete: 'wizardCompletePane',
+};
+const WIZARD_STAGE_HEADING_IDS = {
+    configure: 'wizardConfigureHeading',
+    review: 'wizardReviewHeading',
+    complete: 'wizardCompleteHeading',
+};
+
+// Tracks whether `setWizardStage` has ever run and which stage it last
+// rendered, so we can tell a real user-facing transition apart from the
+// page-load/task-resume call every `init*`/`resume*` path makes.
+let _wizardStageBooted = false;
+let _wizardCurrentStage = null;
+
+/**
+ * Switch the visible stage pane and update every `.wizard-step` stepper
+ * item's active/completed state + `aria-current` (accessible: screen
+ * readers get the current step announced, not just a visual highlight).
+ *
+ * On every *real* transition (stage actually changes, and this isn't the
+ * very first call on page load/resume) focus moves to the new pane's
+ * `tabindex="-1"` heading, so screen-reader/keyboard users land on the new
+ * stage's content instead of staying anchored wherever they were. The
+ * first call ever — resuming a running task or an existing draft on page
+ * load — must not steal focus from wherever the browser naturally placed
+ * it, hence the `isFirstCall` guard.
+ */
+function setWizardStage(stage) {
+    if (WIZARD_STAGE_ORDER.indexOf(stage) === -1) return;
+
+    const isFirstCall = !_wizardStageBooted;
+    const stageChanged = _wizardCurrentStage !== stage;
+    _wizardStageBooted = true;
+    _wizardCurrentStage = stage;
+
+    WIZARD_STAGE_ORDER.forEach(function (s) {
+        const pane = document.getElementById(WIZARD_STAGE_PANES[s]);
+        if (pane) pane.classList.toggle('ob-hidden', s !== stage);
+    });
+    const reviewActions = document.getElementById('wizardReviewActions');
+    if (reviewActions) {
+        reviewActions.classList.toggle('ob-hidden', stage !== 'review');
+    }
+
+    const stageIndex = WIZARD_STAGE_ORDER.indexOf(stage);
+    const stepIds = {
+        configure: 'wizardStepConfigure',
+        review: 'wizardStepReview',
+        complete: 'wizardStepComplete',
+    };
+    WIZARD_STAGE_ORDER.forEach(function (s, idx) {
+        const stepEl = document.getElementById(stepIds[s]);
+        if (!stepEl) return;
+        stepEl.classList.remove('active', 'completed');
+        if (idx < stageIndex) {
+            stepEl.classList.add('completed');
+            stepEl.removeAttribute('aria-current');
+        } else if (idx === stageIndex) {
+            stepEl.classList.add('active');
+            stepEl.setAttribute('aria-current', 'step');
+        } else {
+            stepEl.removeAttribute('aria-current');
         }
-        showNotification('Error applying ontology: ' + (result.message || 'Unknown error'), 'error');
-        return false;
-    } catch (error) {
-        console.error('[Wizard] Apply error:', error);
-        showNotification('Error applying ontology: ' + error.message, 'error');
-        return false;
+    });
+
+    if (stageChanged && !isFirstCall) {
+        const heading = document.getElementById(WIZARD_STAGE_HEADING_IDS[stage]);
+        if (heading) heading.focus();
     }
 }
+
+// =====================================================
+// STAGE 1: METADATA LOADING
+// =====================================================
 
 /**
  * Load metadata for the wizard
@@ -410,28 +429,27 @@ async function loadWizardMetadata() {
     const previewEl = document.getElementById('wizardMetadataPreview');
     const noMetadataEl = document.getElementById('wizardNoMetadata');
     const tableBody = document.getElementById('wizardMetadataTableBody');
-    
+
     try {
         const response = await fetch('/domain/metadata', { credentials: 'same-origin' });
         const result = await response.json();
-        
+
         if (result.success && result.metadata && result.metadata.tables && result.metadata.tables.length > 0) {
             wizardMetadataCache = result.metadata;
-            
+
             // Initialize selection - all tables selected by default
             wizardSelectedTables.clear();
             result.metadata.tables.forEach(table => {
                 const tableName = table.full_name || table.name;
                 wizardSelectedTables.add(tableName);
             });
-            
-            // Show stats
+
             const tableCount = result.metadata.tables.length;
             let totalColumns = 0;
             result.metadata.tables.forEach(t => {
                 totalColumns += (t.columns || []).length;
             });
-            
+
             statusEl.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-check-circle-fill text-success me-2 fs-5"></i>
@@ -440,47 +458,62 @@ async function loadWizardMetadata() {
                     </div>
                 </div>
             `;
-            
-            // Populate preview table with checkboxes
+
             tableBody.innerHTML = '';
             result.metadata.tables.forEach((table, index) => {
                 const columnCount = (table.columns || []).length;
                 const description = table.comment || table.description || '';
                 const tableName = table.full_name || table.name;
-                const displayName = tableName.split('.').pop(); // Get just the table name for display
-                
+                const displayName = tableName.split('.').pop();
+                const kind = table.object_kind || 'table';
+                const kindBadge = kind === 'metric_view'
+                    ? '<span class="badge bg-info ms-1">Metric View</span>'
+                    : (kind === 'view'
+                        ? '<span class="badge bg-secondary ms-1">View</span>'
+                        : '');
+                // Table names/comments come straight from the connected
+                // catalog (server-controlled today, but this rendering path
+                // was substantially rewritten for the staged wizard) — every
+                // server-supplied field is escaped before it reaches
+                // innerHTML, both in text content and inside the quoted
+                // `data-table` attribute.
+                const safeTableNameAttr = escWizardAttr(tableName);
+                const safeDisplayNameAttr = escWizardAttr(displayName);
+                const safeTableName = escapeHtml(tableName);
+                const safeDisplayName = escapeHtml(displayName);
+                const safeDescription = escapeHtml(description);
+
                 tableBody.innerHTML += `
                     <tr>
                         <td class="text-center">
                             <input type="checkbox" class="form-check-input wizard-table-checkbox" 
-                                   data-table="${tableName}" id="wizardTable${index}" checked>
+                                   data-table="${safeTableNameAttr}" id="wizardTable${index}" checked
+                                   aria-label="Include ${safeDisplayNameAttr}">
                         </td>
                         <td>
                             <label for="wizardTable${index}" class="mb-0 cursor-pointer">
-                                <strong>${displayName}</strong>
-                                <br><small class="text-muted">${tableName}</small>
+                                <strong>${safeDisplayName}</strong>${kindBadge}
+                                <br><small class="text-muted">${safeTableName}</small>
                             </label>
                         </td>
                         <td class="text-center">${columnCount}</td>
-                        <td class="small">${description || '<span class="text-muted">-</span>'}</td>
+                        <td class="small">${safeDescription || '<span class="text-muted">-</span>'}</td>
                     </tr>
                 `;
             });
-            
+
             previewEl.style.display = 'block';
             noMetadataEl.style.display = 'none';
-            
-            // Update selection count
+
             updateWizardSelectionCount();
-            
-            // Enable generate button
+
             const genBtn = document.getElementById('wizardTopGenerateBtn');
             if (genBtn) genBtn.disabled = false;
         } else {
             statusEl.innerHTML = `
                 <div class="d-flex align-items-center text-muted">
                     <i class="bi bi-info-circle me-2 fs-5"></i>
-                    <span>No data sources loaded — you can still generate from documents or guidelines</span>
+                    <span>No data assets loaded — you can still detect entities from documents or guidelines</span>
                 </div>
             `;
             previewEl.style.display = 'none';
@@ -491,7 +524,7 @@ async function loadWizardMetadata() {
         statusEl.innerHTML = `
             <div class="d-flex align-items-center text-danger">
                 <i class="bi bi-x-circle-fill me-2 fs-5"></i>
-                <span>Error loading data sources: ${error.message}</span>
+                <span>Error loading data assets: ${error.message}</span>
             </div>
         `;
         noMetadataEl.style.display = 'block';
@@ -554,7 +587,7 @@ function updateWizardSelectionCount() {
     const countEl = document.getElementById('wizardSelectedCount');
     const total = wizardMetadataCache?.tables?.length || 0;
     const selected = wizardSelectedTables.size;
-    
+
     if (countEl) {
         countEl.innerHTML = `<i class="bi bi-check2-square me-1"></i><strong>${selected}</strong> of ${total} tables selected for generation`;
     }
@@ -565,12 +598,12 @@ function updateWizardSelectionCount() {
  */
 function getSelectedMetadata() {
     if (!wizardMetadataCache) return null;
-    
+
     const selectedTables = wizardMetadataCache.tables.filter(table => {
         const tableName = table.full_name || table.name;
         return wizardSelectedTables.has(tableName);
     });
-    
+
     return {
         ...wizardMetadataCache,
         tables: selectedTables
@@ -629,212 +662,387 @@ function loadWizardTemplate(templateName) {
 }
 
 // =====================================================
-// ONTOLOGY GENERATION
+// STAGE 1: START DETECTION
 // =====================================================
 
 /**
- * Generate ontology from wizard inputs (async version)
+ * Start Stage 1 candidate-entity detection (async task). If a draft is
+ * already in Review/Complete, confirm before discarding it (detection
+ * always starts a fresh review cycle — see `GenerateWorkflow.run_detection`).
  */
-async function generateOntologyFromWizard() {
+async function startGenerateDetection() {
+    const reviewPane = document.getElementById('wizardReviewPane');
+    const completePane = document.getElementById('wizardCompletePane');
+    const hasExistingDraftInProgress =
+        (reviewPane && !reviewPane.classList.contains('ob-hidden')) ||
+        (completePane && !completePane.classList.contains('ob-hidden'));
+
+    if (hasExistingDraftInProgress) {
+        const confirmed = await showConfirmDialog({
+            title: 'Re-run Detection',
+            message:
+                'Running detection again discards the current draft (any ' +
+                'candidate edits, includes/excludes) and starts a new review ' +
+                'cycle. Continue?',
+            confirmText: 'Re-detect',
+            confirmClass: 'btn-outline-danger',
+            icon: 'arrow-repeat',
+        });
+        if (!confirmed) return;
+    }
+
+    await runGenerateDetection();
+}
+
+async function runGenerateDetection() {
     const selectedMetadata = getSelectedMetadata();
     const guidelines = document.getElementById('wizardGuidelines').value.trim();
-    const documents = getSelectedDocumentNames();
+    const selectedDocumentFiles = getSelectedDocumentFiles();
+    const unavailableDocuments = selectedDocumentFiles.filter(
+        file => file.parse_status !== 'ready'
+    );
+    const documents = selectedDocumentFiles
+        .filter(file => file.parse_status === 'ready')
+        .map(file => file.name);
 
     const hasMetadata = selectedMetadata && selectedMetadata.tables && selectedMetadata.tables.length > 0;
     const hasGuidelines = guidelines.length > 0;
     const hasDocs = documents.length > 0;
 
+    if (unavailableDocuments.length > 0) {
+        const names = unavailableDocuments.map(file => file.name).join(', ');
+        showNotification(`Document parsing is not ready for: ${names}`, 'warning');
+    }
+
     if (!hasMetadata && !hasGuidelines && !hasDocs) {
-        showNotification('Please provide at least data sources, documents, or guidelines', 'warning');
+        const message = unavailableDocuments.length > 0
+            ? 'Document parsing is not ready. Wait for a ready document or provide another input.'
+            : 'Please provide at least data assets, documents, or guidelines';
+        showNotification(message, 'warning');
         return;
     }
 
-    const options = {
-        includeDataProperties: document.getElementById('wizardIncludeDataProps').checked,
-        includeRelationships: document.getElementById('wizardIncludeRelationships').checked,
-        includeInheritance: document.getElementById('wizardIncludeInheritance').checked,
-        useTableNames: document.getElementById('wizardUseTableNames').checked,
-        useColumnComments: document.getElementById('wizardUseColumnComments').checked
-    };
-    
     try {
-        // Start async task
-        const response = await fetch('/ontology/wizard/generate-async', {
+        const response = await fetch('/ontology/wizard/generate/detect', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 metadata: hasMetadata ? selectedMetadata : {},
                 guidelines: guidelines,
-                options: options,
-                documents: documents
+                options: {},
+                documents: documents,
+                tables: hasMetadata ? Array.from(wizardSelectedTables) : [],
             }),
             credentials: 'same-origin'
         });
-        
+
         const startResult = await response.json();
-        
+
         if (!startResult.success) {
             showNotification('Error: ' + startResult.message, 'error');
             return;
         }
-        
+
         const taskId = startResult.task_id;
-        console.log('[Wizard] Task started:', taskId);
-        
-        // Clear any previously persisted OWL and iteration log
-        sessionStorage.removeItem(WIZARD_OWL_KEY);
-        sessionStorage.removeItem(WIZARD_STATS_KEY);
-        wizardGeneratedOWL = null;
-        _wizardIterationLog = [];
-        
-        // Save task ID to session storage (persist across page navigation)
-        sessionStorage.setItem(WIZARD_TASK_KEY, taskId);
+        console.log('[Wizard] Detection task started:', taskId);
+
+        sessionStorage.setItem(WIZARD_DETECT_TASK_KEY, taskId);
         wizardCurrentTaskId = taskId;
-        wizardNotificationShown = false;  // Reset notification flag for new task
-        
-        // Disable the form and show progress overlay
+
         disableWizardForm(true);
         _clearWizardProgressPanels();
-        
-        // Trigger refresh of task tracker
+
         if (typeof refreshTasks === 'function') {
             refreshTasks();
         }
-        
-        showNotification('Ontology generation started. You can navigate away and come back.', 'info');
-        
-        // Start monitoring the task
-        monitorWizardTask(taskId);
-        
+
+        showNotification('Detecting candidate entities. You can navigate away and come back.', 'info');
+
+        monitorWizardTask(taskId, 'detect');
+
     } catch (error) {
-        console.error('[Wizard] Generation error:', error);
-        showNotification('Error starting generation: ' + error.message, 'error');
+        console.error('[Wizard] Detection error:', error);
+        showNotification('Error starting detection: ' + error.message, 'error');
     }
-}
-
-/**
- * Helper function for delays
- */
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // =====================================================
-// PREVIEW ACTIONS
+// STAGE 3: COMPLETE (relations -> attributes -> axioms -> merge)
 // =====================================================
 
-/**
- * Copy generated OWL to clipboard
- */
-function copyWizardOWL() {
-    const owlContent = wizardGeneratedOWL;
-    if (owlContent) {
-        navigator.clipboard.writeText(owlContent).then(() => {
-            showNotification('OWL content copied to clipboard', 'success', 2000);
-        }).catch(err => {
-            showNotification('Failed to copy: ' + err.message, 'error');
-        });
-    }
+const WIZARD_COMPLETE_SUBSTAGES = ['relations', 'attributes', 'axioms', 'merge'];
+
+/** Map a completion checkpoint status to the checklist item's visual class + icon. */
+function _completeStepVisual(status) {
+    if (status === 'done') return { cls: 'wizard-complete-step-done', icon: 'bi-check-circle-fill text-success' };
+    if (status === 'running') return { cls: 'wizard-complete-step-running', icon: '' }; // spinner injected separately
+    if (status === 'failed') return { cls: 'wizard-complete-step-failed', icon: 'bi-x-circle-fill text-danger' };
+    return { cls: '', icon: 'bi-circle text-muted' };
 }
 
 /**
- * Download generated OWL as file
+ * Render the Stage 3 checklist from the durable draft's
+ * `completion_checkpoints` + `merge_checkpoint` — the only source of truth
+ * for "what's already done" on resume/retry.
  */
-function downloadWizardOWL() {
-    const owlContent = wizardGeneratedOWL;
-    if (!owlContent) return;
-    
-    const blob = new Blob([owlContent], { type: 'text/turtle' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'generated_ontology.ttl';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showNotification('OWL file downloaded', 'success', 2000);
-}
+function renderCompleteChecklist(draft) {
+    const checkpoints = draft.completion_checkpoints || {};
+    const mergeCheckpoint = draft.merge_checkpoint || { status: 'pending' };
 
-/**
- * Clear the preview
- */
-function clearWizardPreview() {
-    wizardGeneratedOWL = null;
-    _wizardIterationLog = [];
-    sessionStorage.removeItem(WIZARD_OWL_KEY);
-    sessionStorage.removeItem(WIZARD_STATS_KEY);
-}
+    WIZARD_COMPLETE_SUBSTAGES.forEach(function (substage) {
+        const li = document.querySelector('[data-substage="' + substage + '"]');
+        if (!li) return;
+        const iconWrap = li.querySelector('.wizard-complete-step-icon');
+        const status = substage === 'merge'
+            ? mergeCheckpoint.status
+            : (checkpoints[substage] || {}).status || 'pending';
+        const visual = _completeStepVisual(status);
 
-/**
- * Apply the generated ontology (import it)
- */
-async function applyWizardOntology() {
-    if (!wizardGeneratedOWL) {
-        showNotification('No ontology to apply', 'warning');
-        return;
-    }
-    
-    // Confirm before applying (will replace existing ontology)
-    const confirmed = await showConfirmDialog({
-        title: 'Apply Generated Ontology',
-        message: 'This will replace your current ontology with the generated one. Continue?',
-        confirmText: 'Apply',
-        confirmClass: 'btn-success',
-        icon: 'check-lg'
+        li.classList.remove('wizard-complete-step-done', 'wizard-complete-step-running', 'wizard-complete-step-failed');
+        if (visual.cls) li.classList.add(visual.cls);
+
+        if (iconWrap) {
+            iconWrap.innerHTML = status === 'running'
+                ? '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>'
+                : `<i class="bi ${visual.icon}" aria-hidden="true"></i>`;
+        }
     });
-    
-    if (!confirmed) return;
-    
+
+    const retryBtn = document.getElementById('wizardCompleteRetryBtn');
+    const summaryEl = document.getElementById('wizardCompleteSummary');
+    const anyFailed = WIZARD_COMPLETE_SUBSTAGES.some(function (s) {
+        const status = s === 'merge' ? mergeCheckpoint.status : (checkpoints[s] || {}).status;
+        return status === 'failed';
+    });
+
+    if (retryBtn) retryBtn.classList.toggle('ob-hidden', !anyFailed);
+
+    if (draft.stage === 'done' && mergeCheckpoint.status === 'done' && summaryEl) {
+        const stats = mergeCheckpoint.result || {};
+        summaryEl.classList.remove('ob-hidden');
+        summaryEl.innerHTML =
+            '<div class="alert alert-success mb-0">' +
+            '<i class="bi bi-check-circle-fill me-2"></i>' +
+            `Merged ${stats.classes_added || 0} entities, ${stats.relations_added || 0} relations, ` +
+            `${stats.attributes_added || 0} attributes, ${stats.axioms_added || 0} axioms into your ontology.` +
+            '</div>';
+    } else if (summaryEl) {
+        summaryEl.classList.add('ob-hidden');
+        summaryEl.innerHTML = '';
+    }
+}
+
+/** Update the checklist live from an in-flight completion task's steps
+ * (task.steps mirrors the substage order, so we translate its status). */
+function renderCompleteChecklistFromTaskSteps(task) {
+    if (!task || !Array.isArray(task.steps)) return;
+    task.steps.forEach(function (step) {
+        const li = document.querySelector('[data-substage="' + step.name + '"]');
+        if (!li) return;
+        const iconWrap = li.querySelector('.wizard-complete-step-icon');
+        const visual = _completeStepVisual(
+            step.status === 'completed' ? 'done' : step.status
+        );
+        li.classList.remove('wizard-complete-step-done', 'wizard-complete-step-running', 'wizard-complete-step-failed');
+        if (visual.cls) li.classList.add(visual.cls);
+        if (iconWrap) {
+            iconWrap.innerHTML = step.status === 'running'
+                ? '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>'
+                : `<i class="bi ${visual.icon}" aria-hidden="true"></i>`;
+        }
+    });
+}
+
+/**
+ * Start (or resume) Stage 3 completion. Called from the Review pane's
+ * "Continue to Complete" button (via `window.WizardCore.startCompletion`)
+ * and from the Complete pane's Retry button.
+ */
+async function startGenerateCompletion() {
+    setWizardStage('complete');
+    resetCompleteChecklistToPending();
+
     try {
-        // Use the existing parse-owl endpoint to import
-        const response = await fetch('/ontology/parse-owl', {
+        const response = await fetch('/ontology/wizard/generate/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: wizardGeneratedOWL }),
-            credentials: 'same-origin'
+            body: JSON.stringify({ options: {} }),
+            credentials: 'same-origin',
         });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('Ontology applied successfully!', 'success');
-            
-            // Clear the preview
-            clearWizardPreview();
-            
-            // Refresh ontology status
-            if (typeof refreshOntologyStatus === 'function') {
-                refreshOntologyStatus();
-            }
-            
-            // Reload ontology state
-            if (typeof loadOntologyFromSession === 'function') {
-                await loadOntologyFromSession();
-            }
-            
-            // Navigate to Map view to see the result
-            if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.switchTo === 'function') {
-                SidebarNav.switchTo('map');
-            }
+        const startResult = await response.json();
 
-        } else {
-            showNotification('Error applying ontology: ' + result.message, 'error');
+        if (!startResult.success) {
+            showNotification('Error: ' + startResult.message, 'error');
+            return;
         }
+
+        const taskId = startResult.task_id;
+        console.log('[Wizard] Completion task started:', taskId);
+
+        sessionStorage.setItem(WIZARD_COMPLETE_TASK_KEY, taskId);
+        wizardCurrentTaskId = taskId;
+
+        disableWizardForm(true);
+        _clearWizardProgressPanels();
+
+        if (typeof refreshTasks === 'function') {
+            refreshTasks();
+        }
+
+        showNotification('Completing ontology Generate. You can navigate away and come back.', 'info');
+
+        monitorWizardTask(taskId, 'complete');
     } catch (error) {
-        console.error('[Wizard] Apply error:', error);
-        showNotification('Error applying ontology: ' + error.message, 'error');
+        console.error('[Wizard] Completion error:', error);
+        showNotification('Error starting completion: ' + error.message, 'error');
     }
 }
+
+/** Retry a partially-failed completion — resumes at the first incomplete
+ * substage (the server never re-runs an already-`done` checkpoint), so
+ * this is just re-issuing the same completion call. */
+function retryGenerateCompletion() {
+    startGenerateCompletion();
+}
+
+/**
+ * Stage 3 "Start Over": discard the current draft (whatever its state —
+ * still completing, failed, or already merged/`done`) and return to the
+ * Configure pane, same destination as the Review pane's discard button
+ * (`window.WizardCore.onDraftDiscarded`). Mirrors the confirm-dialog
+ * pattern used by `discardDraft()` in ontology-wizard-review.js — this
+ * lives here (not there) because it also needs to cancel this module's
+ * in-flight completion task polling/sessionStorage tracking, exactly like
+ * the stale-banner re-detect guard avoids silently discarding unacted-on
+ * work when a task is still running.
+ */
+async function discardDraftAndStartOver() {
+    const taskRunning = !!(wizardCurrentTaskId && sessionStorage.getItem(WIZARD_COMPLETE_TASK_KEY));
+
+    let stage = null;
+    try {
+        const response = await fetch('/ontology/wizard/generate/draft', { credentials: 'same-origin' });
+        const data = await response.json();
+        stage = data.success && data.draft ? data.draft.stage : null;
+    } catch (error) {
+        console.warn('[Wizard] Could not check draft stage before Start Over:', error);
+    }
+
+    const message = taskRunning
+        ? 'Completion is still running in the background. Starting over stops ' +
+          'tracking that task and discards the current draft — any relations, ' +
+          'attributes, or axioms completed so far are lost. Continue?'
+        : stage === 'done'
+            ? 'This draft has already been merged into your ontology. Starting ' +
+              'over only clears the draft record so you can run a fresh ' +
+              'detection cycle — the entities, relations, attributes, and ' +
+              'axioms already merged stay in your ontology. Continue?'
+            : 'Starting over discards the current draft — any relations, ' +
+              'attributes, or axioms completed so far are lost. Continue?';
+
+    const confirmed = await showConfirmDialog({
+        title: 'Start Over',
+        message: message,
+        confirmText: 'Start Over',
+        confirmClass: 'btn-outline-danger',
+        icon: 'arrow-counterclockwise',
+    });
+    if (!confirmed) return;
+
+    if (taskRunning) {
+        sessionStorage.removeItem(WIZARD_COMPLETE_TASK_KEY);
+        wizardCurrentTaskId = null;
+        disableWizardForm(false);
+    }
+
+    try {
+        const response = await fetch('/ontology/wizard/generate/draft/discard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+        });
+        const data = await response.json().catch(function () { return {}; });
+        if (!response.ok) {
+            showNotification(data.message || 'Discarding the draft failed', 'error');
+            return;
+        }
+        showNotification('Draft discarded', 'info');
+        if (window.WizardReview && typeof window.WizardReview.reset === 'function') {
+            window.WizardReview.reset();
+        }
+        setWizardStage('configure');
+    } catch (error) {
+        showNotification('Discarding the draft failed: ' + error.message, 'error');
+    }
+}
+
+function resetCompleteChecklistToPending() {
+    WIZARD_COMPLETE_SUBSTAGES.forEach(function (substage) {
+        const li = document.querySelector('[data-substage="' + substage + '"]');
+        if (!li || li.classList.contains('wizard-complete-step-done')) return;
+        li.classList.remove('wizard-complete-step-failed');
+        const iconWrap = li.querySelector('.wizard-complete-step-icon');
+        if (iconWrap) iconWrap.innerHTML = '<i class="bi bi-circle text-muted" aria-hidden="true"></i>';
+    });
+    const retryBtn = document.getElementById('wizardCompleteRetryBtn');
+    if (retryBtn) retryBtn.classList.add('ob-hidden');
+}
+
+/**
+ * Handle a successful completion task: refresh the ontology, render the
+ * final draft's checklist/summary, and navigate to the Map view — mirrors
+ * today's one-shot wizard's success behavior.
+ */
+async function handleCompletionSuccess(result) {
+    const draft = result.draft || {};
+    renderCompleteChecklist(draft);
+
+    if (typeof refreshOntologyStatus === 'function') {
+        refreshOntologyStatus();
+    }
+    if (typeof loadOntologyFromSession === 'function') {
+        await loadOntologyFromSession();
+    }
+    if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.switchTo === 'function') {
+        SidebarNav.switchTo('map');
+    }
+
+    const stats = result.merge || {};
+    showNotification(
+        `Ontology updated — +${stats.classes_added || 0} entities, ` +
+        `+${stats.relations_added || 0} relations, +${stats.attributes_added || 0} attributes, ` +
+        `+${stats.axioms_added || 0} axioms.`,
+        'success'
+    );
+}
+
+// =====================================================
+// WIZARD CORE — cross-module bridge for ontology-wizard-review.js
+// =====================================================
+
+window.WizardCore = {
+    /** Stage 2 "Continue to Complete" -> Stage 3. */
+    startCompletion: startGenerateCompletion,
+    /** Stale-draft banner's "Re-detect" -> re-run Stage 1 through the same
+     * confirm-guarded entry point Stage 1's own button uses. A stale draft
+     * can still hold manually-added/edited candidates the user hasn't
+     * acted on yet, so re-detecting must not silently discard them —
+     * `startGenerateDetection` sees the Review pane is visible and prompts
+     * before wiping the draft, exactly like re-running detection from
+     * Stage 1 while a draft is already in progress. */
+    redetect: startGenerateDetection,
+    /** After a successful discard, return to the Configure pane. */
+    onDraftDiscarded: function () {
+        setWizardStage('configure');
+    },
+};
 
 // =====================================================
 // DOCUMENTS SELECTION
 // =====================================================
 
 /**
- * Load documents from the domain volume.
+ * Load documents from the domain's Knowledge Store.
  */
 async function loadWizardDocuments() {
     const statusEl = document.getElementById('wizardDocsStatus');
@@ -848,27 +1056,35 @@ async function loadWizardDocuments() {
         if (result.success && result.files && result.files.length > 0) {
             wizardDocsCache = result.files;
             wizardSelectedDocs.clear();
-            // Select all by default
-            wizardDocsCache.forEach(f => wizardSelectedDocs.add(f.name));
+            // Select ready documents by default; unavailable files cannot be evidence.
+            wizardDocsCache
+                .filter(file => file.parse_status === 'ready')
+                .forEach(file => wizardSelectedDocs.add(file.name));
+            const readyCount = wizardDocsCache.filter(
+                file => file.parse_status === 'ready'
+            ).length;
 
             statusEl.innerHTML = `
                 <div class="d-flex align-items-center">
                     <i class="bi bi-check-circle-fill text-success me-2 fs-5"></i>
-                    <div><strong>${wizardDocsCache.length} document${wizardDocsCache.length > 1 ? 's' : ''}</strong> available</div>
+                    <div><strong>${readyCount} of ${wizardDocsCache.length} documents</strong> ready</div>
                 </div>`;
             renderWizardDocsList();
-            previewEl.style.display = '';
+            // Use an explicit block (not '') — the panes carry the
+            // `.ob-hidden { display: none }` class, so clearing the inline
+            // style would let the class re-hide the list and its checkboxes.
+            if (previewEl) previewEl.style.display = 'block';
             if (noDocsEl) noDocsEl.style.display = 'none';
         } else {
             statusEl.innerHTML = '';
             if (previewEl) previewEl.style.display = 'none';
-            if (noDocsEl) noDocsEl.style.display = '';
+            if (noDocsEl) noDocsEl.style.display = 'block';
         }
     } catch (err) {
         console.warn('[Wizard] Could not load documents:', err);
         statusEl.innerHTML = '';
         if (previewEl) previewEl.style.display = 'none';
-        if (noDocsEl) noDocsEl.style.display = '';
+        if (noDocsEl) noDocsEl.style.display = 'block';
     }
 }
 
@@ -893,17 +1109,37 @@ function renderWizardDocsList() {
         const ext = (file.name.split('.').pop() || '').toLowerCase();
         const iconCls = iconMap[ext] || 'bi-file-earmark text-muted';
         const checked = wizardSelectedDocs.has(file.name) ? 'checked' : '';
+        const isReady = file.parse_status === 'ready';
+        const disabled = isReady ? '' : 'disabled';
+        const unavailableIcon = file.parse_status === 'pending' ? 'bi-hourglass-split' : 'bi-exclamation-triangle';
+        const statusLabel = isReady
+            ? '<span class="badge text-bg-success ms-2"><i class="bi bi-check-circle me-1"></i>Ready</span>'
+            : `<span class="badge ${file.parse_status === 'pending' ? 'text-bg-warning' : 'text-bg-danger'} ms-2">
+                   <i class="bi ${unavailableIcon} me-1"></i>${file.parse_status === 'pending' ? 'Parsing' : 'Parse failed'}
+               </span>`;
         const size = file.size != null ? formatDocSize(file.size) : '';
         const docNameAttr = encodeURIComponent(file.name);
+        // Document names come straight from the Knowledge Store listing —
+        // this rendering path was substantially rewritten for the staged
+        // wizard, so every server-supplied field is escaped before it
+        // reaches innerHTML, both in text content and inside the quoted
+        // `value` attribute (`docNameAttr` above is already
+        // percent-encoded via encodeURIComponent, which is attribute-safe
+        // on its own).
+        const safeNameAttr = escWizardAttr(file.name);
+        const safeName = escapeHtml(file.name);
         html += `
             <div class="list-group-item list-group-item-action d-flex align-items-center py-2">
                 <input type="checkbox" class="form-check-input me-3 wizard-doc-checkbox"
-                       value="${file.name}" ${checked}>
+                       value="${safeNameAttr}" ${checked} ${disabled}
+                       aria-label="Include ${safeNameAttr}">
                 <i class="bi ${iconCls} me-2"></i>
-                <span class="text-truncate flex-grow-1">${file.name}</span>
+                <span class="text-truncate flex-grow-1">${safeName}</span>
                 ${size ? `<span class="small text-muted ms-2">${size}</span>` : ''}
+                ${statusLabel}
                 <button class="btn btn-sm btn-outline-primary py-0 px-1 ms-2" type="button"
-                        data-action="wizard-doc-preview" data-doc-name="${docNameAttr}" title="Preview">
+                        data-action="wizard-doc-preview" data-doc-name="${docNameAttr}" title="Preview"
+                        ${disabled}>
                     <i class="bi bi-eye"></i>
                 </button>
             </div>`;
@@ -925,10 +1161,12 @@ function updateWizardDocSelection(checkbox) {
 function selectAllWizardDocs(selectAll) {
     wizardSelectedDocs.clear();
     if (selectAll) {
-        wizardDocsCache.forEach(f => wizardSelectedDocs.add(f.name));
+        wizardDocsCache
+            .filter(file => file.parse_status === 'ready')
+            .forEach(file => wizardSelectedDocs.add(file.name));
     }
     document.querySelectorAll('.wizard-doc-checkbox').forEach(cb => {
-        cb.checked = selectAll;
+        cb.checked = selectAll && !cb.disabled;
     });
     updateWizardDocsCount();
 }
@@ -941,8 +1179,8 @@ function updateWizardDocsCount() {
     el.textContent = `${selected} of ${total} document${total !== 1 ? 's' : ''} selected`;
 }
 
-function getSelectedDocumentNames() {
-    return Array.from(wizardSelectedDocs);
+function getSelectedDocumentFiles() {
+    return wizardDocsCache.filter(file => wizardSelectedDocs.has(file.name));
 }
 
 function formatDocSize(bytes) {
@@ -955,26 +1193,15 @@ function formatDocSize(bytes) {
 // AGENT STEPS LOG
 // =====================================================
 
-function renderAgentStepsLog(steps) {
-    if (typeof TaskProgressUI !== 'undefined') {
-        return TaskProgressUI.renderAgentStepsLogHtml(steps);
-    }
-    return '';
-}
-
-function _truncate(str, max) { return truncate(str, max); }
-
 // =====================================================
 // EXPOSE GLOBALLY
 // =====================================================
 
 window.initOntologyWizard = initOntologyWizard;
 window.loadWizardTemplate = loadWizardTemplate;
-window.generateOntologyFromWizard = generateOntologyFromWizard;
-window.copyWizardOWL = copyWizardOWL;
-window.downloadWizardOWL = downloadWizardOWL;
-window.clearWizardPreview = clearWizardPreview;
-window.applyWizardOntology = applyWizardOntology;
+window.startGenerateDetection = startGenerateDetection;
+window.retryGenerateCompletion = retryGenerateCompletion;
+window.discardDraftAndStartOver = discardDraftAndStartOver;
 window.updateWizardTableSelection = updateWizardTableSelection;
 window.selectAllWizardTables = selectAllWizardTables;
 window.updateWizardDocSelection = updateWizardDocSelection;
@@ -995,7 +1222,7 @@ window.selectAllWizardDocs = selectAllWizardDocs;
             const action = el.dataset.action;
             switch (action) {
                 case 'wizard-generate':
-                    generateOntologyFromWizard();
+                    startGenerateDetection();
                     break;
                 case 'wizard-tables-bulk':
                     selectAllWizardTables(el.dataset.selectAll === 'true');
@@ -1003,17 +1230,11 @@ window.selectAllWizardDocs = selectAllWizardDocs;
                 case 'wizard-docs-bulk':
                     selectAllWizardDocs(el.dataset.selectAll === 'true');
                     break;
-                case 'wizard-copy-owl':
-                    copyWizardOWL();
+                case 'wizard-complete-retry':
+                    retryGenerateCompletion();
                     break;
-                case 'wizard-download-owl':
-                    downloadWizardOWL();
-                    break;
-                case 'wizard-discard-preview':
-                    clearWizardPreview();
-                    break;
-                case 'wizard-apply-ontology':
-                    applyWizardOntology();
+                case 'wizard-complete-discard':
+                    discardDraftAndStartOver();
                     break;
                 case 'wizard-doc-preview': {
                     e.stopPropagation();

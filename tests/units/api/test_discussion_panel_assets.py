@@ -8,7 +8,8 @@ is caught by CI.
 They are deliberately token-level (not behavioural) — they guard that the
 contract between the panel and the rest of the app stays intact:
 
-* comment bodies are rendered as markdown (via the global ``marked``).
+* comment bodies are rendered as markdown (via the shared, DOMPurify-sanitised
+  ``renderMarkdown`` in ``utils.js``).
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ PANEL_JS = "/static/global/js/comments-panel.js"
 ONTOLOGY_INIT_JS = "/static/ontology/js/ontology-init.js"
 MAPPING_INIT_JS = "/static/mapping/js/mapping-init.js"
 COLLAB_JS = "/static/domain/js/domain-collaboration.js"
+UTILS_JS = "/static/global/js/utils.js"
 REVIEW_CSS = "/static/global/css/review-modals.css"
 
 
@@ -35,19 +37,22 @@ def panel_js(client) -> str:
 
 
 class TestDiscussionMarkdownRendering:
-    """Comment bodies render markdown (not raw source) via the global marked."""
+    """Comment bodies render markdown via the shared, sanitised renderer."""
 
-    def test_panel_defines_markdown_renderer(self, panel_js):
-        assert "function renderMarkdown" in panel_js
+    def test_panel_uses_shared_renderer(self, panel_js):
+        # The panel must not ship its own (unsanitised) marked wrapper.
+        assert "function renderMarkdown" not in panel_js
+        assert "marked.parse" not in panel_js
 
-    def test_renderer_uses_global_marked(self, panel_js):
-        assert "window.marked" in panel_js
-        assert "marked.parse" in panel_js
+    def test_shared_renderer_sanitises_marked_output(self, client):
+        utils_js = _static(client, UTILS_JS)
+        assert "function renderMarkdown" in utils_js
+        assert "DOMPurify.sanitize(window.marked.parse(" in utils_js
 
-    def test_renderer_has_plaintext_fallback(self, panel_js):
+    def test_renderer_has_plaintext_fallback(self, client):
         # When marked is unavailable it must still escape + line-break, never
         # inject raw text as HTML.
-        assert "replace(/\\n/g, '<br>')" in panel_js
+        assert "replace(/\\n/g, '<br>')" in _static(client, UTILS_JS)
 
     def test_bubble_renders_body_as_markdown(self, panel_js):
         # The comment bubble pipes the parsed body through the renderer into a
@@ -91,11 +96,10 @@ class TestDiscussionDomainScope:
 class TestDiscussionTimelineMarkdown:
     """Domain → Discussions timeline renders comment bodies as markdown."""
 
-    def test_timeline_defines_markdown_renderer(self, client):
+    def test_timeline_uses_shared_renderer(self, client):
         js = _static(client, COLLAB_JS)
-        assert "function renderMarkdown" in js
-        assert "window.marked" in js
-        assert "marked.parse" in js
+        assert "function renderMarkdown" not in js
+        assert "marked.parse" not in js
 
     def test_timeline_entry_renders_markdown(self, client):
         js = _static(client, COLLAB_JS)

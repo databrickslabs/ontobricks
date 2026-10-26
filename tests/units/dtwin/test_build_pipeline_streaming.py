@@ -11,8 +11,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from back.core.errors import InfrastructureError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.objects.digitaltwin._build_pipeline import (
+from back.objects.digitaltwin.build._build_pipeline import (
     _BuildPipeline,
     collect_domain_stats,
     step_times_from_task,
@@ -136,6 +137,32 @@ class TestFullRebuildProgressMessage:
         assert any("Written 15000/15000 triples" in m for m in msgs), msgs
         assert not any("Written 4500/4500" in m for m in msgs), msgs
 
+    def test_full_rebuild_rebuilds_adjacency_for_postgres_store(self):
+        pipe = self._full_pipe(view_total=10)
+        pipe.store.supports_adjacency = True
+        pipe.store.sql_flavor.return_value = "postgres"
+        pipe.store.rebuild_adjacency = MagicMock()
+        pipe.store.optimize_table = MagicMock()
+
+        ok = pipe._apply_full_rebuild()
+
+        assert ok is True
+        pipe.store.optimize_table.assert_called_once_with(pipe.graph_name)
+        pipe.store.rebuild_adjacency.assert_called_once_with(pipe.graph_name)
+
+    def test_full_rebuild_skips_adjacency_for_non_postgres_flavor(self):
+        pipe = self._full_pipe(view_total=10)
+        pipe.store.supports_adjacency = True
+        pipe.store.sql_flavor.return_value = "spark"
+        pipe.store.rebuild_adjacency = MagicMock()
+        pipe.store.optimize_table = MagicMock()
+
+        ok = pipe._apply_full_rebuild()
+
+        assert ok is True
+        pipe.store.optimize_table.assert_called_once_with(pipe.graph_name)
+        pipe.store.rebuild_adjacency.assert_not_called()
+
 
 # ---------------------------------------------------------------
 # Lakebase managed-synced apply path
@@ -174,6 +201,24 @@ class TestApplyViaSyncedPipeline:
         pipe.tm.is_cancelled.return_value = False
         return pipe
 
+    def test_a_failed_post_sync_count_does_not_fail_the_sync(self):
+        """The count after a successful sync only feeds the progress message."""
+        pipe = self._synced_pipe()
+        pipe._count_view_triples = MagicMock(
+            side_effect=InfrastructureError(
+                "Could not count the triples in cat.sch.v_g: "
+                "Error during request to server"
+            )
+        )
+
+        ok = pipe._apply_via_synced_pipeline()
+
+        assert ok is True
+        assert any(
+            "count unavailable" in str(call)
+            for call in pipe.tm.update_progress.call_args_list
+        )
+
     def test_synced_calls_ensure_trigger_and_truncate_companion(self):
         pipe = self._synced_pipe()
 
@@ -211,6 +256,42 @@ class TestApplyViaSyncedPipeline:
         assert ok is True
         m.assert_called_once_with()
         pipe.source_client.iter_rows.assert_not_called()
+
+    def test_synced_pipeline_rebuilds_adjacency_for_postgres_store(self):
+        pipe = self._synced_pipe()
+        pipe.store.supports_adjacency = True
+        pipe.store.sql_flavor.return_value = "postgres"
+        pipe.store.rebuild_adjacency = MagicMock()
+
+        ok = pipe._apply_via_synced_pipeline()
+
+        assert ok is True
+        pipe.store.rebuild_adjacency.assert_called_once_with(pipe.graph_name)
+
+    def test_synced_pipeline_fails_when_adjacency_rebuild_fails(self):
+        pipe = self._synced_pipe()
+        pipe.store.supports_adjacency = True
+        pipe.store.sql_flavor.return_value = "postgres"
+        pipe.store.rebuild_adjacency.side_effect = RuntimeError("adj stale")
+
+        ok = pipe._apply_via_synced_pipeline()
+
+        assert ok is False
+        pipe.store.truncate_companion.assert_called_once_with(pipe.graph_name)
+        pipe.tm.fail_task.assert_called_once()
+        assert "adjacency" in pipe.tm.fail_task.call_args.args[1].lower()
+
+    def test_synced_pipeline_attempts_adjacency_even_when_truncate_fails(self):
+        pipe = self._synced_pipe()
+        pipe.store.supports_adjacency = True
+        pipe.store.sql_flavor.return_value = "postgres"
+        pipe.store.truncate_companion.side_effect = RuntimeError("truncate failed")
+        pipe.store.rebuild_adjacency = MagicMock()
+
+        ok = pipe._apply_via_synced_pipeline()
+
+        assert ok is True
+        pipe.store.rebuild_adjacency.assert_called_once_with(pipe.graph_name)
 
 
 class TestResolveLakebaseMode:

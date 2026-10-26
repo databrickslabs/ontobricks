@@ -18,6 +18,7 @@ from back.core.errors import (
     ValidationError,
     AuthorizationError,
     ConflictError,
+    GoneError,
     InfrastructureError,
     ErrorResponse,
 )
@@ -64,6 +65,7 @@ class TestErrorCodeDerivation:
             (ValidationError, "validation"),
             (AuthorizationError, "authorization"),
             (ConflictError, "conflict"),
+            (GoneError, "gone"),
             (InfrastructureError, "infrastructure"),
         ],
     )
@@ -110,6 +112,10 @@ class TestSubclassDefaults:
         # Infrastructure errors are 502/503 per the hierarchy spec.
         assert 500 <= err.status_code < 600
 
+    def test_gone_defaults_to_410(self):
+        assert GoneError().status_code == 410
+        assert GoneError("route removed").message == "route removed"
+
     def test_subclass_accepts_detail_kwarg(self):
         err = NotFoundError("missing", detail="domain=sales, version=v3")
         assert err.detail == "domain=sales, version=v3"
@@ -121,7 +127,14 @@ class TestSubclassPolymorphism:
 
     @pytest.mark.parametrize(
         "exc_cls",
-        [NotFoundError, ValidationError, AuthorizationError, ConflictError, InfrastructureError],
+        [
+            NotFoundError,
+            ValidationError,
+            AuthorizationError,
+            ConflictError,
+            GoneError,
+            InfrastructureError,
+        ],
     )
     def test_subclass_caught_by_base(self, exc_cls):
         with pytest.raises(OntoBricksError):

@@ -132,3 +132,41 @@ def test_failed_job_run_raises_not_degrades(monkeypatch):
         DigitalTwin(_fake_domain()).compute_graph_metrics(
             "cat.sch.graph", settings=_fake_settings()
         )
+
+
+def test_job_metrics_readback_uses_build_warehouse_client(monkeypatch):
+    """Job output must never be read through the Lakehouse query warehouse."""
+    from types import SimpleNamespace
+
+    client = SimpleNamespace(execute_query=lambda sql: [])
+    calls = []
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings, *, for_write=False: (
+            calls.append((domain, settings, for_write)) or client
+        ),
+    )
+    monkeypatch.setattr(
+        "back.core.databricks.DatabricksClient",
+        lambda **kwargs: pytest.fail("job readback bypassed the build warehouse client"),
+    )
+
+    domain = _fake_domain()
+    settings = SimpleNamespace(
+        analytics_job_name="analytics-job",
+        analytics_job_output_schema="cat.sch",
+        analytics_job_timeout_s=3600,
+        analytics_job_pagerank_iterations=20,
+        analytics_job_pivots=64,
+        analytics_job_max_depth=32,
+    )
+
+    metrics = DigitalTwin.build_job_metrics(
+        domain,
+        settings,
+        source_table="cat.sch.source",
+        graph_name="graph",
+    )
+
+    assert metrics._query("SELECT 1") == []
+    assert calls == [(domain, settings, True)]

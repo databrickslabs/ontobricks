@@ -17,6 +17,7 @@ PITFALLS_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-pitfalls.css"
 ONTOLOGY_DQ_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-dataquality.css"
 QUERY_DQ_CSS = REPO_ROOT / "src/front/static/query/css/query-dataquality.css"
 QUERY_CHAT_CSS = REPO_ROOT / "src/front/static/query/css/query-chat.css"
+QUERY_SPARQL_CSS = REPO_ROOT / "src/front/static/query/css/query-sparql.css"
 BUSINESS_RULES_CSS = (
     REPO_ROOT / "src/front/static/ontology/css/ontology-business-rules.css"
 )
@@ -86,6 +87,7 @@ SECTION_INVENTORY = {
         "teams",
         "locks",
         "registry",
+        "github",
         "health",
         "logs",
         "runs",
@@ -478,6 +480,27 @@ def test_existing_internal_scroll_variants_have_complete_flex_chains():
             ),
         ),
         (
+            QUERY_SPARQL_CSS,
+            (
+                (
+                    ".query-language-content",
+                    {
+                        "flex": r"1\s+1\s+auto",
+                        "min-height": "0",
+                        "overflow": "hidden",
+                    },
+                ),
+                (
+                    ".sparql-playground",
+                    {
+                        "flex": r"1\s+1\s+auto",
+                        "min-height": "0",
+                        "overflow": "hidden",
+                    },
+                ),
+            ),
+        ),
+        (
             REPO_ROOT / "src/front/static/query/css/query-chat.css",
             (
                 (
@@ -513,6 +536,33 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
         (
             WIZARD_CSS,
             (
+                (
+                    ".wizard-stage-pane",
+                    {
+                        "flex": "1",
+                        "min-height": "0",
+                    },
+                ),
+                (
+                    "#wizardConfigurePane",
+                    {"overflow": "hidden"},
+                ),
+                (
+                    "#wizardConfigurePane .card.h-100",
+                    {
+                        "flex": "1",
+                        "min-height": "0",
+                        "overflow": "hidden",
+                    },
+                ),
+                (
+                    "#wizardConfigurePane .card-body.ob-tabs-wrap",
+                    {
+                        "flex": "1",
+                        "min-height": "0",
+                        "overflow": "hidden",
+                    },
+                ),
                 (
                     "#wizardTabContent",
                     {"flex": "1", "min-height": "0", "overflow-y": "auto"},

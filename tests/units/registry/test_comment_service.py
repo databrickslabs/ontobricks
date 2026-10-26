@@ -24,9 +24,9 @@ from back.objects.registry.PermissionService import (
     ROLE_VIEWER,
     ROLE_NONE,
 )
-from back.objects.registry.CommentService import CommentService
+from back.objects.registry.collab.CommentService import CommentService
 
-_mod = importlib.import_module("back.objects.registry.CommentService")
+_mod = importlib.import_module("back.objects.registry.collab.CommentService")
 
 
 def _request(email="alice@acme.com"):

@@ -6,9 +6,17 @@ from unittest.mock import Mock, MagicMock, patch
 
 _databricks_auth_mod = importlib.import_module("back.core.databricks.DatabricksAuth")
 
+from databricks.sql.exc import ServerOperationError
+
 from back.core.databricks.DatabricksAuth import DatabricksAuth
-from back.core.databricks.SQLWarehouse import SQLWarehouse
+from back.core.databricks.SQLWarehouse import (
+    SQLWarehouse,
+    _SQL_MAX_ATTEMPTS,
+    _is_retryable_transport_error,
+)
 from back.core.errors import ValidationError
+
+_SEA_500 = "Error during request to server. SEA HTTP request failed with status 500"
 
 
 def _make_connect_mock(
@@ -163,6 +171,207 @@ class TestExecuteQuery:
             sw.execute_query("BAD SQL")
 
 
+class TestRetryClassifier:
+    """`_is_retryable_transport_error` must retry only transient transport
+    failures and never real SQL / config errors."""
+
+    def test_sea_5xx_is_retryable(self):
+        assert _is_retryable_transport_error(Exception(_SEA_500)) is True
+
+    def test_service_unavailable_is_retryable(self):
+        assert _is_retryable_transport_error(Exception("503 Service Unavailable")) is True
+
+    def test_connection_reset_is_retryable(self):
+        assert _is_retryable_transport_error(ConnectionResetError("connection reset by peer")) is True
+
+    def test_server_operation_error_not_retryable(self):
+        exc = ServerOperationError("BAD_REQUEST: [TABLE_OR_VIEW_NOT_FOUND] missing")
+        assert _is_retryable_transport_error(exc) is False
+
+    def test_thrift_not_supported_not_retryable(self):
+        # Config error on RT warehouse — retrying can never succeed.
+        exc = Exception("BAD_REQUEST: Lakehouse/RT is not supported for Thrift protocol")
+        assert _is_retryable_transport_error(exc) is False
+
+    def test_plain_sql_error_not_retryable(self):
+        assert _is_retryable_transport_error(Exception("syntax error near FROM")) is False
+
+
+class TestExecuteQueryRetry:
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_retries_transient_then_succeeds(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        good_conn, _ = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        # First borrow raises a transient SEA 500 (warehouse cold-start),
+        # second borrow reconnects and succeeds.
+        mock_connect.side_effect = [Exception(_SEA_500), good_conn]
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-rt"
+        )
+        sw = SQLWarehouse(auth)
+        rows = sw.execute_query("SELECT x FROM t")
+        assert rows == [{"x": 1}]
+        assert mock_connect.call_count == 2
+        _sleep.assert_called_once()
+
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_does_not_retry_real_sql_error(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_connect.side_effect = ServerOperationError("BAD_REQUEST: table not found")
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-1"
+        )
+        sw = SQLWarehouse(auth)
+        with pytest.raises(ServerOperationError):
+            sw.execute_query("SELECT * FROM missing")
+        assert mock_connect.call_count == 1
+        _sleep.assert_not_called()
+
+    @patch("databricks.sql.connect")
+    def test_retries_thrift_rejection_with_kernel(self, mock_connect, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        good_conn, mock_cursor = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        mock_connect.side_effect = [
+            Exception(
+                "Lakehouse/RT is not supported for Thrift protocol. "
+                "Please update your Databricks SQL Driver version"
+            ),
+            good_conn,
+        ]
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-rt",
+            use_sea=False,
+        )
+        sw = SQLWarehouse(auth)
+        rows = sw.execute_query("SELECT 1")
+        assert rows == [{"x": 1}]
+        assert mock_connect.call_count == 2
+        assert mock_connect.call_args_list[0].kwargs.get("use_kernel") is None
+        assert mock_connect.call_args_list[1].kwargs.get("use_kernel") is True
+        assert auth.use_kernel is True
+        executed = [c.args[0] for c in mock_cursor.execute.call_args_list]
+        assert not any("STATEMENT_TIMEOUT" in q for q in executed)
+
+    @patch("databricks.sql.connect")
+    def test_app_mode_thrift_retry_does_not_keep_credentials_provider(
+        self, mock_connect, monkeypatch
+    ):
+        """Kernel cannot take a custom credentials_provider (Apps OAuth)."""
+        monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
+        monkeypatch.setenv("DATABRICKS_CLIENT_ID", "cid")
+        monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "csec")
+        good_conn, _ = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        mock_connect.side_effect = [
+            Exception(
+                "Lakehouse/RT is not supported for Thrift protocol. "
+                "Please update your Databricks SQL Driver version"
+            ),
+            good_conn,
+        ]
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="",
+            warehouse_id="wh-rt",
+            use_sea=False,
+        )
+        sw = SQLWarehouse(auth)
+        rows = sw.execute_query("SELECT 1")
+        assert rows == [{"x": 1}]
+        retry_kwargs = mock_connect.call_args_list[1].kwargs
+        assert retry_kwargs.get("use_kernel") is True
+        assert "credentials_provider" not in retry_kwargs
+        assert retry_kwargs.get("oauth_client_id") == "cid"
+        assert retry_kwargs.get("oauth_client_secret") == "csec"
+
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_gives_up_after_max_attempts(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_connect.side_effect = Exception(_SEA_500)
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-rt"
+        )
+        sw = SQLWarehouse(auth)
+        with pytest.raises(Exception, match="status 500"):
+            sw.execute_query("SELECT 1")
+        assert mock_connect.call_count == _SQL_MAX_ATTEMPTS
+
+
+class TestExecuteStatementRetry:
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_retries_transient_then_succeeds(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        good_conn, _ = _make_connect_mock()
+        mock_connect.side_effect = [Exception(_SEA_500), good_conn]
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-rt"
+        )
+        sw = SQLWarehouse(auth)
+        assert sw.execute_statement("CREATE OR REPLACE VIEW v AS SELECT 1") is True
+        assert mock_connect.call_count == 2
+
+
+class TestKernelStatementTimeout:
+    """Lakehouse/RT reads use Kernel and rely on its request timeout."""
+
+    @patch("databricks.sql.connect")
+    def test_skips_set_timeout_on_kernel(self, mock_connect, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_conn, mock_cursor = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        mock_connect.return_value = mock_conn
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-rt",
+            use_sea=True,
+        )
+        assert auth.use_kernel is True
+        sw = SQLWarehouse(auth)
+        rows = sw.execute_query("SELECT x FROM t", statement_timeout_s=30)
+        assert rows == [{"x": 1}]
+        executed = [c.args[0] for c in mock_cursor.execute.call_args_list]
+        assert executed == ["SELECT x FROM t"]
+        assert not any("STATEMENT_TIMEOUT" in q for q in executed)
+
+    @patch("databricks.sql.connect")
+    def test_applies_set_timeout_on_thrift(self, mock_connect, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_conn, mock_cursor = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        mock_connect.return_value = mock_conn
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-1",
+            use_sea=False,
+        )
+        sw = SQLWarehouse(auth)
+        sw.execute_query("SELECT x FROM t", statement_timeout_s=30)
+        executed = [c.args[0] for c in mock_cursor.execute.call_args_list]
+        assert any("SET STATEMENT_TIMEOUT = 30" in q for q in executed)
+        assert any("SET STATEMENT_TIMEOUT = 0" in q for q in executed)
+
+
 class TestIterRows:
     def test_raises_value_error_if_no_warehouse_id(self, monkeypatch):
         monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
@@ -293,6 +502,47 @@ class TestCreateOrReplaceView:
         assert "Failed to create view" in msg
         assert "ddl failed" in msg
 
+    @patch(
+        "databricks.sql.connect",
+        side_effect=Exception(
+            "BAD_REQUEST: Lakehouse/RT is not supported for Thrift protocol"
+        ),
+    )
+    def test_maps_rt_thrift_error_to_actionable_hint(self, mock_connect, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-rt",
+        )
+        sw = SQLWarehouse(auth)
+        ok, msg = sw.create_or_replace_view("c", "s", "v", "SELECT 1")
+        assert ok is False
+        assert "Build SQL Warehouse" in msg
+        assert "non-RT" in msg
+
+    @patch(
+        "databricks.sql.connect",
+        side_effect=Exception(
+            "[UNSUPPORTED_FEATURE.CREATE_VIEW] CREATE VIEW is not supported "
+            "in Lakehouse//RT"
+        ),
+    )
+    def test_maps_rt_ddl_error_to_build_warehouse_hint(
+        self, mock_connect, monkeypatch
+    ):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-rt",
+        )
+        sw = SQLWarehouse(auth)
+        ok, msg = sw.create_or_replace_view("c", "s", "v", "SELECT 1")
+        assert ok is False
+        assert "Build SQL Warehouse" in msg
+        assert "non-RT" in msg
+
 
 class TestCreateOrReplaceTableFromQuery:
     @patch("databricks.sql.connect")
@@ -335,8 +585,18 @@ class TestGetWarehouses:
         mock_resp.raise_for_status = Mock()
         mock_resp.json.return_value = {
             "warehouses": [
-                {"id": "id1", "name": "Warehouse A", "state": "RUNNING"},
-                {"id": "id2", "name": "Warehouse B", "state": "STOPPED"},
+                {
+                    "id": "id1",
+                    "name": "Warehouse A",
+                    "state": "RUNNING",
+                    "warehouse_type": "PRO",
+                },
+                {
+                    "id": "id2",
+                    "name": "Warehouse B",
+                    "state": "STOPPED",
+                    "warehouse_type": "REYDEN",
+                },
             ],
         }
         mock_get.return_value = mock_resp
@@ -350,8 +610,13 @@ class TestGetWarehouses:
         result = sw.get_warehouses()
 
         assert len(result) == 2
-        assert result[0] == {"id": "id1", "name": "Warehouse A", "state": "RUNNING"}
-        assert result[1] == {"id": "id2", "name": "Warehouse B", "state": "STOPPED"}
+        assert result[0] == {
+            "id": "id1",
+            "name": "Warehouse A",
+            "state": "RUNNING",
+            "warehouse_type": "PRO",
+        }
+        assert result[1]["warehouse_type"] == "REYDEN"
         mock_get.assert_called_once()
         assert "sql/warehouses" in mock_get.call_args[0][0]
 

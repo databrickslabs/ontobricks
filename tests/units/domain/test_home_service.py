@@ -166,7 +166,7 @@ class TestGetDetailedValidation:
             ),
             patch.object(
                 DomainOps,
-                "count_documents_in_volume",
+                "count_documents",
                 MagicMock(return_value=0),
             ),
         ):

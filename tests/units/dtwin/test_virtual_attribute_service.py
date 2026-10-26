@@ -6,14 +6,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from back.core.errors import InfrastructureError, ValidationError
-from back.objects.digitaltwin.VirtualAttributeService import (
+from back.objects.digitaltwin.node.VirtualAttributeService import (
     SCALAR_RESULT_COLUMN,
     VirtualAttributeService,
 )
 
 # The package re-exports the class under the module's own name, so a plain
 # import would hand us the class instead of the module to patch.
-va_module = import_module("back.objects.digitaltwin.VirtualAttributeService")
+va_module = import_module("back.objects.digitaltwin.node.VirtualAttributeService")
 
 
 pytestmark = pytest.mark.unit
@@ -127,7 +127,7 @@ class TestCompute:
             client = _client(rows)
             monkeypatch.setattr(
                 va_module,
-                "get_databricks_client",
+                "get_data_plane_client",
                 lambda *_a, **_kw: client,
             )
             return client
@@ -210,7 +210,7 @@ class TestCompute:
         ]
         monkeypatch.setattr(
             va_module,
-            "get_databricks_client",
+            "get_data_plane_client",
             lambda *_a, **_kw: client,
         )
 
@@ -261,7 +261,7 @@ class TestCompute:
     async def test_missing_databricks_client_raises(self, monkeypatch):
         monkeypatch.setattr(
             va_module,
-            "get_databricks_client",
+            "get_data_plane_client",
             lambda *_a, **_kw: None,
         )
 
@@ -281,7 +281,7 @@ class TestCompute:
 
         monkeypatch.setattr(
             va_module,
-            "get_databricks_client",
+            "get_data_plane_client",
             fail,
         )
 

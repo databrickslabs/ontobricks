@@ -4,6 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from back.core.graphdb.adjacency import typed_in_select, typed_out_select
+from back.core.graphdb.entity_search import entity_search_select
+from back.core.graphdb.props import props_select
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.graphdb.delta import health
 
@@ -36,6 +39,33 @@ class TestTableNaming:
         graph = _table_naming.graph_view_fqn(domain)
         assert graph == view + "_graph"
 
+    def test_adj_fqns(self):
+        domain = _domain()
+        assert _table_naming.adj_out_fqn(domain) == (
+            "cat.sch.triplestore_mydomain_V1_adj_out"
+        )
+        assert _table_naming.adj_in_fqn(domain) == (
+            "cat.sch.triplestore_mydomain_V1_adj_in"
+        )
+
+    def test_entity_search_fqn(self):
+        domain = _domain()
+        assert _table_naming.entity_search_fqn(domain) == (
+            "cat.sch.triplestore_mydomain_V1_entity_search"
+        )
+
+    def test_entity_search_asserted_fqn(self):
+        domain = _domain()
+        assert _table_naming.entity_search_asserted_fqn(domain) == (
+            "cat.sch.triplestore_mydomain_V1_entity_search_asserted"
+        )
+
+    def test_props_fqn(self):
+        domain = _domain()
+        assert _table_naming.props_fqn(domain) == (
+            "cat.sch.triplestore_mydomain_V1_props"
+        )
+
     def test_analytics_snapshot_suffix(self):
         domain = _domain()
         view = _table_naming.view_fqn(domain)
@@ -53,6 +83,19 @@ class TestTableNaming:
         snapshot = _table_naming.analytics_snapshot_fqn(domain)
         assert "_data" not in snapshot
 
+    def test_dq_snapshot_is_named_off_the_gateway_plus_task_id(self):
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+        snapshot = _table_naming.dq_snapshot_fqn(domain, task_id="Ab-12")
+        assert snapshot == view + "_dq_ab_12"
+        assert "_data" not in snapshot
+
+    def test_dq_snapshot_needs_a_task_id_and_a_qualified_view(self):
+        domain = _domain()
+        assert _table_naming.dq_snapshot_fqn(domain, task_id="") == ""
+        blank = _domain(catalog="", schema="")
+        assert _table_naming.dq_snapshot_fqn(blank, task_id="t1") == ""
+
 
 class TestMaterializeSql:
     def test_ctas_includes_cluster_by(self):
@@ -61,6 +104,90 @@ class TestMaterializeSql:
         assert "CLUSTER BY (predicate, subject)" in sql
         assert "FROM cat.sch.view1" in sql
         assert "(subject STRING" not in sql
+
+    def test_adj_ctas_clusters_src_for_out(self):
+        sql = materialize.build_adj_ctas_sql(
+            "cat.sch.g_graph", "cat.sch.g_adj_out", "out"
+        )
+        assert "CREATE OR REPLACE TABLE cat.sch.g_adj_out USING DELTA" in sql
+        assert "CLUSTER BY (src, predicate)" in sql
+        assert typed_out_select("cat.sch.g_graph") in sql
+        assert "typed.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'" in sql
+        assert "t.predicate != 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'" in sql
+        assert "t.predicate != 'http://www.w3.org/2000/01/rdf-schema#label'" in sql
+        assert "t.object LIKE 'http%'" in sql
+
+    def test_adj_ctas_clusters_dst_for_in(self):
+        sql = materialize.build_adj_ctas_sql(
+            "cat.sch.g_graph", "cat.sch.g_adj_in", "in"
+        )
+        assert "CREATE OR REPLACE TABLE cat.sch.g_adj_in USING DELTA" in sql
+        assert "CLUSTER BY (dst, predicate)" in sql
+        assert typed_in_select("cat.sch.g_graph") in sql
+        assert "typed.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'" in sql
+        assert "t.predicate != 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'" in sql
+        assert "t.predicate != 'http://www.w3.org/2000/01/rdf-schema#label'" in sql
+        assert "t.object LIKE 'http%'" in sql
+
+    def test_adj_ctas_out_does_not_append_duplicate_from_suffix(self):
+        sql = materialize.build_adj_ctas_sql(
+            "cat.sch.g_graph", "cat.sch.g_adj_out", "out"
+        )
+        expected = (
+            "CREATE OR REPLACE TABLE cat.sch.g_adj_out USING DELTA "
+            "CLUSTER BY (src, predicate) "
+            f"AS {typed_out_select('cat.sch.g_graph')}"
+        )
+        assert sql == expected
+
+    def test_adj_ctas_in_does_not_append_duplicate_from_suffix(self):
+        sql = materialize.build_adj_ctas_sql(
+            "cat.sch.g_graph", "cat.sch.g_adj_in", "in"
+        )
+        expected = (
+            "CREATE OR REPLACE TABLE cat.sch.g_adj_in USING DELTA "
+            "CLUSTER BY (dst, predicate) "
+            f"AS {typed_in_select('cat.sch.g_graph')}"
+        )
+        assert sql == expected
+
+    def test_entity_search_ctas_clusters_type_without_duplicate_from(self):
+        select_sql = entity_search_select("cat.sch.g_graph")
+        sql = materialize.build_entity_search_ctas_sql(
+            "cat.sch.g_graph", "cat.sch.g_entity_search"
+        )
+        assert sql == (
+            "CREATE OR REPLACE TABLE cat.sch.g_entity_search USING DELTA "
+            "CLUSTER BY (type_uri, label_lc) "
+            f"AS {select_sql}"
+        )
+
+    def test_set_bloom_filter_columns_emits_tblproperties(self):
+        client = MagicMock()
+        materialize.set_bloom_filter_columns(
+            client, "cat.sch.g_entity_search", "label_lc,uri_lc"
+        )
+        sql = client.execute_statement.call_args[0][0]
+        assert "ALTER TABLE cat.sch.g_entity_search SET TBLPROPERTIES" in sql
+        assert "'delta.bloomFilter.columns' = 'label_lc,uri_lc'" in sql
+
+    def test_set_bloom_filter_columns_swallows_alter_errors(self):
+        client = MagicMock()
+        client.execute_statement.side_effect = RuntimeError("no bloom")
+        materialize.set_bloom_filter_columns(
+            client, "cat.sch.g_entity_search", "label_lc,uri_lc"
+        )
+
+    def test_props_ctas_clusters_subject_without_duplicate_from(self):
+        select_sql = props_select("cat.sch.g_graph")
+        sql = materialize.build_props_ctas_sql(
+            "cat.sch.g_graph", "cat.sch.g_props"
+        )
+        assert sql == (
+            "CREATE OR REPLACE TABLE cat.sch.g_props USING DELTA "
+            "CLUSTER BY (subject) "
+            f"AS {select_sql}"
+        )
 
     def test_materialize_from_view_executes(self):
         client = MagicMock()
@@ -74,6 +201,14 @@ class TestMaterializeSql:
         client.execute_statement.assert_called_once()
         sql = client.execute_statement.call_args[0][0]
         assert "CREATE TABLE IF NOT EXISTS c.s.v_inferred" in sql
+
+    def test_run_sql_falls_back_to_execute_query(self):
+        client = MagicMock(spec=["execute_query"])
+        materialize.ensure_inferred_table(client, "c.s.v_inferred")
+        client.execute_query.assert_called_once()
+        assert "CREATE TABLE IF NOT EXISTS c.s.v_inferred" in (
+            client.execute_query.call_args[0][0]
+        )
 
     def test_ensure_graph_view_unions_data_and_inferred(self):
         client = MagicMock()

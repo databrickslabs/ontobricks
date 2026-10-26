@@ -25,7 +25,7 @@ from back.objects.registry.PermissionService import (
     ROLE_VIEWER,
     ROLE_NONE,
 )
-from back.objects.registry.ReviewService import (
+from back.objects.registry.collab.ReviewService import (
     ACTION_APPROVED,
     ACTION_CHANGES_REQUESTED,
     ACTION_PUBLISHED,
@@ -34,7 +34,7 @@ from back.objects.registry.ReviewService import (
     ReviewService,
 )
 
-_mod = importlib.import_module("back.objects.registry.ReviewService")
+_mod = importlib.import_module("back.objects.registry.collab.ReviewService")
 
 
 def _request(email="alice@acme.com"):
@@ -258,6 +258,17 @@ def test_publish_blocked_until_quorum():
     with pytest.raises(ConflictError):
         _call("publish", svc, comment="", user_role="",
               user_domain_role=ROLE_BUILDER)
+
+
+def test_publish_refused_when_quorum_read_fails():
+    svc, info, events = _make_svc(status="IN-REVIEW", quorum=1)
+    svc.store.get_domain_quorum.side_effect = RuntimeError("lakebase down")
+    with pytest.raises(InfrastructureError):
+        _call("publish", svc, comment="", user_role="",
+              user_domain_role=ROLE_BUILDER)
+    assert info["status"] == "IN-REVIEW"
+    svc.set_version_status.assert_not_called()
+    assert events == []
 
 
 def test_publish_admin_overrides_quorum():

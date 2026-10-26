@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.errors import AuthorizationError, InfrastructureError
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 from back.objects.session.GlobalConfigService import GlobalConfigService
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -118,7 +118,7 @@ class TestServiceRead:
             "_resolve_context",
             return_value=(MagicMock(), "https://h", "tok", RCFG),
         ), patch(
-            "back.objects.domain.SettingsService.global_config_service"
+            "back.objects.domain.settings.SettingsService.global_config_service"
             ".get_analytics_job_enabled",
             return_value=configured,
         ):
@@ -149,7 +149,7 @@ class TestServiceRead:
             "_resolve_context",
             return_value=(MagicMock(), "https://h", "tok", RCFG),
         ), patch(
-            "back.objects.domain.SettingsService.global_config_service"
+            "back.objects.domain.settings.SettingsService.global_config_service"
             ".get_analytics_job_enabled",
             side_effect=RuntimeError("registry down"),
         ):
@@ -167,7 +167,7 @@ class TestServiceWrite:
             "require_admin_error",
             side_effect=AuthorizationError("nope"),
         ), patch(
-            "back.objects.domain.SettingsService.global_config_service"
+            "back.objects.domain.settings.SettingsService.global_config_service"
             ".set_analytics_job_enabled"
         ) as setter:
             with pytest.raises(AuthorizationError):
@@ -182,7 +182,7 @@ class TestServiceWrite:
             "_resolve_context",
             return_value=(MagicMock(), "https://h", "tok", RCFG),
         ), patch(
-            "back.objects.domain.SettingsService.global_config_service"
+            "back.objects.domain.settings.SettingsService.global_config_service"
             ".set_analytics_job_enabled",
             return_value=(True, "saved"),
         ) as setter:
@@ -198,7 +198,7 @@ class TestServiceWrite:
             "_resolve_context",
             return_value=(MagicMock(), "https://h", "tok", RCFG),
         ), patch(
-            "back.objects.domain.SettingsService.global_config_service"
+            "back.objects.domain.settings.SettingsService.global_config_service"
             ".set_analytics_job_enabled",
             return_value=(True, "saved"),
         ) as setter:
@@ -214,7 +214,7 @@ class TestServiceWrite:
             "_resolve_context",
             return_value=(MagicMock(), "https://h", "tok", RCFG),
         ), patch(
-            "back.objects.domain.SettingsService.global_config_service"
+            "back.objects.domain.settings.SettingsService.global_config_service"
             ".set_analytics_job_enabled",
             return_value=(False, "disk full"),
         ):

@@ -1,0 +1,560 @@
+## Align docs with the AI Gateway picker and No LLM opt-out
+
+Context: User-facing documentation still described LLM automation as Model
+Serving only, and the Ontology Wizard still told users to pick a model on that
+page. The domain now saves one AI Gateway or Serving target (or No LLM) and
+every in-app LLM action uses that saved target.
+
+Changes:
+
+1. README.md
+   Mention AI Gateway or Model Serving among the Databricks services OntoBricks reuses.
+2. docs/user-guide.md
+   Describe the Browse picker, domain-saved target, Wizard/Auto-Map/Interpret
+   behavior, and No LLM as a valid pipeline choice.
+3. docs/features.md, docs/product.md, docs/INFO.md
+   Replace serving-only LLM wording and document the picker plus No LLM opt-out.
+4. docs/api.md, docs/data-access.md, docs/architecture.md, docs/deployment.md
+   Document the combined llm-endpoints list, domain-authoritative SQL
+   generation, No LLM HTTP 400, and AI Gateway FQNs on agent custom inputs.
+
+Modified files:
+- README.md
+- docs/user-guide.md
+- docs/features.md
+- docs/product.md
+- docs/INFO.md
+- docs/api.md
+- docs/data-access.md
+- docs/architecture.md
+- docs/deployment.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6268 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.63s
+
+## Keep Superpowers drafts local
+
+Context: `docs/superpowers/` holds agent brainstorming specs and implementation
+plans. Those are working drafts, not product documentation, and should not ship
+on GitHub.
+
+Changes:
+
+1. .gitignore
+   Ignore `/docs/superpowers/` like other local Superpowers session files.
+2. docs/superpowers/
+   Stop tracking the folder; files remain on disk for local agent workflows.
+
+Modified files:
+- .gitignore
+- docs/superpowers/ (removed from git index)
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6268 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.93s
+
+## Preserve data quality condition properties
+
+Context: Selecting a property in a data quality rule condition triggered a
+rerender through options captured before the target entity was selected. The
+selected value disappeared and the condition property list became empty.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-conditions.js
+   Keep delegated condition-row handlers synchronized with the latest render options.
+2. tests/units/front/test_dq_condition_builder.py
+   Add a Node-based regression test covering an initially empty property list followed by a populated render.
+
+Modified files:
+- src/front/static/ontology/js/ontology-conditions.js
+- tests/units/front/test_dq_condition_builder.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6269 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 56.32s
+
+## Honor the domain LLM target in Ontology Assistant
+
+Context: The Ontology Assistant received the saved endpoint name but discarded
+its persisted target kind. It could therefore route an explicitly selected AI
+Gateway model through name inference instead of the authoritative domain
+configuration.
+
+Changes:
+
+1. src/agents/agent_ontology_assistant/engine.py
+   Forward the domain endpoint kind to the shared LLM transport.
+2. src/agents/agent_ontology_assistant/responses_agent.py
+   Preserve the endpoint kind in streaming and fallback ResponsesAgent calls.
+3. src/api/routers/internal/ontology.py
+   Inject the saved domain endpoint kind into both Ontology Assistant APIs.
+4. tests/units/agents/test_agent_ontology_assistant_engine.py
+   Add regression coverage for forwarding an AI Gateway target.
+5. tests/units/api/test_routes.py
+   Verify the ResponsesAgent request receives the authoritative saved kind.
+
+Modified files:
+- src/agents/agent_ontology_assistant/engine.py
+- src/agents/agent_ontology_assistant/responses_agent.py
+- src/api/routers/internal/ontology.py
+- tests/units/agents/test_agent_ontology_assistant_engine.py
+- tests/units/api/test_routes.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6270 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.55s
+
+## Document version-named working branches
+
+Context: GitHub no longer has a `develop` branch. Active work lives on a
+version-named branch (`0.9.0` for this release). Agent merge-safety rules
+still told people to merge from `develop`.
+
+Changes:
+
+1. .cursor/07-project-conventions.mdc
+   Replace the develop gitflow with version-named working branches and retarget merge-safety wording.
+
+Modified files:
+- .cursor/07-project-conventions.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6270 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.93s
+
+## Redesign the domain navbar context rail
+
+Context: Task 4 required aligning the canonical navbar contract and public
+documentation with the shipped L1/L2 context-rail implementation, then running
+the full automated verification workflow without claiming manual browser checks.
+
+Changes:
+
+1. .cursor/11-frontend-design.mdc
+   Updated the canonical L1/L2 navbar contract to document the L2 domain context
+   launcher, remove obsolete `#domainL1Link` references, and align action order
+   with the current Versions → Close → Save rendering (`bi-123`).
+2. docs/architecture.md
+   Added the architecture-level navbar context rail contract (identity launcher,
+   workspace-map behavior, active/inactive workspace semantics, and mobile icon
+   state).
+3. docs/user-guide.md
+   Updated end-user navigation guidance for the L2 identity target, workspace
+   map launch behavior, active workspace static segment behavior, and responsive
+   icon-only rail state, including the Versions (`bi-123`) action wording.
+4. src/front/static/global/css/components.css
+   Corrected the workspace-map documentation comment to reference
+   `#domainContextTrigger`.
+5. src/front/templates/partials/layout/_workspace_map_modal.html
+   Corrected the workspace-map template comment to reference
+   `#domainContextTrigger`.
+6. src/front/static/global/css/main.css
+   Finalized context-rail styling: removed stale L1-only dead CSS, preserved
+   segmented workspace styling and active ordinal behavior, and documented
+   constrained/mobile behavior (breadcrumb collapse, icon-only actions/targets
+   below breakpoints, no horizontal overflow, dropdown escape preserved).
+7. tests/units/front/test_settings_subnav_hidden.py
+   Replaced the stale L1 Domain expectation with a contract asserting
+   `updateDomainMenuVisibility` no longer references legacy L1 selectors
+   (`domainNav`, `domainL1NavItem`, `domainL1Link`).
+8. src/front/templates/base.html
+   Confirmed the L2 context trigger + segmented rail structure and preserved
+   action ordering with the Versions action before Close and Save.
+9. src/front/static/global/js/navbar.js
+   Updated workspace-map binding and L2 visibility comments to match the
+   shipped L2 domain identity/context trigger contract.
+10. tests/units/front/test_segmented_subnav_contract.py
+    Kept the segmented subnav contract aligned with L2 context trigger
+    structure, workspace ordering, and constrained/mobile behavior gates.
+11. tests/units/front/test_workspace_map_modal.py
+    Kept workspace-map trigger/open/highlight contracts aligned with
+    `#domainContextTrigger` and modal launch behavior.
+12. tests/units/api/test_ui_rendering.py
+    Renamed the navbar contract test to reflect the L2 context trigger
+    contract while preserving assertions.
+13. docs/superpowers/specs/2026-09-18-navbar-context-focus-rail-design.md
+    Corrected feature wording to the shipped Versions label and `bi-123` icon.
+14. docs/superpowers/plans/2026-09-18-navbar-context-focus-rail.md
+    Corrected plan wording to the shipped Versions label and right-side action
+    order.
+15. Follow-up refinement (L2 context badge)
+    Locked the L2 context trigger to `200px`, matched its fixed rail height
+    with `.ob-subnav-workspace-list`, moved the context copy to a two-row grid
+    (status row + ellipsized name row) with a right-side raw numeric version
+    column spanning both rows, scoped the local status badge `ms-2` removal in
+    `.ob-subnav-context-copy`, aligned the whole trigger to selected-state
+    styling (`--db-primary-light` surface with primary-darker text/border),
+    emphasized that version cell with
+    `--db-primary-darker` + `--db-on-primary` and larger bold numerals, added a
+    small explicit row gap between status and name without increasing shared
+    rail height, set the shared context/workspace control height to `3.5rem`,
+    tightened shell vertical rhythm to 4px above/below the L2 rail
+    (`.ob-subnav-nav` top padding `0.25rem`; desktop `.sidebar-layout` padding
+    `0.25rem 0.5rem 0.5rem`), and fixed mobile icon-only context behavior by
+    resetting the icon to normal flow and using explicit icon-control trigger
+    sizing.
+16. Settings-page return-to-domain behavior
+    Added a mutually exclusive Settings presentation in the single `#obSubnav`
+    slot: with a loaded domain, show only `#settingsDomainReturnLink` ("Back to
+    domain") and hide the regular domain rail (`#domainWorkspaceSubnavNav`),
+    breadcrumb, and actions; with no loaded domain, keep L2 hidden. The return
+    link reuses `openWorkspaceMap()` and falls back to `/domain/` without JS.
+17. Geometry follow-up hardening and contract cleanup
+    Consolidated `.ob-subnav-context-trigger` selected-state styling to a
+    single declaration source while preserving the shared
+    `.ob-subnav-context-trigger, .ob-subnav-workspace-list` height/box geometry
+    source; removed redundant mobile physical padding declarations in favor of
+    `padding-inline`; updated contracts to assert non-redundant logical mobile
+    padding and shared-rule intent; aligned L2 action-order comments to
+    Versions → Close → Save; and synchronized mobile spec wording to icon-only
+    selected-color context behavior with hidden status/name/version details.
+18. Settings return-link width parity refinement
+    Locked `#settingsDomainReturnLink` / `.ob-settings-domain-return-link` to an
+    exact desktop/tablet `200px` outer width (`width/min-width/max-width`) to
+    match the expanded sidebar and shared left gutter alignment, centered its
+    icon+label composition within that width, and added a mobile width reset
+    (`width: auto`, `min-width: 0`, `max-width: none`) to prevent viewport
+    overflow.
+19. Settings first-paint and compact rail refinement
+    Prevented `breadcrumb.js` from revealing the shared breadcrumb on Settings
+    before asynchronous navbar state resolves, and reduced the shared domain
+    context/workspace rail height from `3.5rem` to `3rem` while preserving the
+    4px gaps above and below the L2 controls.
+20. Near-full-height workspace target surfaces
+    Stretched direct `.ob-subnav-workspace-list > .ob-subnav-item` and their
+    `.ob-subnav-link` targets with `height: 100%` so hover and selected
+    backgrounds fill the available inner rail height (~40px) while preserving
+    the outer `3rem` rail and `0.2rem` inset. Added a static contract test and
+    synchronized the canonical frontend design rule. Browser verification
+    measured all four desktop/mobile targets at `39.625px` inside the `48px`
+    rail with equal insets, healthy dropdown/focus behavior, and no overflow.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- docs/architecture.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-18-navbar-context-focus-rail-design.md
+- docs/superpowers/plans/2026-09-18-navbar-context-focus-rail.md
+- docs/superpowers/plans/2026-09-18-taller-workspace-state-surfaces.md
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/global/css/components.css
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_settings_subnav_hidden.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/api/test_ui_rendering.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6280 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.78s
+
+## Honor inherited privileges for AI Gateway discovery
+
+Context: The deployed app omitted a custom AI Gateway model service even
+though its service principal inherited `ALL_PRIVILEGES` from the containing
+catalog. Discovery recognized only a literal `EXECUTE` privilege.
+
+Changes:
+
+1. src/back/core/databricks/ModelServiceCatalog.py
+   Treat effective `ALL_PRIVILEGES` as executable alongside `EXECUTE`.
+2. tests/units/core/test_model_service_catalog.py
+   Add regression coverage for an inherited catalog-level grant.
+3. docs/api.md
+   Document both effective privilege forms accepted by Gateway discovery.
+4. docs/user-guide.md
+   Clarify custom Gateway visibility for application service principals.
+
+Modified files:
+- src/back/core/databricks/ModelServiceCatalog.py
+- tests/units/core/test_model_service_catalog.py
+- docs/api.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6281 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.54s
+
+## Restore Ontology Assistant endpoint routing
+
+Context: Ontology Designer assistant requests returned HTTP 502 before invoking
+the agent because the saved endpoint kind was unpacked under a different local
+name than the one passed to the assistant.
+
+Changes:
+
+1. src/api/routers/internal/ontology.py
+   Pass the saved domain LLM endpoint kind through the defined local variable.
+2. tests/units/api/test_routes.py
+   Add regression coverage proving assistant chat forwards the AI Gateway kind.
+
+Modified files:
+- src/api/routers/internal/ontology.py
+- tests/units/api/test_routes.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6282 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.29s
+
+## Document domain-saved AI Gateway routing
+
+Context: User-facing and architecture docs still described in-app agents as
+Foundation Model / Model Serving only. Ontology Assistant, the Designer UI, and
+deployed Apps now use the domain-saved AI Gateway or Serving target, including
+the persisted endpoint kind.
+
+Changes:
+
+1. docs/architecture.md
+   Document domain LLM routing, assistant chat/invoke, `endpoint_kind`, and the
+   shared `call_serving_endpoint` transport.
+2. docs/api.md
+   Document Ontology Assistant endpoints and that Browse/agents share the
+   Gateway-first llm-endpoints list.
+3. docs/user-guide.md
+   Describe the Designer assistant as using Domain Information → AI.
+4. docs/features.md, docs/product.md, docs/data-access.md
+   Align Assistant and Wizard wording with the saved AI Gateway target.
+5. docs/deployment.md
+   Replace Serving-only diagrams, add Gateway EXECUTE grants, and update
+   credential troubleshooting.
+
+Modified files:
+- docs/architecture.md
+- docs/api.md
+- docs/user-guide.md
+- docs/features.md
+- docs/product.md
+- docs/data-access.md
+- docs/deployment.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6282 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.12s
+
+## Baseline shared parsed-corpus agent contracts
+
+Context: Generate and Mapping need an explicit evaluation contract before
+their document tools can move from on-demand extraction to durable parsed
+sidecars.
+
+Changes:
+
+1. .planning/agents/agent_owl_generator/SPEC.md
+   Define the parsed-corpus tool surface, success criteria, failure modes, and
+   contract metrics.
+2. .planning/agents/agent_mapping_pge/SPEC.md
+   Define Mapping's ready and unavailable document-context behavior.
+3. .planning/agents/agent_owl_generator/eval/dataset.jsonl,
+   .planning/agents/agent_mapping_pge/eval/dataset.jsonl,
+   tests/eval/datasets/agent_owl_generator/baseline.jsonl, and
+   tests/eval/datasets/agent_mapping_pge/baseline.jsonl
+   Add ten material-change cases per affected agent.
+4. tests/eval/document_corpus_contract.py,
+   tests/eval/run_agent_owl_generator.py, and
+   tests/eval/run_agent_mapping_pge.py
+   Add shared deterministic contract scoring and live MLflow runner entry
+   points.
+5. tests/eval/thresholds.yaml
+   Require a 0.90 parsed-corpus contract score for both agents.
+
+Modified files:
+- .planning/agents/agent_owl_generator/SPEC.md
+- .planning/agents/agent_mapping_pge/SPEC.md
+- .planning/agents/agent_owl_generator/eval/dataset.jsonl
+- .planning/agents/agent_mapping_pge/eval/dataset.jsonl
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- tests/eval/datasets/agent_mapping_pge/baseline.jsonl
+- tests/eval/document_corpus_contract.py
+- tests/eval/run_agent_owl_generator.py
+- tests/eval/run_agent_mapping_pge.py
+- tests/eval/thresholds.yaml
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests:
+- `uv run --frozen python tests/eval/run_agent_owl_generator.py` → 10/10 cases passed, aggregate 1.000.
+- `uv run --frozen python tests/eval/run_agent_mapping_pge.py` → 10/10 cases passed, aggregate 1.000.
+- Live OWL baseline → aggregate 0.965, MLflow run `c8ce3cae2014408e9451cc508068fe0d`.
+- Live Mapping baseline → aggregate 0.985, MLflow run `ab43e8f6c175472c8c166112e31d73ce`.
+
+## Add the durable parsed-document corpus service
+
+Context: Document uploads need one idempotent lifecycle owner for source
+hashing, parse status, sidecar persistence, retry, and read-only corpus access.
+
+Changes:
+
+1. src/back/core/databricks/DocumentParseService.py
+   Add typed manifests, SHA-256 upload no-op, in-process parse reservation,
+   plaintext handling, binary extraction, retry, truncation, legacy reads, and
+   sidecar cleanup.
+2. src/back/core/databricks/__init__.py
+   Export the parsed-corpus service and value types.
+3. tests/units/core/test_document_parse_service.py
+   Cover pending-to-ready, identical and changed hashes, failures, retries,
+   plaintext, unsupported files, reader behavior, cleanup, and path safety.
+
+Modified files:
+- src/back/core/databricks/DocumentParseService.py
+- src/back/core/databricks/__init__.py
+- tests/units/core/test_document_parse_service.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_document_parse_service.py tests/units/core/test_document_extractor.py` → 34 passed, 1 warning in 0.25s.
+
+## Parse documents after upload and expose durable status
+
+Context: Successful uploads previously returned before any durable parsed
+corpus existed, and the document APIs had no pending, ready, failed, or retry
+contract.
+
+Changes:
+
+1. src/api/routers/internal/domain.py
+   Route uploads through the parsed-corpus service, schedule binary extraction
+   with TaskManager, expose parse status in document lists, add manual retry,
+   and remove sidecars when deleting a source.
+2. src/back/core/databricks/DocumentParseService.py
+   Convert unexpected extractor exceptions into safe failed manifests.
+3. tests/units/api/test_document_routes.py
+   Cover pending task responses, ready no-op uploads, internal-directory
+   filtering, retry scheduling, and sidecar cleanup.
+4. tests/units/core/test_document_parse_service.py
+   Verify extractor exceptions cannot leak query details or leave pending
+   status.
+
+Modified files:
+- src/api/routers/internal/domain.py
+- src/back/core/databricks/DocumentParseService.py
+- tests/units/api/test_document_routes.py
+- tests/units/core/test_document_parse_service.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/core/test_document_parse_service.py tests/units/core/test_document_extractor.py` → 35 passed, 1 warning in 0.17s.
+- `uv run --frozen pytest -q tests/units/api/test_document_routes.py tests/units/auth/test_permission_middleware.py` → 292 passed, 1 warning in 1.55s.
+
+## Preserve the parsed corpus across domain versions
+
+Context: Parsed sidecars are part of a domain version, but version creation
+previously skipped all document subdirectories and document counts included
+the internal parsed directory.
+
+Changes:
+
+1. src/back/objects/registry/RegistryService.py
+   Copy `_parsed` markdown and manifests after copying source documents while
+   keeping the public copied count source-only.
+2. src/back/objects/domain/Domain.py
+   Exclude directories from document counts.
+3. tests/units/registry/test_registry_document_copy.py
+   Cover sidecar copies and legacy versions without `_parsed`.
+4. tests/units/domain/test_domain_document_count.py
+   Verify internal directories do not affect source document counts.
+
+Modified files:
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/domain/Domain.py
+- tests/units/registry/test_registry_document_copy.py
+- tests/units/domain/test_domain_document_count.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests: `uv run --frozen pytest -q tests/units/registry/test_registry_document_copy.py tests/units/domain/test_domain_document_count.py tests/units/registry/test_version_lifecycle.py tests/units/front/test_create_version_ungated.py` → 33 passed, 1 warning in 0.84s.
+
+## Share ready document sidecars across Generate and Mapping
+
+Context: Generate parsed binary files inside its tool loop while Mapping read
+source files as plaintext and silently skipped binaries.
+
+Changes:
+
+1. src/agents/tools/documents.py
+   Remove extractor and per-run cache paths, read only durable ready corpus
+   content, expose structured unavailable states, and hide internal sidecars.
+2. src/agents/tools/context.py
+   Clarify that the compatibility warehouse field no longer starts document
+   parsing.
+3. src/back/objects/mapping/Mapping.py
+   Preload ready sidecars through DocumentParseService and preserve unavailable
+   document status for the Mapping planner and critic.
+4. tests/units/agents/test_documents_tool.py
+   Cover ready, pending, failed, list-status, and context-separation behavior.
+5. tests/units/mapping/test_parsed_document_preload.py
+   Verify Mapping consumes parsed PDF text and reports pending sources.
+
+Modified files:
+- src/agents/tools/documents.py
+- src/agents/tools/context.py
+- src/back/objects/mapping/Mapping.py
+- tests/units/agents/test_documents_tool.py
+- tests/units/mapping/test_parsed_document_preload.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/agents -m "not scenario"` → 180 passed, 1 warning in 1.76s.
+- `uv run --frozen pytest -q tests/units/mapping -m "not scenario"` → 179 passed, 1 warning in 1.21s.
+
+## Show the document parse lifecycle in the UI
+
+Context: Users could not tell whether an uploaded document was ready for
+Generate and Mapping, and failed parses had no recovery action.
+
+Changes:
+
+1. src/front/static/domain/js/domain-documents.js
+   Render accessible status badges, poll pending files with one timer, expose
+   retry for failed binaries, and support keyboard preview activation.
+2. src/front/templates/partials/domain/_domain_documents.html
+   Explain parse-once sharing and mark status updates as a polite live region.
+3. src/front/static/ontology/js/ontology-wizard.js
+   Select only ready documents, disable pending/failed evidence, and disclose
+   unavailable selected files before generation.
+4. tests/units/front/test_domain_documents_ui.py
+   Lock status, polling, retry, accessibility, and Generate filtering contracts.
+
+Modified files:
+- src/front/static/domain/js/domain-documents.js
+- src/front/templates/partials/domain/_domain_documents.html
+- src/front/static/ontology/js/ontology-wizard.js
+- tests/units/front/test_domain_documents_ui.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_domain_documents_ui.py` → 7 passed, 1 warning in 0.12s.
+- `uv run --frozen pytest -q tests/units/front -m "not scenario"` → 1175 passed, 1 warning in 8.72s.
+- Browser checks at 1440×900 and 375×667 → badges, retry, 2-second single polling, stop-on-ready, keyboard preview, and no document-page horizontal overflow verified.
+
+## Document and verify the shared parsed corpus
+
+Context: The parse-once lifecycle is user-visible and changes which compute
+engine runs during upload, Generate, Mapping, and version creation.
+
+Changes:
+
+1. README.md and docs/user-guide.md
+   Explain shared document evidence, lifecycle states, retry, and version copy.
+2. docs/architecture.md and docs/data-access.md
+   Document sidecar layout, service ownership, REST endpoints, and the single
+   asynchronous `ai_parse_document` execution path.
+3. docs/sphinx/api/app.core.databricks.rst
+   Publish DocumentExtractor and DocumentParseService API symbols.
+4. .planning/agents/agent_owl_generator/SPEC.md and
+   .planning/agents/agent_mapping_pge/SPEC.md
+   Record successful post-change MLflow evaluations.
+5. tests/units/test_user_agent.py
+   Update the Mapping transport contract from raw requests to the shared
+   VolumeFileService.
+
+Modified files:
+- README.md
+- docs/user-guide.md
+- docs/architecture.md
+- docs/data-access.md
+- docs/sphinx/api/app.core.databricks.rst
+- .planning/agents/agent_owl_generator/SPEC.md
+- .planning/agents/agent_mapping_pge/SPEC.md
+- tests/units/test_user_agent.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-18.log
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → 6319 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.33s.
+- `ci/build_docs.sh` → documentation built successfully with no new symbol warnings.
+- OWL post-change live eval → aggregate 1.000, MLflow run `6ef43cc56fb34cb1b74208fd81ae06a9`.
+- Mapping post-change live eval → aggregate 1.000, MLflow run `55125984c92e4466a3a20ea8ebe4137d`.

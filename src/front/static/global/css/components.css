@@ -12,6 +12,125 @@
     display: none;
 }
 
+/* ==========================================================================
+   Workspace map modal (.ob-workspace-map)
+   Four-column directory opened from #domainContextTrigger.
+   ========================================================================== */
+
+.ob-workspace-map {
+    border-color: var(--db-border);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-lg);
+}
+
+.ob-workspace-map .modal-header {
+    border-bottom: 1px solid var(--db-border);
+}
+
+.ob-workspace-map .modal-title > i {
+    color: var(--db-primary);
+}
+
+.ob-workspace-map-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ob-workspace-map-col {
+    min-width: 0;
+    padding: 0.875rem 1rem 1.125rem;
+    border-right: 1px solid var(--db-border);
+}
+
+.ob-workspace-map-col:last-child {
+    border-right: none;
+}
+
+.ob-workspace-map-col-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.625rem;
+    margin: 0 0 0.375rem;
+    border-bottom: 1px solid var(--db-border);
+    color: var(--db-primary-darker);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.ob-workspace-map-col-head i {
+    font-size: 0.95rem;
+}
+
+.ob-workspace-map-group {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0.75rem 0 0.25rem;
+    color: var(--db-text-muted);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.ob-workspace-map-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: calc(var(--db-radius-control) - 1px);
+    color: var(--db-text);
+    font-size: 0.82rem;
+    line-height: 1.25;
+    text-decoration: none;
+}
+
+.ob-workspace-map-item i {
+    width: 16px;
+    color: var(--db-text-muted);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.ob-workspace-map-item:hover {
+    background: var(--db-hover-indigo);
+    color: var(--db-primary-darker);
+}
+
+.ob-workspace-map-item:hover i {
+    color: var(--db-primary);
+}
+
+.ob-workspace-map-item.is-current {
+    background: var(--db-primary-light);
+    color: var(--db-primary-darker);
+    font-weight: 600;
+}
+
+.ob-workspace-map-item.is-current i {
+    color: var(--db-primary);
+}
+
+.ob-workspace-map-item:focus-visible {
+    outline: 1px solid transparent;
+    box-shadow: var(--db-focus-ring);
+}
+
+@media (max-width: 767.98px) {
+    .ob-workspace-map-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ob-workspace-map-col:nth-child(2) {
+        border-right: none;
+    }
+
+    .ob-workspace-map-col:nth-child(-n + 2) {
+        border-bottom: 1px solid var(--db-border);
+    }
+}
+
 /* Local color brand marks, sized and aligned like Bootstrap Icons. */
 .ob-brand-icon {
     display: inline-block;
@@ -170,19 +289,20 @@
 
 /* Primary is the only filled action variant */
 .btn-primary {
-    background-color: var(--db-primary);
+    background: var(--db-gradient-primary);
     border-color: var(--db-primary);
     color: var(--db-on-primary);
+    box-shadow: var(--db-shadow-primary);
 }
 
 .btn-primary:hover {
-    background-color: var(--db-primary-dark);
+    background: var(--db-primary-dark);
     border-color: var(--db-primary-dark);
     color: var(--db-on-primary);
 }
 
 .btn-primary:focus {
-    background-color: var(--db-primary-dark);
+    background: var(--db-primary-dark);
     border-color: var(--db-primary-dark);
     color: var(--db-on-primary);
     box-shadow: var(--db-focus-ring);
@@ -479,7 +599,7 @@
 .ob-kpi-tile.tile-accent-danger  { border-bottom: 3px solid #dc3545; }
 
 /* KPI / health band — responsive tile grid. Shared by the Home page and
-   Domain → Information (the "Current Domain" band). */
+   Domain → General (the "Current Domain" band). */
 .ob-kpi-band {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
@@ -897,10 +1017,12 @@
     -webkit-overflow-scrolling: touch;
 }
 
-/* A card already supplies its own horizontal inset. */
+/* A card or modal already supplies its own horizontal inset. */
 .card-body > .nav-tabs.ob-tabs,
 .card-header > .nav-tabs.ob-tabs,
-.card > .nav-tabs.ob-tabs {
+.card > .nav-tabs.ob-tabs,
+.modal-body > .nav-tabs.ob-tabs,
+.ob-tabs-wrap > .nav-tabs.ob-tabs {
     margin-right: 0;
 }
 
@@ -958,7 +1080,8 @@
     min-height: 0;
 }
 
-.sidebar-section > .content-section > .ob-tabs-wrap {
+.sidebar-section > .content-section > .ob-tabs-wrap,
+.modal-body > .ob-tabs-wrap {
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -1001,10 +1124,6 @@
 
 .ob-form-readonly-muted {
     background-color: #ffffff;
-}
-
-.ob-badge-version {
-    font-size: 0.65rem;
 }
 
 .ob-progress-thin {

@@ -30,7 +30,7 @@
             const active = modalEl.querySelector('#registryModalTabs .nav-link.active');
             const section = active?.dataset.registrySection || 'domains';
             document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
-                detail: { section },
+                detail: { section, source: 'registry-modal' },
             }));
         });
 
@@ -39,7 +39,7 @@
                 const section = btn.dataset.registrySection;
                 if (!section) return;
                 document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
-                    detail: { section },
+                    detail: { section, source: 'registry-modal' },
                 }));
             });
         });

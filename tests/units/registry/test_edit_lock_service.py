@@ -9,10 +9,10 @@ import importlib
 
 from unittest.mock import MagicMock, patch
 
-from back.objects.registry.lockmgt import EditLockService
+from back.objects.registry.collab import EditLockService
 
 _mod = importlib.import_module(
-    "back.objects.registry.lockmgt.EditLockService"
+    "back.objects.registry.collab.EditLockService"
 )
 
 

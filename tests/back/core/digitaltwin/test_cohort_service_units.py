@@ -1,6 +1,6 @@
 """Direct unit tests for CohortService pure-function surface.
 
-`CohortService` (`src/back/objects/digitaltwin/CohortService.py`, 609 LOC)
+`CohortService` (`src/back/objects/digitaltwin/cohort/CohortService.py`, 609 LOC)
 landed via the upstream merge on 2026-05-26. It is the extracted home for
 every Cohort Discovery operation that used to live on `DigitalTwin`.
 This file covers the **stateless** helpers — the three `@staticmethod`s
@@ -20,7 +20,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from back.objects.digitaltwin.CohortService import CohortService
+from back.objects.digitaltwin.cohort.CohortService import CohortService
 
 
 # --- _snake_case ---------------------------------------------------------

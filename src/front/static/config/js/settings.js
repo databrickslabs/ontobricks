@@ -10,7 +10,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentWarehouseId = null;
     let currentDeltaWarehouseId = null;
     let effectiveDeltaWarehouseId = '';
+    let deltaWarehouseOptions = [];
     let warehouseLocked = false;
+    let buildWarehouseHydrated = false;
+    let cloudFetchHydrated = false;
+    let deltaWarehouseHydrated = false;
     // graphDbLoaded → the triple-store backend value is loaded (all the Back End
     // sub-page needs). graphEngineConfigLoaded → the graph engine + JSON config
     // textarea are loaded (needed by a Lakebase Save and by the heavy cascade).
@@ -47,6 +51,7 @@ document.addEventListener('DOMContentLoaded', function () {
         version: 1,
         app_title: 'OntoBricks',
         primary_color: '#4F46E5',
+        aurora_color: '#22A7C8',
         logo_url: '/static/global/img/favicon.svg',
         logo_data_url: '',
         is_custom_logo: false,
@@ -59,6 +64,11 @@ document.addEventListener('DOMContentLoaded', function () {
             focus: 'rgba(79, 70, 229, 0.18)',
             on_primary: '#FFFFFF',
             selected_text: '#3730A3',
+            aurora: '#22A7C8',
+            aurora_rgb: '34, 167, 200',
+            aurora_dark: '#1D8EAA',
+            gradient_end: '#3B72D8',
+            canvas_tint: '#F6F6FE',
         },
     };
     let savedUIBranding = null;
@@ -74,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
     // The graph backend *selection* moved to a mandatory per-domain choice
-    // (Domain Information -> Knowledge Graph tab). The Settings Graph DB pages
+    // (Domain -> General -> Knowledge Graph tab). The Settings Graph DB pages
     // now only configure the engine *connections* (Lakebase / Neo4j / Delta).
 
     loadCurrentConfig();
@@ -84,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function () {
     loadRegistryCacheTtl();
     loadEditLockTtl();
     loadGraphLimits();
+    loadDataAssetsImportLimit();
     loadAnalyticsJobEnabled();
     // Preload the Delta warehouse selection + registry location so the Delta
     // panel reflects the saved SQL warehouse. Also preload graph_engine_config
@@ -168,6 +179,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             currentWarehouseId = data.warehouse_id;
             warehouseLocked = !!data.warehouse_locked;
+            const useCloudFetch = document.getElementById('useCloudFetch');
+            if (useCloudFetch) {
+                useCloudFetch.checked = data.use_cloud_fetch !== false;
+                cloudFetchHydrated = true;
+            }
 
             if (warehouseLocked) {
                 const whSelect = document.getElementById('settingsWarehouseSelect');
@@ -183,6 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 await loadWarehouseSelect(data.warehouse_id);
             }
+            buildWarehouseHydrated = true;
 
             const hostDisplay = document.getElementById('currentHostDisplay');
             if (data.host) {
@@ -214,7 +231,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
                     const opt = document.createElement('option');
                     opt.value = wh.id;
-                    opt.textContent = wh.name + stateLabel;
+                    opt.dataset.warehouseType = wh.warehouse_type || '';
+                    if ((wh.warehouse_type || '').toUpperCase() === 'REYDEN') {
+                        opt.disabled = true;
+                        opt.textContent = wh.name + ' (Lakehouse//RT — query only)';
+                    } else {
+                        opt.textContent = wh.name + stateLabel;
+                    }
                     select.appendChild(opt);
                 });
             } else if (data.error) {
@@ -248,20 +271,89 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!warehouseId) return '';
         return (
             warehouseNameFromSelect(document.getElementById('deltaWarehouseSelect'), warehouseId)
+            || warehouseNameFromSelect(document.getElementById('deltaBuildWarehouseSelect'), warehouseId)
             || warehouseNameFromSelect(document.getElementById('settingsWarehouseSelect'), warehouseId)
             || warehouseId
         );
+    }
+
+    function appendWarehouseOption(select, warehouse, suffix = '') {
+        const opt = document.createElement('option');
+        opt.value = warehouse.id || '';
+        opt.dataset.warehouseType = warehouse.warehouse_type || '';
+        opt.textContent = (warehouse.name || warehouse.id || '(not configured)') + suffix;
+        select.appendChild(opt);
+    }
+
+    function syncLakehouseWarehouseControls() {
+        const buildSelect = document.getElementById('deltaBuildWarehouseSelect');
+        const querySelect = document.getElementById('deltaWarehouseSelect');
+        const useRt = !!document.getElementById('deltaUseSea')?.checked;
+        const buildId = (currentWarehouseId || '').trim();
+        if (!buildSelect || !querySelect) return;
+
+        buildSelect.innerHTML = '';
+        const buildPlaceholder = document.createElement('option');
+        buildPlaceholder.value = '';
+        buildPlaceholder.textContent = '— Select a Build SQL Warehouse —';
+        buildSelect.appendChild(buildPlaceholder);
+        deltaWarehouseOptions
+            .filter((wh) => (wh.warehouse_type || '').toUpperCase() !== 'REYDEN')
+            .forEach((wh) => {
+                const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
+                appendWarehouseOption(buildSelect, wh, stateLabel);
+            });
+        const buildWarehouse = deltaWarehouseOptions.find((wh) => wh.id === buildId) || {
+            id: buildId,
+            name: buildId || '(not configured)',
+        };
+        if (
+            buildId
+            && !Array.from(buildSelect.options).some((option) => option.value === buildId)
+        ) {
+            appendWarehouseOption(buildSelect, buildWarehouse, ' (saved)');
+        }
+        buildSelect.value = buildId;
+
+        querySelect.innerHTML = '';
+        if (!useRt) {
+            appendWarehouseOption(querySelect, buildWarehouse);
+            querySelect.value = buildId;
+        } else {
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '— Select a Lakehouse//RT warehouse —';
+            querySelect.appendChild(placeholder);
+            deltaWarehouseOptions
+                .filter((wh) => wh.id !== buildId)
+                .forEach((wh) => {
+                    const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
+                    appendWarehouseOption(querySelect, wh, stateLabel);
+                });
+            querySelect.value = currentDeltaWarehouseId || '';
+        }
+        querySelect.disabled = !useRt;
+        setDeltaWarehouseStatus();
     }
 
     function setDeltaWarehouseStatus() {
         const effectiveEl = document.getElementById('deltaEffectiveWarehouse');
         if (!effectiveEl) return;
 
-        const savedId = (currentDeltaWarehouseId || '').trim();
-        if (savedId) {
-            const name = resolveDeltaWarehouseDisplayName(savedId);
+        const useRt = !!document.getElementById('deltaUseSea')?.checked;
+        const selectedId = (
+            document.getElementById('deltaWarehouseSelect')?.value
+            || currentDeltaWarehouseId
+            || ''
+        ).trim();
+        if (useRt && selectedId) {
+            const name = resolveDeltaWarehouseDisplayName(selectedId);
             effectiveEl.textContent =
-                'Current SQL Warehouse used for Lakehouse queries: ' + name;
+                'Lakehouse//RT queries use: ' + name;
+            return;
+        }
+        if (useRt) {
+            effectiveEl.textContent = 'Select a Lakehouse//RT Query SQL Warehouse.';
             return;
         }
 
@@ -269,8 +361,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (fallbackId) {
             const name = resolveDeltaWarehouseDisplayName(fallbackId);
             effectiveEl.textContent =
-                'Current SQL Warehouse used for Lakehouse queries: ' + name
-                + ' (same as global warehouse)';
+                'Queries use the Build SQL Warehouse: ' + name;
             return;
         }
 
@@ -280,13 +371,17 @@ document.addEventListener('DOMContentLoaded', function () {
     function setDeltaWarehouseLoading(loading) {
         const loadingEl = document.getElementById('deltaWarehouseLoading');
         const controls = document.getElementById('deltaWarehouseControls');
+        const buildSelect = document.getElementById('deltaBuildWarehouseSelect');
         const select = document.getElementById('deltaWarehouseSelect');
         const refreshBtn = document.getElementById('btnRefreshDeltaWarehouses');
         const applyBtn = document.getElementById('btnApplyDeltaWarehouse');
+        const useRt = !!document.getElementById('deltaUseSea')?.checked;
         if (loadingEl) loadingEl.classList.toggle('d-none', !loading);
         if (controls) controls.classList.toggle('d-none', loading);
+        if (buildSelect) buildSelect.disabled = loading;
         if (select) select.setAttribute('aria-busy', loading ? 'true' : 'false');
-        if (refreshBtn) refreshBtn.disabled = loading;
+        if (select) select.disabled = loading || !useRt;
+        if (refreshBtn) refreshBtn.disabled = loading || !useRt;
         if (applyBtn) applyBtn.disabled = loading;
     }
 
@@ -298,37 +393,11 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch('/settings/warehouses', { credentials: 'same-origin' });
             const data = await response.json();
-
-            select.innerHTML = '<option value="">— same as global warehouse —</option>';
-
-            if (data.warehouses && data.warehouses.length > 0) {
-                data.warehouses.forEach(wh => {
-                    const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
-                    const opt = document.createElement('option');
-                    opt.value = wh.id;
-                    opt.textContent = wh.name + stateLabel;
-                    select.appendChild(opt);
-                });
-            } else if (data.error) {
-                select.innerHTML = '<option value="">Error: ' + escapeHtmlSettings(data.error) + '</option>';
-            } else {
-                select.innerHTML = '<option value="">No warehouses available</option>';
-            }
-
-            if (preselectId) {
-                const hasOpt = Array.from(select.options).some((o) => o.value === preselectId);
-                if (!hasOpt) {
-                    const wh = (data.warehouses || []).find((w) => w.id === preselectId);
-                    const savedOpt = document.createElement('option');
-                    savedOpt.value = preselectId;
-                    savedOpt.textContent = wh ? wh.name : preselectId + ' (saved)';
-                    select.appendChild(savedOpt);
-                }
-                select.value = preselectId;
-            } else {
-                select.value = '';
-            }
-            setDeltaWarehouseStatus();
+            deltaWarehouseOptions = data.warehouses || [];
+            currentDeltaWarehouseId = preselectId || '';
+            effectiveDeltaWarehouseId = effectiveId || currentWarehouseId || '';
+            syncLakehouseWarehouseControls();
+            deltaWarehouseHydrated = true;
         } catch (error) {
             console.error('Error loading Delta warehouses:', error);
             select.innerHTML = '<option value="">Error loading warehouses</option>';
@@ -339,19 +408,98 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnRefreshDeltaWarehouses')?.addEventListener(
         'click',
-        () => loadDeltaWarehouseSelect(currentDeltaWarehouseId)
+        () => loadDeltaWarehouseSelect(currentDeltaWarehouseId, effectiveDeltaWarehouseId)
     );
+    document.getElementById('dttab-warehouse')?.addEventListener('shown.bs.tab', async function () {
+        setGraphDbHeavyLoading(true);
+        try {
+            await loadDeltaWarehouseSelect(
+                currentDeltaWarehouseId,
+                effectiveDeltaWarehouseId
+            );
+        } finally {
+            setGraphDbHeavyLoading(false);
+        }
+    });
+    document.getElementById('deltaUseSea')?.addEventListener('change', function () {
+        if (!this.checked) currentDeltaWarehouseId = '';
+        syncLakehouseWarehouseControls();
+        setDeltaWarehouseLoading(false);
+    });
+    document.getElementById('deltaWarehouseSelect')?.addEventListener('change', function () {
+        currentDeltaWarehouseId = this.value || '';
+        setDeltaWarehouseStatus();
+    });
+    document.getElementById('deltaBuildWarehouseSelect')?.addEventListener('change', function () {
+        currentWarehouseId = this.value || '';
+        if (!document.getElementById('deltaUseSea')?.checked) {
+            currentDeltaWarehouseId = '';
+        }
+        syncLakehouseWarehouseControls();
+        setDeltaWarehouseLoading(false);
+    });
+
+    async function saveBuildWarehouseSelection(errors) {
+        const lakehouseBuild = document.getElementById('deltaBuildWarehouseSelect');
+        const globalBuild = document.getElementById('settingsWarehouseSelect');
+        const buildSelect = lakehouseBuild?.value ? lakehouseBuild : globalBuild;
+        if (!buildSelect) return false;
+        const warehouseId = buildSelect.value || '';
+        if (!warehouseId) {
+            if (errors) errors.push('Select a Build SQL Warehouse');
+            return false;
+        }
+        const selected = Array.from(buildSelect.options)
+            .find((option) => option.value === warehouseId);
+        const warehouseType = selected?.dataset?.warehouseType || '';
+        try {
+            const resp = await fetch('/settings/select-build-warehouse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    warehouse_id: warehouseId,
+                    warehouse_type: warehouseType,
+                }),
+            });
+            const result = await resp.json();
+            if (!resp.ok || !result.success) {
+                const msg = result.message || result.detail || 'Failed to save Build warehouse';
+                if (errors) errors.push('Build warehouse: ' + msg);
+                return false;
+            }
+            currentWarehouseId = result.warehouse_id || warehouseId;
+            return true;
+        } catch (e) {
+            if (errors) errors.push('Build warehouse: ' + e.message);
+            return false;
+        }
+    }
 
     async function saveDeltaWarehouseSelection(errors) {
-        const select = document.getElementById('deltaWarehouseSelect');
-        if (!select) return false;
-        const warehouseId = select.value || '';
+        const querySelect = document.getElementById('deltaWarehouseSelect');
+        const seaEl = document.getElementById('deltaUseSea');
+        if (!querySelect || !seaEl) return false;
+        const useRt = !!seaEl.checked;
+        const warehouseId = useRt ? querySelect.value : '';
+        if (useRt && !warehouseId) {
+            if (errors) errors.push('Select a Query SQL Warehouse for Lakehouse//RT');
+            return false;
+        }
+        if (useRt && warehouseId === currentWarehouseId) {
+            if (errors) {
+                errors.push(
+                    'Query SQL Warehouse must be different from the Build SQL Warehouse'
+                );
+            }
+            return false;
+        }
         try {
             const resp = await fetch('/settings/select-delta-warehouse', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ warehouse_id: warehouseId }),
+                body: JSON.stringify({ warehouse_id: warehouseId, use_sea: useRt }),
             });
             const result = await resp.json();
             if (!resp.ok || !result.success) {
@@ -360,7 +508,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
             currentDeltaWarehouseId = result.delta_warehouse_id || '';
-            setDeltaWarehouseStatus();
+            if (seaEl) seaEl.checked = !!result.use_sea;
+            syncLakehouseWarehouseControls();
+            setDeltaWarehouseLoading(false);
             return true;
         } catch (e) {
             if (errors) errors.push('Lakehouse warehouse: ' + e.message);
@@ -374,13 +524,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!select) return;
         btn.disabled = true;
         const errors = [];
-        const ok = await saveDeltaWarehouseSelection(errors);
+        const buildOk = await saveBuildWarehouseSelection(errors);
+        const ok = buildOk && await saveDeltaWarehouseSelection(errors);
         btn.disabled = false;
         if (ok) {
             showNotification(
                 currentDeltaWarehouseId
                     ? 'Lakehouse SQL Warehouse saved to registry'
-                    : 'Lakehouse warehouse cleared — using global warehouse',
+                    : 'Lakehouse warehouse cleared — using Build SQL Warehouse',
                 'success',
                 2500
             );
@@ -654,10 +805,91 @@ document.addEventListener('DOMContentLoaded', function () {
         return '#111827';
     }
 
-    function deriveBrandPalette(primaryColor) {
+    // Aurora accent + gradient/canvas-tint derivation. Mirrors
+    // back.core.helpers.UIBranding exactly so the browser preview and the
+    // server-rendered first paint never disagree.
+
+    function rgbToHsl(rgb) {
+        const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        const l = (mx + mn) / 2;
+        if (mx === mn) return [0, 0, l];
+        const d = mx - mn;
+        const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+        let h;
+        if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
+        else if (mx === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        return [h * 60, s, l];
+    }
+
+    function hueToChannel(p, q, t) {
+        let tt = t;
+        if (tt < 0) tt += 1;
+        if (tt > 1) tt -= 1;
+        if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+        if (tt < 1 / 2) return q;
+        if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+        return p;
+    }
+
+    function hslToRgb(h, s, l) {
+        if (s === 0) {
+            const channel = Math.round(l * 255);
+            return [channel, channel, channel];
+        }
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        const hh = h / 360;
+        const r = hueToChannel(p, q, hh + 1 / 3);
+        const g = hueToChannel(p, q, hh);
+        const b = hueToChannel(p, q, hh - 1 / 3);
+        return [r, g, b].map((c) => Math.max(0, Math.min(255, Math.round(c * 255))));
+    }
+
+    const AURORA_HUE_SHIFT_DEG = -51.0;
+    const AURORA_SATURATION_RANGE = [0.45, 0.75];
+    const AURORA_LIGHTNESS_RANGE = [0.40, 0.50];
+    const GRADIENT_MIX_RATIO = 0.45;
+
+    function deriveAuroraHex(primaryRgb) {
+        let [h, s, l] = rgbToHsl(primaryRgb);
+        h = (h + AURORA_HUE_SHIFT_DEG + 360) % 360;
+        s = Math.min(AURORA_SATURATION_RANGE[1], Math.max(AURORA_SATURATION_RANGE[0], s));
+        l = Math.min(AURORA_LIGHTNESS_RANGE[1], Math.max(AURORA_LIGHTNESS_RANGE[0], l));
+        return rgbToHex(hslToRgb(h, s, l));
+    }
+
+    function mixColors(rgbA, rgbB, ratio) {
+        return rgbA.map((channel, i) => Math.max(0, Math.min(255, Math.round(channel * (1 - ratio) + rgbB[i] * ratio))));
+    }
+
+    function deriveGradientEnd(primaryRgb, auroraRgb, onPrimaryHex) {
+        const mixed = mixColors(primaryRgb, auroraRgb, GRADIENT_MIX_RATIO);
+        const onPrimaryRgb = hexToRgb(onPrimaryHex);
+        if (contrastRatio(mixed, onPrimaryRgb) >= 4.5) return rgbToHex(mixed);
+        const target = onPrimaryHex.toUpperCase() === '#FFFFFF' ? [0, 0, 0] : [255, 255, 255];
+        for (let step = 1; step <= 20; step++) {
+            const candidate = mixColors(mixed, target, Math.min(1, step * 0.05));
+            if (contrastRatio(candidate, onPrimaryRgb) >= 4.5) return rgbToHex(candidate);
+        }
+        return rgbToHex(primaryRgb);
+    }
+
+    function deriveCanvasTint(primaryRgb) {
+        const white = [255, 255, 255];
+        const composited = primaryRgb.map((channel, i) => Math.round(channel * 0.05 + white[i] * 0.95));
+        return rgbToHex(composited);
+    }
+
+    function deriveBrandPalette(primaryColor, auroraColor) {
         const rgb = hexToRgb(primaryColor);
         if (!rgb) return { ...UI_BRANDING_DEFAULTS.palette };
         const csv = `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`;
+        const onPrimary = chooseOnPrimary(rgb);
+        const auroraHex = parseHexColor(auroraColor) || deriveAuroraHex(rgb);
+        const auroraRgb = hexToRgb(auroraHex);
+        const auroraCsv = `${auroraRgb[0]}, ${auroraRgb[1]}, ${auroraRgb[2]}`;
         return {
             primary_rgb: csv,
             primary_dark: rgbToHex(mixWithBlack(rgb, 0.15)),
@@ -665,8 +897,13 @@ document.addEventListener('DOMContentLoaded', function () {
             primary_light: `rgba(${csv}, 0.10)`,
             hover: `rgba(${csv}, 0.06)`,
             focus: `rgba(${csv}, 0.18)`,
-            on_primary: chooseOnPrimary(rgb),
+            on_primary: onPrimary,
             selected_text: deriveSelectedText(rgb),
+            aurora: auroraHex,
+            aurora_rgb: auroraCsv,
+            aurora_dark: rgbToHex(mixWithBlack(auroraRgb, 0.15)),
+            gradient_end: deriveGradientEnd(rgb, auroraRgb, onPrimary),
+            canvas_tint: deriveCanvasTint(rgb),
         };
     }
 
@@ -679,25 +916,32 @@ document.addEventListener('DOMContentLoaded', function () {
         const title = normalizeTitle(source.app_title || '');
         const normalizedTitle = title || UI_BRANDING_DEFAULTS.app_title;
         const normalizedColor = parseHexColor(source.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
+        const normalizedAurora = parseHexColor(source.aurora_color) || UI_BRANDING_DEFAULTS.aurora_color;
         const palette = source.palette && source.palette.primary_rgb
             ? source.palette
-            : deriveBrandPalette(normalizedColor);
+            : deriveBrandPalette(normalizedColor, normalizedAurora);
         return {
             version: Number(source.version || 1),
             app_title: normalizedTitle,
             primary_color: normalizedColor,
+            aurora_color: normalizedAurora,
             logo_data_url: String(source.logo_data_url || ''),
             logo_url: String(source.logo_url || source.logo_data_url || UI_BRANDING_DEFAULTS.logo_url),
             is_custom_logo: Boolean(source.is_custom_logo || source.logo_data_url),
             palette: {
-                primary_rgb: String(palette.primary_rgb || deriveBrandPalette(normalizedColor).primary_rgb),
-                primary_dark: String(palette.primary_dark || deriveBrandPalette(normalizedColor).primary_dark),
-                primary_darker: String(palette.primary_darker || deriveBrandPalette(normalizedColor).primary_darker),
-                primary_light: String(palette.primary_light || deriveBrandPalette(normalizedColor).primary_light),
-                hover: String(palette.hover || deriveBrandPalette(normalizedColor).hover),
-                focus: String(palette.focus || deriveBrandPalette(normalizedColor).focus),
-                on_primary: String(palette.on_primary || deriveBrandPalette(normalizedColor).on_primary),
-                selected_text: String(palette.selected_text || deriveBrandPalette(normalizedColor).selected_text),
+                primary_rgb: String(palette.primary_rgb || deriveBrandPalette(normalizedColor, normalizedAurora).primary_rgb),
+                primary_dark: String(palette.primary_dark || deriveBrandPalette(normalizedColor, normalizedAurora).primary_dark),
+                primary_darker: String(palette.primary_darker || deriveBrandPalette(normalizedColor, normalizedAurora).primary_darker),
+                primary_light: String(palette.primary_light || deriveBrandPalette(normalizedColor, normalizedAurora).primary_light),
+                hover: String(palette.hover || deriveBrandPalette(normalizedColor, normalizedAurora).hover),
+                focus: String(palette.focus || deriveBrandPalette(normalizedColor, normalizedAurora).focus),
+                on_primary: String(palette.on_primary || deriveBrandPalette(normalizedColor, normalizedAurora).on_primary),
+                selected_text: String(palette.selected_text || deriveBrandPalette(normalizedColor, normalizedAurora).selected_text),
+                aurora: String(palette.aurora || deriveBrandPalette(normalizedColor, normalizedAurora).aurora),
+                aurora_rgb: String(palette.aurora_rgb || deriveBrandPalette(normalizedColor, normalizedAurora).aurora_rgb),
+                aurora_dark: String(palette.aurora_dark || deriveBrandPalette(normalizedColor, normalizedAurora).aurora_dark),
+                gradient_end: String(palette.gradient_end || deriveBrandPalette(normalizedColor, normalizedAurora).gradient_end),
+                canvas_tint: String(palette.canvas_tint || deriveBrandPalette(normalizedColor, normalizedAurora).canvas_tint),
             },
         };
     }
@@ -751,6 +995,7 @@ document.addEventListener('DOMContentLoaded', function () {
             { id: 'uiSwatchLight', name: 'Selected', value: palette.primary_light },
             { id: 'uiSwatchFocus', name: 'Focus Ring', value: palette.focus },
             { id: 'uiSwatchOnPrimary', name: 'On Primary', value: palette.on_primary },
+            { id: 'uiSwatchAurora', name: 'Aurora', value: palette.aurora },
         ];
         labels.forEach((item) => {
             const el = document.getElementById(item.id);
@@ -787,9 +1032,14 @@ document.addEventListener('DOMContentLoaded', function () {
         document.documentElement.style.setProperty('--db-primary-light', palette.primary_light);
         document.documentElement.style.setProperty('--db-hover-indigo', palette.hover);
         document.documentElement.style.setProperty('--db-focus-ring', `0 0 0 0.2rem ${palette.focus}`);
-        document.documentElement.style.setProperty('--db-shadow-primary', `0 8px 20px ${palette.focus}`);
         document.documentElement.style.setProperty('--db-on-primary', palette.on_primary);
         document.documentElement.style.setProperty('--db-primary-selected-text', palette.selected_text);
+        document.documentElement.style.setProperty('--db-aurora', palette.aurora);
+        document.documentElement.style.setProperty('--db-aurora-rgb', palette.aurora_rgb);
+        document.documentElement.style.setProperty('--db-aurora-dark', palette.aurora_dark);
+        document.documentElement.style.setProperty('--db-gradient-end', palette.gradient_end);
+        document.documentElement.style.setProperty('--db-canvas-warm', palette.canvas_tint);
+        document.documentElement.style.setProperty('--db-shadow-primary', `0 8px 20px rgba(${palette.primary_rgb}, 0.35)`);
 
         if (section) {
             section.style.setProperty('--ui-preview-primary', draft.primary_color);
@@ -800,6 +1050,7 @@ document.addEventListener('DOMContentLoaded', function () {
             section.style.setProperty('--ui-preview-focus', `0 0 0 0.2rem ${palette.focus}`);
             section.style.setProperty('--ui-preview-on-primary', palette.on_primary);
             section.style.setProperty('--ui-preview-selected-text', palette.selected_text);
+            section.style.setProperty('--ui-preview-aurora', palette.aurora);
         }
 
         updateBrandingSwatchAccessibility(draft.primary_color, palette);
@@ -836,10 +1087,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const hexInput = document.getElementById('uiBrandingPrimaryHex');
         const titleError = document.getElementById('uiBrandingTitleError');
         const colorError = document.getElementById('uiBrandingColorError');
+        const auroraColorInput = document.getElementById('uiBrandingAuroraColor');
+        const auroraHexInput = document.getElementById('uiBrandingAuroraHex');
+        const auroraError = document.getElementById('uiBrandingAuroraError');
         const title = normalizeTitle(titleInput?.value || '');
         const color = parseHexColor(hexInput?.value || '');
         const titleLength = titleCodePointLength(title);
         const colorPickerValue = parseHexColor(colorInput?.value || '');
+        const auroraHexValue = String(auroraHexInput?.value || '').trim();
+        const auroraValid = auroraHexValue === '' || Boolean(parseHexColor(auroraHexValue));
 
         let titleErrorMessage = '';
         if (titleLength < 1) titleErrorMessage = 'Application title is required.';
@@ -848,10 +1104,14 @@ document.addEventListener('DOMContentLoaded', function () {
         let colorErrorMessage = '';
         if (!color || !colorPickerValue) colorErrorMessage = 'Primary color must use #RRGGBB.';
 
-        uiBrandingValid = !titleErrorMessage && !colorErrorMessage;
+        const auroraErrorMessage = auroraValid ? '' : 'Aurora color must use #RRGGBB or be left blank.';
+
+        uiBrandingValid = !titleErrorMessage && !colorErrorMessage && !auroraErrorMessage;
         setBrandingInputErrorState(titleInput, titleError, titleErrorMessage);
         setBrandingInputErrorState(hexInput, colorError, colorErrorMessage);
         setBrandingInputErrorState(colorInput, colorError, colorErrorMessage);
+        setBrandingInputErrorState(auroraHexInput, auroraError, auroraErrorMessage);
+        setBrandingInputErrorState(auroraColorInput, auroraError, auroraErrorMessage);
         updateUIBrandingButtons();
         if (!uiBrandingValid && uiBrandingDirty) {
             showUIBrandingStatus('Please provide a title and a valid #RRGGBB color.', 'error');
@@ -872,6 +1132,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return (
             normalizeTitle(savedUIBranding.app_title) === UI_BRANDING_DEFAULTS.app_title
             && parseHexColor(savedUIBranding.primary_color) === UI_BRANDING_DEFAULTS.primary_color
+            && (parseHexColor(savedUIBranding.aurora_color) || savedUIBranding.palette.aurora) === UI_BRANDING_DEFAULTS.aurora_color
             && !isCustomLogoBranding(savedUIBranding)
         );
     }
@@ -886,10 +1147,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const draftTitle = normalizeTitle(draftUIBranding.app_title);
         const savedColor = parseHexColor(savedUIBranding.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
         const draftColor = parseHexColor(draftUIBranding.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
+        const savedAurora = savedUIBranding.aurora_color || savedUIBranding.palette.aurora;
+        const draftAurora = draftUIBranding.aurora_color || draftUIBranding.palette.aurora;
         const resetChangesLogo = uiBrandingResetLogo && isCustomLogoBranding(savedUIBranding);
         uiBrandingDirty = (
             savedTitle !== draftTitle
             || savedColor !== draftColor
+            || savedAurora !== draftAurora
             || resetChangesLogo
             || Boolean(uiBrandingPendingLogoFile)
         );
@@ -901,16 +1165,31 @@ document.addEventListener('DOMContentLoaded', function () {
         const titleInput = document.getElementById('uiBrandingTitle');
         const colorInput = document.getElementById('uiBrandingPrimaryColor');
         const hexInput = document.getElementById('uiBrandingPrimaryHex');
+        const auroraColorInput = document.getElementById('uiBrandingAuroraColor');
+        const auroraHexInput = document.getElementById('uiBrandingAuroraHex');
         if (titleInput) titleInput.value = draftUIBranding.app_title;
         if (colorInput) colorInput.value = draftUIBranding.primary_color;
         if (hexInput) hexInput.value = draftUIBranding.primary_color;
+        const auroraEffective = draftUIBranding.aurora_color || draftUIBranding.palette.aurora;
+        if (auroraColorInput) auroraColorInput.value = auroraEffective;
+        if (auroraHexInput) auroraHexInput.value = auroraEffective;
     }
 
     function updateDraftColor(colorValue) {
         const normalized = parseHexColor(colorValue);
         if (!normalized || !draftUIBranding) return;
         draftUIBranding.primary_color = normalized;
-        draftUIBranding.palette = deriveBrandPalette(normalized);
+        draftUIBranding.palette = deriveBrandPalette(normalized, draftUIBranding.aurora_color);
+        previewUIBranding(draftUIBranding);
+        updateUIBrandingDirtyState();
+        updateUIBrandingValidity();
+    }
+
+    function updateDraftAurora(colorValue) {
+        const normalized = parseHexColor(colorValue);
+        if (!draftUIBranding) return;
+        draftUIBranding.aurora_color = normalized || '';
+        draftUIBranding.palette = deriveBrandPalette(draftUIBranding.primary_color, draftUIBranding.aurora_color);
         previewUIBranding(draftUIBranding);
         updateUIBrandingDirtyState();
         updateUIBrandingValidity();
@@ -920,6 +1199,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const titleInput = document.getElementById('uiBrandingTitle');
         const colorInput = document.getElementById('uiBrandingPrimaryColor');
         const hexInput = document.getElementById('uiBrandingPrimaryHex');
+        const auroraColorInput = document.getElementById('uiBrandingAuroraColor');
+        const auroraHexInput = document.getElementById('uiBrandingAuroraHex');
         const logoInput = document.getElementById('uiBrandingLogoFile');
         const saveBtn = document.getElementById('uiBrandingSaveBtn');
         const discardBtn = document.getElementById('uiBrandingDiscardBtn');
@@ -956,6 +1237,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!draftUIBranding || !hexInput) return;
                 hexInput.value = draftUIBranding.primary_color;
                 if (colorInput) colorInput.value = draftUIBranding.primary_color;
+            });
+        }
+
+        if (auroraColorInput) {
+            auroraColorInput.addEventListener('input', () => {
+                if (auroraHexInput) auroraHexInput.value = String(auroraColorInput.value || '').toUpperCase();
+                updateDraftAurora(auroraColorInput.value);
+            });
+        }
+
+        if (auroraHexInput) {
+            auroraHexInput.addEventListener('input', () => {
+                const upper = String(auroraHexInput.value || '').toUpperCase();
+                auroraHexInput.value = upper;
+                const normalized = parseHexColor(upper);
+                if (normalized && auroraColorInput) auroraColorInput.value = normalized;
+                if (normalized || upper === '') updateDraftAurora(normalized || '');
+                else updateUIBrandingValidity();
+            });
+            auroraHexInput.addEventListener('blur', () => {
+                if (!draftUIBranding || !auroraHexInput) return;
+                auroraHexInput.value = draftUIBranding.aurora_color || draftUIBranding.palette.aurora;
+                if (auroraColorInput) auroraColorInput.value = auroraHexInput.value;
+                updateUIBrandingValidity();
             });
         }
 
@@ -1046,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (logoInput) logoInput.value = '';
         draftUIBranding = normalizeUIBrandingDraft({
             ...UI_BRANDING_DEFAULTS,
-            palette: deriveBrandPalette(UI_BRANDING_DEFAULTS.primary_color),
+            palette: deriveBrandPalette(UI_BRANDING_DEFAULTS.primary_color, UI_BRANDING_DEFAULTS.aurora_color),
         });
         applyUIBrandingDraftToInputs();
         previewUIBranding(draftUIBranding);
@@ -1069,6 +1374,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const formData = new FormData();
             formData.append('app_title', normalizeTitle(draftUIBranding.app_title));
             formData.append('primary_color', draftUIBranding.primary_color);
+            formData.append('aurora_color', draftUIBranding.aurora_color || '');
             formData.append('reset_logo', uiBrandingResetLogo ? 'true' : 'false');
             if (uiBrandingPendingLogoFile) {
                 formData.append('logo_file', uiBrandingPendingLogoFile);
@@ -1576,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const stEl   = document.getElementById('lakebaseSyncTableMode');
             const toutEl = document.getElementById('lakebaseSyncTimeout');
             const ucCat  = document.getElementById('lakebaseUcCatalog');
-            if (stEl) o.sync_table_mode = stEl.value || 'snapshot';
+            if (stEl) o.sync_table_mode = 'snapshot';
             if (toutEl) {
                 const n = parseInt(toutEl.value, 10);
                 o.sync_timeout_s = (!isNaN(n) && n > 0) ? n : 600;
@@ -1701,10 +2007,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!document.getElementById('graphEngineConfig')) return;
         const o = (readEngineConfigRoot().lakebase || {});
 
-        if (syncModeEl) syncModeEl.value = (o.sync_mode === 'managed_synced') ? 'managed_synced' : 'app_managed';
+        if (syncModeEl) syncModeEl.value = (o.sync_mode === 'app_managed') ? 'app_managed' : 'managed_synced';
 
         const stEl   = document.getElementById('lakebaseSyncTableMode');
-        if (stEl && o.sync_table_mode) stEl.value = o.sync_table_mode;
+        if (stEl) stEl.value = 'snapshot';
 
         const toutEl = document.getElementById('lakebaseSyncTimeout');
         if (toutEl && o.sync_timeout_s != null) toutEl.value = String(parseInt(o.sync_timeout_s, 10) || 600);
@@ -2116,6 +2422,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = resp.ok ? await resp.json() : {};
             currentDeltaWarehouseId = data.delta_warehouse_id || '';
             effectiveDeltaWarehouseId = data.effective_delta_warehouse_id || '';
+            const seaEl = document.getElementById('deltaUseSea');
+            if (seaEl) seaEl.checked = !!data.use_sea;
             applyDeltaRegistryLocation(data);
         } catch (e) {
             console.log('Delta warehouse state load failed', e);
@@ -2197,6 +2505,21 @@ document.addEventListener('DOMContentLoaded', function () {
             graphLimitsHydrated = true;
         } catch (e) {
             console.log('Graph limits load failed', e);
+        }
+    }
+
+    async function loadDataAssetsImportLimit() {
+        const el = document.getElementById('dataAssetsImportLimit');
+        if (!el) return;
+        try {
+            const resp = await fetch('/settings/data-assets-import-limit', { credentials: 'same-origin' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && data.success && typeof data.data_assets_import_limit === 'number') {
+                el.value = String(data.data_assets_import_limit);
+            }
+        } catch (e) {
+            console.log('Data assets import limit load failed', e);
         }
     }
 
@@ -2782,14 +3105,23 @@ document.addEventListener('DOMContentLoaded', function () {
                     + '<i class="bi bi-trash3"></i></button>';
             }
 
-            // Strip _sync / __app suffix to get the common base name shared by all
-            // three objects belonging to a graph version (view, sync table, companion).
-            // Tables: "{base}_sync" and "{base}__app"  →  base = "{domain}_v{version}"
-            // Views:  "{base}"                          →  base = "{domain}_v{version}"
+            // Strip graph-storage and index suffixes to get the common base shared
+            // by every physical object belonging to one domain/version card.
+            // Tables: "{base}_sync", "{base}__app", "{base}_adj_*",
+            //         "{base}_entity_search", and "{base}_props" → base
+            // Views:  "{base}"                          → base
             function objectBase(name, kind) {
                 if (kind === 'table') {
-                    if (name.endsWith('_sync')) return name.slice(0, -5);
-                    if (name.endsWith('__app')) return name.slice(0, -5);
+                    const domainSuffixes = [
+                        '_entity_search',
+                        '_props',
+                        '_adj_out',
+                        '_adj_in',
+                        '__app',
+                        '_sync',
+                    ];
+                    const suffix = domainSuffixes.find(candidate => name.endsWith(candidate));
+                    if (suffix) return name.slice(0, -suffix.length);
                 }
                 return name;
             }
@@ -3871,7 +4203,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /** Persist the graph engine *connection* JSON config + Delta warehouse
      *  selection (used by global Save). The backend *selection* is per-domain
-     *  now (Domain Information -> Knowledge Graph tab), so nothing is chosen
+     *  now (Domain -> General -> Knowledge Graph tab), so nothing is chosen
      *  here — only the Lakebase / Neo4j / Delta connection settings. */
     async function saveGraphDbSettings(errors) {
         const ta = document.getElementById('graphEngineConfig');
@@ -3880,7 +4212,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             // Persist the Delta SQL-warehouse selection via its dedicated endpoint.
-            await saveDeltaWarehouseSelection(errors);
+            if (deltaWarehouseHydrated) {
+                await saveDeltaWarehouseSelection(errors);
+            }
 
             if (!ta) {
                 applyGraphDbEnginePanels();
@@ -4318,20 +4652,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const errors = [];
 
-        // 1. Save warehouse (skip when locked by Databricks App resource)
-        const whId = document.getElementById('settingsWarehouseSelect').value;
-        if (whId && !warehouseLocked) {
+        // 1. Save the dedicated build warehouse and transport.
+        if (buildWarehouseHydrated) {
+            await saveBuildWarehouseSelection(errors);
+        }
+
+        // 1b. Save CloudFetch (unchecked must persist, but only after hydrate).
+        const cloudFetchInput = document.getElementById('useCloudFetch');
+        if (cloudFetchInput && !cloudFetchHydrated) {
+            errors.push(
+                'CloudFetch: current value could not be read, so it was left '
+                + 'unchanged. Reload the page and try again.'
+            );
+        }
+        if (cloudFetchInput && cloudFetchHydrated) {
             try {
-                const resp = await fetch('/settings/save', {
+                const resp = await fetch('/settings/save-cloud-fetch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ warehouse_id: whId })
+                    body: JSON.stringify({ use_cloud_fetch: cloudFetchInput.checked })
                 });
                 const r = await resp.json();
-                if (r.success) currentWarehouseId = whId;
-                else errors.push('Warehouse: ' + r.message);
-            } catch (e) { errors.push('Warehouse: ' + e.message); }
+                if (!r.success) errors.push('CloudFetch: ' + r.message);
+            } catch (e) { errors.push('CloudFetch: ' + e.message); }
         }
 
         // 2. Save base URI
@@ -4411,6 +4755,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 const r = await resp.json();
                 if (!r.success) errors.push('Graph limits: ' + (r.message || 'save failed'));
             } catch (e) { errors.push('Graph limits: ' + e.message); }
+        }
+
+        const importLimitInput = document.getElementById('dataAssetsImportLimit');
+        if (importLimitInput) {
+            const v = parseInt(importLimitInput.value, 10);
+            const limit = isNaN(v) ? 40 : Math.max(1, Math.min(500, v));
+            try {
+                const resp = await fetch('/settings/save-data-assets-import-limit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ data_assets_import_limit: limit })
+                });
+                const r = await resp.json();
+                if (!r.success) errors.push('Data assets import limit: ' + (r.message || 'save failed'));
+                else if (typeof r.data_assets_import_limit === 'number') {
+                    importLimitInput.value = String(r.data_assets_import_limit);
+                }
+            } catch (e) { errors.push('Data assets import limit: ' + e.message); }
         }
 
         // 3d. Save the Databricks graph-analytics job toggle. An explicit "off"

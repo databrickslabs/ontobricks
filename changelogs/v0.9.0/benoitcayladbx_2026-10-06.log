@@ -1,0 +1,84 @@
+## Fit Explorer camera to node plus neighbors
+
+Context: Zooming on a selected KG Explorer node used Sigma ratio 0.08, so the
+node filled the canvas and neighbors fell off-screen. Click and selectEntity
+now frame the ego network with a higher min ratio and more padding.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Camera fit includes neighbors; min ratio 0.22; padding 2.4; click also frames.
+2. tests/units/front/test_explorer_camera_fit.py
+   Contract for neighbor expansion and no tight 0.08 single-node zoom.
+3. docs/user-guide.md
+   Click zooms so the entity and its neighbors fit on the canvas.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_camera_fit.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7389 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 61.50s
+
+
+## Cap data-assets imports (default 40)
+
+Context: Importing an entire Unity Catalog schema can load far more tables than
+ontology generation can handle. Settings → Global now exposes an import cap
+(default 40, range 1–500) enforced in the picker UI and on the metadata load
+backend.
+
+Changes:
+
+1. src/back/core/databricks/uc/MetadataService.py
+   Clamp import limit; cap schema-wide and selected-table loads.
+2. src/back/objects/session/GlobalConfigService.py
+   Persist data_assets_import_limit (default 40).
+3. src/back/objects/domain/WorkspaceUiSettings.py
+   GET/save helpers for the Global setting.
+4. src/back/objects/domain/SettingsService.py
+   Delegators for the new setting.
+5. src/api/routers/internal/settings.py
+   GET /settings/data-assets-import-limit and POST save.
+6. src/back/objects/domain/Domain.py
+   Pass the cap into load paths; list-tables returns import_limit.
+7. src/back/objects/domain/_metadata_tasks.py
+   Async metadata load honours import_limit.
+8. src/front/templates/settings.html
+   Global number input, default 40.
+9. src/front/static/config/js/settings.js
+   Load and save the import limit with other Global settings.
+10. src/front/static/domain/js/domain-metadata.js
+    Selection respects remaining slots; banner shows the cap.
+11. tests/units/core/test_metadata_mgt.py
+    Clamp, cap, and limit-reached coverage.
+12. tests/units/front/test_data_assets_import_limit.py
+    Settings HTML/JS and Domain picker contracts.
+13. tests/units/domain/test_list_schema_tables_object_kind.py
+    list-tables payload includes import_limit 40.
+14. docs/user-guide.md
+    Document the default 40-asset import cap.
+15. docs/api.md
+    Document the GET/POST settings endpoints.
+
+Modified files:
+- src/back/core/databricks/uc/MetadataService.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/WorkspaceUiSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/_metadata_tasks.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/static/domain/js/domain-metadata.js
+- tests/units/core/test_metadata_mgt.py
+- tests/units/front/test_data_assets_import_limit.py
+- tests/units/domain/test_list_schema_tables_object_kind.py
+- docs/user-guide.md
+- docs/api.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7396 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.92s
+

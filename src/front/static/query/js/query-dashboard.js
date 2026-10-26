@@ -326,58 +326,198 @@ async function _loadDatasetPreviewRows(entityUri) {
  * @param {string} [label] - Display label for the action
  * @param {string} [description] - Optional function description from the class config
  */
-function openEntityActionModal(entityUri, actionFullName, label, description) {
+function _entityActionIsJob(actionOrName) {
+    if (actionOrName && typeof actionOrName === 'object') {
+        return actionOrName.kind === 'job'
+            || (actionOrName.job_id != null && actionOrName.kind !== 'uc_function');
+    }
+    return String(actionOrName || '').indexOf('job:') === 0;
+}
+
+/**
+ * Insert and show the shared action modal. Returns the modal element; it is
+ * removed from the DOM once hidden.
+ */
+function _showEntityActionModal(icon, label, fullName, bodyHtml) {
     const existingModal = document.getElementById('entityActionResultModal');
     if (existingModal) {
         existingModal.remove();
     }
-
-    const safeLabel = escapeHtml(label || actionFullName || 'Action');
-    const safeFullName = escapeHtml(actionFullName || '');
-    const safeDescription = (description || '').trim()
-        ? escapeHtml(String(description).trim())
-        : '';
-    const descriptionBlock = safeDescription
-        ? `<p class="text-muted small mb-3">${safeDescription}</p>`
-        : '';
     const modalHtml = `
         <div class="modal fade" id="entityActionResultModal" tabindex="-1" aria-labelledby="entityActionResultModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header bg-dark text-white py-2">
                         <h5 class="modal-title" id="entityActionResultModalLabel">
-                            <i class="bi bi-lightning-charge me-2"></i>${safeLabel}
+                            <i class="bi ${icon} me-2"></i>${escapeHtml(label)}
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body" id="entityActionResultModalBody">
-                        ${descriptionBlock}
-                        <div class="text-center text-muted py-4">
-                            <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
-                            Running action…
-                        </div>
-                    </div>
+                    <div class="modal-body" id="entityActionResultModalBody">${bodyHtml}</div>
                     <div class="modal-footer py-2">
-                        <small class="text-muted me-auto"><code>${safeFullName}</code></small>
+                        <small class="text-muted me-auto"><code>${escapeHtml(fullName)}</code></small>
                         <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
                     </div>
                 </div>
             </div>
         </div>
     `;
-
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     const modalElement = document.getElementById('entityActionResultModal');
-    const modal = new bootstrap.Modal(modalElement, { backdrop: true, keyboard: true });
     modalElement.addEventListener('hidden.bs.modal', function () {
         modalElement.remove();
     });
-    modal.show();
+    bootstrap.Modal.getOrCreateInstance(modalElement, { backdrop: true, keyboard: true }).show();
+    return modalElement;
+}
+
+function _actionSpinner(text) {
+    return `<div class="text-center text-muted py-4">
+                <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+                ${escapeHtml(text)}
+            </div>`;
+}
+
+function openEntityActionModal(entityUri, actionFullName, label, description) {
+    const safeDescription = (description || '').trim()
+        ? escapeHtml(String(description).trim())
+        : '';
+    const descriptionBlock = safeDescription
+        ? `<p class="text-muted small mb-3">${safeDescription}</p>`
+        : '';
+    if (_entityActionIsJob(actionFullName)) {
+        _openJobActionModal(entityUri, actionFullName, label, descriptionBlock);
+        return;
+    }
+    _showEntityActionModal('bi-lightning-charge', label || actionFullName || 'Action',
+        actionFullName || '', descriptionBlock + _actionSpinner('Running action…'));
 
     _runEntityAction(entityUri, actionFullName).then(function (html) {
         const body = document.getElementById('entityActionResultModalBody');
         if (body) body.innerHTML = descriptionBlock + html;
     });
+}
+
+/**
+ * Map a Background Task status + Databricks life-cycle state to what the
+ * Job popup shows. Every state carries an icon and a label.
+ */
+function _jobRunStatus(taskStatus, lifeCycle) {
+    if (taskStatus === 'completed') {
+        return { icon: 'bi-check-circle-fill', tone: 'text-success', label: 'Succeeded', terminal: true };
+    }
+    if (taskStatus === 'failed') {
+        return { icon: 'bi-x-circle-fill', tone: 'text-danger', label: 'Failed', terminal: true };
+    }
+    if (taskStatus === 'cancelled') {
+        return { icon: 'bi-slash-circle', tone: 'text-warning', label: 'Cancelled', terminal: true };
+    }
+    if (lifeCycle === 'RUNNING') {
+        return { icon: 'bi-play-circle-fill', tone: 'text-primary', label: 'Running', terminal: false };
+    }
+    if (['PENDING', 'QUEUED', 'BLOCKED', 'WAITING_FOR_RETRY'].indexOf(lifeCycle) !== -1) {
+        return { icon: 'bi-hourglass-split', tone: 'text-secondary', label: 'Queued', terminal: false };
+    }
+    if (lifeCycle === 'TERMINATING') {
+        return { icon: 'bi-arrow-repeat', tone: 'text-primary', label: 'Finishing', terminal: false };
+    }
+    return { icon: 'bi-clock', tone: 'text-secondary', label: 'Starting', terminal: false };
+}
+
+function _jobStatusHtml(status, detail) {
+    return `<div class="d-flex align-items-center gap-2 fs-5">
+                <i class="bi ${status.icon} ${status.tone}" aria-hidden="true"></i>
+                <span class="fw-semibold">${escapeHtml(status.label)}</span>
+            </div>
+            ${detail ? `<div class="text-muted small mt-1">${escapeHtml(detail)}</div>` : ''}`;
+}
+
+/**
+ * Trigger a class Job: open the popup at once, report the verified run
+ * state, then follow its Background Task while the popup stays open.
+ */
+function _openJobActionModal(entityUri, actionFullName, label, descriptionBlock) {
+    const jobLabel = label || actionFullName || 'Job';
+    const modalElement = _showEntityActionModal('bi-play-circle', jobLabel, actionFullName || '',
+        descriptionBlock + _actionSpinner('Starting job…'));
+    let followTimer = null;
+    modalElement.addEventListener('hidden.bs.modal', function () {
+        if (followTimer) clearTimeout(followTimer);
+        followTimer = null;
+    });
+    const body = modalElement.querySelector('#entityActionResultModalBody');
+
+    _triggerEntityJob(entityUri, actionFullName).then(function (data) {
+        if (!document.body.contains(modalElement)) return;
+        if (!data.success) {
+            body.innerHTML = descriptionBlock + `<div class="alert alert-danger mb-0">${escapeHtml(data.message)}</div>`;
+            if (typeof showNotification === 'function') showNotification(data.message, 'error', 5000);
+            return;
+        }
+        if (typeof showNotification === 'function') {
+            showNotification(data.message || (jobLabel + ' was started'), 'success', 5000);
+        }
+        if (typeof refreshTasks === 'function') refreshTasks();
+
+        const runUrl = /^https?:\/\//i.test(data.run_page_url || '') ? data.run_page_url : '';
+        body.innerHTML = descriptionBlock + `
+            <div id="entityJobStatus">${_jobStatusHtml(_jobRunStatus('running', data.run_state), data.message)}</div>
+            <dl class="row small mt-3 mb-0">
+                <dt class="col-sm-3 text-muted">Run ID</dt>
+                <dd class="col-sm-9 font-monospace">${escapeHtml(String(data.run_id || '—'))}</dd>
+            </dl>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                ${runUrl ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttr(runUrl)}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Open run in Databricks</a>` : ''}
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-entity-job-tasks><i class="bi bi-list-task me-1"></i>Show Background Tasks</button>
+                <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Tracked in Background Tasks — you can close this window.</small>
+            </div>`;
+        const tasksBtn = body.querySelector('[data-entity-job-tasks]');
+        if (tasksBtn && typeof toggleTaskDropdown === 'function') {
+            tasksBtn.addEventListener('click', function (event) {
+                bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+                toggleTaskDropdown(event);
+            });
+        }
+        if (!data.task_id) return;
+
+        const follow = async function () {
+            followTimer = null;
+            try {
+                const resp = await fetch('/tasks/' + encodeURIComponent(data.task_id), { credentials: 'same-origin' });
+                const payload = resp.ok ? await resp.json() : null;
+                const task = payload && payload.task;
+                const target = document.getElementById('entityJobStatus');
+                if (!task || !target || !document.body.contains(modalElement)) return;
+                const lifeCycle = (task.result && task.result.life_cycle_state) || data.run_state;
+                const status = _jobRunStatus(task.status, lifeCycle);
+                target.innerHTML = _jobStatusHtml(status, task.error || task.message);
+                if (!status.terminal) followTimer = setTimeout(follow, 3000);
+            } catch (err) {
+                console.warn('[Action] Could not follow the job task:', err);
+            }
+        };
+        followTimer = setTimeout(follow, 3000);
+    });
+}
+
+async function _triggerEntityJob(entityUri, actionFullName) {
+    try {
+        const resp = await fetch('/api/v1/digitaltwin/nodes/action', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_uri: entityUri, action_full_name: actionFullName }),
+        });
+        const data = await resp.json().catch(function () { return {}; });
+        if (!resp.ok || !data.success) {
+            const detail = data.message || data.detail || data.error;
+            return { success: false, message: (typeof detail === 'string' && detail) || `The job could not be started (${resp.status}).` };
+        }
+        return data;
+    } catch (err) {
+        console.error('[Action] Job trigger failed:', err);
+        return { success: false, message: 'The job could not be started.' };
+    }
 }
 
 async function _runEntityAction(entityUri, actionFullName) {
@@ -396,7 +536,8 @@ async function _runEntityAction(entityUri, actionFullName) {
         }
         const data = await resp.json();
         if (!data.success) {
-            return `<div class="alert alert-danger mb-0">${escapeHtml(data.message || 'The action could not be executed.')}</div>`;
+            const failMsg = data.message || 'The action could not be executed.';
+            return `<div class="alert alert-danger mb-0">${escapeHtml(failMsg)}</div>`;
         }
 
         const rows = Array.isArray(data.rows) ? data.rows : [];

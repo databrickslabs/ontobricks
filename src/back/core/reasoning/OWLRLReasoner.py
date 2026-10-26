@@ -10,7 +10,8 @@ from typing import List, Set, Tuple
 from rdflib import Graph, Literal, URIRef, BNode
 
 from back.core.logging import get_logger
-from back.core.reasoning.models import InferredTriple, ReasoningResult
+from back.core.reasoning.results.InferredTriple import InferredTriple
+from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from back.core.reasoning.constants import (
     OWLRL_PROVENANCE,
     AXIOMATIC_PREFIXES,

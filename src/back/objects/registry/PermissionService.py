@@ -26,6 +26,7 @@ mode every user has unrestricted access.
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
 from back.core.databricks.DatabricksClient import DatabricksClient
 from back.core.databricks.constants import PERMISSIONS_APPS_PATH, SCIM_USERS_PATH
@@ -383,6 +384,12 @@ class PermissionService:
                 headers=headers,
                 timeout=5,
             )
+            if resp.status_code == 403:
+                logger.debug(
+                    "REST admin check forbidden for app %s; using fallback",
+                    app_name,
+                )
+                return None
             resp.raise_for_status()
             return self._extract_can_manage(resp.json())
         except Exception as e:
@@ -415,34 +422,33 @@ class PermissionService:
         registry_cfg: Dict[str, str],
         domain_folder: str,
         *,
-        force: bool = False,
+        for_update: bool = False,
     ) -> Dict[str, Any]:
-        """Load and cache per-domain permissions from the active store."""
-        now = time.time()
-        if not force:
-            cached = self._domain_perm_cache.get(domain_folder)
-            if cached and (now - cached[1]) < _CACHE_TTL_DOMAIN_PERMS:
-                return cached[0]
+        """Load and cache per-domain permissions; failed reads are never cached.
 
+        Authorization reads fail closed (empty grants). ``for_update`` reads skip the
+        cache and raise :class:`InfrastructureError` so an update cannot wipe grants.
+        """
+        now = time.time()
+        cached = None if for_update else self._domain_perm_cache.get(domain_folder)
+        if cached and (now - cached[1]) < _CACHE_TTL_DOMAIN_PERMS:
+            return cached[0]
         try:
             store = self._store_for(host, token, registry_cfg)
             data = store.load_domain_permissions(domain_folder)
-            self._domain_perm_cache[domain_folder] = (data, now)
-            logger.info(
-                "Loaded %d domain permission entries for %s (backend=%s)",
-                len(data.get("permissions", [])),
-                domain_folder,
-                store.backend,
-            )
-            return data
         except Exception as e:
-            logger.warning(
-                "Error loading domain permissions for %s: %s", domain_folder, e
-            )
-
-        empty: Dict[str, Any] = {"version": 1, "permissions": []}
-        self._domain_perm_cache[domain_folder] = (empty, now)
-        return empty
+            if for_update:
+                raise InfrastructureError("Cannot read domain permissions", detail=str(e)) from e
+            logger.warning("Error loading domain permissions for %s: %s", domain_folder, e)
+            return {"version": 1, "permissions": []}
+        self._domain_perm_cache[domain_folder] = (data, now)
+        logger.info(
+            "Loaded %d domain permission entries for %s (backend=%s)",
+            len(data.get("permissions", [])),
+            domain_folder,
+            store.backend,
+        )
+        return data
 
     def save_domain_permissions(
         self,
@@ -613,7 +619,7 @@ class PermissionService:
             token,
             registry_cfg,
             domain_folder,
-            force=True,
+            for_update=True,
         )
         entries = data.get("permissions", [])
 
@@ -660,7 +666,7 @@ class PermissionService:
             token,
             registry_cfg,
             domain_folder,
-            force=True,
+            for_update=True,
         )
         before = len(data.get("permissions", []))
         data["permissions"] = [
@@ -794,7 +800,7 @@ class PermissionService:
         for domain_folder, ops in by_domain.items():
             try:
                 data = self.load_domain_permissions(
-                    host, token, registry_cfg, domain_folder, force=True
+                    host, token, registry_cfg, domain_folder, for_update=True
                 )
                 entries: List[Dict[str, Any]] = data.get("permissions", [])
 

@@ -138,67 +138,6 @@ class CohortBuilder:
             return data_ns + uri[len(self._base_uri):]
         return uri
 
-    def _predicate_alias_map(self) -> Dict[str, str]:
-        """Return ``local_name → canonical_data_namespace_predicate`` built
-        from the triples already loaded into the cache.
-
-        Provides a last-resort fallback for predicate URIs that live in a
-        foreign namespace (e.g. ``https://ontobricks.com/ontology#hasclaim``
-        when the domain's ``base_uri`` is
-        ``https://databricks-ontology.com/Cust360Auto#``).  In that case
-        :meth:`_to_data_uri` cannot bridge the two namespaces, but the local
-        name ``hasclaim`` is the same in both — this map connects them.
-
-        The map is built once and stored in ``self._cache["predicate_alias"]``
-        so subsequent calls are free.  It is empty when no triples are cached
-        yet (callers must invoke :meth:`_load_triples` first).
-        """
-        if "predicate_alias" in self._cache:
-            return self._cache["predicate_alias"]
-        triples: List[Dict[str, str]] = self._cache.get("triples") or []
-        data_ns = self._data_namespace()
-        alias: Dict[str, str] = {}
-        for t in triples:
-            pred = t.get("predicate", "")
-            if not pred or pred == RDF_TYPE:
-                continue
-            norm = self._to_data_uri(pred)
-            local = extract_local_name(norm)
-            if not local:
-                continue
-            # Prefer the data-namespace form when multiple predicates share
-            # the same local name (e.g. if an ontology- and a data-form
-            # triple both exist in the graph).
-            if local not in alias or (data_ns and norm.startswith(data_ns)):
-                alias[local] = norm
-        self._cache["predicate_alias"] = alias
-        return alias
-
-    def _resolve_predicate(self, uri: str) -> str:
-        """Normalise a predicate URI for rule/hop lookup.
-
-        Extends :meth:`_to_data_uri` with a local-name fallback for
-        predicates that belong to a completely different namespace than
-        the domain's ``base_uri``.  This handles the common situation
-        where an ontology's properties were created under a shared /
-        default namespace (``https://ontobricks.com/ontology#name``)
-        while the data triples use the domain-specific data namespace
-        (``https://my-domain.com/Ontology/name``).
-        """
-        result = self._to_data_uri(uri)
-        if result != uri:
-            return result  # successfully normalised by _to_data_uri
-        # _to_data_uri left the URI unchanged — it may be from a foreign
-        # namespace.  Try the local-name alias built from the loaded triples.
-        if uri:
-            local = extract_local_name(uri)
-            if local:
-                alias = self._predicate_alias_map()
-                resolved = alias.get(local)
-                if resolved:
-                    return resolved
-        return result
-
     def _to_ontology_uri(self, uri: str) -> str:
         """Inverse of :meth:`_to_data_uri` — rewrite a data-namespace URI
         back to ontology form (``base_uri`` + ``#`` + local).
@@ -688,10 +627,11 @@ class CohortBuilder:
         # Delete by URI prefix — wipes both cohort entity triples (subject
         # under prefix) and membership triples (predicate=inCohort<RuleId>,
         # object under prefix).  Implementation lives on the backend.
+        deleted = 0
         delete_fn = getattr(self._store, "delete_cohort_triples", None)
         if callable(delete_fn):
             try:
-                delete_fn(self._graph_name, prefix, in_cohort)
+                deleted = int(delete_fn(self._graph_name, prefix, in_cohort) or 0)
             except Exception as exc:
                 logger.warning(
                     "CohortBuilder: delete_cohort_triples failed for %s: %s",
@@ -700,9 +640,27 @@ class CohortBuilder:
                 )
 
         triples = self._build_cohort_triples(rule, result)
+        inserted = 0
         if not triples:
-            return 0
-        return int(self._store.insert_triples(self._graph_name, triples))
+            inserted = 0
+        else:
+            inserted = int(self._store.insert_triples(self._graph_name, triples))
+        if (
+            (deleted != 0 or inserted > 0)
+            and getattr(self._store, "supports_adjacency", False) is True
+        ):
+            from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
+
+            logger.info(
+                "CohortBuilder: rebuilding adjacency index after cohort materialization "
+                "(deleted=%d, inserted=%d)",
+                deleted,
+                inserted,
+            )
+            rebuild_graph_cache_if_enabled(
+                self._store, self._graph_name, getattr(self, "_domain", None)
+            )
+        return inserted
 
     def materialize_to_uc(
         self,

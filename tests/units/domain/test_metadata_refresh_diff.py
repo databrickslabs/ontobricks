@@ -26,7 +26,7 @@ class _FakeClient:
     def get_table_comment(self, catalog, schema, table):
         return ""
 
-    def check_table_select_permission(self, catalog, schema, table):
+    def check_table_select_permission(self, catalog, schema, table, **kwargs):
         return {"can_select": True, "error": ""}
 
 

@@ -1,5 +1,27 @@
 # OntoBricks Deployment Guide
 
+<!-- toc -->
+**Contents**
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [1. Local Development Setup](#1-local-development-setup)
+- [2. Databricks Apps Deployment (DAB)](#2-databricks-apps-deployment-dab)
+- [3. Unity Catalog Permissions for the Service Principal](#3-unity-catalog-permissions-for-the-service-principal)
+- [4. Permission Management](#4-permission-management)
+- [5. Deploying to a New Workspace](#5-deploying-to-a-new-workspace)
+- [6. Triple Store & Graph DB Backend Configuration](#6-triple-store--graph-db-backend-configuration)
+- [7. MCP Server Deployment (Databricks Playground)](#7-mcp-server-deployment-databricks-playground)
+- [8. MLflow Agent Observability](#8-mlflow-agent-observability)
+- [9. DAB Reference](#9-dab-reference)
+- [10. Full Deployment Checklist](#10-full-deployment-checklist)
+- [11. Troubleshooting](#11-troubleshooting)
+- [12. Production Considerations](#12-production-considerations)
+- [Deployment checklist](#deployment-checklist)
+- [Asset Bundle reference](#asset-bundle-reference)
+- [Production sizing questionnaire](#production-sizing-questionnaire)
+<!-- /toc -->
+
 ## Overview
 
 This guide covers deploying OntoBricks both locally for development and to Databricks Apps for production use, including the optional MCP server for Databricks Playground integration and instructions for deploying to a new workspace.
@@ -64,7 +86,7 @@ This section provides detailed diagrams covering the OntoBricks component topolo
                     │  │   │  (Jinja2 + JS)    │  │   /api/v1/*      │  │   /graphql      │ │    │
                     │  │   └──────────────────┘  └──────────────────┘  └─────────────────┘ │    │
                     │  │                                                                     │    │
-                    │  │   LLM Agents  (Databricks Model Serving / Foundation Models):      │    │
+                    │  │   LLM Agents  (domain-saved AI Gateway or Model Serving):          │    │
                     │  │   OWL Generator · Auto-Assignment · Ontology Assistant             │    │
                     │  │   Digital-Twin Chat · Cohort Generator · Auto-Icon Assign          │    │
                     │  └────────────────────────┬────────────────────────────────────────── ┘    │
@@ -87,9 +109,9 @@ This section provides detailed diagrams covering the OntoBricks component topolo
                     │  └──────────────────┘  └─────────────────────────┘  │   tables        │  │
                     │                                                       │ · Graph triple  │  │
                     │  ┌────────────────────────┐  ┌──────────────────┐   │   store         │  │
-                    │  │  Model Serving / FMs    │  │ MLflow Tracking  │   └─────────────────┘  │
-                    │  │  (LLM endpoints, SQL    │  │ /Shared/onto…    │                        │
-                    │  │   Wizard)               │  │ (agent traces)   │                        │
+                    │  │  AI Gateway / Serving   │  │ MLflow Tracking  │   └─────────────────┘  │
+                    │  │  (domain LLM targets)   │  │ /Shared/onto…    │                        │
+                    │  │                         │  │ (agent traces)   │                        │
                     │  └────────────────────────┘  └──────────────────┘                        │
                     └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -187,7 +209,7 @@ OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (
 │  mcp-ontobricks       $DATABRICKS_APP_PORT   https://<ws>/apps/…       Databricks SSO        │
 │  Lakebase Postgres    5432 (TLS)             PGHOST injected by Apps   OAuth JWT (no passwd)  │
 │  SQL Warehouse         443 (HTTPS)           internal via SDK           OAuth (SP token)      │
-│  Model Serving / FMs   443 (HTTPS)           internal via SDK           OAuth (SP token)      │
+│  AI Gateway / Serving  443 (HTTPS)           internal via SDK           OAuth (SP token)      │
 │  MLflow Tracking        443 (HTTPS)           internal via SDK           OAuth (SP token)      │
 └────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -224,6 +246,8 @@ All four layers must be satisfied before the application is fully functional. Th
 ║  CATALOG  <source_catalog>            USE CATALOG                      Data Source picker ║
 ║  SCHEMA   <src_cat>.<src_sch>         USE SCHEMA                       R2RML builds       ║
 ║  TABLE    <src_cat>.<src_sch>.<tbl>   SELECT                           per mapping entry  ║
+║  MODEL SERVICE  <cat>.<sch>.<svc>     EXECUTE (or inherited            Domain → General    ║
+║                                       ALL_PRIVILEGES)                  → AI Gateway picker ║
 ║                                                                                         ║
 ║  ► Grant once as UC admin (see §3 for full SQL snippets)                                ║
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
@@ -262,6 +286,36 @@ All four layers must be satisfied before the application is fully functional. Th
 ```
 
 > **Deployment order matters.** Layer 1 bootstrap must run before the first user logs in. Layer 2 grants must be in place before any build or sync. Layer 3 grants for `ontobricks_registry` must be applied after the registry schema is initialized (step 14 in the Full Deployment Checklist). Layer 3 grants for `ontobricks_graph` must be applied after the first Knowledge Graph build creates that schema.
+
+#### On-Behalf-Of (OBO) data-plane identity — v0.9.0
+
+Since v0.9.0, **Unity Catalog data reads run on-behalf-of the signed-in user**,
+not the app service principal. Databricks Apps forward the caller's token on the
+`x-forwarded-access-token` header; `PermissionMiddleware` stamps it onto a
+request-scoped identity and the data-plane client factory
+(`DatabricksHelpers.get_data_plane_client`) mints a **user-token** Databricks
+client for every non-build UC read: SPARQL/GraphQL Delta reads, Graph Explorer
+Delta views, mapping preview / test-query / `information_schema` browse, Class
+Action `EXECUTE`, and virtual-attribute compute.
+
+Implications for Layer 2:
+
+- The **SELECT / USE / EXECUTE** grants in the table above must now be held by
+  **each end user** (or a group they belong to), not only the app SP. The app SP
+  still needs them for **build** (`CREATE VIEW` / triplestore materialisation),
+  which stays on the control-plane principal.
+- The read path is **fail-closed**: in App mode a UC data read with no forwarded
+  user token is denied (`AuthorizationError`) — it never silently falls back to
+  the SP.
+- **Lakebase Postgres and Neo4j reads keep the service-principal identity**
+  (they carry no UC identity). Access to those backends is gated by **Team
+  membership**: the caller must hold at least the **Viewer** role on the loaded
+  domain (`assert_domain_graph_read`); App admins bypass the Team check.
+- The **MCP server** authenticates to the main app with its own M2M principal
+  **and forwards** the end-user `x-forwarded-email` / `x-forwarded-access-token`
+  so the same OBO + Team rules apply to MCP-driven reads.
+- **Local dev is unchanged** — OBO and the Team gate are no-ops outside App mode
+  (`is_databricks_app()` guards), so a single developer token keeps working.
 
 ---
 
@@ -348,7 +402,7 @@ MLFLOW_TRACKING_URI=databricks
 #### Graph backend selection (No Backend / Lakebase / Delta / Neo4j)
 
 The Graph DB engine is chosen **per domain** (`graph_backend`: `none`,
-`lakebase`, `databricks`, or `neo4j`) under **Domain → Information → Knowledge
+`lakebase`, `databricks`, or `neo4j`) under **Domain → General → Knowledge
 Graph**; `none` creates an ontology-only domain and requires no graph
 infrastructure. Connection knobs live under **Settings → Back end**. Lakebase
 and the Delta (`databricks`) engine need no extra credentials beyond the
@@ -467,7 +521,7 @@ Edit the workspace-specific defaults in `scripts/deploy.config.sh`:
 | `DEFAULT_INSTANCE_ID` | Derives `APP_NAME` / `MCP_APP_NAME` / `DAB_TARGET` | Single knob for a deploy instance (e.g. `07x` → `ontobricks-07x`, target `dev-lakebase-07x`). |
 | `DEFAULT_APP_NAME` | `databricks.yml > var.app_name` and `DATABRICKS_APP_NAME` at runtime | Usually derived as `ontobricks-${DEFAULT_INSTANCE_ID}`; override only if you must. |
 | `DEFAULT_MCP_APP_NAME` | `databricks.yml > var.mcp_app_name` | Deployed name of the MCP companion (must start with `mcp-`). |
-| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | Auto: `dev-lakebase-<INSTANCE_ID>`. Force `dev-lakebase` only when upgrading a **pre-INSTANCE_ID** (0.6.x) deploy in place — see Upgrade Notes in `releases/ReleaseNotes_V0.7.0.md` and `docs/DEPLOY_CHECKLIST.md` §5. |
+| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | Auto: `dev-lakebase-<INSTANCE_ID>`. Force `dev-lakebase` only when upgrading a **pre-INSTANCE_ID** (0.6.x) deploy in place — see Upgrade Notes in `releases/ReleaseNotes_V0.7.0.md` and [In-place app upgrade](#5-in-place-app-upgrade-06x--070) in the deployment checklist below. |
 | `DEFAULT_WAREHOUSE_ID` | `app.yaml > DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT` + the `sql-warehouse` bundle resource | **SQL Warehouses** → your warehouse → **Connection details**. |
 | `DEFAULT_REGISTRY_CATALOG` / `_SCHEMA` / `_VOLUME` | Bundle `volume` resource (`uc_securable: <cat>.<schema>.<volume>`) | UC namespace that hosts the binary-artefact volume + the triplestore VIEW. |
 | `DEFAULT_LAKEBASE_PROJECT` | `databricks.yml > var.lakebase_project` | Autoscaling **project id** (final segment of `projects/<id>`). |
@@ -625,7 +679,7 @@ or a manual `bootstrap-lakebase-perms.sh` run.
 
 | Schema | When to bootstrap | Who runs it |
 |--------|-------------------|-------------|
-| Registry (`ontobricks_registry`) | After **Settings → Registry → Initialize** has created the schema | `deploy.sh` automatically (`LAKEBASE_REGISTRY_SCHEMA` in `deploy.config.sh`) |
+| Registry (`ontobricks_registry`) | After `make deploy` has created the schema | `deploy.sh` automatically (`LAKEBASE_SCHEMA` in `deploy.config.sh`) |
 | Graph DB (`ontobricks_graph`) | After the **first Knowledge Graph Build** has created the schema | In-app "Create graph DB" flow, or manual run with the graph project/branch/database |
 
 The script grants:
@@ -696,30 +750,26 @@ After the first deployment, bind the app resources in the Databricks workspace U
 1. Go to **Compute > Apps** and open your main app (placeholder **`ontobricks-XXX`** — same string as `resources.apps.ontobricks_dev_app.name` in `databricks.yml`).
 2. Click **Resources**
 3. Bind `sql-warehouse` to a running SQL Warehouse
-4. Bind `volume` to the Unity Catalog Volume for the project registry (e.g., `your_catalog.your_schema.registry` — match `registry_*` variables in `databricks.yml`)
+4. Bind `volume` to the Unity Catalog Volume used as the registry **identifier** and for ad-hoc export bundles (e.g., `your_catalog.your_schema.registry` — match `registry_*` variables in `databricks.yml`). Domain JSON and Knowledge Store documents live in **Lakebase**, not on this Volume.
 5. Repeat for **`mcp-ontobricks`** (same warehouse and volume)
 6. For **`dev-lakebase`**, confirm the **postgres** resource is bound to the Lakebase database you configured (no extra UI step if deploy succeeded).
 7. Verify both apps show status **Running**
 
 > **Note:** Resource bindings persist across redeployments — you only need to do this once per workspace. Once the `sql-warehouse` and `volume` resources are bound, the corresponding controls in the Settings page are **locked**. To change them, update the resource bindings in the Apps UI and restart the app.
 
-### Step 8 — Initialize the registry (first deploy only)
+### Step 8 — Registry initialize (upgrade / repair)
 
-If the volume is empty (first deployment):
+`make deploy` already creates missing UC/Lakebase resources and runs
+`LakebaseRegistryStore.initialize()`. A first install does **not** need
+Settings → Registry → Initialize.
 
-1. Open the app URL
-2. Go to **Settings > Registry**
-3. Click **Initialize** to bootstrap the registry — on the Lakebase
-   backend this also self-applies the **Postgres schema** grants the app +
-   MCP service principals need (results shown under **Permission Grants**).
-   Control-plane re-grants (`CAN_USE` on the Lakebase project, UC
-   `ALL_PRIVILEGES` on the catalog) are best-effort: the app SP usually
-   lacks `CAN_MANAGE` / catalog `MANAGE`, so those lines may warn even
-   when deploy already applied them. If UC privileges are actually
-   missing, re-run `scripts/bootstrap/lakebase-perms.sh` with `-c` as a
-   workspace admin (do **not** need to elevate the app SP to `CAN_MANAGE`).
-   Use **Repair permissions** on the Lakebase Connection panel to re-apply
-   schema grants later (e.g. after a rebind).
+Use **Initialize** in the app as an upgrade/repair path (new columns,
+re-pin the UC triplet, or **Repair permissions** after a rebind).
+Control-plane re-grants (`CAN_USE` on the Lakebase project, UC
+`ALL_PRIVILEGES` on the catalog) are best-effort in-app: the app SP
+usually lacks `CAN_MANAGE` / catalog `MANAGE`. If UC privileges are
+missing, re-run `scripts/bootstrap/lakebase-perms.sh` with `-c` as a
+workspace admin.
 
 ### Step 9 — Verify
 
@@ -838,10 +888,19 @@ When OntoBricks detects that it is running as a Databricks App with resource bin
 
 | Resource | What is locked | How to change |
 |----------|---------------|---------------|
-| `sql-warehouse` | SQL Warehouse dropdown + refresh button | Rebind the `sql-warehouse` resource in **Compute > Apps > Resources** |
+| `sql-warehouse` | Databricks-section warehouse dropdown + refresh button; the Lakehouse Build selector and transport toggle remain editable for admins | Rebind the default `sql-warehouse` resource in **Compute > Apps > Resources**, or save an admin override under **Settings → Lakehouse → SQL Warehouse** |
 | `volume` | Registry Change button | Rebind the `volume` resource in **Compute > Apps > Resources** |
 
 The **Initialize** button remains available when the volume resource is bound but the registry has not been initialized yet (no `.registry` marker). This allows first-time setup without unlocking the UI.
+
+The bound build warehouse must be a classic or serverless SQL warehouse, not
+Lakehouse//RT: Knowledge Graph builds execute `CREATE VIEW`, CTAS, and writes.
+Configure Lakehouse//RT separately under **Settings → Lakehouse → SQL
+Warehouse** when low-latency graph reads are required.
+
+That panel always shows both roles. Query is disabled and mirrors Build until
+**Use Lakehouse//RT for queries** is enabled. RT mode requires a distinct Query
+warehouse; disabling RT and applying removes the override.
 
 In **local development mode** (no Databricks App resources), all Settings controls remain fully editable.
 
@@ -878,6 +937,7 @@ The main app's service principal performs the following operations at runtime. E
 | 6 | File I/O under `/Volumes/<registry_catalog>/<registry_schema>/<registry_volume>/` (projects, domains, history log, registry artefacts) | Registry volume | `READ VOLUME` + `WRITE VOLUME`. |
 | 7 | `POST /api/2.1/unity-catalog/volumes` — only triggered from **Settings → Registry → Initialize** when the volume does not yet exist | Registry schema | Schema `CREATE VOLUME` (skip if you create the volume manually up front). |
 | 8 | `CREATE SCHEMA IF NOT EXISTS`, `CREATE TABLE`, `INSERT … COPY FROM STDIN`, `SELECT`, `DELETE` on the App-bound Lakebase Postgres database (Graph DB engine + optionally registry hybrid backend) | Lakebase database | Lakebase user role with privileges on the configured schema (default `ontobricks_graph`). Authentication uses the App-injected OAuth token. |
+| 9 | List and invoke Unity AI Gateway model services selected in Domain → General → AI (Ontology Assistant, Wizard, Auto-Map, Graph Chat, …) | Each Gateway model service (and its catalog/schema) | `USE CATALOG` + `USE SCHEMA` + `EXECUTE`. An inherited effective `ALL_PRIVILEGES` grant also counts as executable. Legacy Model Serving endpoints use Serving permissions, not this UC chain. |
 
 All the above run through the **SQL Warehouse** bound to the app (`sql-warehouse` resource) on behalf of the app SP. The `CAN_USE` grant on the warehouse covers compute access; data access is controlled by UC.
 
@@ -930,7 +990,7 @@ Prefer the explicit list above for a production workspace because `ALL PRIVILEGE
 
 ### 3.3 — Source data grants (customer tables/views)
 
-For every table or view referenced in an R2RML mapping (i.e. anything that appears in the **Data Sources** tab of a domain), the app SP needs to read the data:
+For every table or view referenced in an R2RML mapping (i.e. anything that appears in the **Data Assets** tab of a domain), the app SP needs to read the data:
 
 ```sql
 GRANT USE CATALOG ON CATALOG `<source_catalog>`                               TO `<app-sp>`;
@@ -944,6 +1004,19 @@ GRANT SELECT      ON TABLE   `<source_catalog>`.`<source_schema>`.`<table>`   TO
 ```
 
 If any mapping `sql_query` joins tables from multiple schemas or catalogs, repeat the `USE CATALOG` / `USE SCHEMA` / `SELECT` chain for each. The VIEW creation in step 3 will fail with `TABLE_OR_VIEW_NOT_FOUND` or `PERMISSION_DENIED` if one is missing.
+
+### 3.3.1 — AI Gateway model services
+
+Custom Unity AI Gateway services selected in **Domain → General → AI** must
+be executable by the app service principal. Discovery lists a service only when
+effective privileges include `EXECUTE` or inherited `ALL_PRIVILEGES`
+(`GET /api/2.1/unity-catalog/effective-permissions/model_service/{name}`).
+
+Grant `USE CATALOG` and `USE SCHEMA` on the catalog and schema that host the
+service, plus `EXECUTE` on the model service (or inherit `ALL_PRIVILEGES` from
+the catalog). `system.ai.*` Foundation Model Gateway services follow the same
+chain when they appear in the picker. Legacy Model Serving endpoints are listed
+separately and do not use this UC grant.
 
 ### 3.4 — What you do **not** need to grant
 
@@ -971,6 +1044,30 @@ DROP TABLE IF EXISTS `<registry_catalog>`.`<registry_schema>`.`triplestore_<doma
 ```
 
 Once dropped, the app SP recreates the object as a VIEW and owns it from then on.
+
+Settings → Lakehouse Delete must also drop graph-index companions
+(`_adj_out`, `_adj_in`, `_entity_search`, `_entity_search_asserted`, `_props`).
+Those tables are grouped with the domain gateway view; a purge that leaves them
+behind will show leftover `triplestore_<domain>_v<n>_*` objects in Catalog.
+
+### 3.5a — Known pitfall: app SP not authorized on the SQL warehouse
+
+Knowledge Graph builds connect as the **app service principal**, not the
+signed-in user. After switching the bound warehouse (for example an empty
+`DEFAULT_WAREHOUSE_ID` resolving to Serverless Starter), DAB may not replay
+`CAN_USE` onto the new endpoint. The build fails in ~200ms with:
+
+```
+PERMISSION_DENIED: <app-sp> is not authorized to use this SQL Endpoint.
+```
+
+`make bootstrap-perms` (also run by `make deploy`) grants `CAN_USE` on the
+warehouse bound to the app. To repair an existing sandbox without redeploying:
+
+```bash
+databricks warehouses update-permissions <warehouse_id> \
+  --json '{"access_control_list":[{"service_principal_name":"<app-sp>","permission_level":"CAN_USE"}]}'
+```
 
 ### 3.6 — Granting when the SP ID is unknown yet
 
@@ -1010,7 +1107,7 @@ OntoBricks includes a built-in permission system that controls who can access th
 When no permissions are configured yet, only users with **CAN_MANAGE** on the Databricks App have access. Everyone else is blocked until an admin adds them via the Permissions tab.
 
 Editors and Builders can browse Unity Catalog catalogs and schemas from the
-domain's **Data Sources** panel and can import, update, or remove its tables.
+domain's **Data Assets** panel and can import, update, or remove its tables.
 They do not need `CAN_MANAGE` for these domain operations. Shared application
 configuration, including SQL Warehouse selection, remains admin-only.
 
@@ -1173,8 +1270,8 @@ scripts/deploy.sh -t dev-lakebase
 
 ### 5.6 — Initialize and verify
 
-1. Open the app URL
-2. Go to **Settings > Registry > Initialize** (if the volume is empty)
+1. Open the app URL — the registry schema is created by `make deploy`.
+2. Use **Settings > Registry > Initialize** only if you need an upgrade/repair.
 3. Verify both apps are **Running**: `databricks apps get ontobricks-XXX` and `databricks apps get mcp-ontobricks`
 
 ### 5.7 — Refresh the MCP server URL after the first deploy
@@ -1213,10 +1310,8 @@ the bundle, and restarts both apps.
 [ ] 10. Grant UC privileges to each app's service principal (see §3):
         registry USE CATALOG / USE SCHEMA / CREATE TABLE / CREATE VIEW +
         volume READ/WRITE + source-table SELECT
-[ ] 11. Open app → Settings → Registry → Initialize
-[ ] 12. Re-run make deploy (or scripts/bootstrap/lakebase-perms.sh) so the
-        registry / graph / sync schema GRANTs apply against the just-
-        created schemas
+[ ] 11. Open app → Settings → Registry → Initialize only for upgrade/repair
+[ ] 12. Re-run make deploy (or scripts/bootstrap/lakebase-perms.sh) if grants need a refresh
 [ ] 13. Verify both apps are RUNNING
 [ ] 14. Re-run make deploy so ONTOBRICKS_URL is resolved and rendered
 [ ] 15. Verify both apps restart successfully
@@ -1235,10 +1330,10 @@ The Delta view is created by R2RML on a Databricks SQL Warehouse and persists tr
 
 ### Lakebase Postgres (`graph`, engine `lakebase`) — Bound by `databricks.yml`
 
-The Graph DB layer runs on the App-bound Lakebase Postgres instance. The Apps runtime injects `PGHOST` / `PGPORT` / `PGDATABASE` / `PGUSER` and OntoBricks mints a short-lived OAuth token via `WorkspaceClient().config.authenticate()`. Two write modes are available:
+Two write modes are available. **Settings → Lakebase** proposes Managed sync; omitted `sync_mode` still means `app_managed` at runtime:
 
-- `app_managed` (default): the FastAPI app streams R2RML rows in `fetchmany` batches and ingests via `COPY FROM STDIN` + `INSERT … ON CONFLICT DO NOTHING`.
-- `managed_synced`: Databricks Lakeflow keeps a Postgres synced table in lock-step with the Delta view; OntoBricks orchestrates `SyncedTableManager.ensure` + `trigger_and_wait`. A writable companion table absorbs reasoning / cohort writes; readers see both via a UNION view.
+- `managed_synced` (Settings proposal): Databricks Lakeflow Snapshot-syncs a Postgres table from the R2RML view (`SyncedTableManager.ensure` + `trigger_and_wait`). Triggered/Continuous are not available (the view has no CDF). A writable companion table absorbs reasoning / cohort writes; readers see both via a UNION view.
+- `app_managed` (runtime fallback when the key is omitted): the FastAPI app streams R2RML rows in `fetchmany` batches and ingests via `COPY FROM STDIN` + `INSERT … ON CONFLICT DO NOTHING`.
 
 The `scripts/bootstrap/lakebase-perms.sh` script grants the app SP the required Lakebase / Postgres privileges (`CREATE` on the schema, `INSERT/SELECT/DELETE` on the per-domain tables). Run it once after the bundle is deployed.
 
@@ -1410,9 +1505,9 @@ OntoBricks agents are instrumented with MLflow tracing. When deployed to Databri
 
 ```
 AGENT (run_agent)
-├── LLM (_call_llm)        — endpoint, tokens, latency
+├── LLM (call_serving_endpoint) — AI Gateway or Serving target, tokens, latency
 ├── TOOL (tool:get_metadata) — arguments, result
-├── LLM (_call_llm)        — next iteration
+├── LLM (call_serving_endpoint) — next iteration
 ├── TOOL (tool:execute_sql)  — SQL query, result
 └── ...
 ```
@@ -1574,8 +1669,8 @@ Use this checklist when deploying OntoBricks from scratch on any workspace:
 [ ] 12. App self-permissions:
         make bootstrap-perms
         (already invoked by `make deploy`, but safe to re-run anytime.)
-[ ] 13. Open app URL → Settings → Registry → Initialize (creates the Postgres schema)
-[ ] 14. Re-run Lakebase GRANT bootstrap so the now-existing schemas pick up USAGE/DML:
+[ ] 13. Registry schema: created by `make deploy`. Settings → Registry → Initialize is upgrade/repair only.
+[ ] 14. Re-run Lakebase GRANT bootstrap if needed:
         make bootstrap-lakebase
         (also runs as part of `make deploy`; idempotent.)
 [ ] 15. Verify main app is RUNNING:
@@ -1612,10 +1707,12 @@ databricks apps list-deployments ontobricks-XXX
 
 ### "Databricks credentials not configured"
 
-The agents need OAuth credentials to call the Foundation Model API. In a Databricks App, these are resolved automatically via the service principal. If you see this error:
+The agents need OAuth credentials to call the domain LLM (AI Gateway or Model
+Serving). In a Databricks App, these are resolved automatically via the service
+principal. If you see this error:
 
 1. Verify the app is running as a Databricks App (not locally)
-2. Check that the LLM endpoint is configured in the project settings
+2. Check that an LLM is saved in Domain → General → AI (or choose **No LLM** if AI is intentionally disabled)
 3. Review app logs for OAuth token resolution errors
 
 ### Connection Errors
@@ -1689,7 +1786,7 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 - **Structured JSON logs**: Set `LOG_FORMAT=json` to emit one JSON object per log line — ideal for log aggregation and search
 - **Request timing**: Every non-static request is logged with method, path, status code, and duration in milliseconds
 - **Thread pool**: Tune concurrent blocking work via `ONTOBRICKS_THREAD_POOL_SIZE` (default `20`)
-- **Health checks**: `GET /health` runs a comprehensive readiness probe (`/tmp` + session/log dirs, Databricks auth, SQL warehouse, registry UC volume read+write, registry catalog/schema view DDL, Lakebase USAGE) and returns `{status, summary:{ok,warnings,errors}, checks:[…]}`. The endpoint always returns HTTP 200 — external probes should look at the top-level `status` and `summary.errors` fields rather than the HTTP code, so a single flickering dependency does not pull the app out of rotation.
+- **Health checks**: `GET /health` is a public, cheap liveness probe — it only checks that the temp and session directories are writable and returns `{status, version, service, timestamp}`, with no per-check detail or error text. It always returns HTTP 200. The full readiness probe (Databricks auth, SQL warehouse, registry catalog/schema DDL, Lakebase USAGE, …) lives at the admin-only `GET /settings/diagnostics/readiness` and returns `{status, summary:{ok,warnings,errors}, checks:[…]}`; Settings → Health → Databricks calls it. If the app fails to start, the fallback `/health` and `/` return a generic message — the traceback is only in the app logs.
 - **Agent traces**: View under **Machine Learning > Experiments > `/Shared/ontobricks-agents`** — each agent call shows a span tree with inputs, outputs, latency, and token usage
 
 ### Updating
@@ -1703,3 +1800,593 @@ and applies pending registry SQL:
 ```bash
 scripts/update-deployed-app.sh <UI_APP_NAME> <MCP_APP_NAME>
 ```
+
+---
+
+## Deployment checklist
+
+Operator preflight for a first deploy or a new workspace. Automate most checks
+with:
+
+```bash
+make deploy-check
+# or, equivalently:
+scripts/_internal/check-deploy-prerequisites.sh
+scripts/deploy.sh --dry-run
+```
+
+---
+
+### 1. Local workstation
+
+| Requirement | Why | How to verify |
+|-------------|-----|---------------|
+| **Python ≥ 3.10** | App + tooling | `python3 --version` |
+| **uv** | Dependency install (`make install`, `make setup`) | `uv --version` (setup.sh installs it if missing) |
+| **Databricks CLI ≥ 0.250.0** | Bundle deploy, bootstrap scripts | `databricks version` |
+| **python3** | JSON parsing, app.yaml render | `python3 --version` |
+| **psql** (libpq client) | `bootstrap-lakebase-perms.sh`, SQL upgrade scripts | `psql --version` — macOS: `brew install libpq && brew link --force libpq` |
+| **curl** | `setup-lakebase.sh` provisioning API calls | `curl --version` |
+| **Git clone + venv** | Project source | `make setup` or `make install` |
+
+Local-only check:
+
+```bash
+scripts/_internal/check-deploy-prerequisites.sh --local
+```
+
+---
+
+### 2. Databricks CLI authentication
+
+| Requirement | Why | How to verify |
+|-------------|-----|---------------|
+| **Authenticated profile** | Every deploy / bootstrap step | `databricks current-user me` |
+| **Correct workspace profile** | Avoid granting on the wrong project | Set `DEFAULT_DATABRICKS_PROFILE` inferences in `scripts/deploy.config.sh` |
+
+```bash
+databricks auth login --host https://<workspace> --profile <profile>
+```
+
+---
+
+### 3. Workspace resources (created if missing on `make deploy`)
+
+Configure in `scripts/deploy.config.sh` (single source of truth).
+`make deploy` on a Lakebase target creates missing catalog, schema,
+Lakebase project/database, and initializes the Postgres registry schema.
+
+| Resource | Config variable(s) | Permission you need |
+|----------|------------------|---------------------|
+| **SQL warehouse** | `DEFAULT_WAREHOUSE_ID` (empty → workspace Serverless Starter Warehouse) | CAN USE |
+| **Unity Catalog catalog** | `DEFAULT_REGISTRY_CATALOG` | USE CATALOG, CREATE CATALOG (first time) |
+| **UC schema** | `DEFAULT_REGISTRY_SCHEMA` | CREATE SCHEMA on the catalog (first time) |
+| **Lakebase project** | `DEFAULT_LAKEBASE_PROJECT` | CAN USE; `setup-lakebase.sh` is invoked by `make deploy` when missing |
+| **Lakebase branch** | `DEFAULT_LAKEBASE_BRANCH` | Usually `production` |
+| **Postgres database (datname)** | `DEFAULT_LAKEBASE_DATABASE` | Created by `setup-lakebase.sh` — use `status.postgres_database` from `list-databases`, **not** the hyphenated `db-…` id |
+| **Postgres registry schema** | `DEFAULT_LAKEBASE_SCHEMA` | Created by `make deploy` (`LakebaseRegistryStore.initialize()`) |
+| **Databricks Apps (sandbox)** | `DEFAULT_APP_NAME`, `DEFAULT_MCP_APP_NAME` | Created by `make deploy` on first run |
+
+Verify resources:
+
+```bash
+databricks warehouses get <WAREHOUSE_ID>
+databricks postgres list-databases "projects/<project>/branches/<branch>" -o json
+```
+
+---
+
+### 4. Lakebase bootstrap (`bootstrap-lakebase-perms.sh`)
+
+Run automatically on every `dev-lakebase` deploy (`make deploy`), or manually:
+
+```bash
+make bootstrap-lakebase
+```
+
+| Requirement | Why |
+|-------------|-----|
+| **psql on PATH** | Connects with a minted Lakebase JWT |
+| **CLI authenticated as schema owner** (or GRANT OPTION) | Applies GRANTs + idempotent DDL migrations |
+| **Active Postgres endpoint** | Project/branch must expose a host via `/api/2.0/postgres/.../endpoints` |
+| **Registry schema exists** | `make deploy` creates it. CAN_USE + `pgcrypto` are applied even before tables exist; schema GRANTs need the schema |
+| **Apps deployed** | Service principal ids are resolved from existing apps (warn-only on first deploy) |
+| **`pgcrypto` in `public`** | Companion `__app` tables need `digest(..., 'sha256')`. Step 1b installs it **in `public`** and relocates a stranded copy — an extension sitting in a graph schema is invisible once that schema changes. Applies **per database**, so the graph DB needs it too |
+
+Preflight (read-only):
+
+```bash
+scripts/_internal/check-deploy-prerequisites.sh --lakebase
+```
+
+---
+
+### 5. In-place app upgrade (0.6.x → 0.7.0)
+
+v0.7.0 derives app name + DAB target from `DEFAULT_INSTANCE_ID`
+(`ontobricks-<id>`, `dev-lakebase-<id>`). Changing the app name under the **same**
+Terraform state is a destroy-then-create (Databricks app names are immutable).
+Deploy preflight blocks that unless you confirm.
+
+| Goal | What to set | Result |
+|------|-------------|--------|
+| **Refresh the live 0.6.x app** | `DEFAULT_INSTANCE_ID=<suffix of live app>` (e.g. `060` for `ontobricks-060`) **and** `DAB_TARGET=dev-lakebase` (or `DEFAULT_DAB_TARGET="dev-lakebase"` in `deploy.config.sh`) | Same app URL; existing unsuffixed state updated |
+| **New parallel instance** | New `DEFAULT_INSTANCE_ID` only (default `07x`) | New app + new `dev-lakebase-<id>` state; old app left running |
+| **Rename under same target** | Different app name, same `DAB_TARGET` | **Destroys** the old app — confirm via preflight / `ALLOW_APP_RENAME=1` |
+
+In-place example:
+
+```bash
+DEFAULT_INSTANCE_ID=060 DAB_TARGET=dev-lakebase make deploy
+```
+
+Keep Lakebase / UC variables pointed at the same registry. Then apply registry
+DDL (§6) if you have not already via `make bootstrap-lakebase`.
+
+Full narrative: `releases/ReleaseNotes_V0.7.0.md` → Upgrade Notes → *Keep the
+existing Databricks app*.
+
+---
+
+### 6. Registry DB upgrades (0.4 → 0.5 → 0.6 → 0.7 → 0.8)
+
+For **in-place upgrades** of an existing Lakebase registry, schema DDL must be applied **as the schema owner**. OntoBricks applies the same objects in four ways (pick one):
+
+1. **`make bootstrap-lakebase`** / `scripts/bootstrap/lakebase-perms.sh` (recommended — idempotent Step 2b; runs automatically from `make deploy`)
+2. **`scripts/migrations/upgrade_0.4_to_0.5.sql`** — adds `domain_versions.status` + backfill from `mcp_enabled`
+3. **`scripts/migrations/upgrade_0.5_to_0.6.sql`** — collaborative tables, graph analytics, edit locks, change events
+4. **`scripts/migrations/upgrade_0.6_to_0.7.sql`** — generic scheduled-task columns on `schedules` / `schedule_runs` + unique-constraint swap
+5. **`scripts/migrations/upgrade_0.7_to_0.8.sql`** — `domains.mcp_policy` (per-domain MCP tool + context policy). No backfill: the `{}` default reproduces pre-0.8 behaviour
+
+Preflight reports **pending** or **stale** migration objects before deploy:
+
+```bash
+python3 scripts/_internal/_lakebase_preflight.py \
+  --project "$LAKEBASE_PROJECT" \
+  --branch "$LAKEBASE_BRANCH" \
+  --database "$LAKEBASE_DATABASE" \
+  --schema "$LAKEBASE_SCHEMA"
+```
+
+Manual upgrade example (0.7 → 0.8):
+
+```bash
+psql "host=<endpoint> dbname=<datname> sslmode=require user=<you>" \
+  -v reg_schema=<schema> \
+  -f scripts/migrations/upgrade_0.7_to_0.8.sql
+```
+
+---
+
+### 7. App permission bootstrap (`bootstrap-app-permissions.sh`)
+
+Run automatically after deploy, or manually:
+
+```bash
+make bootstrap-perms
+```
+
+| Requirement | Why |
+|-------------|-----|
+| **Apps exist** | Resolves each app's service principal |
+| **CAN_MANAGE on both apps** | Your user must grant CAN_MANAGE to each app's own SP |
+| **CAN_MANAGE_RUN on graph-analytics job** | App SP must list/trigger `${app_name}-graph-analytics` (ACL-filtered `jobs.list`) |
+| **UC schema ALL_PRIVILEGES** | SPs need CREATE OR REPLACE on registry objects |
+
+---
+
+### 8. Deploy workflow (happy path)
+
+```text
+[ ] Edit scripts/deploy.config.sh (DEFAULT_INSTANCE_ID, Lakebase coords, warehouse, UC;
+    for a pre-0.7 in-place upgrade also set DEFAULT_DAB_TARGET=dev-lakebase — see §5)
+[ ] scripts/_internal/check-deploy-prerequisites.sh          # or make deploy-check
+[ ] make deploy-dry-run                            # read-only full orchestrator check
+[ ] make deploy                                    # deploy + create-if-missing registry + bootstrap
+[ ] Databricks Apps UI: bind sql-warehouse, postgres (first time only)
+[ ] App UI: Settings → Registry → Initialize     # upgrade/repair only, not first install
+[ ] make bootstrap-lakebase                          # if grants need a refresh
+[ ] App UI: Settings → Graph DB → Create graph DB  # grants graph schema separately
+```
+
+---
+
+### 9. Optional / mode-specific
+
+| Item | When needed |
+|------|-------------|
+| **`uv sync --frozen --extra pitfalls`** | ML-based pitfalls detection panel |
+| **`managed_synced` graph mode** | UC catalog ALL_PRIVILEGES (`-c` / `UC_CATALOG` on bootstrap script) |
+| **Lakebase via UI “New project”** | **Avoid** for Synced Tables — use `scripts/bootstrap/setup-lakebase.sh` instead |
+| **Volume-only backend** | Deploy with `make deploy-volume` (`-t dev`) — skips Lakebase checks |
+
+---
+
+### Quick reference — scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/_internal/check-deploy-prerequisites.sh` | Read-only preflight (this checklist, automated) |
+| `scripts/deploy.sh --dry-run` | Full DAB validate + resource checks, no mutations |
+| `scripts/bootstrap/setup-lakebase.sh` | Create Synced-Tables-compatible Lakebase project |
+| `scripts/bootstrap/lakebase-perms.sh` | CAN_USE + schema GRANTs + registry migrations |
+| `scripts/bootstrap/app-permissions.sh` | App SP self-perms + MCP CAN_USE + UC schema grants |
+| `scripts/migrations/upgrade_0.4_to_0.5.sql` | Explicit 0.4→0.5 lifecycle migration |
+| `scripts/migrations/upgrade_0.5_to_0.6.sql` | Explicit 0.5→0.6 collaborative / analytics migration |
+| `scripts/migrations/upgrade_0.6_to_0.7.sql` | Explicit 0.6→0.7 generic scheduled-task migration |
+| `scripts/migrations/upgrade_0.7_to_0.8.sql` | Explicit 0.7→0.8 per-domain MCP policy migration |
+
+---
+
+## Asset Bundle reference
+
+The bundle configuration lives at the project root (`databricks.yml`) as required by the Databricks CLI.
+
+See also: [Databricks Asset Bundles docs](https://docs.databricks.com/dev-tools/bundles/)
+
+### What Gets Deployed
+
+| App | Bundle Key | Name | Description |
+|-----|------------|------|-------------|
+| **OntoBricks** | `ontobricks_app` | `ontobricks` | Main FastAPI application — ontology editor, mapping, Knowledge Graph builder |
+| **MCP Server** | `mcp_ontobricks_app` | `mcp-ontobricks` | Model Context Protocol companion — exposes knowledge-graph tools to the Databricks Playground |
+
+### Quick Start
+
+```bash
+# From the project root:
+
+# 1. Validate
+databricks bundle validate
+
+# 2. Deploy both apps (configured Lakebase target)
+make deploy
+
+# Or deploy/run explicitly:
+databricks bundle deploy -t <DAB_TARGET>
+databricks bundle run ontobricks_dev_app -t <DAB_TARGET>
+databricks bundle run mcp_ontobricks_app -t <DAB_TARGET>
+
+# DAB_TARGET normally comes from scripts/deploy.config.sh.
+```
+
+### Convenience Script (`scripts/deploy.sh`)
+
+```bash
+scripts/deploy.sh                  # validate + deploy + run both apps
+scripts/deploy.sh -t dev           # explicit Volume-only target
+scripts/deploy.sh -t dev-lakebase  # legacy unsuffixed Lakebase target
+scripts/deploy.sh --no-run         # deploy without starting either app
+scripts/deploy.sh --bind           # bind existing apps during deployment
+scripts/deploy.sh --dry-run        # preflight and validate without changes
+```
+
+### Targets
+
+| Target | Mode | Description |
+|--------|------|-------------|
+| `dev` | development | Volume-only registry backend. |
+| `dev-lakebase` | development | Legacy unsuffixed Lakebase target. |
+| `dev-lakebase-<INSTANCE_ID>` | development | Generated per-instance Lakebase target used by `make deploy`. |
+
+### Variables
+
+Override defaults with `--var` flags or in a target-specific `variables:` block:
+
+| Variable | Description |
+|----------|-------------|
+| `app_name` / `mcp_app_name` | Main and MCP Databricks App names |
+| `warehouse_id` | SQL Warehouse bound to both apps |
+| `registry_catalog` / `registry_schema` / `registry_volume` | Unity Catalog registry Volume |
+| `lakebase_project` / `lakebase_branch` / `lakebase_database_resource_segment` | Lakebase Autoscaling binding |
+| `lakebase_registry_schema` | Postgres schema used by the registry |
+
+```bash
+databricks bundle deploy --var warehouse_id=abc123def456
+```
+
+### Binding Existing Apps
+
+If the apps already exist from a previous manual deployment:
+
+```bash
+databricks bundle deployment bind ontobricks_app ontobricks
+databricks bundle deployment bind mcp_ontobricks_app mcp-ontobricks
+databricks bundle deploy
+```
+
+### Post-Deploy Steps (First Time Only)
+
+1. **Bind resources** — In the Databricks Apps UI, bind `sql-warehouse` (and postgres on Lakebase targets) for both apps
+2. **Registry** — `make deploy` initializes the registry. Use Settings > Registry > Initialize only for upgrade/repair.
+3. **Set MCP URL** — Update `ONTOBRICKS_URL` in `src/mcp-server/app.yaml` with the main app URL
+
+Resource bindings persist across redeployments.
+
+### File Sync
+
+DAB sync = git-tracked files − `.gitignore` + `sync.include` − `sync.exclude`
+in `databricks.yml`. `.databricksignore` is a human/test mirror only.
+
+**Shipped:** `src/` (including MCP + `src/jobs/`), `run.py`, `app.yaml`,
+lockfiles, `LICENSE.txt` / `NOTICE.txt`, and the Help Center set
+(`docs/*.md` catalogued in `help.py`, plus `docs/images/` and
+`docs/screenshots/`).
+
+**Not shipped:** tests, CI, scripts, changelogs, `.github/`, `.planning/`,
+third-party `licenses/`, Sphinx/demo docs, DAB YAML under `resources/`.
+
+Do not exclude `README.md` or `/README.md`: CLI 0.298 applies both recursively
+and drops Help Center Overview (`docs/README.md`). Both README files ship.
+
+Do not exclude `src/mcp-server/`; both apps share one files tree. Keep both
+`app.yaml.template` files too: this CLI matches an anchored root-template
+exclude recursively, and the deploy guard requires the MCP template.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `databricks.yml` | Bundle definition — apps, permissions, targets, **sync.exclude** |
+| `app.yaml` | Main app runtime config (command, env vars, resources) |
+| `src/mcp-server/app.yaml` | MCP server runtime config |
+| `.databricksignore` | Mirror of `sync.exclude` (CLI does not read it) |
+| `scripts/deploy.sh` | Convenience wrapper around DAB commands |
+
+---
+
+## Production sizing questionnaire
+
+Use this questionnaire to collect the information needed to size a production
+OntoBricks deployment on Databricks. Complete all **Required** fields. Complete
+the **Optional** fields when the information is available; otherwise, state
+`Unknown`.
+
+This questionnaire gathers workload characteristics. It does not constitute a
+price quote or capacity commitment. The resulting estimate should document all
+assumptions and include expected growth.
+
+### 1. Customer and Databricks Environment
+
+- **Required — Customer or project name:** ______________________________
+- **Required — Target go-live date:** ______________________________
+- **Required — Cloud provider:** [ ] AWS  [ ] Azure  [ ] GCP
+- **Required — Databricks region:** ______________________________
+- **Required — Databricks platform tier:** ______________________________
+- **Required — Unity Catalog enabled:** [ ] Yes  [ ] No
+- **Required — Databricks Apps enabled:** [ ] Yes  [ ] No  [ ] To confirm
+- **Required — Lakebase Autoscaling available in the target region:**
+  [ ] Yes  [ ] No  [ ] To confirm
+- **Optional — Compliance requirements:** [ ] None  [ ] HIPAA  [ ] PCI
+  [ ] Other: ______________________________
+- **Optional — Enhanced Security and Compliance add-on required:**
+  [ ] Yes  [ ] No  [ ] To confirm
+
+### 2. Users and Concurrency
+
+- **Required — Total named OntoBricks users:** ______________________________
+- **Required — Expected concurrent users at peak:** __________________________
+- **Required — User distribution:**
+  - Viewers: ______________________________
+  - Ontology editors: ______________________________
+  - Graph builders or operators: ______________________________
+  - Administrators: ______________________________
+- **Required — Typical production usage window:** ______ hours/day,
+  ______ days/week
+- **Optional — Expected concurrent API or MCP clients:** _____________________
+- **Optional — Expected annual user growth:** ______________________________ %
+
+### 3. Source Data
+
+Repeat this section for each materially different source or workload.
+
+#### Source or workload: ______________________________
+
+- **Required — Source type:** [ ] Unity Catalog table/view  [ ] File
+  [ ] External database  [ ] SaaS application  [ ] Other: ________________
+- **Required — Current data volume:** __________________ [ ] GB  [ ] TB
+- **Required — Number of tables or views:** ______________________________
+- **Required — Total row count:** ______________________________
+- **Required — Daily data change:** __________________ [ ] GB  [ ] TB
+  [ ] rows
+- **Required — Update pattern:** [ ] Full refresh  [ ] Incremental
+  [ ] Change Data Capture  [ ] Append-only
+- **Required — Refresh frequency:** ______________________________
+- **Optional — Largest table:** __________________ [ ] GB  [ ] TB;
+  __________________ rows
+- **Optional — Average row width, if known:** __________________ bytes
+- **Optional — Data retention period:** ______________________________
+- **Optional — Existing ingestion service:** ______________________________
+
+Add another copy of this subsection for each additional source or workload.
+
+### 4. Ontology and Mapping Complexity
+
+- **Required — Number of business domains:** ______________________________
+- **Required — Number of production ontology versions retained per domain:**
+  `______________________________`
+- **Required — Estimated ontology size per domain:**
+  - Entity or class types: ______________________________
+  - Relationship types: ______________________________
+  - Attributes or properties: ______________________________
+- **Required — Estimated number of source-to-ontology mappings:**
+  `______________________________`
+- **Required — Typical mapping complexity:** [ ] Simple column mapping
+  [ ] Joins across tables  [ ] Complex SQL transformations  [ ] Mixed
+- **Optional — Maximum tables joined by one mapping:** _______________________
+- **Optional — Reasoning features used:** [ ] None  [ ] OWL 2 RL
+  [ ] SWRL rules  [ ] SHACL validation
+- **Optional — Estimated number of SWRL rules:** ____________________________
+- **Optional — Estimated number of SHACL shapes:** __________________________
+- **Optional — Documents or binary artifacts stored per domain:**
+  __________________ [ ] GB  [ ] TB
+
+### 5. Knowledge Graph Builds
+
+- **Required — Number of graph builds per day:** ____________________________
+- **Required — Build schedule:** [ ] On demand  [ ] Scheduled  [ ] Both
+- **Required — Maximum simultaneous builds:** ______________________________
+- **Required — Expected triples generated by a full build:**
+  __________________ [ ] million  [ ] billion  [ ] Unknown
+- **Required — Maximum acceptable full-build duration:** _____________________
+- **Required — Build mode:** [ ] Full rebuild  [ ] Incremental
+  [ ] Both  [ ] To confirm
+- **Optional — Expected triples changed per incremental build:**
+  __________________ [ ] million  [ ] billion
+- **Optional — Largest expected graph:** __________________ [ ] million
+  [ ] billion triples
+- **Optional — Reasoning or validation executed during each build:**
+  [ ] None  [ ] OWL 2 RL  [ ] SWRL  [ ] SHACL
+- **Optional — Build-time availability requirement:** [ ] Queries may pause
+  [ ] Existing graph must remain queryable
+
+If triple counts are unknown, provide representative source row counts and the
+expected number of entities, relationships, and attributes generated per row.
+
+### 6. Graph Consumption
+
+- **Required — Consumption methods:** [ ] OntoBricks Graph Viewer
+  [ ] GraphQL API  [ ] MCP  [ ] SQL  [ ] Other: __________________________
+- **Required — Peak interactive query rate:** __________________ queries/second
+- **Required — Typical query rate:** __________________ queries/second
+- **Required — Expected peak concurrent queries:** __________________________
+- **Required — Typical query complexity:** [ ] Point lookup
+  [ ] One-hop traversal  [ ] Multi-hop traversal  [ ] Aggregation
+  [ ] Mixed
+- **Required — Maximum acceptable interactive response time:**
+  `______________________________`
+- **Optional — Typical result size:** __________________ rows or objects
+- **Optional — Maximum traversal depth:** __________________ hops
+- **Optional — Bulk exports:** ______ exports/day of approximately
+  __________________ [ ] MB  [ ] GB each
+- **Optional — API traffic growth expected during the next 12 months:**
+  __________________ %
+
+### 7. Lakebase Workload
+
+OntoBricks uses Lakebase Autoscaling for its registry and graph storage.
+
+- **Required — Estimated graph storage at go-live:** __________________
+  [ ] GB  [ ] TB  [ ] Unknown
+- **Required — Estimated graph storage after 12 months:** __________________
+  [ ] GB  [ ] TB  [ ] Unknown
+- **Required — Peak Lakebase query rate:** __________________ queries/second
+  [ ] Unknown
+- **Required — Workload balance:** ______ % reads / ______ % writes
+- **Required — Required daily availability:** __________________ hours/day
+- **Optional — Required rollback or recovery retention:**
+  __________________ days
+- **Optional — Largest expected write burst:** __________________ rows/second
+- **Optional — Known connection limit or connection-pooling constraints:**
+  `______________________________`
+
+### 8. SQL Warehouse Workload
+
+OntoBricks uses a Databricks SQL Warehouse for Unity Catalog queries and
+Delta-backed operations.
+
+- **Required — Existing SQL Warehouse available:** [ ] Yes  [ ] No
+  [ ] To be provisioned
+- **Required — Warehouse may be shared with other workloads:** [ ] Yes  [ ] No
+- **Required — Expected OntoBricks warehouse activity:**
+  ______ hours/day, ______ days/week
+- **Required — Maximum concurrent OntoBricks SQL statements:**
+  `______________________________`
+- **Required — Largest data volume scanned by one operation:**
+  __________________ [ ] GB  [ ] TB  [ ] Unknown
+- **Optional — Preferred warehouse type:** [ ] Serverless  [ ] Pro
+  [ ] Classic  [ ] No preference
+- **Optional — Existing warehouse size and scaling range:**
+  `______________________________`
+- **Optional — Auto-stop requirement:** __________________ minutes
+
+### 9. Databricks Apps and MCP
+
+A standard deployment contains the OntoBricks application and an optional MCP
+companion application.
+
+- **Required — MCP server required:** [ ] Yes  [ ] No  [ ] To confirm
+- **Required — Expected app usage:** ______ hours/day, ______ days/week
+- **Required — Peak simultaneous browser sessions:** ________________________
+- **Optional — Peak simultaneous MCP sessions:** ____________________________
+- **Optional — App compute preference:** [ ] Medium  [ ] Large
+  [ ] Let the sizing team recommend
+- **Optional — High availability or minimum replica requirement:**
+  `______________________________`
+- **Optional — External systems calling OntoBricks APIs:**
+  `______________________________`
+
+### 10. AI-Assisted Features
+
+Complete this section only if OntoBricks AI-assisted design or automation
+features will be enabled. Foundation Model API consumption must be estimated
+separately from the core Databricks compute estimate.
+
+- **Required — AI-assisted features enabled:** [ ] Yes  [ ] No
+- **If yes — Features used:** [ ] Ontology generation  [ ] Mapping generation
+  [ ] Automated assignment  [ ] Other: ______________________________
+- **If yes — Expected requests per day:** ______________________________
+- **If yes — Peak simultaneous requests:** ______________________________
+- **Optional — Typical input size:** __________________ tokens or
+  __________________ characters
+- **Optional — Typical output size:** __________________ tokens
+- **Optional — Required model or serving endpoint:** ________________________
+- **Optional — Data residency or model governance constraints:**
+  `______________________________`
+
+### 11. Service Levels, Security, and Growth
+
+- **Required — Production availability target:** ____________________________
+- **Required — Recovery time objective (RTO):** _____________________________
+- **Required — Recovery point objective (RPO):** ____________________________
+- **Required — Expected data growth over 12 months:** _____________________ %
+- **Required — Expected query growth over 12 months:** ____________________ %
+- **Required — Expected graph-build growth over 12 months:** ______________ %
+- **Optional — Network requirements:** [ ] Public workspace connectivity
+  [ ] Private Link  [ ] IP access lists  [ ] Other: ______________________
+- **Optional — Customer-managed keys required:** [ ] Yes  [ ] No
+- **Optional — Audit-log retention requirement:** ___________________________
+- **Optional — Planned traffic peaks or seasonal events:**
+  `______________________________`
+
+### 12. Representative Performance Sample
+
+When possible, provide a representative production sample or benchmark:
+
+- Source data volume: ______________________________
+- Source row count: ______________________________
+- Ontology and mapping used: ______________________________
+- Generated triple count: ______________________________
+- Full-build duration: ______________________________
+- Incremental-build duration: ______________________________
+- Peak memory or compute observed: ______________________________
+- Typical query and measured latency: ______________________________
+- Environment where the measurement was taken: ____________________________
+
+### 13. Additional Context
+
+- Current solution being replaced or complemented:
+  `______________________________`
+- Known bottlenecks or performance concerns:
+  `______________________________`
+- Constraints not covered above:
+  `______________________________`
+- Additional comments:
+  `______________________________`
+
+### 14. Sizing Summary — For the Sizing Team
+
+The customer may leave this section blank.
+
+- Recommended Databricks App compute: ______________________________
+- Recommended MCP App compute: ______________________________
+- Recommended Lakebase capacity and storage: _____________________________
+- Recommended SQL Warehouse type, size, and scaling range:
+  `______________________________`
+- Estimated monthly workload by component: ______________________________
+- Foundation Model API estimate, if applicable: __________________________
+- Growth headroom applied: ______________________________ %
+- Key assumptions: ______________________________
+- Exclusions: ______________________________
+- Confidence level: [ ] Low  [ ] Moderate  [ ] High
+- Reassessment trigger: ______________________________

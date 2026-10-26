@@ -220,7 +220,7 @@ If you cannot satisfy them with the given input, say so explicitly and ask for c
    - NEVER create a class per column or per attribute value — those are datatype properties (e.g. `status`, `vatAmount`, `readingDate`), not classes. Merge near-duplicates aggressively.  
    - Hard limit: 40 classes. If you approach it, consolidate rather than add.  
    - At most 4 subclass levels (max depth = 4).  
-   - At most 3 direct superclasses per class; default is a single superclass.
+   - Single inheritance only: at most 1 direct superclass per class.
 If the user does not give CQs, propose a short list of candidate CQs first, get them confirmed, then model.
 
 ## 2. Class and property design rules
@@ -237,8 +237,8 @@ For each **class** you create:[1][2][3][4]
    - Datatype properties: lowerCamelCase nouns or attributes (e.g., `orderDate`).  
    - Do not create two classes or properties that are synonyms or near-duplicates; merge or explain the difference in their definitions.
 3. Inheritance constraints:  
-   - Default to single inheritance (`rdfs:subClassOf` one parent).  
-   - Allow multiple inheritance only if strictly necessary and documented in a comment.  
+   - Always single inheritance (`rdfs:subClassOf` one parent).  
+   - Never assign a second parent to a class that already has one.  
    - Avoid deep chains: no more than 4 levels from the topmost domain root.
 For each **property** you create:
 1. Always specify:  

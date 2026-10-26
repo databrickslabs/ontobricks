@@ -76,27 +76,30 @@ async function generateR2RMLPreview() {
 // Force regenerate R2RML (can be called when mappings change)
 async function forceRegenerateR2RML() {
     const r2rmlPreview = document.getElementById('r2rmlPreview');
-    
+
     if (!MappingState.config.entities || MappingState.config.entities.length === 0) {
-        r2rmlPreview.value = '';
-        return;
+        if (r2rmlPreview) r2rmlPreview.value = '';
+        return '';
     }
-    
+
     try {
         const response = await fetch('/mapping/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin'
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.r2rml) {
-            r2rmlPreview.value = result.r2rml;
+            if (r2rmlPreview) r2rmlPreview.value = result.r2rml;
+            MappingState.r2rmlContent = result.r2rml;
+            return result.r2rml;
         }
     } catch (error) {
         console.error('Error generating R2RML:', error);
     }
+    return '';
 }
 
 // Expose for global use
@@ -143,9 +146,7 @@ function _initR2RMLButtons() {
         });
     });
 
-    // Download R2RML as file
-    document.getElementById('downloadR2RMLBtn')?.addEventListener('click', async function() {
-        const r2rmlText = document.getElementById('r2rmlPreview').value;
+    async function _exportR2RMLText(r2rmlText) {
         if (!r2rmlText) {
             showNotification('No R2RML content to download', 'warning');
             return;
@@ -169,6 +170,37 @@ function _initR2RMLButtons() {
         a.click();
         URL.revokeObjectURL(url);
         showNotification('R2RML file downloaded: ' + filename, 'success', 3000);
+    }
+
+    // Download R2RML as file (preview section)
+    document.getElementById('downloadR2RMLBtn')?.addEventListener('click', async function() {
+        await _exportR2RMLText(document.getElementById('r2rmlPreview')?.value);
+    });
+
+    // Designer toolbar: generate then export
+    document.getElementById('mappingExportR2RMLBtn')?.addEventListener('click', async function() {
+        const btn = this;
+        btn.disabled = true;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Exporting...';
+        try {
+            const r2rmlPreview = document.getElementById('r2rmlPreview');
+            if (r2rmlPreview) {
+                r2rmlPreview.value = '';
+                r2rmlPreview.placeholder = 'Regenerating R2RML...';
+            }
+            const generated = await forceRegenerateR2RML();
+            const r2rmlText = generated
+                || r2rmlPreview?.value
+                || MappingState.r2rmlContent
+                || '';
+            await _exportR2RMLText(r2rmlText);
+        } catch (error) {
+            showNotification('Error exporting R2RML: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        }
     });
 }
 

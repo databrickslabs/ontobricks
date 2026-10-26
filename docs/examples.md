@@ -5,7 +5,31 @@ These walkthroughs take you from raw tables to an explorable graph viewer. Each 
 | Example | Difficulty | What you'll learn |
 |---------|-----------|-------------------|
 | [Family Tree](#example-family-tree-ontology-mapping) | Beginner | One entity, two relationships — the simplest end-to-end flow |
-| [Customer Journey](#example-customer-journey-ontology-energy-provider) | Intermediate | 10 tables, complex relationships, visual Designer, advanced SPARQL |
+| [Customer Journey](#example-customer-journey-ontology-energy-provider) | Intermediate | 10 tables, complex relationships, visual Studio, advanced SPARQL |
+
+<!-- toc -->
+**Contents**
+
+- [Example: Family Tree Ontology Mapping](#example-family-tree-ontology-mapping)
+  - [What you'll build](#what-youll-build)
+  - [Dataset](#dataset)
+  - [Target Ontology](#target-ontology)
+  - [Mapping Steps](#mapping-steps)
+  - [Generated R2RML](#generated-r2rml)
+  - [Generated RDF Triples](#generated-rdf-triples)
+  - [SPARQL Queries (External API)](#sparql-queries-external-api)
+  - [Using the R2RML Mapping](#using-the-r2rml-mapping)
+  - [Next Steps](#next-steps)
+  - [Summary](#summary)
+- [Example: Customer Journey Ontology (Energy Provider)](#example-customer-journey-ontology-energy-provider)
+  - [What you'll build](#what-youll-build-1)
+  - [Dataset](#dataset-1)
+  - [Step 1: Design the Ontology](#step-1-design-the-ontology)
+  - [Step 2: Map Data Assets](#step-2-map-data-assets)
+  - [Step 3: Explore the Data (Knowledge Graph)](#step-3-explore-the-data-knowledge-graph)
+  - [Graph Viewer](#graph-viewer)
+  - [Reference](#reference)
+<!-- /toc -->
 
 ---
 
@@ -85,18 +109,18 @@ foaf:gender a rdfs:Property .
 #### Step 2: Load Data Source
 
 1. Go to **Mapping** page
-2. Click **Designer** in the sidebar
+2. Click **Studio** in the sidebar
 3. Enter:
    ```
    Catalog: main
    Schema: default
    ```
-3. Click "Load Tables"
+3. Click "Add assets"
 4. You should see `person` in the table list
 
 #### Step 3: Create Entity Mapping
 
-1. Click on the **Person** entity in the Designer view
+1. Click on the **Person** entity in the Studio view
 2. Fill in the form:
    ```
    Table: person
@@ -117,7 +141,7 @@ foaf:gender a rdfs:Property .
 
 ##### Father Relationship
 
-1. Click on the **hasFather** relationship in the Designer view
+1. Click on the **hasFather** relationship in the Studio view
 2. Fill in:
    ```
    Source Table: person
@@ -130,7 +154,7 @@ foaf:gender a rdfs:Property .
 
 ##### Mother Relationship
 
-1. Click on the **hasMother** relationship in the Designer view
+1. Click on the **hasMother** relationship in the Studio view
 2. Fill in:
    ```
    Source Table: person
@@ -401,7 +425,7 @@ The same approach can be applied to any relational database schema and target on
 
 ### What you'll build
 
-A full customer-journey graph viewer for an energy provider — 10 interconnected tables covering customers, contracts, meters, readings, invoices, payments, calls, claims, and interactions. This example exercises the visual Designer, entity and relationship mapping, and the Graph Viewer explorer.
+A full customer-journey graph viewer for an energy provider — 10 interconnected tables covering customers, contracts, meters, readings, invoices, payments, calls, claims, and interactions. This example exercises Ontology Studio, entity and relationship mapping, and the Graph Viewer explorer.
 
 ### Dataset
 
@@ -453,9 +477,9 @@ SUBSCRIPTION METER INVOICE ◄────────────────�
 
 ### Step 1: Design the Ontology
 
-#### Using the Visual Designer
+#### Using Ontology Studio
 
-1. Open OntoBricks and go to **Ontology → Design**
+1. Open OntoBricks and go to **Ontology → Studio**
 2. Create the following entities:
 
 ##### Core Entities
@@ -505,7 +529,7 @@ Click **Auto Layout** to organize the diagram, then **Center** to fit the view.
 
 ---
 
-### Step 2: Map Data Sources
+### Step 2: Map Data Assets
 
 #### Entity Mappings
 

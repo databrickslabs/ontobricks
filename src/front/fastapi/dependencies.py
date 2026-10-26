@@ -181,6 +181,22 @@ templates.env.filters["random"] = random_filter
 # ===========================================
 
 
+def home_redirect_if_unloaded(domain_session):
+    """Return a 303 to Home when the session has no loaded domain, else None.
+
+    Workspace HTML routes (Domain, Ontology, Mapping, Knowledge Graph) call
+    this before rendering so a bookmark or stale URL never paints an empty
+    workspace. Settings / About / Home stay reachable without a domain.
+    """
+    from fastapi.responses import RedirectResponse
+
+    from back.objects.domain import WorkspacePresence
+
+    if WorkspacePresence.is_loaded(domain_session):
+        return None
+    return RedirectResponse("/", status_code=303)
+
+
 def triplestore_page_context(domain_session, settings=None) -> dict:
     """Build the triplestore-related template context shared by dtwin and domain pages."""
     from back.core.helpers import effective_view_table, effective_graph_name, effective_databricks_table

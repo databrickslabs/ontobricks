@@ -13,13 +13,17 @@ from back.core.databricks.lakebase.grants import (  # noqa: F401
     resolve_app_service_principals,
     resolve_mcp_app_name,
 )
-from back.core.databricks.lakebase.LakebaseAuth import (  # noqa: F401
+from back.core.databricks.lakebase.BranchLakebaseAuth import (  # noqa: F401
     BranchLakebaseAuth,
+)
+from back.core.databricks.lakebase.LakebaseAuth import (  # noqa: F401
     LakebaseAuth,
     get_lakebase_auth,
 )
-from back.core.databricks.lakebase.LakebaseConnectionPool import (  # noqa: F401
+from back.core.databricks.lakebase.LakebaseConnectionError import (  # noqa: F401
     LakebaseConnectionError,
+)
+from back.core.databricks.lakebase.LakebaseConnectionPool import (  # noqa: F401
     LakebaseConnectionPool,
     get_lakebase_pool,
     lakebase_cursor,

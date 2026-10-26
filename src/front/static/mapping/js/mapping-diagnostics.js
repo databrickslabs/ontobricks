@@ -50,9 +50,21 @@
             '<i class="bi bi-database-exclamation"></i> ' + n + ' drifted</span>';
     }
 
+    function _issueChecks(checks) {
+        return (checks || []).filter(function (c) {
+            return c.status && c.status !== 'ok';
+        });
+    }
+
+    function _hasIssues(item) {
+        return item.status === 'error' || item.status === 'warning' ||
+            _issueChecks(item.checks).length > 0;
+    }
+
     function _renderChecks(checks) {
-        if (!checks || !checks.length) return '';
-        var rows = checks.map(function (c) {
+        var issues = _issueChecks(checks);
+        if (!issues.length) return '';
+        var rows = issues.map(function (c) {
             var drift = _isDrift(c);
             var icon = drift
                 ? '<i class="bi bi-database-exclamation text-warning"></i>'
@@ -188,21 +200,21 @@
             document.getElementById('diagWarningCount').textContent = summary.warnings || 0;
             document.getElementById('diagErrorCount').textContent = summary.errors || 0;
 
-            var entities = data.entities || [];
-            var rels = data.relationships || [];
-            var perms = data.permissions || [];
+            var entities = (data.entities || []).filter(_hasIssues);
+            var rels = (data.relationships || []).filter(_hasIssues);
+            var perms = (data.permissions || []).filter(_hasIssues);
 
             document.getElementById('diagEntitiesBody').innerHTML =
-                entities.map(_renderEntityRow).join('') || '<p class="text-muted p-3">No entity mappings found.</p>';
+                entities.map(_renderEntityRow).join('') || '<p class="text-muted p-3">No entity mapping issues.</p>';
             _updateBadge('diagEntityBadge', entities);
 
             document.getElementById('diagRelationshipsBody').innerHTML =
-                rels.map(_renderRelRow).join('') || '<p class="text-muted p-3">No relationship mappings found.</p>';
+                rels.map(_renderRelRow).join('') || '<p class="text-muted p-3">No relationship mapping issues.</p>';
             _updateBadge('diagRelBadge', rels);
 
             document.getElementById('diagPermissionsBody').innerHTML =
                 perms.map(_renderPermissionRow).join('') ||
-                '<p class="text-muted p-3">No source tables to verify.</p>';
+                '<p class="text-muted p-3">No source table permission issues.</p>';
             _updateBadge('diagPermBadge', perms);
 
             _showSection('diagKpiTiles', true);

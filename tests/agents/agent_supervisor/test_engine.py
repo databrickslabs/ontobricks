@@ -25,10 +25,6 @@ class _FakeAgentClient:
         self.calls.append(("simple", kw))
         return _FakeResult()
 
-    def run_owl_generator(self, **kw):
-        self.calls.append(("owl", kw))
-        return _FakeResult()
-
 
 _SIMPLE_MD = {"tables": [{"name": "t", "columns": ["id", "x"]}]}
 _SIMPLE_ONTO = {"classes": [{"name": "T"}], "properties": []}
@@ -112,19 +108,19 @@ def test_engine_override_forces_engine(fake_client):
     assert res.complexity.tier == "complex"
 
 
-def test_ontology_task_uses_single_engine(fake_client):
-    res = SupervisorEngine.run(
-        task="ontology",
-        host="h",
-        token="t",
-        endpoint_name="e",
-        metadata=_COMPLEX_MD,
-        ontology=_COMPLEX_ONTO,
-        base_uri="http://x#",
-        selected_tables=["a", "b"],
-    )
-    assert res.engine_used == "owl_generator"
-    assert fake_client.calls[0][0] == "owl"
+def test_ontology_task_no_longer_accepted(fake_client):
+    """The one-shot ``run_owl_generator`` bridge was removed (see the
+    three-stage Generate design); ``SupervisorEngine`` now only supervises
+    the mapping engines."""
+    with pytest.raises(ValueError):
+        SupervisorEngine.run(
+            task="ontology",
+            host="h",
+            token="t",
+            endpoint_name="e",
+            metadata=_COMPLEX_MD,
+            ontology=_COMPLEX_ONTO,
+        )
 
 
 def test_engine_failure_is_surfaced(monkeypatch):

@@ -15,7 +15,7 @@ CONFIG := scripts/deploy.config.sh
         deploy deploy-dry-run deploy-volume deploy-no-run \
         bootstrap-perms bootstrap-lakebase \
         bundle-validate bundle-summary deploy-check \
-        render-app-yaml
+        render-app-yaml docs-toc
 
 # Output dir for the live scenario campaign reports (JUnit + HTML).
 SCENARIO_ARTIFACTS := artifacts/scenarios
@@ -55,9 +55,10 @@ help:
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
 	@echo "    make bundle-validate     - Validate the bundle config (target from deploy.config.sh)"
 	@echo "    make bundle-summary      - Preview what will deploy (target from deploy.config.sh)"
-	@echo "    make deploy-check        - Read-only deploy prerequisite check (see docs/DEPLOY_CHECKLIST.md)"
+	@echo "    make deploy-check        - Read-only deploy prerequisite check (see docs/deployment.md#deployment-checklist)"
 	@echo ""
 	@echo "  Maintenance:"
+	@echo "    make docs-toc     - Regenerate the table of contents of docs/*.md guides"
 	@echo "    make clean        - Remove generated files"
 	@echo ""
 
@@ -84,8 +85,10 @@ test-cov:
 	. .venv/bin/activate && pytest --cov=src --cov-report=html --cov-report=term
 
 # ── Integration test campaign (live, opt-in scenario suites) ─────────────
-# Runs every `scenario`-marked suite under tests/e2e/scenarios/ end-to-end,
-# in filename order (test_scenario_1 → 2 → 3 → … → test_scenario_validation),
+# Runs the live `test_scenario_*.py` suites end-to-end, in filename
+# order (test_scenario_01 → 02 → 03 → 04 → test_scenario_validation).
+# ``test_full_lifecycle.py`` stays out: it is the isolated Playwright
+# server journey and is not a live-app campaign.
 # against a RUNNING app and writes machine + human reports to
 # $(SCENARIO_ARTIFACTS)/ (campaign.xml for CI, campaign.html to open).
 #
@@ -115,10 +118,11 @@ scenario-campaign:
 	done
 	@mkdir -p $(SCENARIO_ARTIFACTS)
 	@echo "Running live scenarios (JUnit + HTML → $(SCENARIO_ARTIFACTS)/)..."
-	. .venv/bin/activate && \
+	set -a && [ -f "$(CURDIR)/.env" ] && . "$(CURDIR)/.env"; set +a; \
+	cd "$(CURDIR)" && env -u VIRTUAL_ENV \
 	  ONTOBRICKS_SCENARIO_LIVE=1 ONTOBRICKS_SCENARIO_CHAIN=1 \
 	  ONTOBRICKS_LIVE_BASE="$(ONTOBRICKS_LIVE_BASE)" \
-	  pytest tests/e2e/scenarios -m scenario -v -s --no-cov -p no:randomly \
+	  uv run --frozen pytest tests/e2e/scenarios/test_scenario_*.py -m scenario -v -s --no-cov -p no:randomly \
 	    --junitxml=$(SCENARIO_ARTIFACTS)/campaign.xml \
 	    --html=$(SCENARIO_ARTIFACTS)/campaign.html --self-contained-html
 	@echo "Reports: $(SCENARIO_ARTIFACTS)/campaign.html  (JUnit: $(SCENARIO_ARTIFACTS)/campaign.xml)"
@@ -160,23 +164,26 @@ prod:
 
 deploy:
 	chmod +x scripts/deploy.sh
-	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE APP_LAKEBASE_PROJECT APP_LAKEBASE_BRANCH LAKEBASE_PROJECT LAKEBASE_BRANCH LAKEBASE_DATABASE LAKEBASE_SCHEMA WAREHOUSE_ID; scripts/deploy.sh
 
 deploy-dry-run:
 	chmod +x scripts/deploy.sh
-	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh --dry-run
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE APP_LAKEBASE_PROJECT APP_LAKEBASE_BRANCH LAKEBASE_PROJECT LAKEBASE_BRANCH LAKEBASE_DATABASE LAKEBASE_SCHEMA WAREHOUSE_ID; scripts/deploy.sh --dry-run
 
 deploy-volume:
 	chmod +x scripts/deploy.sh
-	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh -t dev
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE APP_LAKEBASE_PROJECT APP_LAKEBASE_BRANCH LAKEBASE_PROJECT LAKEBASE_BRANCH LAKEBASE_DATABASE LAKEBASE_SCHEMA WAREHOUSE_ID; scripts/deploy.sh -t dev
 
 deploy-no-run:
 	chmod +x scripts/deploy.sh
-	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh --no-run
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE APP_LAKEBASE_PROJECT APP_LAKEBASE_BRANCH LAKEBASE_PROJECT LAKEBASE_BRANCH LAKEBASE_DATABASE LAKEBASE_SCHEMA WAREHOUSE_ID; scripts/deploy.sh --no-run
 
 render-app-yaml:
 	@echo "Rendering app.yaml from app.yaml.template + $(CONFIG)..."
 	@. ./$(CONFIG) && python3 scripts/_internal/_render-app-yaml.py
+
+docs-toc:
+	python3 scripts/_internal/_docs-toc.py docs
 
 bootstrap-perms:
 	@echo "Bootstrapping app self-permissions (config: $(CONFIG))..."

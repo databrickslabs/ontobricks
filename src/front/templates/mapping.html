@@ -17,8 +17,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <!-- Mapping Core Module (shared state across all partials) -->
 <script src="{{ url_for('static', filename='global/js/mapping-core.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='global/js/ontology-inheritance.js') }}?v={{ asset_version }}"></script>
 
-<!-- Mapping Information module (extracted from _mapping_information.html partial) -->
+<!-- Mapping → General module (extracted from _mapping_information.html partial) -->
 <script src="{{ url_for('static', filename='global/js/mapping-information.js') }}?v={{ asset_version }}"></script>
 
 <!-- Mapping Design module (Visual Mapping Designer - extracted from _mapping_design.html partial) -->
@@ -48,7 +49,7 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
-            <!-- Information Section - Default view -->
+            <!-- General section (id remains information) — default view -->
             <div id="information-section" class="sidebar-section active">
                 {% include "partials/mapping/_mapping_information.html" %}
             </div>

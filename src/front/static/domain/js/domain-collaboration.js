@@ -62,20 +62,6 @@
         return esc(text).replace(/"/g, '&quot;');
     }
 
-    // Render a comment body's markdown to HTML (same approach as the Discussion
-    // panel): use the global `marked` (loaded in base.html), with an escaped
-    // text + <br> fallback when it isn't available.
-    function renderMarkdown(text) {
-        const src = text || '';
-        if (typeof window.marked !== 'undefined' && window.marked.parse) {
-            try {
-                window.marked.setOptions({ breaks: true, gfm: true });
-                return window.marked.parse(src);
-            } catch (e) { /* fall through to plain text */ }
-        }
-        return esc(src).replace(/\n/g, '<br>');
-    }
-
     function note(msg, kind) {
         if (typeof window.showNotification === 'function') {
             window.showNotification(msg, kind || 'info');

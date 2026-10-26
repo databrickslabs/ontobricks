@@ -21,11 +21,17 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
+from back.core.graphdb.adjacency import expand_and_fetch_sql
 from back.core.errors import InfrastructureError
+from back.core.graphdb.lakebase import _adjacency_ddl
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
 from back.core.graphdb.lakebase.SyncedTableManager import (
     DEFAULT_TIMEOUT_S as _SYNC_DEFAULT_TIMEOUT_S,
+)
+from back.core.graphdb.props import (
+    execute_expand_with_props_fallback,
+    forget_missing_props,
 )
 from back.core.helpers import validate_table_name
 from back.core.logging import get_logger
@@ -93,6 +99,9 @@ class LakebaseFlatStore(LakebaseBase):
     """
 
     supports_materialized_inference_purge = True
+    supports_adjacency = True
+    supports_entity_search = True
+    supports_props = True
 
     def __init__(
         self,
@@ -150,6 +159,51 @@ class LakebaseFlatStore(LakebaseBase):
                 "check GraphDBFactory configuration"
             )
         return self._synced_manager
+
+    def sql_flavor(self) -> str:
+        return "postgres"
+
+    def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+        return (
+            _adjacency_ddl.adj_out_phy(table_name),
+            _adjacency_ddl.adj_in_phy(table_name),
+        )
+
+    def entity_search_table_id(self, table_name: str) -> str:
+        return _adjacency_ddl.entity_search_phy(table_name)
+
+    def entity_search_asserted_table_id(self, table_name: str) -> str:
+        return _adjacency_ddl.entity_search_asserted_phy(table_name)
+
+    def props_table_id(self, table_name: str) -> str:
+        return _adjacency_ddl.props_phy(table_name)
+
+    def rebuild_adjacency(self, table_name: str) -> None:
+        validate_table_name(table_name)
+        union_view = self._sql_relation(table_name)
+        adj_out, adj_in = self.adjacency_table_ids(table_name)
+        search = self.entity_search_table_id(table_name)
+        search_asserted = self.entity_search_asserted_table_id(table_name)
+        asserted_spo = self.synced_table_name(table_name)
+        props = self.props_table_id(table_name)
+        with self._cursor() as cur:
+            _adjacency_ddl.ensure_adjacency_tables(cur, adj_out, adj_in)
+            _adjacency_ddl.ensure_entity_search_table(cur, search)
+            _adjacency_ddl.ensure_entity_search_table(cur, search_asserted)
+            _adjacency_ddl.ensure_props_table(cur, props)
+        with self._txn_cursor() as (_, cur):
+            _adjacency_ddl.rebuild_adjacency_data(cur, union_view, adj_out, adj_in)
+            _adjacency_ddl.rebuild_entity_search_data(cur, union_view, search)
+            _adjacency_ddl.rebuild_entity_search_data(
+                cur, asserted_spo, search_asserted
+            )
+            _adjacency_ddl.rebuild_props_data(cur, union_view, props)
+        with self._cursor() as cur:
+            _adjacency_ddl.analyze_adjacency_tables(cur, adj_out, adj_in)
+            _adjacency_ddl.analyze_entity_search_table(cur, search)
+            _adjacency_ddl.analyze_entity_search_table(cur, search_asserted)
+            _adjacency_ddl.analyze_props_table(cur, props)
+        forget_missing_props(props)
 
     # -- Table-name resolution --------------------------------------------
 
@@ -409,6 +463,11 @@ class LakebaseFlatStore(LakebaseBase):
         count = self.count_triples(companion)
         with self._cursor() as cur:
             _companion_ddl.truncate_companion(cur, companion)
+        from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
+
+        rebuild_graph_cache_if_enabled(
+            self, table_name, getattr(self, "_domain", None)
+        )
         logger.info("Purged %d materialized triples from %s", count, companion)
         return count
 
@@ -476,6 +535,33 @@ class LakebaseFlatStore(LakebaseBase):
                 _PG_BTREE_INDEX_MAX_BYTES,
             )
 
+    def _expand_and_fetch_spo_sql(
+        self,
+        *,
+        relation: str,
+        selected_uris: list[str],
+        depth: int,
+        max_entities: int,
+        max_triples: int,
+    ) -> str:
+        sql = expand_and_fetch_sql(
+            flavor=self.sql_flavor(),
+            adj_out="adj_out",
+            adj_in="adj_in",
+            spo=relation,
+            selected_uris=selected_uris,
+            depth=depth,
+            max_entities=max_entities,
+            max_triples=max_triples,
+            escape=self._sql_escape,
+        )
+        return (
+            "WITH "
+            f"adj_out AS ({_adjacency_ddl.typed_out_select(relation)}), "
+            f"adj_in AS ({_adjacency_ddl.typed_in_select(relation)}), "
+            + sql.removeprefix("WITH ")
+        )
+
     @staticmethod
     def _require_pg():
         from back.core.graphdb.lakebase.pool import _require_psycopg
@@ -508,6 +594,90 @@ class LakebaseFlatStore(LakebaseBase):
                     return []
                 finally:
                     cur.execute("RESET statement_timeout")
+
+    def expand_and_fetch_subgraph(
+        self,
+        table_name: str,
+        selected_uris: list[str],
+        depth: int,
+        max_entities: int,
+        max_triples: int,
+    ) -> dict[str, Any]:
+        if not selected_uris:
+            raise ValueError("At least one selected URI is required")
+        depth = max(0, int(depth))
+        max_entities = max(1, int(max_entities))
+        max_triples = max(1, int(max_triples))
+
+        relation = self._sql_relation(table_name)
+        props = ""
+        if self.adjacency_ready(table_name):
+            adj_out, adj_in = self.adjacency_table_ids(table_name)
+            props = self._props_table_for_read(table_name)
+            sql = expand_and_fetch_sql(
+                flavor=self.sql_flavor(),
+                adj_out=self._sql_relation(adj_out),
+                adj_in=self._sql_relation(adj_in),
+                spo=relation,
+                props=self._sql_relation(props) if props else None,
+                selected_uris=selected_uris,
+                depth=depth,
+                max_entities=max_entities,
+                max_triples=max_triples,
+                escape=self._sql_escape,
+            )
+        else:
+            sql = self._expand_and_fetch_spo_sql(
+                relation=relation,
+                selected_uris=selected_uris,
+                depth=depth,
+                max_entities=max_entities,
+                max_triples=max_triples,
+            )
+
+        if props:
+            adj_out, adj_in = self.adjacency_table_ids(table_name)
+            fallback_sql = expand_and_fetch_sql(
+                flavor=self.sql_flavor(),
+                adj_out=self._sql_relation(adj_out),
+                adj_in=self._sql_relation(adj_in),
+                spo=relation,
+                selected_uris=selected_uris,
+                depth=depth,
+                max_entities=max_entities,
+                max_triples=max_triples,
+                escape=self._sql_escape,
+            )
+            rows = execute_expand_with_props_fallback(
+                execute_query=self.execute_query,
+                sql=sql,
+                props_table=props,
+                fallback_sql=fallback_sql,
+            )
+        else:
+            rows = self.execute_query(sql) or []
+        discovered_count = (
+            int(rows[0].get("_ob_expanded_count") or 0)
+            if rows
+            else min(len(set(selected_uris)), max_entities)
+        )
+        triple_capped = len(rows) > max_triples
+        triples = [
+            {
+                "subject": row.get("subject", ""),
+                "predicate": row.get("predicate", ""),
+                "object": row.get("object", ""),
+            }
+            for row in rows[:max_triples]
+        ]
+        entity_capped = discovered_count > max_entities
+        return {
+            "results": triples,
+            "count": len(triples),
+            "expanded_count": min(discovered_count, max_entities),
+            "capped": entity_capped or triple_capped,
+            "timeout_capped": False,
+        }
 
     def find_subjects_by_patterns(
         self, table_name: str, like_patterns: List[str]

@@ -76,6 +76,7 @@ async function checkVersionStatus() {
             window.isActiveVersion = editable;
             renderVersionStatusBadges(window.versionStatus);
 
+            document.body.classList.toggle('read-only-version', !editable);
             if (!editable) {
                 // ``read-only-version`` is the generic gate every selector
                 // in permissions.css / ontoviz.css keys off, disabling all
@@ -90,12 +91,27 @@ async function checkVersionStatus() {
                 if (window.OB && typeof window.OB.installReadOnlyContextMenuBlocker === 'function') {
                     window.OB.installReadOnlyContextMenuBlocker();
                 }
+            } else if (
+                window.OB
+                && typeof window.OB.clearRoleNavBadgeAnnotation === 'function'
+            ) {
+                window.OB.clearRoleNavBadgeAnnotation();
             }
         }
     } catch (e) {
         console.log('Could not fetch version status');
     }
 }
+
+async function refreshVersionStatusState() {
+    if (typeof fetchCachedInvalidate === 'function') {
+        fetchCachedInvalidate('/domain/version-status');
+    } else if (typeof fetchOnceInvalidate === 'function') {
+        fetchOnceInvalidate('/domain/version-status');
+    }
+    return checkVersionStatus();
+}
+window.refreshVersionStatusState = refreshVersionStatusState;
 
 document.addEventListener('DOMContentLoaded', () => {
     renderVersionStatusBadges(window.versionStatus);

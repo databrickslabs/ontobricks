@@ -8,8 +8,9 @@ constructs the graph DB backend for a domain:
   ``databricks``).  This is the common path callers use.
 * ``engine="lakebase"`` — flat triple tables on Lakebase Postgres.
 * ``engine="delta"`` — materialized Delta triple tables in Unity Catalog.
-* ``engine="view"`` — a raw, read-only Delta store bound to a SQL warehouse
-  (health probes against a UC view/table).
+* ``engine="view"`` — a raw, read-only Delta store bound to the **Build**
+  SQL warehouse (health probes and quality SQL against a UC view/table;
+  never the Lakehouse//RT query warehouse).
 
 New engines are pluggable — copy ``_starter_kit/`` into
 ``back/core/graphdb/<engine>/`` and register a ``_create_<engine>`` branch.
@@ -74,6 +75,8 @@ class GraphDBFactory:
         settings: Optional[Any] = None,
         engine: Optional[str] = None,
         engine_config: Optional[Dict[str, Any]] = None,
+        *,
+        for_write: bool = False,
     ) -> Optional[Any]:
         """Create a graph DB backend.
 
@@ -84,12 +87,13 @@ class GraphDBFactory:
                     ``"delta"``, or ``"view"`` (raw read-only Delta store).
             engine_config: Engine-specific JSON configuration set by the
                            admin in Settings > Graph DB.
+            for_write: Use the build SQL warehouse for Delta DDL and writes.
 
         Returns:
             GraphDBBackend instance or *None* if configuration is incomplete.
         """
         if engine is None:
-            return self._create_auto(domain, settings)
+            return self._create_auto(domain, settings, for_write=for_write)
 
         if engine == "view":
             return self._create_delta_view(domain, settings)
@@ -110,7 +114,7 @@ class GraphDBFactory:
             )
 
         if engine == "delta":
-            return self._create_delta(domain, settings)
+            return self._create_delta(domain, settings, for_write=for_write)
 
         logger.warning("Unknown graph DB engine: %s", engine)
         return None
@@ -127,6 +131,12 @@ class GraphDBFactory:
         Resolves ``domain.info.neo4j_connection`` against
         ``engine_config.connections`` (or a nested graph_engine_config root).
         The matched profile supplies URI / database / auth fields.
+
+        Authorization note (2026-09-26-domain-obo-graph-access-design): Neo4j
+        connects with the stored Bolt profile — there is no user OBO. Team
+        membership (Viewer+) is enforced at the read endpoint via
+        ``assert_domain_graph_read`` and queries are pinned to the domain's
+        database; this is intentional, not a missing OBO.
         """
         try:
             from back.core.graphdb.engine_config import (
@@ -148,7 +158,7 @@ class GraphDBFactory:
         if not conn_name:
             logger.warning(
                 "Neo4jStore: domain has no neo4j_connection — pick one in "
-                "Domain → Information → Knowledge Graph"
+                "Domain → General → Knowledge Graph"
             )
             return None
 
@@ -184,7 +194,11 @@ class GraphDBFactory:
             return None
 
     def _create_auto(
-        self, domain: Any, settings: Optional[Any] = None
+        self,
+        domain: Any,
+        settings: Optional[Any] = None,
+        *,
+        for_write: bool = False,
     ) -> Optional[Any]:
         """Resolve the engine from global/registry config and dispatch.
 
@@ -196,7 +210,13 @@ class GraphDBFactory:
             return None
         ts_backend = self._resolve_triple_store_backend(domain, settings)
         if ts_backend == "databricks":
-            return self.create(domain, settings, engine="delta", engine_config={})
+            return self.create(
+                domain,
+                settings,
+                engine="delta",
+                engine_config={},
+                for_write=for_write,
+            )
 
         engine = self._resolve_graph_engine(domain, settings) or "lakebase"
         engine_config = self._resolve_graph_engine_config(domain, settings)
@@ -248,7 +268,7 @@ class GraphDBFactory:
         """Return the mandatory per-domain graph backend.
 
         The choice lives in ``DomainSession.info['graph_backend']`` (set from the
-        Domain Information -> Knowledge Graph tab) and is versioned with the
+        Domain -> General -> Knowledge Graph tab) and is versioned with the
         domain.  Missing/invalid values default to ``lakebase`` so pre-existing
         domains keep working.
         """
@@ -330,24 +350,32 @@ class GraphDBFactory:
         """Instantiate a raw, read-only :class:`DeltaFlatStore` on a SQL warehouse.
 
         Bound with ``domain=None`` so it operates directly on the FQNs passed in
-        (health probes against a UC view/table).  Formerly ``backend="view"``.
+        (health probes against a UC view/table, SHACL/DQ SQL). Uses the Build
+        SQL Warehouse — never the Lakehouse//RT query warehouse.
         """
         try:
             from back.core.databricks import DatabricksClient, is_databricks_app
             from back.core.helpers import (
                 get_databricks_host_and_token,
-                resolve_delta_warehouse_id,
+                resolve_build_warehouse_id,
+                resolve_use_cloud_fetch,
             )
             from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
 
             if settings is not None:
                 host, token = get_databricks_host_and_token(domain, settings)
-                warehouse_id = resolve_delta_warehouse_id(domain, settings)
+                # Quality SQL and UC-view health probes always hit the Build
+                # SQL Warehouse over Thrift. The Lakehouse query warehouse may
+                # be Lakehouse//RT (read-only Kernel/SEA) and is wrong for
+                # Lakebase domains that still compile DQ against the UC view.
+                warehouse_id = resolve_build_warehouse_id(domain, settings)
+                use_cloud_fetch = resolve_use_cloud_fetch(domain, settings)
             else:
                 db = domain.databricks or {}
                 host = db.get("host", "")
                 token = db.get("token", "")
                 warehouse_id = ""
+                use_cloud_fetch = True
             if not host and not is_databricks_app():
                 logger.warning("Delta view store: missing host")
                 return None
@@ -361,6 +389,8 @@ class GraphDBFactory:
                 host=host,
                 token=token,
                 warehouse_id=warehouse_id,
+                use_sea=False,
+                use_cloud_fetch=use_cloud_fetch,
             )
             return DeltaFlatStore(client)
         except Exception as e:
@@ -374,10 +404,18 @@ class GraphDBFactory:
         *,
         engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
-        """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance."""
+        """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance.
+
+        Authorization note (2026-09-26-domain-obo-graph-access-design): Lakebase
+        connects as the app service principal (``PGUSER``) — there is no user
+        OBO on Postgres. Team membership (Viewer+) is enforced at the read
+        endpoint via ``assert_domain_graph_read`` and the query is pinned to the
+        loaded domain's graph table; this is intentional, not a missing OBO.
+        """
         try:
             from back.core.graphdb.lakebase import LAKEBASE_AVAILABLE
             from back.core.graphdb.lakebase.LakebaseBase import (
+                normalize_sync_table_mode,
                 resolve_postgres_database_override,
             )
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
@@ -409,7 +447,14 @@ class GraphDBFactory:
                 SYNC_MODE_APP,
             )
             sync_mode = SYNC_MODE_APP
-        sync_table_mode = str(cfg.get("sync_table_mode") or "snapshot").strip() or "snapshot"
+        try:
+            sync_table_mode = normalize_sync_table_mode(cfg.get("sync_table_mode"))
+        except ValueError:
+            logger.warning(
+                "Unknown sync_table_mode %r in graph_engine_config — using snapshot",
+                cfg.get("sync_table_mode"),
+            )
+            sync_table_mode = "snapshot"
         sync_timeout_s = int(cfg.get("sync_timeout_s") or _SYNC_DEFAULT_TIMEOUT_S)
         sync_uc_catalog = str(cfg.get("sync_uc_catalog") or "").strip()
         sync_uc_schema_override = str(cfg.get("sync_uc_schema") or "").strip()
@@ -466,7 +511,7 @@ class GraphDBFactory:
                 sync_mode = SYNC_MODE_APP
 
         try:
-            return LakebaseFlatStore(
+            store = LakebaseFlatStore(
                 auth,
                 schema=schema,
                 database_override=database_override,
@@ -477,6 +522,8 @@ class GraphDBFactory:
                 sync_uc_schema=sync_uc_schema,
                 synced_manager=synced_manager,
             )
+            store._domain = domain
+            return store
         except Exception as e:
             logger.exception("Failed to create Lakebase graph store: %s", e)
             return None
@@ -485,6 +532,8 @@ class GraphDBFactory:
         self,
         domain: Any,
         settings: Optional[Any] = None,
+        *,
+        for_write: bool = False,
     ) -> Optional[Any]:
         """Instantiate :class:`DeltaFlatStore` on SQL Warehouse."""
         try:
@@ -494,7 +543,7 @@ class GraphDBFactory:
             logger.warning("Delta graph engine unavailable: %s", exc)
             return None
 
-        client = create_databricks_client(domain, settings)
+        client = create_databricks_client(domain, settings, for_write=for_write)
         if client is None:
             return None
         try:
@@ -546,6 +595,8 @@ class GraphDBFactory:
         settings: Optional[Any] = None,
         engine: Optional[str] = None,
         engine_config: Optional[Dict[str, Any]] = None,
+        *,
+        for_write: bool = False,
     ) -> Optional[Any]:
         """Convenience wrapper using the package singleton factory instance."""
         return _get_factory_singleton().create(
@@ -553,6 +604,7 @@ class GraphDBFactory:
             settings=settings,
             engine=engine,
             engine_config=engine_config,
+            for_write=for_write,
         )
 
 

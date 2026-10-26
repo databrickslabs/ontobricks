@@ -1,4 +1,4 @@
-"""Contract tests: Domain → Information Neo4j connection picker wiring."""
+"""Contract tests: Domain → General Neo4j connection picker wiring."""
 
 from __future__ import annotations
 

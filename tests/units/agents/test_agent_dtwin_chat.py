@@ -344,7 +344,7 @@ class TestQueryGraphql:
 class TestRunSparql:
     def test_empty_query_returns_error(self, patch_client):
         out = chat_tools.tool_run_sparql(_ctx(), query="")
-        assert json.loads(out)["error"].startswith("Missing")
+        assert "No SPARQL query" in json.loads(out)["error"]
 
     @pytest.mark.parametrize(
         "dangerous",
@@ -359,7 +359,7 @@ class TestRunSparql:
     def test_mutating_queries_are_refused(self, patch_client, dangerous):
         patch_client(lambda _r: httpx.Response(500))  # never reached
         out = chat_tools.tool_run_sparql(_ctx(), query=dangerous)
-        assert "Refusing" in json.loads(out)["error"]
+        assert "read-only" in json.loads(out)["error"]
 
     def test_bad_limit_returns_error(self, patch_client):
         out = chat_tools.tool_run_sparql(

@@ -3,9 +3,10 @@
  *
  * Settings → Health section.  Manages two lazy-loaded tabs:
  *
- *   Databricks tab  — calls GET /health (readiness probes: filesystem, auth,
- *                     warehouse, CloudFetch, registry config, Lakebase);
- *                     renders a flat KPI + check table, same shape as before.
+ *   Databricks tab  — calls GET /settings/diagnostics/readiness (admin-only
+ *                     readiness probes: filesystem, auth, warehouse,
+ *                     CloudFetch, registry config, Lakebase); renders a flat
+ *                     KPI + check table.
  *
  *   Diagnostics tab — calls GET /settings/diagnostics (admin-only, grouped
  *                     deep-dive: UC privileges, Lakebase registry tables,
@@ -45,7 +46,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // TAB 1 — Databricks readiness probes (GET /health)
+    // TAB 1 — Databricks readiness probes (GET /settings/diagnostics/readiness)
     // ════════════════════════════════════════════════════════════════════
 
     async function loadHealth() {
@@ -64,12 +65,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let data;
         try {
-            const resp = await fetch('/health', { credentials: 'same-origin' });
+            const resp = await fetch('/settings/diagnostics/readiness', { credentials: 'same-origin' });
+            if (resp.status === 403) {
+                container.innerHTML =
+                    '<div class="alert alert-warning small mb-0">' +
+                    '<i class="bi bi-shield-lock me-1"></i>' +
+                    'Readiness probes are admin-only. You do not have permission to run them.' +
+                    '</div>';
+                if (overall) {
+                    overall.className   = 'badge bg-secondary ms-2';
+                    overall.textContent = 'Forbidden';
+                }
+                return;
+            }
             data = await resp.json();
         } catch (err) {
             container.innerHTML =
                 '<div class="alert alert-danger small mb-0">' +
-                'Network error while contacting /health: ' + escapeHtml(String(err)) +
+                'Network error while running readiness probes: ' + escapeHtml(String(err)) +
                 '</div>';
             if (overall) {
                 overall.className   = 'badge bg-danger ms-2';
@@ -99,7 +112,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (checks.length === 0) {
             container.innerHTML =
                 '<div class="alert alert-warning small mb-0">' +
-                'No checks were returned by /health — the readiness probe may not be configured.' +
+                'No readiness checks were returned.' +
                 '</div>';
             return;
         }
@@ -283,10 +296,4 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Utilities ────────────────────────────────────────────────────────
 
-    function escapeHtml(text) {
-        if (text == null) return '';
-        const div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
-    }
 });

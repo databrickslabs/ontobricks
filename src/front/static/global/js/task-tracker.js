@@ -12,15 +12,26 @@ const POLL_INTERVAL_IDLE = 30000;   // 30s when idle
 let lastFetchErrorAt = 0;
 
 // Task type to URL mapping
+//
+// 'ontology_generation' never matched a real backend task_type (the staged
+// Generate workflow creates 'ontology_generate_detect' and
+// 'ontology_generate_complete' — see
+// `src/api/routers/internal/ontology.py`'s `/wizard/generate/detect` and
+// `/wizard/generate/complete` routes) — every "Open task" click on a
+// Generate task silently fell through to no deep link. Both stages resume
+// into the same wizard panel: `initOntologyWizard()` reads the persisted
+// draft's stage and resumes at the right step, so one URL covers both.
 const TASK_TYPE_URLS = {
-    'ontology_generation': '/ontology#wizard',
+    'ontology_generate_detect': '/ontology#wizard',
+    'ontology_generate_complete': '/ontology#wizard',
     'auto_assign': '/mapping#autoassign',
     'metadata_load': '/domain#metadata',
     'metadata_update': '/domain#metadata',
     'triplestore_sync': '/dtwin#sync',
     'registry_archive': '/dtwin#sync',
     'quality_checks': '/dtwin#quality',
-    'graph_analytics': '/dtwin#analytics'
+    'graph_analytics': '/dtwin#analytics',
+    'entity_job_action': '/dtwin'
 };
 
 // =====================================================
@@ -124,13 +135,17 @@ function notifyTaskTransition(task) {
     const durSuffix = duration ? ` <span class="text-muted small">(in ${duration})</span>` : '';
     let type = 'info';
     let body;
+    const runUrl = task.result && task.result.run_page_url;
+    const runLink = runUrl
+        ? ` <a href="${escapeHtml(runUrl)}" target="_blank" rel="noopener">Open run</a>`
+        : '';
     if (task.status === 'completed') {
         type = 'success';
-        body = `Task <strong>${name}</strong> completed${durSuffix}`;
+        body = `Task <strong>${name}</strong> completed${durSuffix}${runLink}`;
     } else if (task.status === 'failed') {
         type = 'error';
         const err = task.error || task.message || 'Unknown error';
-        body = `Task <strong>${name}</strong> failed${durSuffix}: ${escapeHtml(err)}`;
+        body = `Task <strong>${name}</strong> failed${durSuffix}: ${escapeHtml(err)}${runLink}`;
     } else if (task.status === 'cancelled') {
         type = 'warning';
         body = `Task <strong>${name}</strong> cancelled${durSuffix}`;
@@ -289,6 +304,12 @@ function renderTaskItem(task) {
         }
     }
 
+    const runUrl = task.result && /^https?:\/\//i.test(task.result.run_page_url || '')
+        ? task.result.run_page_url : '';
+    const runLinkHtml = runUrl
+        ? `<a class="small d-inline-block mt-1" href="${escapeAttr(runUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right me-1"></i>Open run in Databricks</a>`
+        : '';
+
     const actionsHtml = task.status === 'running'
         ? `<button class="btn btn-link btn-sm p-0 text-danger" onclick="event.stopPropagation(); cancelTask('${task.id}')" title="Cancel">
             <i class="bi bi-x-circle"></i>
@@ -315,6 +336,7 @@ function renderTaskItem(task) {
                         <span class="fw-medium">${escapeHtml(task.name)}</span>
                     </div>
                     <small class="text-muted">${escapeHtml(task.message || statusConfig.label)}</small>
+                    ${runLinkHtml}
                     ${progressHtml}
                 </div>
                 <div class="d-flex align-items-center gap-2">

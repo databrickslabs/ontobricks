@@ -59,8 +59,20 @@ const GraphQLPlayground = (() => {
 
     function _el(id) { return document.getElementById(id); }
 
-    function _show(id) { const e = _el(id); if (e) { e.classList.remove('d-none'); e.style.display = ''; } }
-    function _hide(id) { const e = _el(id); if (e) e.style.display = 'none'; }
+    function _show(id) {
+        const e = _el(id);
+        if (e) {
+            e.classList.remove('d-none');
+            e.style.display = '';
+        }
+    }
+    function _hide(id) {
+        const e = _el(id);
+        if (e) {
+            e.classList.add('d-none');
+            e.style.display = 'none';
+        }
+    }
 
     function _hideAll() {
         ['graphqlLoading', 'graphqlError', 'graphiql-container'].forEach(_hide);

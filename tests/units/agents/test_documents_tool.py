@@ -1,13 +1,4 @@
-"""Unit tests for ``agents.tools.documents``.
-
-Covers the document-reading tool's three paths:
-
-* plain-text files are decoded as UTF-8 (unchanged behaviour),
-* binary files with no SQL warehouse fall back to an informative error,
-* binary files with a warehouse are parsed to markdown via
-  ``ai_parse_document`` (warehouse query mocked), with truncation and an
-  in-run cache.
-"""
+"""Agent document tools read only the Lakebase Knowledge Store corpus."""
 
 from __future__ import annotations
 
@@ -17,140 +8,114 @@ import pytest
 
 from agents.tools import documents as docs
 from agents.tools.context import ToolContext
+from back.core.databricks import DocumentParseService
+from tests.fixtures.factories.registry import FakeDocumentStore
+
+FOLDER, VERSION = "dom", "1"
 
 
-# ---------------------------------------------------------------------------
-# Fixtures / helpers
-# ---------------------------------------------------------------------------
-
-
-def _ctx(warehouse_id: str = "") -> ToolContext:
+def _ctx(documents=None) -> ToolContext:
     return ToolContext(
         host="https://test.databricks.com",
         token="test-token",
         registry={"catalog": "main", "schema": "ob", "volume": "docs"},
-        domain_folder="dom",
-        domain_version="1",
-        warehouse_id=warehouse_id,
+        domain_folder=FOLDER,
+        domain_version=VERSION,
+        documents=list(documents or []),
     )
 
 
-class _FakeResponse:
-    def __init__(self, content: bytes, status_code: int = 200) -> None:
-        self.content = content
-        self.status_code = status_code
-        self.headers = {"content-type": "application/octet-stream"}
-
-    def raise_for_status(self) -> None:  # pragma: no cover - trivial
-        return None
-
-
-class _FakeClient:
-    """Stand-in for DatabricksClient that records query calls."""
-
-    last_query = None
-    call_count = 0
-
-    def __init__(self, *_args, **kwargs) -> None:
-        self.warehouse_id = kwargs.get("warehouse_id", "wh-123")
-
-    def execute_query(self, query: str):
-        _FakeClient.last_query = query
-        _FakeClient.call_count += 1
-        return [{"parsed": _FakeClient.payload}]
+def _service_with(*rows) -> DocumentParseService:
+    store = FakeDocumentStore()
+    for filename, status, parsed_text in rows:
+        store.upsert_document(
+            FOLDER,
+            VERSION,
+            filename=filename,
+            source_hash="h",
+            parser="ai_parse_document",
+            status="pending",
+            size_bytes=12,
+            source_bytes=b"%PDF",
+        )
+        if status == "ready":
+            store.set_document_ready(FOLDER, VERSION, filename, parsed_text=parsed_text)
+        elif status == "failed":
+            store.set_document_failed(
+                FOLDER, VERSION, filename, error="Document parsing is not ready"
+            )
+    return DocumentParseService(store)
 
 
-@pytest.fixture(autouse=True)
-def _reset_fake_client():
-    _FakeClient.last_query = None
-    _FakeClient.call_count = 0
-    # Mirrors the live ai_parse_document v2.0 shape: text in elements[].content,
-    # pages carry only id/image_uri.
-    _FakeClient.payload = json.dumps(
-        {
-            "document": {
-                "elements": [
-                    {"id": 0, "type": "text", "content": "Page one"},
-                    {"id": 1, "type": "text", "content": "Page two"},
-                ],
-                "pages": [{"id": 0, "image_uri": None}],
-            },
-            "metadata": {"version": "2.0"},
-        }
-    )
-    yield
-
-
-def _patch_client(monkeypatch, client_cls=None):
-    import importlib
-
-    dbc_module = importlib.import_module("back.core.databricks.DatabricksClient")
-    monkeypatch.setattr(dbc_module, "DatabricksClient", client_cls or _FakeClient)
-
-
-# ---------------------------------------------------------------------------
-# tool_read_document — text path (unchanged)
-# ---------------------------------------------------------------------------
-
-
-def test_read_text_file_decodes_utf8(monkeypatch):
+def _use(monkeypatch, service):
     monkeypatch.setattr(
-        docs.requests, "get", lambda *a, **k: _FakeResponse(b"hello world")
+        docs, "_document_scope", lambda _ctx: (service, FOLDER, VERSION)
     )
-    out = json.loads(docs.tool_read_document(_ctx(), filename="notes.txt"))
-    assert out["content"] == "hello world"
-    assert out["truncated"] is False
-    assert "parsed_with" not in out
 
 
-# ---------------------------------------------------------------------------
-# tool_read_document — binary path
-# ---------------------------------------------------------------------------
+def test_read_ready_pdf_returns_parsed_text(monkeypatch):
+    service = _service_with(("spec.pdf", "ready", "Page one\n\nPage two"))
+    _use(monkeypatch, service)
 
-
-def test_read_pdf_without_warehouse_returns_error(monkeypatch):
-    # Should never hit the warehouse; no client patched.
     out = json.loads(docs.tool_read_document(_ctx(), filename="spec.pdf"))
-    assert "error" in out
-    assert "ai_parse_document" in out["error"]
 
-
-def test_read_pdf_with_warehouse_parses_markdown(monkeypatch):
-    _patch_client(monkeypatch)
-    out = json.loads(docs.tool_read_document(_ctx("wh-123"), filename="spec.pdf"))
     assert out["content"] == "Page one\n\nPage two"
-    assert out["parsed_with"] == "ai_parse_document"
-    assert "ai_parse_document" in _FakeClient.last_query
-    assert "READ_FILES" in _FakeClient.last_query
-    assert "spec.pdf" in _FakeClient.last_query
-    assert "map('version', '2.0')" in _FakeClient.last_query
+    assert out["parse_status"] == "ready"
 
 
-def test_read_pdf_caches_within_run(monkeypatch):
-    _patch_client(monkeypatch)
-    ctx = _ctx("wh-123")
-    docs.tool_read_document(ctx, filename="spec.pdf")
-    docs.tool_read_document(ctx, filename="spec.pdf")
-    assert _FakeClient.call_count == 1
+@pytest.mark.parametrize("status", ["pending", "failed"])
+def test_unavailable_pdf_returns_structured_status(monkeypatch, status):
+    service = _service_with(("spec.pdf", status, ""))
+    _use(monkeypatch, service)
+
+    out = json.loads(docs.tool_read_document(_ctx(), filename="spec.pdf"))
+
+    assert out["parse_status"] == status
+    assert "content" not in out or out.get("content") == ""
 
 
-def test_read_pdf_truncates_long_output(monkeypatch):
-    long_text = "x" * (docs._MAX_DOC_CHARS + 500)
-    _FakeClient.payload = json.dumps(
-        {"document": {"elements": [{"type": "text", "content": long_text}]}}
-    )
-    _patch_client(monkeypatch)
-    out = json.loads(docs.tool_read_document(_ctx("wh-123"), filename="big.pdf"))
-    assert out["truncated"] is True
-    assert out["size"] == docs._MAX_DOC_CHARS + 500
-    assert "truncated" in out["content"]
+def test_list_documents_reports_status(monkeypatch):
+    service = _service_with(("spec.pdf", "ready", "x"))
+    _use(monkeypatch, service)
+
+    out = json.loads(docs.tool_list_documents(_ctx()))
+
+    assert out["files"] == [
+        {
+            "name": "spec.pdf",
+            "size": 12,
+            "parse_status": "ready",
+            "parser": "ai_parse_document",
+        }
+    ]
 
 
-def test_read_pdf_warehouse_failure_falls_back(monkeypatch):
-    class _Boom(_FakeClient):
-        def execute_query(self, query: str):
-            raise RuntimeError("warehouse down")
-
-    _patch_client(monkeypatch, _Boom)
-    out = json.loads(docs.tool_read_document(_ctx("wh-123"), filename="spec.pdf"))
+def test_no_registry_returns_error(monkeypatch):
+    monkeypatch.setattr(docs, "_document_scope", lambda _ctx: None)
+    out = json.loads(docs.tool_list_documents(_ctx()))
     assert "error" in out
+
+
+def test_documents_context_separates_unavailable_documents():
+    ctx = _ctx(
+        [
+            {"name": "terms.md", "content": "Asset has Location", "parse_status": "ready"},
+            {
+                "name": "manual.pdf",
+                "content": "",
+                "parse_status": "pending",
+                "error": "Document parsing is not ready",
+            },
+        ]
+    )
+
+    out = json.loads(docs.tool_get_documents_context(ctx))
+
+    assert [item["name"] for item in out["documents"]] == ["terms.md"]
+    assert out["unavailable_documents"] == [
+        {
+            "name": "manual.pdf",
+            "parse_status": "pending",
+            "error": "Document parsing is not ready",
+        }
+    ]

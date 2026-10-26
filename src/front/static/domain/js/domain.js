@@ -25,7 +25,7 @@ function enforceCamelCase(value) {
 // Configure sidebar navigation
 window.SIDEBAR_NAV_MANUAL_INIT = true;
 document.addEventListener('DOMContentLoaded', function() {
-    // Show the global domain-loading overlay while the Domain Information
+    // Show the global domain-loading overlay while the Domain → General
     // page boots up after a "New Domain" action. domain-information.js
     // hides it once its Promise.all (info + version-status + LLM
     // endpoints) resolves. Flag is set by domainNew() in navbar.js right
@@ -273,6 +273,7 @@ async function saveDomainInfo() {
     const versionEl = document.getElementById('domainVersionSelect');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const llmEndpointKindEl = document.getElementById('domainLlmEndpointKind');
     const graphBackendEl = document.getElementById('domainGraphBackend');
     const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
     const materializationEl = document.getElementById('domainLakehouseMaterialization');
@@ -308,12 +309,16 @@ async function saveDomainInfo() {
             base_uri: baseUriEl ? baseUriEl.value.trim() : '',
             base_uri_auto: _baseUriAutoMode,
             llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
+            llm_endpoint_kind: llmEndpointKindEl ? llmEndpointKindEl.value : '',
             review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
             graph_backend: graphBackendEl ? graphBackendEl.value : 'lakebase',
             neo4j_connection: (graphBackendEl && graphBackendEl.value === 'neo4j' && neo4jDbEl)
                 ? neo4jDbEl.value : '',
             lakehouse_materialization: (graphBackendEl && graphBackendEl.value === 'databricks' && materializationEl)
-                ? materializationEl.value : 'table',
+                ? materializationEl.value : 'view',
+            graph_cache_enabled: (graphBackendEl && (graphBackendEl.value === 'databricks' || graphBackendEl.value === 'lakebase'))
+                ? ((document.getElementById('domainGraphCacheEnabled') || {}).checked !== false)
+                : undefined,
         };
     
     try {
@@ -330,6 +335,9 @@ async function saveDomainInfo() {
         
         if (data.success) {
             showNotification('Domain info saved successfully!', 'success');
+            window.OB?.updateLlmAvailability(
+                Boolean((data.info?.llm_endpoint || '').trim())
+            );
             // Keep the selector's baseline in step so a later refresh of the
             // Settings connection list re-selects what was just persisted.
             if (neo4jDbEl) {
@@ -365,10 +373,6 @@ async function saveDomainInfo() {
 }
 
 // Note: save-to-local helpers live in domain template partials when present.
-
-function loadDomainFromFile() {
-    document.getElementById('domainFileInput').click();
-}
 
 async function handleDomainFileUpload(input) {
     const file = input.files[0];
@@ -430,86 +434,6 @@ async function newDomain() {
         }
     } catch (error) {
         showNotification('Failed: ' + error.message, 'error');
-    }
-}
-
-/**
- * Save domain from settings page with validation
- * For new domains, requires Domain Name and Base URI
- */
-async function saveDomainFromSettings() {
-    const nameEl = document.getElementById('domainName');
-    const baseUriEl = document.getElementById('domainBaseUri');
-    
-    // Get values
-    const domainName = nameEl ? nameEl.value.trim() : '';
-    const baseUri = baseUriEl ? baseUriEl.value.trim() : '';
-    
-    // Clear previous validation states
-    if (nameEl) nameEl.classList.remove('is-invalid');
-    if (baseUriEl) baseUriEl.classList.remove('is-invalid');
-    
-    // Validate required fields
-    let hasErrors = false;
-    
-    if (!domainName) {
-        if (nameEl) {
-            nameEl.classList.add('is-invalid');
-            nameEl.focus();
-        }
-        showNotification('Domain Name is required', 'warning');
-        hasErrors = true;
-    } else if (!/^[A-Z][a-zA-Z0-9]*$/.test(domainName)) {
-        if (nameEl) {
-            nameEl.classList.add('is-invalid');
-            if (!hasErrors) nameEl.focus();
-        }
-        showNotification('Domain Name must be CamelCase and alphanumeric only (e.g. MyOntologyDomain)', 'warning');
-        hasErrors = true;
-    }
-    
-    if (!baseUri) {
-        if (baseUriEl) {
-            baseUriEl.classList.add('is-invalid');
-            if (!hasErrors) baseUriEl.focus();
-        }
-        if (!hasErrors) {
-            showNotification('Base URI is required', 'warning');
-        } else {
-            showNotification('Domain Name and Base URI are required', 'warning');
-        }
-        hasErrors = true;
-    }
-    
-    // Validate Base URI format
-    if (baseUri && !isValidUri(baseUri)) {
-        if (baseUriEl) {
-            baseUriEl.classList.add('is-invalid');
-            if (!hasErrors) baseUriEl.focus();
-        }
-        showNotification('Base URI must be a valid URI (e.g., https://example.org/ontology#)', 'warning');
-        hasErrors = true;
-    }
-    
-    if (hasErrors) {
-        return;
-    }
-    
-    // Remove validation states on input
-    if (nameEl) {
-        nameEl.addEventListener('input', () => nameEl.classList.remove('is-invalid'), { once: true });
-    }
-    if (baseUriEl) {
-        baseUriEl.addEventListener('input', () => baseUriEl.classList.remove('is-invalid'), { once: true });
-    }
-    
-    // Save domain info to session and persist to the registry (no confirmation popup)
-    // (saveDomainInfo only saves to session; domainSave writes to the registry)
-    if (typeof domainSave === 'function') {
-        await domainSave();
-    } else {
-        await saveDomainInfo();
-        showNotification('Domain info saved. Use the menu "Save Domain" to persist to Unity Catalog.', 'info', 4000);
     }
 }
 

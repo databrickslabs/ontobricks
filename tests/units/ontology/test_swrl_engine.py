@@ -1,8 +1,9 @@
 """Tests for the SWRL SQL translator and SWRLEngine."""
 
-from back.core.reasoning.models import InferredTriple, ReasoningResult
-from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
-from back.core.reasoning.SWRLParser import SWRLParser
+from back.core.reasoning.results.InferredTriple import InferredTriple
+from back.core.reasoning.results.ReasoningResult import ReasoningResult
+from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+from back.core.reasoning.swrl.SWRLParser import SWRLParser
 
 
 # -- Atom parser tests ----------------------------------------------------
@@ -147,7 +148,7 @@ class TestBuiltinNumericCasts:
     """
 
     def test_no_builtin_emits_a_bare_cast(self):
-        from back.core.reasoning.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+        from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
 
         offenders = [
             b.name
@@ -157,7 +158,7 @@ class TestBuiltinNumericCasts:
         assert offenders == []
 
     def test_greater_than_uses_try_cast(self):
-        from back.core.reasoning.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+        from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
 
         builtin = SWRLBuiltinRegistry.get("greaterThan")
         assert (
@@ -171,7 +172,7 @@ class TestBuiltinNumericCasts:
 
 class TestSWRLEngine:
     def test_execute_rules_with_mock_store(self):
-        from back.core.reasoning.SWRLEngine import SWRLEngine
+        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
         from unittest.mock import MagicMock
 
         store = MagicMock()
@@ -205,7 +206,7 @@ class TestSWRLEngine:
         assert len(result.inferred_triples) >= 1
 
     def test_execute_empty_rules(self):
-        from back.core.reasoning.SWRLEngine import SWRLEngine
+        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
         from unittest.mock import MagicMock
 
         store = MagicMock()

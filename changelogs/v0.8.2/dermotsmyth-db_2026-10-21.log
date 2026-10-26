@@ -1,0 +1,75 @@
+================================================================================
+## Read table descriptions from the Unity Catalog tables API
+================================================================================
+
+Context:
+Reliance's Data Sources showed no table descriptions. `get_table_comment()`
+queried `<catalog>.information_schema.tables`, which the app's service
+principal cannot read in their workspace; the broad except swallowed the error
+and returned "" for every table. Their local workaround parsed the text of
+`DESCRIBE TABLE EXTENDED`.
+
+Changes:
+
+1. src/back/core/databricks/uc/UnityCatalog.py
+   `get_table_comment()` reads `comment` from `GET /api/2.1/unity-catalog/tables/{full_name}`, the API `list_tables_and_views()` already uses, which needs only USE CATALOG, USE SCHEMA and SELECT. Identifiers are still validated first, and errors still return "".
+2. tests/units/core/test_unity_catalog.py
+   Replaced the information_schema SQL tests. Every case runs with SQL access refused; the tests cover the returned comment, the request URL, a table without a comment, and an API refusal.
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- tests/units/core/test_unity_catalog.py
+- changelogs/v0.8.2/dermotsmyth-db_2026-10-21.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5939 passed, 316 skipped, 9 deselected, 0 failed in 38.05s. Deselected: 6 by the `not scenario` marker and the 3 network-bound health tests listed on 2026-10-19. The two new behaviour tests failed on the old code (SQL refused → ""; tables API never called).
+
+================================================================================
+## Prepare the v0.8.2 release
+================================================================================
+
+Context:
+Release v0.8.2 with the fixes merged after the 13 October release notes: the
+Knowledge Graph build fix (#201) and table descriptions (section above).
+
+Changes:
+
+1. releases/ReleaseNotes_V0.8.2.md
+   Added the Knowledge Graph build and table-description fixes (highlights, two sections, upgrade notes, bug fixes) and replaced the test-status line with the full-suite result.
+2. uv.lock
+   Root package version 0.8.1 → 0.8.2, matching pyproject.toml (one line). A re-lock was not possible from this network: pypi.org is not reachable directly, and `uv lock` through the internal index rewrites every URL to `pypi-proxy.cloud.databricks.com`, which must not be committed (see `.cursor/09-package-management.mdc`).
+
+Modified files:
+- releases/ReleaseNotes_V0.8.2.md
+- uv.lock
+- changelogs/v0.8.2/dermotsmyth-db_2026-10-21.log
+
+Tests: no code change; same full-suite run as the section above (5939 passed, 0 failed).
+
+================================================================================
+## Address Isaac Review comments on PR #202
+================================================================================
+
+Context:
+Isaac Review (`isaac review --base origin/0.8.2`) posted no findings. Of the
+comments it filtered below its auto-post threshold, three were worth acting on:
+two test gaps and a docstring that overclaimed. The others were pre-existing
+behaviour (validation outside the try, one request and one logged error per
+table) or speculative (non-dict response body), and the `has_valid_auth`
+concern does not apply: `DatabricksAuth` reads DATABRICKS_TOKEN at init.
+
+Changes:
+
+1. tests/units/core/test_unity_catalog.py
+   New tests: no request is sent without credentials or without a host (the guard was untested). The "no comment" and "API refuses" tests now also check the tables API was called, so they no longer pass on the old SQL path. Mutation-checked: removing the guard, or skipping the API call, fails these tests.
+2. src/back/core/databricks/uc/UnityCatalog.py
+   Docstring: `get_table_comment()` returns "" when the table has no comment or the call fails; invalid identifiers still raise ValidationError.
+3. releases/ReleaseNotes_V0.8.2.md
+   Test count updated.
+
+Modified files:
+- tests/units/core/test_unity_catalog.py
+- src/back/core/databricks/uc/UnityCatalog.py
+- releases/ReleaseNotes_V0.8.2.md
+- changelogs/v0.8.2/dermotsmyth-db_2026-10-21.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5941 passed, 316 skipped, 9 deselected, 0 failed in 35.12s (same 9 deselected as above).

@@ -48,13 +48,47 @@ def test_preflight_requires_a_non_empty_data_table(monkeypatch):
     assert "Build" in reason
 
 
+def test_data_table_probe_uses_delta_sql_client_builder(monkeypatch):
+    """The probe must preserve the Lakehouse warehouse transport configuration."""
+    import importlib
+
+    from back.core.graph_analysis import preflight
+
+    client = type(
+        "Client",
+        (),
+        {"execute_query": lambda self, query: [{"ok": 1}]},
+    )()
+    builder_calls = []
+
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings, *, for_write=False: (
+            builder_calls.append((domain, settings, for_write)) or client
+        ),
+    )
+    monkeypatch.setattr(
+        importlib.import_module("back.core.databricks.DatabricksClient"),
+        "DatabricksClient",
+        lambda **kwargs: pytest.fail("probe bypassed the Delta SQL client builder"),
+    )
+
+    domain = object()
+    settings = object()
+    assert preflight.probe_data_table(domain, settings, "cat.sch.snapshot") == (
+        True,
+        "",
+    )
+    assert builder_calls == [(domain, settings, True)]
+
+
 def test_the_scheduler_gates_on_the_same_preflight(monkeypatch):
     """A scheduled run fails with the actionable reason, not a job error."""
     from types import SimpleNamespace
 
     import back.core.graph_analysis as graph_analysis
     from back.core.errors import ValidationError
-    from back.objects.registry.scheduler_tasks import analytics
+    from back.objects.registry.schedule import analytics
 
     monkeypatch.setattr(
         graph_analysis,

@@ -1,20 +1,27 @@
 # Scenario campaign (live E2E integration)
 
-These suites are a **single, ordered journey** over one durable domain
-(named `TestScenario1`, registry folder `testscenario1`) against a **running**
-OntoBricks app. Domain names must be CamelCase alphanumeric; the folder is the
-sanitized lowercase form and is what appears in REST paths. Unlike the unit/mcp
-suites they are stateful, order-dependent, billable (warehouse + LLM), and
-mutate the registry the app reads — so they are **opt-in** (`-m scenario`,
-gated by `ONTOBRICKS_SCENARIO_LIVE=1`) and excluded from routine/agent runs.
+These suites are a **single, ordered journey** over durable domains prefixed
+`Zz` (CamelCase stand-in for `ZZ_` — underscores are illegal in domain names)
+so they sort last in the registry. The shared story uses `ZzTestScenario1`
+(folder `zztestscenario1`). `make scenario-campaign` starts with
+`test_scenario_00_purge.py`, which **deletes every leftover `Zz*` / `ZZ_*`
+domain** (plus the pre-rename folders) before scenario 1 recreates them.
+
+Unlike the unit/mcp suites they are stateful, order-dependent, billable
+(warehouse + LLM), and mutate the registry the app reads — so they are
+**opt-in** (`-m scenario`, gated by `ONTOBRICKS_SCENARIO_LIVE=1`) and excluded
+from routine/agent runs.
 
 ## The journey
 
 | Order | File | Role |
 | --- | --- | --- |
-| 1 | `test_scenario_01_generate_live.py` | Import → generate ontology → automap → **build KG** → publish **V1**. Creates the domain. |
+| 0 | `test_scenario_00_purge.py` | **Preflight.** Delete leftover `Zz*` / `ZZ_*` campaign domains (and the old `testscenario1` / `testzerocopy` / `testmetadataintegrity` folders). |
+| 1 | `test_scenario_01_generate_live.py` | Import → generate ontology → automap → **build KG** → persist **V1**. Creates `ZzTestScenario1`. |
 | 2 | `test_scenario_02_collab_lifecycle.py` | Comments, tasks, review lifecycle on V1; branches a **DRAFT V2**. |
 | 3 | `test_scenario_03_rules_analysis.py` | SHACL + business rules + reasoning + analysis on **V2**; builds V2's graph. Leaves V1 untouched. |
+| 4 | `test_scenario_04_metadata_integrity.py` | **Independent** (own domain + scratch UC tables): metadata refresh/integrity. |
+| 5 | `test_scenario_05_zero_copy_entity_features.py` | **Independent** (own domain `ZzTestZeroCopy` + scratch UC tables/functions): switches the graph backend to **Lakehouse zero-copy** (`…_data` as a VIEW), builds, proves a UC insert is visible with no rebuild, then exercises **virtual attributes** (UC table function), a **UC function action** and a **SWRL business rule** on one entity. |
 | … | *(future `test_scenario_NN_*.py`)* | New steps slot in here, before validation. |
 | last | `test_scenario_validation.py` | **Read-only.** Asserts the cumulative state of every prior scenario and emits a report. |
 
@@ -50,7 +57,8 @@ suite in order and writes reports to `artifacts/scenarios/`:
 | `ONTOBRICKS_SCENARIO_BASE` | *(unset)* | Alternate base override (falls back after `LIVE_BASE`). |
 | `ONTOBRICKS_SCENARIO_CHAIN` | *(unset)* | `1` enables cross-file dependency chaining (set by the make target — see below). |
 | `ONTOBRICKS_SCENARIO_REPORT` | `artifacts/scenarios/campaign_report.md` | Where the validation Markdown report is written. |
-| `ONTOBRICKS_SCENARIO_CATALOG` / `_SCHEMA` | *(scenario default)* | Source tables scenario 1 imports from. |
+| `ONTOBRICKS_SCENARIO_GEN_TIMEOUT` | `420` | Max seconds to wait for Stage 1 detection. |
+| `ONTOBRICKS_SCENARIO_COMPLETE_TIMEOUT` | `420` | Max seconds to wait for Stage 3 completion/merge. |
 
 The make recipe inherits your shell environment, so exporting any of the above
 before `make scenario-campaign` works.
@@ -67,6 +75,13 @@ before `make scenario-campaign` works.
   `DATABRICKS_SQL_WAREHOUSE_ID` before the campaign, or run it independently
   with those values plus `ONTOBRICKS_SCENARIO_LIVE=1` and
   `ONTOBRICKS_LIVE_BASE`.
+- Scenario 5 needs the same Databricks credentials: it creates and drops
+  `<prefix>_customers` / `<prefix>_orders` plus two UC functions
+  (`<prefix>_profile`, `<prefix>_flag`) under
+  `ONTOBRICKS_SCENARIO_CATALOG.ONTOBRICKS_SCENARIO_SCHEMA` (default
+  `benoit_cayla.customer`, prefix `ONTOBRICKS_SCENARIO5_PREFIX`, default
+  `zerocopy_scratch`). The KG build wait is `ONTOBRICKS_SCENARIO5_BUILD_TIMEOUT`
+  (default `420`). It deletes and recreates the `testzerocopy` domain each run.
 
 ## Dependency chaining
 
@@ -111,7 +126,7 @@ coordinate with others.
            os.environ.get("ONTOBRICKS_SCENARIO_LIVE") != "1",
            reason="live scenario — set ONTOBRICKS_SCENARIO_LIVE=1 to run",
        ),
-       *chain_marker("scenario_N", depends=("scenario_<prev>",)),
+       *chain_marker("scenario_N", depends=("scenario_0", "scenario_<prev>",)),
    ]
    ```
 

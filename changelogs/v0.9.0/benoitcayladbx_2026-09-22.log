@@ -1,0 +1,593 @@
+## Keep generated SQL readable
+
+Context: The SPARQL playground's Generated SQL text inherited a white
+foreground from generic code styling while its panel remained white. Scoped
+design-token colors now guarantee readable SQL without affecting other code
+blocks.
+
+Changes:
+
+1. src/front/static/query/css/query-sparql.css
+   Add scoped foreground, background, border, radius, and padding styles for the Generated SQL block.
+2. tests/units/front/test_sparql_playground_contract.py
+   Add a regression contract that requires explicit readable token colors on the SQL container and code.
+
+Modified files:
+- src/front/static/query/css/query-sparql.css
+- tests/units/front/test_sparql_playground_contract.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6835 passed, 308 skipped, 6 deselected, 1 xfailed in 47.54s.
+
+## Add entity-search builder for typed GraphQL lookups
+
+Context: Task 3 of the cached graph reads plan adds a bounded SQL builder for
+GraphQL typed subject lookup against the `_entity_search` companion table.
+The builder matches `type_uri` by exact equality and optionally applies the
+shared label/URI text clause; wiring into GraphQL is deferred to Task 6.
+
+Changes:
+
+1. src/back/core/graphdb/entity_search.py
+   Add `entity_search_uri_search_sql` and export it via `__all__`.
+2. tests/units/graphdb/test_entity_search_sql.py
+   Add three unit tests covering type filter, text search, and pagination SQL shape.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- tests/units/graphdb/test_entity_search_sql.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6860 passed, 308 skipped, 6 deselected, 1 xfailed in 49.41s.
+
+## Add the Knowledge Graph SPARQL playground
+
+Context: Add a read-only SPARQL workspace beside GraphQL on the Knowledge
+Graph Query page. Users can run SELECT queries, inspect generated SQL, export
+results, and explicitly send triple-shaped rows to Explorer without Run
+navigating away.
+
+Changes:
+
+1. src/back/core/w3c/sparql/QuerySafety.py
+   Centralize the read-only SPARQL mutation gate.
+2. src/api/routers/internal/dtwin.py
+   Enforce the gate on execute and translate routes.
+3. src/agents/agent_dtwin_chat/tools.py
+   Reuse the shared SPARQL safety rule.
+4. src/front/templates/partials/dtwin/_query_query.html
+   Add the shared GraphQL/SPARQL Query shell.
+5. src/front/templates/partials/dtwin/_query_graphql.html
+   Preserve GraphiQL as the GraphQL tab pane.
+6. src/front/templates/partials/dtwin/_query_sparql.html
+   Add the SPARQL editor and result workspace.
+7. src/front/static/query/js/query-execute.js
+   Run samples and render results, SQL, CSV, and Explorer actions.
+8. src/front/static/query/js/query-sigmagraph.js
+   Load triple-shaped query results into Explorer.
+9. src/front/static/query/css/query-sparql.css
+   Add token-based responsive split layout.
+10. src/front/static/global/css/query.css
+    Retarget existing Grid.js styling to the SPARQL results pane.
+11. tests/
+    Cover the safety boundary, Query markup, controller behavior, and deep link.
+12. README.md, docs/user-guide.md, docs/data-access.md, and docs/sphinx/api/app.core.w3c.rst
+    Document the playground, execution path, and an executable triple-query example.
+
+Modified files:
+- src/back/core/w3c/sparql/QuerySafety.py
+- src/back/core/w3c/sparql/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/front/templates/dtwin.html
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/templates/partials/dtwin/_query_graphql.html
+- src/front/templates/partials/dtwin/_query_sparql.html
+- src/front/static/query/css/query-sparql.css
+- src/front/static/global/css/query.css
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-graphql.js
+- src/front/static/query/js/query-execute.js
+- src/front/static/query/js/query-sigmagraph.js
+- tests/back/core/w3c/sparql/test_query_safety.py
+- tests/units/api/test_dtwin_sparql_routes.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- tests/units/front/test_sparql_playground_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- README.md
+- docs/user-guide.md
+- docs/data-access.md
+- docs/sphinx/api/app.core.w3c.rst
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6835 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.75s.
+
+## Restore mobile SPARQL results and keyboard focus
+
+Context: Browser verification found that the stacked mobile SPARQL workspace
+collapsed successful query results to zero height and did not reliably expose
+visible keyboard focus on its language tabs and controls.
+
+Changes:
+
+1. src/front/static/query/css/query-sparql.css
+   Restore SPARQL-only natural mobile flow, reserve a scrollable result surface, and add SPARQL-scoped token-based focus-visible indicators.
+2. tests/units/front/test_sparql_playground_contract.py
+   Add parsed CSS contracts for the mobile layout, result scroll ownership, and explicit keyboard focus styles.
+
+Modified files:
+- src/front/static/query/css/query-sparql.css
+- tests/units/front/test_sparql_playground_contract.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6837 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.06s.
+
+## Isolate the mobile SPARQL cascade
+
+Context: Follow-up review found that the mobile natural-flow reset also
+matched the active GraphQL pane and that the CSS contract did not model the
+later shared stylesheet's competing result minimum.
+
+Changes:
+
+1. src/front/static/query/css/query-sparql.css
+   Limit responsive natural-flow resets to the active SPARQL pane while preserving the stacked playground and result minimum.
+2. tests/units/front/test_sparql_playground_contract.py
+   Add GraphQL-exclusion assertions and a focused specificity-aware cascade helper using the template's real stylesheet order.
+
+Modified files:
+- src/front/static/query/css/query-sparql.css
+- tests/units/front/test_sparql_playground_contract.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6838 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.47s.
+
+## Extract is_missing_relation_error helper
+
+Context: Task 1 of the cached graph-reads plan. The missing-relation
+exception classification in `find_preview_seeds` was inline and duplicated;
+extracting it enables reuse by upcoming companion-table branches in Tasks 6
+and 8.
+
+Changes:
+
+1. src/back/core/graphdb/entity_search.py
+   Add `is_missing_relation_error` and export it from `__all__`.
+2. src/back/core/graphdb/GraphDBBackend.py
+   Replace the inline except-block markers with the shared helper.
+3. tests/units/graphdb/test_entity_search_sql.py
+   Add unit tests for known missing-relation and non-matching error markers.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- src/back/core/graphdb/GraphDBBackend.py
+- tests/units/graphdb/test_entity_search_sql.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6839 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.89s.
+
+## Extract entity-search text-match clause helper
+
+Context: Task 2 of the cached Graph Reads plan. The label/URI LIKE-clause
+construction in `preview_select_sql` is shared logic that Tasks 3 and 4 will
+reuse for GraphQL and MCP find seed builders. Extract it into a standalone
+helper without changing Explorer Preview SQL output.
+
+Changes:
+
+1. src/back/core/graphdb/entity_search.py
+   Add `_entity_search_text_clause` and refactor `preview_select_sql` to call it.
+2. tests/units/graphdb/test_entity_search_sql.py
+   Add unit tests for empty value, any/contains, label/exact, and id/starts cases.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- tests/units/graphdb/test_entity_search_sql.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6843 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.49s.
+
+## Resolve the final SPARQL playground review
+
+Context: The final playground review found that lexical mutation matching
+rejected valid queries, malformed text could reach domain access, and retired
+query UI state remained coupled to triple-store synchronization. The review
+also identified duplicate result layout ownership and non-token Grid.js colors.
+
+Changes:
+
+1. src/back/core/w3c/sparql/QuerySafety.py
+   Replace mutation-word matching with RDFLib query/update grammar classification and fail closed for malformed input.
+2. src/front/static/query/js/query.js
+   Remove superseded result globals and global copy/download actions.
+3. src/front/static/query/js/query-sync.js
+   Remove stale query-result UI writes while preserving graph readiness, rebuild, notification, and navigation behavior.
+4. src/front/static/query/js/query-execute.js
+   Normalize result guards and the Explorer navigation string style without changing behavior.
+5. src/front/static/query/css/query-sparql.css
+   Remove duplicate result-container flex declarations while preserving empty-state and mobile behavior.
+6. src/front/static/global/css/query.css
+   Replace SPARQL/Grid hardcoded colors with canonical app-shell tokens.
+7. tests/back/core/w3c/sparql/test_query_safety.py
+   Cover valid mutation-word identifiers/literals, prologued and WITH updates, and malformed input.
+8. tests/units/api/test_dtwin_sparql_routes.py
+   Prove update and malformed input rejection occurs before domain access.
+9. tests/units/front/test_sparql_playground_contract.py
+   Cover dead-state removal, retained sync flow, CSS ownership/cascade, token colors, and local style.
+
+Modified files:
+- src/back/core/w3c/sparql/QuerySafety.py
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-execute.js
+- src/front/static/query/css/query-sparql.css
+- src/front/static/global/css/query.css
+- tests/back/core/w3c/sparql/test_query_safety.py
+- tests/units/api/test_dtwin_sparql_routes.py
+- tests/units/front/test_sparql_playground_contract.py
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/back/core/w3c/sparql/test_query_safety.py tests/units/api/test_dtwin_sparql_routes.py tests/units/front/test_sparql_playground_contract.py` → 12 failed, 40 passed, 1 warning in 1.43s.
+- GREEN: `uv run --frozen pytest -q tests/back/core/w3c/sparql/test_query_safety.py tests/units/api/test_dtwin_sparql_routes.py tests/units/front/test_sparql_playground_contract.py` → 52 passed, 1 warning in 1.20s.
+- Focused: `uv run --frozen pytest -q tests/back/core/w3c/sparql/test_query_safety.py tests/units/api/test_dtwin_sparql_routes.py tests/units/agents/test_agent_dtwin_chat.py tests/units/front/test_sparql_playground_contract.py tests/units/front/test_sidebar_content_stretch_contract.py` → 223 passed, 1 warning in 1.54s.
+- Browser: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/dtwin/test_dtwin_flows.py::TestQueryPlayground` → 4 passed, 1 warning in 13.44s.
+- Mandatory: `uv run --frozen pytest -q -m "not scenario"` → 6860 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.64s.
+
+## Add entity-search seed builder for MCP find
+
+Context: Task 4 of the cached graph reads plan adds an unbounded SQL builder
+for MCP/Graph Chat find-and-traverse BFS seeding against the `_entity_search`
+companion table. Unlike the GraphQL builder, it matches `entity_type` as a
+bare local-name suffix on `type_uri` (case-insensitive `#name` / `/name`),
+mirroring legacy MCP find semantics. Wiring into MCP is deferred to Task 8.
+
+Changes:
+
+1. src/back/core/graphdb/entity_search.py
+   Add `entity_search_seed_sql` with local-name type suffix matching and optional text clause; export via `__all__`.
+2. tests/units/graphdb/test_entity_search_sql.py
+   Add four SQL-shape tests for type suffix, combined filters, search-only, and entity-type escaping.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- tests/units/graphdb/test_entity_search_sql.py
+
+Tests:
+- RED: `uv run --frozen pytest tests/units/graphdb/test_entity_search_sql.py -k seed_sql -v` → ImportError: cannot import name 'entity_search_seed_sql'.
+- GREEN: `uv run --frozen pytest tests/units/graphdb/test_entity_search_sql.py -v` → 19 passed in 0.88s.
+- Mandatory: `uv run --frozen pytest -q -m "not scenario"` → 6864 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.53s.
+
+## Add seeded adjacency BFS builder
+
+Context: Task 5 of the cached graph reads plan adds a generalized, unbounded
+leveled-CTE BFS builder for MCP find-and-traverse. Unlike the fixed-URI-list
+`bfs_sql`, `seeded_bfs_sql` accepts an arbitrary seed subquery and walks
+`_adj_out`/`_adj_in` via the existing `_anti_join` helper, returning
+`(entity, min_lvl)` rows. Wiring into `bfs_traversal` is deferred to Task 8.
+
+Changes:
+
+1. src/back/core/graphdb/adjacency.py
+   Add `seeded_bfs_sql` with per-level adjacency anti-joins and a union of
+   every visited level; export via `__all__`.
+2. tests/units/graphdb/test_adjacency_sql.py
+   Add four SQL-shape tests for depth-zero seed-only output, Spark LEFT ANTI
+   JOIN per level, Postgres NOT EXISTS per level, and level-number unions.
+
+Modified files:
+- src/back/core/graphdb/adjacency.py
+- tests/units/graphdb/test_adjacency_sql.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6868 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.53s.
+
+## Wire find_subjects_by_type to entity-search companion
+
+Context: Task 6 of the cached graph reads plan. `GraphDBBackend.find_subjects_by_type`
+— called by GraphQL's typed list resolver (`SchemaMetadata._query_subjects`) —
+now reads the `_entity_search`/`_entity_search_asserted` companion via
+`entity_search_uri_search_sql` when ready, falling back to the unchanged
+legacy SPO query when the companion is not ready or a missing-table error
+occurs mid-query.
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBBackend.py
+   Prepend a companion-aware branch gated by `entity_search_ready`, using
+   `entity_search_uri_search_sql` with exact `type_uri` equality and the
+   shared text clause; leave the legacy SPO body unchanged as fallback.
+2. tests/units/graphdb/test_graphdb_adjacency_contract.py
+   Add three contract tests: companion path used when ready, fallback when
+   not ready, and fallback on a missing-table error mid-query.
+3. tests/units/core/test_lakebase_flat_store.py
+   Add `test_find_subjects_by_type_uses_entity_search_when_ready` for the
+   companion SQL path.
+
+Modified files:
+- src/back/core/graphdb/GraphDBBackend.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/core/test_lakebase_flat_store.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6872 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 56.71s.
+
+## Wire get_triples_for_subjects to property companion
+
+Context: Task 7 of the cached graph reads plan. `get_triples_for_subjects` —
+called by GraphQL's `SchemaMetadata._load_triples`, MCP's
+`DigitalTwin.find_triples_bfs`, and the "Expand neighbours" route — now reads
+the `_props` companion table when the backend supports it, with transparent
+fallback to SPO for unsupported backends or a missing companion table.
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBBackend.py
+   Add `execute_expand_with_props_fallback` import; replace method body to
+   delegate to props companion (or SPO fallback) based on `supports_props`.
+2. tests/units/graphdb/test_graphdb_adjacency_contract.py
+   Add `setup_function` cache-reset guard and 4 new contract tests covering
+   props-backed path, SPO-only path, missing-table fallback, and empty-subjects
+   short-circuit.
+
+Modified files:
+- src/back/core/graphdb/GraphDBBackend.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+
+Tests:
+- RED: `uv run --frozen pytest tests/units/graphdb/test_graphdb_adjacency_contract.py -k get_triples_for_subjects -v` → 2 failed, 2 passed.
+- GREEN: `uv run --frozen pytest tests/units/graphdb/test_graphdb_adjacency_contract.py -k get_triples_for_subjects -v` → 4 passed.
+- Mandatory: `uv run --frozen pytest -q -m "not scenario"` → 6876 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.30s.
+## Wire bfs_traversal to the adjacency + entity-search companions
+
+Context: Task 8 of the cached graph reads plan — the highest-risk task.
+`GraphDBBackend.bfs_traversal`, called (via `DigitalTwin.find_triples_bfs`)
+by MCP's `describe_entity` tool and Graph Chat's find-and-traverse flow, now
+seeds from `entity_search_seed_sql` (Task 4) and walks `_adj_out`/`_adj_in`
+via `seeded_bfs_sql` (Task 5) when both companions are ready, falling back
+to the existing `WITH RECURSIVE` SPO CTE (built from the caller-supplied
+`seed_where`) when they are not, or on a missing-table error mid-query. The
+seed-input threading was already resolved by earlier tasks: `bfs_traversal`
+already accepted `search`/`entity_type` as separate optional parameters
+(alongside `seed_where`), and `DigitalTwin.find_triples_bfs` already passed
+them through — this task only had to consume them.
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBBackend.py
+   Import `seeded_bfs_sql` (adjacency) and `entity_search_seed_sql`
+   (entity_search); prepend the companion-aware branch to `bfs_traversal`,
+   leaving the legacy SPO recursive-CTE body unchanged as the fallback.
+2. tests/units/graphdb/test_graphdb_adjacency_contract.py
+   Add 4 FakeStore contract tests: companion path used when both ready,
+   fallback when adjacency not ready, fallback when entity-search not
+   ready, fallback on a missing-table error mid-query (2-call sequence).
+3. tests/units/core/test_lakebase_flat_store.py
+   Add `table_exists` mock to the existing `test_bfs_traversal_sql_path`
+   (now required because `bfs_traversal` probes readiness before falling
+   back — the unmocked call previously never touched `table_exists` and a
+   live pool connection isn't available in this unit test) and add
+   `test_bfs_traversal_uses_companions_when_ready` for the companion SQL.
+4. tests/units/dtwin/test_digitaltwin_api.py
+   `TestBfsTraversalSql._capture_sql` uses a bare
+   `MagicMock(spec=GraphDBBackend)`; `adjacency_ready`/`entity_search_ready`
+   now default to a truthy `MagicMock()` return value instead of `False`,
+   which entered the new companion branch and blew up unpacking
+   `adjacency_table_ids()`. Pin both to `False` so this class keeps testing
+   only the legacy SPO SQL generation it was written for.
+
+Modified files:
+- src/back/core/graphdb/GraphDBBackend.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/core/test_lakebase_flat_store.py
+- tests/units/dtwin/test_digitaltwin_api.py
+
+Tests:
+- RED: `uv run --frozen pytest tests/units/graphdb/test_graphdb_adjacency_contract.py -k bfs_traversal -v` → 2 failed, 2 passed.
+- GREEN: `uv run --frozen pytest tests/units/graphdb/test_graphdb_adjacency_contract.py tests/units/core/test_lakebase_flat_store.py tests/units/dtwin/test_digitaltwin_api.py -v` → 124 passed.
+- Mandatory: `uv run --frozen pytest -q -m "not scenario"` → 6881 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.57s.
+
+## Read GraphQL and MCP find through the graph-cache companions
+
+Context: Explorer Preview/Expansion already read the `_entity_search`,
+`_adj_out`/`_adj_in`, and `_props` companion tables instead of the
+reader-facing SPO relation. GraphQL's typed list/nested-field resolvers and
+MCP's `describe_entity` / `/triples/find` find-and-traverse path did not —
+every call rescanned the live union relation. This change makes both read
+the same companions when ready, with an exact fallback to the previous SQL
+when a companion is missing or a missing-table error occurs mid-query.
+
+Changes:
+
+1. src/back/core/graphdb/entity_search.py
+   Add `entity_search_uri_search_sql` (exact-type-URI match, for GraphQL/
+   Preview-style callers) and `entity_search_seed_sql` (local-name-suffix
+   type match, for MCP find-style callers), both built on a newly extracted
+   `_entity_search_text_clause` helper. Add `is_missing_relation_error`,
+   extracted from `find_preview_seeds`'s existing fallback detection.
+2. src/back/core/graphdb/adjacency.py
+   Add `seeded_bfs_sql`, a leveled adjacency BFS seeded from an arbitrary
+   subquery instead of a fixed URI list, returning `(entity, min_lvl)` rows.
+3. src/back/core/graphdb/GraphDBBackend.py
+   `find_subjects_by_type`, `get_triples_for_subjects`, and `bfs_traversal`
+   each gain a companion-aware branch gated by `entity_search_ready` /
+   `adjacency_ready` / `supports_props`, falling back to the exact previous
+   SQL when the companion is not ready or a missing-table error occurs.
+4. docs/optimizations.md, docs/architecture.md
+   Document the new companion-aware read paths and the two `entity_type`
+   matching modes (full-URI exact vs. local-name suffix) that predate this
+   change and remain unchanged.
+
+Modified files:
+- src/back/core/graphdb/entity_search.py
+- src/back/core/graphdb/adjacency.py
+- src/back/core/graphdb/GraphDBBackend.py
+- docs/optimizations.md
+- docs/architecture.md
+- tests/units/graphdb/test_entity_search_sql.py
+- tests/units/graphdb/test_adjacency_sql.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/core/test_lakebase_flat_store.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6881 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.81s.
+
+## Reveal generated SQL after SPARQL execution
+
+Context: The SPARQL playground updated the Generated SQL text after a
+successful run but left its disclosure collapsed. Successful executions now
+open the disclosure automatically so the generated warehouse query is
+immediately visible.
+
+Changes:
+
+1. src/front/static/query/js/query-execute.js
+   Open the Generated SQL details element whenever execution displays generated SQL.
+2. tests/units/front/test_sparql_playground_contract.py
+   Add a regression contract for the disclosure-opening behavior.
+3. tests/e2e/dtwin/test_dtwin_flows.py
+   Verify the disclosure starts collapsed, opens after Run, and contains the generated SQL.
+
+Modified files:
+- src/front/static/query/js/query-execute.js
+- tests/units/front/test_sparql_playground_contract.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6882 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.57s.
+
+## Keep generated SQL below the SPARQL editor
+
+Context: The Generated SQL output occupied a collapsible disclosure beneath
+Results. Keep the desktop workspace at two columns while making SQL persistent
+under the editor, leaving the right column exclusively for full-height results,
+and preserving editor → SQL → results order on mobile.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sparql.html
+   Move Generated SQL into an always-visible section after the editor and remove the obsolete details disclosure.
+2. src/front/static/query/css/query-sparql.css
+   Give the SQL pane a fixed non-shrinking height, token-based surfaces, and an internally scrolling preformatted region.
+3. src/front/static/query/js/query-execute.js
+   Limit generated-SQL display behavior to updating text without mutating disclosure state.
+4. tests/units/front/test_sparql_playground_contract.py
+   Add structural, layout, overflow, token, and controller regression contracts.
+5. tests/e2e/dtwin/test_dtwin_flows.py
+   Verify successful execution keeps SQL visible under the editor and outside Results.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sparql.html
+- src/front/static/query/css/query-sparql.css
+- src/front/static/query/js/query-execute.js
+- tests/units/front/test_sparql_playground_contract.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-22.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py` → 3 failed, 23 passed, 1 warning in 0.28s.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sparql_playground_contract.py` → 26 passed, 1 warning in 0.20s.
+- Focused browser flow: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/dtwin/test_dtwin_flows.py::TestQueryPlayground` → 4 passed, 1 warning in 14.25s.
+- Browser layout: deterministic mocked execution at 1440×900 and 390×844 → 1 passed, 1 warning in 10.23s; no console or first-party response errors.
+- Mandatory: `uv run --frozen pytest -q -m "not scenario"` → 6883 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.58s.
+
+## Remove KG header domain and switch-domain chrome
+
+Context: Knowledge Graph section subtitles still repeated the current domain
+or Graph DB name plus a Switch domain button, even though the L2 navbar
+already owns that context. Those lines are now removed from every KG
+sub-page header.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_query.html
+   Keep the Query subtitle and drop Graph DB plus Switch domain.
+2. src/front/templates/partials/dtwin/_query_chat.html
+   Keep the Chat subtitle and drop Graph DB plus Switch domain.
+3. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Keep the Explorer subtitle and drop Graph DB plus Switch domain.
+4. src/front/templates/partials/dtwin/_query_dataquality.html
+   Keep the Data Quality subtitle and drop Domain, version, and Switch domain.
+5. src/front/templates/partials/dtwin/_query_reasoning.html
+   Keep the Inference subtitle and drop Domain, version, and Switch domain.
+6. src/front/templates/partials/dtwin/_query_cohorts.html
+   Keep the Cohorts subtitle and drop Domain, version, and Graph DB.
+7. src/front/static/query/js/query.js
+   Remove the unused Query-shell switch-domain action mapping.
+8. src/front/static/query/js/query-dataquality.js
+   Remove the unused Data Quality graph-switcher click handler.
+9. tests/units/front/test_kg_section_headers.py
+   Require every KG section header to omit Domain, Graph DB, and Switch domain.
+10. tests/units/front/test_sparql_playground_contract.py
+    Assert the Query shell no longer wires switch-domain.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-dataquality.js
+- tests/units/front/test_kg_section_headers.py
+- tests/units/front/test_sparql_playground_contract.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6888 passed, 308 skipped, 6 deselected, 1 xfailed in 49.64s.
+
+## Route all Analytics job SQL through the Build warehouse
+
+Context: Knowledge Graph Analytics mixed the Lakehouse query warehouse into
+the job path. The preflight probe and, after a successful Databricks job, its
+result readback could therefore send Thrift SQL to Lakehouse/RT. Every SQL
+operation belonging to Analytics jobs now uses the shared Build warehouse
+client contract; the Lakehouse query warehouse is never resolved.
+
+Changes:
+
+1. src/back/core/graph_analysis/preflight.py
+   Probe the mapped-triples source through the Build warehouse client.
+2. src/back/core/graph_analysis/JobMetrics.py
+   Materialize and drop disposable Analytics snapshots through the Build warehouse.
+3. src/back/objects/digitaltwin/DigitalTwin.py
+   Read job output and exhaustive metric series through the Build warehouse builder instead of constructing query-warehouse clients.
+4. tests/units/api/test_dtwin_analytics.py
+   Require the Analytics preflight to request the Build warehouse.
+5. tests/units/api/test_dtwin_metric_series.py
+   Require metric-series SQL to use the Build warehouse client.
+6. tests/units/core/test_job_metrics.py
+   Require temporary snapshot DDL to use the Build warehouse client.
+7. tests/units/dtwin/test_analytics_job_status.py
+   Route probe outcome fixtures through the shared builder contract.
+8. tests/units/dtwin/test_dtwin_analytics.py
+   Add a regression test that rejects query-warehouse construction during job result readback.
+
+Modified files:
+- src/back/core/graph_analysis/preflight.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/units/api/test_dtwin_analytics.py
+- tests/units/api/test_dtwin_metric_series.py
+- tests/units/core/test_job_metrics.py
+- tests/units/dtwin/test_analytics_job_status.py
+- tests/units/dtwin/test_dtwin_analytics.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-22.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/api/test_dtwin_analytics.py::test_data_table_probe_uses_delta_sql_client_builder tests/units/dtwin/test_dtwin_analytics.py::test_job_metrics_readback_uses_build_warehouse_client` → 2 failed, 1 warning in 1.41s.
+- Focused: `uv run --frozen pytest -q tests/units/api/test_dtwin_analytics.py tests/units/api/test_dtwin_metric_series.py tests/units/core/test_job_metrics.py tests/units/dtwin/test_dtwin_analytics.py tests/units/dtwin/test_analytics_job_status.py tests/units/graphdb/delta/test_delta_base.py` → 119 passed, 1 warning in 1.72s.
+- Mandatory: `uv run --frozen pytest -q -m "not scenario"` → 6890 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.90s.
+
+## Translate SWRL built-ins during inference
+
+Context: The "Customer with active contract owns meter" rule returned no
+inferences even though Anna Martin has two active contracts linked to five
+meters. The inference translator treated `swrlb:contains` as a graph property
+instead of applying its SQL string predicate.
+
+Changes:
+
+1. src/back/core/reasoning/SWRLSQLTranslator.py
+   Exclude built-ins from graph joins and apply them as filters after antecedent variables are bound.
+2. tests/units/ontology/test_swrl_engine.py
+   Add a regression test requiring `swrlb:contains` to produce a SQL filter rather than a nonexistent property join.
+
+Modified files:
+- src/back/core/reasoning/SWRLSQLTranslator.py
+- tests/units/ontology/test_swrl_engine.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-22.log
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/ontology/test_swrl_engine.py::TestSWRLSQLTranslator::test_inference_translates_string_builtin_to_filter` → 1 failed, 1 warning in 1.14s.
+- Focused: `uv run --frozen pytest -q tests/units/ontology/test_swrl_engine.py` → 24 passed, 1 warning in 0.85s.
+- Live: the target rule inferred 87 triples, including all five expected `owns` triples for Anna Martin.
+- Mandatory: `uv run --frozen pytest -q -m "not scenario"` → 6891 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.85s.

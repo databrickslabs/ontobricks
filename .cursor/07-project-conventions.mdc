@@ -1,6 +1,10 @@
 ---
-alwaysApply: false
+name: Project Conventions
+priority: 75
+scope:
+  globs: ["**/*"]
 ---
+
 ### Project Conventions
 
 **Architecture**
@@ -16,15 +20,22 @@ alwaysApply: false
 1. Default to a **service class** when adding new functionality.
 2. Constructor receives dependencies (configuration, credentials, collaborators) for testability.
 3. Methods over functions — reserve module-level functions only for thin factory/accessor helpers or pure stateless utilities.
-4. **One public class per file** — name the file after the class in PascalCase (e.g., `OWLRLReasoner.py`).
-5. Small helper dataclasses in the same file are fine. Shared constants go in `constants.py`, shared DTOs in `models.py`.
+4. **One public class per file** — name the file after the class in PascalCase (e.g., `OWLRLReasoner.py`). A private helper class (`_Foo`) may share the file only if nothing else uses it.
+5. **One purpose per class**, stated in one docstring sentence. If the sentence needs "and", split the class.
+6. **Size budget**: a class stays ≤ 400 LOC (hard ceiling 800), a method ≤ 50 LOC (hard ceiling 100). Bigger means Extract Class / Extract Method.
+7. **Records** (dataclasses, Pydantic models, enums): one file per **aggregate root**, named after it. Value objects that only exist inside that root share its file (`ConflictReport.py` holds `ConflictReport` + `ConflictItem`); records used on their own get their own file (`TaskStatus.py`). No grab-bag `models.py`. Shared constants go in `constants.py`.
+8. **Decomposing a class** puts its collaborators in a sub-package named after the concept (`mapping/diagnostics/`), re-exported from `__init__.py`.
+9. **Inheritance only for a real "is-a" with shared behaviour**: Template Method (agents, build phases, health checks), an abstract interface plus default implementation (graph backends), polymorphic strategies replacing an `if/elif` ladder. Everything else uses composition. Mixins are fine for splitting a large interface (precedent: `LakebaseRegistryStore`); they hold no state and define no `__init__`.
+10. **No pass-through facades.** A method whose body only forwards to another class is a Middle Man: callers import the real class instead.
+11. These rules are enforced by `tests/units/architecture/` with shrink-only baselines (`baseline.json`). Fix new offenders; never add them to the baseline. After a refactor, tighten it with `uv run --frozen python -m tests.units.architecture.ratchet`.
 
 **Package Organisation**
 
 1. Every subpackage `__init__.py` must re-export public symbols. Consumers import from the package, never from internal modules.
 2. Use `__all__` when the public surface is well-defined.
-3. Keep `__init__.py` files short — only imports, `__all__`, and thin backward-compatible wrappers.
-4. When refactoring functions into class methods, provide backward-compatible wrappers in `__init__.py`.
+3. Keep `__init__.py` files short — only imports and `__all__`.
+4. When moving, renaming, or converting code into class methods, **update every caller (src and tests) in the same change** and delete the old module. Do not add backward-compatible wrappers, aliases, or shim modules. Only external contracts keep their names: REST `v1` endpoints, MCP tools, and entry points referenced by string (`app.yaml`, DAB job files).
+5. **Group by topic when a folder gets crowded.** When a package holds more than ~12 modules, or three or more modules share a topic (a common prefix such as `SWRL*`, or a common job such as build / quality / settings), move them into a lowercase topic sub-package (`reasoning/swrl/`, `digitaltwin/build/`, `domain/settings/`). Keep the package's entry-point class (`ReasoningService`, `DigitalTwin`, `Domain`) at the root. Each sub-package `__init__.py` re-exports its public classes (rule 1). Don't create a sub-package for one or two files.
 
 **Where to Put New Code**
 
@@ -40,8 +51,7 @@ alwaysApply: false
 
 - Save brainstorming/planning artifacts under **`docs/superpowers/`** — plans in
   `docs/superpowers/plans/YYYY-MM-DD-<slug>.md`, design specs in
-  `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`. This tree is
-  gitignored (local-only; not published to GitHub).
+  `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`.
 - `docs/` is the single canonical docs root (Help Center markdown, Sphinx
   sources, plans/specs). Do not create a parallel top-level `documentation/`.
 
@@ -54,9 +64,10 @@ alwaysApply: false
 ### Subpackage Patterns (reference)
 
 **`back/objects/registry/`** — service + scheduler + permissions + pluggable store (reference pattern for multi-concern domain areas):
-- `RegistryService.py` — owns all CRUD; delegates persistence to a `RegistryStore`. Constructor receives `RegistryCfg` (dataclass).
-- `permissions.py` — `PermissionService` encapsulates permission checks. Role constants are module-level.
-- `scheduler.py` — `BuildScheduler` wraps APScheduler. Module-level `get_scheduler()` returns singleton.
+- `RegistryService.py` — owns all CRUD; delegates persistence to a `RegistryStore`. Constructor receives `RegistryCfg` (dataclass). Entry-point class stays at the package root.
+- `PermissionService.py` — encapsulates permission checks. Role constants are module-level.
+- `collab/` — `CommentService`, `ReviewService`, `EditLockService` (single-editor DRAFT lock).
+- `schedule/` — `BuildScheduler` wraps APScheduler; task-type specs live beside it. Module-level `get_scheduler()` returns the singleton.
 - `store/` — backend abstraction. Single concrete store, built via `RegistryFactory.from_cfg(...)`:
   - `store/lakebase/LakebaseRegistryStore.py` — domains/versions/permissions/schedules/global config in Lakebase Postgres (autoscaling only). Domain-scoped binary artefacts (the `documents/` uploads imported by the ontology designer) **must still go to the UC Volume** via `VolumeFileService` — the store handles JSON-shaped data only.
 - Lakebase coordinates (host/db/schema) and the Volume triplet come from the Databricks App config — never hard-coded in code; user-visible only through **Settings → Registry**.
@@ -104,15 +115,7 @@ alwaysApply: false
 
 - Every subpackage `__init__.py` must explicitly import and re-export its public API.
 - Use `__all__` when the public surface is well-defined.
-- Keep `__init__.py` short — only imports, `__all__`, and thin backward-compatible wrappers; no business logic.
-- Backward-compatible wrappers when refactoring functions into class methods:
-  ```python
-  # __init__.py
-  from back.core.industry.cdisc.CdiscImportService import CdiscImportService
-
-  def get_cdisc_catalog(*a, **kw):
-      return CdiscImportService.get_cdisc_catalog(*a, **kw)
-  ```
+- Keep `__init__.py` short — only imports and `__all__`; no business logic and no new wrapper functions. Existing legacy wrappers are removed when their callers are migrated (see §Package Organisation 4).
 - Consumers must always import from the package:
   ```python
   # Good
@@ -126,9 +129,8 @@ alwaysApply: false
 There is **no `develop` branch**. GitHub's default branch is `master`.
 
 Active work lives on a **version-named working branch** that matches the
-release in `pyproject.toml` (the next release is `0.9.0`, so the working
-branch is `0.9.0`). Feature branches merge into that version branch; the
-version branch ships to `master`.
+release in `pyproject.toml` (this working branch is `0.9.0`). Feature
+branches merge into that version branch; the version branch ships to `master`.
 
 ### Merge Safety (feature branch → version branch)
 

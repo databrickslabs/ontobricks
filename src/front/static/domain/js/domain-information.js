@@ -70,6 +70,31 @@ function toggleLakehouseMaterializationSection() {
     section.classList.toggle('d-none', backend !== 'databricks');
 }
 
+function toggleSearchCacheSection() {
+    const backend = (document.getElementById('domainGraphBackend') || {}).value;
+    const section = document.getElementById('searchCacheSection');
+    if (!section) return;
+    const show = backend === 'databricks' || backend === 'lakebase';
+    section.classList.toggle('d-none', !show);
+}
+
+function refreshSearchCacheStatusLine(state) {
+    const line = document.getElementById('searchCacheStatusLine');
+    const enabledEl = document.getElementById('domainGraphCacheEnabled');
+    if (!line || !enabledEl) return;
+    const enabled = enabledEl.checked;
+    const resolved = state || enabledEl.dataset.cacheState || 'pending_refresh';
+    if (!enabled) {
+        line.textContent = 'Off — live reads';
+        return;
+    }
+    if (resolved === 'ready') {
+        line.textContent = 'On — using cached indexes';
+        return;
+    }
+    line.textContent = 'On — rebuild or Refresh cache required (live reads until then)';
+}
+
 // A "No Backend" domain is ontology-only: every graph MCP tool is unchecked
 // and locked, and the explanatory notice is revealed. Switching back to a real
 // backend re-enables (and re-checks) the graph tools to their default state.
@@ -84,7 +109,8 @@ function applyGraphlessConstraints() {
     [
         'graphBackendMigrationNotice',
         'dualKnowledgeGraphSection',
-        'tripleStoreGatewaySection'
+        'tripleStoreGatewaySection',
+        'graphAccessInfoSection'
     ].forEach(sectionId => {
         const section = document.getElementById(sectionId);
         if (section) section.classList.toggle('d-none', graphless);
@@ -95,6 +121,11 @@ function applyGraphlessConstraints() {
         el.checked = !graphless;
     });
     if (typeof syncMcpSelectAll === 'function') syncMcpSelectAll();
+
+    // Show only the access/permissions detail for the selected backend.
+    document.querySelectorAll('.graph-access-detail').forEach(el => {
+        el.classList.toggle('d-none', el.dataset.backend !== backend);
+    });
 }
 
 // Populate the Neo4j connection dropdown from Settings named connections.
@@ -145,114 +176,29 @@ async function _loadNeo4jConnectionOptions() {
     }
 }
 
-// Load available LLM endpoints
-async function loadLlmEndpoints() {
-    const select = document.getElementById('domainLlmEndpoint');
-    if (!select) return;
-    
-    const savedValue = select.dataset.savedValue || '';
-
-    try {
-        const response = await fetch('/mapping/wizard/llm-endpoints', { credentials: 'same-origin' });
-        const data = await response.json();
-        
-        select.innerHTML = '<option value="">-- Select an LLM endpoint --</option>';
-        
-        if (data.success && data.endpoints && data.endpoints.length > 0) {
-            data.endpoints.forEach(endpoint => {
-                const option = document.createElement('option');
-                option.value = endpoint.name;
-                option.textContent = endpoint.name;
-                select.appendChild(option);
-            });
-        } else {
-            const option = document.createElement('option');
-            option.value = '';
-            option.textContent = 'No endpoints available';
-            option.disabled = true;
-            select.appendChild(option);
-        }
-
-        if (savedValue) {
-            setSelectedLlmEndpoint(savedValue);
-        }
-    } catch (error) {
-        console.error('Error loading LLM endpoints:', error);
-    }
+function setSelectedLlmEndpoint(endpointName, endpointKind = '') {
+    const nameInput = document.getElementById('domainLlmEndpoint');
+    const kindInput = document.getElementById('domainLlmEndpointKind');
+    const display = document.getElementById('domainLlmEndpointDisplay');
+    if (!nameInput || !kindInput || !display) return;
+    nameInput.value = endpointName || '';
+    kindInput.value = endpointKind || '';
+    display.value = endpointName || '';
 }
 
-// Set the selected LLM endpoint
-function setSelectedLlmEndpoint(endpointName) {
-    const select = document.getElementById('domainLlmEndpoint');
-    if (!select || !endpointName) return;
-
-    select.value = endpointName;
-    if (select.value !== endpointName) {
-        const option = document.createElement('option');
-        option.value = endpointName;
-        option.textContent = endpointName;
-        select.appendChild(option);
-        select.value = endpointName;
-    }
-}
-
-// Rollback to the saved version (discard all local changes)
-async function rollbackVersion() {
-    const versionSelect = document.getElementById('domainVersionSelect');
-    const currentVersion = versionSelect ? versionSelect.value : '1';
-    
-    try {
-        // Determine the domain folder from version-status or domain info
-        let domainFolder = currentDomainFolder;
-        if (!domainFolder) {
-            const statusData = await fetchOnce('/domain/version-status');
-            const folder = statusData.success && (statusData.domain_folder || statusData.project_folder);
-            if (folder) {
-                domainFolder = folder;
-                currentDomainFolder = domainFolder;
-            }
-        }
-
-        if (!domainFolder) {
-            showNotification('Domain must be saved to the registry first to rollback', 'warning');
-            return;
-        }
-
-        const confirmed = await showConfirmDialog({
-            title: 'Rollback Version',
-            message: `This will reload version ${currentVersion} from Unity Catalog and discard ALL unsaved changes. Are you sure?`,
-            confirmText: 'Rollback',
-            confirmClass: 'btn-warning',
-            icon: 'arrow-counterclockwise'
-        });
-        if (!confirmed) return;
-
-        showNotification('Rolling back to saved version...', 'info', 3000);
-
-        const response = await fetch('/domain/load-from-uc', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                domain: domainFolder,
-                version: currentVersion
-            }),
-            credentials: 'same-origin'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification(`Rolled back to version ${currentVersion} successfully!`, 'success');
-            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            // Reload page to refresh all data
-            window.location.reload();
-        } else {
-            showNotification('Error: ' + data.message, 'error');
-        }
-    } catch (error) {
-        console.error('Rollback error:', error);
-        showNotification('Error: ' + error.message, 'error');
-    }
+async function browseLlmEndpoints() {
+    const nameInput = document.getElementById('domainLlmEndpoint');
+    const kindInput = document.getElementById('domainLlmEndpointKind');
+    if (!nameInput || !kindInput || typeof openLlmEndpointPicker !== 'function') return;
+    const selected = await openLlmEndpointPicker({
+        name: nameInput.value,
+        kind: kindInput.value
+    });
+    if (!selected) return;
+    setSelectedLlmEndpoint(selected.name, selected.kind);
+    nameInput.dataset.userEdited = '1';
+    nameInput.dispatchEvent(new Event('change', { bubbles: true }));
+    kindInput.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // Create a new version
@@ -289,59 +235,6 @@ async function createNewVersion() {
             versionSelect.value = data.new_version;
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             // Reload page to refresh status
-            window.location.reload();
-        } else {
-            showNotification('Error: ' + data.message, 'error');
-        }
-    } catch (error) {
-        showNotification('Error: ' + error.message, 'error');
-    }
-}
-
-// Handle version change
-async function onVersionChange(version) {
-    if (!currentDomainFolder) {
-        showNotification('Domain must be saved to Unity Catalog first', 'warning');
-        return;
-    }
-    
-    const confirmed = await showConfirmDialog({
-        title: 'Switch Version',
-        message: `Load version ${version}? Unsaved changes will be lost.`,
-        confirmText: 'Load Version',
-        confirmClass: 'btn-primary',
-        icon: 'arrow-repeat'
-    });
-    
-    if (!confirmed) {
-        // Reset select to current version
-        const statusResponse = await fetch('/domain/version-status', { credentials: 'same-origin' });
-        const statusData = await statusResponse.json();
-        if (statusData.success) {
-            document.getElementById('domainVersionSelect').value = statusData.version;
-        }
-        return;
-    }
-    
-    try {
-        showNotification('Loading version...', 'info', 3000);
-        
-        const response = await fetch('/domain/load-from-uc', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                domain: currentDomainFolder,
-                version: version
-            }),
-            credentials: 'same-origin'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification(data.message || 'Version loaded successfully!', 'success');
-            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            // Reload page to refresh all data
             window.location.reload();
         } else {
             showNotification('Error: ' + data.message, 'error');
@@ -412,17 +305,6 @@ function updateVersionStatusUI(isActive, version, hasRegistry) {
     }
 }
 
-function updateRegistryLocationDisplay(registry, domainFolder) {
-    const ucRow = document.getElementById('ucLocationRow');
-    const displayEl = document.getElementById('registryLocationDisplay');
-    if (!ucRow || !displayEl) return;
-
-    if (registry && registry.catalog && domainFolder) {
-        displayEl.textContent = `${registry.catalog}.${registry.schema}.${registry.volume}/domains/${domainFolder}`;
-        ucRow.style.display = 'flex';
-    }
-}
-
 // Fetch and update version status on page load
 document.addEventListener('DOMContentLoaded', async function() {
     try {
@@ -454,19 +336,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         const graphBackendEl = document.getElementById('domainGraphBackend');
         const neo4jDbElInit = document.getElementById('domainNeo4jDatabase');
-        // The template already renders the persisted Graph Backend / Neo4j
-        // Connection server-side (Jinja), so these two fields are correct the
-        // instant the page paints. The redundant `/domain/info` re-fetch below
-        // is gated behind the (often multi-second, real-workspace) LLM
-        // endpoints call in the same Promise.all — a fast user can pick a new
-        // value before it resolves, and it would otherwise silently revert
-        // the pick back to the stale one it fetched. Mark the field dirty on
-        // the first user interaction so that late resolution never clobbers
-        // an edit made in the meantime.
+        // The template already renders persisted values server-side. Mark
+        // controls dirty on first interaction so the `/domain/info` refresh
+        // below cannot overwrite a newer browser selection.
         if (graphBackendEl) {
             graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
             graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
             graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
+            graphBackendEl.addEventListener('change', toggleSearchCacheSection);
             graphBackendEl.addEventListener('change', applyGraphlessConstraints);
             graphBackendEl.addEventListener('change', () => {
                 graphBackendEl.dataset.userEdited = '1';
@@ -483,18 +360,28 @@ document.addEventListener('DOMContentLoaded', async function() {
                 materializationElInit.dataset.userEdited = '1';
             });
         }
+        const cacheElInit = document.getElementById('domainGraphCacheEnabled');
+        if (cacheElInit) {
+            cacheElInit.addEventListener('change', () => {
+                cacheElInit.dataset.userEdited = '1';
+                refreshSearchCacheStatusLine();
+            });
+        }
         initGraphBackendCards();
         syncNeo4jConnectionSection();
         toggleLakehouseMaterializationSection();
+        toggleSearchCacheSection();
         applyGraphlessConstraints();
         const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
         if (refreshDbBtn) {
             refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
         }
+        const llmBrowse = document.getElementById('domainLlmBrowse');
+        if (llmBrowse) {
+            llmBrowse.addEventListener('click', browseLlmEndpoints);
+        }
 
-        // Load LLM endpoints and version status in parallel
-        const [, statusData, infoData] = await Promise.all([
-            loadLlmEndpoints(),
+        const [statusData, infoData] = await Promise.all([
             fetchOnce('/domain/version-status').catch(() => null),
             fetchOnce('/domain/info').catch(() => null)
         ]);
@@ -517,8 +404,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (inf && !currentDomainFolder) {
                 currentDomainFolder = inf;
             }
-            if (infoData.info && infoData.info.llm_endpoint) {
-                setSelectedLlmEndpoint(infoData.info.llm_endpoint);
+            const llmNameInput = document.getElementById('domainLlmEndpoint');
+            if (llmNameInput && !llmNameInput.dataset.userEdited
+                    && infoData.info && infoData.info.llm_endpoint) {
+                setSelectedLlmEndpoint(
+                    infoData.info.llm_endpoint,
+                    infoData.info.llm_endpoint_kind || ''
+                );
             }
             const graphBackendEl = document.getElementById('domainGraphBackend');
             // Skip once the user has touched the field: this fetch reflects
@@ -551,8 +443,20 @@ document.addEventListener('DOMContentLoaded', async function() {
             // edited the field: it reads the select's *current* value first
             // (see `_loadNeo4jConnectionOptions`) and only falls back to
             // `dataset.savedValue` when the select has nothing of its own.
+            const cacheEl = document.getElementById('domainGraphCacheEnabled');
+            if (cacheEl && !cacheEl.dataset.userEdited && infoData.info) {
+                if (typeof infoData.info.graph_cache_enabled === 'boolean') {
+                    cacheEl.checked = infoData.info.graph_cache_enabled;
+                    cacheEl.dataset.savedValue = infoData.info.graph_cache_enabled ? 'true' : 'false';
+                }
+                if (infoData.info.graph_cache_state) {
+                    cacheEl.dataset.cacheState = infoData.info.graph_cache_state;
+                }
+            }
             syncNeo4jConnectionSection();
             toggleLakehouseMaterializationSection();
+            toggleSearchCacheSection();
+            refreshSearchCacheStatusLine();
             applyGraphlessConstraints();
         }
 
@@ -628,16 +532,10 @@ function refreshDtNamesFromForm() {
     }
 }
 
-// Backwards-compatible alias: callers and tests still reference the
-// old name; keep it working as a thin wrapper over the new function.
-function updateGraphPaths() {
-    refreshDtNamesFromForm();
-}
-
 
 /* ──────────────────────────────────────────────────────────────────────────
    Current-domain KPI / health band (moved here from the Home page).
-   Populates the #kpi* tiles rendered at the top of Domain → Information:
+   Populates the #kpi* tiles rendered at the top of Domain → General:
    entities, relationships, mappings, quality, status, version.
    Self-contained (IIFE) to avoid leaking generic helper names as globals.
    ────────────────────────────────────────────────────────────────────────── */

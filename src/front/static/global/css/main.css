@@ -12,14 +12,31 @@
     --db-primary-dark: #4338CA;
     --db-primary-darker: #3730A3;
     --db-primary-light: rgba(79, 70, 229, 0.1);
+    /* Softer filled wells (L2 Domain badge): darker than --db-primary-light,
+       so the control can drop its hard primary outline. Tracks brand RGB. */
+    --db-primary-soft: rgba(var(--db-primary-rgb), 0.18);
+    --db-primary-soft-hover: rgba(var(--db-primary-rgb), 0.28);
     --db-primary-rgb: 79, 70, 229;
     --db-on-primary: #FFFFFF;
     --db-primary-selected-text: #3730A3;
     --db-hover: rgba(79, 70, 229, 0.06);
     --db-focus: rgba(79, 70, 229, 0.18);
-    
+
+    /* Aurora accent + derived cinematic tokens (Aurora Pro).
+       Server-rendered #uiBrandingTokens overrides the hex/rgb values below
+       per request; the linear-gradient()/radial-gradient() compositions
+       stay static here and simply re-read whichever hex is currently in
+       scope via var(). */
+    --db-aurora: #22A7C8;
+    --db-aurora-rgb: 34, 167, 200;
+    --db-aurora-dark: #1D8EAA;
+    --db-gradient-end: #3A79E2;
+    --db-gradient-primary: linear-gradient(120deg, var(--db-primary), var(--db-gradient-end));
+    --db-gradient-rail: linear-gradient(180deg, var(--db-primary), var(--db-aurora));
+    --db-halo: radial-gradient(circle at 30% 20%, rgba(var(--db-aurora-rgb), 0.35), transparent 60%);
+
     /* Warm neutral surfaces */
-    --db-canvas-warm: #FAFAF9;
+    --db-canvas-warm: #F6F6FE; /* derived: Primary at 5% alpha on white (Aurora Pro) */
     --db-surface-warm: #FFFFFF;
     --db-line-soft: #F4F2EF;
     --db-hover-warm: #F3F2F0;
@@ -91,7 +108,7 @@
     --db-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.12);
     --db-shadow-md: 0 12px 34px rgba(15, 23, 42, 0.16);
     --db-shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.2);
-    --db-shadow-primary: 0 0 0 3px rgba(var(--db-primary-rgb), 0.18);
+    --db-shadow-primary: 0 8px 20px rgba(var(--db-primary-rgb), 0.35);
     
     /* Transitions */
     --db-transition: all 0.2s ease;
@@ -153,13 +170,34 @@ body {
     transition: all 0.2s ease;
 }
 
-.navbar .dropdown-menu .dropdown-item .bi {
-    font-size: 0.95rem;
+.navbar .dropdown-menu .dropdown-item .ob-dropdown-icon {
+    flex: 0 0 20px;
     width: 20px;
     min-width: 20px;
-    text-align: center;
+    max-width: 20px;
+    height: 20px;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.navbar .dropdown-menu .dropdown-item .ob-dropdown-icon .bi,
+.navbar .dropdown-menu .dropdown-item .ob-dropdown-icon .ob-brand-icon {
+    display: block;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    margin: 0;
+    vertical-align: top;
     opacity: 1;
-    margin-right: 0;
+}
+
+.navbar .dropdown-menu .dropdown-item .ob-dropdown-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 20px;
 }
 
 .navbar .dropdown-menu .dropdown-item:hover,
@@ -299,20 +337,6 @@ body {
     font-weight: 400;
 }
 
-#domainL1Link.active {
-    background-color: var(--db-primary-light) !important;
-    color: var(--db-primary-darker) !important;
-    border-radius: 9px;
-    padding-left: 0.6rem;
-    padding-right: 0.6rem;
-    font-weight: 700;
-}
-
-#domainL1Link.active:hover {
-    background-color: var(--db-primary-light) !important;
-    color: var(--db-primary-darker) !important;
-}
-
 /* Disabled navigation items (requires domain saved to UC) */
 .navbar .nav-link.nav-disabled {
     opacity: 0.4;
@@ -412,28 +436,17 @@ body {
 }
 
 /* ==========================================================================
-   Navbar path separators (Proposal 1 — "· Registry › Domain" style)
+   Navbar path separator dot
    ========================================================================== */
-.navbar .ob-nav-dot-sep,
-.navbar .ob-nav-path-sep {
+.navbar .ob-nav-dot-sep {
     display: flex;
     align-items: center;
     padding: 0 0.15rem;
     pointer-events: none;
     user-select: none;
     color: var(--db-border);
-    font-size: 1rem;
+    font-size: 1.1rem;
     line-height: 1;
-}
-
-.navbar .ob-nav-dot-sep { font-size: 1.1rem; }
-.navbar .ob-nav-path-sep { font-size: 0.9rem; opacity: 0.7; }
-
-/* Disabled state for L1 Domain link (no domain loaded) */
-.navbar .nav-link.ob-nav-disabled {
-    opacity: 0.45;
-    pointer-events: none;
-    cursor: default;
 }
 
 /* ==========================================================================
@@ -459,15 +472,111 @@ body {
     align-items: center;
     list-style: none;
     margin: 0;
-    /* Match the shell gutter below the rail. The shell owns the lower 0.5rem,
+    /* Match the shell gutter below the rail. The shell owns the lower 0.25rem,
        so L1 -> L2 and L2 -> page content remain visually equal. */
-    padding: 0.5rem 0 0;
+    padding: 0.25rem 0 0;
+    --ob-subnav-rail-height: 3rem;
     gap: 0;
 }
 
 .ob-subnav-workspaces {
     display: flex;
     align-items: center;
+}
+
+.ob-subnav-context {
+    display: flex;
+    align-items: center;
+    margin-right: 0.5rem;
+}
+
+.ob-subnav-context-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+    padding-top: 0.28rem;
+    padding-bottom: 0.28rem;
+    padding-left: 1.75rem;
+    padding-right: 0.55rem;
+    background: var(--db-primary-soft);
+    border: 0;
+    border-radius: var(--db-radius-control);
+    color: var(--db-primary-darker);
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ob-subnav-context-trigger > .bi {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.ob-subnav-context-trigger:hover {
+    background: var(--db-primary-soft-hover);
+    color: var(--db-primary-darker);
+    text-decoration: none;
+}
+
+.ob-subnav-context-trigger:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-subnav-context-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    row-gap: 0.12rem;
+    column-gap: 0.4rem;
+    align-items: center;
+    justify-items: center;
+    width: 100%;
+    /* Required so the nested domain-name label can actually ellipsize. */
+    min-width: 0;
+    line-height: 1.15;
+}
+
+.ob-subnav-context-copy .domain-status-badge {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+    margin-left: 0 !important;
+}
+
+.ob-subnav-context-name {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--db-text);
+}
+
+.ob-subnav-context-version {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    justify-self: center;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--db-on-primary);
+    background: var(--db-primary-darker);
+    border-radius: var(--db-radius-control);
+    padding: 0.12rem 0.45rem;
+    white-space: nowrap;
 }
 
 .ob-subnav-workspace-list {
@@ -480,6 +589,19 @@ body {
     background: var(--db-surface-warm);
     border: 1px solid var(--db-border);
     border-radius: var(--db-radius-control);
+}
+
+.ob-subnav-context-trigger,
+.ob-subnav-workspace-list {
+    min-height: var(--ob-subnav-rail-height);
+    height: var(--ob-subnav-rail-height);
+    box-sizing: border-box;
+    border-radius: var(--db-radius-control);
+}
+
+.ob-subnav-workspace-list > .ob-subnav-item,
+.ob-subnav-workspace-list > .ob-subnav-item > .ob-subnav-link {
+    height: 100%;
 }
 
 .ob-subnav-item {
@@ -505,6 +627,21 @@ body {
     font-size: 0.85rem;
 }
 
+.ob-subnav-ordinal {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.25rem;
+    border: 1px solid var(--db-border);
+    border-radius: 999px;
+    color: var(--db-text-muted);
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
 .ob-subnav-link:hover {
     color: var(--db-text);
     background: var(--db-hover-indigo);
@@ -519,16 +656,55 @@ body {
 }
 
 .ob-subnav-link.active {
-    color: var(--db-primary-darker);
+    color: var(--db-on-primary);
     font-weight: 700;
-    background: var(--db-primary-light);
+    background: var(--db-gradient-primary);
     border-radius: calc(var(--db-radius-control) - 2px);
+}
+
+.ob-subnav-link.active .ob-subnav-ordinal {
+    border-color: var(--db-on-primary);
+    background: var(--db-on-primary);
+    color: var(--db-primary);
 }
 
 .ob-subnav-link.nav-disabled {
     opacity: 0.4;
     pointer-events: none;
     cursor: not-allowed;
+}
+
+.ob-subnav-settings-return-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+    padding: 0.35rem 0.75rem;
+    color: var(--db-text);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    box-shadow: none;
+    text-decoration: none;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.ob-subnav-settings-return-link:hover {
+    color: var(--db-text);
+    background: var(--db-hover-indigo);
+    border-color: var(--db-primary);
+    text-decoration: none;
+}
+
+.ob-subnav-settings-return-link:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
 }
 
 /* Dropdown toggle arrow */
@@ -625,7 +801,7 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    margin-right: 0.4rem;
+    margin: 0;
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: #664d03;
@@ -643,7 +819,7 @@ body {
     border-color: #ffda6a;
 }
 
-/* Save Domain button — right-aligned in the L2 subnav */
+/* Save Domain button — last action in the L2 order */
 .ob-subnav-save-btn {
     display: inline-flex;
     align-items: center;
@@ -651,19 +827,31 @@ body {
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: var(--db-on-primary);
-    background-color: var(--db-primary);
+    background: var(--db-gradient-primary);
     border: 1px solid var(--db-primary);
     border-radius: var(--db-radius-control);
+    box-shadow: var(--db-shadow-primary);
     text-decoration: none;
     white-space: nowrap;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .ob-subnav-save-btn:hover {
-    background-color: var(--db-primary-dark);
+    background: var(--db-primary-dark);
     border-color: var(--db-primary-dark);
     color: var(--db-on-primary);
     text-decoration: none;
+}
+
+.ob-subnav-save-btn.is-saving {
+    pointer-events: none;
+    cursor: progress;
+}
+
+.ob-subnav-save-btn .ob-save-spinner {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-width: 0.15em;
 }
 
 .ob-subnav-save-btn.disabled,
@@ -672,12 +860,12 @@ body {
     pointer-events: none;
 }
 
-/* Switch Version button — sits between Save and Close in the L2 subnav */
+/* Switch Version button — first in the L2 action cluster */
 .ob-subnav-switch-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    margin-left: 0.4rem;
+    margin: 0;
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: var(--db-text);
@@ -701,12 +889,12 @@ body {
     pointer-events: none;
 }
 
-/* Close Domain button — sits beside Save in the L2 subnav */
+/* Close Domain button — between Versions and Save */
 .ob-subnav-close-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    margin-left: 0.4rem;
+    margin: 0;
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: var(--db-status-danger);
@@ -766,11 +954,33 @@ body {
     color: var(--db-subnav-border);
 }
 
-/* Save button item alignment */
+/* Save/switch/close actions share one spacing wrapper for stable ordering. */
 .ob-subnav-nav .ob-subnav-item:has(.ob-subnav-save-btn) {
     display: flex;
     align-items: center;
+    gap: 0.4rem;
     padding-right: 0.25rem;
+}
+
+@media (max-width: 1199.98px) {
+    #obBreadcrumbWrap {
+        display: none !important;
+    }
+
+    .ob-subnav-resume-btn .ob-subnav-label,
+    .ob-subnav-switch-btn .ob-subnav-label,
+    .ob-subnav-close-btn .ob-subnav-label,
+    .ob-subnav-save-btn .ob-subnav-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
 }
 
 /* ==========================================================================
@@ -783,7 +993,7 @@ body {
 .card {
     border: 1px solid var(--db-border);
     border-radius: var(--db-radius-card);
-    box-shadow: none;
+    box-shadow: var(--db-shadow-sm);
     background: var(--db-surface-warm);
 }
 
@@ -945,7 +1155,9 @@ body {
 }
 
 .section-header {
-    padding-top: 1rem;
+    /* Same as the header's bottom margin (subtitle → content), so the
+       title block has equal space above and below. */
+    padding-top: 0.5rem;
     padding-right: 12px;
 }
 
@@ -983,6 +1195,40 @@ body {
         padding-inline: 0.5rem !important;
     }
 
+    .ob-subnav,
+    #obSubnav .container-fluid,
+    .ob-subnav-nav,
+    .ob-subnav-workspaces,
+    .ob-subnav-workspace-list {
+        overflow: visible;
+    }
+
+    .ob-subnav-nav {
+        flex-wrap: nowrap;
+    }
+
+    .ob-subnav-context-copy {
+        display: none;
+    }
+
+    .ob-subnav-context-trigger {
+        width: auto;
+        min-width: 2rem;
+        max-width: none;
+        padding-inline: 0.5rem;
+    }
+
+    .ob-subnav-context-trigger > .bi {
+        position: static;
+        left: auto;
+        top: auto;
+        transform: none;
+    }
+
+    .ob-subnav-ordinal {
+        display: none;
+    }
+
     .ob-subnav-link,
     .ob-subnav-resume-btn,
     .ob-subnav-save-btn,
@@ -992,15 +1238,16 @@ body {
         padding-inline: 0.5rem;
     }
 
-    .ob-subnav-resume-btn,
-    .ob-subnav-switch-btn,
-    .ob-subnav-close-btn {
-        margin-left: 0.25rem;
-        margin-right: 0;
-    }
-
     .ob-subnav-label {
         display: none;
+    }
+
+    .ob-subnav-settings-return-link {
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        padding-inline: 0.6rem;
+        font-size: 0.78rem;
     }
 
     /* A joined `.btn-group` can't stay joined once it has to wrap: Bootstrap
@@ -1022,6 +1269,7 @@ body {
 
 .page-header {
     margin-bottom: 2rem;
+    padding-top: 0.5rem;
     padding-bottom: 1rem;
     border-bottom: 2px solid var(--db-border);
 }

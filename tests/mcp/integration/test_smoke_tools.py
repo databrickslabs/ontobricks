@@ -214,15 +214,12 @@ class TestErrorPaths:
             await patched_mcp.call("definitely_not_a_real_tool_xyzzy")
 
     async def test_backend_returns_error_status_is_surfaced(self, patched_mcp):
-        """5xx from the backend should propagate as a FastMCP ToolError.
+        """A 5xx reaches the model as the backend's safe message, not a ToolError.
 
-        This is the current FastMCP contract: when an `httpx` call inside a
-        tool handler fails with `raise_for_status`, FastMCP wraps it in
-        `ToolError`. If OntoBricks ever decides to swallow these and return a
-        graceful string, this test will need to relax.
+        A ToolError would carry the httpx exception string, i.e. the full
+        request URL with its registry query params.
         """
-        from fastmcp.exceptions import ToolError
-
         patched_mcp.add_route("GET", "/api/v1/domains", status=500, json={"error": "boom"})
-        with pytest.raises(ToolError):
-            await patched_mcp.call("list_domains")
+        text = _result_text(await patched_mcp.call("list_domains"))
+        assert text == "boom"
+        assert "http://" not in text

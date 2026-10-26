@@ -125,22 +125,19 @@ import json, os
 d = json.loads(os.environ["APP_JSON"])
 res = {r.get("name", ""): r for r in d.get("resources", [])}
 wh = ((res.get("sql-warehouse") or {}).get("sql_warehouse") or {}).get("id", "")
-vol = ((res.get("volume") or {}).get("uc_securable") or {}).get("securable_full_name", "")
 pg = (res.get("postgres") or {}).get("postgres") or {}
 src = ((d.get("active_deployment") or {}).get("deployment_artifacts") or {}).get("source_code_path", "")
 print("WAREHOUSE_ID\t" + wh)
-print("VOLUME_FQN\t" + vol)
 print("PG_BRANCH\t" + (pg.get("branch", "") or ""))
 print("PG_DATABASE_PATH\t" + (pg.get("database", "") or ""))
 print("SOURCE_PATH\t" + (src or ""))
 PY
 }
 
-WAREHOUSE_ID=""; VOLUME_FQN=""; PG_BRANCH=""; PG_DATABASE_PATH=""; UI_SOURCE_PATH=""
+WAREHOUSE_ID=""; PG_BRANCH=""; PG_DATABASE_PATH=""; UI_SOURCE_PATH=""
 while IFS=$'\t' read -r _k _v; do
     case "$_k" in
         WAREHOUSE_ID)     WAREHOUSE_ID="$_v" ;;
-        VOLUME_FQN)       VOLUME_FQN="$_v" ;;
         PG_BRANCH)        PG_BRANCH="$_v" ;;
         PG_DATABASE_PATH) PG_DATABASE_PATH="$_v" ;;
         SOURCE_PATH)      UI_SOURCE_PATH="$_v" ;;
@@ -153,13 +150,11 @@ while IFS=$'\t' read -r _k _v; do
 done < <(_parse_app "$MCP_JSON")
 
 [[ -n "$WAREHOUSE_ID" ]] || die "App '$UI_APP' has no 'sql-warehouse' resource binding — is it an OntoBricks app?"
-[[ -n "$VOLUME_FQN" ]]   || die "App '$UI_APP' has no 'volume' resource binding — is it an OntoBricks app?"
 
-# Volume FQN  →  catalog.schema.volume
-REGISTRY_CATALOG="${VOLUME_FQN%%.*}"
-_vol_rest="${VOLUME_FQN#*.}"
-REGISTRY_SCHEMA="${_vol_rest%%.*}"
-REGISTRY_VOLUME="${_vol_rest##*.}"
+# Registry catalog/schema are runtime env (REGISTRY_CATALOG / REGISTRY_SCHEMA)
+# in the deployed app.yaml, not resource bindings — resolved after the
+# app.yaml fetch below. The UC Volume binding was removed in v0.9.0.
+REGISTRY_CATALOG=""; REGISTRY_SCHEMA=""
 
 # Lakebase binding (present only on Lakebase-backed apps).
 IS_LAKEBASE=false
@@ -178,11 +173,10 @@ TARGET="dev"
 $IS_LAKEBASE && TARGET="dev-lakebase"
 
 ok "warehouse : ${WAREHOUSE_ID}"
-ok "volume    : ${VOLUME_FQN}  (catalog=${REGISTRY_CATALOG} schema=${REGISTRY_SCHEMA} volume=${REGISTRY_VOLUME})"
 if $IS_LAKEBASE; then
     ok "lakebase  : projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
 else
-    ok "backend   : Volume-only (no postgres binding) — SQL step will be skipped"
+    ok "backend   : no postgres binding — SQL step will be skipped"
 fi
 ok "DAB target: ${TARGET}"
 
@@ -229,8 +223,20 @@ def find(key):
     return (m.group(1).strip() if m else "")
 print("LAKEBASE_SCHEMA\t" + find("LAKEBASE_SCHEMA"))
 print("LAKEBASE_DATABASE\t" + find("LAKEBASE_DATABASE"))
+print("REGISTRY_CATALOG\t" + find("REGISTRY_CATALOG"))
+print("REGISTRY_SCHEMA\t" + find("REGISTRY_SCHEMA"))
 PY
 }
+
+# Resolve registry catalog/schema from the deployed UI app.yaml env block
+# (they are runtime env, not resource bindings). Falls back to
+# deploy.config.sh defaults inside deploy.sh when absent.
+while IFS=$'\t' read -r _k _v; do
+    case "$_k" in
+        REGISTRY_CATALOG) [[ -n "$_v" ]] && REGISTRY_CATALOG="$_v" ;;
+        REGISTRY_SCHEMA)  [[ -n "$_v" ]] && REGISTRY_SCHEMA="$_v" ;;
+    esac
+done < <(read_app_yaml_env)
 
 LAKEBASE_SCHEMA=""; LAKEBASE_DATABASE=""
 if $IS_LAKEBASE; then
@@ -280,7 +286,6 @@ MCP_APP_NAME="$MCP_APP" \
 WAREHOUSE_ID="$WAREHOUSE_ID" \
 REGISTRY_CATALOG="$REGISTRY_CATALOG" \
 REGISTRY_SCHEMA="$REGISTRY_SCHEMA" \
-REGISTRY_VOLUME="$REGISTRY_VOLUME" \
 LAKEBASE_PROJECT="${LAKEBASE_PROJECT:-}" \
 LAKEBASE_BRANCH="${LAKEBASE_BRANCH:-}" \
 LAKEBASE_DATABASE_RESOURCE_SEGMENT="${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" \
@@ -320,7 +325,7 @@ echo "${_C_GRN}=== Done — '${UI_APP}' updated ===${_C_RST}"
 echo ""
 echo "Reused configuration (read back from the live app):"
 echo "  warehouse : ${WAREHOUSE_ID}"
-echo "  volume    : ${VOLUME_FQN}"
+echo "  registry  : ${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}"
 if $IS_LAKEBASE; then
     echo "  lakebase  : ${LAKEBASE_PROJECT}/${LAKEBASE_BRANCH}  db=${LAKEBASE_DATABASE}  schema=${LAKEBASE_SCHEMA}"
 fi

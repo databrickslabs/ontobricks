@@ -128,7 +128,7 @@ if $DRY_RUN; then
 fi
 
 # ── Step 1: Check name availability ──────────────────────────────────────────
-_log "Checking if '$NAME' already exists in database/instances …"
+_log "Checking if '$NAME' already exists …"
 EXISTING=$(curl -sf "$HOST/api/2.0/database/instances/$NAME" \
   -H "Authorization: Bearer $TOKEN" 2>/dev/null || true)
 
@@ -138,40 +138,51 @@ if echo "$EXISTING" | grep -q '"state"'; then
   _ok "Instance '$NAME' already exists (state=$STATE, host=$HOST_DNS)"
   _log "Skipping creation — proceeding to database step."
 else
-  # ── Step 2: Create via old instances API ─────────────────────────────────
-  _log "Creating Lakebase instance '$NAME' (capacity=$CAPACITY) via /api/2.0/database/instances …"
-  _log "  NOTE: The Databricks UI 'New project' button uses a different API that is"
-  _log "        NOT compatible with the Synced Tables API. This script uses the correct one."
-  PAYLOAD=$(printf '{"name":"%s","capacity":"%s","enable_pg_native_login":true}' "$NAME" "$CAPACITY")
-  RESULT=$(curl -sf -X POST "$HOST/api/2.0/database/instances" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "Content-Type: application/json" \
-    -d "$PAYLOAD" 2>&1) || {
-      ERR_MSG=$(echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('message','unknown'))" 2>/dev/null || echo "$RESULT")
-      _err "Failed to create instance: $ERR_MSG"
-    }
-
-  _ok "Instance creation request accepted."
-
-  # ── Step 3: Wait for AVAILABLE ─────────────────────────────────────────────
-  _log "Waiting for '$NAME' to become AVAILABLE (max ${WAIT}s) …"
-  ELAPSED=0
-  while true; do
-    sleep 5
-    ELAPSED=$((ELAPSED + 5))
-    STATUS_JSON=$(curl -sf "$HOST/api/2.0/database/instances/$NAME" \
-      -H "Authorization: Bearer $TOKEN" 2>/dev/null || true)
-    STATE=$(echo "$STATUS_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('state','?'))" 2>/dev/null || echo "?")
-    _log "  state=$STATE (${ELAPSED}s elapsed)"
-    if [[ "$STATE" == "AVAILABLE" ]]; then
-      HOST_DNS=$(echo "$STATUS_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('read_write_dns','?'))")
-      _ok "Instance '$NAME' is AVAILABLE at $HOST_DNS"
-      break
+  PG_EXISTING=$(curl -sf "$HOST/api/2.0/postgres/projects/$NAME" \
+    -H "Authorization: Bearer $TOKEN" 2>/dev/null || true)
+  if echo "$PG_EXISTING" | grep -q '"project_id"'; then
+    _ok "Postgres project '$NAME' already exists (Lakebase Autoscaling). Skipping instance create."
+    _log "Proceeding to database step."
+  else
+    # ── Step 2: Create via old instances API ─────────────────────────────────
+    _log "Creating Lakebase instance '$NAME' (capacity=$CAPACITY) via /api/2.0/database/instances …"
+    _log "  NOTE: The Databricks UI 'New project' button uses a different API that is"
+    _log "        NOT compatible with the Synced Tables API. This script uses the correct one."
+    PAYLOAD=$(printf '{"name":"%s","capacity":"%s","enable_pg_native_login":true}' "$NAME" "$CAPACITY")
+    CREATE_BODY="$(mktemp)"
+    HTTP_CODE=$(curl -sS -o "$CREATE_BODY" -w '%{http_code}' -X POST "$HOST/api/2.0/database/instances" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$PAYLOAD" || true)
+    RESULT="$(cat "$CREATE_BODY")"
+    rm -f "$CREATE_BODY"
+    if [[ "$HTTP_CODE" != "200" && "$HTTP_CODE" != "201" ]]; then
+      ERR_MSG=$(printf '%s' "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('message') or d.get('error_code') or d)" 2>/dev/null || echo "$RESULT")
+      _err "Failed to create instance (HTTP ${HTTP_CODE}): $ERR_MSG"
     fi
-    if [[ $ELAPSED -ge $WAIT ]]; then
-      _err "Timed out after ${WAIT}s waiting for AVAILABLE (state=$STATE). Check the Databricks UI."
-    fi
-  done
+
+    _ok "Instance creation request accepted."
+
+    # ── Step 3: Wait for AVAILABLE ─────────────────────────────────────────────
+    _log "Waiting for '$NAME' to become AVAILABLE (max ${WAIT}s) …"
+    ELAPSED=0
+    while true; do
+      sleep 5
+      ELAPSED=$((ELAPSED + 5))
+      STATUS_JSON=$(curl -sf "$HOST/api/2.0/database/instances/$NAME" \
+        -H "Authorization: Bearer $TOKEN" 2>/dev/null || true)
+      STATE=$(echo "$STATUS_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('state','?'))" 2>/dev/null || echo "?")
+      _log "  state=$STATE (${ELAPSED}s elapsed)"
+      if [[ "$STATE" == "AVAILABLE" ]]; then
+        HOST_DNS=$(echo "$STATUS_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('read_write_dns','?'))")
+        _ok "Instance '$NAME' is AVAILABLE at $HOST_DNS"
+        break
+      fi
+      if [[ $ELAPSED -ge $WAIT ]]; then
+        _err "Timed out after ${WAIT}s waiting for AVAILABLE (state=$STATE). Check the Databricks UI."
+      fi
+    done
+  fi
 fi
 
 # ── Step 4: Get production branch endpoint ────────────────────────────────────
@@ -278,8 +289,8 @@ echo "║  2. In Databricks Apps UI: rebind the postgres resource      ║"
 echo "║     to the new project endpoint (if the host changed).       ║"
 echo "║                                                              ║"
 echo "║  3. Run: make deploy                                         ║"
+echo "║     (creates the registry schema if it does not exist)       ║"
 echo "║  4. Run: make bootstrap-lakebase                             ║"
-echo "║  5. In the app UI: Settings → Registry → Initialize          ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 

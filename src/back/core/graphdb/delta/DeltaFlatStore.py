@@ -2,10 +2,23 @@
 
 from __future__ import annotations
 
+import concurrent.futures
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.adjacency import expand_and_fetch_sql
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming, materialize
+from back.core.graphdb.delta.DeltaOverviewStats import DeltaOverviewStats
+from back.core.graphdb.entity_search import (
+    is_missing_relation_error,
+    is_view_not_table_error,
+)
+from back.core.graphdb.props import (
+    execute_expand_with_props_fallback,
+    forget_missing_props,
+)
 from back.core.helpers import sql_escape as _escape_sql_string, validate_table_name
 from back.core.logging import get_logger
 
@@ -22,6 +35,9 @@ class DeltaFlatStore(GraphDBBackend):
     """
 
     supports_materialized_inference_purge = True
+    supports_adjacency = True
+    supports_entity_search = True
+    supports_props = True
 
     def __init__(
         self,
@@ -36,6 +52,16 @@ class DeltaFlatStore(GraphDBBackend):
     @property
     def query_dialect(self) -> str:
         return "sql"
+
+    def _distinct_count_expr(self, column: str) -> str:
+        """Use Spark's HyperLogLog counter for the stats overview.
+
+        ``approx_count_distinct`` is O(1) memory and avoids the full distinct
+        shuffle an exact ``COUNT(DISTINCT ...)`` triggers over multi-million-row
+        triple tables — turning a multi-second stats query into sub-second. The
+        default ~5% relative error is acceptable for an at-a-glance overview.
+        """
+        return f"approx_count_distinct({column})"
 
     def get_connection(self) -> Any:
         return self._client
@@ -69,6 +95,143 @@ class DeltaFlatStore(GraphDBBackend):
         if resolved:
             return resolved
         return table_name
+
+    def sql_flavor(self) -> str:
+        return "spark"
+
+    def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+        if self._domain is not None:
+            adj_out = _table_naming.adj_out_fqn(self._domain, self._settings)
+            adj_in = _table_naming.adj_in_fqn(self._domain, self._settings)
+            if adj_out and adj_in:
+                return (adj_out, adj_in)
+        if "." not in table_name or table_name.count(".") != 2:
+            return ("", "")
+        cat, sch, base = table_name.split(".", 2)
+        base = _table_naming.strip_graph_leaf_suffix(base)
+        return (
+            f"{cat}.{sch}.{base}{_table_naming.adj_out_suffix()}",
+            f"{cat}.{sch}.{base}{_table_naming.adj_in_suffix()}",
+        )
+
+    def entity_search_table_id(self, table_name: str) -> str:
+        if self._domain is not None:
+            search = _table_naming.entity_search_fqn(self._domain, self._settings)
+            if search:
+                return search
+        if "." not in table_name or table_name.count(".") != 2:
+            return ""
+        cat, sch, base = table_name.split(".", 2)
+        base = _table_naming.strip_graph_leaf_suffix(base)
+        return f"{cat}.{sch}.{base}{_table_naming.entity_search_suffix()}"
+
+    def entity_search_asserted_table_id(self, table_name: str) -> str:
+        if self._domain is not None:
+            search = _table_naming.entity_search_asserted_fqn(
+                self._domain, self._settings
+            )
+            if search:
+                return search
+        if "." not in table_name or table_name.count(".") != 2:
+            return ""
+        cat, sch, base = table_name.split(".", 2)
+        base = _table_naming.strip_graph_leaf_suffix(base)
+        return f"{cat}.{sch}.{base}{_table_naming.entity_search_asserted_suffix()}"
+
+    def props_table_id(self, table_name: str) -> str:
+        if self._domain is not None:
+            props = _table_naming.props_fqn(self._domain, self._settings)
+            if props:
+                return props
+        if "." not in table_name or table_name.count(".") != 2:
+            return ""
+        cat, sch, base = table_name.split(".", 2)
+        base = _table_naming.strip_graph_leaf_suffix(base)
+        return f"{cat}.{sch}.{base}{_table_naming.props_suffix()}"
+
+    def _try_optimize(self, table_fqn: str, kind: str) -> None:
+        """Run OPTIMIZE best-effort; log a warning with *kind* context on failure."""
+        try:
+            materialize.optimize_table(self._client, table_fqn)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OPTIMIZE %s failed for %s: %s", kind, table_fqn, exc)
+
+    def _run_rebuild_job(self, name: str, rebuild: Callable[[], None]) -> None:
+        started = time.perf_counter()
+        rebuild()
+        logger.info(
+            "Graph-index companion rebuilt: %s in %.0f ms",
+            name,
+            (time.perf_counter() - started) * 1000,
+        )
+
+    def rebuild_adjacency(self, table_name: str) -> None:
+        relation = self._sql_relation(table_name)
+        adj_out, adj_in = self.adjacency_table_ids(table_name)
+        search = self.entity_search_table_id(table_name)
+        search_asserted = self.entity_search_asserted_table_id(table_name)
+        props = self.props_table_id(table_name)
+        if not adj_out or not adj_in or not search or not props:
+            logger.warning("Skipping graph-index rebuild, unresolved table ids for %s", table_name)
+            return
+        asserted_spo = self.synced_table_name(table_name)
+        jobs: Dict[str, Callable[[], None]] = {
+            "adj_out": lambda: self._rebuild_adjacency_table(relation, adj_out, "out"),
+            "adj_in": lambda: self._rebuild_adjacency_table(relation, adj_in, "in"),
+            "entity_search": lambda: self._rebuild_entity_search_table(relation, search),
+            "props": lambda: self._rebuild_props_table(relation, props),
+        }
+        if search_asserted and asserted_spo:
+            jobs["entity_search_asserted"] = lambda: self._rebuild_entity_search_table(
+                asserted_spo, search_asserted
+            )
+        started = time.perf_counter()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(jobs))) as executor:
+            future_names = {
+                executor.submit(self._run_rebuild_job, name, rebuild): name
+                for name, rebuild in jobs.items()
+            }
+            for future in concurrent.futures.as_completed(future_names):
+                try:
+                    future.result()
+                except Exception:
+                    for pending in future_names:
+                        pending.cancel()
+                    logger.exception(
+                        "Graph-index companion rebuild failed: %s", future_names[future]
+                    )
+                    raise
+        logger.info(
+            "Graph-index rebuild completed: %s companions in %.0f ms",
+            len(jobs),
+            (time.perf_counter() - started) * 1000,
+        )
+
+    def _rebuild_adjacency_table(
+        self, relation: str, adj_fqn: str, direction: str
+    ) -> None:
+        materialize.drop_relation(self._client, adj_fqn, kind="view")
+        self._client.execute_statement(
+            materialize.build_adj_ctas_sql(relation, adj_fqn, direction)
+        )
+        self._try_optimize(adj_fqn, "adjacency table")
+
+    def _rebuild_props_table(self, relation: str, props: str) -> None:
+        materialize.drop_relation(self._client, props, kind="view")
+        self._client.execute_statement(materialize.build_props_ctas_sql(relation, props))
+        # CTAS succeeded; OPTIMIZE below is best-effort only.
+        self._try_optimize(props, "property table")
+        forget_missing_props(props)
+
+    def _rebuild_entity_search_table(self, spo_fqn: str, search_fqn: str) -> None:
+        materialize.drop_relation(self._client, search_fqn, kind="view")
+        self._client.execute_statement(
+            materialize.build_entity_search_ctas_sql(spo_fqn, search_fqn)
+        )
+        materialize.set_bloom_filter_columns(
+            self._client, search_fqn, "label_lc,uri_lc"
+        )
+        self._try_optimize(search_fqn, "entity-search table")
 
     def _writable_table_fqn(self, table_name: str) -> str:
         """Route app writes to the inferred companion table (Lakebase ``__app`` analogue)."""
@@ -105,6 +268,10 @@ class DeltaFlatStore(GraphDBBackend):
         """Base data table without inferred companion rows."""
         if table_name.endswith(_table_naming.data_suffix()):
             return table_name
+        if self._domain is not None:
+            data = _table_naming.data_table_fqn(self._domain, self._settings)
+            if data:
+                return data
         if "." in table_name and table_name.count(".") == 2:
             cat, sch, base = table_name.split(".", 2)
             if base.endswith(_table_naming.inferred_suffix()):
@@ -137,6 +304,26 @@ class DeltaFlatStore(GraphDBBackend):
         logger.info("Dropping Delta table: %s", table_name)
         self._client.execute_statement(query)
 
+    def _uses_inline_sql(self) -> bool:
+        """True when the warehouse is Apps INLINE Statement Execution."""
+        transport = getattr(self._client, "sql", self._client)
+        return getattr(type(transport), "uses_inline_statements", False) is True
+
+    @staticmethod
+    def _insert_sql(table_name: str, batch: List[Dict[str, str]]) -> str:
+        values_sql = ",\n".join(
+            "('{s}', '{p}', '{o}')".format(
+                s=_escape_sql_string(t.get("subject", "") or ""),
+                p=_escape_sql_string(t.get("predicate", "") or ""),
+                o=_escape_sql_string(t.get("object", "") or ""),
+            )
+            for t in batch
+        )
+        return (
+            f"INSERT INTO {table_name} (subject, predicate, object) VALUES\n"
+            f"{values_sql}"
+        )
+
     def _execute_insert_triples(
         self,
         table_name: str,
@@ -149,6 +336,11 @@ class DeltaFlatStore(GraphDBBackend):
         if not triples:
             return 0
 
+        if self._uses_inline_sql():
+            return self._execute_insert_triples_inline(
+                table_name, triples, batch_size, on_progress
+            )
+
         from databricks import sql
 
         total = 0
@@ -157,15 +349,7 @@ class DeltaFlatStore(GraphDBBackend):
             with connection.cursor() as cursor:
                 for i in range(0, len(triples), batch_size):
                     batch = triples[i : i + batch_size]
-                    values_list = []
-                    for t in batch:
-                        s = _escape_sql_string(t.get("subject", "") or "")
-                        p = _escape_sql_string(t.get("predicate", "") or "")
-                        o = _escape_sql_string(t.get("object", "") or "")
-                        values_list.append(f"('{s}', '{p}', '{o}')")
-                    values_sql = ",\n".join(values_list)
-                    query = f"INSERT INTO {table_name} (subject, predicate, object) VALUES\n{values_sql}"
-                    cursor.execute(query)
+                    cursor.execute(self._insert_sql(table_name, batch))
                     total += len(batch)
                     if on_progress:
                         on_progress(total, len(triples))
@@ -177,6 +361,26 @@ class DeltaFlatStore(GraphDBBackend):
                     )
 
         logger.info("Inserted %d triples into %s", total, table_name)
+        return total
+
+    def _execute_insert_triples_inline(
+        self,
+        table_name: str,
+        triples: List[Dict[str, str]],
+        batch_size: int,
+        on_progress: Optional[Callable[[int, int], None]],
+    ) -> int:
+        """INSERT via Statement Execution (no Thrift session in Databricks Apps)."""
+        total = 0
+        for i in range(0, len(triples), batch_size):
+            batch = triples[i : i + batch_size]
+            self._client.execute_statement(self._insert_sql(table_name, batch))
+            total += len(batch)
+            if on_progress:
+                on_progress(total, len(triples))
+        logger.info(
+            "Inserted %d triples into %s via Statement Execution", total, table_name
+        )
         return total
 
     def insert_triples(
@@ -210,8 +414,24 @@ class DeltaFlatStore(GraphDBBackend):
     def purge_materialized_triples(self, table_name: str) -> int:
         """Truncate the inferred companion and preserve mapped source triples."""
         inferred = self._writable_table_fqn(table_name)
-        count = self.count_triples(inferred)
+        try:
+            count = self.count_triples(inferred)
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            if (
+                "TABLE_OR_VIEW_NOT_FOUND" in msg
+                or "does not exist" in msg.lower()
+            ):
+                logger.info(
+                    "Purged 0 materialized triples; companion missing: %s",
+                    inferred,
+                )
+                return 0
+            raise
         materialize.truncate_table(self._client, inferred)
+        from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
+
+        rebuild_graph_cache_if_enabled(self, table_name, self._domain)
         logger.info("Purged %d materialized triples from %s", count, inferred)
         return count
 
@@ -230,37 +450,97 @@ class DeltaFlatStore(GraphDBBackend):
             return int(rows[0].get("cnt", 0))
         return 0
 
+    def describe_detail(self, table_name: str) -> Dict[str, Any]:
+        """Return the first ``DESCRIBE DETAIL`` row, or ``{}`` if it fails.
+
+        A view (zero-copy ``…_data``) has no Delta detail, so it also yields ``{}``.
+        """
+        if not table_name or not table_name.strip():
+            return {}
+        validate_table_name(table_name)
+        try:
+            rows = self._client.execute_query(f"DESCRIBE DETAIL {table_name}")
+        except Exception as exc:  # noqa: BLE001
+            if is_missing_relation_error(exc) or is_view_not_table_error(exc):
+                return {}
+            raise
+        return rows[0] if rows else {}
+
+    def _graph_index_probe_fqn(self, table_name: str) -> str:
+        """Prefer ``…_entity_search`` when *table_name* is the union ``…_graph`` VIEW."""
+        leaf = table_name.rsplit(".", 1)[-1]
+        if leaf.endswith(_table_naming.graph_suffix()):
+            search = self.entity_search_table_id(table_name)
+            if search:
+                return search
+        return table_name
+
     def table_exists(self, table_name: str) -> bool:
-        """Check if table exists by trying count, catch TABLE_OR_VIEW_NOT_FOUND."""
+        """Check existence with catalog metadata, not a row scan.
+
+        For the union ``…_graph`` VIEW, describe ``…_entity_search`` first.
+        ``DESCRIBE DETAIL`` on a pass-through mapping view can fail the same
+        way a ``COUNT(*)`` does (timeout / cloud I/O), which the KG badge
+        treats as unknown.
+        """
         if not table_name or not table_name.strip():
             return False
-        try:
-            self.count_triples(table_name)
+        validate_table_name(table_name)
+        probe = self._graph_index_probe_fqn(table_name)
+        if probe != table_name and self._describe_exists(probe) is True:
             return True
-        except Exception as e:
-            error_msg = str(e)
-            if (
-                "TABLE_OR_VIEW_NOT_FOUND" in error_msg
-                or "does not exist" in error_msg.lower()
-            ):
+        exists = self._describe_exists(table_name)
+        if exists is not None:
+            return exists
+        return False
+
+    def _describe_exists(self, table_name: str) -> Optional[bool]:
+        try:
+            self._client.execute_query(f"DESCRIBE DETAIL {table_name}")
+            return True
+        except Exception as exc:
+            if is_view_not_table_error(exc):
+                return True
+            if is_missing_relation_error(exc):
                 return False
             raise
 
     def get_status(self, table_name: str) -> Dict[str, Any]:
-        """Return dict with count, last_modified, etc."""
+        """Return count/metadata without touching a live mapping VIEW."""
         validate_table_name(table_name)
-        count = self.count_triples(table_name)
-        status: Dict[str, Any] = {"count": count, "last_modified": None}
-        try:
-            detail = self._client.execute_query(f"DESCRIBE DETAIL {table_name}")
-            if detail and len(detail) > 0:
-                row = detail[0]
-                status["last_modified"] = row.get("lastModified")
-                status["path"] = row.get("path")
-                status["format"] = row.get("format")
-        except Exception as e:
-            logger.debug("Could not get DESCRIBE DETAIL for %s: %s", table_name, e)
+        probe = self._graph_index_probe_fqn(table_name)
+        status: Dict[str, Any] = {"count": 0, "last_modified": None}
+        row = self.describe_detail(probe)
+        if row:
+            status["last_modified"] = row.get("lastModified")
+            status["path"] = row.get("path")
+            status["format"] = row.get("format")
+        total = (
+            DeltaOverviewStats(self).triple_count(table_name)
+            if probe != table_name
+            else None
+        )
+        status["count"] = total if total else self._companion_has_row_count(probe)
         return status
+
+    def _companion_has_row_count(self, table_name: str) -> int:
+        """``1``/``0`` from ``LIMIT 1`` on *table_name* (already a probe FQN)."""
+        try:
+            rows = self._client.execute_query(f"SELECT 1 FROM {table_name} LIMIT 1")
+            return 1 if rows else 0
+        except Exception as exc:  # noqa: BLE001
+            if is_missing_relation_error(exc):
+                return 0
+            raise
+
+    def get_aggregate_stats(self, table_name: str) -> Dict[str, int]:
+        return DeltaOverviewStats(self).aggregate(table_name)
+
+    def get_type_distribution(self, table_name: str) -> List[Dict[str, Any]]:
+        return DeltaOverviewStats(self).type_distribution(table_name)
+
+    def get_predicate_distribution(self, table_name: str) -> List[Dict[str, Any]]:
+        return DeltaOverviewStats(self).predicate_distribution(table_name)
 
     def optimize_table(self, table_name: str) -> None:
         """Run OPTIMIZE to trigger Liquid Clustering compaction."""
@@ -284,6 +564,166 @@ class DeltaFlatStore(GraphDBBackend):
         if sql_service is not None and hasattr(sql_service, "execute_query"):
             return sql_service.execute_query(query, statement_timeout_s=timeout_s)
         return self._client.execute_query(query)
+
+    @staticmethod
+    def _expansion_level_ctes(
+        relation: str, depth: int, max_entities: int
+    ) -> list[str]:
+        """Build fixed-depth, de-duplicated BFS levels for one SQL statement."""
+        ctes: list[str] = []
+        for level in range(1, depth + 1):
+            previous = f"level_{level - 1}"
+            visited = f"visited_{level}"
+            visited_union = " UNION ALL ".join(
+                f"SELECT entity FROM level_{prior}" for prior in range(level)
+            )
+            ctes.extend(
+                [
+                    f"{visited} AS ({visited_union})",
+                    (
+                        f"level_{level}_candidates AS ("
+                        f"SELECT t.object AS entity FROM {relation} t "
+                        f"JOIN {previous} frontier "
+                        f"ON t.subject = frontier.entity "
+                        f"WHERE t.object LIKE 'http%' "
+                        f"AND t.predicate != '{RDF_TYPE}' "
+                        f"AND t.predicate != '{RDFS_LABEL}' "
+                        f"UNION ALL "
+                        f"SELECT t.subject AS entity FROM {relation} t "
+                        f"JOIN {previous} frontier "
+                        f"ON t.object = frontier.entity "
+                        f"WHERE t.predicate != '{RDF_TYPE}' "
+                        f"AND t.predicate != '{RDFS_LABEL}')"
+                    ),
+                    (
+                        f"level_{level} AS ("
+                        f"SELECT DISTINCT candidate.entity "
+                        f"FROM level_{level}_candidates candidate "
+                        f"JOIN {relation} typed "
+                        f"ON typed.subject = candidate.entity "
+                        f"AND typed.predicate = '{RDF_TYPE}' "
+                        f"LEFT ANTI JOIN {visited} "
+                        f"ON {visited}.entity = candidate.entity "
+                        f"LIMIT {max_entities})"
+                    ),
+                ]
+            )
+        return ctes
+
+    def expand_and_fetch_subgraph(
+        self,
+        table_name: str,
+        selected_uris: list[str],
+        depth: int,
+        max_entities: int,
+        max_triples: int,
+    ) -> dict[str, Any]:
+        """Expand and fetch a bounded Delta subgraph in one SQL statement."""
+        if not selected_uris:
+            raise ValueError("At least one selected URI is required")
+        depth = max(0, int(depth))
+        max_entities = max(1, int(max_entities))
+        max_triples = max(1, int(max_triples))
+
+        relation = self._sql_relation(table_name)
+        props = ""
+        if self.adjacency_ready(table_name):
+            adj_out, adj_in = self.adjacency_table_ids(table_name)
+            props = self._props_table_for_read(table_name)
+            sql = expand_and_fetch_sql(
+                flavor=self.sql_flavor(),
+                adj_out=self._sql_relation(adj_out),
+                adj_in=self._sql_relation(adj_in),
+                spo=relation,
+                props=self._sql_relation(props) if props else None,
+                selected_uris=selected_uris,
+                depth=depth,
+                max_entities=max_entities,
+                max_triples=max_triples,
+                escape=self._sql_escape,
+            )
+        else:
+            seed_values = ", ".join(
+                f"('{self._sql_escape(uri)}')" for uri in dict.fromkeys(selected_uris)
+            )
+            ctes = [f"level_0(entity) AS (VALUES {seed_values})"]
+            ctes.extend(self._expansion_level_ctes(relation, depth, max_entities))
+
+            levels = " UNION ALL ".join(
+                f"SELECT entity FROM level_{level}" for level in range(depth + 1)
+            )
+            ctes.extend(
+                [
+                    (
+                        "entity_probe AS ("
+                        f"SELECT DISTINCT entity FROM ({levels}) discovered "
+                        f"LIMIT {max_entities + 1})"
+                    ),
+                    (
+                        "entities AS ("
+                        f"SELECT entity FROM entity_probe LIMIT {max_entities})"
+                    ),
+                    (
+                        "entity_stats AS ("
+                        "SELECT COUNT(*) AS _ob_expanded_count FROM entity_probe)"
+                    ),
+                ]
+            )
+            sql = (
+                "WITH "
+                + ", ".join(ctes)
+                + " "
+                + "SELECT triples.subject, triples.predicate, triples.object, "
+                + "stats._ob_expanded_count "
+                + f"FROM {relation} triples "
+                + "JOIN entities ON entities.entity = triples.subject "
+                + "CROSS JOIN entity_stats stats "
+                + f"LIMIT {max_triples + 1}"
+            )
+
+        if props:
+            adj_out, adj_in = self.adjacency_table_ids(table_name)
+            fallback_sql = expand_and_fetch_sql(
+                flavor=self.sql_flavor(),
+                adj_out=self._sql_relation(adj_out),
+                adj_in=self._sql_relation(adj_in),
+                spo=relation,
+                selected_uris=selected_uris,
+                depth=depth,
+                max_entities=max_entities,
+                max_triples=max_triples,
+                escape=self._sql_escape,
+            )
+            rows = execute_expand_with_props_fallback(
+                execute_query=self.execute_query,
+                sql=sql,
+                props_table=props,
+                fallback_sql=fallback_sql,
+            )
+        else:
+            rows = self.execute_query(sql) or []
+        discovered_count = (
+            int(rows[0].get("_ob_expanded_count") or 0)
+            if rows
+            else min(len(set(selected_uris)), max_entities)
+        )
+        triple_capped = len(rows) > max_triples
+        triples = [
+            {
+                "subject": row.get("subject", ""),
+                "predicate": row.get("predicate", ""),
+                "object": row.get("object", ""),
+            }
+            for row in rows[:max_triples]
+        ]
+        entity_capped = discovered_count > max_entities
+        return {
+            "results": triples,
+            "count": len(triples),
+            "expanded_count": min(discovered_count, max_entities),
+            "capped": entity_capped or triple_capped,
+            "timeout_capped": False,
+        }
 
     def get_inferred_triple_count(self, table_name: str) -> int:
         if self._domain is None:

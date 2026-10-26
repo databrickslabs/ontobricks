@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.errors import OntoBricksError, ValidationError, InfrastructureError
+from shared.llm_target import build_llm_request
 
 from .models import SchemaContext
 
@@ -262,7 +263,11 @@ class SQLWizardService:
         return {"system": system_instruction, "user": user_message}
 
     def call_llm_endpoint(
-        self, endpoint_name: str, prompt: Dict[str, str], timeout: int = 60
+        self,
+        endpoint_name: str,
+        prompt: Dict[str, str],
+        timeout: int = 60,
+        endpoint_kind: str = "",
     ) -> str:
         """Call the LLM endpoint and get the generated SQL.
 
@@ -283,16 +288,18 @@ class SQLWizardService:
         host = self.client.host.rstrip("/")
         headers = self.client.get_auth_headers()
 
-        url = f"{host}/serving-endpoints/{endpoint_name}/invocations"
-
-        payload = {
-            "messages": [
+        messages = [
                 {"role": "system", "content": prompt["system"]},
                 {"role": "user", "content": prompt["user"]},
-            ],
-            "max_tokens": 1024,
-            "temperature": 0.1,
-        }
+        ]
+        url, payload = build_llm_request(
+            host,
+            endpoint_name,
+            endpoint_kind,
+            messages,
+            max_tokens=1024,
+            temperature=0.1,
+        )
 
         logger.info(
             "[SQLWizard] call_llm_endpoint: POST %s (timeout=%ds)",
@@ -728,6 +735,7 @@ class SQLWizardService:
         mapping_type: str = None,
         catalog: str = None,
         schema: str = None,
+        endpoint_kind: str = "",
     ) -> Dict[str, Any]:
         """Full pipeline: generate and validate SQL from natural language.
 
@@ -740,6 +748,7 @@ class SQLWizardService:
             mapping_type: Type of mapping ('entity', 'relationship', or None for general)
             catalog: (deprecated) Unity Catalog catalog - only used if fetching from UC
             schema: (deprecated) Schema name - only used if fetching from UC
+            endpoint_kind: Saved LLM target kind (serving or AI Gateway)
 
         Returns:
             Dict with generated SQL, validation results, and telemetry
@@ -802,7 +811,9 @@ class SQLWizardService:
             logger.info(
                 "[SQLWizard] generate_sql step 3: call LLM endpoint '%s'", endpoint_name
             )
-            raw_output = self.call_llm_endpoint(endpoint_name, prompt)
+            raw_output = self.call_llm_endpoint(
+                endpoint_name, prompt, endpoint_kind=endpoint_kind
+            )
             logger.debug(
                 "[SQLWizard] generate_sql: raw LLM output (%d chars): %.300s",
                 len(raw_output),

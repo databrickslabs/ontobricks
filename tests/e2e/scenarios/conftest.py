@@ -19,7 +19,8 @@ import pathlib
 
 import pytest
 
-from tests.e2e.scenarios._harness import base_url
+from tests.e2e.conftest import _install_redirect_fix, _resolve_live_bearer
+from tests.e2e.scenarios._harness import base_url, probe_app
 
 _SCENARIOS_DIR = pathlib.Path(__file__).parent.resolve()
 
@@ -39,35 +40,37 @@ def pytest_collection_modifyitems(items):
 
 # ── Shared fixtures for the scenario campaign ────────────────────────────────
 # Every scenario suite talks to a *running* app (the local dev server by
-# default) through a plain Playwright request context — deliberately bypassing
-# the parent ``page`` fixture, which injects an int-workspace bearer token that
-# the scenarios must not carry.
+# default) through a Playwright request context. A local app gets a plain
+# context; a deployed Databricks App sits behind the Apps gateway, which
+# answers unauthenticated calls with a 200 HTML login page, so the context
+# carries the workspace bearer (``_live_bearer``, ``None`` on localhost).
 
 
 @pytest.fixture(scope="module")
-def scenario_base() -> str:
+def scenario_base(_live_bearer) -> str:
     """Resolve and smoke-check the target app before the browser spins up."""
-    import httpx
-
     base = base_url()
-    last_exc: Exception | None = None
-    for probe in ("/health", "/healthz"):  # local serves /health; deployed /healthz
-        try:
-            resp = httpx.get(f"{base}{probe}", timeout=20.0)
-            if resp.status_code == 200:
-                return base
-        except Exception as exc:  # noqa: BLE001
-            last_exc = exc
-    pytest.skip(
-        f"No OntoBricks app reachable at {base} ({last_exc or 'non-200 health'}). "
-        f"Start it with `scripts/start.sh` or set ONTOBRICKS_LIVE_BASE."
-    )
+    try:
+        probe_app(base, token=_live_bearer)
+    except Exception as exc:  # noqa: BLE001 — skip with the probe's reason
+        pytest.skip(
+            f"No OntoBricks app reachable at {base} ({exc}). "
+            f"Start it with `scripts/start.sh` or set ONTOBRICKS_LIVE_BASE."
+        )
+    return base
 
 
 @pytest.fixture
-def scenario_page(browser_instance, scenario_base):
+def scenario_page(browser_instance, scenario_base, _live_bearer):
     """A fresh browser page on a clean context pointed at the running app."""
-    ctx = browser_instance.new_context()
+    token = _resolve_live_bearer() if _live_bearer else None
+    if token:
+        ctx = browser_instance.new_context(
+            extra_http_headers={"Authorization": f"Bearer {token}"}
+        )
+        _install_redirect_fix(ctx, scenario_base, token)
+    else:
+        ctx = browser_instance.new_context()
     pg = ctx.new_page()
     pg.base_url = scenario_base
     yield pg

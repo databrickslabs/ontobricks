@@ -130,6 +130,17 @@ class TestSubjectSQL:
         assert "c0.object = 1000" in sql
         assert "CAST" not in sql
 
+    @pytest.mark.parametrize("value", ["nan", "inf", "-Infinity", "1_000", " 5", "5\n"])
+    def test_a_float_parsable_non_literal_is_quoted(self, value):
+        """``float()`` accepts these, but pasted bare they are not SQL numbers."""
+        sql = _sql([_cond("gt", value, prop_uri=AMOUNT, name="amount")])
+        assert f"'{value.lower()}'" in sql
+        assert "TRY_CAST" not in sql
+
+    def test_a_float_parsable_non_literal_is_quoted_in_sparql(self):
+        sparql = ShapeConditions._sparql_expression("gt", "?v", "nan")
+        assert '"nan"' in sparql
+
     def test_a_quote_in_a_value_is_escaped(self):
         sql = _sql([_cond("eq", "O'Brien")])
         assert "'o''brien'" in sql

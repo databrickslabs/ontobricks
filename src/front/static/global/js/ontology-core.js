@@ -39,7 +39,7 @@ const OntologyState = {
 
 /**
  * Load base URI from domain session (managed on the Domain page)
- * Base URI is no longer auto-generated - it's managed in the Project Information page.
+ * Base URI is no longer auto-generated — it is managed on Domain → General.
  */
 function generateBaseUri() {
     // This function is kept for backward compatibility but no longer auto-generates
@@ -282,7 +282,7 @@ async function autoGenerateOwl() {
     if (!name) {
         issues.push('Ontology name is required');
     } else if (name === 'myontology' || name === 'newproject' || name === 'newdomain') {
-        warnings.push('Ontology name is still set to the default. Set a Domain Name in Domain Information.');
+        warnings.push('Ontology name is still set to the default. Set a Domain Name in Domain → General.');
     }
     
     if (!baseUri) {

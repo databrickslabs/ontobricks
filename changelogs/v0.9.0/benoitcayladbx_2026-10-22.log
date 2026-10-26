@@ -1,0 +1,46 @@
+================================================================================
+## Merge origin/master into 0.9.0 to clear PR #204 conflicts
+================================================================================
+
+Context: Release PR #204 (0.9.0 → master) was CONFLICTING. master is v0.8.2
+and carries 0.8.1/0.8.2 history plus docs/CI that 0.9.0 never rebased.
+Product code keeps 0.9.0 (those 0.8.2 fixes were already forward-ported).
+Tracked Sphinx/PR47 packs stay gitignored; deleted 0.9.0 docs and
+SettingsService.py stay deleted. This does not merge into master.
+
+Changes:
+
+1. Merge origin/master into 0.9.0
+   Resolve content conflicts with 0.9.0; take master's additive 0.8.x
+   changelogs, CONTRIBUTING, and CI workflow edits.
+
+Modified files:
+- merge of origin/master into 0.9.0 (conflict resolutions as above)
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9515 passed, 326 skipped, 8 deselected, 40 warnings in 46.74s
+
+================================================================================
+## Keep make deploy from rebinding Lakebase off a sourced .env
+================================================================================
+
+Context: Redeploying ontobricks-09x while ``LAKEBASE_PROJECT`` was still
+exported from ``.env`` overrode ``deploy.config.sh`` and rebound the app
+postgres resource from ``ontobricks-demo-09-registry`` (the populated
+registry) to ``ontobricks-dev-registry``. Domains were not deleted; the
+app pointed at a different database.
+
+Changes:
+
+1. Makefile
+   ``make deploy`` (and siblings) also unset ``LAKEBASE_*`` /
+   ``APP_LAKEBASE_PROJECT`` / ``APP_LAKEBASE_BRANCH`` before
+   ``scripts/deploy.sh``.
+2. tests/units/settings/test_deploy_app_rename_guard.py
+   Contract that the deploy recipes drop those env vars.
+
+Modified files:
+- Makefile
+- tests/units/settings/test_deploy_app_rename_guard.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9516 passed, 326 skipped, 8 deselected, 40 warnings in 54.06s
+

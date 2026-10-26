@@ -1,0 +1,203 @@
+================================================================================
+## Raise Dependabot security floors and document 0.8.x → 0.9.0 upgrades
+================================================================================
+
+Context: GitHub Dependabot listed 14 open pip advisories on uv.lock.
+Patched floors close the ones with a published fix. oauthlib 4.x is blocked
+by databricks-sql-connector; nltk has no patched release. Operators needed
+a short in-place upgrade guide matching update_to_0.8.md. No warehouse
+registry DDL: 0.9 only adds domain_documents lazily.
+
+Changes:
+
+1. pyproject.toml
+   Raise strawberry-graphql, aiohttp, mcp, Mako floors; add fsspec,
+   multidict, and werkzeug constraints.
+2. src/mcp-server/pyproject.toml
+   Raise mcp to >=1.30.0 (StreamableHTTP session accumulation).
+3. uv.lock
+   Re-lock patched versions on files.pythonhosted.org.
+4. src/mcp-server/uv.lock
+   Pin mcp 1.30.0 on the public CDN.
+5. docs/development.md
+   Document strawberry-graphql >=0.327.2.
+6. update_to_0.9.0.md
+   In-place 0.8.x → 0.9.0 upgrade: keep deploy.config.sh, updater, OBO
+   grants, Knowledge Store re-upload.
+
+Modified files:
+- pyproject.toml
+- src/mcp-server/pyproject.toml
+- uv.lock
+- src/mcp-server/uv.lock
+- docs/development.md
+- update_to_0.9.0.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9506 passed, 326 skipped, 8 deselected, 1 xfailed, 40 warnings in 55.38s
+
+================================================================================
+## Rewrite the October 2026 roadmap as a customer vision document
+================================================================================
+
+Context: The October roadmap still read as an Asana snapshot (board counts,
+Needs triage, close-out hygiene). Customers need a vision of where the
+product is going, not an internal tracker.
+
+Changes:
+
+1. releases/Roadmap_2026-10.md
+   Customer-facing vision: Available now / Next / Toward GA / Exploring.
+   No tracker language, no shipped-but-open ticket close-out, no
+   contribution-via-backlog process.
+
+Modified files:
+- releases/Roadmap_2026-10.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9504 passed, 326 skipped, 8 deselected, 1 xfailed, 40 warnings in 54.40s
+
+================================================================================
+## Prefix scenario domains with Zz and purge leftovers at campaign start
+================================================================================
+
+Context: Campaign domains mixed with real registry entries. Names cannot
+contain underscores (CamelCase alphanumeric only), so the ``ZZ_`` prefix
+becomes ``Zz``. A new scenario 0 deletes leftover ``Zz*`` / ``ZZ_*``
+folders (and the pre-rename ``testscenario1`` / ``testzerocopy`` /
+``testmetadataintegrity`` / ``salesdomain`` ones) before the journey
+recreates them.
+
+Changes:
+
+1. tests/e2e/scenarios/_harness.py
+   Canonical ``Zz*`` domain constants, leftover matcher, and
+   ``purge_campaign_domains``.
+2. tests/e2e/scenarios/test_scenario_00_purge.py
+   Campaign preflight: DELETE every leftover campaign domain.
+3. tests/e2e/scenarios/test_scenario_01_generate_live.py
+   Domain ``ZzTestScenario1``; chain depends on scenario 0.
+4. tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py
+   Default folder ``zztestscenario1``.
+5. tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+   Default folder ``zztestscenario1``.
+6. tests/e2e/scenarios/test_scenario_04_metadata_integrity.py
+   Domain ``ZzTestMetadataIntegrity``; chain depends on scenario 0.
+7. tests/e2e/scenarios/test_scenario_05_zero_copy_entity_features.py
+   Domain ``ZzTestZeroCopy``; chain depends on scenario 0.
+8. tests/e2e/scenarios/test_scenario_validation.py
+   Default folder ``zztestscenario1``.
+9. tests/e2e/scenarios/test_full_lifecycle.py
+   Domain ``ZzSalesDomain``.
+10. tests/e2e/scenarios/README.md
+    Document Zz prefix, purge step, and chain on scenario 0.
+11. tests/units/e2e/test_scenario_campaign_wiring.py
+    Prefix, leftover matcher, and purge-step contracts.
+
+Modified files:
+- tests/e2e/scenarios/_harness.py
+- tests/e2e/scenarios/test_scenario_00_purge.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- tests/e2e/scenarios/test_scenario_04_metadata_integrity.py
+- tests/e2e/scenarios/test_scenario_05_zero_copy_entity_features.py
+- tests/e2e/scenarios/test_scenario_validation.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/scenarios/README.md
+- tests/units/e2e/test_scenario_campaign_wiring.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9492 passed, 326 skipped, 8 deselected, 1 xfailed, 40 warnings in 56.82s
+
+================================================================================
+## Fail Knowledge Graph builds on a lost triple count instead of reporting 0
+================================================================================
+
+Context:
+Forward-port of the 0.8.2 hotfix (PR #201 / Reliance): Lakehouse builds that
+ran past the one-hour M2M OAuth token lifetime lost the warehouse connection
+while counting triples. The count swallowed the error and returned 0, so the
+build finished with "VIEW created but no triples generated". 0.9.0 still had
+the static ``access_token`` connect path and the same swallowed COUNT on the
+Delta pipeline, ``_BuildPipeline``, and scheduled builds.
+
+Changes:
+
+1. src/back/core/databricks/DatabricksAuth.py
+   App-mode SQL connections pass a ``credentials_provider`` whose header factory reads ``get_oauth_token()`` on every request.
+2. src/back/core/graphdb/delta/materialize.py
+   New ``count_triples``: raises ``InfrastructureError`` when the count cannot run or returns no row (complies with ``src/.coding_rules.md §4``).
+3. src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+   Materialized builds run the CTAS first and count the Delta table afterwards; view-only builds still count the gateway VIEW first. Count errors fail the task. Extract Method: ``_build_data_relation``, ``_finish_without_triples``.
+4. src/back/objects/digitaltwin/build/_build_pipeline.py
+   ``_count_view_triples`` delegates to ``materialize.count_triples``. Post-sync count stays non-fatal and does not publish "Synced 0 triples" when the count is unavailable. Extract Function: ``_report_post_sync_triple_count``.
+5. src/back/objects/registry/schedule/build.py
+   Scheduled full rebuilds use the same raising count; managed-synced post-count stays non-fatal.
+6. tests/units/objects/test_build_pipeline_materialize.py
+   Recording SQL client; count failures, single gateway-VIEW scan, empty-row raise.
+7. tests/units/auth/test_auth.py
+   App-mode params expose ``credentials_provider``; refreshed-token header factory.
+8. tests/units/dtwin/test_build_pipeline_streaming.py
+   A failed post-sync count does not fail a successful synced build.
+9. docs/backend.md
+   ``materialize.py`` row mentions ``count_triples``.
+
+Modified files:
+- src/back/core/databricks/DatabricksAuth.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- tests/units/objects/test_build_pipeline_materialize.py
+- tests/units/auth/test_auth.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- docs/backend.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-21.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9504 passed, 326 skipped, 8 deselected, 1 xfailed, 40 warnings in 57.59s
+
+================================================================================
+## Keep live Playwright e2e authenticated on the Apps gateway
+================================================================================
+
+Context: Against ontobricks-09x, a catch-all ``page.route("**/*")`` dropped
+gateway bearer headers on fetch/XHR (``TypeError: Failed to fetch``) while
+``continue_(headers=)`` on those requests broke ``window.fetch``. A
+session-minted OAuth token also expired mid-suite (~1h), so later tests
+landed on Databricks Sign-In. Restrict intercepts to HTML navigations,
+remint the bearer every 20 minutes, and isolate a health check from a
+leaked ``DATABRICKS_CONFIG_PROFILE``.
+
+Changes:
+
+1. tests/e2e/conftest.py
+   Document-only slash-redirect intercept; ``fallback()`` for non-document;
+   ``_resolve_live_bearer`` remints before the Apps token dies.
+2. tests/e2e/scenarios/conftest.py
+   Scenario pages use the reminted bearer, not the session probe token.
+3. tests/e2e/domain/test_domain_versions_cards.py
+   Stub ``/settings/registry/domains`` so mocked card tests ignore registry fetch.
+4. tests/e2e/dtwin/test_dtwin_flows.py
+   Wait until SPARQL playground fills the default SELECT query.
+5. tests/e2e/help/test_help_modal_flows.py
+   Path-traversal image URL is rejected as 400 or 404.
+6. tests/units/e2e/test_scenario_campaign_wiring.py
+   Contracts for document continue, XHR fallback, and bearer remint.
+7. tests/units/core/test_health.py
+   Pin CLI profile to ``default`` so a live-run env cannot fail the unit test.
+8. tests/fixtures/databricks_auth.py
+   ``mint_token(..., force_refresh=)`` maps to ``databricks auth token --force-refresh``.
+9. tests/e2e/navigation/test_sidebar_bottom_alignment.py
+   Live mode waits for the seeded L2 rail and expects a 4px gutter (deployed chrome).
+
+Modified files:
+- tests/e2e/conftest.py
+- tests/e2e/scenarios/conftest.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/help/test_help_modal_flows.py
+- tests/units/e2e/test_scenario_campaign_wiring.py
+- tests/units/core/test_health.py
+- tests/fixtures/databricks_auth.py
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9506 passed, 326 skipped, 8 deselected, 1 xfailed, 40 warnings in 46.46s
+

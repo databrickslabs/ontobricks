@@ -18,7 +18,7 @@ Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versio
 
 import time
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
 
@@ -37,7 +37,14 @@ from back.core.helpers import (
     effective_graph_query_table,
     run_blocking,
 )
-from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot, NodeContextService
+from back.objects.digitaltwin import (
+    CohortService,
+    DigitalTwin,
+    DomainSnapshot,
+    NodeContextService,
+    NodeShaclResponse,
+    NodeShaclService,
+)
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
 _resolve_registry = DigitalTwin.resolve_registry
@@ -49,6 +56,29 @@ _RDF_TYPE = NodeContextService.RDF_TYPE
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+def assert_public_graph_read(request, domain, settings) -> None:
+    """Team gate for the public graph-read surface (see ``_graph_access``).
+
+    Imported lazily to avoid an import cycle: this external (Block A) module
+    is imported *by* the ``api.routers.internal`` package during its own
+    initialization, so a top-level import of the internal gate would recurse.
+    """
+    from api.routers.internal._graph_access import (
+        assert_public_graph_read as _impl,
+    )
+
+    _impl(request, domain, settings)
+
+
+def assert_public_graph_write(request, domain, settings) -> None:
+    """Builder gate for public routes that write to the graph (lazy import, see above)."""
+    from api.routers.internal._graph_access import (
+        assert_public_graph_write as _impl,
+    )
+
+    _impl(request, domain, settings)
 
 # Short-TTL, in-process cache for ``GET /stats`` results keyed by the graph
 # query table. Triple-store stats only change on a build, so a small TTL
@@ -172,16 +202,21 @@ class FindResponse(BaseModel):
     depth: int = Field(1, description="Traversal depth used")
     triples: List[TripleRow] = []
     count: int = Field(0, description="Triples returned in this page")
-    total: int = Field(0, description="Total distinct triples across all pages")
-    entity_count: int = Field(
-        0, description="Entities included after alias expansion"
-    )
+    total: int = Field(0, description="Total triples found across all pages")
     has_more: bool = Field(
         False, description="Whether more triples exist beyond this page"
     )
     limit: int = Field(1000, description="Page size used")
     offset: int = Field(0, description="Offset used")
+    entity_count: int = 0
     message: Optional[str] = None
+    cache_used: bool = Field(
+        False, description="Whether adjacency/entity-search companions were read"
+    )
+    cache_mode: str = Field(
+        "auto",
+        description="Resolved cache mode: auto, force_on, or force_off",
+    )
 
 
 class NodeContextDataset(BaseModel):
@@ -202,15 +237,28 @@ class NodeContextBridge(BaseModel):
 
 
 class NodeContextAction(BaseModel):
-    """A Unity Catalog function bound to the node's ontology class.
+    """A class action: Unity Catalog function or Databricks Job.
 
-    The function takes exactly one parameter: the ID of the entity to act on.
+    UC functions take exactly one parameter (entity ID). Jobs are identified
+    as ``job:<job_id>`` and must declare an ``entity_id`` job parameter.
     """
 
     fullName: str
     function: str = ""
     description: Optional[str] = None
     returns_table: bool = False
+    kind: Optional[str] = None
+    job_id: Optional[int] = None
+    job_name: Optional[str] = None
+
+
+class NodeContextBusinessRule(BaseModel):
+    """A SWRL rule declared on the node's ontology class, runnable on the node."""
+
+    name: str
+    description: Optional[str] = None
+    antecedent: str = ""
+    consequent: str = ""
 
 
 class NodeContextVirtualAttribute(BaseModel):
@@ -245,14 +293,17 @@ class NodeContextResponse(BaseModel):
     dataset: Optional[NodeContextDataset] = None
     bridges: Optional[List[NodeContextBridge]] = None
     actions: Optional[List[NodeContextAction]] = None
+    business_rules: Optional[List[NodeContextBusinessRule]] = None
     virtual_attributes: Optional[List[NodeContextVirtualAttributeGroup]] = None
+    shacl_shape_count: Optional[int] = None
     message: Optional[str] = None
 
 
 class NodeActionRequest(BaseModel):
     entity_uri: str = Field(..., description="Instance URI of the node to act on")
     action_full_name: str = Field(
-        ..., description="Fully qualified UC function name (catalog.schema.function)"
+        ...,
+        description="UC function FQN (catalog.schema.function) or job:<job_id>",
     )
     domain_name: Optional[str] = Field(None, description="Domain name in the registry")
     domain_version: Optional[str] = Field(None, description="Domain version to load")
@@ -267,8 +318,42 @@ class NodeActionResponse(BaseModel):
     entity_local_id: str = ""
     class_name: Optional[str] = None
     action: Optional[str] = None
+    kind: Optional[str] = None
     returns_table: bool = False
     rows: Optional[List[Dict[str, Any]]] = None
+    task_id: Optional[str] = None
+    run_id: Optional[int] = None
+    run_state: Optional[str] = None
+    run_page_url: Optional[str] = None
+    message: Optional[str] = None
+
+
+class NodeBusinessRuleRequest(BaseModel):
+    entity_uri: str = Field(..., description="Instance URI of the node to apply the rule to")
+    rule: str = Field(..., description="Name of a SWRL business rule declared on the class")
+    domain_name: Optional[str] = Field(None, description="Domain name in the registry")
+    domain_version: Optional[str] = Field(None, description="Domain version to load")
+    registry_catalog: Optional[str] = None
+    registry_schema: Optional[str] = None
+    registry_volume: Optional[str] = None
+
+
+class InferredTripleOut(BaseModel):
+    subject: str
+    predicate: str
+    object: str
+
+
+class NodeBusinessRuleResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    rule: Optional[str] = None
+    inferred_count: int = 0
+    materialized_count: int = 0
+    triples: List[InferredTripleOut] = []
+    truncated: bool = False
     message: Optional[str] = None
 
 
@@ -373,6 +458,7 @@ async def dt_registry(
     "and how many triples it currently contains.",
 )
 async def dt_status(
+    request: Request,
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
@@ -405,6 +491,7 @@ async def dt_status(
         domain_version,
         read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
 
@@ -458,6 +545,7 @@ async def dt_status(
     "label/relationship totals.",
 )
 async def dt_stats(
+    request: Request,
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
@@ -490,6 +578,7 @@ async def dt_stats(
         domain_version,
         read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     graph_name = effective_graph_name(domain)
 
     if not graph_name:
@@ -691,14 +780,22 @@ async def dt_build_progress(task_id: str):
     summary="Find entities and traverse relationships",
     description="Search for entities by type and/or label text, then traverse "
     "their relationships up to N levels deep (BFS graph walk). "
-    "Returns all triples discovered during traversal.",
+    "Returns all triples discovered during traversal. "
+    "Query param ``cache`` (true/false) overrides the domain Search cache "
+    "switch; omitted uses the domain policy.",
 )
 async def dt_triples_find(
+    request: Request,
     entity_type: Optional[str] = None,
     search: Optional[str] = None,
     depth: int = 1,
     limit: int = 1000,
     offset: int = 0,
+    cache: Optional[str] = Query(
+        None,
+        description="true/false: force search companions on or off. "
+        "Omitted uses Domain → General → Backend Search cache.",
+    ),
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
@@ -737,9 +834,19 @@ async def dt_triples_find(
         domain_version,
         read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
+
+    from back.core.graphdb.search_cache import (
+        apply_search_cache_to_store,
+        parse_cache_param,
+        search_cache_usage,
+    )
+
+    request_cache = parse_cache_param(cache)
+    apply_search_cache_to_store(store, domain, request_cache)
 
     table = effective_graph_query_table(domain, settings, store=store)
     if not table:
@@ -756,12 +863,16 @@ async def dt_triples_find(
             offset=offset,
         )
         if result.get("message") and not result.get("triples"):
+            mode, used = search_cache_usage(store, table)
             return FindResponse(
                 success=True,
                 seed_count=0,
                 depth=depth,
                 message=result["message"],
+                cache_used=used,
+                cache_mode=mode,
             )
+        mode, used = search_cache_usage(store, table)
         return FindResponse(
             success=True,
             seed_count=result["seed_count"],
@@ -775,31 +886,32 @@ async def dt_triples_find(
                 for r in result["triples"]
             ],
             count=result["count"],
-            total=result.get("total", result["count"]),
-            entity_count=result.get("entity_count", 0),
-            has_more=result.get("has_more", False),
+            total=result["total"],
+            has_more=bool(result.get("has_more", False)),
             limit=limit,
             offset=offset,
+            entity_count=result["entity_count"],
+            cache_used=used,
+            cache_mode=mode,
         )
 
     try:
         t0 = time.perf_counter()
-        # Seed count + folded BFS/fetch/paginate are blocking SQL; run them off
-        # the event loop so a dense neighbourhood walk does not stall other
-        # concurrent MCP tool calls.
+        # BFS traversal + alias expansion + bulk triple fetch are all
+        # blocking SQL; run them off the event loop so a dense neighbourhood
+        # walk does not stall other concurrent MCP tool calls.
         resp = await run_blocking(_run_find)
         logger.info(
-            "dt_triples_find: search=%r type=%r depth=%d → %d triples "
-            "(total=%d, has_more=%s) in %.0fms",
+            "dt_triples_find: search=%r type=%r depth=%d → %d triples in %.0fms",
             search,
             entity_type,
             depth,
-            resp.count,
             resp.total,
-            resp.has_more,
             (time.perf_counter() - t0) * 1000,
         )
         return resp
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
     except Exception as e:
         logger.exception("dt_triples_find failed: %s", e)
         raise InfrastructureError("Triple search failed", detail=str(e)) from e
@@ -819,6 +931,7 @@ async def dt_triples_find(
     "and pagination via limit/offset.",
 )
 async def dt_triples(
+    request: Request,
     subject: Optional[str] = None,
     predicate: Optional[str] = None,
     object: Optional[str] = None,
@@ -860,6 +973,7 @@ async def dt_triples(
         registry_volume,
         domain_version,
     )
+    assert_public_graph_read(request, domain, settings)
     engine = None if (backend or "graph") == "graph" else backend
     store = get_graphdb(domain, settings, engine=engine)
     if not store:
@@ -1662,6 +1776,7 @@ async def dt_cohort_materialize(
     "declared on the class (with optional on-demand computation).",
 )
 async def dt_nodes_context(
+    request: Request,
     entity_uri: str = Query(..., description="Full URI of the entity node"),
     domain_name: Optional[str] = Query(
         None,
@@ -1694,6 +1809,7 @@ async def dt_nodes_context(
         registry_catalog, registry_schema, registry_volume,
         domain_version, read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     payload = await NodeContextService.resolve_context(
         domain,
         settings,
@@ -1729,6 +1845,7 @@ async def dt_nodes_context(
 )
 async def dt_nodes_action(
     payload: NodeActionRequest,
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -1737,6 +1854,7 @@ async def dt_nodes_action(
         payload.registry_catalog, payload.registry_schema, payload.registry_volume,
         payload.domain_version, read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     result = await NodeContextService.invoke_action(
         domain,
         settings,
@@ -1745,6 +1863,84 @@ async def dt_nodes_action(
         context_policy=NodeContextService.resolve_context_policy(domain),
     )
     return NodeActionResponse(**result)
+
+
+# ---------------------------------------------------------------------------
+# POST /nodes/business-rule
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/nodes/business-rule",
+    response_model=NodeBusinessRuleResponse,
+    response_model_exclude_none=True,
+    summary="Trigger a SWRL business rule on a node",
+    description="Run one of the SWRL business rules declared on the node's "
+    "ontology class, restricted to that node, and write the inferred triples "
+    "to the graph. Requires the Builder role on the domain. Only rules "
+    "declared on the resolved class may be triggered.",
+)
+async def dt_nodes_business_rule(
+    payload: NodeBusinessRuleRequest,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        payload.domain_name, session_mgr, settings,
+        payload.registry_catalog, payload.registry_schema, payload.registry_volume,
+        payload.domain_version, read_only=True,
+    )
+    assert_public_graph_write(request, domain, settings)
+    result = await NodeContextService.run_business_rule(
+        domain,
+        settings,
+        entity_uri=payload.entity_uri,
+        rule_name=payload.rule,
+        context_policy=NodeContextService.resolve_context_policy(domain),
+    )
+    return NodeBusinessRuleResponse(**result)
+
+
+# ---------------------------------------------------------------------------
+# GET /nodes/shacl
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/nodes/shacl",
+    response_model=NodeShaclResponse,
+    response_model_exclude_none=True,
+    summary="Evaluate the SHACL shapes related to a node",
+    description="Check every enabled SHACL shape that targets the entity's "
+    "class, one of its ancestors, or no class, against that entity only. "
+    "Each facet reports pass, fail, not_applicable, not_evaluated or error, "
+    "with the values the entity carries on the constrained property. "
+    "Read-only; shapes are always read from the domain.",
+)
+async def dt_nodes_shacl(
+    request: Request,
+    entity_uri: str = Query(..., description="Full URI of the entity node"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry",
+    ),
+    domain_version: Optional[str] = Query(None),
+    registry_catalog: Optional[str] = Query(None),
+    registry_schema: Optional[str] = Query(None),
+    registry_volume: Optional[str] = Query(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume,
+        domain_version, read_only=True,
+    )
+    assert_public_graph_read(request, domain, settings)
+    payload = await NodeShaclService.evaluate(domain, settings, entity_uri=entity_uri)
+    return NodeShaclResponse(**payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1772,6 +1968,7 @@ class ComputeVirtualAttributesResponse(BaseModel):
     "receives exactly one argument: the entity's local ID.",
 )
 async def dt_nodes_virtual_attributes(
+    request: Request,
     entity_uri: str = Query(..., description="Full URI of the entity node"),
     function: Optional[str] = Query(
         None,
@@ -1795,6 +1992,7 @@ async def dt_nodes_virtual_attributes(
         registry_catalog, registry_schema, registry_volume,
         domain_version, read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     payload = await NodeContextService.compute_virtual_attributes(
         domain,
         settings,

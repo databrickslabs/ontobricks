@@ -11,31 +11,32 @@ afterwards.
 
 It therefore runs against an **already-running OntoBricks instance** — by
 default the local dev server on ``http://localhost:8000`` (``scripts/start.sh``)
-so the persisted ``TestScenario1`` domain lands in the *same* registry the
+so the persisted ``ZzTestScenario1`` domain lands in the *same* registry the
 local app reads, and shows up immediately when you open the app and browse the
 registry. Point it elsewhere with ``ONTOBRICKS_LIVE_BASE``.
 
 The journey:
 
     1. prime the session (sets the CSRF cookie)
-    2. reset to a clean slate, then create domain ``TestScenario1`` with the
+    2. reset to a clean slate, then create domain ``ZzTestScenario1`` with the
        Claude serving endpoint attached (so the wizard has an LLM)
     3. import the data sources (``benoit_cayla.customer`` tables) — *beforehand*,
        so the Generate page can see them
     4. open the real **Generate** page, confirm the imported tables render, and
-       click the real Generate button → the wizard runs the async LLM task and
-       auto-applies the resulting OWL to the session
-    5. poll until the generated ontology lands in the session
-    6. run **Auto-Map** from the real Mapping page (the AI mapping wizard that
+       click **Detect Entities** (Stage 1). Poll the durable draft until it
+       reaches ``reviewing``, then POST ``/ontology/wizard/generate/complete``
+       (the same call the Review Continue button makes) and poll the task
+       until merge writes classes into the session
+    5. run **Auto-Map** from the real Mapping page (the AI mapping wizard that
        generates the SQL queries + column mappings for every entity/relationship)
-    7. save the domain to the registry (clean create — must precede the build,
+    6. save the domain to the registry (clean create — must precede the build,
        which records itself against the registry domain)
-    8. **Build the knowledge graph** (POST /dtwin/sync/start → CREATE VIEW +
+    7. **Build the knowledge graph** (POST /dtwin/sync/start → CREATE VIEW +
        populate the graph store) and poll the task to completion
-    9. re-save to capture the build metadata, then verify it is listed
+    8. re-save to capture the build metadata, then verify it is listed
 
 The domain is intentionally **NOT** reset/deleted at the end — that is the
-whole point: open the app afterwards and load ``TestScenario1``.
+whole point: open the app afterwards and load ``ZzTestScenario1``.
 
 Gated behind ``ONTOBRICKS_SCENARIO_LIVE=1`` so it never runs in the default
 matrix (it costs warehouse + LLM time and mutates the registry).
@@ -51,7 +52,8 @@ Override the target / inputs via env:
     ONTOBRICKS_SCENARIO_CATALOG   data-source catalog (default benoit_cayla)
     ONTOBRICKS_SCENARIO_SCHEMA    data-source schema  (default customer)
     ONTOBRICKS_SCENARIO_LLM       serving endpoint    (default databricks-claude-sonnet-4-5)
-    ONTOBRICKS_SCENARIO_GEN_TIMEOUT      max seconds to wait for OWL generation (default 420)
+    ONTOBRICKS_SCENARIO_GEN_TIMEOUT      max seconds to wait for Stage 1 detection (default 420)
+    ONTOBRICKS_SCENARIO_COMPLETE_TIMEOUT max seconds to wait for Stage 3 completion (default 420)
     ONTOBRICKS_SCENARIO_AUTOMAP_TIMEOUT  max seconds to wait for Auto-Map (default 600)
     ONTOBRICKS_SCENARIO_BUILD_TIMEOUT    max seconds to wait for the KG build (default 420)
 """
@@ -65,6 +67,7 @@ import time
 import pytest
 
 from tests.e2e.scenarios._harness import (
+    CAMPAIGN_DOMAIN_NAME,
     chain_marker,
     csrf_headers,
     json_body,
@@ -82,19 +85,20 @@ pytestmark = [
         reason="live scenario — set ONTOBRICKS_SCENARIO_LIVE=1 to run "
         "(needs a running app + warehouse + LLM; writes a durable domain)",
     ),
-    *chain_marker("scenario_1"),
+    *chain_marker("scenario_1", depends=("scenario_0",)),
 ]
 
 
 # Domain names must be CamelCase alphanumeric (``is_valid_domain_name``); the
 # registry folder is the sanitized lowercase form, and it is the folder that
 # appears in registry listings and REST paths.
-_DOMAIN_NAME = "TestScenario1"
+_DOMAIN_NAME = CAMPAIGN_DOMAIN_NAME
 _DOMAIN_FOLDER = _DOMAIN_NAME.lower()
 _CATALOG = os.environ.get("ONTOBRICKS_SCENARIO_CATALOG", "benoit_cayla")
 _SCHEMA = os.environ.get("ONTOBRICKS_SCENARIO_SCHEMA", "customer")
 _LLM_ENDPOINT = os.environ.get("ONTOBRICKS_SCENARIO_LLM", "databricks-claude-sonnet-4-5")
 _GEN_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_GEN_TIMEOUT", "420"))
+_COMPLETE_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_COMPLETE_TIMEOUT", "420"))
 _AUTOMAP_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_AUTOMAP_TIMEOUT", "600"))
 _BUILD_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_BUILD_TIMEOUT", "420"))
 
@@ -128,6 +132,24 @@ def _poll_task(page, base: str, task_id: str, timeout_s: int, label: str) -> dic
     return poll_task(page, base, task_id, timeout_s, label, step=_step)
 
 
+def _load_generate_draft(page, base: str) -> dict:
+    try:
+        payload = _json(page.request.get(f"{base}/ontology/wizard/generate/draft"))
+    except Exception:  # noqa: BLE001 — transient while the detect task writes
+        return {}
+    if not payload.get("success"):
+        return {}
+    return payload.get("draft") or {}
+
+
+def _draft_has_reviewable_entities(draft: dict) -> bool:
+    if draft.get("stage") not in ("reviewing", "completing", "done"):
+        return False
+    anchors = draft.get("existing_anchors") or []
+    candidates = draft.get("candidate_entities") or []
+    return bool(anchors) or any(c.get("included", True) for c in candidates)
+
+
 class TestScenario1GenerateLive:
     """Import data sources → generate OWL → Auto-Map → build graph → persist."""
 
@@ -141,7 +163,7 @@ class TestScenario1GenerateLive:
         page.wait_for_load_state("domcontentloaded")
         headers = _csrf_headers(page.context)
 
-        # ── 2. Clean slate: delete any prior 'TestScenario1', then create it ─
+        # ── 2. Clean slate: delete any prior campaign domain, then create it ─
         # Deleting an existing copy makes every run re-exercise the full
         # generate → Auto-Map → build pipeline and keeps the final save a clean
         # create (no name conflict). The domain is recreated below and persists
@@ -167,7 +189,7 @@ class TestScenario1GenerateLive:
             )
             assert resp.status in (200, 204), resp.text()
 
-        _step("resetting session for a fresh 'TestScenario1'")
+        _step(f"resetting session for a fresh '{_DOMAIN_NAME}'")
         resp = page.context.request.post(f"{base}/domain/reset", headers=headers)
         assert resp.status == 200, resp.text()
 
@@ -256,35 +278,74 @@ class TestScenario1GenerateLive:
             timeout=30_000,
         )
 
-        # ── 5. Click the real Generate button → async LLM wizard ─────────────
-        _step("clicking Generate → running the LLM wizard (this can take minutes)")
+        # ── 5. Detect → review → complete (staged Generate, not one-shot OWL)
+        _step("clicking Detect Entities → Stage 1 (this can take minutes)")
         gen_btn.click()
 
-        # The wizard polls /tasks/<id> in-page and, on success, auto-applies the
-        # OWL to the session via /ontology/parse-owl. We poll the SESSION truth
-        # (/ontology/load) so we're decoupled from front-end timing.
         deadline = time.monotonic() + _GEN_TIMEOUT_S
-        classes: list = []
+        draft: dict = {}
         last_log = 0.0
         while time.monotonic() < deadline:
             page.wait_for_timeout(3000)
-            try:
-                onto = _json(page.request.get(f"{base}/ontology/load")).get("config", {})
-            except Exception:  # noqa: BLE001 — transient during generation
-                onto = {}
-            classes = onto.get("classes", []) or []
-            if classes:
+            draft = _load_generate_draft(page, base)
+            if _draft_has_reviewable_entities(draft):
                 break
             now = time.monotonic()
             if now - last_log > 20:
                 last_log = now
                 remaining = int(deadline - now)
-                _step(f"  …still generating (no classes yet, {remaining}s left)")
+                stage = draft.get("stage") or "none"
+                n_cand = len(draft.get("candidate_entities") or [])
+                _step(
+                    f"  …still detecting (stage={stage}, "
+                    f"{n_cand} candidates, {remaining}s left)"
+                )
 
+        assert _draft_has_reviewable_entities(draft), (
+            f"Detection did not produce a reviewable draft within {_GEN_TIMEOUT_S}s "
+            f"(stage={draft.get('stage')!r}). Check the serving endpoint / warehouse, "
+            "or raise ONTOBRICKS_SCENARIO_GEN_TIMEOUT."
+        )
+        n_cand = len(draft.get("candidate_entities") or [])
+        n_anchors = len(draft.get("existing_anchors") or [])
+        _step(f"detection reached review ({n_cand} candidates, {n_anchors} anchors)")
+
+        # Stage 3 is the same endpoint the Review "Continue" button POSTs.
+        # Drive it over the request context (CSRF + session cookie) instead of
+        # a DOM click: detection is async, Continue stays disabled until the
+        # Review pane re-renders, and a premature click leaves the draft at
+        # ``reviewing`` with zero classes — which is what the last campaign did.
+        _step("POST /ontology/wizard/generate/complete (Stage 3 — can take minutes)")
+        resp = page.context.request.post(
+            f"{base}/ontology/wizard/generate/complete",
+            headers=_csrf_headers(page.context),
+            data=json.dumps({"options": {}}),
+            timeout=60_000,
+        )
+        assert resp.status == 200, resp.text()
+        started = _json(resp)
+        assert started.get("success") is True, started
+        complete_task_id = started["task_id"]
+        _step(f"completion task {complete_task_id} started")
+
+        complete_task = _poll_task(
+            page, base, complete_task_id, _COMPLETE_TIMEOUT_S, "complete"
+        )
+        assert complete_task.get("status") == "completed", (
+            f"Completion failed: {complete_task.get('error') or complete_task}"
+        )
+        merge = (complete_task.get("result") or {}).get("merge") or {}
+        _step(
+            f"completion merged +{merge.get('classes_added', 0)} classes, "
+            f"+{merge.get('relations_added', 0)} relations, "
+            f"+{merge.get('attributes_added', 0)} attributes"
+        )
+
+        onto = _json(page.request.get(f"{base}/ontology/load")).get("config", {})
+        classes = onto.get("classes", []) or []
         assert classes, (
-            f"Wizard did not produce an ontology within {_GEN_TIMEOUT_S}s. "
-            "Check the serving endpoint / warehouse, or raise "
-            "ONTOBRICKS_SCENARIO_GEN_TIMEOUT."
+            "Completion finished but /ontology/load has no classes. "
+            f"merge={merge}"
         )
         class_names = sorted({c.get("name", "") for c in classes})
         _step(f"generated ontology with {len(classes)} classes: {class_names[:12]}")

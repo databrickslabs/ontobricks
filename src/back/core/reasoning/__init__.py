@@ -2,28 +2,24 @@
 decision tables, SPARQL CONSTRUCT rules, and aggregate rules."""
 
 # ── New (PascalCase) module imports ──────────────────────────────────────
-from back.core.reasoning.models import (  # noqa: F401
-    InferredTriple,
-    ReasoningResult,
-    RuleViolation,
-    SWRLAtomPartition,
-)
+from back.core.reasoning.results.InferredTriple import InferredTriple  # noqa: F401
+from back.core.reasoning.results.ReasoningResult import ReasoningResult  # noqa: F401
+from back.core.reasoning.results.RuleViolation import RuleViolation  # noqa: F401
+from back.core.reasoning.swrl.SWRLAtomPartition import SWRLAtomPartition  # noqa: F401
 from back.core.reasoning.ReasoningService import ReasoningService  # noqa: F401
 from back.core.reasoning.OWLRLReasoner import OWLRLReasoner  # noqa: F401
-from back.core.reasoning.SWRLEngine import SWRLEngine  # noqa: F401
-from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator  # noqa: F401
-from back.core.reasoning.SWRLBuiltinRegistry import (  # noqa: F401
-    SWRLBuiltin,
-    SWRLBuiltinRegistry,
-)
-from back.core.reasoning.SWRLParser import SWRLParser  # noqa: F401
-from back.core.reasoning.SWRLTextCodec import (  # noqa: F401
+from back.core.reasoning.swrl.SWRLEngine import SWRLEngine  # noqa: F401
+from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator  # noqa: F401
+from back.core.reasoning.swrl.SWRLBuiltin import SWRLBuiltin  # noqa: F401
+from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry  # noqa: F401
+from back.core.reasoning.swrl.SWRLParser import SWRLParser  # noqa: F401
+from back.core.reasoning.swrl.SWRLTextCodec import (  # noqa: F401
     parse_rules as parse_swrl_text,
     serialize_rules as serialize_swrl_text,
 )
-from back.core.reasoning.DecisionTableEngine import DecisionTableEngine  # noqa: F401
-from back.core.reasoning.SPARQLRuleEngine import SPARQLRuleEngine  # noqa: F401
-from back.core.reasoning.AggregateRuleEngine import AggregateRuleEngine  # noqa: F401
+from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine  # noqa: F401
+from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine  # noqa: F401
+from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine  # noqa: F401
 
 # ── Backward-compatible wrappers for the old function-based API ──────────
 # Callers that imported `get_builtin`, `is_builtin`, etc. from the package

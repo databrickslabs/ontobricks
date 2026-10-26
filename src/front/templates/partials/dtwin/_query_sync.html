@@ -42,8 +42,21 @@
                     title="Refresh status from the triple store">
                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </button>
-            {% include "partials/dtwin/_purge_inferences_button.html" %}
             {% set _dr = get_user_domain_role() %}
+            {% if _dr not in ('viewer', 'editor', 'none') %}
+            <button type="button" class="btn btn-sm btn-outline-secondary d-none"
+                    id="syncAdjacencyRefreshBtn" data-sync-action="refresh-adjacency-only"
+                    title="Rebuild graph cache">
+                <i class="bi bi-diagram-3 me-1"></i>Refresh cache
+            </button>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline-secondary d-none" disabled
+                    id="syncAdjacencyRefreshBtn"
+                    title="Only builders and admins can refresh the graph cache">
+                <i class="bi bi-lock me-1"></i>Refresh cache
+            </button>
+            {% endif %}
+            {% include "partials/dtwin/_purge_inferences_button.html" %}
             {% if _dr not in ('viewer', 'editor', 'none') %}
             <button type="button" class="btn btn-sm btn-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
                 <i class="bi bi-fast-forward me-1"></i>Build
@@ -223,7 +236,7 @@
             </div>
 
             <!-- Building Knowledge Graph (live build log) -->
-            <div class="card d-none mb-3" id="syncBuildLogCard">
+            <div class="card d-none mb-3 timed-task-log-card" id="syncBuildLogCard">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6 class="card-title mb-0">

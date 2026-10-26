@@ -1,0 +1,19 @@
+================================================================================
+## Add v0.8.2 release notes
+================================================================================
+
+Context:
+Document the 0.8.2 patch (Lakebase Initialize DDL skip + bound-volume
+ontology generation) using the v0.8.1 notes structure.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.8.2.md
+   Patch release notes covering Initialize ownership, bound UC Volume
+   generation, upgrade steps, and selected bug fixes.
+
+Modified files:
+- releases/ReleaseNotes_V0.8.2.md
+- changelogs/v0.8.2/benoitcayladbx_2026-10-13.log
+
+Tests: not re-run. Full `uv run --frozen pytest -q -m "not scenario"` still stalls in `tests/units/api/test_routes.py` (known 0.8.2 stall). Docs-only change.

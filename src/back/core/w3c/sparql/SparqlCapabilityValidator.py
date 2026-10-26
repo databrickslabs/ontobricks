@@ -54,11 +54,15 @@ class SparqlCapabilityValidator:
     ) -> None:
         name = node.name
         if name == "SelectQuery":
-            next_projected = cls._projected_vars_from_node(node.get("PV")) or projected_vars
+            next_projected = (
+                cls._projected_vars_from_node(node.get("PV")) or projected_vars
+            )
             cls._validate_node(node.get("p"), next_projected)
             return
         if name == "Project":
-            next_projected = cls._projected_vars_from_node(node.get("PV")) or projected_vars
+            next_projected = (
+                cls._projected_vars_from_node(node.get("PV")) or projected_vars
+            )
             cls._validate_node(node.get("p"), next_projected)
             return
         if name == "Distinct":
@@ -254,7 +258,11 @@ class SparqlCapabilityValidator:
         expr = branch.get("expr")
         var = branch.get("var")
         bgp = branch.get("p")
-        if not isinstance(expr, URIRef) or not isinstance(var, Variable) or str(var) != "predicate":
+        if (
+            not isinstance(expr, URIRef)
+            or not isinstance(var, Variable)
+            or str(var) != "predicate"
+        ):
             return False
         if not isinstance(bgp, CompValue) or bgp.name != "BGP":
             return False

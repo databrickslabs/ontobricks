@@ -12,13 +12,18 @@ Lakebase and Neo4j always get the table.
 
 from __future__ import annotations
 
+import re
 import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from databricks.sql.exc import RequestError
 
-from back.objects.digitaltwin._build_pipeline import _BuildPipeline
+from back.objects.digitaltwin.build._build_pipeline import _BuildPipeline
+
+_VIEW = "cat.sch.triplestore_dom_V3"
+_DATA = "cat.sch.triplestore_dom_V3_data"
 
 
 class _StubTM:
@@ -29,11 +34,15 @@ class _StubTM:
         self.failure_message = ""
         self.steps: list[str] = []
         self.results: list[dict] = []
+        self.messages: list[str] = []
 
     def advance_step(self, task_id, msg="") -> None:
         self.steps.append(str(msg))
 
     def update_progress(self, task_id, pct, msg="") -> None:
+        self.steps.append(str(msg))
+
+    def skip_step(self, task_id, msg="") -> None:
         self.steps.append(str(msg))
 
     def fail_task(self, task_id, msg="") -> None:
@@ -42,6 +51,7 @@ class _StubTM:
 
     def complete_task(self, task_id, **kw) -> None:
         self.results.append(kw.get("result") or {})
+        self.messages.append(str(kw.get("message", "")))
 
     def start_task(self, task_id, msg="") -> None:
         pass
@@ -51,6 +61,37 @@ class _StubTM:
 
     def is_cancelled(self, task_id) -> bool:
         return False
+
+
+class _RecordingClient:
+    """Stands in for ``DatabricksClient``, recording every SQL call in order.
+
+    Any ``execute_query`` whose SQL contains *fail_on* raises the connector's
+    ``RequestError``: what a status poll sends back once the OAuth token
+    behind a long-running statement has expired.
+    """
+
+    def __init__(self, *, count: int = 5, fail_on: str | None = None) -> None:
+        self.calls: list[str] = []
+        self._count = count
+        self._fail_on = fail_on
+
+    def execute_query(self, sql: str):
+        self.calls.append(sql)
+        if self._fail_on and self._fail_on in sql:
+            raise RequestError("Error during request to server")
+        if sql.strip().upper().startswith("SELECT COUNT"):
+            return [{"cnt": self._count}]
+        return []
+
+    def execute_statement(self, sql: str) -> bool:
+        self.calls.append(sql)
+        return True
+
+
+def _reads(sql: str, relation: str) -> bool:
+    """True when *sql* selects from *relation* itself, not a longer name."""
+    return re.search(rf"\bFROM\s+{re.escape(relation)}(?![\w.])", sql) is not None
 
 
 def _bare_pipeline(
@@ -176,6 +217,24 @@ def test_a_failed_materialisation_fails_the_build(lakebase_pipeline):
     assert "no permission" in lakebase_pipeline.tm.failure_message
 
 
+def test_a_failed_triple_count_fails_the_build(lakebase_pipeline):
+    """A lost connection while counting is an error, not an empty mapping.
+
+    The count used to swallow the error, return 0 and finish the build with
+    "no triples generated (check your mappings)".
+    """
+    pipe = lakebase_pipeline
+    del pipe._apply_full_rebuild  # run the real phase that counts the VIEW
+    pipe._uses_synced_pipeline = MagicMock(return_value=False)
+    pipe.source_client = _RecordingClient(fail_on="COUNT(*)")
+
+    with patch("back.core.graphdb.delta.materialize.materialize_from_view"):
+        pipe.run()
+
+    assert pipe.tm.failed is True
+    assert "Error during request to server" in pipe.tm.failure_message
+
+
 def test_the_delta_pipeline_materialises_once(delta_pipeline):
     """The Lakehouse pipeline must call materialize_from_view exactly once."""
     calls = []
@@ -273,17 +332,17 @@ def _bare_delta_pipeline(
     pipe.view_table = "cat.sch.triplestore_dom_V3"
     pipe.data_table = "cat.sch.triplestore_dom_V3_data"
     pipe.materialization = materialization
-    pipe.source_client = MagicMock()
+    pipe.source_client = _RecordingClient(count=triple_count)
     pipe.start_time = time.time()
     pipe.triple_count = 0
     pipe._build_recorded = False
-    pipe._count_view_triples = MagicMock(return_value=triple_count)
 
     pipe._prepare_translation = MagicMock(return_value=True)
     pipe._create_view = MagicMock(return_value=True)
     pipe._ensure_inferred_companion = MagicMock()
     pipe._truncate_inferred = MagicMock()
     pipe._ensure_graph_view = MagicMock()
+    pipe._rebuild_adjacency_index = MagicMock()
     pipe._log_phase = MagicMock()
 
     if not real_reporting:
@@ -401,3 +460,76 @@ class TestWhatABuildReports:
         assert results[0]["build_mode"] == "delta_view"
         assert results[0]["materialization"] == "view"
         assert entries[0]["materialization"] == "view"
+
+
+class TestCountingTriples:
+    """A Lakehouse build counts what it built and never mistakes an error for 0.
+
+    Reliance's builds ran for an hour, lost the warehouse connection while
+    counting the gateway VIEW (the OAuth token expired mid-statement), and
+    were reported as successful builds with "no triples generated".
+    """
+
+    @pytest.mark.parametrize("materialization", ["table", "view"])
+    def test_a_failed_count_fails_the_task_with_the_real_error(self, materialization):
+        pipe = _bare_delta_pipeline(materialization, real_reporting=True)
+        pipe.source_client = _RecordingClient(fail_on="COUNT(*)")
+
+        _run_capturing_reports(pipe)
+
+        assert pipe.tm.failed is True
+        assert "Error during request to server" in pipe.tm.failure_message
+
+    @pytest.mark.parametrize("materialization", ["table", "view"])
+    def test_a_failed_count_is_audited_as_an_error(self, materialization):
+        pipe = _bare_delta_pipeline(materialization, real_reporting=True)
+        pipe.source_client = _RecordingClient(fail_on="COUNT(*)")
+
+        _, entries = _run_capturing_reports(pipe)
+
+        assert [entry["status"] for entry in entries] == ["error"]
+
+    def test_a_materialized_build_scans_the_gateway_view_once(self):
+        """Counting the VIEW before the CTAS ran the whole mapping SQL twice."""
+        pipe = _bare_delta_pipeline("table")
+
+        pipe.run()
+
+        reads = [sql for sql in pipe.source_client.calls if _reads(sql, _VIEW)]
+        assert len(reads) == 1
+
+    def test_a_materialized_build_counts_the_table_it_just_built(self):
+        pipe = _bare_delta_pipeline("table")
+
+        pipe.run()
+
+        calls = pipe.source_client.calls
+        ctas = next(
+            i for i, sql in enumerate(calls)
+            if sql.startswith(f"CREATE OR REPLACE TABLE {_DATA} ")
+        )
+        counts = [
+            i for i, sql in enumerate(calls)
+            if "COUNT(*)" in sql and _reads(sql, _DATA)
+        ]
+        assert counts and min(counts) > ctas
+
+    def test_an_empty_materialized_build_warns_that_the_mapping_produced_nothing(self):
+        pipe = _bare_delta_pipeline("table", triple_count=0, real_reporting=True)
+
+        results, _ = _run_capturing_reports(pipe)
+
+        assert results[0]["triple_count"] == 0
+        assert "no triples generated" in pipe.tm.messages[0]
+
+    def test_an_empty_count_result_fails_the_build(self):
+        """COUNT(*) with no row is infrastructure, not an empty mapping."""
+        from back.core.errors import InfrastructureError
+        from back.core.graphdb.delta import materialize
+
+        class _Empty:
+            def execute_query(self, sql: str):
+                return []
+
+        with pytest.raises(InfrastructureError, match="returned no row"):
+            materialize.count_triples(_Empty(), _VIEW)

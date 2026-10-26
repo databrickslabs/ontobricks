@@ -1,0 +1,17 @@
+## Set the project version to 0.8.2
+
+Context: Prepare the 0.8.2 release by aligning the package metadata and
+the version displayed in the project README.
+
+Changes:
+
+1. pyproject.toml
+   Updated the package version from 0.8.1 to 0.8.2.
+2. README.md
+   Updated the displayed OntoBricks version from 0.8.1 to 0.8.2.
+
+Modified files:
+- pyproject.toml
+- README.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` reached 19% and then stalled in `tests/units/api/test_routes.py` with no output or CPU activity for more than nine minutes; the run was terminated.

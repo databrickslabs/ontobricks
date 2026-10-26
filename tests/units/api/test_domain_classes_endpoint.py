@@ -83,7 +83,7 @@ class TestDomainClassesEndpoint:
         with patch(
             "api.routers.domains.DigitalTwin.resolve_domain", return_value=mock_domain
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "back.objects.digitaltwin.node.NodeContextService.NodeContextService"
             "._load_mcp_target_descriptions",
             return_value={"Finance": "Finance ontology"},
         ):
@@ -101,7 +101,7 @@ class TestDomainClassesEndpoint:
         with patch(
             "api.routers.domains.DigitalTwin.resolve_domain", return_value=mock_domain
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "back.objects.digitaltwin.node.NodeContextService.NodeContextService"
             "._load_mcp_target_descriptions",
             return_value={"Other": "Some other domain"},
         ):
@@ -118,7 +118,7 @@ class TestDomainClassesEndpoint:
         with patch(
             "api.routers.domains.DigitalTwin.resolve_domain", return_value=mock_domain
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "back.objects.digitaltwin.node.NodeContextService.NodeContextService"
             "._load_mcp_target_descriptions",
             return_value=None,
         ):

@@ -73,6 +73,63 @@ def test_template_contains_ui_section_with_branding_and_theme_cards():
     assert 'id="uiBrandingStatus"' in html
 
 
+def test_theme_card_exposes_an_aurora_color_picker_mirroring_primary():
+    html = _read(SETTINGS_TEMPLATE)
+    assert 'id="uiBrandingAuroraColor"' in html
+    assert 'id="uiBrandingAuroraHex"' in html
+    assert 'type="color"' in html
+    assert 'id="uiBrandingAuroraHelp"' in html
+    assert 'id="uiBrandingAuroraError"' in html
+    assert 'aria-describedby="uiBrandingAuroraHelp uiBrandingAuroraError"' in html
+    assert 'id="uiSwatchAurora"' in html
+    assert 'role="img"' in html
+
+    # Aurora field must sit in the same Theme card as Primary, after it.
+    theme_card = html[html.index('<h5 class="card-title mb-3">Theme</h5>') :]
+    assert theme_card.index("uiBrandingPrimaryHex") < theme_card.index("uiBrandingAuroraColor")
+
+
+def test_settings_js_mirrors_aurora_derivation_in_deriveBrandPalette():
+    js = _read(SETTINGS_JS)
+    assert "function deriveBrandPalette(primaryColor, auroraColor" in js
+    assert "AURORA_HUE_SHIFT_DEG" in js
+    assert "hexToRgb(auroraColor)" in js or "parseHexColor(auroraColor)" in js
+
+
+def test_settings_js_ui_branding_defaults_include_aurora():
+    js = _read(SETTINGS_JS)
+    assert "aurora_color: '#22A7C8'" in js
+
+
+def test_settings_js_saves_aurora_via_formdata():
+    js = _read(SETTINGS_JS)
+    assert "formData.append('aurora_color'" in js
+
+
+def test_settings_js_previews_aurora_css_vars():
+    js = _read(SETTINGS_JS)
+    preview_fn = js[js.find("function previewUIBranding") : js.find("function updateUIBrandingButtons")]
+    assert "--db-aurora'" in preview_fn
+    assert "--db-aurora-rgb'" in preview_fn
+    assert "--db-gradient-end'" in preview_fn
+    assert "--db-canvas-warm'" in preview_fn
+
+
+def test_settings_js_binds_aurora_input_events():
+    js = _read(SETTINGS_JS)
+    assert "uiBrandingAuroraColor" in js
+    assert "uiBrandingAuroraHex" in js
+    assert "function updateDraftAurora" in js
+
+
+def test_settings_js_validates_aurora_hex_and_toggles_aria_invalid():
+    js = _read(SETTINGS_JS)
+    validity_fn = js[js.find("function updateUIBrandingValidity") : js.find("function isCustomLogoBranding")]
+    assert "uiBrandingAuroraHex" in validity_fn
+    assert "uiBrandingAuroraError" in validity_fn
+    assert "setBrandingInputErrorState(auroraHexInput" in validity_fn
+
+
 def test_logo_file_input_has_accessible_label_and_help_association():
     html = _read(SETTINGS_TEMPLATE)
     assert 'for="uiBrandingLogoFile"' in html

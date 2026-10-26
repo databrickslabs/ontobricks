@@ -1,0 +1,433 @@
+================================================================================
+## Live scenario campaign runs against a deployed Databricks App
+================================================================================
+
+Context:
+`make scenario-campaign ONTOBRICKS_LIVE_BASE=<app-url>` (documented in
+tests/e2e/scenarios/README.md) could not target a deployed app. The scenario
+browser context carried no workspace bearer, so the Apps gateway answered
+every call with its 200 HTML login page (scenarios 1 and 4 failed on empty
+JSON, and the health probe "passed" on that login page). Once authenticated,
+the shared trailing-slash redirect workaround resolved navigations with a
+cookieless httpx client and also followed the app's session-dependent 303s
+("no domain loaded → /"), so the browser silently landed on Home instead of
+the requested workspace page. Separately, the local `test_full_lifecycle.py`
+journey was stale against two UI changes: workspace pages now bounce an
+unloaded session to Home, and the R2RML view moved from Mapping to
+Domain → W3C Standards.
+
+Changes:
+
+1. tests/e2e/scenarios/conftest.py
+   ``scenario_page`` uses the session ``_live_bearer`` (``None`` on localhost)
+   as an ``Authorization`` header plus ``_install_redirect_fix`` for deployed
+   apps; ``scenario_base`` probes health with the same token. Local campaigns
+   are unchanged.
+2. tests/e2e/scenarios/_harness.py
+   ``probe_app`` accepts an optional bearer ``token``.
+3. tests/e2e/conftest.py
+   ``_install_redirect_fix._canonical`` only follows 307/308 (the wrong-host
+   slash redirects); session redirects (303) are left to the browser, which
+   holds the session cookie.
+4. tests/e2e/scenarios/test_full_lifecycle.py
+   Names the domain via ``/domain/info`` before opening ``/domain`` (then
+   asserts the field shows the saved name), and drives R2RML regeneration
+   from the Domain page's W3C Standards section.
+
+Campaign result (deployed ontobricks-09x, profile DEFAULT):
+`make scenario-campaign` → 5 passed in 22m39s (scenarios 01–04 + validation;
+validation report 13 passed, 0 failed, 2 info).
+`ONTOBRICKS_E2E_FAKE_CREDS=1 pytest tests/e2e/scenarios/test_full_lifecycle.py -m scenario`
+→ 1 passed.
+
+Modified files:
+- tests/e2e/conftest.py
+- tests/e2e/scenarios/conftest.py
+- tests/e2e/scenarios/_harness.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9431 passed, 326 skipped, 6 deselected, 1 xfailed, 40 warnings in 49.83s.
+
+================================================================================
+## Scenario 5: Lakehouse zero-copy + entity virtual attributes / actions / business rules
+================================================================================
+
+Context:
+New independent live scenario covering a domain switched to the Lakehouse
+backend in zero-copy mode (`…_data` is a VIEW over the R2RML gateway view),
+then the per-entity features: virtual attributes backed by a UC table
+function, a UC scalar function action, and a SWRL rule declared as a
+business rule and triggered on one entity. Writing it surfaced two app bugs
+on that path:
+- The Lakehouse status probe ran `DESCRIBE DETAIL` on the `…_data` VIEW,
+  which Databricks rejects with `EXPECT_TABLE_NOT_VIEW`; the probe re-raised
+  it, so a successful zero-copy build reported the triple store as missing.
+- Writes of inferred triples (entity business rule, reasoning "append to
+  graph", materialise inferred to graph) opened the graph store with the
+  default read path, i.e. on the Lakehouse *query* warehouse. That warehouse
+  may be read-only and rejected the `CREATE TABLE … CLUSTER BY` of the
+  `…_inferred` companion (`DELTA_CLUSTERING_NOT_SUPPORTED`), so the business
+  rule confirm returned 502. Writes now use the build warehouse.
+
+Changes:
+
+1. tests/e2e/scenarios/test_scenario_05_zero_copy_entity_features.py (new)
+   Creates scratch UC tables (customers, orders) and functions (a table
+   function for virtual attributes, a scalar function for the action); builds
+   a fresh `TestZeroCopy` domain; sets `graph_backend=databricks` +
+   `lakehouse_materialization=view`; builds; checks the relation is present
+   with data; inserts a new customer in UC and asserts it appears in `_data`
+   with no rebuild; lists both functions as picker-eligible; declares the
+   virtual attributes / action / business rule on `Customer`; asserts the
+   node context, the computed virtual attributes, the action result plus
+   one-time token, and the rule inference (1 triple for a customer with an
+   order, 0 for one without). Drops the scratch objects on teardown.
+2. src/back/core/graphdb/entity_search.py
+   New ``is_view_not_table_error`` helper.
+3. src/back/core/graphdb/delta/DeltaFlatStore.py
+   ``describe_detail`` returns ``{}`` for a view, and ``_describe_exists``
+   treats the view error as "exists".
+4. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+   Opens the graph store with ``for_write=True``.
+5. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   Reasoning "append inferred triples to graph" opens the store with
+   ``for_write=True``.
+6. src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+   Materialise-to-graph opens the store with ``for_write=True``.
+7. tests/units/graphdb/test_entity_search_sql.py,
+   tests/units/graphdb/delta/test_delta_status_probe.py
+   View-error helper test; zero-copy `_data` view exists and reports status
+   without Delta detail.
+8. tests/units/dtwin/test_entity_business_rules.py,
+   tests/units/dtwin/test_v090_twin_build_prepare.py
+   Assert the business rule and materialise-to-graph writes request the
+   build warehouse (both red before the fix).
+9. tests/e2e/scenarios/README.md
+   Lists scenarios 4 and 5 in the journey table and documents scenario 5's
+   prerequisites and env vars (`ONTOBRICKS_SCENARIO5_PREFIX`,
+   `ONTOBRICKS_SCENARIO5_BUILD_TIMEOUT`).
+
+Scenario result (local dev server, profile DEFAULT):
+`ONTOBRICKS_SCENARIO_LIVE=1 ONTOBRICKS_LIVE_BASE=http://localhost:8000 pytest
+tests/e2e/scenarios/test_scenario_05_zero_copy_entity_features.py -m scenario`
+→ 1 passed in 112s. Not yet run on ontobricks-09x: the two app fixes need a
+redeploy first.
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_05_zero_copy_entity_features.py (new)
+- src/back/core/graphdb/entity_search.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/build/TwinInferredMaterialize.py
+- tests/units/graphdb/test_entity_search_sql.py
+- tests/units/graphdb/delta/test_delta_status_probe.py
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/e2e/scenarios/README.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9436 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 48.67s.
+
+================================================================================
+## Ontology Studio entity panel: tabs grouped by what each section does
+================================================================================
+
+Context:
+The entity panel's Actions tab mixed three features with different effects
+(UC functions return a result, Jobs start a background run, business rules
+write inferred triples to the graph) with nothing telling them apart. The
+same one-parameter UC function picker was split across two tabs (virtual
+attributes under Attrs., actions under Actions), "Business rules" clashed
+with the Ontology → Business Rules page that hosts several rule types, and
+Refs. mixed presentation links (dashboard, dataset) with a semantic link
+(bridges). Tabs are now grouped by purpose. Labels were measured in the
+browser: the full-word set needed ~428px of the 382px rail at the default
+420px panel width, so "Attrs." stays abbreviated and the axioms tab is
+"Model" (rail now 382/382px).
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Entity rail is General / Attrs. / Model / Behaviour / Links
+   (ids details / attributes / model / behaviour / links; unknown remembered
+   ids fall back to General via ``ENTITY_PANEL_TABS``). General: name, label,
+   icon, description, group. Attrs.: mapped attributes only. Model: inherits
+   from, inherited relationships, equivalent to, disjoint with, bridges.
+   Behaviour: virtual attributes, functions, jobs, inference rules (SWRL),
+   each heading tagged with an icon + text effect chip (Computed when viewed /
+   Returns a result / Runs in background / Writes to the graph, the last in
+   the warning tone); headings wrap so the Add button stays visible on narrow
+   panels. Links: dashboard, dataset. "UC functions" → "Functions",
+   "Business rules" → "Inference rules (SWRL)" with matching empty states,
+   remove titles, picker title and toasts. Relationship rail Details → General.
+2. src/front/static/ontology/js/ontology-map.js
+   Entity right-click shortcuts mirror the new tabs (General, Attributes,
+   Model, Behaviour, Links); relationship shortcut Details → General.
+3. src/front/static/ontology/css/ontology-shared-panels.css
+   ``.entity-effect-chip`` size rule for the Behaviour chips.
+4. src/front/static/query/js/query-sigmagraph.js,
+   src/front/static/query/js/query-entity-details.js,
+   src/front/static/query/js/query-business-rules.js
+   Graph Explorer details section and node right-click header say
+   "Inference rules". Stored class fields (``actions``, ``virtualAttributes``,
+   ``business_rules``), endpoints and MCP policy keys are unchanged.
+5. tests/units/front/test_entity_panel_tabs.py (new)
+   Pins rail order/labels, the fallback, each pane's contents, the four
+   effect chips and the warning tone, the relationship rail, the Designer
+   shortcuts and the Explorer wording (red before the change).
+6. tests/units/front/test_map_context_menu_tabs.py,
+   tests/units/front/test_class_actions_ui.py,
+   tests/units/front/test_entity_business_rules_ui.py,
+   tests/units/front/test_ontology_split_panel_layout.py,
+   tests/units/front/test_ontology_map_external_badge.py
+   Updated to the new tab ids and pane boundaries; the superseded
+   Infos/Attrs. label test is removed.
+7. docs/user-guide.md, docs/api.md, releases/ReleaseNotes_V0.9.0.md
+   Steps point at Behaviour → Functions / Virtual attributes; new
+   "Inference Rules on an Entity (SWRL)" and "Entity Panel Tabs" sections;
+   release note describes the new tabs.
+
+Browser check (local dev server, TestZeroCopy domain, Playwright): rail
+382/382px at 1440px, all five tabs rendered and screenshotted, keyboard Tab
+moves focus along the rail, Behaviour headings wrap at a 390px viewport,
+no console or page errors.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-business-rules.js
+- tests/units/front/test_entity_panel_tabs.py (new)
+- tests/units/front/test_map_context_menu_tabs.py
+- tests/units/front/test_class_actions_ui.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/front/test_ontology_split_panel_layout.py
+- tests/units/front/test_ontology_map_external_badge.py
+- docs/user-guide.md
+- docs/api.md
+- releases/ReleaseNotes_V0.9.0.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9445 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 57.41s.
+
+================================================================================
+## Entity panel: virtual attributes move back to the Attrs. tab
+================================================================================
+
+Context:
+Virtual attributes read like attributes to users (they are shown with the
+entity's other values in the Knowledge Graph), so having them under
+Behaviour next to functions and jobs was confusing. They now sit under the
+mapped attributes in Attrs., keeping their "Computed when viewed" chip.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Virtual attributes section (``#sharedEntityVirtualAttributes``) moved
+   from the Behaviour pane to the Attrs. pane, below the mapped attributes.
+   Behaviour now holds Functions, Jobs and Inference rules (SWRL) only.
+2. tests/units/front/test_entity_panel_tabs.py
+   Attrs. holds mapped then virtual attributes with one effect chip;
+   Behaviour lists its three sections and no virtual attributes.
+3. docs/user-guide.md
+   Virtual attribute step points at Attrs.; the Entity Panel Tabs table
+   lists Attrs. = mapped then virtual attributes.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_entity_panel_tabs.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-16.log
+
+Tests: covered by the run in the next section.
+
+================================================================================
+## Entity panel: one shared section layout inside every tab
+================================================================================
+
+Context:
+Sections inside the entity panel tabs each had their own markup: grey
+framed boxes on some, white bordered boxes on others, help text under the
+box, "Assign" / "Select" / icon-only add buttons, plain grey "No ..."
+empty texts, always-bordered two-row description textareas, and native
+multi-selects (Ctrl/Cmd-click) for Equivalent To / Disjoint With. All five
+tabs now render their sections with one set of helpers.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   - New helper block (``// ---- Panel section helpers ----``):
+     ``EFFECT_CHIPS`` (single source for the four effect chips),
+     ``panelSectionHeader`` (icon + title, item count, effect chip, "+ Add"
+     button or a dropdown menu, one-line subtitle, info button carrying the
+     long help in title/aria-label, optional ``<label for>`` title),
+     ``panelEmptyState`` (dashed box with a direct "Add ..." link),
+     ``panelItemRow`` (icon, title + kind badge, muted full name, remove
+     button, body underneath; escapes its own text) and
+     ``panelInlineField`` (borderless always-editable textarea, plain text
+     when view-only). ``_updatePanelSection`` refreshes the header count and
+     flips Add/Change on single-item sections (Dashboard, Dataset).
+   - Pane markup: every section is ``<section class="panel-section">`` with
+     the shared header; grey ``bg-light rounded border`` boxes removed;
+     General puts the icon picker and the name on one row (the duplicate
+     emoji preview is gone) and moves Group last; Attrs. Add is a menu
+     (From data assets / Manually); all ids the rest of the code reads are
+     unchanged.
+   - Equivalent to / Disjoint with: chip pickers (``renderSharedAxiomChips``,
+     ``addSharedAxiomChip``, ``removeSharedAxiomChip``) drive the original
+     multi-selects, now hidden, so save and constraints code are unchanged;
+     focus returns to the add list after each add/remove.
+   - Render functions for mapped attributes, inherited relationships,
+     virtual attributes, functions, jobs, inference rules, bridges,
+     dashboard and dataset use the shared rows and empty states
+     ("No functions yet." + "Add a function", ...). Attribute names and
+     inherited relationship labels are now HTML-escaped (they were
+     interpolated raw), and the inherited-relationship onclick is
+     attribute-escaped.
+   - Dirty tracking ignores buttons marked ``data-panel-passive`` (info
+     buttons, the Add dropdown toggle, inherited-relationship links), so
+     reading help no longer flags unsaved changes.
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   Section, header, count, subtitle, help, empty state, item row, kind
+   badge, inline field (transparent border at rest, border on hover, shared
+   focus ring on focus), attribute row, chip picker and identity row rules,
+   all on shared tokens; header actions never wrap. Removed the unused
+   ``.panel-box``, ``#sharedEntityAttributes`` sizing and ``.va-group``
+   rules.
+3. tests/units/front/test_entity_panel_sections.py (new)
+   Runs the helpers under node (header, warning chip, view-only, menu,
+   label-for, empty state, item escaping, inline field) and pins the pane
+   markup, chip pickers, empty states, borderless descriptions, passive
+   buttons and CSS contracts (red before the change: 33 failed).
+4. tests/units/front/test_entity_panel_tabs.py,
+   tests/units/front/test_class_actions_ui.py,
+   tests/units/front/test_inherited_relations_ui.py,
+   tests/units/front/test_ontology_dataset_description.py
+   Assert the helper arguments (``title:`` / ``chip:`` / ``id:``) instead of
+   the old literal markup; effect chip labels defined once.
+5. docs/user-guide.md
+   Entity Panel Tabs section describes the section layout, in-place
+   descriptions and the chip pickers; Dashboard steps use Links → + Add /
+   Change.
+
+Browser check (local dev server, testzerocopy domain, Playwright, 1440px
+and 390px): all five tabs screenshotted, no horizontal overflow, header
+counts filled (Attrs. 1 / 2, Functions 1, Inference rules 1), info-button
+click leaves the panel clean, Equivalent-to chip add/remove updates the
+hidden select and keeps focus on the add list, Attrs. menu lists both
+choices, no console or page errors.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_entity_panel_sections.py (new)
+- tests/units/front/test_entity_panel_tabs.py
+- tests/units/front/test_class_actions_ui.py
+- tests/units/front/test_inherited_relations_ui.py
+- tests/units/front/test_ontology_dataset_description.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9474 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 56.43s.
+
+================================================================================
+## Menus: Domain / Ontology / Mapping "Information" renamed to "General"
+================================================================================
+
+Context:
+The first item of the Domain, Ontology and Mapping menus was "Information",
+while the entity panel's first tab is now "General". The three menu items
+are renamed to "General" for one vocabulary. Section ids (``information``),
+URLs (``?section=information``), partial and JS/CSS file names are
+unchanged, so links, bookmarks and code keep working.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Labels of the ``information`` items in domain-main, ontology-editor and
+   assignment-main: "Information" → "General" (sidebar and navbar dropdowns).
+2. src/front/templates/partials/domain/_domain_information.html,
+   src/front/templates/partials/ontology/_ontology_information.html
+   Page headings "Domain Information" / "Ontology Information" → "General",
+   matching the single-word headings of the other menu pages; Ontology hints
+   point at "Domain → General".
+3. User-facing references: the No-LLM guidance
+   ("No LLM selected. Select one in Domain → General → AI.") in
+   src/front/static/global/js/permissions.js and
+   src/back/core/helpers/DatabricksHelpers.py; the missing-backend error in
+   src/back/core/graphdb/GraphDBFactory.py; the ``cache`` parameter
+   descriptions in src/api/routers/digitaltwin.py and
+   src/back/fastapi/graphql_routes.py (docstrings/comments in
+   NodeContextService.py and internal/settings.py too);
+   the help modal (Domain workflow item and the Graph DB FAQ), the Settings
+   back-end hint, the new-domain dialog (utils.js), the default-name warning
+   (ontology-core.js) and the "load an ontology first" toast
+   (ontology-design.js). Code comments naming the page updated alongside.
+4. Docs: README.md, docs/user-guide.md, docs/getting-started.md,
+   docs/backend.md, docs/deployment.md (ASCII grants table re-aligned),
+   docs/architecture.md, docs/api.md, docs/mcp.md,
+   releases/ReleaseNotes_V0.9.0.md and .cursor/11-frontend-design.mdc say
+   Domain / Ontology / Mapping → General; "Click **General** in the
+   sidebar" steps. Historical design specs under docs/superpowers/ and past
+   changelogs are left as written.
+5. Tests asserting the guidance text or naming the page updated
+   (test_domain_llm_guard, test_dtwin_assistant_chat, test_no_llm_ui_gate,
+   test_no_backend_ui, test_clarity_design_contract and docstrings).
+
+Check: local dev server renders "General" in the three sidebars and the
+navbar dropdowns; menu_config.json parses.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/ontology/_ontology_information.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/settings.html
+- src/front/static/global/js/permissions.js, utils.js, ontology-core.js,
+  ontology-design.js and other front files with page-name comments
+- src/back/** and src/api/** guidance strings listed above
+- tests/** listed above
+- README.md, docs/*.md, releases/ReleaseNotes_V0.9.0.md,
+  .cursor/11-frontend-design.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-10-16.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9474 passed, 326 skipped, 7 deselected, 1 xfailed, 40 warnings in 55.66s.
+
+================================================================================
+## Release notes V0.9.0: catch up with the last commits
+================================================================================
+
+Context:
+The release notes did not yet cover the entity panel section layout, the
+Information → General menu rename, scenario 5, or the fixes shipped since
+the Explorer Job popup commit, and still called the functions section
+"UC functions".
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.0.md
+   - Test status updated to the latest run.
+   - Highlights: Jobs bullet points at the Behaviour tab; Studio bullet
+     mentions the regrouped tabs and shared section layout.
+   - Ontology Studio: new bullets for the section layout (counts, effect
+     chips, + Add / Change, ⓘ help, empty states, in-place descriptions,
+     Equivalent / Disjoint chip pickers) and the menu rename.
+   - Jobs as class actions: "UC functions" → Behaviour tab, Functions.
+   - Reliability: live scenario campaigns against deployed Apps and the
+     new zero-copy scenario 5.
+   - Bug fixes: inference writes through the Build warehouse, zero-copy
+     `DESCRIBE DETAIL` on the `_data` VIEW, `version: 1` load pinning and
+     Overview/status scans, Explorer right-click menus inside the viewport,
+     unescaped labels in the entity panel.
+   - Upgrade notes: new "Menu rename" section, including the changed
+     No-LLM guidance text.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.0.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-16.log
+
+Tests: documentation-only change; last suite run 9474 passed, 326 skipped, 7 deselected, 1 xfailed.

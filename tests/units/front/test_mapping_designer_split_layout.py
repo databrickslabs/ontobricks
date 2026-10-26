@@ -132,13 +132,15 @@ def test_shared_css_defines_column_split_orientation_and_handle():
 
     handle = _block(css, ".ob-split-shell--column > .detail-panel-resize-handle")
     assert _declaration(handle, "width") == "100%"
-    assert _declaration(handle, "height") == "8px"
+    assert _declaration(handle, "height") == "1px"
+    assert _declaration(handle, "margin-top") == "-0.25rem"
+    assert _declaration(handle, "margin-bottom") == "-0.25rem"
     assert _declaration(handle, "cursor") == "row-resize"
     assert _declaration(handle, "order") == "0"
 
     bar = _block(css, ".ob-split-shell--column > .detail-panel-resize-handle .resize-handle-bar")
     assert _declaration(bar, "width") == "40px"
-    assert _declaration(bar, "height") == "3px"
+    assert _declaration(bar, "height") == "0.5px"
 
 
 def test_mapping_designer_panel_css_uses_fixed_open_height_not_zero():

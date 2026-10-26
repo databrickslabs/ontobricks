@@ -1,14 +1,17 @@
 import asyncio
 import os
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any, Callable, Dict, Tuple
 
 import back.core.databricks as _databricks
-from back.core.errors import ValidationError
+from back.core.databricks.request_identity import get_request_identity
+from back.core.errors import AuthorizationError, ValidationError
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_BASE_URI
+from shared.llm_target import normalize_llm_endpoint_kind
 
 logger = get_logger(__name__)
 
@@ -218,6 +221,16 @@ class DatabricksHelpers:
         return DatabricksHelpers.resolve_warehouse_id(domain, settings)
 
     @staticmethod
+    def resolve_build_warehouse_id(domain, settings) -> str:
+        """Resolve the SQL warehouse dedicated to build DDL and writes.
+
+        The global/session/deployment warehouse is the build warehouse. This
+        intentionally never consults the Lakehouse query warehouse, which may
+        be Lakehouse//RT and therefore read-only.
+        """
+        return DatabricksHelpers.resolve_warehouse_id(domain, settings)
+
+    @staticmethod
     def _resolve_global_setting(domain, settings, getter_name: str) -> str:
         """Read a single value from the global config (UC Volume), returning '' on failure."""
         from back.objects.session import global_config_service
@@ -244,6 +257,16 @@ class DatabricksHelpers:
         return DatabricksHelpers._resolve_global_setting(
             domain, settings, "get_default_base_uri"
         ) or DEFAULT_BASE_URI.rstrip("/")
+
+    @staticmethod
+    def build_auto_base_uri(domain_name: str, default_domain: str) -> str:
+        """Build the default ontology namespace for a domain display name."""
+        base = (default_domain or DEFAULT_BASE_URI).rstrip("/#")
+        raw_name = (domain_name or "").strip() or "MyDomain"
+        safe_name = (
+            re.sub(r"[^a-zA-Z0-9_-]", "_", raw_name).strip("_") or "MyDomain"
+        )
+        return f"{base}/{safe_name}#"
 
     @staticmethod
     def resolve_default_emoji(domain, settings) -> str:
@@ -288,6 +311,46 @@ class DatabricksHelpers:
                 exc,
             )
             return True
+
+    @staticmethod
+    def resolve_lakehouse_use_sea(domain, settings) -> bool:
+        """Resolve the Lakehouse SEA (Statement Execution API) toggle.
+
+        Reads ``graph_engine_config.lakehouse.use_sea`` from the global config.
+        Defaults to ``False`` (Thrift) when unset or the registry is not
+        configured, so classic SQL warehouses keep their current transport.
+        Bypasses ``_resolve_global_setting`` (whose ``if val: return val`` would
+        discard an explicit ``False``), mirroring :meth:`resolve_use_cloud_fetch`.
+
+        In Databricks Apps this enables the direct INLINE Statement Execution
+        transport; locally it enables the SQL connector's Kernel transport.
+        """
+        from back.objects.session import global_config_service
+
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
+
+        if not host or not registry_cfg.get("catalog") or not registry_cfg.get(
+            "schema"
+        ):
+            return False
+
+        try:
+            return bool(
+                global_config_service.get_delta_warehouse_use_sea(
+                    host, token, registry_cfg
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort default resolution
+            logger.debug(
+                "Could not resolve Lakehouse use_sea, defaulting to False: %s", exc
+            )
+            return False
+
+    @staticmethod
+    def resolve_build_use_sea(domain, settings) -> bool:
+        """Return False because build DDL and writes never use Kernel/SEA."""
+        return False
 
     @staticmethod
     def resolve_analytics_job_enabled(domain, settings) -> bool:
@@ -404,6 +467,43 @@ class DatabricksHelpers:
         return None
 
     @staticmethod
+    def get_data_plane_client(domain, settings):
+        """Return a Databricks client bound to the caller for UC data reads.
+
+        In Databricks App mode the client authenticates with the caller's
+        forwarded OAuth token (on-behalf-of), so Unity Catalog governs what
+        can be read. A missing forwarded token is a hard failure — we never
+        fall back to the app service principal for data-plane reads.
+
+        In local / PAT / CLI mode there is no proxy identity, so this behaves
+        exactly like :meth:`get_databricks_client`.
+        """
+        if not _databricks.is_databricks_app():
+            return DatabricksHelpers.get_databricks_client(domain, settings)
+
+        identity = get_request_identity()
+        if not identity.user_token:
+            raise AuthorizationError(
+                "User authorization is required for this data access. "
+                "The Databricks Apps proxy did not forward a user token."
+            )
+
+        dbcfg = _domain_databricks(domain)
+        host = (
+            dbcfg.get("host")
+            or settings.databricks_host
+            or _databricks.get_workspace_host()
+        )
+        warehouse_id = DatabricksHelpers.resolve_warehouse_id(domain, settings)
+        use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch(domain, settings)
+        return _databricks.DatabricksClient(
+            host=host,
+            token=identity.user_token,
+            warehouse_id=warehouse_id,
+            use_cloud_fetch=use_cloud_fetch,
+        )
+
+    @staticmethod
     def get_databricks_credentials(domain, settings) -> Tuple[str, str, str]:
         """Get Databricks credentials from domain session or settings.
 
@@ -428,13 +528,21 @@ class DatabricksHelpers:
         return host, token, warehouse_id
 
     @staticmethod
-    def get_triplestore_sql_credentials(domain, settings) -> Tuple[str, str, str]:
-        """Return SQL credentials for triple-store builds (Delta-aware warehouse)."""
-        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+    def get_build_sql_credentials(domain, settings) -> Tuple[str, str, str]:
+        """Return credentials for build DDL, requiring a build warehouse."""
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        warehouse_id = DatabricksHelpers.resolve_build_warehouse_id(domain, settings)
+        if not warehouse_id:
+            raise ValidationError(
+                "No Build SQL Warehouse configured. Select one in "
+                "Settings -> Databricks before building."
+            )
+        return host, token, warehouse_id
 
-        if GraphDBFactory._resolve_triple_store_backend(domain, settings) == "databricks":
-            return DatabricksHelpers.get_delta_databricks_credentials(domain, settings)
-        return DatabricksHelpers.get_databricks_credentials(domain, settings)
+    @staticmethod
+    def get_triplestore_sql_credentials(domain, settings) -> Tuple[str, str, str]:
+        """Return credentials for the SQL VIEW and materialization build."""
+        return DatabricksHelpers.get_build_sql_credentials(domain, settings)
 
     @staticmethod
     def get_databricks_host_and_token(domain, settings) -> Tuple[str, str]:
@@ -489,24 +597,29 @@ class DatabricksHelpers:
         return _databricks.normalize_host(host), token
 
     @staticmethod
-    def require_serving_llm(
-        domain,
-        settings,
-    ) -> Tuple[str, str, str]:
-        """Validate host, token, and domain LLM serving endpoint.
+    def require_domain_llm(domain, settings) -> tuple[str, str, str, str]:
+        """Validate the saved domain LLM target and Databricks credentials.
 
-        Returns ``(host, token, endpoint_name)`` or raises :class:`ValidationError`.
+        Reads and trims ``domain.info.llm_endpoint`` before resolving
+        credentials so an empty endpoint always raises the no-LLM guidance
+        message, even when credentials are missing.
+
+        Returns ``(host, token, endpoint_name, endpoint_kind)`` or raises
+        :class:`ValidationError`.
         """
+        info = domain.info or {}
+        endpoint = str(info.get("llm_endpoint") or "").strip()
+        if not endpoint:
+            raise ValidationError(
+                "No LLM selected. Select one in Domain → General → AI."
+            )
         host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
         if not host or not token:
             raise ValidationError("Databricks credentials not configured")
-        endpoint = (domain.info or {}).get("llm_endpoint", "") or ""
-        if not endpoint:
-            raise ValidationError(
-                "No LLM serving endpoint configured. Please set it in Domain Settings.",
-            )
-        return host, token, endpoint
-
+        kind = normalize_llm_endpoint_kind(
+            endpoint, str(info.get("llm_endpoint_kind") or "")
+        )
+        return host, token, endpoint, kind
 
 def effective_uc_version_path(domain) -> str:
     """Return the version-scoped UC Volume path, with domain-level fallback.

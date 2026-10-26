@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from back.core.errors import InfrastructureError
-from back.objects.domain.SettingsService import SettingsService
+from back.objects.domain.settings.SettingsService import SettingsService
 
 pytestmark = pytest.mark.unit
 
@@ -40,14 +40,14 @@ class TestTripleStoreDatabricksHealthService:
         app_ctx = ("https://adb", "dapi-token", {"catalog": "main", "schema": "graph"})
 
         with patch(
-            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            "back.objects.domain.settings.SettingsService.resolve_app_registry_context",
             return_value=app_ctx,
         ) as mock_ctx, patch(
-            "back.objects.domain.SettingsService.DatabricksClient",
+            "back.objects.domain.settings.SettingsService.DatabricksClient",
             return_value=client,
             create=True,
         ) as mock_ctor, patch(
-            "back.objects.domain.SettingsService.get_domain",
+            "back.objects.domain.settings.SettingsService.get_domain",
             side_effect=AssertionError("get_domain must not be called"),
         ), patch(
             "back.core.graphdb.delta.DeltaBase.create_databricks_client",
@@ -104,10 +104,10 @@ class TestTripleStoreDatabricksHealthService:
         }
 
         with patch(
-            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            "back.objects.domain.settings.SettingsService.resolve_app_registry_context",
             return_value=("https://adb", "tok", {"catalog": "main", "schema": "graph"}),
         ), patch(
-            "back.objects.domain.SettingsService.DatabricksClient",
+            "back.objects.domain.settings.SettingsService.DatabricksClient",
             return_value=client,
             create=True,
         ):
@@ -125,10 +125,10 @@ class TestTripleStoreDatabricksHealthService:
         client.workspace.get_current_user_email.return_value = ""
 
         with patch(
-            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            "back.objects.domain.settings.SettingsService.resolve_app_registry_context",
             return_value=("https://adb", "tok", {"catalog": "main", "schema": "graph"}),
         ), patch(
-            "back.objects.domain.SettingsService.DatabricksClient",
+            "back.objects.domain.settings.SettingsService.DatabricksClient",
             return_value=client,
             create=True,
         ):
@@ -149,10 +149,10 @@ class TestTripleStoreDatabricksHealthService:
         client = _client(client_id="app-client-id")
 
         with patch(
-            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            "back.objects.domain.settings.SettingsService.resolve_app_registry_context",
             return_value=("https://adb", "tok", {"catalog": "main", "schema": ""}),
         ), patch(
-            "back.objects.domain.SettingsService.DatabricksClient",
+            "back.objects.domain.settings.SettingsService.DatabricksClient",
             return_value=client,
             create=True,
         ) as mock_ctor:
@@ -176,10 +176,10 @@ class TestTripleStoreDatabricksHealthService:
             "error": None,
         }
         with patch(
-            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            "back.objects.domain.settings.SettingsService.resolve_app_registry_context",
             return_value=("https://adb", "tok", {"catalog": "main", "schema": "graph"}),
         ), patch(
-            "back.objects.domain.SettingsService.DatabricksClient",
+            "back.objects.domain.settings.SettingsService.DatabricksClient",
             return_value=client,
             create=True,
         ):
@@ -200,10 +200,10 @@ class TestTripleStoreDatabricksHealthService:
             "error": {"raw": "diagnostic"},
         }
         with patch(
-            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            "back.objects.domain.settings.SettingsService.resolve_app_registry_context",
             return_value=("https://adb", "tok", {"catalog": "main", "schema": "graph"}),
         ), patch(
-            "back.objects.domain.SettingsService.DatabricksClient",
+            "back.objects.domain.settings.SettingsService.DatabricksClient",
             return_value=client,
             create=True,
         ):
@@ -219,10 +219,10 @@ class TestTripleStoreDatabricksHealthService:
         client.catalog.get_effective_schema_permissions.side_effect = RuntimeError("boom")
 
         with patch(
-            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            "back.objects.domain.settings.SettingsService.resolve_app_registry_context",
             return_value=("https://adb", "tok", {"catalog": "main", "schema": "graph"}),
         ), patch(
-            "back.objects.domain.SettingsService.DatabricksClient",
+            "back.objects.domain.settings.SettingsService.DatabricksClient",
             return_value=client,
             create=True,
         ):

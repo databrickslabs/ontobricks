@@ -63,7 +63,7 @@ class TestHomePage:
         assert "OntoBricks" in hero.text_content()
 
     def test_all_domains_gateway_visible(self, page, live_server):
-        # The KPI band moved to Domain → Information and the Settings / About
+        # The KPI band moved to Domain → General and the Settings / About
         # quick links were removed; the Home page leads with My Tasks + the
         # All Domains gateway grid.
         page.goto(live_server)

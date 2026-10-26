@@ -20,7 +20,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from back.objects.registry.RegistryService import RegistryCfg
+from back.objects.registry.RegistryCfg import RegistryCfg
 from back.objects.registry.store.base import parse_schedule_key, schedule_key
 
 pytestmark = pytest.mark.unit

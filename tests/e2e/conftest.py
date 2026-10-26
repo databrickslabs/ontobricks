@@ -99,6 +99,18 @@ def _e2e_explicitly_selected(config) -> bool:
     return any("tests/e2e" in a or a.endswith("/e2e") for a in normalized)
 
 
+def _bearer_continue_headers(request_headers: dict, token: str) -> dict:
+    """Re-apply the Apps gateway bearer after Playwright intercepts a request.
+
+    ``page.route`` + ``route.continue_()`` drops ``extra_http_headers``, so
+    document navigations hit the Databricks sign-in page and XHR/API calls
+    come back 401. Copy intercepted headers and set ``Authorization``.
+    """
+    headers = dict(request_headers or {})
+    headers["authorization"] = f"Bearer {token}"
+    return headers
+
+
 def _install_redirect_fix(ctx, base: str, token: str) -> None:
     """Work around the deployed app's wrong-host ``redirect_slashes`` redirects.
 
@@ -112,9 +124,10 @@ def _install_redirect_fix(ctx, base: str, token: str) -> None:
     Instead, for each top-level document navigation we resolve the canonical
     URL server-side with httpx — following redirects but pinning every hop
     back onto ``base`` — then point the browser straight at the resolved
-    same-origin URL (``continue_`` only allows same-origin rewrites). Sub-
-    resource and XHR requests are passed through untouched (they already
-    target ``base`` and carry the bearer header from the context).
+    same-origin URL (``continue_`` only allows same-origin rewrites). Every
+    intercepted request (document, XHR, sub-resource) is continued with the
+    gateway bearer, because Playwright drops ``extra_http_headers`` once a
+    route handler is installed.
     """
     import httpx
 
@@ -128,7 +141,10 @@ def _install_redirect_fix(ctx, base: str, token: str) -> None:
         ) as client:
             for _ in range(5):
                 resp = client.get(url)
-                if resp.status_code not in (301, 302, 303, 307, 308):
+                # Only the slash redirects (307/308) are wrong-host. Session
+                # redirects (303, e.g. "no domain loaded → /") depend on the
+                # browser's cookies, which this cookieless client lacks.
+                if resp.status_code not in (307, 308):
                     return url
                 loc = resp.headers.get("location", "")
                 if not loc:
@@ -144,19 +160,51 @@ def _install_redirect_fix(ctx, base: str, token: str) -> None:
     def _route(route):
         req = route.request
         if req.resource_type != "document" or not req.url.startswith(base):
-            route.continue_()
+            # ``continue_()`` drops extra_http_headers; ``continue_(headers=)``
+            # breaks ``window.fetch`` (TypeError: Failed to fetch). ``fallback()``
+            # sends the request as the context built it, bearer included.
+            route.fallback()
             return
+        headers = _bearer_continue_headers(req.headers, token)
         try:
             resolved = _canonical(req.url)
         except Exception:  # noqa: BLE001 — best-effort; fall back to the browser
-            route.continue_()
+            route.continue_(headers=headers)
             return
         if resolved != req.url:
-            route.continue_(url=resolved)
+            route.continue_(url=resolved, headers=headers)
         else:
-            route.continue_()
+            route.continue_(headers=headers)
 
-    ctx.route("**/*", _route)
+    # Intercept only top-level HTML navigations. A ``**/*`` handler also
+    # sees fetch/XHR; even ``fallback()`` then races ``window.fetch`` on
+    # the Apps gateway (registry domain list → TypeError: Failed to fetch).
+    for pattern in (
+        f"{base}",
+        f"{base}/",
+        f"{base}/ontology",
+        f"{base}/ontology/",
+        f"{base}/ontology?*",
+        f"{base}/domain",
+        f"{base}/domain/",
+        f"{base}/domain?*",
+        f"{base}/mapping",
+        f"{base}/mapping/",
+        f"{base}/mapping?*",
+        f"{base}/dtwin",
+        f"{base}/dtwin/",
+        f"{base}/dtwin/?*",
+        f"{base}/settings",
+        f"{base}/settings/",
+        f"{base}/settings?*",
+        f"{base}/help",
+        f"{base}/help/",
+        f"{base}/registry",
+        f"{base}/registry/",
+        f"{base}/access-denied",
+        f"{base}/review/**",
+    ):
+        ctx.route(pattern, _route)
 
 
 # Default integration workspace settings. Override via the
@@ -225,7 +273,7 @@ def _set_env():
         # Live mode: talk to a DEPLOYED app via the Databricks Apps gateway.
         # No local subprocess starts, so there is nothing to configure here
         # (no DATABRICKS_TOKEN/HOST/SECRET_KEY export, no skip-on-missing
-        # creds). The bearer token is minted lazily by ``_live_bearer``.
+        # creds). The bearer token is minted lazily by ``_resolve_live_bearer``.
         return
 
     fake_only = os.environ.get("ONTOBRICKS_E2E_FAKE_CREDS") == "1"
@@ -359,26 +407,52 @@ def browser_instance():
     pw.stop()
 
 
-@pytest.fixture(scope="session")
-def _live_bearer() -> Optional[str]:
-    """Workspace bearer token for live mode; ``None`` in local mode.
+# Apps gateway OAuth tokens die in ~1h. Remint well before that so a
+# 309-test live e2e run does not start landing on Databricks Sign-In.
+# Force-refresh: the CLI cache can keep serving a token the gateway already
+# rejects; ``--force-refresh`` asks for a new one.
+_LIVE_BEARER_TTL_S = 12 * 60
+_live_bearer_state: dict = {"token": None, "mono": 0.0}
+
+
+def _resolve_live_bearer() -> Optional[str]:
+    """Workspace bearer for live mode; ``None`` in local / loopback mode.
 
     Profile precedence matches the live_integration suite —
     ``DATABRICKS_CONFIG_PROFILE`` first, then ``ONTOBRICKS_E2E_PROFILE``,
     then the int default — so a single env var configures both suites.
+    Cached for ``_LIVE_BEARER_TTL_S`` so every ``page`` fixture does not
+    shell out to the CLI, then reminted so long campaigns stay authenticated.
     """
     if not _live_base():
         return None
+    from tests.e2e.scenarios._harness import needs_apps_gateway_token
+
+    if not needs_apps_gateway_token(_live_base()):
+        return None
+    now = time.monotonic()
+    cached = _live_bearer_state["token"]
+    if cached and (now - _live_bearer_state["mono"]) < _LIVE_BEARER_TTL_S:
+        return cached
     profile = os.environ.get("DATABRICKS_CONFIG_PROFILE") or os.environ.get(
         "ONTOBRICKS_E2E_PROFILE", DEFAULT_E2E_PROFILE
     )
-    token = DatabricksAuth.mint_token(profile)
+    had_cached = bool(cached)
+    token = DatabricksAuth.mint_token(profile, force_refresh=had_cached)
     if not token:
         pytest.skip(
             "Live e2e needs a Databricks token. Run "
             f"`databricks auth login --profile {profile}` and retry."
         )
+    _live_bearer_state["token"] = token
+    _live_bearer_state["mono"] = now
     return token
+
+
+@pytest.fixture(scope="session")
+def _live_bearer() -> Optional[str]:
+    """Session probe token. Page fixtures remint via ``_resolve_live_bearer``."""
+    return _resolve_live_bearer()
 
 
 # Tests that assume the LOCAL admin/no-auth server (or a local host / locally
@@ -449,6 +523,8 @@ def pytest_collection_modifyitems(config, items):
 
     if not _live_base():
         return
+    if os.environ.get("ONTOBRICKS_LIVE_NO_SKIP") == "1":
+        return
     allow_mut = os.environ.get("ONTOBRICKS_LIVE_ALLOW_MUTATING") == "1"
     skip_env = pytest.mark.skip(
         reason="live mode: ENV-SPECIFIC (assumes local admin/no-auth host)"
@@ -465,6 +541,45 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_mut)
 
 
+def _seed_loaded_workspace(pg, base: str) -> None:
+    """Give the session a named domain so workspace HTML does not 303 to Home.
+
+    ``home_redirect_if_unloaded`` sends ``/ontology``, ``/mapping``,
+    ``/domain``, and ``/dtwin`` to ``/`` when the session is still the
+    ``NewDomain`` placeholder. Live Apps contexts start empty, so sidebar
+    and title assertions would otherwise run against the home page.
+    Session-only — not saved to the registry.
+    """
+    import json
+
+    pg.goto(base)
+    pg.wait_for_load_state("domcontentloaded")
+    headers = {"Content-Type": "application/json"}
+    cookies = {c["name"]: c["value"] for c in pg.context.cookies()}
+    if csrf := cookies.get("csrf_token"):
+        headers["X-CSRF-Token"] = csrf
+    resp = pg.context.request.post(
+        f"{base}/domain/info",
+        headers=headers,
+        data=json.dumps(
+            {
+                "name": "ZzE2eLive",
+                "description": "Session-only workspace seed for live e2e",
+            }
+        ),
+    )
+    if resp.status != 200:
+        raise AssertionError(
+            f"live workspace seed failed: {resp.status} {resp.text()[:300]}"
+        )
+    pg.goto(f"{base}/ontology")
+    pg.wait_for_load_state("domcontentloaded")
+    pg.wait_for_function(
+        "() => { const el = document.getElementById('obSubnav');"
+        " return Boolean(el) && !el.classList.contains('d-none'); }"
+    )
+
+
 @pytest.fixture
 def page(browser_instance, live_server, _live_bearer):
     """Provide a fresh browser page pointed at the server.
@@ -474,15 +589,18 @@ def page(browser_instance, live_server, _live_bearer):
     API calls) and rewrites the deployed app's bad trailing-slash redirects.
     Local mode is unchanged.
     """
-    if _live_bearer:
+    token = _resolve_live_bearer() if _live_bearer else None
+    if token:
         ctx = browser_instance.new_context(
-            extra_http_headers={"Authorization": f"Bearer {_live_bearer}"}
+            extra_http_headers={"Authorization": f"Bearer {token}"}
         )
-        _install_redirect_fix(ctx, live_server, _live_bearer)
+        _install_redirect_fix(ctx, live_server, token)
     else:
         ctx = browser_instance.new_context()
     pg = ctx.new_page()
     pg.base_url = live_server
+    if _live_base():
+        _seed_loaded_workspace(pg, live_server)
     yield pg
     pg.close()
     ctx.close()

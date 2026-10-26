@@ -7,11 +7,11 @@ volume management).
 
 import requests
 from databricks import sql
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from back.core.logging import get_logger
-from back.core.errors import ValidationError
+from back.core.errors import InfrastructureError, ValidationError
 from shared.config.constants import MSG_WAREHOUSE_ID_REQUIRED
 
 from ..DatabricksAuth import DatabricksAuth
@@ -20,6 +20,7 @@ from .identifiers import (
     quote_uc_identifier,
     validate_uc_identifier,
 )
+from .metric_sql import build_metric_view_base_sql
 
 logger = get_logger(__name__)
 
@@ -31,12 +32,89 @@ class UnityCatalog:
     Unity Catalog REST API.
     """
 
+    # Map a Unity Catalog REST ``table_type`` to an OntoBricks source kind.
+    _TABLE_TYPE_TO_KIND = {
+        "MANAGED": "table",
+        "EXTERNAL": "table",
+        "FOREIGN": "table",
+        "MANAGED_SHALLOW_CLONE": "table",
+        "VIEW": "view",
+        "MATERIALIZED_VIEW": "view",
+        "STREAMING_TABLE": "view",
+        "METRIC_VIEW": "metric_view",
+    }
+
     def __init__(self, auth: DatabricksAuth) -> None:
         self._auth = auth
 
     def _require_warehouse(self) -> None:
         if not self._auth.warehouse_id:
             raise ValidationError(MSG_WAREHOUSE_ID_REQUIRED)
+
+    @staticmethod
+    def object_kind_for_table_type(table_type: str) -> str:
+        """Map a UC REST ``table_type`` to an OntoBricks source ``object_kind``.
+
+        Returns ``'table'`` | ``'view'`` | ``'metric_view'``. Unknown or blank
+        types default to ``'table'`` (safest: a plain ``SELECT`` works).
+        """
+        return UnityCatalog._TABLE_TYPE_TO_KIND.get(
+            (table_type or "").strip().upper(), "table"
+        )
+
+    @staticmethod
+    def _parse_measure_names(ddl: str) -> set:
+        """Extract measure names from a metric view's YAML definition.
+
+        The metric YAML has a top-level ``measures:`` block of ``- name: <n>``
+        entries (mirroring ``dimensions:``). Parse defensively: isolate the
+        ``measures:`` block and collect the ``name:`` keys under it, so a
+        dimension named identically is never mis-classified. Returns an empty
+        set when there is no ``measures:`` block.
+        """
+        import re
+
+        text = ddl or ""
+        # Isolate from ``measures:`` to the next top-level YAML key (a line that
+        # starts at column 0 with ``word:``) or the end of the definition.
+        block_match = re.search(
+            r"(?ims)^\s*measures:\s*$(.*?)(?=^\s*[A-Za-z_][\w-]*:\s*$|\Z)", text
+        )
+        if not block_match:
+            return set()
+        block = block_match.group(1)
+        return set(re.findall(r"name:\s*['\"]?([A-Za-z0-9_]+)", block))
+
+    def _metric_measure_names(self, catalog: str, schema: str, name: str) -> set:
+        """Return the set of measure column names for a metric view.
+
+        Reads the metric definition via ``SHOW CREATE TABLE`` and extracts the
+        ``measures:`` names. Soft-fails to an empty set (→ all columns treated
+        as dimensions) so a metadata load never crashes on an unreadable or
+        unexpected definition.
+        """
+        fqn = quote_uc_fqn(catalog, schema, name)
+        try:
+            params = self._auth.get_sql_connection_params()
+            with sql.connect(**params) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"SHOW CREATE TABLE {fqn}")
+                    row = cur.fetchone()
+            ddl = (row[0] if row else "") or ""
+            return self._parse_measure_names(ddl)
+        except Exception as exc:  # noqa: BLE001 — soft-fail is the contract
+            logger.warning("metric definition unreadable for %s: %s", fqn, exc)
+            return set()
+
+    def get_metric_view_columns_with_roles(
+        self, catalog: str, schema: str, name: str
+    ) -> List[Dict[str, str]]:
+        """Return metric-view columns tagged with a ``role`` (dimension|measure)."""
+        cols = self.get_table_columns(catalog, schema, name)
+        measures = self._metric_measure_names(catalog, schema, name)
+        for col in cols:
+            col["role"] = "measure" if col.get("name") in measures else "dimension"
+        return cols
 
     @staticmethod
     def _normalize_privilege_name(value: Any) -> str:
@@ -89,8 +167,9 @@ class UnityCatalog:
     def get_tables(self, catalog: str, schema: str) -> List[str]:
         """Return table names within *catalog*.*schema*.
 
-        Returns an empty list on error (callers rely on this for graceful
-        degradation).
+        Raises:
+            InfrastructureError: the listing failed (warehouse down, missing
+                privilege, …) — distinct from a schema that has no tables.
         """
         fqn = quote_uc_fqn(catalog, schema)
         try:
@@ -101,7 +180,9 @@ class UnityCatalog:
                     return [row[1] for row in cur.fetchall()]
         except Exception as exc:
             logger.exception("Error fetching tables: %s", exc)
-            return []
+            raise InfrastructureError(
+                f"Could not list tables in {catalog}.{schema}", detail=str(exc)
+            ) from exc
 
     def list_tables_and_views(
         self, catalog: str, schema: str
@@ -110,9 +191,14 @@ class UnityCatalog:
 
         Unlike ``get_tables`` (SQL ``SHOW TABLES``), the REST endpoint reports
         each asset's ``table_type`` so callers can distinguish views from
-        tables. No warehouse required. Returns an empty list on error.
+        tables. No warehouse required. Returns an empty list when no
+        workspace credentials are configured.
 
         Each dict has ``name``, ``full_name``, ``table_type`` and ``comment``.
+
+        Raises:
+            InfrastructureError: the REST listing failed (HTTP error, missing
+                privilege, network).
         """
         if not self._auth.host or not self._auth.has_valid_auth():
             return []
@@ -143,7 +229,10 @@ class UnityCatalog:
             return assets
         except Exception as exc:
             logger.exception("Error listing tables and views: %s", exc)
-            return []
+            raise InfrastructureError(
+                f"Could not list tables and views in {catalog}.{schema}",
+                detail=str(exc),
+            ) from exc
 
     def list_functions(self, catalog: str, schema: str) -> List[Dict[str, Any]]:
         """Return user-defined functions in *catalog*.*schema* with their parameters.
@@ -152,7 +241,8 @@ class UnityCatalog:
         ``/functions`` collection endpoint omits ``input_params`` (it is only
         populated when fetching a single function by name), and callers need
         the parameter count to tell which functions are bindable as class
-        actions. Returns an empty list on error.
+        actions. Returns an empty list for an invalid *schema* identifier and
+        raises :class:`InfrastructureError` when the listing query fails.
 
         Each dict has ``name``, ``full_name``, ``comment``, ``input_params``
         (parameter names in declaration order), ``param_count``,
@@ -193,7 +283,9 @@ class UnityCatalog:
                     )
         except Exception as exc:
             logger.exception("Error listing functions: %s", exc)
-            return []
+            raise InfrastructureError(
+                f"Could not list functions in {catalog}.{schema}", detail=str(exc)
+            ) from exc
 
         functions: List[Dict[str, Any]] = []
         for row in rows:
@@ -291,23 +383,44 @@ class UnityCatalog:
             return -1
 
     def check_table_select_permission(
-        self, catalog: str, schema: str, table: str
+        self,
+        catalog: str,
+        schema: str,
+        table: str,
+        *,
+        object_kind: str = "table",
+        columns: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Probe whether the caller can SELECT from *catalog*.*schema*.*table*.
 
-        Runs ``SELECT * … LIMIT 0`` — cheap, no data returned, but sufficient
-        to confirm row-level read access.
+        Tables and views use ``SELECT * … LIMIT 0``. Metric views cannot be
+        queried with ``SELECT *``; they are probed with the metric-aware base
+        SQL (dimensions + ``MEASURE()`` + ``GROUP BY``) plus ``LIMIT 0``.
 
         Returns:
         - ``can_select`` (bool): True when the query succeeds
         - ``error`` (str | None): human-readable reason when can_select is False
         """
-        fqn = quote_uc_fqn(catalog, schema, table)
+        kind = (object_kind or "table").strip() or "table"
+        if kind == "metric_view":
+            cols = columns or []
+            if not cols:
+                return {
+                    "can_select": False,
+                    "error": "Metric view has no columns to probe",
+                }
+            fqn = f"{catalog}.{schema}.{table}"
+            probe_sql = build_metric_view_base_sql(
+                {"full_name": fqn, "columns": cols}
+            ) + "\nLIMIT 0"
+        else:
+            fqn = quote_uc_fqn(catalog, schema, table)
+            probe_sql = f"SELECT * FROM {fqn} LIMIT 0"
         try:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {fqn} LIMIT 0")
+                    cur.execute(probe_sql)
             return {"can_select": True, "error": None}
         except Exception as exc:
             logger.info(
@@ -321,8 +434,10 @@ class UnityCatalog:
         """Return column metadata for *catalog*.*schema*.*table*.
 
         Each dict has ``name``, ``type``, and ``comment`` keys.
-        Returns an empty list on error (callers rely on this for graceful
-        degradation).
+
+        Raises:
+            InfrastructureError: ``DESCRIBE`` failed (missing table, no
+                privilege, warehouse down) — never reported as "no columns".
         """
         fqn = quote_uc_fqn(catalog, schema, table)
         try:
@@ -342,31 +457,37 @@ class UnityCatalog:
                     return columns
         except Exception as exc:
             logger.exception("Error fetching table columns: %s", exc)
-            return []
+            raise InfrastructureError(
+                f"Could not read columns of {catalog}.{schema}.{table}",
+                detail=str(exc),
+            ) from exc
 
     def get_table_comment(self, catalog: str, schema: str, table: str) -> str:
-        """Return the table-level comment (empty string if none)."""
-        catalog_q = quote_uc_identifier(catalog, role="catalog")
+        """Return the table-level comment, or "" if it has none or the call fails.
+
+        Invalid identifiers raise :class:`ValidationError`, as before.
+
+        Read from the Unity Catalog tables API, like
+        :meth:`list_tables_and_views`. It needs only the grants a data source
+        already has (USE CATALOG, USE SCHEMA, SELECT). The previous
+        ``information_schema.tables`` query also needed access to
+        ``information_schema``, which an app service principal often lacks;
+        the error was swallowed and every table showed an empty description.
+        """
         catalog_val = validate_uc_identifier(catalog, role="catalog")
         schema_val = validate_uc_identifier(schema, role="schema")
         table_val = validate_uc_identifier(table, role="table")
+        if not self._auth.host or not self._auth.has_valid_auth():
+            return ""
+        full_name = quote(f"{catalog_val}.{schema_val}.{table_val}", safe=".")
+        url = f"{self._auth.host.rstrip('/')}/api/2.1/unity-catalog/tables/{full_name}"
         try:
-            params = self._auth.get_sql_connection_params()
-            with sql.connect(**params) as conn:
-                with conn.cursor() as cur:
-                    # Databricks SQL Connector (use_inline_params=False) only
-                    # rewrites qmark ``?`` placeholders — pyformat ``%s`` is
-                    # sent to the warehouse verbatim and raises PARSE_SYNTAX_ERROR.
-                    query = (
-                        f"SELECT comment FROM {catalog_q}.information_schema.tables "
-                        "WHERE table_catalog = ? "
-                        "AND table_schema = ? "
-                        "AND table_name = ?"
-                    )
-                    cur.execute(query, (catalog_val, schema_val, table_val))
-                    row = cur.fetchone()
-                    return row[0] if row and row[0] else ""
-        except Exception as exc:
+            response = requests.get(
+                url, headers=self._auth.get_auth_headers(), timeout=10
+            )
+            response.raise_for_status()
+            return response.json().get("comment") or ""
+        except Exception as exc:  # noqa: BLE001 — callers treat "" as "no description"
             logger.exception("Error fetching table comment: %s", exc)
             return ""
 

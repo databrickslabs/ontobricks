@@ -286,7 +286,7 @@ class TestTheNavbarDisablesGraphFeatures:
 class TestTheAddDomainDialogDefaultsToLakehouse:
     """The New Domain dialog no longer asks for a backend: new domains default
     to Lakehouse and the dialog explains the choices can be changed later in
-    Domain → Information."""
+    Domain → General."""
 
     def _dialog(self) -> str:
         src = _read(UTILS_JS)
@@ -304,7 +304,7 @@ class TestTheAddDomainDialogDefaultsToLakehouse:
 
     def test_the_dialog_explains_the_choices_and_where_to_change_them(self):
         dialog = self._dialog()
-        assert "Domain → Information" in dialog
+        assert "Domain → General" in dialog
         for choice in ("Lakehouse", "Lakebase", "Neo4j", "No Backend"):
             assert choice in dialog
 

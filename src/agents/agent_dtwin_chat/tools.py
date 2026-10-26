@@ -39,7 +39,6 @@ full-graph access.
 from __future__ import annotations
 
 import json
-import re
 from typing import Callable, Dict, List
 
 import httpx  # noqa: F401 — kept for httpx.HTTPStatusError in tool handlers
@@ -54,17 +53,15 @@ from agents.tools.graph_formatting import (
     local_name,
     pretty_predicate,
 )
+from back.core.errors import ValidationError
 from back.core.logging import get_logger
+from back.core.w3c.sparql import require_read_only_sparql
 
 logger = get_logger(__name__)
 
 _HTTP_TIMEOUT = 120  # fallback floor when the graph timeout can't be resolved
 _HTTP_TIMEOUT_MARGIN_S = 30
 _MAX_DEPTH = 1
-_SPARQL_DANGEROUS = re.compile(
-    r"\b(DROP|DELETE|INSERT|CREATE|CLEAR|LOAD|COPY|MOVE|ADD)\b",
-    re.IGNORECASE,
-)
 
 _ACTION_HINT = (
     "call request_entity_action(entity_uri, action) to propose one "
@@ -498,13 +495,10 @@ def tool_run_sparql(
     the warehouse Delta view and cannot see inferred/reasoning triples.  Kept
     for future activation when a raw-SPARQL mode is needed.
     """
-    if not query or not query.strip():
-        return _error("Missing required 'query' argument.")
-    if _SPARQL_DANGEROUS.search(query):
-        return _error(
-            "Refusing to run mutating SPARQL (DROP/DELETE/INSERT/CREATE/...). "
-            "Only SELECT / ASK / DESCRIBE queries are allowed."
-        )
+    try:
+        query = require_read_only_sparql(query)
+    except ValidationError as exc:
+        return _error(exc.message)
 
     payload: dict = {"query": query}
     if limit is not None:

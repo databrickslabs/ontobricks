@@ -16,18 +16,58 @@ logger = get_logger(__name__)
 SAFE_SQL_IDENT = re.compile(r"^[A-Za-z0-9_.]+$")  # qualified: catalog.schema.name
 SAFE_COL_IDENT = re.compile(r"^[A-Za-z0-9_]+$")  # single column / attribute name
 
+SQL_DIALECT_SPARK = "spark"
+SQL_DIALECT_POSTGRES = "postgres"
+# Interpolated bare into SQL text, so anything Python's ``float()`` also
+# accepts (``nan``, ``inf``, ``1_000``, surrounding whitespace) is refused.
+SQL_NUMERIC_LITERAL = re.compile(r"-?\d+(\.\d+)?([eE][-+]?\d+)?")
+
 
 class SQLHelpers:
     @staticmethod
-    def sql_escape(value: str) -> str:
-        """Escape a string value for safe embedding in SQL literals.
+    def sql_escape(value: str, dialect: str = SQL_DIALECT_SPARK) -> str:
+        """Escape *value* for the inside of a ``'...'`` literal in *dialect*.
 
-        Handles ``None`` gracefully and escapes both single-quotes and
-        backslashes, which is the superset behaviour needed by all callers.
+        Spark (the default, and any dialect other than ``postgres``) treats a
+        backslash as an escape character, so it is doubled before quotes;
+        otherwise a value ending in ``\\`` closes the literal. Postgres runs
+        with ``standard_conforming_strings`` on, where backslashes are plain
+        characters and only quotes are doubled. ``None`` becomes ``""``.
         """
         if value is None:
             return ""
-        return str(value).replace("\\", "\\\\").replace("'", "''")
+        text = str(value)
+        if dialect != SQL_DIALECT_POSTGRES:
+            text = text.replace("\\", "\\\\")
+        return text.replace("'", "''")
+
+    @staticmethod
+    def sql_literal(value: str, dialect: str = SQL_DIALECT_SPARK) -> str:
+        """Return *value* as a quoted SQL string literal for *dialect*."""
+        return f"'{SQLHelpers.sql_escape(value, dialect)}'"
+
+    @staticmethod
+    def is_sql_numeric(value) -> bool:
+        """Whether *value* can be interpolated into SQL as a bare number."""
+        if value is None or isinstance(value, bool):
+            return False
+        return SQL_NUMERIC_LITERAL.fullmatch(str(value)) is not None
+
+    # ``!`` rather than the default backslash: Spark and Postgres disagree on
+    # backslashes inside string literals, but both honour an explicit ESCAPE.
+    LIKE_ESCAPE = "ESCAPE '!'"
+
+    @staticmethod
+    def sql_like_escape(value: str) -> str:
+        """Make ``%`` and ``_`` in *value* match literally in a LIKE pattern.
+
+        Apply before ``sql_escape`` and append ``LIKE_ESCAPE`` to the clause.
+        """
+        if value is None:
+            return ""
+        return (
+            str(value).replace("!", "!!").replace("%", "!%").replace("_", "!_")
+        )
 
     @staticmethod
     def sql_cast(expr: str, sql_type: str) -> str:
@@ -100,7 +140,7 @@ class SQLHelpers:
         catalog = delta.get("catalog", "")
         schema = delta.get("schema", "")
         name = (getattr(domain, "info", None) or {}).get("name", "")
-        version = (
+        version = str(
             getattr(domain, "current_version", DEFAULT_GRAPH_VERSION)
             or DEFAULT_GRAPH_VERSION
         )
@@ -127,7 +167,7 @@ class SQLHelpers:
     def effective_graph_name(domain) -> str:
         """Graph table/name derived from the domain name and version."""
         name = (getattr(domain, "info", None) or {}).get("name", DEFAULT_GRAPH_NAME)
-        version = (
+        version = str(
             getattr(domain, "current_version", DEFAULT_GRAPH_VERSION)
             or DEFAULT_GRAPH_VERSION
         )

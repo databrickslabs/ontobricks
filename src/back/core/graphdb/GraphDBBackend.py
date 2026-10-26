@@ -17,11 +17,22 @@ querying, reasoning, graph traversal, and analytics.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 
 from back.core.logging import get_logger
+from back.core.helpers import LIKE_ESCAPE, SQL_DIALECT_SPARK, sql_like_escape
 from back.core.helpers import sql_escape as _shared_sql_escape
+from back.core.graphdb.adjacency import expand_entity_neighbors_sql, seeded_bfs_sql
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.props import execute_expand_with_props_fallback, props_page_sql
+from back.core.graphdb.entity_search import (
+    entity_search_seed_sql,
+    entity_search_uri_search_sql,
+    is_asserted_only_relation,
+    is_missing_relation_error,
+    preview_select_sql,
+    sort_preview_rows,
+)
 
 logger = get_logger(__name__)
 
@@ -34,6 +45,11 @@ class GraphDBBackend(ABC):
     """
 
     supports_materialized_inference_purge = False
+    supports_adjacency = False
+    supports_entity_search = False
+    supports_props = False
+    # auto | force_on | force_off — see back.core.graphdb.search_cache
+    _search_cache_mode = "auto"
 
     # ------------------------------------------------------------------
     # Core abstract methods
@@ -131,10 +147,9 @@ class GraphDBBackend(ABC):
     # Future non-SQL engines (Cypher, Gremlin) override with native queries.
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _sql_escape(value: str) -> str:
-        """Escape single quotes for SQL string literals."""
-        return _shared_sql_escape(value)
+    def _sql_escape(self, value: str) -> str:
+        """Escape *value* for a ``'...'`` literal in this backend's SQL dialect."""
+        return _shared_sql_escape(value, self.sql_flavor() or SQL_DIALECT_SPARK)
 
     def _sql_relation(self, table_name: str) -> str:
         """SQL relation fragment for *table_name* in generated queries.
@@ -158,6 +173,16 @@ class GraphDBBackend(ABC):
         """
         return 0
 
+    def _distinct_count_expr(self, column: str) -> str:
+        """SQL expression for a distinct count of *column*.
+
+        Default is the exact ``COUNT(DISTINCT ...)``. Backends with a fast
+        approximate cardinality counter (e.g. Spark's ``approx_count_distinct``)
+        override this so the aggregate-stats overview doesn't pay for a full
+        distinct shuffle over multi-million-row triple tables.
+        """
+        return f"COUNT(DISTINCT {column})"
+
     def get_aggregate_stats(self, table_name: str) -> Dict[str, int]:
         """Return aggregate triple-store statistics in a single query.
 
@@ -167,8 +192,8 @@ class GraphDBBackend(ABC):
         sql = (
             f"SELECT "
             f"COUNT(*) AS total, "
-            f"COUNT(DISTINCT subject) AS distinct_subjects, "
-            f"COUNT(DISTINCT predicate) AS distinct_predicates, "
+            f"{self._distinct_count_expr('subject')} AS distinct_subjects, "
+            f"{self._distinct_count_expr('predicate')} AS distinct_predicates, "
             f"SUM(CASE WHEN predicate = '{RDF_TYPE}' THEN 1 ELSE 0 END) AS type_assertion_count, "
             f"SUM(CASE WHEN predicate = '{RDFS_LABEL}' THEN 1 ELSE 0 END) AS label_count "
             f"FROM {self._sql_relation(table_name)}"
@@ -188,250 +213,6 @@ class GraphDBBackend(ABC):
         sql = (
             f"SELECT object AS type_uri, COUNT(*) AS cnt FROM {self._sql_relation(table_name)} "
             f"WHERE predicate = '{RDF_TYPE}' GROUP BY object ORDER BY cnt DESC"
-        )
-        return self.execute_query(sql) or []
-
-    # ------------------------------------------------------------------
-    # Graph-analytics aggregations.
-    #
-    # These compute the non-iterative half of the KG analytics page
-    # (structure counts, degree, per-type profiles) inside the engine, so
-    # they work on graphs far too large to load into memory.  The
-    # entity-entity edge definition is supplied by the caller through
-    # *excluded_predicates* — the exclusion policy belongs to the analytics
-    # layer, not to storage.
-    #
-    # Self-loops are excluded.  NetworkX counts a self-loop as degree 2, so
-    # results can differ from the in-memory path on graphs that contain
-    # self-referencing triples.
-    # ------------------------------------------------------------------
-
-    def _analytics_edge_cte(
-        self,
-        table_name: str,
-        excluded_predicates: List[str],
-        class_filter: Optional[List[str]] = None,
-    ) -> str:
-        """Return the leading ``WITH`` clause defining the analytics edge set.
-
-        Defines ``edges(src, dst)`` as the deduplicated, canonically ordered
-        set of entity-entity edges, and — when *class_filter* is given —
-        ``allowed(n)``, the instances of the selected classes.
-        """
-        rel = self._sql_relation(table_name)
-        excluded = ", ".join(
-            f"'{self._sql_escape(p)}'" for p in excluded_predicates
-        ) or "''"
-
-        parts: List[str] = []
-        edge_conditions = [
-            "t.subject <> ''",
-            "t.object <> ''",
-            "t.subject <> t.object",
-            "(t.object LIKE 'http://%' OR t.object LIKE 'https://%')",
-            f"t.predicate NOT IN ({excluded})",
-        ]
-
-        if class_filter:
-            classes = ", ".join(
-                f"'{self._sql_escape(c)}'" for c in class_filter
-            )
-            parts.append(
-                f"allowed AS (\n"
-                f"  SELECT DISTINCT subject AS n FROM {rel}\n"
-                f"  WHERE predicate = '{RDF_TYPE}' AND object IN ({classes})\n"
-                f")"
-            )
-            edge_conditions.append(
-                "(t.subject IN (SELECT n FROM allowed) "
-                "OR t.object IN (SELECT n FROM allowed))"
-            )
-
-        where_sql = "\n    AND ".join(edge_conditions)
-        parts.append(
-            f"edges AS (\n"
-            f"  SELECT DISTINCT\n"
-            f"    LEAST(t.subject, t.object) AS src,\n"
-            f"    GREATEST(t.subject, t.object) AS dst\n"
-            f"  FROM {rel} t\n"
-            f"  WHERE {where_sql}\n"
-            f")"
-        )
-        return "WITH " + ",\n".join(parts)
-
-    @staticmethod
-    def _degree_cte() -> str:
-        """Return the ``deg(n, d)`` CTE body computing raw degree per node."""
-        return (
-            "deg AS (\n"
-            "  SELECT n, COUNT(*) AS d FROM (\n"
-            "    SELECT src AS n FROM edges\n"
-            "    UNION ALL\n"
-            "    SELECT dst AS n FROM edges\n"
-            "  ) x GROUP BY n\n"
-            ")"
-        )
-
-    def get_graph_structure_stats(
-        self,
-        table_name: str,
-        *,
-        excluded_predicates: List[str],
-        class_filter: Optional[List[str]] = None,
-    ) -> Dict[str, int]:
-        """Return ``edge_count``, ``graph_node_count`` and ``node_count``.
-
-        ``graph_node_count`` counts nodes with at least one entity-entity
-        edge.  ``node_count`` is the number of nodes the analysis reports:
-        the same value unfiltered, or the full instance count of the
-        selected classes (isolated instances included) when *class_filter*
-        is given.
-        """
-        cte = self._analytics_edge_cte(
-            table_name, excluded_predicates, class_filter
-        )
-        selects = ["e.edge_count", "n.graph_node_count"]
-        froms = [
-            "(SELECT COUNT(*) AS edge_count FROM edges) e",
-            "(SELECT COUNT(*) AS graph_node_count FROM gnodes) n",
-        ]
-        if class_filter:
-            selects.append("a.filtered_node_count")
-            froms.append(
-                "(SELECT COUNT(*) AS filtered_node_count FROM allowed) a"
-            )
-
-        sql = (
-            f"{cte},\n"
-            f"gnodes AS (\n"
-            f"  SELECT src AS n FROM edges UNION SELECT dst AS n FROM edges\n"
-            f")\n"
-            f"SELECT {', '.join(selects)}\n"
-            f"FROM {' CROSS JOIN '.join(froms)}"
-        )
-        rows = self.execute_query(sql)
-        row = rows[0] if rows else {}
-        graph_node_count = int(row.get("graph_node_count", 0) or 0)
-        node_count = (
-            int(row.get("filtered_node_count", 0) or 0)
-            if class_filter
-            else graph_node_count
-        )
-        return {
-            "edge_count": int(row.get("edge_count", 0) or 0),
-            "graph_node_count": graph_node_count,
-            "node_count": node_count,
-        }
-
-    def get_top_nodes_by_degree(
-        self,
-        table_name: str,
-        *,
-        excluded_predicates: List[str],
-        class_filter: Optional[List[str]] = None,
-        top_n: int = 100,
-    ) -> List[Dict[str, Any]]:
-        """Return the *top_n* highest-degree nodes with label and type.
-
-        The label/type join is applied **after** the ``LIMIT`` so it only
-        touches the returned rows.
-        """
-        cte = self._analytics_edge_cte(
-            table_name, excluded_predicates, class_filter
-        )
-        rel = self._sql_relation(table_name)
-        scope = (
-            " WHERE n IN (SELECT n FROM allowed)" if class_filter else ""
-        )
-        sql = (
-            f"{cte},\n"
-            f"{self._degree_cte()},\n"
-            f"top AS (\n"
-            f"  SELECT n, d FROM deg{scope} ORDER BY d DESC, n LIMIT {int(top_n)}\n"
-            f")\n"
-            f"SELECT top.n AS node_uri, top.d AS degree,\n"
-            f"       MIN(lab.object) AS label, MIN(typ.object) AS type_uri\n"
-            f"FROM top\n"
-            f"LEFT JOIN {rel} lab\n"
-            f"  ON lab.subject = top.n AND lab.predicate = '{RDFS_LABEL}'\n"
-            f"LEFT JOIN {rel} typ\n"
-            f"  ON typ.subject = top.n AND typ.predicate = '{RDF_TYPE}'\n"
-            f"GROUP BY top.n, top.d\n"
-            f"ORDER BY top.d DESC, top.n"
-        )
-        return self.execute_query(sql) or []
-
-    def get_type_edge_stats(
-        self,
-        table_name: str,
-        *,
-        excluded_predicates: List[str],
-        class_filter: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
-        """Return per-class ``connected_count`` and ``degree_sum``.
-
-        ``connected_count`` is the number of instances of the class that
-        have at least one entity-entity edge; ``degree_sum`` is the total of
-        their raw degrees.  The caller turns these into a mean degree
-        centrality by dividing by ``graph_node_count - 1``.
-        """
-        cte = self._analytics_edge_cte(
-            table_name, excluded_predicates, class_filter
-        )
-        rel = self._sql_relation(table_name)
-        sql = (
-            f"{cte},\n"
-            f"{self._degree_cte()}\n"
-            f"SELECT ty.object AS type_uri,\n"
-            f"       COUNT(*) AS connected_count,\n"
-            f"       SUM(deg.d) AS degree_sum\n"
-            f"FROM deg\n"
-            f"JOIN {rel} ty\n"
-            f"  ON ty.subject = deg.n AND ty.predicate = '{RDF_TYPE}'\n"
-            f"GROUP BY ty.object"
-        )
-        return self.execute_query(sql) or []
-
-    def get_type_predicate_pairs(
-        self,
-        table_name: str,
-        *,
-        excluded_predicates: List[str],
-        class_filter: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
-        """Return the distinct ``(type_uri, predicate)`` pairs used by nodes.
-
-        A predicate counts for a node whether the node is the subject or the
-        (URI-valued) object, mirroring the in-memory profile builder.  Rows
-        are aggregated in Python so no engine-specific array function is
-        needed.
-        """
-        cte = self._analytics_edge_cte(
-            table_name, excluded_predicates, class_filter
-        )
-        rel = self._sql_relation(table_name)
-        excluded = ", ".join(
-            f"'{self._sql_escape(p)}'" for p in excluded_predicates
-        ) or "''"
-        sql = (
-            f"{cte},\n"
-            f"gnodes AS (\n"
-            f"  SELECT src AS n FROM edges UNION SELECT dst AS n FROM edges\n"
-            f")\n"
-            f"SELECT DISTINCT ty.object AS type_uri, t.predicate AS predicate\n"
-            f"FROM {rel} t\n"
-            f"JOIN gnodes g ON g.n = t.subject\n"
-            f"JOIN {rel} ty\n"
-            f"  ON ty.subject = t.subject AND ty.predicate = '{RDF_TYPE}'\n"
-            f"WHERE t.predicate NOT IN ({excluded})\n"
-            f"UNION\n"
-            f"SELECT DISTINCT ty.object AS type_uri, t.predicate AS predicate\n"
-            f"FROM {rel} t\n"
-            f"JOIN gnodes g ON g.n = t.object\n"
-            f"JOIN {rel} ty\n"
-            f"  ON ty.subject = t.object AND ty.predicate = '{RDF_TYPE}'\n"
-            f"WHERE t.predicate NOT IN ({excluded})\n"
-            f"  AND (t.object LIKE 'http://%' OR t.object LIKE 'https://%')"
         )
         return self.execute_query(sql) or []
 
@@ -577,19 +358,50 @@ class GraphDBBackend(ABC):
 
         When *search* is given, matches against all literal values for the
         subject (label, data properties, etc.) — not just ``rdfs:label``.
+
+        When the entity-search companion is ready, reads it instead — a
+        Build/Refresh-cache snapshot rather than the live graph, and
+        *search* then matches only ``rdfs:label``/URI (same fields Explorer
+        Preview searches). Falls back to the SPO query below when the
+        companion is missing or a missing-table error occurs mid-query.
         """
+        if self.entity_search_ready(table_name):
+            if is_asserted_only_relation(table_name):
+                search_table = self.entity_search_asserted_table_id(table_name)
+            else:
+                search_table = self.entity_search_table_id(table_name)
+            sql = entity_search_uri_search_sql(
+                search_table=self._sql_relation(search_table),
+                type_uri=type_uri,
+                search=search or "",
+                limit=limit,
+                offset=offset,
+                escape=self._sql_escape,
+            )
+            try:
+                rows = self.execute_query(sql)
+                return [r["uri"] for r in rows]
+            except Exception as exc:  # noqa: BLE001
+                if not is_missing_relation_error(exc):
+                    raise
+                logger.info(
+                    "Entity-search table is unavailable for typed lookup; "
+                    "using SPO fallback: %s",
+                    exc,
+                )
+
         esc_type = self._sql_escape(type_uri)
         conditions = [
             f"predicate = '{RDF_TYPE}'",
             f"object = '{esc_type}'",
         ]
         if search:
-            esc = self._sql_escape(search).lower()
+            esc = self._sql_escape(sql_like_escape(search)).lower()
             conditions.append(
                 f"subject IN ("
                 f"SELECT DISTINCT subject FROM {self._sql_relation(table_name)} "
                 f"WHERE predicate != '{RDF_TYPE}' "
-                f"AND LOWER(object) LIKE '%{esc}%')"
+                f"AND LOWER(object) LIKE '%{esc}%' {LIKE_ESCAPE})"
             )
         sql = (
             f"SELECT DISTINCT subject FROM {self._sql_relation(table_name)} "
@@ -627,24 +439,23 @@ class GraphDBBackend(ABC):
             return []
         in_clause = ", ".join(f"'{self._sql_escape(u)}'" for u in subjects)
 
-        type_sql = (
-            f"SELECT subject, object FROM {self._sql_relation(table_name)} "
-            f"WHERE predicate = '{RDF_TYPE}' AND subject IN ({in_clause})"
-        )
-        label_sql = (
-            f"SELECT subject, object FROM {self._sql_relation(table_name)} "
-            f"WHERE predicate = '{RDFS_LABEL}' AND subject IN ({in_clause})"
-        )
-
-        type_rows = self.execute_query(type_sql) or []
-        label_rows = self.execute_query(label_sql) or []
+        # Fetch type and label in a single round-trip. Two separate queries
+        # doubled the warehouse latency on the preview path (each scan of the
+        # union graph view is several seconds on a serverless warehouse); one
+        # predicate-IN scan returns both and is split in Python.
+        rows = self.execute_query(
+            f"SELECT subject, predicate, object FROM {self._sql_relation(table_name)} "
+            f"WHERE subject IN ({in_clause}) "
+            f"AND predicate IN ('{RDF_TYPE}', '{RDFS_LABEL}')"
+        ) or []
 
         types: Dict[str, str] = {}
-        for r in type_rows:
-            types.setdefault(r["subject"], r["object"])
         labels: Dict[str, str] = {}
-        for r in label_rows:
-            labels.setdefault(r["subject"], r["object"])
+        for r in rows:
+            if r["predicate"] == RDF_TYPE:
+                types.setdefault(r["subject"], r["object"])
+            elif r["predicate"] == RDFS_LABEL:
+                labels.setdefault(r["subject"], r["object"])
 
         return [
             {"uri": uri, "type": types.get(uri, ""), "label": labels.get(uri, "")}
@@ -655,15 +466,89 @@ class GraphDBBackend(ABC):
     def get_triples_for_subjects(
         self, table_name: str, subjects: List[str]
     ) -> List[Dict[str, str]]:
-        """Return all triples whose subject is in *subjects*."""
+        """Return all triples whose subject is in *subjects*.
+
+        Reads the property companion (``_props``) when this backend
+        supports it — every outgoing triple of a **typed** subject — falling
+        back to the SPO relation for a companion-missing graph or a
+        missing-table error mid-query (see ``back.core.graphdb.props``).
+        """
         if not subjects:
             return []
         in_clause = ", ".join(f"'{self._sql_escape(u)}'" for u in subjects)
-        sql = (
+        fallback_sql = (
             f"SELECT subject, predicate, object FROM {self._sql_relation(table_name)} "
             f"WHERE subject IN ({in_clause})"
         )
-        return self.execute_query(sql)
+        props = self._props_table_for_read(table_name)
+        if not props:
+            return self.execute_query(fallback_sql)
+        sql = (
+            f"SELECT subject, predicate, object FROM {self._sql_relation(props)} "
+            f"WHERE subject IN ({in_clause})"
+        )
+        return execute_expand_with_props_fallback(
+            execute_query=self.execute_query,
+            sql=sql,
+            props_table=props,
+            fallback_sql=fallback_sql,
+        )
+
+    def get_triples_page_for_subjects(
+        self,
+        table_name: str,
+        subjects: List[str],
+        *,
+        limit: int,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Return a paged triple list plus exact total for the subject set."""
+        if not subjects:
+            return {"rows": [], "total": 0}
+
+        fallback_sql = props_page_sql(
+            payload_relation=self._sql_relation(table_name),
+            uris=subjects,
+            limit=limit,
+            offset=offset,
+            escape=self._sql_escape,
+        )
+
+        props = self._props_table_for_read(table_name)
+        if props:
+            sql = props_page_sql(
+                payload_relation=self._sql_relation(props),
+                uris=subjects,
+                limit=limit,
+                offset=offset,
+                escape=self._sql_escape,
+            )
+            rows = execute_expand_with_props_fallback(
+                execute_query=self.execute_query,
+                sql=sql,
+                props_table=props,
+                fallback_sql=fallback_sql,
+            )
+        else:
+            rows = self.execute_query(fallback_sql) or []
+
+        total = int(rows[0].get("_ob_total") or 0) if rows else 0
+        triples: List[Dict[str, str]] = []
+        for row in rows:
+            if (
+                row.get("subject") is None
+                and row.get("predicate") is None
+                and row.get("object") is None
+            ):
+                continue
+            triples.append(
+                {
+                    "subject": row.get("subject") or "",
+                    "predicate": row.get("predicate") or "",
+                    "object": row.get("object") or "",
+                }
+            )
+        return {"rows": triples, "total": total}
 
     def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         """Return distinct predicates used by instances of *type_uri*."""
@@ -717,159 +602,69 @@ class GraphDBBackend(ABC):
         *search* and *entity_type* are structured parameters for future
         non-SQL backends (Cypher, Gremlin) that cannot use raw SQL fragments.
 
+        When both the adjacency and entity-search companions are ready,
+        seeds from the entity-search index (structured *search*/*entity_type*
+        rather than *seed_where*) and walks ``_adj_out``/``_adj_in`` instead
+        of the raw SPO relation — same typed-endpoint restriction Explorer's
+        expansion already has. Falls back to the SPO recursive CTE below
+        when either companion is missing, or on a missing-table error
+        mid-query.
+
         Returns rows with ``entity`` and ``min_lvl`` columns.
-
-        The traversal uses a pre-filtered *bidirectional edge* CTE so the
-        recursive step joins on a single equality (``e.src = b.entity``) instead
-        of the non-sargable ``t.subject = b.entity OR t.object = b.entity``. The
-        OR form forces a full table scan at every level; the edge form lets the
-        planner hash-join, which roughly halves traversal time on large graphs.
         """
-        rel = self._sql_relation(table_name)
+        if self.adjacency_ready(table_name) and self.entity_search_ready(table_name):
+            if is_asserted_only_relation(table_name):
+                search_table = self.entity_search_asserted_table_id(table_name)
+            else:
+                search_table = self.entity_search_table_id(table_name)
+            seed_sql = entity_search_seed_sql(
+                search_table=self._sql_relation(search_table),
+                entity_type=entity_type,
+                search=search,
+                escape=self._sql_escape,
+            )
+            adj_out, adj_in = self.adjacency_table_ids(table_name)
+            sql = seeded_bfs_sql(
+                flavor=self.sql_flavor(),
+                adj_out=self._sql_relation(adj_out),
+                adj_in=self._sql_relation(adj_in),
+                seed_sql=seed_sql,
+                depth=depth,
+            )
+            try:
+                return self.execute_query(sql) or []
+            except Exception as exc:  # noqa: BLE001
+                if not is_missing_relation_error(exc):
+                    raise
+                logger.info(
+                    "Adjacency/entity-search companions unavailable for BFS "
+                    "find; using SPO fallback: %s",
+                    exc,
+                )
+
+        edge_filters = (
+            f"t.predicate != '{RDF_TYPE}' "
+            f"AND t.predicate NOT LIKE '%#label' "
+            f"AND t.predicate NOT LIKE '%/label' "
+            f"AND t.predicate != '{RDFS_LABEL}' "
+            f"AND (t.object LIKE 'http://%' OR t.object LIKE 'https://%')"
+        )
         sql = (
-            f"{self._bfs_walk_cte(rel, seed_where, depth)}\n"
-            f"SELECT entity, MIN(lvl) AS min_lvl FROM bfs GROUP BY entity"
-        )
-        return self.execute_query(sql) or []
-
-    @staticmethod
-    def _bfs_edge_filter(prefix: str = "") -> str:
-        """Predicate/object filter keeping only URI-valued relationship edges.
-
-        *prefix* is the table alias (e.g. ``"t"``) or empty for an unqualified
-        base scan. Excludes ``rdf:type`` / label predicates and literal objects.
-        """
-        p = f"{prefix}." if prefix else ""
-        return (
-            f"{p}predicate != '{RDF_TYPE}' "
-            f"AND {p}predicate NOT LIKE '%#label' "
-            f"AND {p}predicate NOT LIKE '%/label' "
-            f"AND {p}predicate != '{RDFS_LABEL}' "
-            f"AND ({p}object LIKE 'http://%' OR {p}object LIKE 'https://%')"
-        )
-
-    def _bfs_walk_cte(self, rel: str, seed_where: str, depth: int) -> str:
-        """Build the ``WITH RECURSIVE`` prefix that walks the graph to *depth*.
-
-        Emits three CTEs — ``edges`` (bidirectional, pre-filtered), ``seeds``
-        (from *seed_where*) and the recursive ``bfs(entity, lvl)`` — leaving the
-        caller to append its own final ``SELECT`` over ``bfs``.
-        """
-        safe_depth = max(0, int(depth))
-        edge = self._bfs_edge_filter()
-        return (
-            f"WITH RECURSIVE edges AS (\n"
-            f"  SELECT subject AS src, object AS dst FROM {rel} WHERE {edge}\n"
-            f"  UNION ALL\n"
-            f"  SELECT object AS src, subject AS dst FROM {rel} WHERE {edge}\n"
-            f"), seeds AS (\n"
-            f"  SELECT DISTINCT subject AS entity FROM {rel}{seed_where}\n"
+            f"WITH RECURSIVE seeds AS (\n"
+            f"  SELECT DISTINCT subject AS entity FROM {self._sql_relation(table_name)}{seed_where}\n"
             f"), bfs(entity, lvl) AS (\n"
             f"  SELECT entity, 0 FROM seeds\n"
             f"  UNION ALL\n"
-            f"  SELECT e.dst, b.lvl + 1\n"
-            f"  FROM bfs b\n"
-            f"  JOIN edges e ON e.src = b.entity\n"
-            f"  WHERE b.lvl < {safe_depth}\n"
-            f")"
-        )
-
-    def find_triples_bfs_page(
-        self,
-        table_name: str,
-        seed_where: str,
-        depth: int,
-        *,
-        limit: int,
-        offset: int = 0,
-        search: str = "",
-        entity_type: str = "",
-    ) -> Dict[str, Any]:
-        """Walk the graph and return one de-duplicated, ordered page of triples.
-
-        Folds seed selection, BFS traversal, triple fetch, de-duplication and
-        pagination into a single server-side query so the caller never
-        materialises the full neighbourhood in memory.
-
-        The query computes exact metadata in a ``stats`` CTE
-        (``seed_count``, ``total``, ``entity_count``) and returns it alongside
-        the paged triples. ``has_more`` is derived from exact totals using
-        ``offset + len(triples) < total`` after dropping the null placeholder row
-        produced by ``LEFT JOIN page`` when a page is empty.
-
-        *seed_where* drives SQL backends; *search* / *entity_type* are the
-        structured equivalents for non-SQL backends (Cypher, Gremlin) that
-        cannot consume a raw SQL fragment.
-        """
-        rel = self._sql_relation(table_name)
-        page_limit = int(limit)
-        page_offset = int(offset)
-        sql = (
-            f"{self._bfs_walk_cte(rel, seed_where, depth)}, ents AS (\n"
-            f"  SELECT DISTINCT entity FROM bfs\n"
-            f"), alias_ids AS (\n"
-            f"  SELECT DISTINCT regexp_replace(entity, '^.*[#/]', '') AS local_id\n"
-            f"  FROM ents\n"
-            f"  WHERE regexp_replace(entity, '^.*[#/]', '') != ''\n"
-            f"), alias_ents AS (\n"
-            f"  SELECT DISTINCT candidate.subject AS entity\n"
-            f"  FROM {rel} candidate\n"
-            f"  JOIN alias_ids alias\n"
-            f"    ON candidate.subject LIKE CONCAT('%/', alias.local_id)\n"
-            f"), all_ents AS (\n"
-            f"  SELECT entity FROM ents UNION SELECT entity FROM alias_ents\n"
-            f"), distinct_triples AS (\n"
-            f"  SELECT DISTINCT t.subject, t.predicate, t.object\n"
-            f"  FROM {rel} t JOIN all_ents e ON t.subject = e.entity\n"
-            f"), stats AS (\n"
             f"  SELECT\n"
-            f"    (SELECT COUNT(*) FROM seeds) AS seed_count,\n"
-            f"    (SELECT COUNT(*) FROM distinct_triples) AS total,\n"
-            f"    (SELECT COUNT(*) FROM all_ents) AS entity_count\n"
-            f"), page AS (\n"
-            f"  SELECT subject, predicate, object FROM distinct_triples\n"
-            f"  ORDER BY subject, predicate, object\n"
-            f"  LIMIT {page_limit} OFFSET {page_offset}\n"
+            f"    CASE WHEN t.subject = b.entity THEN t.object ELSE t.subject END,\n"
+            f"    b.lvl + 1\n"
+            f"  FROM bfs b\n"
+            f"  JOIN {self._sql_relation(table_name)} t ON (t.subject = b.entity OR t.object = b.entity)\n"
+            f"  WHERE b.lvl < {depth} AND {edge_filters}\n"
             f")\n"
-            f"SELECT page.subject, page.predicate, page.object,\n"
-            f"       stats.seed_count, stats.total, stats.entity_count\n"
-            f"FROM stats LEFT JOIN page ON TRUE\n"
-            f"ORDER BY page.subject, page.predicate, page.object"
+            f"SELECT entity, MIN(lvl) AS min_lvl FROM bfs GROUP BY entity"
         )
-        rows = self.execute_query(sql) or []
-        if not rows:
-            return {
-                "seed_count": 0,
-                "triples": [],
-                "total": 0,
-                "entity_count": 0,
-                "has_more": False,
-            }
-
-        stats_row = rows[0]
-        seed_count = int(stats_row.get("seed_count", 0) or 0)
-        total = int(stats_row.get("total", 0) or 0)
-        entity_count = int(stats_row.get("entity_count", 0) or 0)
-
-        triples: List[Dict[str, Any]] = []
-        for row in rows:
-            subject = row.get("subject")
-            predicate = row.get("predicate")
-            object_ = row.get("object")
-            if subject is None and predicate is None and object_ is None:
-                continue
-            triples.append(
-                {"subject": subject, "predicate": predicate, "object": object_}
-            )
-
-        has_more = page_offset + len(triples) < total
-        return {
-            "seed_count": seed_count,
-            "triples": triples,
-            "total": total,
-            "entity_count": entity_count,
-            "has_more": has_more,
-        }
+        return self.execute_query(sql) or []
 
     def find_seed_subjects(
         self,
@@ -890,6 +685,7 @@ class GraphDBBackend(ABC):
         """
         esc_type = self._sql_escape(entity_type) if entity_type else ""
         safe_val = self._sql_escape(value.lower()) if value else ""
+        like_val = self._sql_escape(sql_like_escape(value.lower())) if value else ""
         rel = self._sql_relation(table_name)
 
         search_label = field in ("label", "any")
@@ -899,10 +695,10 @@ class GraphDBBackend(ABC):
             if match_type == "exact":
                 return f"{column} = '{safe_val}'"
             if match_type == "starts":
-                return f"{column} LIKE '{safe_val}%'"
+                return f"{column} LIKE '{like_val}%' {LIKE_ESCAPE}"
             if match_type == "ends":
-                return f"{column} LIKE '%{safe_val}'"
-            return f"{column} LIKE '%{safe_val}%'"
+                return f"{column} LIKE '%{like_val}' {LIKE_ESCAPE}"
+            return f"{column} LIKE '%{like_val}%' {LIKE_ESCAPE}"
 
         if entity_type and value:
             # Build a set of candidate subjects matching the text filter,
@@ -945,8 +741,78 @@ class GraphDBBackend(ABC):
                 )
             sql = " UNION ".join(parts)
 
+        # Cap server-side. Without this the warehouse materialises *every*
+        # matching subject — for a bare entity-type filter that is every
+        # instance of the type (potentially millions), all serialised back over
+        # SEA before the caller slices to the preview size. Wrapping in a
+        # derived table applies the bound to the whole (possibly UNION-ed) set
+        # in both Spark and Postgres. The caller asks for max_preview+1 so it can
+        # still detect capping.
+        if limit and int(limit) > 0:
+            sql = f"SELECT subject FROM ({sql}) AS _seeds LIMIT {int(limit)}"
+
         rows = self.execute_query(sql)
         return {r["subject"] for r in rows}
+
+    def find_preview_seeds(
+        self,
+        table_name: str,
+        entity_type: str = "",
+        field: str = "any",
+        match_type: str = "contains",
+        value: str = "",
+        limit: int = 0,
+    ) -> List[Dict[str, str]]:
+        """Return Preview rows with URI, type URI, and label."""
+        probe_limit = int(limit) if limit else 0
+        search_table = ""
+        if probe_limit > 0 and self.entity_search_ready(table_name):
+            if is_asserted_only_relation(table_name):
+                search_table = self.entity_search_asserted_table_id(table_name)
+            else:
+                search_table = self.entity_search_table_id(table_name)
+        if search_table:
+            try:
+                rows = self.execute_query(
+                    preview_select_sql(
+                        search_table=self._sql_relation(search_table),
+                        entity_type=entity_type,
+                        field=field,
+                        match_type=match_type,
+                        value=value,
+                        limit=probe_limit,
+                        escape=self._sql_escape,
+                    )
+                ) or []
+                return sort_preview_rows(
+                    [
+                        {
+                            "uri": row["uri"],
+                            "type": row.get("type_uri") or "",
+                            "label": row.get("label") or "",
+                        }
+                        for row in rows
+                    ]
+                )
+            except Exception as exc:  # noqa: BLE001
+                if not is_missing_relation_error(exc):
+                    raise
+                logger.info(
+                    "Entity-search table is unavailable; using SPO Preview fallback: %s",
+                    exc,
+                )
+
+        subjects = list(
+            self.find_seed_subjects(
+                table_name,
+                entity_type=entity_type,
+                field=field,
+                match_type=match_type,
+                value=value,
+                limit=probe_limit,
+            )
+        )
+        return sort_preview_rows(self.get_entity_metadata(table_name, subjects))
 
     def find_subjects_by_patterns(
         self, table_name: str, like_patterns: List[str]
@@ -1114,28 +980,156 @@ class GraphDBBackend(ABC):
 
         Only returns URIs that have an ``rdf:type`` assertion (real entity
         instances, not class or property URIs).
+
+        When :meth:`adjacency_ready` is true, reads clustered adjacency
+        tables; otherwise falls back to the legacy SPO scan.
         """
         if not entity_uris:
             return set()
-        in_clause = ", ".join(f"'{self._sql_escape(e)}'" for e in entity_uris)
-        sql = (
-            f"SELECT DISTINCT e.entity FROM ("
-            f"  SELECT object AS entity FROM {self._sql_relation(table_name)} "
-            f"  WHERE subject IN ({in_clause}) "
-            f"  AND object LIKE 'http%' "
-            f"  AND predicate != '{RDF_TYPE}' "
-            f"  AND predicate != '{RDFS_LABEL}' "
-            f"  UNION "
-            f"  SELECT subject AS entity FROM {self._sql_relation(table_name)} "
-            f"  WHERE object IN ({in_clause}) "
-            f"  AND predicate != '{RDF_TYPE}' "
-            f"  AND predicate != '{RDFS_LABEL}'"
-            f") e "
-            f"INNER JOIN {self._sql_relation(table_name)} t "
-            f"ON t.subject = e.entity AND t.predicate = '{RDF_TYPE}'"
-        )
+        if self.adjacency_ready(table_name):
+            adj_out, adj_in = self.adjacency_table_ids(table_name)
+            sql = expand_entity_neighbors_sql(
+                self._sql_relation(adj_out),
+                self._sql_relation(adj_in),
+                list(entity_uris),
+                self._sql_escape,
+            )
+        else:
+            in_clause = ", ".join(f"'{self._sql_escape(e)}'" for e in entity_uris)
+            rel = self._sql_relation(table_name)
+            sql = (
+                f"SELECT DISTINCT e.entity FROM ("
+                f"  SELECT object AS entity FROM {rel} "
+                f"  WHERE subject IN ({in_clause}) "
+                f"  AND object LIKE 'http%' "
+                f"  AND predicate != '{RDF_TYPE}' "
+                f"  AND predicate != '{RDFS_LABEL}' "
+                f"  UNION "
+                f"  SELECT subject AS entity FROM {rel} "
+                f"  WHERE object IN ({in_clause}) "
+                f"  AND predicate != '{RDF_TYPE}' "
+                f"  AND predicate != '{RDFS_LABEL}'"
+                f") e "
+                f"INNER JOIN {rel} t "
+                f"ON t.subject = e.entity AND t.predicate = '{RDF_TYPE}'"
+            )
         rows = self.execute_query(sql) or []
         return {r["entity"] for r in rows}
+
+    def sql_flavor(self) -> Optional[Literal["spark", "postgres"]]:
+        """SQL dialect for adjacency helpers, or *None* when not applicable."""
+        return None
+
+    def search_cache_mode(self) -> str:
+        """Return ``auto``, ``force_on``, or ``force_off`` for this request."""
+        return getattr(self, "_search_cache_mode", "auto") or "auto"
+
+    def _companion_tables_exist(self, *table_names: str) -> bool:
+        """Return whether every companion exists.
+
+        ``auto`` treats a failed existence probe as ``False`` so Explorer,
+        Graph Chat, and MCP fall back to the live SPO relation. ``force_on``
+        still surfaces the probe error (or the missing-cache ValidationError).
+        """
+        try:
+            return all(self.table_exists(name) for name in table_names if name)
+        except Exception as exc:  # noqa: BLE001
+            if self.search_cache_mode() == "force_on":
+                raise
+            logger.info(
+                "Companion existence probe failed; using live graph reads: %s",
+                exc,
+            )
+            return False
+
+    def set_search_cache_mode(self, mode: str) -> None:
+        """Pin companion usage for the lifetime of this store instance."""
+        if mode not in ("auto", "force_on", "force_off"):
+            from back.core.errors import ValidationError
+
+            raise ValidationError("Invalid search cache mode")
+        self._search_cache_mode = mode
+
+    def _raise_if_force_on_missing(self, ready: bool) -> None:
+        if ready or self.search_cache_mode() != "force_on":
+            return
+        from back.core.errors import ValidationError
+        from back.core.graphdb.search_cache import CACHE_MISSING_MESSAGE
+
+        raise ValidationError(CACHE_MISSING_MESSAGE)
+
+    def _props_table_for_read(self, table_name: str) -> str:
+        """Property companion id, or ``\"\"`` when this request must use SPO."""
+        mode = self.search_cache_mode()
+        if mode == "force_off" or not self.supports_props:
+            if mode == "force_on" and not self.supports_props:
+                from back.core.errors import ValidationError
+                from back.core.graphdb.search_cache import CACHE_BACKEND_MESSAGE
+
+                raise ValidationError(CACHE_BACKEND_MESSAGE)
+            return ""
+        props = self.props_table_id(table_name)
+        if not props:
+            self._raise_if_force_on_missing(False)
+            return ""
+        if mode == "force_on" and not self.table_exists(props):
+            self._raise_if_force_on_missing(False)
+        return props
+
+    def adjacency_table_ids(self, table_name: str) -> tuple[str, str]:
+        """Return ``(adj_out, adj_in)`` table identifiers for *table_name*."""
+        return ("", "")
+
+    def rebuild_adjacency(self, table_name: str) -> None:
+        """Materialise adj, ``_entity_search``, asserted search, and ``_props``.
+
+        Default is a no-op. SQL backends rebuild companions from the
+        reader-facing SPO relation plus an asserted-only entity-search table.
+        """
+
+    def adjacency_ready(self, table_name: str) -> bool:
+        """Whether adjacency tables exist and neighbour expansion can use them."""
+        mode = self.search_cache_mode()
+        if mode == "force_off":
+            return False
+        if not self.supports_adjacency:
+            self._raise_if_force_on_missing(False)
+            return False
+        adj_out, adj_in = self.adjacency_table_ids(table_name)
+        if not adj_out or not adj_in:
+            self._raise_if_force_on_missing(False)
+            return False
+        ready = self._companion_tables_exist(adj_out, adj_in)
+        self._raise_if_force_on_missing(ready)
+        return ready
+
+    def entity_search_table_id(self, table_name: str) -> str:
+        """Return the union entity-search table identifier for *table_name*."""
+        return ""
+
+    def entity_search_asserted_table_id(self, table_name: str) -> str:
+        """Return the asserted-only entity-search table identifier."""
+        return ""
+
+    def props_table_id(self, table_name: str) -> str:
+        """Return the property-companion table identifier for *table_name*."""
+        return ""
+
+    def entity_search_ready(self, table_name: str) -> bool:
+        """Whether Preview can use the matching entity-search snapshot."""
+        mode = self.search_cache_mode()
+        if mode == "force_off":
+            return False
+        if not self.supports_entity_search:
+            self._raise_if_force_on_missing(False)
+            return False
+        if is_asserted_only_relation(table_name):
+            search_table = self.entity_search_asserted_table_id(table_name)
+        else:
+            search_table = self.entity_search_table_id(table_name)
+        ready = bool(search_table) and self._companion_tables_exist(search_table)
+        self._raise_if_force_on_missing(ready)
+        return ready
 
     # ------------------------------------------------------------------
     # Capability flags — reasoning engines use these instead of isinstance
@@ -1229,6 +1223,6 @@ class GraphDBBackend(ABC):
         SQL-based backends should return an ``SWRLSQLTranslator``.
         Cypher-based backends should return the matching Cypher translator.
         """
-        from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
+        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 
         return SWRLSQLTranslator()

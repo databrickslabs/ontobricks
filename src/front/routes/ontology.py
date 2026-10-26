@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from back.objects.session import SessionManager, get_session_manager, get_domain
-from front.fastapi.dependencies import templates
+from front.fastapi.dependencies import home_redirect_if_unloaded, templates
 
 router = APIRouter(prefix="/ontology", tags=["Ontology"])
 
@@ -16,6 +16,9 @@ async def ontology_page(
 ):
     """Ontology management page."""
     domain_session = get_domain(session_mgr)
+    redirect = home_redirect_if_unloaded(domain_session)
+    if redirect is not None:
+        return redirect
     ont = domain_session.ontology or {}
 
     reasoning_ctx = {

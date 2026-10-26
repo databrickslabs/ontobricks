@@ -17,7 +17,7 @@ patterns** — the whole point of the typed model — instead of self-joining fl
 triple nodes.
 """
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
@@ -361,6 +361,37 @@ class Neo4jReadOps:
         return self._reconstruct_triples_for_nodes(
             sanitise_label(table_name), node_uris=subjects
         )
+
+    def get_triples_page_for_subjects(
+        self,
+        table_name: str,
+        subjects: List[str],
+        *,
+        limit: int,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        if not subjects:
+            return {"rows": [], "total": 0}
+
+        triples = self.get_triples_for_subjects(table_name, subjects)
+        distinct: Set[Tuple[str, str, str]] = {
+            (
+                str(t.get("subject") or ""),
+                str(t.get("predicate") or ""),
+                str(t.get("object") or ""),
+            )
+            for t in triples
+        }
+        ordered = sorted(distinct)
+        total = len(ordered)
+        offset_i = max(int(offset), 0)
+        limit_i = max(int(limit), 0)
+        page = ordered[offset_i : offset_i + limit_i]
+        rows = [
+            {"subject": subj, "predicate": pred, "object": obj}
+            for subj, pred, obj in page
+        ]
+        return {"rows": rows, "total": total}
 
     def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         label = sanitise_label(table_name)

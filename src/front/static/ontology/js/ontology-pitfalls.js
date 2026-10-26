@@ -428,20 +428,6 @@ window.PitfallsModule = (function () {
         if (tab) bootstrap.Tab.getOrCreateInstance(tab).show();
     }
 
-    function _showDepsWarning(msg) {
-        const body = document.getElementById('pitfallsPatternBody');
-        const runBtn = document.getElementById('pitfallsRunBtn');
-        if (body) {
-            body.innerHTML = `
-                <div class="alert alert-warning small mb-0">
-                    <i class="bi bi-exclamation-triangle me-1"></i>
-                    <strong>Optional dependencies missing.</strong> ${msg}<br>
-                    Install with: <code>pip install .[pitfalls]</code>
-                </div>`;
-        }
-        if (runBtn) runBtn.disabled = true;
-    }
-
     // ── Public API ────────────────────────────────────────────────────────────
     return { init, run, selectAll, selectFast, _onCheckChange };
 

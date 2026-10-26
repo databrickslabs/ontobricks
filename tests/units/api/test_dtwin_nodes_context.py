@@ -103,7 +103,7 @@ def test_dtwin_classes_enriches_bridges_but_keeps_unavailable_targets(
     never drops bridges — the ontology designer keeps seeing every authored bridge,
     even ones whose target is not (yet) MCP-visible."""
     from api.routers.internal import dtwin
-    from back.objects.digitaltwin.NodeContextService import NodeContextService
+    from back.objects.digitaltwin.node.NodeContextService import NodeContextService
 
     mock_domain = MagicMock()
     mock_domain.info = {"name": "Customer 360"}
@@ -129,7 +129,7 @@ def test_dtwin_classes_enriches_bridges_but_keeps_unavailable_targets(
 
 def test_dtwin_classes_adds_target_description_when_visible(client, monkeypatch):
     from api.routers.internal import dtwin
-    from back.objects.digitaltwin.NodeContextService import NodeContextService
+    from back.objects.digitaltwin.node.NodeContextService import NodeContextService
 
     mock_domain = MagicMock()
     mock_domain.info = {"name": "Customer 360"}

@@ -3,6 +3,7 @@
 from back.core.graphdb.lakebase.LakebaseBase import (
     DEFAULT_GRAPH_SCHEMA,
     default_schema,
+    normalize_sync_table_mode,
     validate_engine_config_keys,
     validate_graph_schema,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "LakebaseFlatStore",
     "SyncedTableManager",
     "default_schema",
+    "normalize_sync_table_mode",
     "validate_engine_config_keys",
     "validate_graph_schema",
 ]

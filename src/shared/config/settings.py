@@ -33,15 +33,14 @@ class Settings(BaseSettings):
         """Alias used by resolve_warehouse_id()."""
         return self.databricks_sql_warehouse_id
 
-    # Domain Registry (single Volume for all domains) — used solely for
-    # domain-scoped binary artefacts (the documents/ uploads imported
-    # by the ontology designer). Structured registry data (domains,
-    # versions, permissions, schedules, global config) lives in
-    # Lakebase as of v0.4.0.
-    registry_volume_path: str = ""
+    # Domain Registry catalog/schema — used to locate the Unity Catalog
+    # objects (Delta views/tables) materialised during Knowledge Graph
+    # builds. Structured registry data (domains, versions, permissions,
+    # schedules, global config) lives in Lakebase as of v0.4.0; parsed
+    # documents (the Knowledge Store) live in Lakebase as of v0.9.0, so
+    # no UC Volume is required for domain-scoped artefacts anymore.
     registry_catalog: str = ""
     registry_schema: str = ""
-    registry_volume: str = "OntoBricksRegistry"
 
     # Lakebase: Postgres schema where the registry tables live.
     # Connection parameters (PGHOST/PGPORT/PGDATABASE/PGUSER) come from

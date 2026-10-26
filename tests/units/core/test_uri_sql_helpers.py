@@ -139,6 +139,17 @@ class TestSQLHelpers:
         result = SQLHelpers.effective_view_table(FakeDomain())
         assert result == "triplestore_mydomain_V1"
 
+    def test_effective_view_table_stringifies_integer_version(self):
+        class FakeDomain:
+            delta = {"catalog": "cat", "schema": "sch"}
+            info = {"name": "BigCustomers100m"}
+            current_version = 1
+
+        assert (
+            SQLHelpers.effective_view_table(FakeDomain())
+            == "cat.sch.triplestore_bigcustomers100m_V1"
+        )
+
     def test_effective_graph_name(self):
         class FakeDomain:
             info = {"name": "TestGraph"}

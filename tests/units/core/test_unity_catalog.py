@@ -9,7 +9,7 @@ _unity_catalog_mod = importlib.import_module("back.core.databricks.uc.UnityCatal
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth
 from back.core.databricks.uc import UnityCatalog
-from back.core.errors import ValidationError
+from back.core.errors import InfrastructureError, ValidationError
 
 
 def _make_sql_mocks(mock_connect, *, fetchall=None, fetchone=None):
@@ -112,9 +112,54 @@ class TestGetTables:
         "databricks.sql.connect",
         side_effect=RuntimeError("warehouse down"),
     )
-    def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
+    def test_raises_infrastructure_error_on_error(
+        self, _mock_connect, auth_with_warehouse
+    ):
         uc = UnityCatalog(auth_with_warehouse)
-        assert uc.get_tables("cat", "sch") == []
+        with pytest.raises(InfrastructureError) as exc_info:
+            uc.get_tables("cat", "sch")
+        assert "warehouse down" not in exc_info.value.message
+        assert exc_info.value.detail == "warehouse down"
+
+
+class TestListTablesAndViews:
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_returns_typed_assets(self, mock_get, auth_with_warehouse):
+        mock_resp = Mock()
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {
+            "tables": [{"name": "v1", "table_type": "VIEW", "comment": "c"}]
+        }
+        mock_get.return_value = mock_resp
+        out = UnityCatalog(auth_with_warehouse).list_tables_and_views("cat", "sch")
+        assert out == [
+            {
+                "name": "v1",
+                "full_name": "cat.sch.v1",
+                "table_type": "VIEW",
+                "comment": "c",
+            }
+        ]
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_raises_infrastructure_error_on_http_error(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = Mock()
+        mock_resp.raise_for_status.side_effect = requests.HTTPError(
+            "403 PERMISSION_DENIED"
+        )
+        mock_get.return_value = mock_resp
+        with pytest.raises(InfrastructureError):
+            UnityCatalog(auth_with_warehouse).list_tables_and_views("cat", "sch")
+
+    def test_returns_empty_when_no_auth(self, clean_databricks_env):
+        auth = DatabricksAuth(
+            host="https://test.cloud.databricks.com",
+            token="",
+            warehouse_id="wh",
+        )
+        assert UnityCatalog(auth).list_tables_and_views("cat", "sch") == []
 
 
 class TestListFunctions:
@@ -224,9 +269,12 @@ class TestListFunctions:
         assert out[1]["return_columns"] == []
 
     @patch("databricks.sql.connect", side_effect=RuntimeError("boom"))
-    def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
+    def test_raises_infrastructure_error_on_error(
+        self, _mock_connect, auth_with_warehouse
+    ):
         uc = UnityCatalog(auth_with_warehouse)
-        assert uc.list_functions("main", "ops") == []
+        with pytest.raises(InfrastructureError):
+            uc.list_functions("main", "ops")
 
     def test_rejects_invalid_schema_identifier(self, auth_with_warehouse):
         uc = UnityCatalog(auth_with_warehouse)
@@ -257,44 +305,111 @@ class TestGetTableColumns:
         "databricks.sql.connect",
         side_effect=Exception("no table"),
     )
-    def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
+    def test_raises_infrastructure_error_on_error(
+        self, _mock_connect, auth_with_warehouse
+    ):
         uc = UnityCatalog(auth_with_warehouse)
-        assert uc.get_table_columns("c", "s", "t") == []
+        with pytest.raises(InfrastructureError):
+            uc.get_table_columns("c", "s", "t")
 
 
 class TestGetTableComment:
-    @patch("databricks.sql.connect")
-    def test_returns_comment_string(self, mock_connect, auth_with_warehouse):
-        mock_cursor = _make_sql_mocks(
-            mock_connect,
-            fetchone=["my table comment"],
+    """Table descriptions come from the Unity Catalog tables API.
+
+    An app service principal often cannot read ``information_schema``: the
+    previous ``information_schema.tables`` query then failed, the error was
+    swallowed, and every table showed an empty description. The tables API
+    needs only the grants a data source already has.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_information_schema_access(self):
+        with patch(
+            "databricks.sql.connect",
+            side_effect=Exception("PERMISSION_DENIED on information_schema"),
+        ):
+            yield
+
+    @staticmethod
+    def _response(payload, status=200):
+        resp = MagicMock()
+        resp.status_code = status
+        resp.json.return_value = payload
+        resp.raise_for_status = Mock()
+        if status >= 400:
+            resp.raise_for_status.side_effect = requests.HTTPError(str(status))
+        return resp
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_returns_the_comment_without_information_schema_access(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_get.return_value = self._response(
+            {"name": "tbl", "comment": "my table comment"}
         )
-        uc = UnityCatalog(auth_with_warehouse)
-        assert uc.get_table_comment("cat", "sch", "tbl") == "my table comment"
-        mock_cursor.execute.assert_called_once()
-        call_args = mock_cursor.execute.call_args
-        call_sql = call_args[0][0]
-        assert "information_schema.tables" in call_sql
-        assert "`cat`.information_schema.tables" in call_sql
-        # Databricks SQL Connector requires qmark placeholders, not pyformat %s.
-        assert "%s" not in call_sql
-        assert call_sql.count("?") == 3
-        assert call_args[0][1] == ("cat", "sch", "tbl")
 
-    @patch("databricks.sql.connect")
-    def test_returns_empty_when_no_row(self, mock_connect, auth_with_warehouse):
-        mock_cursor = _make_sql_mocks(mock_connect)
-        mock_cursor.fetchone.return_value = None
-        uc = UnityCatalog(auth_with_warehouse)
-        assert uc.get_table_comment("cat", "sch", "tbl") == ""
+        comment = UnityCatalog(auth_with_warehouse).get_table_comment(
+            "cat", "sch", "tbl"
+        )
 
-    @patch(
-        "databricks.sql.connect",
-        side_effect=Exception("timeout"),
-    )
-    def test_returns_empty_string_on_error(self, _mock_connect, auth_with_warehouse):
-        uc = UnityCatalog(auth_with_warehouse)
-        assert uc.get_table_comment("c", "s", "t") == ""
+        assert comment == "my table comment"
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_asks_the_tables_api_for_the_table_by_full_name(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_get.return_value = self._response({"comment": "x"})
+
+        UnityCatalog(auth_with_warehouse).get_table_comment("cat", "sch", "tbl")
+
+        assert mock_get.call_args[0][0] == (
+            "https://test.cloud.databricks.com/api/2.1/unity-catalog/tables/cat.sch.tbl"
+        )
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_returns_empty_when_the_table_has_no_comment(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_get.return_value = self._response({"name": "tbl"})
+
+        comment = UnityCatalog(auth_with_warehouse).get_table_comment(
+            "cat", "sch", "tbl"
+        )
+
+        # The empty string must be the API's answer, not a skipped call.
+        assert (comment, mock_get.call_count) == ("", 1)
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_returns_empty_when_the_api_refuses(self, mock_get, auth_with_warehouse):
+        mock_get.return_value = self._response(
+            {"error_code": "PERMISSION_DENIED"}, status=403
+        )
+
+        comment = UnityCatalog(auth_with_warehouse).get_table_comment(
+            "cat", "sch", "tbl"
+        )
+
+        assert (comment, mock_get.call_count) == ("", 1)
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_sends_nothing_without_credentials(self, mock_get, auth_with_warehouse):
+        auth_with_warehouse.has_valid_auth = lambda: False
+
+        comment = UnityCatalog(auth_with_warehouse).get_table_comment(
+            "cat", "sch", "tbl"
+        )
+
+        assert (comment, mock_get.call_count) == ("", 0)
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_sends_nothing_without_a_host(self, mock_get, auth_with_warehouse):
+        auth_with_warehouse.host = ""
+
+        comment = UnityCatalog(auth_with_warehouse).get_table_comment(
+            "cat", "sch", "tbl"
+        )
+
+        assert (comment, mock_get.call_count) == ("", 0)
 
 
 class TestGetVolumesSql:
@@ -639,3 +754,25 @@ class TestCheckTableSelectPermission:
         out = uc.check_table_select_permission("cat", "sch", "tbl")
         assert out["can_select"] is False
         assert "no select" in out["error"]
+
+    @patch("databricks.sql.connect")
+    def test_metric_view_probe_uses_measure_sql_not_select_star(
+        self, mock_connect, auth_with_warehouse
+    ):
+        mock_cursor = _make_sql_mocks(mock_connect)
+        uc = UnityCatalog(auth_with_warehouse)
+        out = uc.check_table_select_permission(
+            "cat",
+            "sales",
+            "region_metrics",
+            object_kind="metric_view",
+            columns=[
+                {"name": "region", "role": "dimension"},
+                {"name": "revenue", "role": "measure"},
+            ],
+        )
+        assert out == {"can_select": True, "error": None}
+        sql = mock_cursor.execute.call_args[0][0]
+        assert "SELECT *" not in sql
+        assert "MEASURE(`revenue`)" in sql
+        assert "LIMIT 0" in sql

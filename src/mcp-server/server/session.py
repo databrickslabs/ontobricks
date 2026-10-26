@@ -62,6 +62,9 @@ class MCPServerSession:
     def __init__(self, mode: str) -> None:
         self.mode = mode
         self.base = _http._base_url(mode)
+        # Let the module-level ``_get`` / ``_post`` mint the right auth headers
+        # (and merge the forwarded end-user identity) without threading ``mode``.
+        _http.set_mode(mode)
 
         # Per-connection state (selected domain + label/action caches) lives in
         # ``_domain_states`` keyed by MCP session id, so concurrent clients
@@ -158,41 +161,22 @@ class MCPServerSession:
         return self._state().class_actions
 
     async def ensure_registry(self) -> dict:
-        """Resolve registry config: volume path → env vars → main app API."""
+        """Resolve registry config: env vars → main app API."""
         if self.registry["_loaded"]:
             return self.registry
 
-        vol_path = os.getenv("REGISTRY_VOLUME_PATH", "")
-        if vol_path:
-            parts = vol_path.strip("/").split("/")
-            if len(parts) >= 4 and parts[0].lower() == "volumes":
-                self.registry["catalog"] = parts[1]
-                self.registry["schema"] = parts[2]
-                self.registry["volume"] = parts[3]
-                self.registry["_loaded"] = True
-                logger.info(
-                    "Registry from volume resource: %s.%s.%s",
-                    self.registry["catalog"],
-                    self.registry["schema"],
-                    self.registry["volume"],
-                )
-                return self.registry
-            logger.warning("Cannot parse REGISTRY_VOLUME_PATH '%s'", vol_path)
-
         env_cat = os.getenv("REGISTRY_CATALOG", "")
         env_sch = os.getenv("REGISTRY_SCHEMA", "")
-        env_vol = os.getenv("REGISTRY_VOLUME", "")
 
         if env_cat and env_sch:
             self.registry["catalog"] = env_cat
             self.registry["schema"] = env_sch
-            self.registry["volume"] = env_vol or "OntoBricksRegistry"
+            self.registry["volume"] = "OntoBricksRegistry"
             self.registry["_loaded"] = True
             logger.info(
-                "Registry from env vars: %s.%s.%s",
+                "Registry from env vars: %s.%s",
                 self.registry["catalog"],
                 self.registry["schema"],
-                self.registry["volume"],
             )
             return self.registry
 

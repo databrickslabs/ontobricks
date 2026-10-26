@@ -59,7 +59,7 @@
 
                     <div class="mb-4">
                         <label class="form-label fw-semibold">
-                            SQL Warehouse
+                            Build SQL Warehouse
                             <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
                                 <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
                             </span>
@@ -72,7 +72,24 @@
                                 <i class="bi bi-arrow-clockwise"></i>
                             </button>
                         </div>
-                        <small class="text-muted" id="warehouseHelp">Required for Unity Catalog operations. Stored globally for all users.</small>
+                        <small class="text-muted" id="warehouseHelp">
+                            Required for Knowledge Graph views and materialization. Lakehouse//RT
+                            warehouses cannot be used because builds execute DDL and writes.
+                        </small>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="useCloudFetch" checked>
+                            <label class="form-check-label small" for="useCloudFetch">
+                                Use CloudFetch
+                                <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                    <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                                </span>
+                            </label>
+                            <div class="form-text small">
+                                Download large SQL result files from Databricks storage. Disable
+                                this when Databricks Apps cannot reach the CloudFetch endpoint
+                                (Explorer searches then time out after retries).
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-0">
@@ -87,13 +104,17 @@
             <!-- ==================== DELTA TRIPLE STORE SECTION ==================== -->
             <div id="delta-section" class="sidebar-section">
                 <div class="content-section">
-                    <div class="section-header mb-4">
+                    <div class="section-header d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <h4 class="mb-1"><i class="ob-brand-icon ob-icon-lakehouse me-2"></i>Lakehouse</h4>
                             <p class="text-muted mb-0 small">
                                 Unity Catalog Delta tables for the triple store — no separate graph database to provision
                             </p>
                         </div>
+                        <button type="button" class="btn btn-sm btn-primary text-nowrap"
+                                id="btnApplyDeltaWarehouse" disabled>
+                            <i class="bi bi-check-circle me-1"></i> Save
+                        </button>
                     </div>
 
                     <div id="deltaSectionBanner" class="alert alert-light border d-none align-items-center justify-content-center gap-2 py-3 mb-3" role="status" aria-live="polite">
@@ -150,11 +171,11 @@
                                         where all triple-store objects live for every domain.
                                     </p>
                                     <p class="mb-0">
-                                        Pick a dedicated SQL Warehouse on the <strong>SQL Warehouse</strong> tab for Lakehouse graph
-                                        queries and builds. When unset, the global warehouse from
-                                        <strong>Settings → Databricks</strong> is used. After mapping is ready, run
-                                        <strong>Knowledge Graph → Build</strong> to create the R2RML VIEW and materialize the
-                                        <code>_data</code> Delta table.
+                                        Pick a dedicated Query SQL Warehouse on the <strong>SQL Warehouse</strong>
+                                        tab for Lakehouse graph reads. When unset, the Build SQL Warehouse from
+                                        <strong>Settings → Databricks</strong> is also used for reads. Builds always
+                                        use that non-RT Build SQL Warehouse to create the R2RML VIEW and materialize
+                                        the <code>_data</code> Delta table.
                                     </p>
                                 </div>
                             </div>
@@ -162,17 +183,43 @@
                             <!-- ── TAB 2 · SQL Warehouse ── -->
                             <div class="tab-pane fade" id="dtpane-warehouse" role="tabpanel" aria-labelledby="dttab-warehouse">
                                 <p class="small text-muted mb-3">
-                                    Used only when <strong>Lakehouse</strong> is the graph backend — graph queries,
-                                    health probes, and Lakehouse builds run against this warehouse. Click <strong>Apply</strong>
+                                    Used only when <strong>Lakehouse</strong> is the graph backend — graph queries
+                                    and health probes run against this warehouse. Build DDL always uses the
+                                    separate Build SQL Warehouse. Click <strong>Save</strong>
                                     to persist the selection in the registry.
                                 </p>
-                                <label for="deltaWarehouseSelect" class="form-label small fw-semibold mb-1">Warehouse</label>
+                                <label for="deltaBuildWarehouseSelect"
+                                       class="form-label small fw-semibold mb-1">
+                                    Build SQL Warehouse
+                                </label>
+                                <select id="deltaBuildWarehouseSelect"
+                                        class="form-select form-select-sm mb-2"></select>
+                                <div class="form-text small mb-3">
+                                    Builds require DDL and write support, so Lakehouse//RT warehouses
+                                    are excluded. The selection applies to all users.
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="deltaUseSea">
+                                    <label class="form-check-label small" for="deltaUseSea">
+                                        Use Lakehouse//RT for queries
+                                    </label>
+                                    <div class="form-text small">
+                                        Enables a separate Query SQL Warehouse and connects through the
+                                        native Kernel backend. Turning this off restores Build as Query.
+                                    </div>
+                                </div>
+
                                 <div id="deltaWarehouseLoading"
                                      class="d-flex align-items-center gap-2 text-muted small py-1">
                                     <span class="spinner-border spinner-border-sm" role="status"
                                           aria-hidden="true"></span>
                                     <span>Loading warehouses…</span>
                                 </div>
+                                <label for="deltaWarehouseSelect"
+                                       class="form-label small fw-semibold mb-1">
+                                    Query SQL Warehouse
+                                </label>
                                 <div id="deltaWarehouseControls"
                                      class="d-none d-flex flex-wrap gap-2 align-items-center">
                                     <select id="deltaWarehouseSelect"
@@ -182,10 +229,6 @@
                                     <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
                                             id="btnRefreshDeltaWarehouses" disabled>
                                         <i class="bi bi-arrow-clockwise me-1"></i> Refresh list
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-primary text-nowrap"
-                                            id="btnApplyDeltaWarehouse" disabled>
-                                        <i class="bi bi-check2 me-1"></i> Apply
                                     </button>
                                 </div>
                                 <p class="text-muted mb-0 mt-2" id="deltaWarehouseHelp">
@@ -197,7 +240,8 @@
                             <div class="tab-pane fade" id="dtpane-objects" role="tabpanel" aria-labelledby="dttab-objects">
                                 <p class="small text-muted mb-3">
                                     Lists triple-store objects in the Registry UC schema
-                                    (<code>catalog.schema</code>) for <strong>all domains</strong>.
+                                    (<code>catalog.schema</code>) only for domain versions configured
+                                    with the <strong>Lakehouse</strong> backend.
                                     Use <strong>Drop</strong> to remove a single object or every artefact
                                     for one domain version (views are dropped before tables).
                                 </p>
@@ -377,34 +421,36 @@
                             <!-- ── TAB 2 · Bulk loading ── -->
                             <div class="tab-pane fade" id="lkpane-bulk" role="tabpanel" aria-labelledby="lktab-bulk">
                                 <p class="small text-muted mb-3">
-                                    Choose how R2RML triples reach Postgres. Most workspaces start with <strong>App-managed</strong>.
-                                    <strong>Managed sync</strong> delegates bulk copy to Databricks Lakeflow (needs UC registration).
+                                    Choose how R2RML triples reach Postgres.
+                                    <strong>Managed sync</strong> is the recommended path: Databricks Lakeflow copies the mapped view into Postgres (needs UC registration).
+                                    <strong>App-managed</strong> streams rows through the app when you need the COPY path.
                                 </p>
                                 <div class="row g-3 align-items-start mb-0">
                                     <div class="col-12">
                                         <label for="lakebaseSyncMode" class="form-label small fw-semibold mb-1">Mode</label>
                                         <select class="form-select form-select-sm" id="lakebaseSyncMode" aria-describedby="lakebaseSyncModeHelp">
-                                            <option value="app_managed">App-managed — stream from SQL warehouse into Postgres (default)</option>
-                                            <option value="managed_synced">Managed sync — Lakeflow syncs the Delta view to Postgres (data plane)</option>
+                                            <option value="managed_synced" selected>Managed sync — Lakeflow syncs the Delta view to Postgres (recommended)</option>
+                                            <option value="app_managed">App-managed — stream from SQL warehouse into Postgres</option>
                                         </select>
                                         <div id="lakebaseSyncModeHelp" class="form-text small mt-2 mb-0">
-                                            <span data-lk-mode="app_managed">The app runs the warehouse query and COPYs rows; no Unity Catalog object is required for the load.</span>
-                                            <span data-lk-mode="managed_synced" class="d-none">Lakeflow keeps a synced table; the app only orchestrates. Requires a valid <code>catalog.schema</code> in Unity Catalog for registration.</span>
+                                            <span data-lk-mode="app_managed" class="d-none">The app runs the warehouse query and COPYs rows; no Unity Catalog object is required for the load.</span>
+                                            <span data-lk-mode="managed_synced">Lakeflow keeps a synced table; the app only orchestrates. Requires a valid <code>catalog.schema</code> in Unity Catalog for registration.</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div id="lakebaseManagedSyncPanel" class="border rounded p-3 mt-3 bg-body-tertiary d-none">
+                                <div id="lakebaseManagedSyncPanel" class="border rounded p-3 mt-3 bg-body-tertiary">
                                     <div class="fw-semibold small mb-2">Managed sync options</div>
                                     <div class="row g-3">
                                         <div class="col-12 col-lg-6">
                                             <label for="lakebaseSyncTableMode" class="form-label small fw-semibold mb-1">Lakeflow schedule</label>
                                             <select class="form-select form-select-sm" id="lakebaseSyncTableMode">
-                                                <option value="snapshot">Snapshot — full refresh on trigger (good default)</option>
-                                                <option value="triggered">Triggered — refresh when you trigger</option>
-                                                <option value="continuous">Continuous — keep near real-time</option>
+                                                <option value="snapshot" selected>Snapshot — full refresh on each Knowledge Graph build</option>
                                             </select>
-                                            <div class="form-text small mt-1 mb-0 text-muted">How often Lakeflow updates the Postgres mirror.</div>
+                                            <div class="form-text small mt-1 mb-0 text-muted">
+                                                Snapshot is the only schedule that works here: the Lakeflow source is an R2RML view, which has no Change Data Feed.
+                                                Triggered and Continuous need CDF on a Delta table.
+                                            </div>
                                         </div>
                                         <div class="col-12 col-lg-6">
                                             <label for="lakebaseSyncTimeout" class="form-label small fw-semibold mb-1">Sync wait (seconds)</label>
@@ -677,13 +723,13 @@
                     <div class="alert alert-info border-0 mb-3 small">
                         <strong>Named connections:</strong> each entry is a full Bolt profile
                         (URI, database, username, Databricks secret). Domains pick a connection by
-                        name under <em>Domain → Information → Knowledge Graph</em>.
+                        name under <em>Domain → General → Knowledge Graph</em>.
                     </div>
 
                     <div class="alert alert-warning border-0 mb-3 small">
                         <strong>Requirements:</strong> Neo4j <strong>server 5.x</strong> (Aura, Enterprise,
                         or Community). OntoBricks assumes it <em>owns</em> the connected database. APOC is not required.
-                        See the <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/neo4j-requirements.md" target="_blank" rel="noopener">Neo4j requirements guide</a>.
+                        See the <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/backend.md#neo4j-backend" target="_blank" rel="noopener">Neo4j backend guide</a>.
                     </div>
 
                     <div class="row g-3">
@@ -876,6 +922,20 @@
                                min="0" step="1" value="10">
                         <small class="text-muted">
                             <i class="bi bi-info-circle"></i> How long a DRAFT single-editor lock survives with no keep-alive (a crashed / closed tab) before another user can reclaim it. The editor's browser auto-renews while open. Set to <strong>0</strong> to disable the lease (a lock is then held until the editor closes the domain or an admin force-unlocks it).
+                        </small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="dataAssetsImportLimit" class="form-label fw-semibold">
+                            Data assets import limit
+                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                            </span>
+                        </label>
+                        <input type="number" class="form-control" id="dataAssetsImportLimit"
+                               min="1" max="500" step="1" value="40">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> Maximum Unity Catalog tables, views and metric views a domain may import. Default <strong>40</strong> (range 1–500). Extra assets in a schema are skipped until you raise the limit or remove existing assets.
                         </small>
                     </div>
 
@@ -1084,6 +1144,32 @@
                                 </div>
                             </div>
 
+                            <div class="row g-3 align-items-end mb-3">
+                                <div class="col-12 col-lg-4">
+                                    <label for="uiBrandingAuroraColor" class="form-label fw-semibold">Aurora color</label>
+                                    <input type="color"
+                                           class="form-control form-control-color"
+                                           id="uiBrandingAuroraColor"
+                                           aria-describedby="uiBrandingAuroraHelp uiBrandingAuroraError"
+                                           value="#22A7C8">
+                                </div>
+                                <div class="col-12 col-lg-8">
+                                    <label for="uiBrandingAuroraHex" class="form-label fw-semibold">Hex value</label>
+                                    <input type="text"
+                                           class="form-control form-control-sm font-monospace text-uppercase"
+                                           id="uiBrandingAuroraHex"
+                                           aria-describedby="uiBrandingAuroraHelp uiBrandingAuroraError"
+                                           maxlength="7"
+                                           autocomplete="off"
+                                           value="#22A7C8"
+                                           placeholder="#22A7C8">
+                                </div>
+                                <div class="col-12">
+                                    <div id="uiBrandingAuroraHelp" class="form-text">Accent used for gradients and highlights. Leave unchanged to auto-derive from Primary.</div>
+                                    <div id="uiBrandingAuroraError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                </div>
+                            </div>
+
                             <div class="row g-2 mb-3 ui-branding-swatches">
                                 <div class="col-6 col-lg-4">
                                     <div class="ui-branding-swatch ui-branding-swatch-primary" id="uiSwatchPrimary" role="img" aria-label="Primary color #4F46E5" title="Primary color #4F46E5">Primary</div>
@@ -1099,6 +1185,9 @@
                                 </div>
                                 <div class="col-6 col-lg-4">
                                     <div class="ui-branding-swatch ui-branding-swatch-on-primary" id="uiSwatchOnPrimary" role="img" aria-label="On Primary color #FFFFFF" title="On Primary color #FFFFFF">On Primary</div>
+                                </div>
+                                <div class="col-6 col-lg-4">
+                                    <div class="ui-branding-swatch ui-branding-swatch-aurora" id="uiSwatchAurora" role="img" aria-label="Aurora color #22A7C8" title="Aurora color #22A7C8">Aurora</div>
                                 </div>
                             </div>
 
@@ -1139,6 +1228,13 @@
             <div id="registry-section" class="sidebar-section">
                 <div class="content-section">
                     {% include "partials/registry/_registry_configuration.html" %}
+                </div>
+            </div>
+
+            <!-- ==================== GITHUB SECTION (admin only) ==================== -->
+            <div id="github-section" class="sidebar-section">
+                <div class="content-section">
+                    {% include "partials/settings/_settings_github.html" %}
                 </div>
             </div>
 
@@ -1270,5 +1366,6 @@
 <script src="{{ url_for('static', filename='config/js/settings-registry-configuration.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-health.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-logs.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/settings-github.js') }}?v={{ asset_version }}"></script>
 {% endif %}
 {% endblock %}

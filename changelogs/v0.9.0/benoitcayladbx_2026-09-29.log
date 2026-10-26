@@ -1,0 +1,878 @@
+## Add domain checkboxes and spinner to OBX import
+
+Context: Importing a `.obx` archive always queued every domain in the file.
+Operators who wanted a subset had to Skip each conflict individually, and
+reading the file had no wait indicator. Import now matches Export: pick
+domains with checkboxes, and show a spinner while the archive is parsed.
+
+Changes:
+
+1. `src/front/templates/partials/registry/_import_obx_modal.html`
+   Select-all checkbox column and a preview-read spinner on step 1.
+2. `src/front/static/registry/js/registry.js`
+   Per-row pick checkboxes; unchecked domains are skipped; spinner during
+   preview and import; Import disabled when none selected.
+3. `src/front/static/registry/css/registry.css`
+   Width for the import checkbox column, matching Export.
+4. `docs/import-export.md`, `docs/features.md`
+   Document domain selection and spinner on import.
+5. `tests/units/front/test_registry_obx_import_rename.py`
+   Structural contracts for checkboxes and the preview spinner.
+
+Modified files:
+- src/front/templates/partials/registry/_import_obx_modal.html
+- src/front/static/registry/js/registry.js
+- src/front/static/registry/css/registry.css
+- docs/import-export.md
+- docs/features.md
+- tests/units/front/test_registry_obx_import_rename.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7167 passed, 315 skipped, 6 deselected, 1 xfailed in 53.01s
+
+## Add Domain Search cache switch and request cache override
+
+Context: Lakehouse and Lakebase searches (Explorer, GraphQL, MCP
+`describe_entity`) used adjacency / entity-search / props companions whenever
+those tables existed. There was no domain switch and no per-request override,
+so Views-only Lakehouse could still read a stale snapshot, and operators could
+not force live SPO. This adds one Search cache control (default on), pending
+rebuild after re-enable, and a `cache` query/body flag that always wins.
+
+Changes:
+
+1. `src/back/core/graphdb/search_cache.py`
+   Policy helpers: parse `cache`, resolve auto/force_on/force_off, rebuild skip,
+   mark ready/pending.
+2. `src/back/core/graphdb/GraphDBBackend.py`
+   Gate `adjacency_ready` / `entity_search_ready` / props reads on the request
+   mode; `cache=true` with missing companions raises ValidationError.
+3. `src/back/objects/session/DomainSession.py`, `src/back/objects/domain/Domain.py`
+   Persist `graph_cache_enabled` / `graph_cache_state`; new domains pending;
+   legacy import missing keys → enabled+ready; re-enable → pending_refresh.
+4. `src/front/templates/partials/domain/_domain_information.html`,
+   `src/front/static/domain/js/domain-information.js`,
+   `src/front/static/domain/js/domain.js`,
+   `src/front/static/global/js/navbar.js`
+   Backend tab Search cache switch (Lakehouse/Lakebase) on both save paths.
+5. `src/api/routers/digitaltwin.py`, `src/api/routers/internal/dtwin.py`,
+   `src/back/fastapi/graphql_routes.py`, `src/mcp-server/server/tools.py`
+   `cache` on public/session find, filter, GraphQL, MCP describe_entity;
+   find responses include `cache_used` / `cache_mode`.
+6. Rebuild callers (`_build_pipeline.py`, Delta pipeline, DigitalTwin refresh,
+   `cache_refresh.py`, ReasoningService, CohortBuilder, Lakebase/Delta purge)
+   skip companion rebuild when the switch is off; Refresh cache fails if
+   disabled.
+7. `docs/user-guide.md`, `docs/features.md`, `docs/optimizations.md`
+   Document the switch and request override.
+8. Unit tests for policy, UI contract, session round-trip, purge skip, and
+   Preview seed gating under the new ready checks.
+
+Modified files:
+- src/back/core/graphdb/search_cache.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/objects/registry/scheduler_tasks/cache_refresh.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/back/fastapi/graphql_routes.py
+- src/mcp-server/server/tools.py
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- src/front/static/global/js/navbar.js
+- docs/user-guide.md
+- docs/features.md
+- docs/optimizations.md
+- tests/units/graphdb/test_search_cache.py
+- tests/units/front/test_search_cache_ui.py
+- tests/units/domain/test_domain_session.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/graphdb/test_materialized_inference_purge.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7154 passed, 315 skipped, 6 deselected, 1 xfailed in 54.71s
+
+## Equalize page-title top inset with subtitle gap
+
+Context: Section titles sat flush to the content top on desktop
+(``padding-top: 0``) while the subtitle-to-content gap was 0.5rem. Pages
+looked tighter above the heading than below it (e.g. "Domain Information").
+
+Changes:
+
+1. `src/front/static/global/css/main.css`
+   `.section-header` and `.page-header` top padding is 0.5rem, matching the
+   header's bottom margin (subtitle -> content).
+2. `src/front/static/global/css/sidebar-layout.css`
+   Desktop sidebar titles keep 0.5rem top padding instead of zeroing it.
+3. `tests/units/front/test_clarity_design_contract.py`
+   Contract: title top inset equals subtitle -> content gap (0.5rem).
+4. `.cursor/11-frontend-design.mdc`
+   Document the 0.5rem title inset.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/global/css/sidebar-layout.css
+- tests/units/front/test_clarity_design_contract.py
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7155 passed, 315 skipped, 6 deselected, 1 xfailed in 54.76s
+
+## Fall back to live graph when search-cache probes fail
+
+Context: After the Search cache switch, Explorer Preview (and Graph Chat /
+MCP find) called ``table_exists`` before querying companions. A probe error
+— including serverless warehouses rejecting Thrift — was wrapped as
+``Error querying graph`` with no SPO fallback. Search then failed even when
+the live triple relation was readable.
+
+Changes:
+
+1. `src/back/core/graphdb/GraphDBBackend.py`
+   ``auto`` mode treats a failed companion existence probe as not-ready and
+   falls back to live SPO (Lakebase and Lakehouse). ``force_on`` still raises.
+2. `src/back/core/databricks/SQLWarehouse.py`
+   On "not supported for Thrift", reconnect with native Kernel SEA and pin
+   ``use_kernel`` on the auth object.
+3. `tests/units/graphdb/test_graphdb_adjacency_contract.py`
+   Preview and BFS fallback contracts for both postgres (Lakebase) and spark
+   (Lakehouse) flavors.
+4. `tests/units/dtwin/test_filter_preview_entity_search.py`
+   Explorer ``filter_preview`` and Chat/MCP ``find_triples_bfs`` must not
+   surface probe errors as "Error querying graph".
+5. `tests/units/core/test_sql_warehouse.py`
+   Thrift rejection reconnects with ``use_kernel=True``.
+
+Modified files:
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/databricks/SQLWarehouse.py
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/dtwin/test_filter_preview_entity_search.py
+- tests/units/core/test_sql_warehouse.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 55.40s
+
+## Extract SearchCachePolicy, GraphFilter, and GraphFind
+
+Context: Review flagged module-level functions in ``search_cache.py``
+(class-first) and DigitalTwin as a God object. First Fowler Extract Class
+chunk: cache policy + Explorer/Chat find-filter, with shims so existing
+imports and ``DigitalTwin.*`` names stay stable.
+
+Changes:
+
+1. `src/back/core/graphdb/SearchCachePolicy.py`
+   New class holding cache parse/resolve/apply/rebuild/state helpers.
+2. `src/back/core/graphdb/search_cache.py`
+   Re-export constants and method aliases for existing callers.
+3. `src/back/objects/digitaltwin/GraphFind.py`
+   Seed WHERE, URI alias expand, and ``find_triples_bfs``.
+4. `src/back/objects/digitaltwin/GraphFilter.py`
+   Explorer ``preview`` / ``expand``.
+5. `src/back/objects/digitaltwin/DigitalTwin.py`
+   One-line delegators for the moved methods.
+6. `src/back/objects/digitaltwin/__init__.py`
+   Re-export ``GraphFilter`` and ``GraphFind``.
+7. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Remaining God-class extract plan (SettingsService, registry, dtwin).
+
+Modified files:
+- src/back/core/graphdb/SearchCachePolicy.py
+- src/back/core/graphdb/search_cache.py
+- src/back/objects/digitaltwin/GraphFind.py
+- src/back/objects/digitaltwin/GraphFilter.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 51.39s
+
+## Extract GraphEngineSettings from SettingsService
+
+Context: SettingsService was a God class (~5300 LOC). Fowler Extract Class
+moves graph-engine connection, health, Neo4j, Lakebase, and Lakehouse
+object listing into GraphEngineSettings. SettingsService methods stay
+delegators so routes and ``patch.object(SettingsService, ...)`` keep working.
+Collaborators patched on the SettingsService *module* are resolved via
+``importlib.import_module`` (package ``__init__`` shadows the submodule name).
+
+Changes:
+
+1. `src/back/objects/domain/GraphEngineSettings.py`
+   Graph engine get/set, Neo4j, Lakebase, UC, and Lakehouse health/objects.
+2. `src/back/objects/domain/SettingsService.py`
+   Thin delegators for the moved methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``GraphEngineSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this chunk done; registry store and dtwin still pending.
+
+Modified files:
+- src/back/objects/domain/GraphEngineSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 52.03s
+
+## Extract GraphEngineNeo4jSettings from GraphEngineSettings
+
+Context: GraphEngineSettings was still a Large Class (~2200 LOC) mixing
+Neo4j, Lakebase, and Lakehouse. Fowler Extract Class moves Neo4j secrets,
+health, labels, and databases into GraphEngineNeo4jSettings. Existing
+SettingsService / GraphEngineSettings names stay delegators.
+
+Changes:
+
+1. `src/back/objects/domain/GraphEngineNeo4jSettings.py`
+   Neo4j connection list, secrets, test/health, databases, labels, drop.
+2. `src/back/objects/domain/GraphEngineSettings.py`
+   Delegators for the moved Neo4j methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``GraphEngineNeo4jSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark Neo4j slice done.
+
+Modified files:
+- src/back/objects/domain/GraphEngineNeo4jSettings.py
+- src/back/objects/domain/GraphEngineSettings.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 56.36s
+
+## Extract GraphEngineLakebaseSettings from GraphEngineSettings
+
+Context: After the Neo4j extract, GraphEngineSettings still mixed Lakebase
+provision/objects with Lakehouse health. Fowler Extract Class moves Lakebase
+health, listing, provision, objects, and grants into
+GraphEngineLakebaseSettings. SettingsService names stay delegators.
+
+Changes:
+
+1. `src/back/objects/domain/GraphEngineLakebaseSettings.py`
+   Lakebase health, projects/branches/PG, provision, objects, roles, grants.
+2. `src/back/objects/domain/GraphEngineSettings.py`
+   Delegators for the moved Lakebase methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``GraphEngineLakebaseSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark Lakebase Settings slice done.
+
+Modified files:
+- src/back/objects/domain/GraphEngineLakebaseSettings.py
+- src/back/objects/domain/GraphEngineSettings.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 61.85s
+
+## Extract LakebaseRegistryDocuments from LakebaseRegistryStore
+
+Context: LakebaseRegistryStore was a God class (~4500 LOC). Fowler Extract
+Class moves Knowledge Store document CRUD into a mixin so the public store
+type is unchanged (``store.list_documents`` still works).
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/LakebaseRegistryDocuments.py`
+   Document table ensure, upsert/list/get, text/bytes, status, copy, count.
+2. `src/back/objects/registry/store/lakebase/store.py`
+   Inherit the mixin; drop the inlined document methods.
+3. `src/back/objects/registry/store/lakebase/__init__.py`
+   Re-export ``LakebaseRegistryDocuments``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark the documents slice done.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/LakebaseRegistryDocuments.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 52.07s
+
+## Extract collab and edit-lock mixins from LakebaseRegistryStore
+
+Context: After documents, the store still owned comments/tasks and DRAFT
+edit locks. Fowler Extract Class moves those into mixins; the store keeps
+the public methods via inheritance.
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/LakebaseRegistryCollab.py`
+   Comments and tasks (ensure tables, insert/list/resolve/update).
+2. `src/back/objects/registry/store/lakebase/LakebaseRegistryEditLocks.py`
+   Acquire, renew, release, force, list edit locks.
+3. `src/back/objects/registry/store/lakebase/store.py`
+   Inherit both mixins; drop the inlined methods.
+4. `src/back/objects/registry/store/lakebase/__init__.py`
+   Re-export the new mixins.
+5. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark collab + locks done.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/LakebaseRegistryCollab.py
+- src/back/objects/registry/store/lakebase/LakebaseRegistryEditLocks.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 52.44s
+
+## Extract LakebaseRegistryAnalytics from LakebaseRegistryStore
+
+Context: Graph metrics cache and analytics run history still lived on the
+God store. Fowler Extract Class moves them into a mixin. ``build_analytics``
+stays on the store — it rolls up ``build_runs``, not the graph-analytics
+tables.
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/LakebaseRegistryAnalytics.py`
+   Cache upsert/load plus analytics run record/list.
+2. `src/back/objects/registry/store/lakebase/store.py`
+   Inherit the mixin; drop the inlined methods.
+3. `src/back/objects/registry/store/lakebase/__init__.py`
+   Re-export ``LakebaseRegistryAnalytics``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark the analytics slice done.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/LakebaseRegistryAnalytics.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 53.06s
+
+## Extract review, change, and build-run mixins from LakebaseRegistryStore
+
+Context: Audit logs and the Knowledge Graph build-run trace were still
+on the God store. Fowler Extract Class splits them into three mixins;
+``_scalar_total`` stays on the store (shared with analytics listing).
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/LakebaseRegistryReviewEvents.py`
+   Review/validation audit table and queries.
+2. `src/back/objects/registry/store/lakebase/LakebaseRegistryChangeEvents.py`
+   Ontology/mapping change audit table and queries.
+3. `src/back/objects/registry/store/lakebase/LakebaseRegistryBuildRuns.py`
+   Build-run ensure, record, stamp, and list.
+4. `src/back/objects/registry/store/lakebase/store.py`
+   Inherit the three mixins; drop the inlined methods.
+5. `src/back/objects/registry/store/lakebase/__init__.py`
+   Re-export the new mixins.
+6. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/LakebaseRegistryReviewEvents.py
+- src/back/objects/registry/store/lakebase/LakebaseRegistryChangeEvents.py
+- src/back/objects/registry/store/lakebase/LakebaseRegistryBuildRuns.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 51.61s
+
+## Extract catalog and schedules mixins from LakebaseRegistryStore
+
+Context: Domain/version/permission CRUD and scheduled tasks were the last
+large capability clusters on the store. Fowler Extract Class moves them
+into mixins. Source-scan tests for ``mcp_policy`` now read the catalog
+file as well as ``store.py``.
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/LakebaseRegistryCatalog.py`
+   Folders, versions, permissions, column self-heal.
+2. `src/back/objects/registry/store/lakebase/LakebaseRegistrySchedules.py`
+   Load/save schedules, history, legacy cohort import.
+3. `src/back/objects/registry/store/lakebase/store.py`
+   Inherit both mixins; drop the inlined methods.
+4. `src/back/objects/registry/store/lakebase/__init__.py`
+   Re-export the new mixins.
+5. `tests/units/registry/test_mcp_policy_column.py`
+   Pin self-heal SQL and write/read paths on the catalog mixin file.
+6. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark catalog + schedules done.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/LakebaseRegistryCatalog.py
+- src/back/objects/registry/store/lakebase/LakebaseRegistrySchedules.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- tests/units/registry/test_mcp_policy_column.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 53.48s
+
+## Extract bootstrap, global config, and build analytics from LakebaseRegistryStore
+
+Context: Identity, connection, and DDL stay on the store. Initialize/grants
+and the JSONB blob become mixins (Fowler Extract Class). ``build_analytics``
+moves onto the build-run mixin because it queries ``build_runs``.
+
+Changes:
+
+1. `src/back/objects/registry/store/lakebase/LakebaseRegistryBootstrap.py`
+   ``is_initialized``, ``init_status``, ``check_permissions``, ``initialize``,
+   ``grant_app_permissions``, ``_ensure_registry_row``.
+2. `src/back/objects/registry/store/lakebase/LakebaseRegistryGlobalConfig.py`
+   ``load_global_config`` / ``save_global_config`` and the legacy-key scrub.
+3. `src/back/objects/registry/store/lakebase/LakebaseRegistryBuildRuns.py`
+   Host ``_empty_analytics`` and ``build_analytics``.
+4. `src/back/objects/registry/store/lakebase/store.py`
+   Inherit the new mixins; keep identity, pool, ``_apply_ddl``, row counts.
+5. `src/back/objects/registry/store/lakebase/__init__.py`
+   Re-export ``LakebaseRegistryBootstrap`` and ``LakebaseRegistryGlobalConfig``.
+6. `tests/units/registry/test_mcp_policy_column.py`
+   Count ``initialize``'s ``mcp_policy`` self-heal on the bootstrap mixin.
+7. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark store remainder done; SettingsService / DigitalTwin / dtwin next.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/LakebaseRegistryBootstrap.py
+- src/back/objects/registry/store/lakebase/LakebaseRegistryGlobalConfig.py
+- src/back/objects/registry/store/lakebase/LakebaseRegistryBuildRuns.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/__init__.py
+- tests/units/registry/test_mcp_policy_column.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 61.70s
+
+## Extract RegistrySettings from SettingsService
+
+Context: Settings → Registry (UC browse, Lakebase status, Initialize, Repair
+grants) was still inlined on the God service. Fowler Extract Class moves it;
+``SettingsService`` keeps delegators. ``global_config_service`` is read from
+the SettingsService module so existing test patches still apply.
+
+Changes:
+
+1. `src/back/objects/domain/RegistrySettings.py`
+   UC listing, registry GET payload, schema status, initialize, grants.
+2. `src/back/objects/domain/SettingsService.py`
+   One-line delegators for the moved methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``RegistrySettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/domain/RegistrySettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 51.24s
+
+## Extract RegistryDomainSettings from SettingsService
+
+Context: Registry browse (list/delete domains and versions, lifecycle
+status, target-domain role) was still on the God service. Fowler Extract
+Class moves it; ``SettingsService`` keeps delegators. Tests that patch
+``get_domain`` / ``RegistryService`` on the SettingsService module still
+apply via ``_ss``.
+
+Changes:
+
+1. `src/back/objects/domain/RegistryDomainSettings.py`
+   Domain list, bridges, delete, version status, ``resolve_domain_role``.
+2. `src/back/objects/domain/SettingsService.py`
+   One-line delegators for the moved methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``RegistryDomainSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/domain/RegistryDomainSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 51.68s
+
+## Extract WorkspaceUiSettings from SettingsService
+
+Context: Navbar branding, logos, and instance-wide prefs (cache TTL, graph
+limits, edit-lock TTL, analytics job, CloudFetch) were still inlined on the
+God service. Fowler Extract Class moves them; ``SettingsService`` keeps
+delegators. Tests that patch ``global_config_service`` /
+``resolve_app_registry_context`` on the SettingsService module still apply.
+
+Changes:
+
+1. `src/back/objects/domain/WorkspaceUiSettings.py`
+   Branding, logo encode limits, cache/graph/edit-lock TTL, analytics, CloudFetch.
+2. `src/back/objects/domain/SettingsService.py`
+   One-line delegators for the moved methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``WorkspaceUiSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/domain/WorkspaceUiSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 56.83s
+
+## Extract WarehouseSettings from SettingsService
+
+Context: Current-config, connection test, and Build/Query SQL warehouse
+selection were still on the God service. Fowler Extract Class moves them;
+``SettingsService`` keeps delegators. Tests that patch ``get_domain``,
+warehouse resolvers, and ``global_config_service`` on the SettingsService
+module still apply via ``_ss``.
+
+Changes:
+
+1. `src/back/objects/domain/WarehouseSettings.py`
+   Warehouse lock, current config, save, test, list, Build/Query/Delta select.
+2. `src/back/objects/domain/SettingsService.py`
+   One-line delegators for the moved methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``WarehouseSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/domain/WarehouseSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 52.83s
+
+## Extract PermissionSettings from SettingsService
+
+Context: App ACL (permissions/me, diag), domain permission CRUD, and the
+Teams matrix were still on the God service. Fowler Extract Class moves
+them; ``SettingsService`` keeps delegators. Tests that patch
+``permission_service`` on the SettingsService module still apply via ``_ss``.
+
+Changes:
+
+1. `src/back/objects/domain/PermissionSettings.py`
+   permissions/me, diag, principals search, domain ACL, Teams batch save.
+2. `src/back/objects/domain/SettingsService.py`
+   One-line delegators for the moved methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``PermissionSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/domain/PermissionSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 61.05s
+
+## Extract ScheduleSettings from SettingsService
+
+Context: Schedules, run history, build analytics, and the cohort-rule
+picker were still on the God service. Fowler Extract Class moves them;
+``SettingsService`` keeps delegators. Tests that patch ``_get_scheduler``
+and ``get_domain`` on the SettingsService module still apply.
+
+Changes:
+
+1. `src/back/objects/domain/ScheduleSettings.py`
+   Schedule CRUD/trigger, registry-wide runs, ``human_size``, cohort rules.
+2. `src/back/objects/domain/SettingsService.py`
+   One-line delegators for the moved methods.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``ScheduleSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/domain/ScheduleSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 54.89s
+
+## Extract ObxSettings from SettingsService
+
+Context: Registry Browse `.obx` export/preview/import was the last large
+capability cluster still inlined on SettingsService. Fowler Extract Class
+moves it; ``SettingsService`` keeps delegators and ``OBX_MAX_BYTES``. Tests
+that patch ``RegistryService`` / ``get_domain`` on the SettingsService module
+still apply via ``_ss``.
+
+Changes:
+
+1. `src/back/objects/domain/ObxSettings.py`
+   Version resolution, envelope build, preview, import decisions.
+2. `src/back/objects/domain/SettingsService.py`
+   One-line delegators; keep ``OBX_MAX_BYTES``.
+3. `src/back/objects/domain/__init__.py`
+   Re-export ``ObxSettings``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark SettingsService capability extract done; DigitalTwin / dtwin next.
+
+Modified files:
+- src/back/objects/domain/ObxSettings.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 53.82s
+
+## Extract TwinStoreCache from DigitalTwin
+
+Context: Session TTL cache, graph status, and Lakebase/Neo4j existence probes
+were still on the DigitalTwin God object. Fowler Extract Class moves them;
+``DigitalTwin`` keeps delegators. ``_TS_STATS_CACHE_TTL_SECONDS`` stays
+import-aliased on the DigitalTwin module so existing tests keep working.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/TwinStoreCache.py`
+   Per-section cache, schedule last_build sync, live existence probes.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   One-line delegators; re-export the TTL constant.
+3. `src/back/objects/digitaltwin/__init__.py`
+   Re-export ``TwinStoreCache``.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark this slice done.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinStoreCache.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7165 passed, 315 skipped, 6 deselected, 1 xfailed in 52.05s
+
+## Extract SqlQualityChecks from DigitalTwin
+
+Context: Fowler Extract Class. SHACL / SWRL / decision-table / aggregate SQL data-quality checks lived on DigitalTwin. Move them to SqlQualityChecks; DigitalTwin keeps one-line delegators and `_SQL_ERROR_MAX_CHARS` for tests that read the class attribute.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/SqlQualityChecks.py`
+   New class: classify_predicates, run_sql_checks, and the private SQL check helpers.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Delegators plus `_SQL_ERROR_MAX_CHARS = SqlQualityChecks._SQL_ERROR_MAX_CHARS`.
+3. `src/back/objects/digitaltwin/__init__.py`
+   Re-export SqlQualityChecks.
+4. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark SqlQualityChecks done.
+
+Modified files:
+- src/back/objects/digitaltwin/SqlQualityChecks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: covered by the QualitySqlBuilder run below (same suite).
+
+## Extract QualitySqlBuilder from DigitalTwin
+
+Context: Fowler Extract Class. Legacy `build_quality_sql` / `_build_*` SQL string builders and the SWRL translator cache still sat on DigitalTwin after SqlQualityChecks. Move them to QualitySqlBuilder; DigitalTwin keeps one-line delegators.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/QualitySqlBuilder.py`
+   New class: cardinality, value, property characteristic, label, orphan, and SWRL SQL builders.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Delegators; drop unused `sql_escape` import.
+3. `src/back/objects/digitaltwin/__init__.py`
+   Re-export QualitySqlBuilder.
+4. `docs/sphinx/api/app.objects.digitaltwin.rst`
+   Automodule entries for GraphFilter, GraphFind, TwinStoreCache, SqlQualityChecks, QualitySqlBuilder.
+5. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark QualitySqlBuilder done; remaining DigitalTwin + dtwin.py.
+
+Modified files:
+- src/back/objects/digitaltwin/QualitySqlBuilder.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7167 passed, 315 skipped, 6 deselected, 1 xfailed in 51.27s
+
+## Honor Explorer max-entities in Databricks Apps
+
+Context: Graph Explorer expand on a deployed Databricks App silently capped
+neighbourhood size at 3 000 entities while the UI default is 5 000 (max
+20 000). Searching Anna Martin at depth 3 on customer100M therefore returned
+exactly 3 000 nodes. The server now uses the dropdown value, with the same
+100–20 000 clamp locally and in app mode.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/GraphFilter.py`
+   `clamp_max_entities` aligned with `#sgMaxEntities` (default 5 000, max 20 000).
+2. `src/api/routers/internal/dtwin.py`
+   Expand uses that clamp; drop the app-only 3 000 cap.
+3. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Comment linking option values to the backend constants.
+4. `docs/user-guide.md`
+   Document that the max-entities control is honored including on Apps.
+5. `tests/units/dtwin/test_filter_expand.py`,
+   `tests/units/front/test_clarity_design_contract.py`
+   Clamp cases and UI/backend option contract.
+
+Modified files:
+- src/back/objects/digitaltwin/GraphFilter.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- docs/user-guide.md
+- tests/units/dtwin/test_filter_expand.py
+- tests/units/front/test_clarity_design_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7175 passed, 315 skipped, 6 deselected, 1 xfailed in 58.95s
+
+## Extract TwinBackgroundTasks from DigitalTwin
+
+Context: Fowler Extract Class. Knowledge Graph worker-thread runners (build, adjacency refresh, SQL DQ, metrics persist, inference) still lived on DigitalTwin after the quality-SQL extracts. Move them to TwinBackgroundTasks; DigitalTwin keeps one-line delegators so routers, the scheduler, and tests that patch DigitalTwin.* keep working.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/TwinBackgroundTasks.py`
+   New class: complete_dq_task, run_build_task, run_adjacency_refresh_task, run_data_quality_task, _analytics_run_entry, run_metrics_task, run_inference_task.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Delegators; drop unused SimpleNamespace import.
+3. `src/back/objects/digitaltwin/__init__.py`
+   Re-export TwinBackgroundTasks.
+4. `docs/sphinx/api/app.objects.digitaltwin.rst`
+   Automodule for TwinBackgroundTasks.
+5. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark TwinBackgroundTasks done.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7175 passed, 315 skipped, 6 deselected, 1 xfailed in 53.35s
+
+## Extract TwinMapping from DigitalTwin
+
+Context: Fowler Extract Class. R2RML mapping augmentation, VIEW error diagnosis, SELECT-column parsing, and SPARQL-on-Spark still lived on DigitalTwin. Move them to TwinMapping; DigitalTwin keeps one-line delegators so Mapping, build pipelines, and tests that patch DigitalTwin.augment_* keep working.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/TwinMapping.py`
+   New class: URI helpers, `_extract_select_columns`, diagnose_view_error, augment mappings/relationships, execute_spark_query.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Delegators; drop unused `is_databricks_app` import.
+3. `src/back/objects/digitaltwin/__init__.py`
+   Re-export TwinMapping.
+4. `docs/sphinx/api/app.objects.digitaltwin.rst`
+   Automodule for TwinMapping.
+5. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark TwinMapping done.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinMapping.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7175 passed, 315 skipped, 6 deselected, 1 xfailed in 51.80s
+
+## Extract TwinAnalytics from DigitalTwin
+
+Context: Fowler Extract Class. Community detection, Databricks metrics job wiring, metric series, interpreter, and the navbar KG indicator still lived on DigitalTwin. Move them to TwinAnalytics; DigitalTwin keeps one-line delegators so tests that patch DigitalTwin.build_job_metrics / analytics_output_table still work via _dt().
+
+Changes:
+
+1. `src/back/objects/digitaltwin/TwinAnalytics.py`
+   New class: detect_clusters, compute_graph_metrics, build_job_metrics, load_graph_metric_series, analytics_output_table, interpret_graph_metrics, compute_dtwin_indicator.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Delegators for those methods.
+3. `src/back/objects/digitaltwin/__init__.py`
+   Re-export TwinAnalytics.
+4. `docs/sphinx/api/app.objects.digitaltwin.rst`
+   Automodule for TwinAnalytics.
+5. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark TwinAnalytics done.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7175 passed, 315 skipped, 6 deselected, 1 xfailed in 54.47s
+
+## Extract TwinResolve from DigitalTwin
+
+Context: Fowler Extract Class. Registry/session resolve, UC volume client, snapshots, URI/range helpers, backend label, and owlrl probe still lived on DigitalTwin. Move them to TwinResolve; DigitalTwin keeps one-line delegators and re-imports ``get_domain`` so tests that patch ``DigitalTwin.get_domain`` still work.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/TwinResolve.py`
+   New class: resolve_registry/domain, uc_from_domain, is_datatype_range, make_snapshot, extract_local_id, effective_backend_label, is_owlrl_available.
+2. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Delegators; keep ``get_domain`` on the module; drop unused SHACL/error/logger imports.
+3. `src/back/objects/digitaltwin/__init__.py`
+   Re-export TwinResolve.
+4. `docs/sphinx/api/app.objects.digitaltwin.rst`
+   Automodule for TwinResolve.
+5. `docs/superpowers/plans/2026-09-29-god-class-extract.md`
+   Mark TwinResolve done.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinResolve.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- docs/superpowers/plans/2026-09-29-god-class-extract.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7175 passed, 315 skipped, 6 deselected, 1 xfailed in 56.67s
+

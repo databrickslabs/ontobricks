@@ -53,7 +53,7 @@
                     "items": [
                         {
                             "id": "information",
-                            "label": "Information",
+                            "label": "General",
                             "icon": "bi-info-circle",
                             "default": true,
                             "requires": null
@@ -81,14 +81,14 @@
                     "items": [
                         {
                             "id": "metadata",
-                            "label": "Data Sources",
+                            "label": "Data Assets",
                             "icon": "bi-database",
                             "default": false,
                             "requires": "domain_saved"
                         },
                         {
                             "id": "documents",
-                            "label": "Documents",
+                            "label": "Knowledge Store",
                             "icon": "bi-file-earmark-text",
                             "default": false,
                             "requires": "domain_saved"
@@ -179,7 +179,7 @@
                     "items": [
                         {
                             "id": "information",
-                            "label": "Information",
+                            "label": "General",
                             "icon": "bi-info-circle",
                             "default": true,
                             "requires": null
@@ -202,7 +202,7 @@
                         },
                         {
                             "id": "map",
-                            "label": "Designer",
+                            "label": "Studio",
                             "icon": "bi-pencil",
                             "default": false,
                             "requires": null
@@ -278,20 +278,6 @@
                             "requires": "domain_saved"
                         }
                     ]
-                },
-                {
-                    "id": "ontology-w3c",
-                    "title": "W3C Standards",
-                    "icon": "bi-filetype-xml",
-                    "items": [
-                        {
-                            "id": "owl",
-                            "label": "OWL",
-                            "icon": "bi-file-earmark-code",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
                 }
             ]
         },
@@ -313,7 +299,7 @@
                     "items": [
                         {
                             "id": "information",
-                            "label": "Information",
+                            "label": "General",
                             "icon": "bi-info-circle",
                             "default": true,
                             "requires": null,
@@ -329,7 +315,7 @@
                         },
                         {
                             "id": "design",
-                            "label": "Designer",
+                            "label": "Studio",
                             "icon": "bi-pencil",
                             "default": false,
                             "requires": null,
@@ -364,14 +350,6 @@
                     "title": "W3C Standards",
                     "icon": "bi-filetype-xml",
                     "items": [
-                        {
-                            "id": "r2rml",
-                            "label": "R2RML",
-                            "icon": "bi-link-45deg",
-                            "default": false,
-                            "requires": null,
-                            "disabled_during": "autoassign"
-                        },
                         {
                             "id": "sparksql",
                             "label": "Spark SQL",
@@ -411,6 +389,14 @@
                             "id": "registry",
                             "label": "Registry",
                             "icon": "bi-archive",
+                            "default": false,
+                            "requires": null,
+                            "admin_only": true
+                        },
+                        {
+                            "id": "github",
+                            "label": "GitHub",
+                            "icon": "bi-github",
                             "default": false,
                             "requires": null,
                             "admin_only": true

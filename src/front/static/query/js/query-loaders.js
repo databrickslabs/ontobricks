@@ -8,83 +8,6 @@
 // ENTITY TYPE VALIDATION
 // =====================================================
 
-function isValidEntityType(type) {
-    if (!type) return false;
-    var excludedTypes = ['Source', 'Target', 'Basic', 'Literal', 'BlankNode', 'Unknown',
-                         'Resource', 'Property', 'Statement', 'List', 'Container'];
-    if (excludedTypes.indexOf(type) >= 0) return false;
-    var typeLower = type.toLowerCase();
-    var typeLocalName = type.split('#').pop().split('/').pop().toLowerCase();
-    if (typeof SearchBuilder !== 'undefined' && SearchBuilder.ontologyClasses && SearchBuilder.ontologyClasses.length > 0) {
-        for (var i = 0; i < SearchBuilder.ontologyClasses.length; i++) {
-            var cls = SearchBuilder.ontologyClasses[i];
-            var clsName = (cls.name || cls.localName || '').toLowerCase();
-            var clsLabel = (cls.label || '').toLowerCase();
-            var clsUri = (cls.uri || '').toLowerCase();
-            if (clsName === typeLower || clsName === typeLocalName ||
-                clsLabel === typeLower || clsLabel === typeLocalName ||
-                clsUri.endsWith('#' + typeLocalName) || clsUri.endsWith('/' + typeLocalName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    if (typeof entityMappings !== 'undefined' && Object.keys(entityMappings).length > 0) {
-        if (entityMappings[typeLower] || entityMappings[typeLocalName]) return true;
-        for (var key in entityMappings) {
-            if (key.indexOf(typeLocalName) >= 0 || typeLocalName.indexOf(key) >= 0) return true;
-        }
-        return false;
-    }
-    return false;
-}
-
-/**
- * Display cached graph data (legacy, retained for compatibility).
- * Graph data is cached in memory when a query is executed.
- */
-async function displayCachedVisualization() {
-    const loadingMsg = document.getElementById('graphLoading');
-    const noGraphMsg = document.getElementById('noGraphMessage');
-    const svgElement = document.getElementById('graphSvg');
-    
-    // If graph is already displayed, no need to rebuild or fit again
-    if (d3NodesData.length > 0 && svgElement && svgElement.style.opacity === '1') {
-        console.log('[Viz] Graph already displayed, no action needed');
-        return;
-    }
-    
-    // Check if we have cached results to build graph from
-    if (!lastQueryResults || !lastQueryResults.results || lastQueryResults.results.length === 0) {
-        if (noGraphMsg) noGraphMsg.style.display = 'block';
-        if (loadingMsg) loadingMsg.style.display = 'none';
-        if (svgElement) svgElement.style.opacity = '1';
-        return;
-    }
-    
-    // Show loading and build graph
-    if (noGraphMsg) noGraphMsg.style.display = 'none';
-    if (loadingMsg) loadingMsg.style.display = 'block';
-    if (svgElement) svgElement.style.opacity = '0';
-    
-    // Clear any existing graph data for fresh start
-    d3NodesData = [];
-    d3LinksData = [];
-    d3.select('#graphSvg').selectAll('*').remove();
-    
-    // Build graph from cached results
-    if (typeof buildGraph === 'function') {
-        await buildGraph(lastQueryResults.results, lastQueryResults.columns);
-    }
-    
-    if (d3NodesData.length === 0) {
-        // No data - hide loading and show no graph message
-        if (loadingMsg) loadingMsg.style.display = 'none';
-        if (svgElement) svgElement.style.opacity = '1';
-        if (noGraphMsg) noGraphMsg.style.display = 'block';
-    }
-}
-
 // =====================================================
 // QUERY FUNCTIONS
 // =====================================================
@@ -137,8 +60,32 @@ async function loadOntologyClasses() {
         if (typeof ontologyProperties !== 'undefined') ontologyProperties = {};
         
         if (data && data.success && data.config) {
+            // Business rules: keep references to existing, enabled SWRL rules.
+            const swrlByName = {};
+            let hasSwrl = false;
+            try {
+                const swrlResp = await fetch('/ontology/swrl/list');
+                const swrlData = await swrlResp.json();
+                if (swrlData && Array.isArray(swrlData.rules)) {
+                    hasSwrl = true;
+                    swrlData.rules.forEach(r => { if (r && r.name) swrlByName[r.name] = r; });
+                }
+            } catch (e) {
+                console.log('No SWRL rules loaded:', e.message);
+            }
+            // SHACL shapes: only their count per class is needed up front, to
+            // gate the "Check SHACL facets" menu item without a round-trip.
+            let shaclShapes = [];
+            try {
+                const shaclResp = await fetch('/ontology/dataquality/list', { credentials: 'same-origin' });
+                const shaclData = await shaclResp.json();
+                if (shaclData && Array.isArray(shaclData.shapes)) shaclShapes = shaclData.shapes;
+            } catch (e) {
+                console.log('No SHACL shapes loaded:', e.message);
+            }
+            const allClasses = data.config.classes || [];
             // Load classes
-            for (const cls of (data.config.classes || [])) {
+            for (const cls of allClasses) {
                 const classInfo = {
                     name: cls.name || '',
                     label: cls.label || cls.name || '',
@@ -148,7 +95,13 @@ async function loadOntologyClasses() {
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
                     actions: cls.actions || [],
+                    businessRules: (cls.business_rules || [])
+                        .filter(ref => ref && ref.name && (!hasSwrl
+                            || (swrlByName[ref.name] && swrlByName[ref.name].enabled !== false)))
+                        .map(ref => ({ name: ref.name, description: (swrlByName[ref.name] || {}).description || '' })),
                     virtualAttributes: cls.virtualAttributes || [],
+                    shaclShapeCount: (typeof shaclShapeCountFor === 'function')
+                        ? shaclShapeCountFor(cls.name, allClasses, shaclShapes) : 0,
                     description: cls.description || cls.comment || '',
                     dataProperties: cls.dataProperties || []
                 };

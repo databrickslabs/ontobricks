@@ -56,7 +56,7 @@ async def reset_session(
     domain = get_domain(session_mgr)
     # Free the single-editor lock held by this session before wiping it,
     # so the (domain, version) is immediately editable by the next opener.
-    from back.objects.registry.lockmgt import EditLockService
+    from back.objects.registry.collab import EditLockService
 
     EditLockService.release_for_session(request, session_mgr, settings)
     domain.reset()

@@ -5,6 +5,8 @@ from unittest.mock import Mock, patch, MagicMock
 
 from back.core.databricks import (
     DatabricksClient,
+    SQLWarehouse,
+    StatementExecutionWarehouse,
     get_workspace_host,
     is_databricks_app,
     normalize_host,
@@ -42,6 +44,41 @@ class TestHelperFunctions:
 
 
 class TestDatabricksClientInit:
+    def test_apps_sea_uses_inline_statement_execution(self, monkeypatch):
+        monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
+        monkeypatch.setenv("DATABRICKS_CLIENT_ID", "client")
+        monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "secret")
+
+        client = DatabricksClient(
+            host="https://h",
+            warehouse_id="wh-rt",
+            use_cloud_fetch=False,
+            use_sea=True,
+        )
+
+        assert isinstance(client.sql, StatementExecutionWarehouse)
+
+    @pytest.mark.parametrize("app_mode", [False, True])
+    def test_non_apps_sea_or_apps_thrift_keep_sql_warehouse(
+        self, monkeypatch, app_mode
+    ):
+        if app_mode:
+            monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
+            use_sea = False
+        else:
+            monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+            use_sea = True
+
+        client = DatabricksClient(
+            host="https://h",
+            token="tok",
+            warehouse_id="wh",
+            use_cloud_fetch=False,
+            use_sea=use_sea,
+        )
+
+        assert isinstance(client.sql, SQLWarehouse)
+
     def test_init_explicit(self):
         client = DatabricksClient(
             host="https://example.databricks.com",

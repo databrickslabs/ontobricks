@@ -183,8 +183,8 @@ A class has multiple superclasses whose labels are synonyms or near-synonyms. De
 redundant synonymous parents inflates the hierarchy without adding distinctions, and may
 cause unintended logical entailments.
 
-**Rule:** When assigning multiple parent classes, verify that the parents are semantically
-distinct and do not express the same concept under different names.
+**Rule:** OntoBricks Generate supports a single parent per class. Do not assign a
+second superclass. If a class already has a parent, leave that parent unchanged.
 
 ---
 
