@@ -35,6 +35,22 @@ class TestTwinGraphAccess:
         assert out == "cat.sch.g_data"
         assert seen == {"domain": "d", "settings": "s", "inf": False, "store": "st"}
 
+    def test_graph_query_table_uses_simulation_union(self, monkeypatch):
+        from back.objects.simulation import Simulation
+
+        seen = {}
+
+        def fake_explorer(self, sid, *, include_inferred, store):
+            seen.update(sid=sid, inf=include_inferred, store=store)
+            return f"g__smu_{sid}"
+
+        monkeypatch.setattr(Simulation, "explorer_relation", fake_explorer)
+        out = TwinGraphAccess.graph_query_table(
+            "d", "s", "st", include_inferred=False, simulation_id="abc"
+        )
+        assert out == "g__smu_abc"
+        assert seen == {"sid": "abc", "inf": False, "store": "st"}
+
     def test_dataquality_table_requires_view(self):
         with pytest.raises(ValidationError, match="VIEW is not available"):
             TwinGraphAccess.dataquality_table(None, None, view_table_fn=lambda d, s: "  ")

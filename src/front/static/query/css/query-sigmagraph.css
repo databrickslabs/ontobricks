@@ -173,6 +173,11 @@
     font-size: 0.78rem;
 }
 
+.sg-sim-select {
+    min-width: 11rem;
+    max-width: 16rem;
+}
+
 .sg-seed-quick-filter {
     width: 200px;
 }

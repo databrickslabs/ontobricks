@@ -50,6 +50,47 @@ class TestSimPhy:
         assert _companion_ddl.is_sim_phy('"schema"."g_v1__sim_s1"')
         assert not _companion_ddl.is_sim_phy("g_v1")
         assert not _companion_ddl.is_sim_phy("g_v1__app")
+        assert not _companion_ddl.is_sim_phy("g_v1__smu_s1")
+        assert not _companion_ddl.is_sim_phy("g_v1__sms_s1")
+
+    def test_sim_union_phy_markers(self):
+        inferred = _companion_ddl.sim_union_phy("MyDomain_V3", "sAbc", include_inferred=True)
+        asserted = _companion_ddl.sim_union_phy("MyDomain_V3", "sAbc", include_inferred=False)
+        assert inferred == "mydomain_v3__smu_sabc"
+        assert asserted == "mydomain_v3__sms_sabc"
+        assert inferred != asserted
+
+    def test_simulation_union_drop_all_drops_both_views(self):
+        from back.core.graphdb.lakebase.LakebaseSimulationUnion import (
+            LakebaseSimulationUnion,
+        )
+
+        cur = _Cursor()
+
+        class Store:
+            @contextmanager
+            def _cursor(self):
+                yield cur
+
+        LakebaseSimulationUnion(Store()).drop_all("G_V1", "s1")
+        sqls = [c[0] for c in cur.calls]
+        inferred = _companion_ddl.sim_union_phy("G_V1", "s1", include_inferred=True)
+        asserted = _companion_ddl.sim_union_phy("G_V1", "s1", include_inferred=False)
+        assert any(inferred in s for s in sqls)
+        assert any(asserted in s for s in sqls)
+
+    def test_sim_union_view_sql_overlays_sandbox_subjects(self):
+        cur = _Cursor()
+        _companion_ddl.ensure_sim_union_view(cur, "g__smu_s1", "g_v1", "g__sim_s1")
+        sql = cur.calls[0][0]
+        assert "CREATE OR REPLACE VIEW g__smu_s1 AS" in sql
+        assert "FROM g_v1 l" in sql
+        assert (
+            "FROM g__sim_s1 s "
+            "WHERE s.subject = l.subject AND s.predicate = l.predicate"
+        ) in sql
+        assert "UNION ALL" in sql
+        assert "FROM g__sim_s1 s" in sql
 
     def test_sandbox_name_matches_physical_resolution(self):
         name = LakebaseSimulationStore.sandbox_table_name("Dom_V1", "s1")
@@ -215,6 +256,21 @@ class _LiveStore:
 
 
 class TestSimulationScope:
+    def test_focus_label_roundtrips(self):
+        scope = SimulationScope.from_dict(
+            {
+                "type": "entity",
+                "focus": EX + "CUST0000037",
+                "hops": 2,
+                "cap": 10,
+                "focus_label": "Acme Industries",
+            },
+            default_hops=2,
+            default_cap=5000,
+        )
+        assert scope.focus_label == "Acme Industries"
+        assert scope.to_dict()["focus_label"] == "Acme Industries"
+
     def test_entity_neighbourhood_collects_uri_objects_not_types(self):
         store = _LiveStore(sub=[
             {"subject": EX + "a", "predicate": EX + "knows", "object": EX + "b"},
@@ -335,6 +391,43 @@ class TestSandboxApply:
     def test_sandbox_requires_lakebase_store(self):
         with pytest.raises(ValidationError):
             SimulationSandbox(object(), "g", "s1")
+
+
+class TestSandboxLifecycle:
+    def test_reset_drops_explorer_views_before_sandbox(self, monkeypatch):
+        events = []
+
+        class Union:
+            def __init__(self, live):
+                pass
+
+            def drop_all(self, graph_name, sim_id):
+                events.append(("views", graph_name, sim_id))
+
+        class Store:
+            def drop_table(self, table):
+                events.append(("table", table))
+
+            def create_table(self, table):
+                events.append(("create", table))
+
+        import back.core.graphdb.lakebase as lakebase
+
+        monkeypatch.setattr(lakebase, "LakebaseSimulationUnion", Union)
+        sandbox = object.__new__(SimulationSandbox)
+        sandbox._live = object()
+        sandbox._graph_name = "g_v1"
+        sandbox._sim_id = "s1"
+        sandbox.table = "g_v1__sim_s1"
+        sandbox.store = Store()
+
+        sandbox.reset()
+
+        assert events == [
+            ("views", "g_v1", "s1"),
+            ("table", "g_v1__sim_s1"),
+            ("create", "g_v1__sim_s1"),
+        ]
 
 
 def test_reasoning_service_targets_sandbox():

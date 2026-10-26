@@ -98,6 +98,10 @@ const SidebarNav = {
         const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${sectionName}"]`);
         if (link) {
             link.click();
+            return;
+        }
+        if (SidebarNav._showSection(sectionName)) {
+            SidebarNav._pushSectionState(sectionName);
         }
     },
 
@@ -136,17 +140,22 @@ const SidebarNav = {
     /**
      * Activate a section by id without pushing a new history entry.
      */
-    _activateSection: function(sectionName) {
-        const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${sectionName}"]`);
-        if (!link) return;
-        document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => l.classList.remove('active'));
-        link.classList.add('active');
-        document.querySelectorAll('.sidebar-section').forEach(s => s.classList.remove('active'));
+    _showSection: function(sectionName) {
         const target = document.getElementById(sectionName + '-section');
-        if (target) target.classList.add('active');
+        if (!target) return null;
+        document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => l.classList.remove('active'));
+        const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${sectionName}"]`);
+        if (link) link.classList.add('active');
+        document.querySelectorAll('.sidebar-section').forEach(s => s.classList.remove('active'));
+        target.classList.add('active');
         document.dispatchEvent(new CustomEvent('sidebarSectionChanged', {
             detail: { section: sectionName, targetSection: target }
         }));
+        return target;
+    },
+
+    _activateSection: function(sectionName) {
+        SidebarNav._showSection(sectionName);
     },
 
     /**
@@ -235,14 +244,11 @@ if (typeof window !== 'undefined' && !window.SIDEBAR_NAV_MANUAL_INIT) {
 
             const params = new URLSearchParams(window.location.search);
             const target = params.get('section') || window.location.hash.substring(1);
-            if (target) {
-                const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${target}"]`);
-                if (link) {
-                    setTimeout(() => {
-                        SidebarNav._activateSection(target);
-                        window.history.replaceState({ section: target }, '', window.location.href);
-                    }, 100);
-                }
+            if (target && document.getElementById(target + '-section')) {
+                setTimeout(() => {
+                    SidebarNav._activateSection(target);
+                    window.history.replaceState({ section: target }, '', window.location.href);
+                }, 100);
             }
         }
     });

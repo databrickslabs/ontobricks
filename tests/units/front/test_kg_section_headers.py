@@ -33,7 +33,7 @@ _TEMPLATES = (
         "chat",
         "dataquality",
         "reasoning",
-        "cohorts",
+        "cohort-run",
         "analytics",
         "insights",
     ),

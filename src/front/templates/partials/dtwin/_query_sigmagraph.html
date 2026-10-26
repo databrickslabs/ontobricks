@@ -29,6 +29,16 @@
             <label class="form-check-label small" for="sgShowQualityRings">Quality</label>
         </div>
         <div class="d-inline-flex align-items-center gap-1 mb-0">
+            <label class="form-label small mb-0 text-muted" for="sgSimulationSelect">Graph</label>
+            <select class="form-select form-select-sm py-0 sg-compact-select sg-sim-select"
+                    id="sgSimulationSelect"
+                    aria-label="Graph source"
+                    title="Live knowledge graph or a ready simulation sandbox"
+                    data-sg-change="onSimulationChange">
+                <option value="">Live graph</option>
+            </select>
+        </div>
+        <div class="d-inline-flex align-items-center gap-1 mb-0">
             <label class="form-label small mb-0 text-muted" for="sgMaxEntities"><i class="bi bi-speedometer2"></i></label>
             <select class="form-select form-select-sm py-0 sg-compact-select" id="sgMaxEntities" title="Max entities returned by graph search">
                 <!-- Option values must stay within GraphFilter.EXPLORER_MAX_ENTITIES_* -->
@@ -65,6 +75,9 @@
             <i class="bi bi-chat-dots"></i>
         </button>
     </div>
+</div>
+<div id="sgSimulationBanner" class="alert alert-info py-1 px-2 small d-none mb-2" role="status">
+    Viewing the live graph unioned with <strong id="sgSimulationBannerLabel"></strong>. Search, expand, and hops are unchanged; simulated predicates overlay live ones, existing facts stay visible.
 </div>
 <div class="visualization-layout" id="sgLayout">
     <!-- Graph Wrapper (graph + filter pane) -->

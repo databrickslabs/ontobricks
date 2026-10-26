@@ -764,10 +764,11 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
 | Registry modal (`/?open=registry`) | Navbar boxes icon (`bi-boxes`) → Browse + Bridges modal |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
-| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Cohorts, Expr. & Axioms, Pitfalls); Studio **Export** (OWL); section divs, OntoViz script |
+| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms, Pitfalls); Studio **Export** (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with section links (General, Import, Studio, Manual, Auto-Map, Diagnostics, Spark SQL), Studio **Export** (R2RML), mapping-core.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Knowledge Store, My Tasks, Discussions, Cockpit, Audit trail, OWL, R2RML), section divs |
-| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Graph Viewer, GraphQL), Advanced (Data Quality, Reasoning); Sigma.js script |
+| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Explorer, Query, Chat), Build, Advanced (Data Quality, Inference, Analytics); Sigma.js script |
+| Simulation `/simulation/` | Sidebar: Cohorts, Run, Scenarios, Results, Runs; scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**

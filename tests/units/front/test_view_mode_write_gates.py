@@ -89,6 +89,7 @@ class TestCssGates:
 
     def test_cohort_materialise_is_disabled(self):
         assert _gated(_css(), "#cohortMaterializeBtn")
+        assert _gated(_css(), "#cohortMaterializeNowBtn")
 
     def test_reasoning_materialise_is_status_open_but_view_mode_disabled(self):
         css = _css()

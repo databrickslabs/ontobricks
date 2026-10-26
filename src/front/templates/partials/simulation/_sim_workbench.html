@@ -29,6 +29,11 @@
             <div class="progress sim-progress-track">
                 <div class="progress-bar" id="simWbProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
+            <div id="simWbProgressDone" class="d-none mt-3">
+                <button type="button" class="btn btn-sm btn-primary" id="simWbViewResultsBtn">
+                    <i class="bi bi-clipboard-data me-1"></i>View results
+                </button>
+            </div>
         </div>
     </div>
 
@@ -63,9 +68,10 @@
                             </select>
                         </div>
                         <div class="col-12 col-md-8">
-                            <label for="simWbFocus" class="form-label small" id="simWbFocusLabel">Entity URI</label>
+                            <label for="simWbFocus" class="form-label small" id="simWbFocusLabel">Entity</label>
                             <input type="text" class="form-control form-control-sm" id="simWbFocus" placeholder="https://…">
                             <select class="form-select form-select-sm d-none" id="simWbCohort"></select>
+                            <div id="simWbFocusCaption" class="form-text d-none"></div>
                         </div>
                         <div class="col-6 col-md-4" id="simWbHopsGroup">
                             <label for="simWbHops" class="form-label small">Hops</label>
@@ -85,9 +91,14 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-pencil-square me-1"></i>Hypothetical facts <span class="badge bg-secondary ms-1" id="simWbPatchCount">0</span></span>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="simWbAddPatchBtn">
-                        <i class="bi bi-plus-lg me-1"></i>Add fact
-                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbFactWizardBtn">
+                            <i class="bi bi-magic me-1"></i>Fact wizard
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="simWbAddPatchBtn">
+                            <i class="bi bi-plus-lg me-1"></i>Add fact
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">

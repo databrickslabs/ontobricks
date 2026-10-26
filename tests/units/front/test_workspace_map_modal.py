@@ -67,6 +67,13 @@ def test_column_icons_match_menu_config():
         assert f"bi {icon}" in column
 
 
+def test_simulation_workbench_is_not_on_the_map():
+    html = _render_modal()
+    sim_column = html.split('data-workspace-map-col="simulation"', 1)[1]
+    assert "/simulation/?section=workbench" not in sim_column
+    assert "/simulation/?section=scenarios" in sim_column
+
+
 def test_representative_workspace_routes_are_rendered():
     html = _render_modal()
     assert "/domain/?section=information" in html

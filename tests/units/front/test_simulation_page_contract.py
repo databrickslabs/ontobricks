@@ -23,10 +23,28 @@ def _menu() -> dict:
     return next(m for m in menus if m["id"] == "simulation")
 
 
+def test_cohorts_group_is_first():
+    assert [g["id"] for g in _menu()["groups"]] == [
+        "simulation-cohorts",
+        "simulation-scenarios",
+        "simulation-results",
+    ]
+
+
 def test_menu_follows_knowledge_graph():
     ids = [m["id"] for m in json.loads(_read(MENU_CONFIG))["menus"]]
     assert ids.index("simulation") == ids.index("digitaltwin") + 1
     assert _menu()["route"] == "/simulation/"
+
+
+def test_workbench_is_not_a_sidebar_item():
+    items = [i["id"] for g in _menu()["groups"] for i in g["items"]]
+    assert "workbench" not in items
+    html = _read(PAGE)
+    assert 'id="workbench-section"' in html
+    nav = _read(FRONT / "static/global/js/sidebar-nav.js")
+    assert "_showSection: function" in nav
+    assert "getElementById(target + '-section')" in nav
 
 
 def test_every_menu_item_has_a_section_and_one_is_active():
@@ -63,7 +81,46 @@ def test_js_uses_shared_notifications_not_alert():
         assert "alert(" not in src and "confirm(" not in src.replace("showDeleteConfirm(", "")
 
 
+def test_completed_run_keeps_view_results_cta():
+    js = _read(FRONT / "static/simulation/js/simulation.js")
+    html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
+    assert 'id="simWbViewResultsBtn"' in html
+    assert "keepProgress: true" in js
+    assert "this.showResults(simId)" in js
+    assert "tick()" in js
+
+
 def test_entity_panel_links_to_workbench():
     js = _read(FRONT / "static/query/js/query-entity-details.js")
-    assert "/simulation/?section=workbench&entity=" in js
+    assert "/simulation/?section=workbench" in js
+    assert "entity=" in js
+    assert "&label=" in js
     assert "Simulate from here" in js
+    assert "getDisplayLabel(entity)" in js
+
+
+def test_workbench_prefers_entity_label_over_local_id():
+    js = _read(FRONT / "static/simulation/js/simulation-workbench.js")
+    assert "params.get('label')" in js
+    assert "What if: ${SimulationPage.shortUri(entity)}" not in js
+    assert "_applyFocusLabel" in js
+    page = _read(FRONT / "static/simulation/js/simulation.js")
+    assert "resolveEntityLabel" in page
+    assert "uriCell(s.focus, s.focus_label)" in page
+
+
+def test_scenarios_list_shows_spinner_while_loading():
+    html = _read(FRONT / "templates/partials/simulation/_sim_scenarios.html")
+    js = _read(FRONT / "static/simulation/js/simulation.js")
+    assert "spinner-border spinner-border-sm" in html
+    assert "Loading scenarios" in html
+    assert "_loadingRow" in js
+    assert "Loading scenarios…" in js
+
+
+def test_scenarios_list_has_purge_action():
+    js = _read(FRONT / "static/simulation/js/simulation.js")
+    assert 'data-action="purge"' in js
+    assert "purgeScenario" in js
+    assert "/purge" in js
+    assert "bi-eraser" in js

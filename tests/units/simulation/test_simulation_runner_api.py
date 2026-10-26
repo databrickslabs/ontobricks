@@ -169,6 +169,57 @@ class TestSimulationFacade:
         assert sim.start_run(row["id"]) == "task-1"
         assert ran == [row["id"]] and started == [True]
 
+    def test_sandbox_relation_requires_ready(self, monkeypatch):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        with pytest.raises(ValidationError, match="exploring"):
+            sim.sandbox_relation(row["id"])
+        reg.rows[row["id"]]["status"] = "ready"
+        monkeypatch.setattr(sim_mod, "effective_graph_name", lambda d: "G_HR_v1")
+        from back.core.graphdb.lakebase.LakebaseSimulationStore import (
+            LakebaseSimulationStore,
+        )
+
+        name = sim.sandbox_relation(row["id"])
+        assert name == LakebaseSimulationStore.sandbox_table_name("G_HR_v1", row["id"])
+
+    def test_explorer_relation_unions_live_and_sandbox(self, monkeypatch):
+        from back.core.graphdb.lakebase import _companion_ddl
+        from back.core.graphdb.lakebase.LakebaseSimulationStore import (
+            LakebaseSimulationStore,
+        )
+
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        reg.rows[row["id"]]["status"] = "ready"
+        monkeypatch.setattr(sim_mod, "effective_graph_name", lambda d: "G_HR_v1")
+        monkeypatch.setattr(
+            sim_mod, "effective_graph_query_table",
+            lambda d, s, include_inferred=True, store=None: "g_hr_v1" if include_inferred else "g_hr_v1_sync",
+        )
+        from contextlib import contextmanager
+
+        seen = []
+
+        class Store:
+            @contextmanager
+            def _cursor(self):
+                class Cur:
+                    def execute(self, sql, params=None):
+                        seen.append(sql)
+                yield Cur()
+
+        store = Store()
+        view = sim.explorer_relation(row["id"], include_inferred=True, store=store)
+        expect = _companion_ddl.sim_union_phy("G_HR_v1", row["id"], include_inferred=True)
+        sandbox = LakebaseSimulationStore.sandbox_table_name("G_HR_v1", row["id"])
+        assert view == expect
+        assert seen and "UNION ALL" in seen[0]
+        assert "FROM g_hr_v1 l" in seen[0]
+        assert f"FROM {sandbox} s" in seen[0]
+
     def test_diff_page(self):
         reg = _Registry()
         sim = Simulation(_Domain(), None, registry=reg)
@@ -336,6 +387,33 @@ class TestSimulationApi:
         deleted = await self.api.delete_simulation(sim_id, sim=sim)
         assert deleted == {"success": True, "deleted": True}
 
+    async def test_purge_keeps_spec_and_resets_draft(self, monkeypatch):
+        sim = self._sim(monkeypatch)
+        created = await self.api.create_simulation(_Req(), body=_body(), sim=sim)
+        sim_id = created["simulation"]["id"]
+        sim.registry.rows[sim_id]["status"] = "ready"
+        sim.registry.rows[sim_id]["diff"] = {"added": [{"s": 1}]}
+        sim.registry.rows[sim_id]["diff_summary"] = {"added_count": 1}
+        dropped = []
+        monkeypatch.setattr(sim, "_drop_sandbox", lambda sid: dropped.append(sid))
+        out = await self.api.purge_simulation(sim_id, sim=sim)
+        assert dropped == [sim_id]
+        row = out["simulation"]
+        assert row["status"] == "draft"
+        assert "diff" not in row
+        stored = sim.registry.rows[sim_id]
+        assert stored["status"] == "draft"
+        assert stored["diff"] == {}
+        assert stored["spec"]
+
+    async def test_purge_refuses_running(self, monkeypatch):
+        sim = self._sim(monkeypatch)
+        created = await self.api.create_simulation(_Req(), body=_body(), sim=sim)
+        sim_id = created["simulation"]["id"]
+        sim.registry.rows[sim_id]["status"] = "running"
+        with pytest.raises(ValidationError, match="running"):
+            await self.api.purge_simulation(sim_id, sim=sim)
+
     async def test_json_body_must_be_object(self):
         with pytest.raises(ValidationError):
             await self.api._json_object(_Req(body=[1, 2]))
@@ -356,6 +434,7 @@ class TestSimulationApi:
         assert ("/simulation/{sim_id}", ("PUT",)) in guarded
         assert ("/simulation/{sim_id}", ("DELETE",)) in guarded
         assert ("/simulation/{sim_id}/run", ("POST",)) in guarded
+        assert ("/simulation/{sim_id}/purge", ("POST",)) in guarded
         readonly = {r.path for r in self.api.router.routes if not r.dependencies}
         assert {"/simulation/list", "/simulation/runs", "/simulation/{sim_id}/diff"} <= readonly
 

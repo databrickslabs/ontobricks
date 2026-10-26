@@ -434,7 +434,6 @@ other graph backends retain their native or iterative traversal.
 | **Relationships** | Manage object properties |
 | **Data Quality** | SHACL shape-based data quality rules |
 | **Business Rules** | Define SWRL inference rules (graphical D3 editor) |
-| **Cohorts** | Define cohort queries for data slicing |
 | **Expr. & Axioms** | OWL class expressions and axioms |
 | **Pitfalls** | Automated ontology pitfall detection |
 

@@ -76,9 +76,14 @@ def _graph_query_table(
     store=None,
     *,
     include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
 ) -> str:
     return TwinGraphAccess.graph_query_table(
-        domain, settings, store, include_inferred=include_inferred
+        domain,
+        settings,
+        store,
+        include_inferred=include_inferred,
+        simulation_id=simulation_id,
     )
 
 
@@ -301,11 +306,16 @@ async def load_triplestore(
         except Exception:
             body = {}
         include_inferred = body.get("include_inferred", True)
+        simulation_id = str(body.get("simulation_id") or "").strip()
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
         query_table = _graph_query_table(
-            domain, settings, store, include_inferred=include_inferred
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=simulation_id or None,
         )
 
         try:
@@ -964,6 +974,7 @@ async def filter_triplestore(
         data = await request.json()
         phase = data.get("phase", "preview")
         include_inferred = data.get("include_inferred", True)
+        simulation_id = str(data.get("simulation_id") or "").strip()
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
@@ -976,10 +987,36 @@ async def filter_triplestore(
             store, domain, parse_cache_param(data.get("cache"))
         )
         query_table = _graph_query_table(
-            domain, settings, store, include_inferred=include_inferred
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=simulation_id or None,
         )
 
-        if phase == "preview":
+        if phase == "sandbox":
+            if not simulation_id:
+                raise ValidationError("simulation_id is required to load a sandbox")
+            max_depth_cap = 3 if is_databricks_app() else 5
+            depth = min(max(1, int(data.get("depth", 3))), max_depth_cap)
+            max_entities = GraphFilter.clamp_max_entities(data.get("max_entities"))
+            batch_size = 250 if is_databricks_app() else 1000
+            max_fetch_seconds = 40.0 if is_databricks_app() else 120.0
+            live_table = _graph_query_table(
+                domain, settings, store, include_inferred=include_inferred
+            )
+            payload = await run_blocking(
+                GraphFilter.sandbox_slice,
+                store,
+                query_table,
+                max_entities,
+                batch_size,
+                100_000,
+                max_fetch_seconds,
+                live_table,
+                depth,
+            )
+        elif phase == "preview":
             entity_type = (data.get("entity_type") or "").strip()
             field = data.get("field", "any")
             match_type = data.get("match_type", "contains")
@@ -2616,6 +2653,7 @@ async def dtwin_neighbors(
     depth: int = 2,
     limit: int = 2000,
     include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -2639,12 +2677,18 @@ async def dtwin_neighbors(
     store = _require_graph_store(domain, settings)
     from back.core.graphdb.search_cache import apply_search_cache_to_store
 
-    apply_search_cache_to_store(store, domain, None)
-    table = _graph_query_table(domain, settings, store)
+    sid = (simulation_id or "").strip()
+    if not sid:
+        apply_search_cache_to_store(store, domain, None)
+    table = _graph_query_table(
+        domain, settings, store, simulation_id=sid or None
+    )
     if not table:
         raise ValidationError("Graph name not configured")
 
-    query_table = table if include_inferred else store.synced_table_name(table)
+    query_table = (
+        table if (sid or include_inferred) else store.synced_table_name(table)
+    )
 
     try:
         # The BFS expansion runs one blocking SQL query per hop plus a final

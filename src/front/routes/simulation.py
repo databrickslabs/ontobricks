@@ -55,6 +55,9 @@ async def simulation_page(
         {
             **triplestore_page_context(domain_session, settings),
             "simulation_ctx": simulation_ctx,
+            "reasoning_ctx": {
+                "cohort_rules_count": simulation_ctx["cohort_rules_count"],
+            },
             "domain_name": (domain_session.info or {}).get("name", "NewDomain"),
             "current_version": domain_session.current_version or "1",
         },

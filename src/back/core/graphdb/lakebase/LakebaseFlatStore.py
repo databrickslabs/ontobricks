@@ -68,6 +68,23 @@ def _long_literal_detail(batch: List[Dict[str, str]]) -> str:
     return f"predicate={predicate!r}, object_size={obj_bytes} bytes"
 
 
+def _spo_expand_sql(sql: str, relation: str, depth: int) -> str:
+    """Wrap SPO expand SQL with inlined adjacency CTEs when hops are needed.
+
+    Depth 0 is already a ``SELECT ... WHERE subject IN (...)``. Prefixing
+    the CTEs produced ``WITH adj_out AS (...), SELECT ...``, which Postgres
+    rejects.
+    """
+    if depth == 0:
+        return sql
+    return (
+        "WITH "
+        f"adj_out AS ({_adjacency_ddl.typed_out_select(relation)}), "
+        f"adj_in AS ({_adjacency_ddl.typed_in_select(relation)}), "
+        + sql.removeprefix("WITH ")
+    )
+
+
 def _reraise_lakebase_index_limit(
     exc: BaseException, batch: List[Dict[str, str]]
 ) -> None:
@@ -555,12 +572,7 @@ class LakebaseFlatStore(LakebaseBase):
             max_triples=max_triples,
             escape=self._sql_escape,
         )
-        return (
-            "WITH "
-            f"adj_out AS ({_adjacency_ddl.typed_out_select(relation)}), "
-            f"adj_in AS ({_adjacency_ddl.typed_in_select(relation)}), "
-            + sql.removeprefix("WITH ")
-        )
+        return _spo_expand_sql(sql, relation, depth)
 
     @staticmethod
     def _require_pg():

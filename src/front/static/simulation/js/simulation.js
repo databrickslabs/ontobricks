@@ -7,6 +7,7 @@ const SimulationPage = {
     scenarios: [],
     pollTimer: null,
     runningId: null,
+    _pollBusy: false,
     POLL_MS: 2000,
     TASK_KEY: 'ontobricks_simulation_task',
 
@@ -49,6 +50,7 @@ const SimulationPage = {
                 if (action === 'open') this.openScenario(id);
                 else if (action === 'run') this.startRun(id);
                 else if (action === 'results') this.showResults(id);
+                else if (action === 'purge') this.purgeScenario(id);
                 else if (action === 'delete') this.deleteScenario(id);
             });
         }
@@ -87,8 +89,34 @@ const SimulationPage = {
         return cut >= 0 && cut < s.length - 1 ? s.substring(cut + 1) : s;
     },
 
-    uriCell(uri) {
-        return `<span class="sim-uri" title="${this.esc(uri)}">${this.esc(this.shortUri(uri))}</span>`;
+    uriCell(uri, label) {
+        const shown = (label && label !== uri) ? label : this.shortUri(uri);
+        return `<span class="sim-uri" title="${this.esc(uri)}">${this.esc(shown)}</span>`;
+    },
+
+    async resolveEntityLabel(uri) {
+        const key = String(uri || '').trim();
+        if (!key) return '';
+        this._labelCache = this._labelCache || {};
+        if (this._labelCache[key]) return this._labelCache[key];
+        try {
+            const data = await this.api('/dtwin/sync/filter', {
+                method: 'POST',
+                body: {
+                    phase: 'preview',
+                    field: 'id',
+                    match_type: 'exact',
+                    value: key,
+                    include_inferred: true,
+                },
+            });
+            const seed = (data.seeds || []).find((s) => s.uri === key) || (data.seeds || [])[0];
+            const label = (seed && seed.label) ? String(seed.label) : '';
+            if (label) this._labelCache[key] = label;
+            return label;
+        } catch (_) {
+            return '';
+        }
     },
 
     fmtDate(iso) {
@@ -113,14 +141,23 @@ const SimulationPage = {
     scopeLabel(scope) {
         const s = scope || {};
         if (s.type === 'cohort') return `Cohort · ${this.esc(s.focus)}`;
-        if (s.type === 'class') return `Class · ${this.uriCell(s.focus)}`;
-        return `${this.uriCell(s.focus)} <span class="text-muted">· ${this.esc(s.hops)} hops</span>`;
+        if (s.type === 'class') return `Class · ${this.uriCell(s.focus, s.focus_label)}`;
+        return `${this.uriCell(s.focus, s.focus_label)} <span class="text-muted">· ${this.esc(s.hops)} hops</span>`;
     },
 
     // -- Scenarios ---------------------------------------------------------
 
+    _loadingRow(colspan, label) {
+        return `<tr><td colspan="${colspan}" class="text-center text-muted py-4">`
+            + '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>'
+            + `${this.esc(label)}</td></tr>`;
+    },
+
     async loadScenarios() {
         const body = document.getElementById('simScenariosBody');
+        const refresh = document.getElementById('simRefreshBtn');
+        if (body) body.innerHTML = this._loadingRow(8, 'Loading scenarios…');
+        if (refresh) refresh.disabled = true;
         try {
             const data = await this.api('/simulation/list');
             this.scenarios = data.simulations || [];
@@ -130,6 +167,8 @@ const SimulationPage = {
             if (body) {
                 body.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">${this.esc(err.message)}</td></tr>`;
             }
+        } finally {
+            if (refresh) refresh.disabled = false;
         }
         if (window.SimulationResults) SimulationResults.refreshPicker();
     },
@@ -160,6 +199,7 @@ const SimulationPage = {
                 <td class="text-end text-nowrap">
                     <button type="button" class="btn btn-sm btn-outline-secondary" data-action="results" data-id="${this.esc(s.id)}" title="Results" ${ready ? '' : 'disabled'}><i class="bi bi-clipboard-data"></i></button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-action="run" data-id="${this.esc(s.id)}" title="Run" ${running ? 'disabled' : ''}><i class="bi bi-play-fill"></i></button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" data-action="purge" data-id="${this.esc(s.id)}" title="Purge sandbox" ${running || s.status === 'draft' ? 'disabled' : ''}><i class="bi bi-eraser"></i></button>
                     <button type="button" class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${this.esc(s.id)}" title="Delete" ${running ? 'disabled' : ''}><i class="bi bi-trash"></i></button>
                 </td>
             </tr>`;
@@ -174,6 +214,28 @@ const SimulationPage = {
     showResults(id) {
         if (window.SimulationResults) SimulationResults.select(id);
         SidebarNav.switchTo('results');
+    },
+
+    async purgeScenario(id) {
+        const sim = this.scenarios.find((s) => s.id === id);
+        const label = this.esc(sim ? sim.label : id);
+        const ok = await showConfirmDialog({
+            title: 'Purge simulation sandbox?',
+            message: `Drop the sandbox after-picture for "<strong>${label}</strong>"? `
+                + 'The scenario definition is kept as a draft so you can run it again.',
+            confirmText: 'Purge',
+            cancelText: 'Cancel',
+            confirmClass: 'btn-warning',
+            icon: 'eraser',
+        });
+        if (!ok) return;
+        try {
+            await this.api(`/simulation/${encodeURIComponent(id)}/purge`, { method: 'POST' });
+            showNotification('Simulation sandbox purged', 'success');
+            this.loadScenarios();
+        } catch (err) {
+            showNotification(`Purge failed: ${err.message}`, 'error');
+        }
     },
 
     async deleteScenario(id) {
@@ -218,35 +280,43 @@ const SimulationPage = {
         if (saved && saved.taskId) this._poll(saved.taskId, saved.simId);
     },
 
-    _setProgress(visible, pct, msg) {
+    _setProgress(visible, pct, msg, { done = false, failed = false } = {}) {
         const box = document.getElementById('simWbProgress');
         if (!box) return;
         box.classList.toggle('d-none', !visible);
         const bar = document.getElementById('simWbProgressBar');
         const pctEl = document.getElementById('simWbProgressPct');
         const msgEl = document.getElementById('simWbProgressMsg');
+        const doneBox = document.getElementById('simWbProgressDone');
         if (bar) {
             bar.style.width = `${pct || 0}%`;
             bar.setAttribute('aria-valuenow', String(pct || 0));
+            bar.classList.toggle('bg-success', done);
+            bar.classList.toggle('bg-danger', failed);
         }
         if (pctEl) pctEl.textContent = `${pct || 0}%`;
         if (msgEl && msg) msgEl.textContent = msg;
+        if (doneBox) doneBox.classList.toggle('d-none', !done);
         const runBtn = document.getElementById('simWbRunBtn');
-        if (runBtn && this.config.supported) runBtn.disabled = visible;
+        if (runBtn && this.config.supported) runBtn.disabled = visible && !done && !failed;
     },
 
-    _stopPolling() {
+    _stopPolling({ keepProgress = false } = {}) {
         if (this.pollTimer) clearInterval(this.pollTimer);
         this.pollTimer = null;
-        this.runningId = null;
         sessionStorage.removeItem(this.TASK_KEY);
-        this._setProgress(false, 0, '');
+        if (!keepProgress) {
+            this.runningId = null;
+            this._setProgress(false, 0, '');
+        }
     },
 
     _poll(taskId, simId) {
         this.runningId = simId;
         this._setProgress(true, 0, 'Starting simulation…');
-        this.pollTimer = setInterval(async () => {
+        const tick = async () => {
+            if (this._pollBusy) return;
+            this._pollBusy = true;
             try {
                 const resp = await fetch(`/tasks/${encodeURIComponent(taskId)}`, { credentials: 'same-origin' });
                 const data = await resp.json();
@@ -256,12 +326,19 @@ const SimulationPage = {
                 }
                 const task = data.task;
                 if (task.status === 'completed') {
-                    this._stopPolling();
-                    showNotification(task.message || 'Simulation complete', 'success');
+                    this._stopPolling({ keepProgress: true });
+                    this._setProgress(true, 100, task.message || 'Simulation complete', { done: true });
+                    showNotification(task.message || 'Simulation complete — open Results', 'success');
                     await this.loadScenarios();
                     this.showResults(simId);
                 } else if (task.status === 'failed' || task.status === 'cancelled') {
-                    this._stopPolling();
+                    this._stopPolling({ keepProgress: true });
+                    this._setProgress(
+                        true,
+                        Math.round(task.progress || 0),
+                        `Simulation failed: ${task.error || task.message || 'unknown error'}`,
+                        { failed: true },
+                    );
                     showNotification(`Simulation failed: ${task.error || task.message || 'unknown error'}`, 'error');
                     this.loadScenarios();
                 } else {
@@ -269,8 +346,12 @@ const SimulationPage = {
                 }
             } catch (err) {
                 console.error('Simulation poll error:', err);
+            } finally {
+                this._pollBusy = false;
             }
-        }, this.POLL_MS);
+        };
+        tick();
+        this.pollTimer = setInterval(tick, this.POLL_MS);
     },
 
     // -- Runs section ------------------------------------------------------

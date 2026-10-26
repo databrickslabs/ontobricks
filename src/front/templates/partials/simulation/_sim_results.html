@@ -10,12 +10,17 @@
             <button type="button" class="btn btn-sm btn-outline-secondary" id="simResultsRefreshBtn" title="Refresh">
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
+            <a class="btn btn-sm btn-outline-primary d-none" id="simResultsExplorerBtn"
+               href="/dtwin/?section=sigmagraph" title="Open this sandbox in Graph Explorer">
+                <i class="bi bi-share me-1"></i>Explorer
+            </a>
         </div>
     </div>
 
     <div id="simResultsEmpty" class="text-center text-muted py-5">
         <i class="bi bi-clipboard-data fs-2 d-block mb-2"></i>
-        Run a scenario to see its results here.
+        <p class="mb-2">No results loaded yet.</p>
+        <p class="small mb-0">After a run finishes, this page opens automatically. You can also pick a scenario in the dropdown above, or open <em>Scenarios</em> and click the clipboard icon.</p>
     </div>
 
     <div id="simResultsBody" class="d-none">

@@ -79,6 +79,13 @@ const SimulationResults = {
         const body = document.getElementById('simResultsBody');
         if (empty) empty.classList.toggle('d-none', hasResult);
         if (body) body.classList.toggle('d-none', !hasResult);
+        const explorer = document.getElementById('simResultsExplorerBtn');
+        if (explorer) {
+            explorer.classList.toggle('d-none', !this.selectedId);
+            explorer.href = this.selectedId
+                ? `/dtwin/?section=sigmagraph&simulation=${encodeURIComponent(this.selectedId)}`
+                : '/dtwin/?section=sigmagraph';
+        }
     },
 
     async load() {

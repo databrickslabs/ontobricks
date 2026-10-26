@@ -6,6 +6,8 @@ const SimulationWorkbench = {
     currentId: null,
     patches: [],
     _cohortsLoaded: false,
+    _focusLabel: '',
+    _focusLookupTimer: null,
 
     init() {
         const on = (id, evt, fn) => {
@@ -13,16 +15,34 @@ const SimulationWorkbench = {
             if (el) el.addEventListener(evt, fn);
         };
         on('simWbAddPatchBtn', 'click', () => this.addPatch());
+        on('simWbFactWizardBtn', 'click', () => this.openFactWizard());
+        on('simWbViewResultsBtn', 'click', () => {
+            const id = this.currentId || (window.SimulationPage && SimulationPage.runningId);
+            if (id && window.SimulationPage) SimulationPage.showResults(id);
+        });
         on('simWbSaveBtn', 'click', () => this.save());
         on('simWbRunBtn', 'click', () => this.run());
         on('simWbResetBtn', 'click', () => this.reset());
         on('simWbScopeType', 'change', () => this._syncScopeUi());
+        on('simWbFocus', 'change', () => this._onFocusUriChanged());
+        on('simWbFocus', 'input', () => {
+            clearTimeout(this._focusLookupTimer);
+            this._focusLookupTimer = setTimeout(() => this._onFocusUriChanged(), 400);
+        });
 
         const body = document.getElementById('simWbPatchesBody');
         if (body) {
             body.addEventListener('input', (e) => this._onPatchEdit(e));
             body.addEventListener('change', (e) => this._onPatchEdit(e));
             body.addEventListener('click', (e) => {
+                const lookup = e.target.closest('[data-lookup]');
+                if (lookup) {
+                    this.openFactWizard({
+                        idx: Number(lookup.dataset.idx),
+                        startField: lookup.dataset.lookup,
+                    });
+                    return;
+                }
                 const btn = e.target.closest('[data-remove]');
                 if (!btn) return;
                 this.patches.splice(Number(btn.dataset.remove), 1);
@@ -34,11 +54,14 @@ const SimulationWorkbench = {
         const params = new URLSearchParams(window.location.search);
         const entity = params.get('entity');
         if (entity) {
+            const urlLabel = (params.get('label') || '').trim();
             this._set('simWbScopeType', 'entity');
             this._set('simWbFocus', entity);
-            this._set('simWbLabel', `What if: ${SimulationPage.shortUri(entity)}`);
+            this._applyFocusLabel(urlLabel, entity);
+            this._set('simWbLabel', `What if: ${this._focusLabel || SimulationPage.shortUri(entity)}`);
             this._syncScopeUi();
             this.addPatch({ op: 'set', subject: entity, predicate: '', object: '' });
+            if (!urlLabel) this._onFocusUriChanged();
         }
     },
 
@@ -83,10 +106,45 @@ const SimulationWorkbench = {
         if (cohort) cohort.classList.toggle('d-none', !isCohort);
         if (hops) hops.classList.toggle('d-none', type !== 'entity');
         if (label) {
-            label.textContent = { entity: 'Entity URI', cohort: 'Cohort rule', class: 'Class URI' }[type];
+            label.textContent = { entity: 'Entity', cohort: 'Cohort rule', class: 'Class URI' }[type];
             label.setAttribute('for', isCohort ? 'simWbCohort' : 'simWbFocus');
         }
         if (isCohort) this._loadCohorts();
+        this._paintFocusCaption();
+    },
+
+    _applyFocusLabel(label, uri) {
+        const local = SimulationPage.shortUri(uri);
+        const text = String(label || '').trim();
+        this._focusLabel = (text && text !== uri && text !== local) ? text : (text || '');
+        this._paintFocusCaption();
+    },
+
+    _paintFocusCaption() {
+        const cap = this._el('simWbFocusCaption');
+        if (!cap) return;
+        const type = this._val('simWbScopeType') || 'entity';
+        const uri = this._val('simWbFocus');
+        const local = SimulationPage.shortUri(uri);
+        const show = type === 'entity' && this._focusLabel && this._focusLabel !== uri && this._focusLabel !== local;
+        cap.textContent = show ? this._focusLabel : '';
+        cap.classList.toggle('d-none', !show);
+    },
+
+    async _onFocusUriChanged() {
+        if ((this._val('simWbScopeType') || 'entity') !== 'entity') return;
+        const uri = this._val('simWbFocus');
+        if (!uri) {
+            this._applyFocusLabel('', '');
+            return;
+        }
+        const label = await SimulationPage.resolveEntityLabel(uri);
+        if (this._val('simWbFocus') !== uri) return;
+        this._applyFocusLabel(label, uri);
+        const name = this._el('simWbLabel');
+        if (name && /^What if: /.test(name.value) && this._focusLabel) {
+            name.value = `What if: ${this._focusLabel}`;
+        }
     },
 
     reset() {
@@ -97,6 +155,7 @@ const SimulationWorkbench = {
         this._set('simWbDescription', '');
         this._set('simWbScopeType', 'entity');
         this._set('simWbFocus', '');
+        this._applyFocusLabel('', '');
         this._set('simWbHops', cfg.default_hops != null ? cfg.default_hops : 2);
         this._set('simWbCap', cfg.class_cap || 5000);
         this._applyPhases(null);
@@ -122,6 +181,8 @@ const SimulationWorkbench = {
                 this._set('simWbCohort', scope.focus);
             } else {
                 this._set('simWbFocus', scope.focus);
+                this._applyFocusLabel(scope.focus_label || '', scope.focus);
+                if (scope.type === 'entity' && !scope.focus_label) this._onFocusUriChanged();
             }
             this._set('simWbHops', scope.hops);
             this._set('simWbCap', scope.cap);
@@ -170,7 +231,6 @@ const SimulationWorkbench = {
             body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3 small">No hypothetical facts yet — add one to describe what changes.</td></tr>';
             return;
         }
-        const esc = (v) => SimulationPage.esc(v);
         body.innerHTML = this.patches.map((p, i) => `<tr>
             <td>
                 <select class="form-select form-select-sm" data-field="op" data-idx="${i}" aria-label="Operation">
@@ -179,11 +239,54 @@ const SimulationWorkbench = {
                     <option value="remove" ${p.op === 'remove' ? 'selected' : ''}>Remove</option>
                 </select>
             </td>
-            <td><input type="text" class="form-control form-control-sm" data-field="subject" data-idx="${i}" value="${esc(p.subject)}" placeholder="Subject URI" aria-label="Subject"></td>
-            <td><input type="text" class="form-control form-control-sm" data-field="predicate" data-idx="${i}" value="${esc(p.predicate)}" placeholder="Predicate URI" aria-label="Predicate"></td>
-            <td><input type="text" class="form-control form-control-sm" data-field="object" data-idx="${i}" value="${esc(p.object)}" placeholder="Object URI or literal" aria-label="Object"></td>
+            <td>${this._lookupInput('subject', i, p.subject, 'Subject URI')}</td>
+            <td>${this._lookupInput('predicate', i, p.predicate, 'Predicate URI')}</td>
+            <td>${this._lookupInput('object', i, p.object, 'Object URI or literal')}</td>
             <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" data-remove="${i}" title="Remove fact"><i class="bi bi-x-lg"></i></button></td>
         </tr>`).join('');
+    },
+
+    _lookupInput(field, idx, value, placeholder) {
+        const esc = (v) => SimulationPage.esc(v);
+        return `<div class="input-group input-group-sm">
+            <input type="text" class="form-control" data-field="${field}" data-idx="${idx}"
+                   value="${esc(value)}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">
+            <button type="button" class="btn btn-outline-secondary" data-lookup="${field}" data-idx="${idx}"
+                    title="Find existing ${esc(field)}"><i class="bi bi-search"></i></button>
+        </div>`;
+    },
+
+    openFactWizard({ idx = null, startField = 'subject' } = {}) {
+        if (idx == null) {
+            const focus = this._val('simWbScopeType') === 'entity' ? this._val('simWbFocus') : '';
+            if (window.SimulationFactWizard) {
+                SimulationFactWizard.open({
+                    idx: null,
+                    startField,
+                    patch: { op: 'set', subject: focus, predicate: '', object: '' },
+                });
+            }
+            return;
+        }
+        if (window.SimulationFactWizard) {
+            SimulationFactWizard.open({
+                idx,
+                startField,
+                patch: this.patches[idx] || { op: 'set', subject: '', predicate: '', object: '' },
+            });
+        }
+    },
+
+    applyFactFromWizard(patch, idx) {
+        const row = {
+            op: patch.op || 'set',
+            subject: patch.subject || '',
+            predicate: patch.predicate || '',
+            object: patch.object || '',
+        };
+        if (idx == null || !this.patches[idx]) this.patches.push(row);
+        else this.patches[idx] = row;
+        this.renderPatches();
     },
 
     // -- Save / run --------------------------------------------------------
@@ -202,6 +305,7 @@ const SimulationWorkbench = {
                 focus: type === 'cohort' ? this._val('simWbCohort') : this._val('simWbFocus'),
                 hops: Number(this._val('simWbHops') || 0),
                 cap: Number(this._val('simWbCap') || 0),
+                focus_label: type === 'entity' ? this._focusLabel : '',
             },
             patches: this.patches
                 .filter((p) => (p.subject || p.predicate || p.object))

@@ -1399,12 +1399,16 @@ async function loadTripleStore(options = {}) {
     if (syncBtn) { syncBtn.disabled = true; syncBtn.innerHTML = loadingHtml; }
 
     const includeInferred = document.getElementById('sgShowInferred')?.checked !== false;
+    const simulationId = document.getElementById('sgSimulationSelect')?.value || '';
 
     try {
         const response = await fetch('/dtwin/sync/load', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ include_inferred: includeInferred }),
+            body: JSON.stringify({
+                include_inferred: includeInferred,
+                ...(simulationId ? { simulation_id: simulationId } : {}),
+            }),
             credentials: 'same-origin'
         });
 

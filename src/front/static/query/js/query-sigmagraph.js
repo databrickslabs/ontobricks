@@ -167,6 +167,95 @@ var SigmaGraph = (function () {
         });
     }
 
+    var _simulationSelectLoading = false;
+
+    function _selectedSimulationId() {
+        var sel = document.getElementById('sgSimulationSelect');
+        return (sel && sel.value) ? String(sel.value) : '';
+    }
+
+    function _withGraphSource(body) {
+        var id = _selectedSimulationId();
+        if (id) body.simulation_id = id;
+        return body;
+    }
+
+    function _applySimulationChrome() {
+        var id = _selectedSimulationId();
+        var sel = document.getElementById('sgSimulationSelect');
+        var banner = document.getElementById('sgSimulationBanner');
+        var label = document.getElementById('sgSimulationBannerLabel');
+        if (banner) banner.classList.toggle('d-none', !id);
+        if (label && sel) {
+            var opt = sel.options[sel.selectedIndex];
+            label.textContent = opt ? opt.textContent : '';
+        }
+    }
+
+    async function _loadSimulationSelect(opts) {
+        opts = opts || {};
+        var sel = document.getElementById('sgSimulationSelect');
+        if (!sel) return;
+        var previous = sel.value;
+        var wanted = opts.simulationId;
+        if (!wanted) {
+            try {
+                wanted = new URLSearchParams(window.location.search || '').get('simulation') || '';
+            } catch (_) {
+                wanted = '';
+            }
+        }
+        try {
+            var resp = await fetch('/simulation/list', { credentials: 'same-origin' });
+            var data = await resp.json();
+            var rows = (data && data.simulations) || [];
+            var ready = rows.filter(function (s) { return s && s.status === 'ready' && s.id; });
+            var html = '<option value="">Live graph</option>';
+            ready.forEach(function (s) {
+                html += '<option value="' + _esc(s.id) + '">' + _esc(s.label || s.id) + '</option>';
+            });
+            _simulationSelectLoading = true;
+            sel.innerHTML = html;
+            if (wanted && ready.some(function (s) { return s.id === wanted; })) {
+                sel.value = wanted;
+            } else if (previous && ready.some(function (s) { return s.id === previous; })) {
+                sel.value = previous;
+            } else {
+                sel.value = '';
+            }
+        } catch (err) {
+            console.warn('[SigmaGraph] could not load simulations', err);
+        } finally {
+            _simulationSelectLoading = false;
+            _applySimulationChrome();
+        }
+    }
+
+    async function _retargetCurrentView() {
+        _showGraphLoading('Loading graph data…');
+        try {
+            if (_graphFilterActive && _lastExpandedSeedUris && _lastExpandedSeedUris.length) {
+                await _expandAndRenderGraph(_lastExpandedSeedUris);
+            } else if (_hasData() && typeof loadTripleStore === 'function') {
+                await loadTripleStore({ silent: true, navigate: false });
+            } else {
+                _showEmptyState();
+            }
+        } catch (error) {
+            if (typeof showNotification === 'function') {
+                showNotification('Graph refresh failed: ' + error.message, 'error');
+            }
+        } finally {
+            _hideGraphLoading();
+        }
+    }
+
+    async function _onSimulationChange() {
+        if (_simulationSelectLoading) return;
+        _applySimulationChrome();
+        await _retargetCurrentView();
+    }
+
     var TYPE_COLORS = [
         '#FF3621', '#6366F1', '#4ECDC4', '#F59E0B', '#EC4899',
         '#10B981', '#8B5CF6', '#F97316', '#06B6D4', '#EF4444',
@@ -2213,14 +2302,14 @@ var SigmaGraph = (function () {
             var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+                body: JSON.stringify(_withGraphSource({
                     phase: 'preview',
                     entity_type: entityType,
                     field: 'any',
                     match_type: matchType,
                     value: searchValue,
                     include_inferred: includeInferredPreview,
-                }),
+                })),
                 credentials: 'same-origin'
             }, 45000, 'Search request timed out');
             var data = await _parseJsonResponse(resp, 'Search request failed');
@@ -2315,14 +2404,14 @@ var SigmaGraph = (function () {
         var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            body: JSON.stringify(_withGraphSource({
                 phase: 'expand',
                 selected_uris: uris,
                 include_rels: true,
                 depth: maxDepth,
                 max_entities: maxEntities,
                 include_inferred: includeInferred,
-            }),
+            })),
             credentials: 'same-origin'
         }, 90000, 'Graph expansion timed out');
         var data = await _parseJsonResponse(resp, 'Graph expansion failed');
@@ -2844,13 +2933,14 @@ var SigmaGraph = (function () {
         }
         _initialized = true;
 
-        if (focusUri) {
+        _loadSimulationSelect().then(function () {
+            if (!focusUri) return;
             _waitForGraphLibs(10000).then(function () {
                 SigmaGraph.focusEntityByUri(focusUri).finally(function () {
                     _pendingFocusLoad = false;
                 });
             });
-        }
+        });
     }
 
     function _hasData() {
@@ -3050,14 +3140,14 @@ var SigmaGraph = (function () {
                 var previewResp = await _fetchWithTimeout('/dtwin/sync/filter', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    body: JSON.stringify(_withGraphSource({
                         phase: 'preview',
                         entity_type: '',
                         field: 'any',
                         match_type: 'contains',
                         value: localName,
                         include_inferred: document.getElementById('sgShowInferred')?.checked !== false,
-                    }),
+                    })),
                     credentials: 'same-origin'
                 }, 45000, 'Search request timed out');
                 var previewData = await _parseJsonResponse(previewResp, 'Search request failed');
@@ -3273,6 +3363,8 @@ var SigmaGraph = (function () {
         },
 
         populateFilterEntityTypes: function () { _populateFilterEntityTypes(); },
+        loadSimulations: function () { return _loadSimulationSelect(); },
+        onSimulationChange: function () { _onSimulationChange(); },
         executeGraphFilter: function () { _executeGraphSearch(); },
         executeGraphSearch: function () { _executeGraphSearch(); },
         updateFilterDepthLabel: function () {
@@ -3319,22 +3411,9 @@ var SigmaGraph = (function () {
         },
 
         toggleInferred: async function () {
-            // Re-fetch from the appropriate table (union view or _sync only) so
-            // the graph reflects the real data state rather than client-side hiding.
-            _showGraphLoading('Loading graph data…');
-            try {
-                if (_graphFilterActive && _lastExpandedSeedUris && _lastExpandedSeedUris.length) {
-                    await _expandAndRenderGraph(_lastExpandedSeedUris);
-                } else if (_hasData() && typeof loadTripleStore === 'function') {
-                    await loadTripleStore({ silent: true, navigate: false });
-                }
-            } catch (error) {
-                if (typeof showNotification === 'function') {
-                    showNotification('Graph refresh failed: ' + error.message, 'error');
-                }
-            } finally {
-                _hideGraphLoading();
-            }
+            // Re-fetch from the selected source (live union/_sync, or sandbox)
+            // so the graph reflects the real data state rather than hiding client-side.
+            await _retargetCurrentView();
         },
 
         // --- Right-click "Expand neighbours" (default 1 hop) ---
@@ -3360,6 +3439,8 @@ var SigmaGraph = (function () {
             var url = '/dtwin/neighbors?uri=' + encodeURIComponent(seedUri) +
                 '&depth=' + encodeURIComponent(depth) + '&limit=2000' +
                 '&include_inferred=' + includeInferredHop;
+            var simHop = _selectedSimulationId();
+            if (simHop) url += '&simulation_id=' + encodeURIComponent(simHop);
             _showGraphLoading('Expanding neighbours (' + depth + ' hop)…');
             await _waitForGraphLoadingPaint();
             try {
@@ -3996,6 +4077,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 SigmaGraph.populateFilterEntityTypes();
             }
         });
+    }
+
+    if (document.getElementById('sgSimulationSelect')
+            && typeof SigmaGraph !== 'undefined'
+            && typeof SigmaGraph.loadSimulations === 'function') {
+        SigmaGraph.loadSimulations();
     }
 
     document.addEventListener('click', function (e) {

@@ -257,13 +257,6 @@
                             "requires": null
                         },
                         {
-                            "id": "cohorts",
-                            "label": "Cohorts",
-                            "icon": "bi-people-fill",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
                             "id": "axioms",
                             "label": "Expr. & Axioms",
                             "icon": "bi-diagram-2",
@@ -621,13 +614,6 @@
                             "icon": "bi-lightning",
                             "default": false,
                             "requires": null
-                        },
-                        {
-                            "id": "cohorts",
-                            "label": "Cohorts",
-                            "icon": "bi-people-fill",
-                            "default": false,
-                            "requires": null
                         }
                     ]
                 }
@@ -645,6 +631,27 @@
             "navbar_actions": [],
             "groups": [
                 {
+                    "id": "simulation-cohorts",
+                    "title": "Cohorts",
+                    "icon": "bi-people-fill",
+                    "items": [
+                        {
+                            "id": "cohorts",
+                            "label": "Cohorts",
+                            "icon": "bi-people-fill",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "cohort-run",
+                            "label": "Run",
+                            "icon": "bi-play-circle",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "simulation-scenarios",
                     "title": "Scenarios",
                     "icon": "bi-sliders2-vertical",
@@ -654,13 +661,6 @@
                             "label": "Scenarios",
                             "icon": "bi-collection",
                             "default": true,
-                            "requires": null
-                        },
-                        {
-                            "id": "workbench",
-                            "label": "Workbench",
-                            "icon": "bi-tools",
-                            "default": false,
                             "requires": null
                         }
                     ]

@@ -506,7 +506,9 @@ async function showEntityDetails(entity) {
     }
 
     if (entity.id && _simulationAvailable()) {
-        const simUrl = `/simulation/?section=workbench&entity=${encodeURIComponent(entity.id)}`;
+        const simUrl = '/simulation/?section=workbench'
+            + '&entity=' + encodeURIComponent(entity.id)
+            + '&label=' + encodeURIComponent(displayLabel || '');
         html += `
             <div class="entity-detail-section">
                 <h6><i class="bi bi-sliders2-vertical"></i> What-if</h6>

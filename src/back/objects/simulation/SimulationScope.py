@@ -28,6 +28,7 @@ class SimulationScope:
     focus: str = ""
     hops: int = 2
     cap: int = 5000
+    focus_label: str = ""
 
     @classmethod
     def from_dict(
@@ -44,6 +45,7 @@ class SimulationScope:
             focus=str(data.get("focus", "") or "").strip(),
             hops=hops,
             cap=min(max(1, cap), default_cap),
+            focus_label=str(data.get("focus_label", "") or "").strip(),
         )
         scope.validate()
         return scope
@@ -61,7 +63,13 @@ class SimulationScope:
             raise ValidationError(f"Scope hops must be between 0 and {self.MAX_HOPS}")
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"type": self.type, "focus": self.focus, "hops": self.hops, "cap": self.cap}
+        return {
+            "type": self.type,
+            "focus": self.focus,
+            "hops": self.hops,
+            "cap": self.cap,
+            "focus_label": self.focus_label,
+        }
 
     # -- Entity-set resolution against the live store ----------------------
 

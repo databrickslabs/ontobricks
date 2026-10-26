@@ -5,9 +5,9 @@ from __future__ import annotations
 import threading
 from typing import Any, Dict, List, Optional
 
-from back.core.errors import NotFoundError, ValidationError
+from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.graphdb.GraphDBFactory import normalize_graph_backend
-from back.core.helpers import effective_graph_name
+from back.core.helpers import effective_graph_name, effective_graph_query_table
 from back.core.logging import get_logger
 from back.objects.simulation.SimulationDiff import SimulationDiff
 from back.objects.simulation.SimulationRunner import SimulationRunner
@@ -90,6 +90,61 @@ class Simulation:
             raise NotFoundError(f"Simulation '{sim_id}' was not found")
         return row
 
+    def sandbox_relation(self, sim_id: str) -> str:
+        """Physical Lakebase table of a *ready* simulation sandbox.
+
+        Explorer reads the union view from :meth:`explorer_relation`, not this
+        table. Draft / running / failed scenarios have no guaranteed snapshot.
+        """
+        self.require_supported()
+        row = self.get(sim_id)
+        if row.get("status") != "ready":
+            raise ValidationError(
+                "Run the simulation before exploring its sandbox"
+            )
+        from back.core.graphdb.lakebase.LakebaseSimulationStore import (
+            LakebaseSimulationStore,
+        )
+
+        return LakebaseSimulationStore.sandbox_table_name(
+            effective_graph_name(self._domain), sim_id
+        )
+
+    def explorer_relation(
+        self,
+        sim_id: str,
+        *,
+        include_inferred: bool = True,
+        store: Any = None,
+    ) -> str:
+        """Live graph UNION sandbox after-picture for Explorer reads.
+
+        Sandbox predicates overlay live ones; other live facts of the same
+        entity stay visible. The view is created lazily.
+        """
+        sandbox = self.sandbox_relation(sim_id)
+        graph_name = effective_graph_name(self._domain)
+        from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
+
+        view = _companion_ddl.sim_union_phy(
+            graph_name, sim_id, include_inferred=include_inferred
+        )
+        graph_store = store
+        if graph_store is None:
+            from back.core.graphdb import get_graphdb
+
+            graph_store = get_graphdb(self._domain, self._settings)
+        if graph_store is None:
+            raise InfrastructureError("Graph backend is not configured")
+        live = effective_graph_query_table(
+            self._domain,
+            self._settings,
+            include_inferred=include_inferred,
+            store=graph_store,
+        )
+        LakebaseSimulationUnion(graph_store).ensure(view, live, sandbox)
+        return view
+
     def create(self, body: Dict[str, Any], owner: str = "") -> Dict[str, Any]:
         self.require_supported()
         spec = self.parse_spec(body)
@@ -118,6 +173,29 @@ class Simulation:
         self.get(sim_id)
         self._drop_sandbox(sim_id)
         return self.registry.delete_simulation(self.folder, self.version, sim_id)
+
+    def purge(self, sim_id: str) -> Dict[str, Any]:
+        """Drop the sandbox after-picture; keep the scenario spec as a draft."""
+        current = self.get(sim_id)
+        if current.get("status") == "running":
+            raise ValidationError("Simulation is running — wait for it to finish")
+        self._drop_sandbox(sim_id)
+        self.registry.save_simulation(
+            self.folder,
+            self.version,
+            {
+                "id": sim_id,
+                "label": current.get("label", ""),
+                "status": "draft",
+                "spec": current.get("spec") or {},
+                "owner": current.get("owner", ""),
+                "diff_summary": {},
+                "diff": {},
+                "task_id": "",
+                "error": "",
+            },
+        )
+        return self.get(sim_id)
 
     def _drop_sandbox(self, sim_id: str) -> None:
         """Best-effort removal of the sandbox table (registry row is the source of truth)."""

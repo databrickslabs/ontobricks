@@ -26,8 +26,22 @@ class TwinGraphAccess:
         store=None,
         *,
         include_inferred: bool = True,
+        simulation_id: Optional[str] = None,
     ) -> str:
-        """Resolve the physical graph table for read queries (Lakebase or Delta)."""
+        """Resolve the physical graph table for read queries (Lakebase or Delta).
+
+        When *simulation_id* is set, return the Explorer union view: live
+        graph with that scenario's sandbox after-picture on overlapping
+        predicates. *include_inferred* still switches the live side
+        (union view vs synced bulk table).
+        """
+        sid = (simulation_id or "").strip()
+        if sid:
+            from back.objects.simulation import Simulation
+
+            return Simulation(domain, settings).explorer_relation(
+                sid, include_inferred=include_inferred, store=store
+            )
         return effective_graph_query_table(
             domain,
             settings,

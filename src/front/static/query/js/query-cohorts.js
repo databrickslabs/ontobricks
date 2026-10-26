@@ -15,6 +15,8 @@ const CohortModule = {
     objectProperties: [],       // ObjectProperty subset
     lastPreview: null,          // last DetectionResult JSON
     dirty: false,
+    _busyPreview: false,
+    _busyMaterialize: false,
     _counterTimers: {},
 
     // ---- bootstrap ------------------------------------------------------
@@ -23,7 +25,7 @@ const CohortModule = {
         await this._loadOntology();
         await this.loadRules();
         // Honour a deep-link from the run page's "view/edit" button:
-        // ``/ontology/?section=cohorts&rule=<id>`` lands on the design
+        // ``/simulation/?section=cohorts&rule=<id>`` lands on the design
         // surface with that rule preloaded into the form.
         const params = new URLSearchParams(window.location.search || '');
         const ruleParam = params.get('rule');
@@ -178,20 +180,28 @@ const CohortModule = {
     },
 
     _renderRulesList() {
-        const list = document.getElementById('cohortRulesList');
-        const empty = document.getElementById('cohortRulesEmpty');
-        const counter = document.getElementById('cohortRulesCount');
+        this._fillRulesList(
+            document.getElementById('cohortRulesList'),
+            document.getElementById('cohortRulesEmpty'),
+            document.getElementById('cohortRulesCount'),
+            false,
+        );
+        this._fillRulesList(
+            document.getElementById('cohortRunRulesList'),
+            document.getElementById('cohortRunRulesEmpty'),
+            document.getElementById('cohortRunRulesCount'),
+            true,
+        );
+    },
+
+    _fillRulesList(list, empty, counter, editLink) {
         if (counter) counter.textContent = this.rules.length;
         if (!list) return;
         list.innerHTML = '';
         if (!this.rules.length) {
-            if (empty) list.appendChild(empty);
+            if (empty) list.appendChild(empty.cloneNode(true));
             return;
         }
-        // Edit link is shown only on the run page (Knowledge Graph → Cohorts):
-        // the design page is itself the editor, so an extra link there would
-        // just reload the same view.
-        const onRunPage = !document.getElementById('cohortRuleLabel');
         for (const r of this.rules) {
             const row = document.createElement('div');
             row.className = 'cohort-rule-item' + (
@@ -211,9 +221,9 @@ const CohortModule = {
                         ${ucIcon}
                     </div>
                 </button>
-                ${onRunPage
+                ${editLink
                     ? `<a class="cohort-rule-edit" title="View / edit rule definition"
-                          href="/ontology/?section=cohorts&rule=${encodeURIComponent(r.id)}">
+                          href="/simulation/?section=cohorts&rule=${encodeURIComponent(r.id)}">
                            <i class="bi bi-pencil-square"></i>
                        </a>`
                     : ''}
@@ -264,15 +274,9 @@ const CohortModule = {
     _resetPreviewPane() {
         const body = document.getElementById('cohortPreviewBody');
         if (body) {
-            const onRunPage = !document.getElementById('cohortRuleLabel');
-            body.innerHTML = onRunPage
-                ? `<div class="text-muted small fst-italic py-3">
-                       Pick a rule from the right pane and click
+            body.innerHTML = `<div class="text-muted small fst-italic py-3">
+                       Pick a rule from the left pane and click
                        <em>Preview cohorts</em>.
-                   </div>`
-                : `<div class="text-muted small fst-italic py-3">
-                       No preview yet. Run <em>Preview cohorts</em> from the
-                       <strong>Build rule</strong> tab to see results here.
                    </div>`;
         }
         const explainResult = document.getElementById('cohortExplainResult');
@@ -280,13 +284,13 @@ const CohortModule = {
         const traceResult = document.getElementById('cohortTraceResult');
         if (traceResult) traceResult.innerHTML = '';
         const matBtn = document.getElementById('cohortMaterializeBtn');
-        if (matBtn) matBtn.disabled = true;
+        if (matBtn && !this._busyMaterialize) matBtn.disabled = true;
     },
 
     /**
      * Render a compact read-only summary of the active rule.
      *
-     * Only used on the Knowledge Graph run page (#cohortRuleSummary lives
+     * Only used on the Simulation run page (#cohortRuleSummary lives
      * there). On the design page this is a no-op.
      */
     _renderRuleSummary() {
@@ -373,14 +377,7 @@ const CohortModule = {
         this._refreshNodeCount();
         this._renderRuleSummary();
 
-        const btnMat = document.getElementById('cohortMaterializeBtn');
-        if (btnMat) {
-            const readOnly = window.OB && typeof window.OB.canEditOntology === 'function'
-                && !window.OB.canEditOntology();
-            btnMat.disabled = readOnly || !this.lastPreview;
-        }
-        const btnPrev = document.getElementById('cohortPreviewBtn');
-        if (btnPrev) btnPrev.disabled = !this.rule?.class_uri;
+        this._syncActionButtons();
     },
 
     _hookLabelInput() {
@@ -449,9 +446,9 @@ const CohortModule = {
     },
 
     _collectFromForm() {
-        // Only the design page (Ontology > Cohorts) has the build form.
-        // Run page (Knowledge Graph > Cohorts) is read-only — bail without
-        // touching ``this.rule`` so the loaded saved rule isn't corrupted.
+        // Only Simulation → Cohorts has the build form. Simulation → Run
+        // is read-only — bail without touching ``this.rule`` so the loaded
+        // saved rule isn't corrupted.
         if (!document.getElementById('cohortRuleLabel')) return;
         if (!this.rule) this.rule = {};
         const r = this.rule;
@@ -1088,6 +1085,7 @@ const CohortModule = {
     // ---- Preview --------------------------------------------------------
 
     async preview() {
+        if (this._busyPreview || this._busyMaterialize) return;
         this._collectFromForm();
         this._setStatus('Computing preview…');
         // 60s client-side budget: long enough for cold SQL warehouses but
@@ -1096,6 +1094,10 @@ const CohortModule = {
         const PREVIEW_TIMEOUT_MS = 60000;
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), PREVIEW_TIMEOUT_MS);
+        this._busyPreview = true;
+        this._setBusy('cohortPreviewBtn', true, 'Previewing…');
+        const matBtn = document.getElementById('cohortMaterializeBtn');
+        if (matBtn) matBtn.disabled = true;
         try {
             const r = await fetch('/dtwin/cohorts/dry-run', {
                 method: 'POST',
@@ -1113,12 +1115,6 @@ const CohortModule = {
             const data = await r.json();
             this.lastPreview = data;
             this._renderPreview(data);
-            const btnMat = document.getElementById('cohortMaterializeBtn');
-            if (btnMat) {
-                const readOnly = window.OB && typeof window.OB.canEditOntology === 'function'
-                    && !window.OB.canEditOntology();
-                btnMat.disabled = readOnly;
-            }
             this._setStatus(`Preview: ${data.cohorts?.length || 0} cohorts in ${data.stats?.elapsed_ms || 0} ms.`);
         } catch (e) {
             const aborted = e && (e.name === 'AbortError' || ctrl.signal.aborted);
@@ -1129,6 +1125,9 @@ const CohortModule = {
             this._renderPreviewBody(`<div class="text-danger small">${this._esc(msg)}</div>`);
         } finally {
             clearTimeout(timer);
+            this._busyPreview = false;
+            this._setBusy('cohortPreviewBtn', false);
+            this._syncActionButtons();
         }
     },
 
@@ -1542,12 +1541,10 @@ const CohortModule = {
         }
         bootstrap.Modal.getInstance(document.getElementById('cohortOutputsModal')).hide();
 
-        // Outputs is configured from the Knowledge Graph run page where there is
-        // no Save-rule button — persist the change to the registry directly so
-        // it survives reloads. On the design page (with the Save form) we just
-        // mark dirty; the user persists everything together via Save rule.
-        const onRunPage = !document.getElementById('cohortRuleLabel');
-        if (onRunPage && this.activeRuleId) {
+        // Outputs can be edited from the run section (no Save-rule button
+        // there) — persist immediately when a saved rule is loaded. A draft
+        // on the design form is only marked dirty.
+        if (this.activeRuleId) {
             try {
                 const r = await fetch('/dtwin/cohorts/rules', {
                     method: 'POST',
@@ -1647,11 +1644,17 @@ const CohortModule = {
     },
 
     async materialize() {
+        if (this._busyMaterialize || this._busyPreview) return;
         if (window.OB && typeof window.OB.canEditOntology === 'function'
                 && !window.OB.canEditOntology()) {
             this._notify('Materialise is unavailable — this version is read-only.', 'warning');
             return;
         }
+        this._busyMaterialize = true;
+        this._setBusy('cohortMaterializeNowBtn', true, 'Materialising…');
+        this._setBusy('cohortMaterializeBtn', true, 'Materialising…');
+        const prevBtn = document.getElementById('cohortPreviewBtn');
+        if (prevBtn) prevBtn.disabled = true;
         try {
             const r = await fetch('/dtwin/cohorts/materialize', {
                 method: 'POST',
@@ -1670,6 +1673,13 @@ const CohortModule = {
             bootstrap.Modal.getInstance(document.getElementById('cohortMaterializeModal'))?.hide();
         } catch (e) {
             this._notify('Materialise failed.', 'error');
+        } finally {
+            this._busyMaterialize = false;
+            this._setBusy('cohortMaterializeNowBtn', false);
+            this._setBusy('cohortMaterializeBtn', false);
+            const nowBtn = document.getElementById('cohortMaterializeNowBtn');
+            if (nowBtn) nowBtn.disabled = false;
+            this._syncActionButtons();
         }
     },
 
@@ -1997,6 +2007,40 @@ const CohortModule = {
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     },
 
+    _ACTION_IDLE: {
+        cohortPreviewBtn: '<i class="bi bi-eye me-1"></i>Preview cohorts',
+        cohortMaterializeBtn: '<i class="bi bi-cloud-upload me-1"></i>Materialise',
+        cohortMaterializeNowBtn: '<i class="bi bi-cloud-upload me-1"></i>Materialise now',
+    },
+
+    _setBusy(id, busy, label) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        if (busy) {
+            if (btn.dataset.idleHtml == null) btn.dataset.idleHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>'
+                + this._esc(label || 'Working…');
+            return;
+        }
+        btn.removeAttribute('aria-busy');
+        btn.innerHTML = btn.dataset.idleHtml || this._ACTION_IDLE[id] || btn.innerHTML;
+        delete btn.dataset.idleHtml;
+    },
+
+    _syncActionButtons() {
+        if (this._busyPreview || this._busyMaterialize) return;
+        const btnMat = document.getElementById('cohortMaterializeBtn');
+        if (btnMat) {
+            const readOnly = window.OB && typeof window.OB.canEditOntology === 'function'
+                && !window.OB.canEditOntology();
+            btnMat.disabled = readOnly || !this.lastPreview;
+        }
+        const btnPrev = document.getElementById('cohortPreviewBtn');
+        if (btnPrev) btnPrev.disabled = !this.rule?.class_uri;
+    },
+
     _setStatus(msg, kind = 'info') {
         const el = document.getElementById('cohortStatus');
         if (!el) return;
@@ -2009,7 +2053,8 @@ const CohortModule = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('cohorts-section')) {
+    if (document.getElementById('cohorts-section')
+            || document.getElementById('cohort-run-section')) {
         try {
             CohortModule.init();
             CohortModule._hookLabelInput();

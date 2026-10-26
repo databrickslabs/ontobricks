@@ -108,6 +108,14 @@ async def delete_simulation(sim_id: str, sim: Simulation = Depends(_simulation))
     return {"success": True, "deleted": bool(deleted)}
 
 
+@router.post("/{sim_id}/purge", dependencies=_builder_only)
+async def purge_simulation(sim_id: str, sim: Simulation = Depends(_simulation)):
+    """Drop the sandbox after-picture; keep the scenario as a draft."""
+    row = await run_blocking(sim.purge, sim_id)
+    row.pop("diff", None)
+    return {"success": True, "simulation": row}
+
+
 @router.post("/{sim_id}/run", dependencies=_builder_only)
 async def run_simulation(
     sim_id: str, request: Request, sim: Simulation = Depends(_simulation)

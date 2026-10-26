@@ -61,3 +61,12 @@
 .sim-origin-patch {
     background-color: var(--db-gray-600);
 }
+
+.sim-fact-wizard-list {
+    max-height: 16rem;
+    overflow-y: auto;
+}
+
+.sim-table .input-group {
+    min-width: 10rem;
+}

@@ -10,8 +10,10 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
+from back.core.helpers import is_uri
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
+from back.objects.digitaltwin.constants import RDF_TYPE
 
 logger = get_logger(__name__)
 
@@ -19,6 +21,149 @@ logger = get_logger(__name__)
 EXPLORER_MAX_ENTITIES_MIN = 100
 EXPLORER_MAX_ENTITIES_DEFAULT = 5000
 EXPLORER_MAX_ENTITIES_UI_MAX = 20_000
+
+
+def _overlay_live_neighbourhood(
+    store: Any,
+    live_table: str,
+    *,
+    sandbox_rows: List[Any],
+    sandbox_subjects: List[str],
+    depth: int,
+    max_entities: int,
+    batch_size: int,
+    max_triples: int,
+    max_fetch_seconds: float,
+) -> tuple[List[Any], bool]:
+    """Union live neighbourhood triples with the sandbox after-picture.
+
+    Sandbox (subject, predicate) pairs overlay live ones; other live facts
+    of the same entity stay visible. Neighbours come from a live expand
+    around sandbox subjects and the URI objects they point at.
+    """
+    overlay_preds = {
+        ((row or {}).get("subject") or "", (row or {}).get("predicate") or "")
+        for row in sandbox_rows
+        if (row or {}).get("subject") and (row or {}).get("predicate")
+    }
+    seeds: List[str] = []
+    seen: Set[str] = set()
+    for uri in sandbox_subjects:
+        if uri and uri not in seen:
+            seen.add(uri)
+            seeds.append(uri)
+    for row in sandbox_rows:
+        pred = (row or {}).get("predicate") or ""
+        obj = (row or {}).get("object") or ""
+        if pred == RDF_TYPE or not is_uri(obj) or obj in seen:
+            continue
+        seen.add(obj)
+        seeds.append(obj)
+    try:
+        live = GraphFilter.expand(
+            store,
+            live_table,
+            seeds,
+            include_rels=True,
+            depth=max(1, int(depth or 2)),
+            max_entities=max_entities,
+            batch_size=batch_size,
+            max_triples=max_triples,
+            max_fetch_seconds=max_fetch_seconds,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Live neighbourhood overlay failed; showing sandbox only: %s", exc
+        )
+        return sandbox_rows, False
+    merged = [
+        row
+        for row in (live.get("results") or [])
+        if (
+            ((row or {}).get("subject") or ""),
+            ((row or {}).get("predicate") or ""),
+        )
+        not in overlay_preds
+    ]
+    merged.extend(sandbox_rows)
+    if len(merged) > max_triples:
+        return merged[:max_triples], True
+    return merged, bool(live.get("capped"))
+
+
+def _read_sandbox_triples(
+    store: Any,
+    graph_name: str,
+    *,
+    max_entities: int,
+    batch_size: int,
+    max_triples: int,
+    max_fetch_seconds: float,
+) -> Dict[str, Any]:
+    """Load distinct sandbox subjects and their triples (no live expand)."""
+    subjects: List[str] = []
+    seen: Set[str] = set()
+    capped = False
+    iterator = getattr(store, "iter_triples", None)
+    stream = (
+        iterator(graph_name, batch_size=batch_size)
+        if callable(iterator)
+        else store.query_triples(graph_name)
+    )
+    for triple in stream:
+        subject = (triple or {}).get("subject") or ""
+        if not subject or subject in seen:
+            continue
+        seen.add(subject)
+        subjects.append(subject)
+        if len(subjects) >= max_entities:
+            capped = True
+            break
+    if not subjects:
+        return {
+            "subjects": [],
+            "results": [],
+            "capped": False,
+            "timeout_capped": False,
+        }
+
+    results: List[Any] = []
+    timeout_capped = False
+    fetch_t0 = time.monotonic()
+    try:
+        for i in range(0, len(subjects), batch_size):
+            if (time.monotonic() - fetch_t0) > max_fetch_seconds:
+                timeout_capped = True
+                capped = True
+                break
+            batch_rows = store.get_triples_for_subjects(
+                graph_name, subjects[i : i + batch_size]
+            )
+            if batch_rows:
+                results.extend(batch_rows)
+            if len(results) >= max_triples:
+                results = results[:max_triples]
+                capped = True
+                break
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        msg = str(e)
+        if "does not exist" in msg.lower():
+            raise NotFoundError(
+                f"Simulation sandbox {graph_name} does not exist. "
+                "Run the scenario again.",
+                detail=msg,
+            )
+        raise InfrastructureError(
+            "Error reading the simulation sandbox", detail=msg
+        )
+    return {
+        "subjects": subjects,
+        "results": results,
+        "capped": capped,
+        "timeout_capped": timeout_capped,
+    }
 
 
 class GraphFilter:
@@ -238,6 +383,75 @@ class GraphFilter:
             "count": len(results),
             "initial_count": initial_count,
             "expanded_count": len(entity_set),
+            "capped": capped,
+            "timeout_capped": timeout_capped,
+        }
+
+    @staticmethod
+    def sandbox_slice(
+        store: Any,
+        graph_name: str,
+        max_entities: int = 5000,
+        batch_size: int = 1000,
+        max_triples: int = 100_000,
+        max_fetch_seconds: float = 120.0,
+        live_table: Optional[str] = None,
+        depth: int = 2,
+    ) -> Dict[str, Any]:
+        """Return the sandbox after-picture, optionally unioned with the live graph.
+
+        Sandbox triples are the what-if slice (cohort members, patched facts,
+        inferred conclusions). When *live_table* is set, expand those entities
+        on the live graph and overlay only the predicates the sandbox wrote.
+        """
+        loaded = _read_sandbox_triples(
+            store,
+            graph_name,
+            max_entities=max_entities,
+            batch_size=batch_size,
+            max_triples=max_triples,
+            max_fetch_seconds=max_fetch_seconds,
+        )
+        subjects = loaded["subjects"]
+        results = loaded["results"]
+        capped = loaded["capped"]
+        timeout_capped = loaded["timeout_capped"]
+        if not subjects:
+            return {
+                "phase": "sandbox",
+                "results": [],
+                "columns": ["subject", "predicate", "object"],
+                "count": 0,
+                "initial_count": 0,
+                "expanded_count": 0,
+                "capped": False,
+                "timeout_capped": False,
+                "message": "This simulation sandbox is empty.",
+            }
+
+        if live_table:
+            results, live_capped = _overlay_live_neighbourhood(
+                store,
+                live_table,
+                sandbox_rows=results,
+                sandbox_subjects=subjects,
+                depth=depth,
+                max_entities=max_entities,
+                batch_size=batch_size,
+                max_triples=max_triples,
+                max_fetch_seconds=max_fetch_seconds,
+            )
+            capped = bool(capped or live_capped)
+
+        return {
+            "phase": "sandbox",
+            "results": results,
+            "columns": ["subject", "predicate", "object"],
+            "count": len(results),
+            "initial_count": len(subjects),
+            "expanded_count": len(
+                {t.get("subject") for t in results if t.get("subject")}
+            ),
             "capped": capped,
             "timeout_capped": timeout_capped,
         }

@@ -240,7 +240,6 @@
                                             <ul>
                                                 <li><strong>Data Quality (SHACL)</strong> &mdash; define shapes for completeness, cardinality, pattern, consistency...</li>
                                                 <li><strong>Business Rules (SWRL)</strong> &mdash; author inference rules using the graphical D3 editor</li>
-                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;); run &amp; preview them from <strong>Knowledge Graph &rarr; Cohorts</strong>. See the <a href="#help-docs/advanced-features#cohort-discovery" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="cohort-discovery">Cohort discovery</a> guide.</li>
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
                                                 <li><strong>Pitfalls</strong> &mdash; detect structural, logical and semantic modeling issues, with a precision score</li>
                                             </ul>
@@ -285,12 +284,11 @@
                                             <ul>
                                                 <li><strong>Build</strong> / <strong>Runs</strong> &mdash; trigger a synchronization and inspect its run history</li>
                                                 <li><strong>Overview</strong> / <strong>Analytics</strong> &mdash; insight dashboards: entity &amp; relationship counts, last sync timestamp, quality status, usage trends</li>
-                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
+                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick a ready simulation sandbox from the Graph dropdown, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
                                                 <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
                                                 <li><strong>Chat</strong> &mdash; ask natural-language questions over the materialized graph</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
                                                 <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning (SQL on Delta / Lakebase; Cypher on Neo4j)</li>
-                                                <li><strong>Cohorts</strong> &mdash; run &amp; preview the constraint-based grouping rules designed in <strong>Ontology &rarr; Advanced &rarr; Cohorts</strong></li>
                                             </ul>
                                             <p>A <em>Readiness Status</em> indicator tells you when ontology &amp; mapping are both ready to sync.</p>
                                         </div>
@@ -307,9 +305,10 @@
                                     <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
                                             <ul>
-                                                <li><strong>Scenarios</strong> &mdash; create, duplicate and delete named what-if simulations for the loaded domain version</li>
-                                                <li><strong>Workbench</strong> &mdash; pick a scope (entity + hops, saved cohort, or class), add hypothetical triple patches, choose reasoning phases, and run</li>
-                                                <li><strong>Results</strong> &mdash; inspect the triples the patches and reasoning added or removed compared to the live graph</li>
+                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
+                                                <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
+                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor: pick a scope, add hypothetical facts, choose reasoning phases, and run</li>
+                                                <li><strong>Results</strong> &mdash; after a run finishes, this page opens with the triples the patches and reasoning added or removed; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
                                             </ul>
                                             <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Lakebase graph backend only.</p>
@@ -335,7 +334,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-share"></i></div>
                                         <h5>Interactive Graph Viewer</h5>
-                                        <p>Two-phase search, configurable depth, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
+                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -377,7 +376,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
                                         <h5>Cohort Discovery</h5>
-                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Ontology &rarr; Advanced &rarr; Cohorts</strong>, run &amp; preview in <strong>Knowledge Graph &rarr; Cohorts</strong>.</p>
+                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Simulation &rarr; Cohorts</strong>, run &amp; preview in <strong>Simulation &rarr; Run</strong>.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -516,7 +515,7 @@
                                 <dt>SWRL</dt><dd>Semantic Web Rule Language &mdash; &ldquo;IF ... THEN ...&rdquo; inference rules.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
-                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Ontology &rarr; Advanced &rarr; Cohorts</em>, run under <em>Knowledge Graph &rarr; Cohorts</em>.</dd>
+                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Simulation &rarr; Cohorts</em>, run under <em>Simulation &rarr; Run</em>.</dd>
                                 <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
                                 <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the domain Graph DB.</dd>
                                 <dt>Graph DB</dt><dd>Per-domain engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>

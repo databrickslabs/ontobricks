@@ -738,7 +738,7 @@ Delta table — or both.
 
 ### 2. Authoring a rule (UX)
 
-In the Knowledge Graph, open **Advanced → Cohorts**.  The form has five
+In **Simulation → Cohorts**, open the design form.  The form has five
 sections, each with live feedback:
 
 1. **Identity** — *Rule name* + optional *Description*.  The internal id is

@@ -1381,6 +1381,7 @@ Scenario definitions and the last diff live in the registry tables
 | `POST /simulation/create` | Create a draft (Builder) |
 | `GET / PUT / DELETE /simulation/{id}` | Read, replace spec (Builder), delete + drop sandbox (Builder) |
 | `POST /simulation/{id}/run` | Start the run; poll `GET /tasks/{task_id}` (Builder) |
+| `POST /simulation/{id}/purge` | Drop sandbox after-picture; keep spec as draft (Builder) |
 | `GET /simulation/{id}/diff?kind=added\|removed&page=&search=` | Paged diff rows + summary |
 | `GET /simulation/runs?simulation_id=` | Run history |
 
@@ -1394,7 +1395,12 @@ Scenario definitions and the last diff live in the registry tables
 | `src/back/core/graphdb/lakebase/LakebaseSimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
 | `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
-| `src/front/templates/simulation.html` | Scenarios / Workbench / Results / Runs page |
+| `src/front/templates/simulation.html` | Cohorts / Run / Scenarios / Results / Runs page (scenario editor is not a sidebar item) |
+
+Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
+(former Knowledge Graph → Cohorts) live under this menu. Bookmarks to
+`/ontology/?section=cohorts` and `/dtwin/?section=cohorts` redirect here.
+Materialise still writes to the live graph via `/dtwin/cohorts/*`.
 
 ---
 

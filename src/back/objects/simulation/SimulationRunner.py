@@ -178,6 +178,16 @@ class SimulationRunner:
         self._progress(20, f"Seeding sandbox with {len(entities)} entities")
         sandbox.reset()
         sandbox.seed(entities)
+        scoped = set(entities)
+        patch_subjects = list(
+            dict.fromkeys(
+                p.subject
+                for p in self._spec.patches
+                if p.subject and p.subject not in scoped
+            )
+        )
+        if patch_subjects:
+            sandbox.seed(patch_subjects)
         before = sandbox.triples()
 
         self._progress(40, f"Applying {len(self._spec.patches)} patches")
@@ -217,4 +227,17 @@ class SimulationRunner:
                 "sandbox_table": sandbox.table,
             }
         )
+        ensure = getattr(sandbox, "ensure_explorer_views", None)
+        if callable(ensure):
+            from back.core.helpers import effective_graph_query_table
+
+            live_union = effective_graph_query_table(
+                self._domain, self._settings, include_inferred=True, store=live
+            )
+            live_asserted = (
+                live.synced_table_name(graph_name)
+                if hasattr(live, "synced_table_name")
+                else live_union
+            )
+            ensure(live_union, live_asserted)
         return diff

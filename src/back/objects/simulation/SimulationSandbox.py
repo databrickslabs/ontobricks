@@ -28,15 +28,35 @@ class SimulationSandbox:
             raise ValidationError("Simulations require the Lakebase graph backend")
         self._live = live_store
         self._graph_name = graph_name
+        self._sim_id = sim_id
         self.table = LakebaseSimulationStore.sandbox_table_name(graph_name, sim_id)
         self.store = LakebaseSimulationStore.from_store(live_store)
 
     def reset(self) -> None:
+        self._drop_explorer_views()
         self.store.drop_table(self.table)
         self.store.create_table(self.table)
 
     def drop(self) -> None:
+        self._drop_explorer_views()
         self.store.drop_table(self.table)
+
+    def _drop_explorer_views(self) -> None:
+        """Remove Explorer views before their sandbox dependency is dropped."""
+        from back.core.graphdb.lakebase import LakebaseSimulationUnion
+
+        LakebaseSimulationUnion(self._live).drop_all(self._graph_name, self._sim_id)
+
+    def ensure_explorer_views(self, live_union: str, live_asserted: str) -> None:
+        """Materialise inferred and asserted Explorer union views after a run."""
+        from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
+
+        union = LakebaseSimulationUnion(self._live)
+        for include_inferred, live in ((True, live_union), (False, live_asserted)):
+            view = _companion_ddl.sim_union_phy(
+                self._graph_name, self._sim_id, include_inferred=include_inferred
+            )
+            union.ensure(view, live, self.table)
 
     def seed(self, entities: List[str]) -> int:
         source = self._live.sql_table_reference(self._graph_name)

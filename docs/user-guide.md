@@ -923,6 +923,14 @@ select seed entities and returns after you choose **Explore selected**.
 - **Pan**: Click and drag background
 - **Fit to View**: Click the fullscreen button to fit all entities in view
 
+**Graph source.** The **Graph** dropdown in the Explorer header switches
+the targeted view. A **ready** simulation is the live knowledge graph
+**UNION** the sandbox after-picture: simulated predicates overlay live
+ones, and the rest of each entity (existing properties and relations)
+stays visible. Explorer behaviour is unchanged (search, expand, hops,
+inferred, max entities). Use **Live graph** to query the built knowledge
+graph only.
+
 **Find & Filter:**
 - **Find**: Search for entities by label or URI — matching entities and their neighbors are highlighted and the camera zooms to focus on results
 - **Filters**: Advanced filtering by entity type, field (label/URI), match type
@@ -1174,7 +1182,7 @@ Click **Inference** in the Knowledge Graph sidebar to run the multi-phase reason
 Results are displayed as inferred triples and violations. Inferred triples can be **materialized** (written back) to the triple store.
 
 Builders can use **Purge Inferences** from **Build** (Lakebase and
-Lakehouse), **Inference**, or **Cohorts** to remove all materialized
+Lakehouse), **Inference**, or **Simulation → Run** to remove all materialized
 reasoning and cohort triples from the
 active graph. The confirmation dialog names the active graph and shows the
 combined number of generated triples that will be deleted. The Cockpit
@@ -1245,14 +1253,30 @@ needs data about entities outside the scope will not fire. For example, an
 aggregate over all customers will not fire when you simulate a 2-hop
 neighbourhood. Widen the hops or use a cohort or class scope in that case.
 
+### Cohorts (Sidebar)
+
+Design the grouping rules used as a simulation scope (and as a live graph
+materialisation). Pick the target class, the linking paths, the compatibility
+filters and the grouping type, then **Save rule**. Preview and write results
+from **Simulation → Run**. See [Cohort discovery](advanced_features.md#cohort-discovery).
+
+### Run (Sidebar)
+
+Pick a saved cohort rule, **Preview** the groups it finds on the live graph,
+and **Materialise** them as `:inCohort` triples and/or a Unity Catalog table.
+**Outputs** configures those targets. This is the former Knowledge Graph
+Cohorts page.
+
 ### Scenarios (Sidebar)
 
 Lists the saved scenarios of the active domain version with their scope,
 number of facts, status (`draft`, `running`, `ready`, `failed`) and the
-added / removed counts of the last run. Open, run, view results or delete a
-scenario from its row. **New scenario** opens an empty Workbench.
+added / removed counts of the last run. Open, run, view results, **purge**
+(drop the sandbox after-picture, keep the scenario as a draft) or delete a
+scenario from its row. **New scenario** (or Explorer **Simulate from here**)
+opens the scenario editor — it is not a sidebar item.
 
-### Workbench (Sidebar)
+### Scenario editor
 
 1. **Scenario** — give it a name and an optional description.
 2. **Scope** — choose the slice of the graph to copy into the sandbox:
@@ -1263,13 +1287,19 @@ scenario from its row. **New scenario** opens an empty Workbench.
 3. **Hypothetical facts** — add rows of *subject / predicate / value*:
    **Set** replaces every value of the predicate on the subject (e.g. a new
    credit score), **Add** asserts an extra triple, **Remove** retracts one.
+   **Fact wizard** (or the search icon on a cell) looks up existing graph
+   entities, ontology predicates declared on the subject's class (including
+   inherited), and related instances so you do not have to paste URIs by hand.
 4. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
    decision tables, SPARQL rules, aggregate rules and OWL 2 RL are optional.
 5. **Run** saves the scenario and starts it as a background task; the progress
-   bar follows the phases (scope, seed, facts, reasoning, diff).
+   bar follows the phases (scope, seed, facts, reasoning, diff). When it
+   finishes, **Simulation → Results** opens with the before/after diff. You
+   can also click **View results** on the editor, or the clipboard icon
+   on the Scenarios list.
 
 Tip: in the Knowledge Graph Explorer, the entity details panel has a
-**Simulate from here** button that opens the Workbench pre-filled with that
+**Simulate from here** button that opens the editor pre-filled with that
 entity's neighbourhood and an empty *Set* fact.
 
 ### Results (Sidebar)
@@ -1279,6 +1309,9 @@ inferences, removed triples, affected entities) and two paged, searchable
 tables: **Added** — each row tagged *your fact* or *inferred* (hover for the
 rule that produced it) — and **Removed**. Lists show the first 2000 rows; the
 counts are always exact. A warning lists reasoning phases that failed.
+**Explorer** opens Knowledge Graph Explorer on that sandbox so you can walk the
+after picture as a graph (same as picking the scenario in Explorer's Graph
+dropdown).
 
 ### Runs (Sidebar)
 
@@ -2947,10 +2980,14 @@ After import you can:
 - **Unmap all**: Clear every entity and relationship mapping from both **Mapping → General** and **Mapping → Studio** via a shared confirmation dialog (`Unmap all`). Attribute exclusions stamped on ontology objects are re-evaluated after the wipe so the Studio canvas stays consistent.
 - **Mapping Diagnostics**: **Mapping → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
 
+### Simulation
+- **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Graph Explorer's **Graph** dropdown (and Results → **Explorer**) loads a ready sandbox as a graph.
+- **Cohort design and run**: **Simulation → Cohorts** authors grouping rules; **Simulation → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
+
 ### Knowledge Graph (Sync & Explore)
 - **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).
 - **Readiness Status**: Validates ontology, entity mappings, relationship mappings, and attribute mapping completeness before enabling sync and explore actions.
-- **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Insights, Analytics, Cohorts, GraphQL, Data Quality, Inference) shows a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
+- **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Insights, Analytics, GraphQL, Data Quality, Inference) and **Simulation → Run** shows a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
 - **Triple Store Sync**: Synchronize generated triples to a Unity Catalog table — SQL is generated automatically from R2RML mappings (no manual query writing required).
 - **Last Updated Timestamp**: Triple store status displays the last modification date and time retrieved from Unity Catalog Delta table metadata (`DESCRIBE DETAIL`).
 - **Auto-Load Triple Store**: Triples and Graph Viewer views automatically load data from the triple store on navigation (no manual button click required).
