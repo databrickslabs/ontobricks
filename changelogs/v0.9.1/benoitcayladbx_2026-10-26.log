@@ -1,0 +1,35 @@
+================================================================================
+## Let viewers search the graph and use Graph Chat
+================================================================================
+
+Context: PermissionMiddleware blocked every POST on domain-scoped paths for
+the Viewer role. Explorer search/expand (/dtwin/sync/filter) and Graph Chat
+(/dtwin/assistant/chat, /chat/stream, and the agent's query_graphql loopback
+to /dtwin/graphql/execute) take a POST body but only read, so a Viewer could
+open the Knowledge Graph but not search it or chat. Extract
+_viewer_write_blocked so PermissionMiddleware.dispatch does not grow past
+the size-budget baseline (186 LOC).
+
+Changes:
+
+1. src/shared/fastapi/main.py
+   Add _VIEWER_READ_ONLY_POSTS (exact paths, POST only) and
+   _viewer_write_blocked; skip the viewer write gate for those POSTs.
+   Graph Chat writes (/dtwin/nodes/action/request, /confirm) and
+   /dtwin/sync/load stay blocked.
+2. tests/units/auth/test_permission_middleware.py
+   Dispatch tests for all four allowlisted paths (GET/POST allowed;
+   PUT/PATCH/DELETE blocked; non-members blocked). Write POSTs and
+   prefix-sharing paths stay 403; editors can still POST writes.
+   TestViewerWriteBlocked covers _viewer_write_blocked and pins the
+   allowlist set.
+3. docs/development.md
+   Document the Viewer POST exceptions in the enforcement table.
+
+Modified files:
+- src/shared/fastapi/main.py
+- tests/units/auth/test_permission_middleware.py
+- docs/development.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9616 passed, 326 skipped, 8 deselected, 0 failed in 53.08s
