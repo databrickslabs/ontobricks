@@ -154,6 +154,21 @@ _PERM_BYPASS_PREFIXES = (
 
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
+# Read-only endpoints that take their parameters as a POST body. Viewers
+# need them to search/expand the Explorer and to run Graph Chat (the agent
+# loopbacks ``query_graphql`` to ``/dtwin/graphql/execute``). None of them
+# persists domain content; Graph Chat write actions go through
+# ``/dtwin/nodes/action/request`` and ``/confirm``, which stay blocked.
+# ``/sync/load`` stays blocked: it is a builder-only data-refresh operation.
+_VIEWER_READ_ONLY_POSTS = frozenset(
+    {
+        "/dtwin/sync/filter",
+        "/dtwin/assistant/chat",
+        "/dtwin/assistant/chat/stream",
+        "/dtwin/graphql/execute",
+    }
+)
+
 _PERM_ADMIN_ONLY_PREFIXES = (
     "/settings",
 )
@@ -302,6 +317,13 @@ _STATUS_GATE_WIZARD_EDIT_SUFFIXES = (
 )
 
 
+def _viewer_write_blocked(method: str, path: str) -> bool:
+    """True when a Viewer must not use this method/path."""
+    if method not in _VIEWER_BLOCKED_METHODS:
+        return False
+    return not (method == "POST" and path in _VIEWER_READ_ONLY_POSTS)
+
+
 def _is_status_gated_edit(path: str, method: str) -> bool:
     """True when *path*/*method* mutates the loaded version's content."""
     if method not in _VIEWER_BLOCKED_METHODS:
@@ -334,7 +356,9 @@ class PermissionMiddleware(BaseHTTPMiddleware):
       ``/mapping``, ``/dtwin``) additionally requires a non-empty entry
       in the domain's ``.domain_permissions.json``.  Admins bypass this.
     - **Viewer write-block**: a viewer team entry allows GETs on domain
-      routes but not writes.
+      routes but not writes, except POST to the exact paths in
+      :data:`_VIEWER_READ_ONLY_POSTS` (Explorer filter, Graph Chat, and
+      GraphQL execute).
     - **Admin-only prefix** (`/settings`) is gated to admins even for
       app users. A small allow-list (see
       :data:`_PERM_ADMIN_ONLY_EXCEPTIONS` and
@@ -472,7 +496,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             if (
                 is_domain_scoped
                 and domain_role == ROLE_VIEWER
-                and request.method in _VIEWER_BLOCKED_METHODS
+                and _viewer_write_blocked(request.method, path)
             ):
                 return self._forbidden_json(
                     request, "Viewer role does not allow write operations"
