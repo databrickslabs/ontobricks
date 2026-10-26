@@ -49,10 +49,13 @@ dependencies = [
     #   GHSA-m952-2w3f-6r8h (CVE-2026-107727)  graphql-ws retains completed
     #     subscription slots (fixed in 0.327.2)
     "strawberry-graphql[fastapi]>=0.327.2",
-    # mlflow>=3.16.1 is outside the AI Gateway SSRF range (GHSA-h7x2-h6g9-p789 /
-    # CVE-2026-71211, affected 3.13.0–3.15.2) and relaxes cryptography to <51,
-    # so the PKCS#7 oracle floor (cryptography>=50) is now satisfiable.
-    "mlflow>=3.16.1",
+    # mlflow>=3.17.2 is outside the AI Gateway SSRF range (GHSA-h7x2-h6g9-p789 /
+    # CVE-2026-71211, affected 3.13.0–3.15.2), relaxes cryptography to <51
+    # (so the PKCS#7 oracle floor, cryptography>=50, is satisfiable), fixes
+    # the unauthenticated scorer-kwargs SSRF (GHSA-2wqp-q3c6-ccj5, Dependabot
+    # #268) and the FileStore trace-id path traversal (GHSA-wqmh-qccw-pqwf,
+    # Dependabot #263).
+    "mlflow>=3.17.2",
     "apscheduler>=3.10,<4",
     "owlrl>=7.0.0",
     "pyshacl>=0.26.0",
@@ -89,7 +92,9 @@ dev = [
     "pytest-mock>=3.12.0",
     "pytest-cov>=4.1.0",
     "httpx>=0.25.0",
-    "black>=26.3.1",
+    # black>=26.10.1: GitHub Action installed an unvalidated required-version
+    # from pyproject.toml (GHSA-cg8m-r9f2-5wm2, Dependabot #257).
+    "black>=26.10.1",
     "flake8>=6.0.0",
     "responses>=0.24.0",
     "playwright>=1.40.0",
@@ -100,7 +105,9 @@ dev = [
     "hypothesis>=6.100.0", # property-based tests (T-M6)
     "syrupy>=4.6.0", # snapshot tests for templates + MCP schemas
     "testcontainers[postgres]>=4.0.0", # ephemeral Postgres for Lakebase tests (db marker)
-    "fastmcp>=2.3.1", # in-process MCP server tests (T-M3, mcp marker)
+    # fastmcp>=3.4.10: post-transform component authorization was skipped on
+    # direct calls (GHSA-7xgj-8392-5q4r, Dependabot #261).
+    "fastmcp>=3.4.10", # in-process MCP server tests (T-M3, mcp marker)
     "pyyaml>=6.0", # consumed by scripts/check_coverage.py
     # M3.P1 quality enforcement
     "ruff>=0.7.4", # supersedes flake8 once the baseline is clean
@@ -129,10 +136,12 @@ constraint-dependencies = [
     # (GHSA-5639-2j2p-m4mx / CVE-2026-102991, Dependabot #208).
     "mako>=1.4.2",
     "pygments>=2.20.0",
-    # GitPython 3.1.62: submodule path traversal (GHSA-59cr-6r3x-644w),
+    # GitPython 3.2.1: submodule path traversal (GHSA-59cr-6r3x-644w),
     # ReDoS (GHSA-g5vv-9gxw-82hx), --no-index oracle (GHSA-whh4-5q6c-9v3x),
-    # git-dir impersonation (GHSA-239g-whfq-7xj9). Transitive via mlflow.
-    "gitpython>=3.1.62",
+    # git-dir impersonation (GHSA-239g-whfq-7xj9), and a submodule ".git"
+    # path validated only after cloning into it (GHSA-83vg-56qc-22m7 /
+    # Dependabot #259, RCE). Transitive via mlflow.
+    "gitpython>=3.2.1",
     # Security floors for transitive dependencies reported by Dependabot.
     "click>=8.3.3",
     # certifi>=2026.10.19 removes a compromised root certificate
@@ -144,12 +153,27 @@ constraint-dependencies = [
     # mcp>=1.30.0: unbounded StreamableHTTP session accumulation
     # (GHSA-84m7-p3x7-pcfv / CVE-2026-59951, Dependabot #201/#202).
     "mcp>=1.30.0",
-    # pillow>=13.0.0 resolves Dependabot #216–#243. Pillow 13 drops
+    # pillow>=13.0.0 resolves Dependabot #216–#260. Pillow 13 drops
     # Python 3.10, so the project runtime floor is Python 3.11.
     "pillow>=13.0.0",
     "pip>=26.2.0",
     "pyasn1>=0.6.4",
-    "setuptools>=83.0.0",
+    # setuptools>=84.1.0: Windows path escape via namespace_packages.txt
+    # during legacy wheel installation (GHSA-xmj3-9gf7-h52w, Dependabot #264).
+    "setuptools>=84.1.0",
+    # filelock>=4.2.1: three Windows-only SQLite side-file issues in
+    # ReadWriteLock — planted symlink/journal file overwrite (high,
+    # GHSA-v4x8-3wr5-3wq8), cross-user file placement (GHSA-9vhv-jxww-xfm5),
+    # and a soft-lock oplock stall (GHSA-567q-5qvw-pf92). Dependabot
+    # #267/#269/#270, transitive via uv/tox tooling.
+    "filelock>=4.2.1",
+    # fastmcp-slim>=3.4.10: post-transform component authorization was
+    # skipped on direct calls (GHSA-7xgj-8392-5q4r, Dependabot #262).
+    # Transitive alt distribution of fastmcp.
+    "fastmcp-slim>=3.4.10",
+    # opentelemetry-api>=1.45.1: unbounded tracestate parsing
+    # (GHSA-xcq7-p3pf-p88h, Dependabot #258). Transitive via mlflow.
+    "opentelemetry-api>=1.45.1",
     # Security floors for the optional pitfalls dependency graph.
     "transformers>=5.10.0",
     "torch>=2.13.0",
