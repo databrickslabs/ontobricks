@@ -930,7 +930,7 @@ Request arrives
 | Condition | Action |
 |-----------|--------|
 | `role = none` | JSON 403 (for fetch/XHR) or redirect to `/access-denied` (for page navigation). |
-| `role = viewer` + write method (POST/PUT/PATCH/DELETE) | JSON 403: "Viewer role does not allow write operations". |
+| `role = viewer` + write method (POST/PUT/PATCH/DELETE) | JSON 403: "Viewer role does not allow write operations", except POST to the exact read-only graph paths `/dtwin/sync/filter`, `/dtwin/assistant/chat`, `/dtwin/assistant/chat/stream`, and `/dtwin/graphql/execute`. PUT/PATCH/DELETE on those paths stay blocked. |
 | `role != admin` + path starts with `/settings` | JSON 403 or redirect to `/`, except an explicit GET allow-list (registry/warehouse status **and** Unity Catalog catalog/schema browse used by **Add Data Source**). Settings writes and warehouse selection stay admin-only. |
 | Digital twin build + effective domain role < `builder` | JSON 403: "Only builders and admins can build a graph viewer". |
 | Otherwise | Request proceeds normally. |
