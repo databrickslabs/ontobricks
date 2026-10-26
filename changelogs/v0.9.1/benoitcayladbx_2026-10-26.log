@@ -33,3 +33,54 @@ Modified files:
 - changelogs/v0.9.1/benoitcayladbx_2026-10-26.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9616 passed, 326 skipped, 8 deselected, 0 failed in 53.08s
+
+================================================================================
+## Rebase SWRL builtin inference/materialization fixes (#171 / #172)
+================================================================================
+
+Context: Editor-generated SWRL rules with ``swrlb:`` builtins over datatype
+properties still inferred zero triples on current 0.9.1 (issue #171). PR #172
+was correct but targeted pre-``swrl/`` paths and conflicted with master.
+Ported onto the topic package, kept the review follow-ups (IRI-safe
+normalisation, shared ``partition_rule_atoms``, Postgres dialect gap
+documented), and extracted ``SWRLSQLBuiltinFilters`` so ``SWRLSQLTranslator``
+stays under the class size ceiling. Inference already emitted WHERE filters
+(0.9.0); materialization, uri_map ``dataProperties``, registry prefixes, and
+Lakebase ``TRY_CAST`` were still broken.
+
+Changes:
+
+1. src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+   Prefix- and IRI-tolerant ``_normalize`` for ``get`` / ``is_builtin``.
+2. src/back/core/reasoning/swrl/SWRLEngine.py
+   Fold class ``dataProperties`` into the uri_map (data namespace); object
+   properties win a same-name clash, as in ``AggregateRuleEngine``.
+3. src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+   ``dialect`` on the translator; inference/materialization reuse
+   ``partition_rule_atoms``; builtins become WHERE filters and negated atoms
+   ``NOT EXISTS``. Extract Method for filters, var-class map, and INSERT
+   statements (size budget).
+4. src/back/core/reasoning/swrl/SWRLSQLBuiltinFilters.py
+   Extract Class: built-in SQL templates plus the Postgres
+   ``TRY_CAST``/``DOUBLE`` rewrite (comparison/math only; remaining Lakebase
+   gap documented).
+5. src/back/core/graphdb/lakebase/LakebaseBase.py
+   ``get_query_translator`` returns ``SWRLSQLTranslator(dialect="postgres")``.
+6. tests/units/ontology/test_swrl_builtin_defects.py
+   One regression class per defect (13 tests).
+7. tests/units/architecture/baseline.json
+   Drop ``build_materialization_sql`` (now under 100 LOC); shrink the other
+   SWRL SQL builder entries.
+
+Modified files:
+- src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+- src/back/core/reasoning/swrl/SWRLEngine.py
+- src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+- src/back/core/reasoning/swrl/SWRLSQLBuiltinFilters.py
+- src/back/core/reasoning/swrl/__init__.py
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- tests/units/ontology/test_swrl_builtin_defects.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.9.1/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9629 passed, 326 skipped, 8 deselected, 0 failed in 58.79s
