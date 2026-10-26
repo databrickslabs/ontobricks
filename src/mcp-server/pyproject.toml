@@ -5,7 +5,9 @@ description = "OntoBricks MCP Server — Knowledge graph tools for Databricks Pl
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115.0",
-    "fastmcp>=2.3.1",
+    # fastmcp>=3.4.10: post-transform component authorization was skipped on
+    # direct calls (GHSA-7xgj-8392-5q4r, Dependabot #245).
+    "fastmcp>=3.4.10",
     "httpx>=0.25.0",
     "uvicorn>=0.34.0",
     "pydantic>=2",
@@ -27,6 +29,16 @@ constraint-dependencies = [
     # (GHSA-84m7-p3x7-pcfv / CVE-2026-59951, Dependabot #201).
     "mcp>=1.30.0",
     "pyasn1>=0.6.4",
+    # certifi>=2026.10.19 removes a compromised root certificate
+    # (GHSA-6q48-6c7w-9gw2, Dependabot #209).
+    "certifi>=2026.10.19",
+    # fastmcp-slim>=3.4.10: post-transform component authorization was
+    # skipped on direct calls (GHSA-7xgj-8392-5q4r, Dependabot #246).
+    # Transitive alt distribution of fastmcp.
+    "fastmcp-slim>=3.4.10",
+    # opentelemetry-api>=1.45.1: unbounded tracestate parsing
+    # (GHSA-xcq7-p3pf-p88h, Dependabot #244). Transitive via fastmcp.
+    "opentelemetry-api>=1.45.1",
     # pyjwt>=2.15.0: HMAC/JWK confusion series + RecursionError + options-dict
     # mutation (GHSA-gvp8-978c-rx2q). Transitive via databricks-sdk.
     "pyjwt>=2.15.0",
