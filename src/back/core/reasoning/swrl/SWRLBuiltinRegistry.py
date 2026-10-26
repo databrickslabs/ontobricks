@@ -6,9 +6,20 @@ both SQL and Cypher translation.  Templates use positional placeholders
 references or literal values.
 """
 
+import re
 from typing import Dict, Optional
 
+from back.core.helpers import SQL_DIALECT_POSTGRES
 from back.core.reasoning.swrl.SWRLBuiltin import SWRLBuiltin
+
+# POSIX character class so the pattern is safe inside a Postgres string
+# literal (no backslash escapes). Accepts the same shapes as Spark DOUBLE.
+_PG_FLOAT_RE = r"^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$"
+_PG_INT_RE = r"^[+-]?[0-9]+$"
+_TRY_CAST_RE = re.compile(
+    r"TRY_CAST\((\{[0-9]+\}|[^\)]+) AS (DOUBLE|BIGINT|TIMESTAMP|DATE)\)",
+    re.IGNORECASE,
+)
 
 
 class SWRLBuiltinRegistry:
@@ -235,6 +246,49 @@ class SWRLBuiltinRegistry:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    @classmethod
+    def sql_template_for(cls, builtin: SWRLBuiltin, dialect: Optional[str] = None) -> str:
+        """Return the SQL template for *dialect* (Spark by default).
+
+        Lakebase is Postgres: Spark ``TRY_CAST`` / ``RLIKE`` / ``CURRENT_TIMESTAMP()``
+        abort the whole rule there, which the engine used to swallow as
+        ``errors += 1`` with zero inferences.
+        """
+        template = builtin.sql_template
+        if (dialect or "").lower() != SQL_DIALECT_POSTGRES:
+            return template
+        return cls._spark_sql_to_postgres(template)
+
+    @staticmethod
+    def _pg_try_cast(inner: str, pg_type: str) -> str:
+        if pg_type == "DOUBLE":
+            return (
+                f"(CASE WHEN ({inner}) ~ '{_PG_FLOAT_RE}' "
+                f"THEN ({inner})::float8 END)"
+            )
+        if pg_type == "BIGINT":
+            return (
+                f"(CASE WHEN ({inner}) ~ '{_PG_INT_RE}' "
+                f"THEN ({inner})::bigint END)"
+            )
+        mapped = "timestamptz" if pg_type == "TIMESTAMP" else "date"
+        return f"(NULLIF(BTRIM(({inner})::text), '')::{mapped})"
+
+    @classmethod
+    def _spark_sql_to_postgres(cls, template: str) -> str:
+        out = template.replace(
+            "DATEDIFF(TRY_CAST({0} AS DATE), TRY_CAST({1} AS DATE))",
+            f"({cls._pg_try_cast('{0}', 'DATE')} - {cls._pg_try_cast('{1}', 'DATE')})",
+        )
+        out = _TRY_CAST_RE.sub(
+            lambda m: cls._pg_try_cast(m.group(1), m.group(2).upper()),
+            out,
+        )
+        return (
+            out.replace(" RLIKE ", " ~ ")
+            .replace("CURRENT_TIMESTAMP()", "CURRENT_TIMESTAMP")
+        )
 
     @classmethod
     def get(cls, name: str) -> Optional[SWRLBuiltin]:

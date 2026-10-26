@@ -128,13 +128,41 @@ class TestSimulationFacade:
         with pytest.raises(NotFoundError):
             sim.get(row["id"])
 
-    def test_update_refused_while_running(self):
+    def test_update_refused_while_running(self, monkeypatch):
         reg = _Registry()
         sim = Simulation(_Domain(), None, registry=reg)
         row = sim.create(_body())
         reg.rows[row["id"]]["status"] = "running"
+        reg.rows[row["id"]]["task_id"] = "task-live"
+        monkeypatch.setattr(Simulation, "_run_task_is_active", staticmethod(lambda tid: True))
         with pytest.raises(ValidationError):
             sim.update(row["id"], _body())
+
+    def test_update_clears_stale_running_lock(self):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        reg.rows[row["id"]]["status"] = "running"
+        updated = sim.update(row["id"], _body(label="After stale run"))
+        assert updated["label"] == "After stale run"
+        assert updated["status"] == "draft"
+
+    def test_abort_unlocks_running_scenario(self, monkeypatch):
+        cancelled = []
+        monkeypatch.setattr(
+            "back.core.task_manager.get_task_manager",
+            lambda: SimpleNamespace(cancel_task=lambda tid: cancelled.append(tid)),
+        )
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        reg.rows[row["id"]]["status"] = "running"
+        reg.rows[row["id"]]["task_id"] = "task-stuck"
+        monkeypatch.setattr(Simulation, "_run_task_is_active", staticmethod(lambda tid: True))
+        out = sim.abort(row["id"])
+        assert out["status"] == "failed"
+        assert out["task_id"] == ""
+        assert cancelled == ["task-stuck"]
 
     def test_start_run_cohort_rule_must_exist(self, monkeypatch):
         reg = _Registry()
@@ -370,9 +398,10 @@ class TestSimulationRunner:
         ).run()
         sandbox = _FakeSandbox.instances[0]
         assert any(
-            contract in uris and hops == 2
+            contract in uris and hops == 1
             for uris, hops in sandbox.neighbourhood_calls
         )
+        assert all(EX + "acme" not in uris for uris, _hops in sandbox.neighbourhood_calls)
 
     def test_failure_marks_failed_without_leaking_internals(self, monkeypatch):
         reg, tm = _Registry(), _TM()
@@ -386,6 +415,49 @@ class TestSimulationRunner:
         assert "secret" not in reg.rows["s1"]["error"]
         assert reg.runs[-1]["status"] == "error"
         assert tm.failed and "secret" not in tm.failed[0]
+
+    def test_swrl_skip_fails_the_run(self, monkeypatch):
+        class _SkipSwrl(_FakeReasoning):
+            def run_full_reasoning(self, options, progress_callback=None):
+                return ReasoningResult(
+                    stats={
+                        "swrl_skipped": True,
+                        "swrl_reason": "No SWRL rules defined in ontology",
+                    }
+                )
+
+        _FakeSandbox.instances = []
+        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _SkipSwrl)
+        monkeypatch.setattr(
+            SimulationScope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+        )
+        reg, tm = _Registry(), _TM()
+        _runner(reg, tm).run()
+        assert tm.failed == ["SWRL did not run: No SWRL rules defined in ontology"]
+        assert reg.rows["s1"]["status"] == "failed"
+
+    def test_swrl_sql_errors_fail_the_run(self, monkeypatch):
+        class _BrokenSwrl(_FakeReasoning):
+            def run_full_reasoning(self, options, progress_callback=None):
+                return ReasoningResult(
+                    stats={
+                        "swrl_errors": 1,
+                        "swrl_error_details": "attach: function try_cast does not exist",
+                    }
+                )
+
+        _FakeSandbox.instances = []
+        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _BrokenSwrl)
+        monkeypatch.setattr(
+            SimulationScope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+        )
+        reg, tm = _Registry(), _TM()
+        _runner(reg, tm).run()
+        assert tm.failed == [
+            "SWRL failed on 1 rule(s): attach: function try_cast does not exist"
+        ]
 
     def test_validation_error_message_is_surfaced(self, monkeypatch):
         reg, tm = _Registry(), _TM()
@@ -464,8 +536,18 @@ class TestSimulationApi:
         created = await self.api.create_simulation(_Req(), body=_body(), sim=sim)
         sim_id = created["simulation"]["id"]
         sim.registry.rows[sim_id]["status"] = "running"
+        sim.registry.rows[sim_id]["task_id"] = "task-live"
+        monkeypatch.setattr(Simulation, "_run_task_is_active", staticmethod(lambda tid: True))
         with pytest.raises(ValidationError, match="running"):
             await self.api.purge_simulation(sim_id, sim=sim)
+
+    async def test_abort_route(self, monkeypatch):
+        sim = self._sim(monkeypatch)
+        monkeypatch.setattr(sim, "abort", lambda sim_id: {"id": sim_id, "status": "failed", "diff": {}})
+        out = await self.api.abort_simulation("s1", sim=sim)
+        assert out["success"] is True
+        assert out["simulation"]["status"] == "failed"
+        assert "diff" not in out["simulation"]
 
     async def test_json_body_must_be_object(self):
         with pytest.raises(ValidationError):
@@ -488,6 +570,7 @@ class TestSimulationApi:
         assert ("/simulation/{sim_id}", ("DELETE",)) in guarded
         assert ("/simulation/{sim_id}/run", ("POST",)) in guarded
         assert ("/simulation/{sim_id}/purge", ("POST",)) in guarded
+        assert ("/simulation/{sim_id}/abort", ("POST",)) in guarded
         readonly = {r.path for r in self.api.router.routes if not r.dependencies}
         assert {"/simulation/list", "/simulation/runs", "/simulation/{sim_id}/diff"} <= readonly
 

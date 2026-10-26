@@ -135,6 +135,25 @@ class TestSWRLSQLTranslator:
         assert "'active'" in sql
         assert "predicate = 'http://ex.org#contains'" not in sql
 
+    def test_inference_postgres_avoids_spark_try_cast(self):
+        from back.core.helpers import SQL_DIALECT_POSTGRES
+
+        params = {
+            "antecedent": (
+                "Customer(?x) \u2227 hasScore(?x, ?s) "
+                "\u2227 swrlb:greaterThan(?s, 500)"
+            ),
+            "consequent": "HighValue(?x)",
+            "base_uri": "http://ex.org",
+            "uri_map": {},
+        }
+        sql = SWRLSQLTranslator(dialect=SQL_DIALECT_POSTGRES).build_inference_sql(
+            "triples", params
+        )
+        assert sql is not None
+        assert "TRY_CAST" not in sql
+        assert "::float8" in sql
+
 
 # -- Built-in registry tests -----------------------------------------------
 
@@ -165,6 +184,17 @@ class TestBuiltinNumericCasts:
             builtin.sql_template
             == "TRY_CAST({0} AS DOUBLE) > TRY_CAST({1} AS DOUBLE)"
         )
+
+    def test_postgres_templates_drop_spark_only_syntax(self):
+        from back.core.helpers import SQL_DIALECT_POSTGRES
+        from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+
+        offenders = []
+        for builtin in SWRLBuiltinRegistry.all().values():
+            sql = SWRLBuiltinRegistry.sql_template_for(builtin, SQL_DIALECT_POSTGRES)
+            if "TRY_CAST" in sql or "RLIKE" in sql or "CURRENT_TIMESTAMP()" in sql:
+                offenders.append(builtin.name)
+        assert offenders == []
 
 
 # -- SWRLEngine tests ------------------------------------------------------

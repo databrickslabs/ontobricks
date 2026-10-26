@@ -362,20 +362,41 @@ const SimulationWorkbench = {
             return null;
         }
         try {
-            const data = this.currentId
-                ? await SimulationPage.api(`/simulation/${encodeURIComponent(this.currentId)}`, { method: 'PUT', body })
-                : await SimulationPage.api('/simulation/create', { method: 'POST', body });
-            const sim = data.simulation || {};
-            this.currentId = sim.id;
-            const title = this._el('simWbTitle');
-            if (title) title.textContent = `— ${sim.label || sim.id}`;
-            if (!quiet) showNotification('Scenario saved', 'success');
-            SimulationPage.loadScenarios();
-            return sim.id;
+            return await this._putSave(body, { quiet });
         } catch (err) {
-            showNotification(`Save failed: ${err.message}`, 'error');
-            return null;
+            if (!this.currentId || !/is running/i.test(err.message || '')) {
+                showNotification(`Save failed: ${err.message}`, 'error');
+                return null;
+            }
+            try {
+                await SimulationPage.api(
+                    `/simulation/${encodeURIComponent(this.currentId)}/abort`,
+                    { method: 'POST' },
+                );
+                if (typeof SimulationPage._stopPolling === 'function') {
+                    SimulationPage._stopPolling();
+                }
+                const id = await this._putSave(body, { quiet: true });
+                showNotification('Previous run was still marked running — scenario saved', 'warning');
+                return id;
+            } catch (retryErr) {
+                showNotification(`Save failed: ${retryErr.message}`, 'error');
+                return null;
+            }
         }
+    },
+
+    async _putSave(body, { quiet = false } = {}) {
+        const data = this.currentId
+            ? await SimulationPage.api(`/simulation/${encodeURIComponent(this.currentId)}`, { method: 'PUT', body })
+            : await SimulationPage.api('/simulation/create', { method: 'POST', body });
+        const sim = data.simulation || {};
+        this.currentId = sim.id;
+        const title = this._el('simWbTitle');
+        if (title) title.textContent = `— ${sim.label || sim.id}`;
+        if (!quiet) showNotification('Scenario saved', 'success');
+        SimulationPage.loadScenarios();
+        return sim.id;
     },
 
     async run() {

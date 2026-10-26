@@ -82,13 +82,16 @@ class Simulation:
     # -- CRUD ---------------------------------------------------------------
 
     def list_all(self) -> List[Dict[str, Any]]:
-        return self.registry.list_simulations(self.folder, self.version)
+        return [
+            self._reap_stale_run(row)
+            for row in self.registry.list_simulations(self.folder, self.version)
+        ]
 
     def get(self, sim_id: str) -> Dict[str, Any]:
         row = self.registry.load_simulation(self.folder, self.version, sim_id)
         if not row:
             raise NotFoundError(f"Simulation '{sim_id}' was not found")
-        return row
+        return self._reap_stale_run(row)
 
     def sandbox_relation(self, sim_id: str) -> str:
         """Physical Lakebase table of a *ready* simulation sandbox.
@@ -158,7 +161,9 @@ class Simulation:
 
     def update(self, sim_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
         current = self.get(sim_id)
-        if current.get("status") == "running":
+        if current.get("status") == "running" and self._run_task_is_active(
+            current.get("task_id")
+        ):
             raise ValidationError("Simulation is running — wait for it to finish")
         spec = self.parse_spec(body, sim_id=sim_id)
         self.registry.save_simulation(
@@ -177,7 +182,9 @@ class Simulation:
     def purge(self, sim_id: str) -> Dict[str, Any]:
         """Drop the sandbox after-picture; keep the scenario spec as a draft."""
         current = self.get(sim_id)
-        if current.get("status") == "running":
+        if current.get("status") == "running" and self._run_task_is_active(
+            current.get("task_id")
+        ):
             raise ValidationError("Simulation is running — wait for it to finish")
         self._drop_sandbox(sim_id)
         self.registry.save_simulation(
@@ -220,7 +227,7 @@ class Simulation:
 
         self.require_supported()
         row = self.get(sim_id)
-        if row.get("status") == "running":
+        if row.get("status") == "running" and self._run_task_is_active(row.get("task_id")):
             raise ValidationError("Simulation is already running")
         spec = self.parse_spec(row.get("spec") or {}, sim_id=sim_id)
 
@@ -251,8 +258,86 @@ class Simulation:
             owner=owner or row.get("owner", ""),
             cohort_rule=cohort_rule,
         )
+        self.registry.save_simulation(
+            self.folder,
+            self.version,
+            {
+                "id": sim_id,
+                "label": spec.label,
+                "status": "running",
+                "spec": spec.to_dict(),
+                "owner": owner or row.get("owner", ""),
+                "task_id": task.id,
+            },
+        )
         threading.Thread(target=runner.run, daemon=True).start()
         return task.id
+
+    def abort(self, sim_id: str) -> Dict[str, Any]:
+        """Mark a run failed and clear its task so the scenario can be edited."""
+        row = self.get(sim_id)
+        tid = str(row.get("task_id") or "").strip()
+        if tid:
+            try:
+                from back.core.task_manager import get_task_manager
+
+                get_task_manager().cancel_task(tid)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not cancel simulation task %s: %s", tid, exc)
+        self.registry.save_simulation(
+            self.folder,
+            self.version,
+            {
+                "id": sim_id,
+                "label": row.get("label", ""),
+                "status": "failed",
+                "spec": row.get("spec") or {},
+                "owner": row.get("owner", ""),
+                "task_id": "",
+                "error": "Run aborted",
+            },
+        )
+        return self.get(sim_id)
+
+    @staticmethod
+    def _run_task_is_active(task_id: Any) -> bool:
+        tid = str(task_id or "").strip()
+        if not tid:
+            return False
+        try:
+            from back.core.task_manager import get_task_manager
+
+            task = get_task_manager().get_task(tid)
+        except Exception:  # noqa: BLE001
+            return False
+        if task is None:
+            return False
+        status = getattr(task.status, "value", task.status)
+        return str(status).lower() in ("pending", "running")
+
+    def _reap_stale_run(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Clear ``running`` when the worker task is gone (restart / crash)."""
+        if not row or row.get("status") != "running":
+            return row
+        if self._run_task_is_active(row.get("task_id")):
+            return row
+        sim_id = row.get("id")
+        if not sim_id:
+            return row
+        self.registry.save_simulation(
+            self.folder,
+            self.version,
+            {
+                "id": sim_id,
+                "label": row.get("label", ""),
+                "status": "failed",
+                "spec": row.get("spec") or {},
+                "owner": row.get("owner", ""),
+                "task_id": "",
+                "error": "Run interrupted — the worker is no longer active",
+            },
+        )
+        return self.registry.load_simulation(self.folder, self.version, sim_id) or row
 
     def runs(self, sim_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         return self.registry.load_simulation_runs(

@@ -429,8 +429,8 @@ class TestSandboxApply:
         seeded: list = []
         sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
         sandbox._graph_name = "g"
-        sandbox.uri_objects_of = lambda subject: (
-            [EX + "m1"] if subject == EX + "c2" else []
+        sandbox.uri_objects_of_many = lambda subjects: (
+            [EX + "m1"] if EX + "c2" in subjects else []
         )
 
         class Live:
@@ -463,6 +463,7 @@ class TestSandboxApply:
 
             def execute_query(self, sql):
                 assert "g__sim_s1" in sql
+                assert "IN (" in sql or "subject =" in sql
                 return [
                     {"predicate": RDF_TYPE, "object": EX + "Customer"},
                     {"predicate": EX + "hasContract", "object": EX + "c2"},

@@ -70,6 +70,10 @@ class SimulationRunner:
     def _progress(self, pct: int, msg: str) -> None:
         self._tm.update_progress(self._task_id, pct, msg)
 
+    def _is_current_run(self) -> bool:
+        row = self._registry.load_simulation(self._folder, self._version, self._spec.id)
+        return bool(row) and str(row.get("task_id") or "") == str(self._task_id)
+
     def _live_store(self) -> Any:
         if self._get_store is not None:
             return self._get_store(self._domain, self._settings)
@@ -87,17 +91,39 @@ class SimulationRunner:
             )
         )
 
-    def _seed_hypothesis(self, sandbox: Any) -> None:
-        """Copy every patched entity and two live hops so SWRL can join."""
-        uris = self._hypothesis_uris()
+    def _seed_hypothesis(self, sandbox: Any, skip: Any = None) -> None:
+        """Copy patched entities not already in the scope, plus one live hop.
+
+        Skip the scope slice (already copied). One hop plus a sandbox object
+        walk is enough for ``hasContract`` → ``hasMeter``; two hops from the
+        customer re-traverses the live graph and freezes the 30% progress bar.
+        """
+        ignored = set(skip or [])
+        uris = [u for u in self._hypothesis_uris() if u not in ignored]
         if not uris:
             return
         self._progress(30, f"Seeding {len(uris)} hypothesis entities and neighbours")
         seed_nb = getattr(sandbox, "seed_neighbourhood", None)
         if callable(seed_nb):
-            seed_nb(uris, hops=2)
+            seed_nb(uris, hops=1)
         else:
             sandbox.seed(uris)
+
+    def _require_swrl(self, stats: Dict[str, Any]) -> None:
+        """Fail the run when the SWRL phase was requested but did not execute."""
+        if not self._spec.phases.get("swrl", True):
+            return
+        if stats.get("swrl_error"):
+            raise InfrastructureError(f"SWRL failed: {stats['swrl_error']}")
+        if stats.get("swrl_skipped"):
+            reason = stats.get("swrl_reason") or "SWRL did not run"
+            raise InfrastructureError(f"SWRL did not run: {reason}")
+        errors = stats.get("swrl_errors") or 0
+        if not errors:
+            return
+        details = stats.get("swrl_error_details") or ""
+        suffix = f": {details}" if details else ""
+        raise InfrastructureError(f"SWRL failed on {errors} rule(s){suffix}")
 
     def _relink_hypothesis(self, sandbox: Any) -> None:
         """After patches, copy objects of new links only (not the patched subjects).
@@ -120,9 +146,10 @@ class SimulationRunner:
         extra = list(dict.fromkeys(extra))
         if not extra:
             return
+        self._progress(42, f"Copying {len(extra)} linked entities for reasoning")
         seed_nb = getattr(sandbox, "seed_neighbourhood", None)
         if callable(seed_nb):
-            seed_nb(extra, hops=2)
+            seed_nb(extra, hops=1)
         else:
             sandbox.seed(extra)
 
@@ -137,6 +164,13 @@ class SimulationRunner:
                 self._folder, self._version, self._entry("running")
             )
             result = self._execute()
+            if not self._is_current_run():
+                logger.warning(
+                    "Simulation %s run %s was aborted; dropping result",
+                    sim_id,
+                    task_id,
+                )
+                return
             duration = round(time.time() - t0, 3)
             summary = dict(result["summary"])
             summary["duration_s"] = duration
@@ -176,6 +210,13 @@ class SimulationRunner:
                 ),
             )
         except Exception as exc:  # noqa: BLE001
+            if not self._is_current_run():
+                logger.warning(
+                    "Simulation %s run %s was aborted during failure handling",
+                    sim_id,
+                    task_id,
+                )
+                return
             message = (
                 exc.message
                 if isinstance(exc, OntoBricksError)
@@ -227,7 +268,8 @@ class SimulationRunner:
         self._progress(20, f"Seeding sandbox with {len(entities)} entities")
         sandbox.reset()
         sandbox.seed(entities)
-        self._seed_hypothesis(sandbox)
+        self._seed_hypothesis(sandbox, skip=entities)
+        self._progress(38, "Recording the before-picture")
         before = sandbox.triples()
 
         self._progress(40, f"Applying {len(self._spec.patches)} patches")
@@ -243,6 +285,7 @@ class SimulationRunner:
         reasoning = svc.run_full_reasoning(
             self._spec.reasoning_options(), progress_callback=_swrl_progress
         )
+        self._require_swrl(reasoning.stats or {})
         provenance = {
             SimulationDiff.key(
                 {"subject": t.subject, "predicate": t.predicate, "object": t.object}
@@ -266,6 +309,8 @@ class SimulationRunner:
                 "swrl_rules_count": stats.get("swrl_rules_count"),
                 "swrl_skipped": stats.get("swrl_skipped"),
                 "swrl_reason": stats.get("swrl_reason"),
+                "swrl_errors": stats.get("swrl_errors"),
+                "swrl_error_details": stats.get("swrl_error_details"),
                 "phase_errors": {
                     k[: -len("_error")]: v for k, v in stats.items() if k.endswith("_error")
                 },

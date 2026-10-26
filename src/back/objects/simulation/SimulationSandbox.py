@@ -86,7 +86,10 @@ class SimulationSandbox:
         copied = self.seed(unique)
         seen: Dict[str, None] = {u: None for u in unique}
         copied += self._seed_live_expand(unique, hops, seen)
-        copied += self._seed_sandbox_walk(list(seen), max(hops, 1), seen)
+        # Walk only the URIs we were asked to seed — not every live-expand
+        # neighbour (that is one SQL round-trip per subject and freezes the
+        # run at "30% seeding neighbours").
+        copied += self._seed_sandbox_walk(unique, max(hops, 1), seen)
         return copied
 
     def _seed_live_expand(
@@ -127,38 +130,49 @@ class SimulationSandbox:
         copied = 0
         frontier = list(start)
         for _ in range(max(hops, 1)):
-            nxt: List[str] = []
-            for uri in frontier:
-                for obj in self.uri_objects_of(uri):
-                    if obj not in seen:
-                        seen[obj] = None
-                        nxt.append(obj)
+            nxt = [
+                obj
+                for obj in self.uri_objects_of_many(frontier)
+                if obj not in seen
+            ]
             if not nxt:
                 break
+            for obj in nxt:
+                seen[obj] = None
             copied += self.seed(nxt)
             frontier = nxt
         return copied
 
     def uri_objects_of(self, subject: str) -> List[str]:
         """Sandbox URI objects of *subject*, excluding ``rdf:type`` class objects."""
+        return self.uri_objects_of_many([subject] if subject else [])
+
+    def uri_objects_of_many(self, subjects: List[str]) -> List[str]:
+        """Sandbox URI objects of *subjects*, excluding ``rdf:type`` class objects."""
         from back.core.helpers import SQL_DIALECT_POSTGRES, sql_literal
 
+        wanted = list(dict.fromkeys(s for s in subjects if s))
         store = getattr(self, "store", None)
         execute = getattr(store, "execute_query", None)
         table_ref = getattr(store, "sql_table_reference", None)
-        if not subject or not callable(execute) or not callable(table_ref):
+        if not wanted or not callable(execute) or not callable(table_ref):
             return []
-        rows = execute(
-            f"SELECT object, predicate FROM {table_ref(self.table)} "
-            f"WHERE subject = {sql_literal(subject, SQL_DIALECT_POSTGRES)}"
-        ) or []
-        seen: Dict[str, None] = {}
-        for row in rows:
-            obj = (row or {}).get("object") or ""
-            if (row or {}).get("predicate") == RDF_TYPE or not is_uri(obj):
-                continue
-            seen.setdefault(obj, None)
-        return list(seen)
+        out: Dict[str, None] = {}
+        chunk = 400
+        for i in range(0, len(wanted), chunk):
+            literals = ", ".join(
+                sql_literal(s, SQL_DIALECT_POSTGRES) for s in wanted[i : i + chunk]
+            )
+            rows = execute(
+                f"SELECT object, predicate FROM {table_ref(self.table)} "
+                f"WHERE subject IN ({literals})"
+            ) or []
+            for row in rows:
+                obj = (row or {}).get("object") or ""
+                if (row or {}).get("predicate") == RDF_TYPE or not is_uri(obj):
+                    continue
+                out.setdefault(obj, None)
+        return list(out)
 
     def seed_focus_for_swrl(self, entity_uri: str, hops: int = 2) -> int:
         """Copy the entity neighbourhood plus objects already linked in the sandbox.

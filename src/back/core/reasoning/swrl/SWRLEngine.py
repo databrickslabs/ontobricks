@@ -62,6 +62,7 @@ class SWRLEngine:
 
         translator = self._get_translator(store, table_name)
         errors = 0
+        failed: List[str] = []
 
         enabled_rules = [r for r in rules if r.get("enabled", True)]
         total = len(enabled_rules)
@@ -104,6 +105,7 @@ class SWRLEngine:
             except Exception as e:
                 logger.error("SWRL rule '%s' failed: %s", name, e)
                 errors += 1
+                failed.append(f"{name}: {e}")
 
         duration = time.time() - t0
         result.stats = {
@@ -112,6 +114,7 @@ class SWRLEngine:
             "rules_total": len(rules),
             "inferred_count": len(result.inferred_triples),
             "errors": errors,
+            "error_details": "; ".join(failed)[:2000],
             "duration_seconds": round(duration, 3),
         }
         logger.info(

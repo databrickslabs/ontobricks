@@ -118,6 +118,13 @@ def test_scenarios_list_shows_spinner_while_loading():
     assert "Loading scenarios…" in js
 
 
+def test_workbench_save_aborts_stale_run():
+    js = _read(FRONT / "static/simulation/js/simulation-workbench.js")
+    assert "/abort" in js
+    assert "/is running/i.test" in js
+    assert "_stopPolling" in js
+
+
 def test_scenarios_list_has_purge_action():
     js = _read(FRONT / "static/simulation/js/simulation.js")
     assert 'data-action="purge"' in js

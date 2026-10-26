@@ -849,4 +849,112 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9725 passed, 326 skipped, 8 deselected, 0 failed in 60.68s
 
+================================================================================
+## Unstick simulation progress at 30%
+================================================================================
+
+Context: After seeding extra-contract neighbourhoods so SWRL can fire, the
+run bar sat at 30%. Hypothesis seed re-expanded the already-scoped customer
+at two hops, then issued one SQL query per expanded neighbour.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationRunner.py
+   Seed only URIs not already in the slice, at one hop; advance the bar
+   before the before-picture dump.
+2. src/back/objects/simulation/SimulationSandbox.py
+   Walk URI objects of the seeded URIs only, in batched IN-list SQL.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Extra contracts are seeded; the scoped customer is not re-expanded.
+4. tests/units/simulation/test_simulation_core.py
+   Sandbox object walk uses the batched helper.
+5. docs/user-guide.md
+   Extra hypothesis entities copy one neighbour hop.
+
+Modified files:
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/simulation/SimulationSandbox.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/simulation/test_simulation_core.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9725 passed, 326 skipped, 8 deselected, 0 failed in 53.75s
+
+================================================================================
+## Unlock Save after a stuck simulation run
+================================================================================
+
+Context: After a run froze at 30%, the scenario stayed ``running`` and
+Save failed with "Simulation is running — wait for it to finish". The
+worker may still be in TM, or already gone after a restart.
+
+Changes:
+
+1. src/back/objects/simulation/Simulation.py
+   Reap running rows whose task is gone; abort() cancels the task and
+   marks the scenario failed so it can be edited.
+2. src/back/objects/simulation/SimulationRunner.py
+   Ignore a late finish if the scenario was aborted (task_id mismatch).
+3. src/api/routers/internal/simulation.py
+   POST /simulation/{id}/abort.
+4. src/front/static/simulation/js/simulation-workbench.js
+   Save retries after abort when the lock is still held.
+5. tests + docs
+   Stale lock, abort route, workbench retry.
+
+Modified files:
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9729 passed, 326 skipped, 8 deselected, 0 failed in 51.29s
+
+================================================================================
+## Fail loudly when simulation SWRL does not run
+================================================================================
+
+Context: With the SWRL checkbox ticked, a simulation could still finish
+ready with zero inferences. Lakebase is Postgres, but SWRL SQL used Spark
+TRY_CAST / RLIKE / CURRENT_TIMESTAMP(); each rule error was swallowed so
+attach-meter never showed up. Empty DomainSnapshot.swrl_rules also skipped
+the phase even when ontology.swrl_rules had the rules.
+
+Changes:
+
+1. src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+   Postgres templates: numeric CASE casts, ~ instead of RLIKE, CURRENT_TIMESTAMP.
+2. src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+   Dialect from the store; built-in filters use the Postgres templates.
+3. src/back/core/graphdb/GraphDBBackend.py
+   get_query_translator passes sql_flavor() into the translator.
+4. src/back/core/reasoning/swrl/SWRLEngine.py
+   Keep per-rule error details on the result stats.
+5. src/back/core/reasoning/ReasoningService.py
+   Copy SWRL errors into full-run stats; fall back to ontology.swrl_rules.
+6. src/back/objects/simulation/SimulationRunner.py
+   Fail the run when SWRL is requested but skipped or errored.
+7. tests + docs/user-guide.md
+   Postgres SQL, ontology fallback, runner fails on skip/SQL errors.
+
+Modified files:
+- src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+- src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/reasoning/swrl/SWRLEngine.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/objects/simulation/SimulationRunner.py
+- tests/units/ontology/test_swrl_engine.py
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9734 passed, 326 skipped, 8 deselected, 0 failed in 49.36s
+
 

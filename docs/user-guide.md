@@ -1252,9 +1252,12 @@ graph. Deleting a scenario drops its sandbox.
 
 **What a slice means for rules.** Ticked reasoning phases (SWRL, graph, …)
 run automatically after the hypotheses are applied, against the sandbox.
-Rules only see what was copied. Each hypothetical entity is copied from
-live with two neighbour hops (so an extra contract brings its meters),
-then SWRL can attach those meters to the customer. A rule that needs a
+Rules only see what was copied. Each hypothetical entity that was not
+already in the scope is copied from live with one neighbour hop (so an
+extra contract brings its meters), then SWRL can attach those meters to
+the customer. If SWRL is ticked and the rules cannot run (none in the
+domain, or a query error), the run **fails** with that message instead of
+finishing as ready with zero inferences. A rule that needs a
 global aggregate still will not fire on a neighbourhood slice — widen the
 hops or use a cohort or class scope in that case.
 
@@ -1304,7 +1307,9 @@ opens the scenario editor — it is not a sidebar item.
    graph with one hop of neighbours so SWRL can chain to meters, invoices,
    and the rest. When it finishes, **Simulation → Results** opens with the
    before/after diff. You can also click **View results** on the editor, or
-   the clipboard icon on the Scenarios list.
+   the clipboard icon on the Scenarios list. If a previous run is still
+   marked running (stuck worker or app restart), **Save** aborts it and
+   writes the scenario so you can run again.
 
 Tip: in the Knowledge Graph Explorer, the entity details panel has a
 **Simulate from here** button that opens the editor pre-filled with that
