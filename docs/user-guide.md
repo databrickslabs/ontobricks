@@ -1299,6 +1299,9 @@ opens the scenario editor — it is not a sidebar item.
    **Fact wizard** (or the search icon on a cell) looks up existing graph
    entities, ontology predicates declared on the subject's class (including
    inherited), and related instances so you do not have to paste URIs by hand.
+   Ontology predicate URIs are resolved to the mapped data predicate when
+   the sandbox applies the fact, so an added relationship participates in
+   SWRL joins with the existing graph.
 4. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
    decision tables, SPARQL rules, aggregate rules and OWL 2 RL are optional.
 5. **Run** saves the scenario and starts it as a background task; the progress

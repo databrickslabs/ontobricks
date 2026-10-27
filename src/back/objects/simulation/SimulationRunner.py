@@ -7,9 +7,10 @@ import time
 from typing import Any, Dict, Optional
 
 from back.core.errors import InfrastructureError, OntoBricksError
-from back.core.helpers import effective_graph_name, is_uri
+from back.core.helpers import effective_graph_name, extract_local_name, is_uri
 from back.core.logging import get_logger
 from back.objects.simulation.SimulationDiff import SimulationDiff
+from back.objects.simulation.SimulationPatch import SimulationPatch
 from back.objects.simulation.SimulationReasoningService import SimulationReasoningService
 from back.objects.simulation.SimulationSandbox import SimulationSandbox
 from back.objects.simulation.SimulationSpec import SimulationSpec
@@ -90,6 +91,39 @@ class SimulationRunner:
                 if uri and (uri == p.subject or is_uri(uri))
             )
         )
+
+    def _sandbox_patches(self) -> list[SimulationPatch]:
+        """Resolve ontology predicate URIs to the R2RML data namespace.
+
+        The fact picker supplies ontology URIs (normally ``...#hascontract``),
+        while mapped triples use ``.../hascontract``. Applying the raw URI
+        creates a disconnected sandbox edge that SWRL cannot join.
+        """
+        ontology = getattr(self._domain, "ontology", None) or {}
+        base_uri = str(ontology.get("base_uri") or "")
+        data_ns = base_uri.rstrip("#/") + "/" if base_uri else ""
+        aliases: Dict[str, str] = {}
+        for prop in ontology.get("properties") or []:
+            if not isinstance(prop, dict):
+                continue
+            name = str(prop.get("name") or prop.get("localName") or "").strip()
+            uri = str(prop.get("uri") or "").strip()
+            if not name and not uri:
+                continue
+            canonical = data_ns + extract_local_name(uri or name) if data_ns else (uri or name)
+            for key in (name, uri, extract_local_name(uri) if uri else ""):
+                if key:
+                    aliases[key.lower()] = canonical
+        return [
+            SimulationPatch(
+                op=patch.op,
+                subject=patch.subject,
+                predicate=aliases.get(patch.predicate.lower(), patch.predicate),
+                object=patch.object,
+                datatype=patch.datatype,
+            )
+            for patch in self._spec.patches
+        ]
 
     def _seed_hypothesis(self, sandbox: Any, skip: Any = None) -> None:
         """Copy patched entities not already in the scope, plus one live hop.
@@ -273,7 +307,7 @@ class SimulationRunner:
         before = sandbox.triples()
 
         self._progress(40, f"Applying {len(self._spec.patches)} patches")
-        asserted = sandbox.apply(self._spec.patches)
+        asserted = sandbox.apply(self._sandbox_patches())
         self._relink_hypothesis(sandbox)
 
         self._progress(50, "Running reasoning in the sandbox")

@@ -403,6 +403,51 @@ class TestSimulationRunner:
         )
         assert all(EX + "acme" not in uris for uris, _hops in sandbox.neighbourhood_calls)
 
+    def test_normalizes_ontology_patch_predicate_for_sandbox(self, monkeypatch):
+        _FakeSandbox.instances = []
+        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _FakeReasoning)
+        monkeypatch.setattr(
+            SimulationScope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+        )
+        spec = SimulationSpec.from_dict(
+            _body(
+                patches=[
+                    {
+                        "op": "add",
+                        "subject": EX + "acme",
+                        "predicate": "http://ex.org#hascontract",
+                        "object": EX + "contract2",
+                    }
+                ]
+            ),
+            default_hops=2,
+            default_cap=100,
+            sim_id="s1",
+        )
+        domain = _Domain()
+        domain.ontology = {
+            "base_uri": "http://ex.org#",
+            "properties": [
+                {"uri": "http://ex.org#hascontract", "name": "hascontract"}
+            ],
+        }
+        reg, tm = _Registry(), _TM()
+        SimulationRunner(
+            tm=tm,
+            task_id="task-1",
+            settings=None,
+            domain_snap=domain,
+            registry=reg,
+            folder="dom",
+            version="1",
+            spec=spec,
+            owner="a@b.c",
+            get_store=lambda d, s: object(),
+        ).run()
+        rows = _FakeSandbox.instances[0].rows
+        assert (EX + "acme", EX + "hascontract", EX + "contract2") in rows
+
     def test_failure_marks_failed_without_leaking_internals(self, monkeypatch):
         reg, tm = _Registry(), _TM()
 

@@ -1,0 +1,27 @@
+================================================================================
+## Normalize simulation fact predicates for SWRL
+================================================================================
+
+Context: Cust360Auto’s fact wizard supplies ontology predicates such as
+``...#hascontract``, while R2RML-loaded triples use the data namespace
+``.../hascontract``. A hypothetical contract attached to Jacob Martin
+therefore did not join the SWRL rule, although customers with mapped live
+relationships did.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationRunner.py
+   Resolve known ontology predicates to their R2RML data-namespace aliases
+   before applying sandbox patches.
+2. tests/units/simulation/test_simulation_runner_api.py
+   Cover an ontology ``#`` predicate becoming the sandbox ``/`` predicate.
+3. docs/user-guide.md
+   Document predicate resolution for hypothetical facts.
+
+Modified files:
+- src/back/objects/simulation/SimulationRunner.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9735 passed, 326 skipped, 8 deselected, 0 failed in 60.03s
