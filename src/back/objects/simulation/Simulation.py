@@ -306,6 +306,7 @@ class Simulation:
                 "task_id": task.id,
             },
         )
+        tm.merge_result(task.id, {"simulation_id": spec.id})
         threading.Thread(target=runner.run, daemon=True).start()
         return task.id
 

@@ -1305,8 +1305,10 @@ opens the scenario editor — it is not a sidebar item.
    SWRL joins with the existing graph.
 4. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
    decision tables, SPARQL rules, aggregate rules and OWL 2 RL are optional.
-5. **Run** saves the scenario and starts it as a background task; the progress
-   bar follows the phases (scope, seed, facts, reasoning, diff). Hypothetical
+5. **Run** saves the scenario and starts it as a background task. Follow it in
+   the navbar **Background Tasks** hourglass (click the row to return to the
+   editor) and on the workbench progress bar, which follows the phases (scope,
+   seed, facts, reasoning, diff). Hypothetical
    entities you **Add** (for example extra contracts) are copied from the live
    graph with one hop of neighbours so SWRL can chain to meters, invoices,
    and the rest. When it finishes, **Simulation → Results** opens with the
@@ -1328,7 +1330,8 @@ rule that produced it) — and **Removed**. Lists show the first 2000 rows; the
 counts are always exact. A warning lists reasoning phases that failed.
 **Explorer** opens Knowledge Graph Explorer on that sandbox so you can walk the
 after picture as a graph (same as picking the scenario in Explorer's Graph
-dropdown).
+dropdown). Explorer keeps that Graph choice until you switch it or leave the
+page; later Explorer refreshes do not snap back to the live graph.
 
 ### Runs (Sidebar)
 
@@ -2628,8 +2631,8 @@ Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Search** by entity type, field, match type, and relationship depth
 - **Cap expansion** with the max-entities control (default 5 000, up to 20 000). The server uses the value you pick, including in Databricks Apps.
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
-- **Toggle labels** for node and edge labels
-- **Hide orphans** to focus on connected entities
+- **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario
+- **View** opens canvas help: entity and relationship labels, hide orphans, and quality rings
 
 ---
 
@@ -2998,7 +3001,7 @@ After import you can:
 - **Mapping Diagnostics**: **Mapping → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
 
 ### Simulation
-- **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Graph Explorer's **Graph** dropdown (and Results → **Explorer**) loads a ready sandbox as a graph.
+- **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Graph Explorer's **Graph** dropdown lists live asserted, live inferred, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox).
 - **Cohort design and run**: **Simulation → Cohorts** authors grouping rules; **Simulation → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
 
 ### Knowledge Graph (Sync & Explore)
@@ -3025,7 +3028,7 @@ After import you can:
 - **Entity Inference Rules (SWRL)**: In **Ontology → Studio → Behaviour → Inference rules (SWRL)**, attach one or more SWRL rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Knowledge Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the SWRL editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
 - **Virtual Attributes (computed on demand)**: A class of attribute that no mapping feeds and no build materialises — a Unity Catalog function computes it from the entity's ID when someone asks. Declare them in **Ontology → Studio → Attrs. → Virtual attributes** by picking a UC function that takes exactly one parameter; one attribute is created per returned column (or a single one for a scalar function), read from `information_schema`. In the Graph Explorer they appear in their own **Virtual Attributes** section under the mapped ones with a per-function **Compute** button, a **Compute all**, and a right-click shortcut; computed values are cached per entity for the page's lifetime, with **Recompute** as the refresh. Over MCP the declarations always ride along with `get_entity_context`; when a question is about a virtual attribute's value, the model should call `compute_virtual_attributes(entity_uri)` to run the UC function — nothing is computed unless asked. A failing function reports its error without denying the attributes that still resolve. Because they are never materialised, virtual attributes are **not queryable** in SPARQL or GraphQL and take no part in mappings, R2RML, SHACL or data-quality checks.
 - **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Knowledge Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
-check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. The **Quality** toolbar toggle hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.
+check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. **View → Quality rings** hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.
 - **Graph Chat ↔ MCP alignment**: Knowledge Graph → Chat discovers Datasets, Bridges, and Class Actions the same way MCP does (`get_entity_context`). Executing an Action from Graph Chat is **confirmation-gated**: the agent proposes via `request_entity_action`, the UI shows a Confirm/Cancel card, and only Confirm runs the allow-listed UC function. Graph Chat does **not** expose MCP's direct `invoke_entity_action` tool.
 - **Named Neo4j connections**: Settings → Neo4j holds multiple named Bolt profiles (URI, database, username, Databricks secret). Domains with Graph Backend = Neo4j must pick one connection on Domain → General → Knowledge Graph; Test connection / Objects operate on the selected profile.
 - **Violation Details**: View quality check violations in a detailed modal with entity information.

@@ -1398,8 +1398,11 @@ async function loadTripleStore(options = {}) {
     const loadingHtml = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
     if (syncBtn) { syncBtn.disabled = true; syncBtn.innerHTML = loadingHtml; }
 
-    const includeInferred = document.getElementById('sgShowInferred')?.checked !== false;
-    const simulationId = document.getElementById('sgSimulationSelect')?.value || '';
+    const source = (typeof SigmaGraph !== 'undefined' && typeof SigmaGraph.graphSource === 'function')
+        ? SigmaGraph.graphSource()
+        : { includeInferred: true, simulationId: '' };
+    const includeInferred = source.includeInferred !== false;
+    const simulationId = source.simulationId || '';
 
     try {
         const response = await fetch('/dtwin/sync/load', {

@@ -161,7 +161,7 @@
                             </div>
 
                             <div class="alert alert-info mt-3">
-                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-hourglass-split"></i> <strong>Background Tasks</strong> panel in the navbar.
+                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality, Simulation) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-hourglass-split"></i> <strong>Background Tasks</strong> panel in the navbar.
                             </div>
                         </section>
 
@@ -284,7 +284,7 @@
                                             <ul>
                                                 <li><strong>Build</strong> / <strong>Runs</strong> &mdash; trigger a synchronization and inspect its run history</li>
                                                 <li><strong>Overview</strong> / <strong>Analytics</strong> &mdash; insight dashboards: entity &amp; relationship counts, last sync timestamp, quality status, usage trends</li>
-                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick a ready simulation sandbox from the Graph dropdown, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
+                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick live asserted, live inferred, or one ready sandbox per scenario from Graph, open canvas labels and quality rings from View, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
                                                 <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
                                                 <li><strong>Chat</strong> &mdash; ask natural-language questions over the materialized graph</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
@@ -311,7 +311,7 @@
                                                 <li><strong>Results</strong> &mdash; after a run finishes, this page opens with the triples the patches and reasoning added or removed; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
                                             </ul>
-                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Lakebase graph backend only.</p>
+                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -419,7 +419,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
-                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality and Inference all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-hourglass-split"></i> navbar icon &mdash; you can navigate anywhere and come back.</div></div>
+                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality, Inference and Simulation all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-hourglass-split"></i> navbar icon &mdash; you can navigate anywhere and come back.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">How does the LLM automation pick the right model?</button></h2>

@@ -81,6 +81,13 @@ def test_js_uses_shared_notifications_not_alert():
         assert "alert(" not in src and "confirm(" not in src.replace("showDeleteConfirm(", "")
 
 
+def test_run_registers_with_background_tasks():
+    js = _read(FRONT / "static/simulation/js/simulation.js")
+    assert "refreshTasks()" in js
+    wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
+    assert "params.get('simulation')" in wb
+
+
 def test_completed_run_keeps_view_results_cta():
     js = _read(FRONT / "static/simulation/js/simulation.js")
     html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")

@@ -53,6 +53,11 @@ const SimulationWorkbench = {
 
         this.reset();
         const params = new URLSearchParams(window.location.search);
+        const simId = (params.get('simulation') || '').trim();
+        if (simId) {
+            this.load(simId);
+            return;
+        }
         const entity = params.get('entity');
         if (entity) {
             const urlLabel = (params.get('label') || '').trim();

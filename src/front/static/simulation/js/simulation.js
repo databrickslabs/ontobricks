@@ -263,6 +263,7 @@ const SimulationPage = {
             const data = await this.api(`/simulation/${encodeURIComponent(id)}/run`, { method: 'POST' });
             sessionStorage.setItem(this.TASK_KEY, JSON.stringify({ taskId: data.task_id, simId: id }));
             this._poll(data.task_id, id);
+            if (typeof refreshTasks === 'function') refreshTasks();
             showNotification('Simulation started...', 'info');
             this.loadScenarios();
         } catch (err) {
@@ -328,11 +329,13 @@ const SimulationPage = {
                 if (task.status === 'completed') {
                     this._stopPolling({ keepProgress: true });
                     this._setProgress(true, 100, task.message || 'Simulation complete', { done: true });
+                    if (typeof refreshTasks === 'function') refreshTasks();
                     showNotification(task.message || 'Simulation complete — open Results', 'success');
                     await this.loadScenarios();
                     this.showResults(simId);
                 } else if (task.status === 'failed' || task.status === 'cancelled') {
                     this._stopPolling({ keepProgress: true });
+                    if (typeof refreshTasks === 'function') refreshTasks();
                     this._setProgress(
                         true,
                         Math.round(task.progress || 0),

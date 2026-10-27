@@ -67,10 +67,14 @@ class _Domain:
 
 class _TM:
     def __init__(self):
-        self.completed, self.failed, self.progress = [], [], []
+        self.completed, self.failed, self.progress, self.results = [], [], [], []
 
     def create_task(self, **kwargs):
         return SimpleNamespace(id="task-1")
+
+    def merge_result(self, task_id, patch):
+        self.results.append((task_id, patch))
+        return True
 
     def start_task(self, task_id, message=""):
         return True
@@ -197,6 +201,7 @@ class TestSimulationFacade:
         row = sim.create(_body())
         assert sim.start_run(row["id"]) == "task-1"
         assert ran == [row["id"]] and started == [True]
+        assert tm.results == [("task-1", {"simulation_id": row["id"]})]
 
     def test_sandbox_relation_requires_ready(self, monkeypatch):
         reg = _Registry()

@@ -69,3 +69,130 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9736 passed, 326 skipped, 8 deselected, 0 failed in 54.26s.
+
+================================================================================
+## Keep Explorer on the selected simulation graph
+================================================================================
+
+Context: Switching Explorer's Graph dropdown from Live to a ready sandbox
+snapped back to Live after a few seconds. A later SigmaGraph.init() rebuilt
+the dropdown from /simulation/list and lost the user's choice.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Remember the selected simulation and skip a second Explorer init that
+   would wipe the canvas and reset the Graph dropdown.
+2. tests/units/front/test_explorer_simulation_select.py
+   Cover persistence of the Graph choice across Explorer reloads.
+3. docs/user-guide.md
+   Note that Explorer keeps the selected sandbox until the user changes it.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_simulation_select.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9737 passed, 326 skipped, 8 deselected, 0 failed in 55.00s.
+
+================================================================================
+## Move Explorer canvas toggles into View and Graph
+================================================================================
+
+Context: Explorer's toolbar mixed canvas help checkboxes with graph-source
+selection. Inferred triples also used a separate checkbox instead of the
+Graph list.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Keep Graph, max entities, and actions in the toolbar; open canvas help
+   from View.
+2. src/front/templates/partials/dtwin/_query_sigmagraph_canvas_help_modal.html
+   Group labels, relationship labels, hide orphans, and quality rings.
+3. src/front/static/query/js/query-sigmagraph.js and query-sync.js
+   Encode live inferred, live asserted, and sandbox asserted graphs in the
+   Graph dropdown.
+4. tests/units/front/test_explorer_simulation_select.py,
+   test_explorer_loading_overlay.py, and test_shacl_facets_ui.py
+   Cover the View modal and Graph-source encoding.
+5. docs/user-guide.md and help_modal.html
+   Document Graph inferred options and the View modal.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_sigmagraph_canvas_help_modal.html
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_explorer_loading_overlay.py
+- tests/units/front/test_shacl_facets_ui.py
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9737 passed, 326 skipped, 8 deselected, 0 failed in 56.49s.
+
+================================================================================
+## List one Explorer graph per simulation
+================================================================================
+
+Context: The Graph dropdown listed each scenario twice (inferred and
+asserted). Inferred vs asserted belongs to the live graph only.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Emit one option per ready sandbox; keep Live graph and Live graph
+   (inferred) as the only asserted/inferred split.
+2. tests/units/front/test_explorer_simulation_select.py
+   Reject sandbox "(asserted)" options.
+3. docs/user-guide.md and help_modal.html
+   Document one Graph entry per scenario.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_simulation_select.py
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9737 passed, 326 skipped, 8 deselected, 0 failed in 97.08s.
+
+================================================================================
+## Track simulation runs in Background Tasks
+================================================================================
+
+Context: A what-if run created a TaskManager job but the navbar hourglass
+did not pick it up immediately, so users could not follow progress after
+leaving the workbench.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation.js
+   Refresh the navbar task list when a run starts, finishes, or fails.
+2. src/front/static/global/js/task-tracker.js
+   Map simulation tasks to the workbench and open the scenario from the
+   hourglass row.
+3. src/back/objects/simulation/Simulation.py
+   Publish simulation_id on the running task so the tracker can deep-link.
+4. src/front/static/simulation/js/simulation-workbench.js
+   Load ?simulation= into the editor.
+5. docs/user-guide.md and help_modal.html
+   Document following a run from Background Tasks.
+
+Modified files:
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/global/js/task-tracker.js
+- src/back/objects/simulation/Simulation.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9739 passed, 326 skipped, 8 deselected, 0 failed in 54.25s.
