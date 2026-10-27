@@ -9,6 +9,7 @@ from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 from back.core.helpers import effective_graph_name, effective_graph_query_table
 from back.core.logging import get_logger
+from back.objects.simulation.SimulationArtifacts import SimulationArtifacts
 from back.objects.simulation.SimulationDiff import SimulationDiff
 from back.objects.simulation.SimulationRunner import SimulationRunner
 from back.objects.simulation.SimulationSpec import SimulationSpec
@@ -91,7 +92,13 @@ class Simulation:
         row = self.registry.load_simulation(self.folder, self.version, sim_id)
         if not row:
             raise NotFoundError(f"Simulation '{sim_id}' was not found")
-        return self._reap_stale_run(row)
+        return self._with_artifacts(self._reap_stale_run(row))
+
+    def _with_artifacts(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        if not row:
+            return row
+        row["artifacts"] = SimulationArtifacts.describe(self._domain, row)
+        return row
 
     def sandbox_relation(self, sim_id: str, *, store: Any = None) -> str:
         """Physical Lakebase table of a *ready* simulation sandbox.

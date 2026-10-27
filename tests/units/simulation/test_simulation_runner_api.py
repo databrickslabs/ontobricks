@@ -126,6 +126,11 @@ class TestSimulationFacade:
         monkeypatch.setattr(sim, "_drop_sandbox", lambda sim_id: None)
         row = sim.create(_body(), owner="a@b.c")
         assert row["status"] == "draft" and row["owner"] == "a@b.c"
+        catalog = row["artifacts"]
+        assert catalog["status"] == "draft"
+        assert catalog["objects"]
+        assert all(o.get("name") for o in catalog["objects"])
+        assert catalog["counts"] == {}
         assert [r["id"] for r in sim.list_all()] == [row["id"]]
         updated = sim.update(row["id"], _body(label="Renamed"))
         assert updated["label"] == "Renamed"
@@ -274,6 +279,8 @@ class _FakeSandbox:
 
     def __init__(self, live, graph_name, sim_id):
         self.table = f"{graph_name.lower()}__sim_{sim_id}"
+        self._graph_name = graph_name
+        self._sim_id = sim_id
         self.store = object()
         self.rows = {}
         self.seeded = None
@@ -361,6 +368,9 @@ class TestSimulationRunner:
         assert s["removed_count"] == 1
         assert s["phase_errors"] == {"graph": "boom"}
         assert s["sandbox_table"] == "dom_v1__sim_s1"
+        names = [o["name"] for o in s["artifacts"]]
+        assert "dom_v1__sim_s1" in names
+        assert any(o["kind"] == "view" for o in s["artifacts"])
         assert reg.runs[-1]["status"] == "success"
         assert tm.completed and not tm.failed
 

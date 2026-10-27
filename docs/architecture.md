@@ -1374,6 +1374,10 @@ Scenario definitions and the last diff live in the registry tables
 `simulations` (PK `(domain_id, version, id)`) and `simulation_runs`
 (append-only trace), created lazily by the `Simulations` mixin of
 `LakebaseRegistryStore`. Runs execute as `TaskManager` background tasks.
+`SimulationArtifacts` names the physical objects of a scenario — sandbox
+table (Lakebase/Delta), Explorer overlay views (`__smu_` / `__sms_`), or
+the isolated Neo4j graph — and the last-run item counts. The scenario
+editor shows that catalog in a third column.
 
 | Endpoint | Purpose |
 |----------|---------|

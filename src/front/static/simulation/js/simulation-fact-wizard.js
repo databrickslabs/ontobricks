@@ -65,12 +65,20 @@ const SimulationFactWizard = {
         document.getElementById('simFactPredHits')?.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-uri]');
             if (!btn) return;
-            this._pickPredicate(btn.dataset.uri, btn.dataset.kind === 'object', btn.dataset.range || '', btn);
+            this._pickPredicate(
+                btn.dataset.uri,
+                btn.dataset.kind === 'object',
+                btn.dataset.range || '',
+                btn.dataset.label || '',
+                btn,
+            );
         });
         document.getElementById('simFactObjectHits')?.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-uri]');
             if (!btn) return;
             this._set('simFactObjectValue', btn.dataset.uri);
+            this._pickedObjectUri = btn.dataset.uri;
+            this._pickedObjectLabel = btn.dataset.label || this._local(btn.dataset.uri);
             this._markActive('simFactObjectHits', btn);
         });
     },
@@ -84,6 +92,9 @@ const SimulationFactWizard = {
         this._pickedLabel = '';
         this._predIsObject = false;
         this._predRange = '';
+        this._pickedPredLabel = '';
+        this._pickedObjectLabel = '';
+        this._pickedObjectUri = '';
         await this._ensureOntology();
         const p = patch || {};
         this._set('simFactOp', p.op || 'set');
@@ -153,9 +164,16 @@ const SimulationFactWizard = {
     },
 
     _local(uri) {
-        const s = String(uri || '');
-        const i = Math.max(s.lastIndexOf('#'), s.lastIndexOf('/'));
-        return i >= 0 ? s.slice(i + 1) : s;
+        return SimulationPage.shortUri(uri);
+    },
+
+    _objectDisplayLabel(object) {
+        const value = String(object == null ? '' : object);
+        if (!value) return '';
+        if (this._pickedObjectUri && value === this._pickedObjectUri) {
+            return this._pickedObjectLabel || this._local(value);
+        }
+        return SimulationPage.isUri(value) ? this._local(value) : value;
     },
 
     _isObjectProp(p) {
@@ -315,10 +333,10 @@ const SimulationFactWizard = {
             const active = p.uri === selected ? ' active' : '';
             const kind = p.kind === 'object' ? 'relationship' : 'attribute';
             return `<button type="button" class="list-group-item list-group-item-action small${active}"
-                data-uri="${SimulationPage.esc(p.uri)}" data-kind="${p.kind}" data-range="${SimulationPage.esc(p.range)}">
+                data-uri="${SimulationPage.esc(p.uri)}" data-kind="${p.kind}"
+                data-range="${SimulationPage.esc(p.range)}" data-label="${SimulationPage.esc(p.label)}">
                 <strong>${SimulationPage.esc(p.label)}</strong>
                 <span class="badge bg-secondary bg-opacity-25 text-dark ms-1">${kind}</span>
-                <div class="text-muted text-break">${SimulationPage.esc(p.uri)}</div>
             </button>`;
         }).join('');
     },
@@ -333,10 +351,11 @@ const SimulationFactWizard = {
         this._renderPredicates();
     },
 
-    _pickPredicate(uri, isObject, range, btn) {
+    _pickPredicate(uri, isObject, range, label, btn) {
         this._set('simFactPredicateUri', uri);
         this._predIsObject = !!isObject;
         this._predRange = range || '';
+        this._pickedPredLabel = label || this._local(uri);
         this._markActive('simFactPredHits', btn);
         this._syncObjectHint();
     },
@@ -538,7 +557,7 @@ const SimulationFactWizard = {
                     data-label="${SimulationPage.esc(s.label || this._local(s.uri))}">
                     <strong>${SimulationPage.esc(s.label || this._local(s.uri))}</strong>
                     <span class="badge bg-secondary bg-opacity-25 text-dark ms-1">${SimulationPage.esc(s.type || 'Unknown')}</span>
-                    <div class="text-muted text-break">${SimulationPage.esc(s.uri)}</div>
+                    <div class="text-muted">${SimulationPage.esc(this._local(s.uri))}</div>
                 </button>`).join('');
         } catch (err) {
             list.innerHTML = `<div class="list-group-item small text-danger">${SimulationPage.esc(err.message)}</div>`;
@@ -600,7 +619,15 @@ const SimulationFactWizard = {
         }
         if (window.SimulationWorkbench) {
             SimulationWorkbench.applyFactFromWizard(
-                { op, subject, predicate, object },
+                {
+                    op,
+                    subject,
+                    predicate,
+                    object,
+                    subject_label: this._pickedLabel || this._local(subject),
+                    predicate_label: this._pickedPredLabel || this._local(predicate),
+                    object_label: this._objectDisplayLabel(object),
+                },
                 this._idx,
             );
         }

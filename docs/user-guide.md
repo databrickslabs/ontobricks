@@ -1297,15 +1297,21 @@ opens the scenario editor — it is not a sidebar item.
 3. **Hypothetical facts** — add rows of *subject / predicate / value*:
    **Set** replaces every value of the predicate on the subject (e.g. a new
    credit score), **Add** asserts an extra triple, **Remove** retracts one.
+   The table shows labels (or the local name); hover a cell for the full URI.
    **Fact wizard** (or the search icon on a cell) looks up existing graph
    entities, ontology predicates declared on the subject's class (including
    inherited), and related instances so you do not have to paste URIs by hand.
    Ontology predicate URIs are resolved to the mapped data predicate when
    the sandbox applies the fact, so an added relationship participates in
    SWRL joins with the existing graph.
-4. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
+4. **Sandbox objects** — the third column lists the physical objects this
+   scenario owns: the copy-on-write sandbox (Lakebase/Delta table or Neo4j
+   graph) and, on SQL backends, the two Explorer overlay views. After a run
+   it also shows item counts (entities in scope, triples, added / removed /
+   inferred). Purge or delete drops them.
+5. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
    decision tables, SPARQL rules, aggregate rules and OWL 2 RL are optional.
-5. **Run** saves the scenario and starts it as a background task. Follow it in
+6. **Run** saves the scenario and starts it as a background task. Follow it in
    the navbar **Background Tasks** hourglass (click the row to return to the
    editor) and on the workbench progress bar, which follows the phases (scope,
    seed, facts, reasoning, diff). Hypothetical

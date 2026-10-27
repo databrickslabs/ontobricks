@@ -66,6 +66,14 @@ def test_wizard_locks_operation_after_subject_and_adapts_copy():
     assert "op.disabled = this._step !== 1" in src
 
 
+def test_wizard_hit_lists_show_local_name_not_full_uri():
+    src = _read(JS)
+    assert "this._local(s.uri)" in src
+    assert 'data-label="${SimulationPage.esc(p.label)}"' in src
+    assert "_objectDisplayLabel" in src
+    assert "predicate_label" in src
+
+
 def test_wizard_js_searches_live_graph_and_ontology():
     src = _read(JS)
     assert "/dtwin/sync/filter" in src

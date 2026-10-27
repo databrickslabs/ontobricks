@@ -66,7 +66,13 @@ const SimulationWorkbench = {
             this._applyFocusLabel(urlLabel, entity);
             this._set('simWbLabel', `What if: ${this._focusLabel || SimulationPage.shortUri(entity)}`);
             this._syncScopeUi();
-            this.addPatch({ op: 'set', subject: entity, predicate: '', object: '' });
+            this.addPatch({
+                op: 'set',
+                subject: entity,
+                subject_label: this._focusLabel || SimulationPage.shortUri(entity),
+                predicate: '',
+                object: '',
+            });
             if (!urlLabel) this._onFocusUriChanged();
         }
     },
@@ -173,6 +179,7 @@ const SimulationWorkbench = {
         if (title) title.textContent = '— new scenario';
         this._syncScopeUi();
         this.renderPatches();
+        this.paintArtifacts(null);
     },
 
     async load(id) {
@@ -201,6 +208,8 @@ const SimulationWorkbench = {
             const title = this._el('simWbTitle');
             if (title) title.textContent = `— ${sim.label || sim.id}`;
             this.renderPatches();
+            this._resolvePatchLabels();
+            this.paintArtifacts(sim.artifacts, sim.status);
         } catch (err) {
             showNotification(`Could not open scenario: ${err.message}`, 'error');
         }
@@ -221,15 +230,32 @@ const SimulationWorkbench = {
 
     addPatch(patch) {
         const focus = this._val('simWbScopeType') === 'entity' ? this._val('simWbFocus') : '';
-        this.patches.push(patch || { op: 'set', subject: focus, predicate: '', object: '' });
+        const row = patch || {
+            op: 'set',
+            subject: focus,
+            subject_label: focus ? (this._focusLabel || SimulationPage.shortUri(focus)) : '',
+            predicate: '',
+            object: '',
+        };
+        this.patches.push(row);
         this.renderPatches();
+        if (!patch || !row.subject_label) this._resolvePatchLabels();
     },
 
     _onPatchEdit(e) {
         const field = e.target.dataset.field;
         const idx = Number(e.target.dataset.idx);
         if (!field || Number.isNaN(idx) || !this.patches[idx]) return;
-        this.patches[idx][field] = e.target.value;
+        const patch = this.patches[idx];
+        const typed = e.target.value;
+        if (field === 'op') {
+            patch.op = typed;
+            return;
+        }
+        const shown = SimulationPage.termLabel(patch[field], patch[`${field}_label`]);
+        if (typed === shown) return;
+        patch[field] = typed;
+        patch[`${field}_label`] = SimulationPage.isUri(typed) ? '' : typed;
     },
 
     renderPatches() {
@@ -249,21 +275,55 @@ const SimulationWorkbench = {
                     <option value="remove" ${p.op === 'remove' ? 'selected' : ''}>Remove</option>
                 </select>
             </td>
-            <td>${this._lookupInput('subject', i, p.subject, 'Subject URI')}</td>
-            <td>${this._lookupInput('predicate', i, p.predicate, 'Predicate URI')}</td>
-            <td>${this._lookupInput('object', i, p.object, 'Object URI or literal')}</td>
+            <td>${this._lookupInput('subject', i, p, 'Subject')}</td>
+            <td>${this._lookupInput('predicate', i, p, 'Predicate')}</td>
+            <td>${this._lookupInput('object', i, p, 'Value')}</td>
             <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" data-remove="${i}" title="Remove fact"><i class="bi bi-x-lg"></i></button></td>
         </tr>`).join('');
     },
 
-    _lookupInput(field, idx, value, placeholder) {
+    _lookupInput(field, idx, patch, placeholder) {
         const esc = (v) => SimulationPage.esc(v);
+        const uri = patch[field] || '';
+        const shown = SimulationPage.termLabel(uri, patch[`${field}_label`]);
         return `<div class="input-group input-group-sm">
             <input type="text" class="form-control" data-field="${field}" data-idx="${idx}"
-                   value="${esc(value)}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">
+                   value="${esc(shown)}" title="${esc(uri)}" placeholder="${esc(placeholder)}"
+                   aria-label="${esc(placeholder)}">
             <button type="button" class="btn btn-outline-secondary" data-lookup="${field}" data-idx="${idx}"
                     title="Find existing ${esc(field)}"><i class="bi bi-search"></i></button>
         </div>`;
+    },
+
+    async _resolvePatchLabels() {
+        const jobs = [];
+        this.patches.forEach((patch, i) => {
+            ['subject', 'predicate', 'object'].forEach((field) => {
+                const value = patch[field];
+                if (!value || patch[`${field}_label`]) return;
+                if (field === 'predicate') {
+                    patch.predicate_label = SimulationPage.shortUri(value);
+                    return;
+                }
+                if (!SimulationPage.isUri(value)) {
+                    patch[`${field}_label`] = value;
+                    return;
+                }
+                jobs.push(
+                    SimulationPage.resolveEntityLabel(value).then((label) => {
+                        if (this.patches[i] && this.patches[i][field] === value) {
+                            this.patches[i][`${field}_label`] = label || SimulationPage.shortUri(value);
+                        }
+                    }),
+                );
+            });
+        });
+        if (!jobs.length) {
+            this.renderPatches();
+            return;
+        }
+        await Promise.all(jobs);
+        this.renderPatches();
     },
 
     openScopeEntityPicker() {
@@ -309,16 +369,90 @@ const SimulationWorkbench = {
         }
     },
 
+    paintArtifacts(artifacts, status) {
+        const box = this._el('simWbArtifacts');
+        const badge = this._el('simWbArtifactStatus');
+        const data = artifacts || {};
+        const state = status || data.status || '';
+        const objects = data.objects || [];
+        const counts = data.counts || {};
+        const created = state === 'ready';
+        if (badge) {
+            badge.textContent = created ? 'created' : (state || 'none');
+            badge.className = `badge ${created ? 'bg-success' : 'bg-secondary'}`;
+        }
+        if (!box) return;
+        if (!objects.length) {
+            box.innerHTML = '<p class="text-muted small mb-0">Save and run the scenario to create the sandbox table and Explorer overlay views.</p>';
+            return;
+        }
+        const esc = (v) => SimulationPage.esc(v);
+        const roles = {
+            sandbox: 'Sandbox triples',
+            explorer_inferred: 'Explorer inferred overlay',
+            explorer_asserted: 'Explorer asserted overlay',
+        };
+        const rows = objects.map((obj) => {
+            const items = created && obj.role === 'sandbox' && counts.triples != null
+                ? `<div class="text-muted">${Number(counts.triples).toLocaleString()} triples</div>`
+                : '';
+            return `<li class="mb-2">
+                <div class="d-flex align-items-center gap-1 mb-1">
+                    <span class="badge bg-secondary bg-opacity-25 text-dark">${esc(obj.kind || 'object')}</span>
+                    <span class="small">${esc(roles[obj.role] || obj.role || '')}</span>
+                </div>
+                <code class="sim-artifact-name" title="${esc(obj.name || '')}">${esc(obj.name || '')}</code>
+                ${items}
+            </li>`;
+        }).join('');
+        let stats = '';
+        if (created) {
+            const cell = (label, value) => `<div><span class="text-muted">${esc(label)}</span> `
+                + `<strong>${Number(value || 0).toLocaleString()}</strong></div>`;
+            stats = `<div class="sim-artifact-counts small mt-3 pt-2 border-top">
+                ${cell('Entities', counts.entities)}
+                ${cell('Triples', counts.triples)}
+                ${cell('Added', counts.added)}
+                ${cell('Removed', counts.removed)}
+                ${cell('Inferred', counts.inferred)}
+                ${cell('Touched', counts.touched)}
+            </div>`;
+        } else {
+            stats = '<p class="text-muted small mb-0 mt-2">Run the scenario to materialise these objects.</p>';
+        }
+        box.innerHTML = `<ul class="list-unstyled mb-0">${rows}</ul>${stats}`;
+    },
+
+    async refreshArtifacts() {
+        if (!this.currentId) {
+            this.paintArtifacts(null);
+            return;
+        }
+        try {
+            const data = await SimulationPage.api(`/simulation/${encodeURIComponent(this.currentId)}`);
+            const sim = data.simulation || {};
+            this.paintArtifacts(sim.artifacts, sim.status);
+        } catch (_) {
+            /* keep the last catalog if the refresh fails */
+        }
+    },
+
     applyFactFromWizard(patch, idx) {
         const row = {
             op: patch.op || 'set',
             subject: patch.subject || '',
             predicate: patch.predicate || '',
             object: patch.object || '',
+            subject_label: patch.subject_label || '',
+            predicate_label: patch.predicate_label || '',
+            object_label: patch.object_label || '',
         };
         if (idx == null || !this.patches[idx]) this.patches.push(row);
         else this.patches[idx] = row;
         this.renderPatches();
+        if (!row.subject_label || !row.predicate_label || (row.object && !row.object_label)) {
+            this._resolvePatchLabels();
+        }
     },
 
     // -- Save / run --------------------------------------------------------
@@ -399,6 +533,7 @@ const SimulationWorkbench = {
         this.currentId = sim.id;
         const title = this._el('simWbTitle');
         if (title) title.textContent = `— ${sim.label || sim.id}`;
+        this.paintArtifacts(sim.artifacts, sim.status);
         if (!quiet) showNotification('Scenario saved', 'success');
         SimulationPage.loadScenarios();
         return sim.id;

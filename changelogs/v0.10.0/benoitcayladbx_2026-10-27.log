@@ -196,3 +196,75 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9739 passed, 326 skipped, 8 deselected, 0 failed in 54.25s.
+
+================================================================================
+## Show sandbox objects on the scenario editor
+================================================================================
+
+Context: The scenario editor showed name and scope but not the physical
+objects a run creates. Operators need to see the sandbox table or graph,
+Explorer overlay views, and item counts without leaving the workbench.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationArtifacts.py
+   Catalog sandbox tables/views (or the Neo4j graph) and last-run counts.
+2. src/back/objects/simulation/Simulation.py
+   Attach the catalog to GET/create/update payloads.
+3. src/back/objects/simulation/SimulationRunner.py
+   Persist exact object names on the run summary after Explorer views exist.
+4. src/front/templates/partials/simulation/_sim_workbench.html
+   Add a third Sandbox objects column beside Scenario and Scope.
+5. src/front/static/simulation/js/simulation-workbench.js
+   Render planned vs created objects and refresh after a run completes.
+6. tests/units/simulation/test_simulation_artifacts.py
+   Cover Lakebase, Delta and Neo4j naming plus draft vs ready counts.
+
+Modified files:
+- src/back/objects/simulation/SimulationArtifacts.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/simulation/__init__.py
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/simulation/test_simulation_artifacts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9745 passed, 326 skipped, 8 deselected, 0 failed in 57.75s.
+
+================================================================================
+## Show labels in hypothetical facts
+================================================================================
+
+Context: The scenario editor fact table showed full subject / predicate /
+object URIs, including page-relative ones. Operators need the entity and
+property names; the URI stays on hover and is still what save/run persist.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation.js
+   Add termLabel / isUri helpers and shorten fragment-empty URIs safely.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Render fact cells as labels (or local names) while keeping URIs in the patch.
+3. src/front/static/simulation/js/simulation-fact-wizard.js
+   Pass labels from the wizard and list local names instead of full URIs.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract that the fact table no longer binds the raw URI as the input value.
+
+Modified files:
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9747 passed, 326 skipped, 8 deselected, 0 failed in 58.53s.

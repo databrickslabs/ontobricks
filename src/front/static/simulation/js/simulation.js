@@ -85,8 +85,23 @@ const SimulationPage = {
 
     shortUri(uri) {
         const s = String(uri || '');
-        const cut = Math.max(s.lastIndexOf('#'), s.lastIndexOf('/'));
-        return cut >= 0 && cut < s.length - 1 ? s.substring(cut + 1) : s;
+        const hashAt = s.lastIndexOf('#');
+        if (hashAt >= 0 && hashAt < s.length - 1) return s.substring(hashAt + 1);
+        const path = s.split('?')[0].replace(/\/+$/, '');
+        const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf(':'));
+        return cut >= 0 && cut < path.length - 1 ? path.substring(cut + 1) : s;
+    },
+
+    isUri(value) {
+        const s = String(value || '');
+        return /^https?:\/\//i.test(s) || s.startsWith('urn:');
+    },
+
+    termLabel(value, label) {
+        const text = String(label || '').trim();
+        const raw = String(value || '');
+        if (text && text !== raw) return text;
+        return this.isUri(raw) ? this.shortUri(raw) : raw;
     },
 
     uriCell(uri, label) {
@@ -332,6 +347,7 @@ const SimulationPage = {
                     if (typeof refreshTasks === 'function') refreshTasks();
                     showNotification(task.message || 'Simulation complete — open Results', 'success');
                     await this.loadScenarios();
+                    if (window.SimulationWorkbench) SimulationWorkbench.refreshArtifacts();
                     this.showResults(simId);
                 } else if (task.status === 'failed' || task.status === 'cancelled') {
                     this._stopPolling({ keepProgress: true });

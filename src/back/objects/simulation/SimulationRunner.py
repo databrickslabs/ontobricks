@@ -9,6 +9,8 @@ from typing import Any, Dict, Optional
 from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.helpers import effective_graph_name, extract_local_name, is_uri
 from back.core.logging import get_logger
+from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+from back.objects.simulation.SimulationArtifacts import SimulationArtifacts
 from back.objects.simulation.SimulationDiff import SimulationDiff
 from back.objects.simulation.SimulationPatch import SimulationPatch
 from back.objects.simulation.SimulationReasoningService import SimulationReasoningService
@@ -364,4 +366,8 @@ class SimulationRunner:
                 else live_union
             )
             ensure(live_union, live_asserted)
+        backend = normalize_graph_backend(
+            (getattr(self._domain, "info", None) or {}).get("graph_backend")
+        )
+        diff["summary"]["artifacts"] = SimulationArtifacts.from_sandbox(sandbox, backend)
         return diff

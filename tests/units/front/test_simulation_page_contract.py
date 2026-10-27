@@ -106,6 +106,17 @@ def test_entity_panel_links_to_workbench():
     assert "getDisplayLabel(entity)" in js
 
 
+def test_hypothetical_facts_show_labels_not_full_uris():
+    wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
+    page = _read(FRONT / "static/simulation/js/simulation.js")
+    wizard = _read(FRONT / "static/simulation/js/simulation-fact-wizard.js")
+    assert "termLabel" in page
+    assert "SimulationPage.termLabel" in wb
+    assert "_lookupInput('subject', i, p.subject" not in wb
+    assert "subject_label" in wb
+    assert wizard.count('text-muted">${SimulationPage.esc(s.uri)}</div>') == 0
+
+
 def test_workbench_prefers_entity_label_over_local_id():
     js = _read(FRONT / "static/simulation/js/simulation-workbench.js")
     assert "params.get('label')" in js
@@ -123,6 +134,18 @@ def test_scenarios_list_shows_spinner_while_loading():
     assert "Loading scenarios" in html
     assert "_loadingRow" in js
     assert "Loading scenarios…" in js
+
+
+def test_workbench_has_sandbox_objects_column():
+    html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
+    js = _read(FRONT / "static/simulation/js/simulation-workbench.js")
+    page = _read(FRONT / "static/simulation/js/simulation.js")
+    assert 'id="simWbArtifacts"' in html
+    assert "Sandbox objects" in html
+    assert "col-xl-4" in html
+    assert "paintArtifacts" in js
+    assert "refreshArtifacts" in js
+    assert "SimulationWorkbench.refreshArtifacts" in page
 
 
 def test_workbench_save_aborts_stale_run():
