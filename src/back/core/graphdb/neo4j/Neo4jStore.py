@@ -324,6 +324,21 @@ class Neo4jStore(GraphDBBackend):
             "Use the named query methods on TripleStoreBackend instead."
         )
 
+    def execute_reasoning_query(self, query: str) -> List[Dict[str, Any]]:
+        """Run a translator-produced read-only Cypher query.
+
+        This intentionally remains separate from ``execute_query``: callers
+        cannot use it for graph mutations and the SWRL translator is the only
+        producer of these MATCH/RETURN statements.
+        """
+        normalized = " ".join((query or "").upper().split())
+        if not normalized.startswith("MATCH ") or " RETURN " not in normalized:
+            raise ValueError("Neo4j reasoning queries must be read-only MATCH/RETURN")
+        forbidden = (" CREATE ", " MERGE ", " DELETE ", " SET ", " REMOVE ", " CALL ")
+        if any(token in f" {normalized} " for token in forbidden):
+            raise ValueError("Neo4j reasoning query contains a mutation")
+        return [dict(record) for record in self._conn.run(query)]
+
     # ======================================================================
     #  TripleStoreBackend — read delegators (→ Neo4jReadOps)
     # ======================================================================

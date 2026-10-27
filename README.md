@@ -157,7 +157,8 @@ rules there, and shows exactly which triples would be added or removed — the
 live knowledge graph is never modified. Start from **Scenarios → New scenario**
 or **Simulate from here** on any Explorer entity. After a run, pick the scenario
 in Explorer's **Graph** dropdown (or Results → **Explorer**) to walk the
-sandbox. Lakebase backend only. See the
+sandbox. Lakebase, Lakehouse (Delta), and Neo4j backends are supported; Neo4j
+supports graph-shaped SWRL rules (class and object-property atoms). See the
 [Simulation guide](docs/user-guide.md#step-4-simulation-what-if-sandboxes).
 
 ### Publish to AI agents (MCP)

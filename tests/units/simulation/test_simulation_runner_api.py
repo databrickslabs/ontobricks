@@ -101,11 +101,12 @@ def _body(**over):
 class TestSimulationFacade:
     def test_backend_support(self):
         assert Simulation.is_backend_supported(_Domain("lakebase"))
-        assert not Simulation.is_backend_supported(_Domain("databricks"))
+        assert Simulation.is_backend_supported(_Domain("databricks"))
+        assert Simulation.is_backend_supported(_Domain("neo4j"))
         assert not Simulation.is_backend_supported(_Domain("none"))
 
-    def test_create_requires_lakebase(self):
-        sim = Simulation(_Domain("databricks"), None, registry=_Registry())
+    def test_create_requires_supported_backend(self):
+        sim = Simulation(_Domain("none"), None, registry=_Registry())
         with pytest.raises(ValidationError):
             sim.create(_body())
 

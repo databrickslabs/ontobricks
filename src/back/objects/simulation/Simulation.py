@@ -25,7 +25,7 @@ class Simulation:
 
     DEFAULT_HOPS = 2
     DEFAULT_CLASS_CAP = 5000
-    SUPPORTED_BACKEND = "lakebase"
+    SUPPORTED_BACKENDS = frozenset({"lakebase", "databricks", "neo4j"})
 
     def __init__(self, domain: Any, settings: Any, *, registry: Any = None) -> None:
         self._domain = domain
@@ -37,7 +37,7 @@ class Simulation:
     @classmethod
     def is_backend_supported(cls, domain: Any) -> bool:
         info = getattr(domain, "info", None) or {}
-        return normalize_graph_backend(info.get("graph_backend")) == cls.SUPPORTED_BACKEND
+        return normalize_graph_backend(info.get("graph_backend")) in cls.SUPPORTED_BACKENDS
 
     @property
     def supported(self) -> bool:
@@ -46,7 +46,7 @@ class Simulation:
     def require_supported(self) -> None:
         if not self.supported:
             raise ValidationError(
-                "Simulations are only available for domains on the Lakebase graph backend"
+                "Simulations require a Lakebase, Databricks Delta, or Neo4j graph backend"
             )
 
     # -- Context ------------------------------------------------------------
@@ -93,7 +93,7 @@ class Simulation:
             raise NotFoundError(f"Simulation '{sim_id}' was not found")
         return self._reap_stale_run(row)
 
-    def sandbox_relation(self, sim_id: str) -> str:
+    def sandbox_relation(self, sim_id: str, *, store: Any = None) -> str:
         """Physical Lakebase table of a *ready* simulation sandbox.
 
         Explorer reads the union view from :meth:`explorer_relation`, not this
@@ -105,13 +105,24 @@ class Simulation:
             raise ValidationError(
                 "Run the simulation before exploring its sandbox"
             )
-        from back.core.graphdb.lakebase.LakebaseSimulationStore import (
-            LakebaseSimulationStore,
+        backend = normalize_graph_backend(
+            (getattr(self._domain, "info", None) or {}).get("graph_backend")
         )
+        if backend == "lakebase":
+            from back.core.graphdb.lakebase import LakebaseSimulationStore
 
-        return LakebaseSimulationStore.sandbox_table_name(
-            effective_graph_name(self._domain), sim_id
-        )
+            return LakebaseSimulationStore.sandbox_table_name(
+                effective_graph_name(self._domain), sim_id
+            )
+        from back.objects.simulation.SimulationSandbox import SimulationSandbox
+
+        if store is None:
+            from back.core.graphdb import get_graphdb
+
+            store = get_graphdb(self._domain, self._settings)
+        if store is None:
+            raise InfrastructureError("Graph backend is not configured")
+        return SimulationSandbox(store, effective_graph_name(self._domain), sim_id).table
 
     def explorer_relation(
         self,
@@ -125,13 +136,7 @@ class Simulation:
         Sandbox predicates overlay live ones; other live facts of the same
         entity stay visible. The view is created lazily.
         """
-        sandbox = self.sandbox_relation(sim_id)
         graph_name = effective_graph_name(self._domain)
-        from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
-
-        view = _companion_ddl.sim_union_phy(
-            graph_name, sim_id, include_inferred=include_inferred
-        )
         graph_store = store
         if graph_store is None:
             from back.core.graphdb import get_graphdb
@@ -139,14 +144,45 @@ class Simulation:
             graph_store = get_graphdb(self._domain, self._settings)
         if graph_store is None:
             raise InfrastructureError("Graph backend is not configured")
-        live = effective_graph_query_table(
-            self._domain,
-            self._settings,
-            include_inferred=include_inferred,
-            store=graph_store,
+        backend = normalize_graph_backend(
+            (getattr(self._domain, "info", None) or {}).get("graph_backend")
         )
-        LakebaseSimulationUnion(graph_store).ensure(view, live, sandbox)
-        return view
+        if backend == "lakebase":
+            from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
+
+            view = _companion_ddl.sim_union_phy(
+                graph_name, sim_id, include_inferred=include_inferred
+            )
+            LakebaseSimulationUnion(graph_store).ensure(
+                view,
+                effective_graph_query_table(
+                    self._domain,
+                    self._settings,
+                    include_inferred=include_inferred,
+                    store=graph_store,
+                ),
+                self.sandbox_relation(sim_id, store=graph_store),
+            )
+            return view
+        sandbox = self.sandbox_relation(sim_id, store=graph_store)
+        from back.objects.simulation.SimulationSandbox import SimulationSandbox
+
+        simulation_sandbox = SimulationSandbox(graph_store, graph_name, sim_id)
+        simulation_sandbox.ensure_explorer_views(
+            effective_graph_query_table(
+                self._domain, self._settings, include_inferred=True, store=graph_store
+            ),
+            effective_graph_query_table(
+                self._domain, self._settings, include_inferred=False, store=graph_store
+            ),
+        )
+        # Neo4j does not have SQL views. Its Explorer overlay is performed by
+        # GraphFilter from the sandbox marker graph.
+        if backend == "neo4j":
+            return sandbox
+        if hasattr(simulation_sandbox, "_view_name"):
+            return simulation_sandbox._view_name(include_inferred)
+        return sandbox
 
     def create(self, body: Dict[str, Any], owner: str = "") -> Dict[str, Any]:
         self.require_supported()

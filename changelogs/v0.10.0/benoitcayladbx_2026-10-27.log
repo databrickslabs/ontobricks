@@ -25,3 +25,47 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9735 passed, 326 skipped, 8 deselected, 0 failed in 60.03s
+
+================================================================================
+## Add isolated multi-backend simulation sandboxes
+================================================================================
+
+Context: What-if simulations must preserve their copy-on-write and Explorer
+semantics when a domain uses Lakehouse Delta or Neo4j rather than Lakebase.
+
+Changes:
+
+1. src/back/objects/simulation/Simulation.py
+   Enable simulation capability checks and Explorer relation resolution for
+   Lakebase, Lakehouse Delta, and Neo4j.
+2. src/back/objects/simulation/SimulationSandbox.py
+   Add Delta-table and Neo4j marker-graph sandboxes, including Delta
+   predicate-overlay views and lifecycle cleanup.
+3. src/back/core/reasoning/swrl/SWRLFlatCypherTranslator.py
+   Translate class and object-property SWRL rules to read-only Neo4j Cypher
+   and reject unsupported atoms explicitly.
+4. src/back/core/graphdb/neo4j/Neo4jStore.py
+   Add a constrained, read-only execution path for translator-generated
+   reasoning queries.
+5. src/back/core/reasoning/swrl/SWRLEngine.py
+   Route Neo4j inference queries through the constrained reasoning executor.
+6. tests/units/simulation/test_simulation_runner_api.py and
+   tests/units/reasoning/test_swrl_flat_cypher_translator.py
+   Cover supported backend selection and Cypher output for the
+   Customer-to-Contract-to-Meter rule.
+7. README.md and docs/user-guide.md
+   Document Delta and Neo4j simulation availability and sandbox isolation.
+
+Modified files:
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/core/reasoning/swrl/SWRLFlatCypherTranslator.py
+- src/back/core/reasoning/swrl/SWRLEngine.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/reasoning/test_swrl_flat_cypher_translator.py
+- README.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-27.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9736 passed, 326 skipped, 8 deselected, 0 failed in 54.26s.

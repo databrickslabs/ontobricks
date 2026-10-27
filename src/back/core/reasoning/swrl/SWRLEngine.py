@@ -153,7 +153,10 @@ class SWRLEngine:
 
         t_rule = time.time()
         count = 0
-        rows = store.execute_query(query) or []
+        execute = store.execute_query
+        if getattr(store, "query_dialect", "") == "cypher":
+            execute = getattr(store, "execute_reasoning_query", execute)
+        rows = execute(query) or []
         for row in rows:
             result.inferred_triples.append(
                 InferredTriple(

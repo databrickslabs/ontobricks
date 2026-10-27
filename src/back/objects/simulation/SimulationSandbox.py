@@ -15,7 +15,7 @@ from back.objects.simulation.SimulationPatch import SimulationPatch
 logger = get_logger(__name__)
 
 
-class SimulationSandbox:
+class _LakebaseSimulationSandbox:
     """Seed, patch and read a standalone sandbox copy of a live graph slice.
 
     The live store is only read (``copy_subjects_from``); every write goes
@@ -27,7 +27,7 @@ class SimulationSandbox:
 
     def __init__(self, live_store: Any, graph_name: str, sim_id: str) -> None:
         if LakebaseFlatStore is None or not isinstance(live_store, LakebaseFlatStore):
-            raise ValidationError("Simulations require the Lakebase graph backend")
+            raise ValidationError("Lakebase simulation sandbox requires Lakebase")
         self._live = live_store
         self._graph_name = graph_name
         self._sim_id = sim_id
@@ -211,3 +211,193 @@ class SimulationSandbox:
                 asserted.discard(SimulationDiff.key(patch.triple()))
         logger.info("Applied %d patches to sandbox %s", len(patches), self.table)
         return asserted
+
+
+class _StoreSimulationSandbox:
+    """Backend-neutral copy-on-write sandbox for Delta and Neo4j.
+
+    Both engines support an independently named SPO graph.  The source graph
+    is read only; all mutations target ``table``.  Delta receives a raw store
+    so its normal inferred-companion write routing cannot redirect sandbox
+    mutations into the live domain.
+    """
+
+    MAX_TRIPLES = _LakebaseSimulationSandbox.MAX_TRIPLES
+
+    def __init__(self, live_store: Any, graph_name: str, sim_id: str) -> None:
+        self._live = live_store
+        self._graph_name = graph_name
+        self._sim_id = sim_id
+        self.table = self._sandbox_name(graph_name, sim_id)
+        self.store = self._sandbox_store(live_store)
+
+    @staticmethod
+    def _token(value: str) -> str:
+        import re
+
+        token = re.sub(r"[^a-zA-Z0-9_]", "_", value or "")
+        return token.strip("_") or "simulation"
+
+    def _sandbox_name(self, graph_name: str, sim_id: str) -> str:
+        return f"{self._token(graph_name)}__sim_{self._token(sim_id)}"
+
+    def _sandbox_store(self, live_store: Any) -> Any:
+        return live_store
+
+    def reset(self) -> None:
+        self.drop()
+        self.store.create_table(self.table)
+
+    def drop(self) -> None:
+        self._drop_explorer_views()
+        self.store.drop_table(self.table)
+
+    def _drop_explorer_views(self) -> None:
+        return
+
+    def ensure_explorer_views(self, live_union: str, live_asserted: str) -> None:
+        return
+
+    def seed(self, entities: List[str]) -> int:
+        unique = list(dict.fromkeys(entity for entity in entities if entity))
+        if not unique:
+            return 0
+        triples = self._live.get_triples_for_subjects(self._graph_name, unique)
+        copied = self.store.insert_triples(self.table, triples) if triples else 0
+        if self.store.count_triples(self.table) > self.MAX_TRIPLES:
+            self.drop()
+            raise ValidationError(
+                f"Simulation slice has more than {self.MAX_TRIPLES} triples — narrow the scope"
+            )
+        return copied
+
+    def seed_neighbourhood(self, uris: List[str], hops: int = 1) -> int:
+        unique = list(dict.fromkeys(uri for uri in uris if uri))
+        if not unique:
+            return 0
+        copied = self.seed(unique)
+        seen = set(unique)
+        frontier = unique
+        for _ in range(max(hops, 0)):
+            next_uris = [
+                triple.get("object", "")
+                for triple in self.store.query_triples(self.table)
+                if triple.get("subject") in frontier
+                and triple.get("predicate") != RDF_TYPE
+                and is_uri(triple.get("object", ""))
+                and triple.get("object") not in seen
+            ]
+            frontier = list(dict.fromkeys(next_uris))
+            if not frontier:
+                break
+            seen.update(frontier)
+            copied += self.seed(frontier)
+        return copied
+
+    def seed_focus_for_swrl(self, entity_uri: str, hops: int = 2) -> int:
+        return self.seed_neighbourhood([entity_uri], hops=hops)
+
+    def uri_objects_of(self, subject: str) -> List[str]:
+        return [
+            triple["object"]
+            for triple in self.store.query_triples(self.table)
+            if triple.get("subject") == subject
+            and triple.get("predicate") != RDF_TYPE
+            and is_uri(triple.get("object", ""))
+        ]
+
+    def uri_objects_of_many(self, subjects: List[str]) -> List[str]:
+        wanted = set(subjects)
+        return list(
+            dict.fromkeys(
+                triple["object"]
+                for triple in self.store.query_triples(self.table)
+                if triple.get("subject") in wanted
+                and triple.get("predicate") != RDF_TYPE
+                and is_uri(triple.get("object", ""))
+            )
+        )
+
+    def triples(self) -> List[Dict[str, str]]:
+        return self.store.query_triples(self.table)
+
+    def apply(self, patches: List[SimulationPatch]) -> Set[TripleKey]:
+        asserted: Set[TripleKey] = set()
+        for patch in patches:
+            if patch.op == "set":
+                current = [
+                    triple for triple in self.triples()
+                    if triple.get("subject") == patch.subject
+                    and triple.get("predicate") == patch.predicate
+                ]
+                if current:
+                    self.store.delete_triples(self.table, current)
+                self.store.insert_triples(self.table, [patch.triple()])
+                asserted = {
+                    key for key in asserted
+                    if (key[0], key[1]) != (patch.subject, patch.predicate)
+                }
+                asserted.add(SimulationDiff.key(patch.triple()))
+            elif patch.op == "add":
+                self.store.insert_triples(self.table, [patch.triple()])
+                asserted.add(SimulationDiff.key(patch.triple()))
+            else:
+                self.store.delete_triples(self.table, [patch.triple()])
+                asserted.discard(SimulationDiff.key(patch.triple()))
+        return asserted
+
+
+class _DeltaSimulationSandbox(_StoreSimulationSandbox):
+    """UC Delta sandbox table and predicate-overlay Explorer views."""
+
+    def _sandbox_name(self, graph_name: str, sim_id: str) -> str:
+        source = self._live._sql_relation(graph_name)
+        if source.count(".") != 2:
+            raise ValidationError("Delta simulations require a Unity Catalog graph table")
+        return f"{source}__sim_{self._token(sim_id)}"
+
+    def _sandbox_store(self, live_store: Any) -> Any:
+        from back.core.graphdb.delta import DeltaFlatStore
+
+        return DeltaFlatStore(live_store._client)
+
+    def _view_name(self, inferred: bool) -> str:
+        suffix = "smu" if inferred else "sms"
+        return self.table.replace("__sim_", f"__{suffix}_")
+
+    def _drop_explorer_views(self) -> None:
+        for inferred in (True, False):
+            self.store._client.execute_statement(f"DROP VIEW IF EXISTS {self._view_name(inferred)}")
+
+    def ensure_explorer_views(self, live_union: str, live_asserted: str) -> None:
+        for inferred, live in ((True, live_union), (False, live_asserted)):
+            view = self._view_name(inferred)
+            self.store._client.execute_statement(
+                f"CREATE OR REPLACE VIEW {view} AS "
+                f"SELECT l.subject, l.predicate, l.object FROM {live} l "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {self.table} s "
+                f"WHERE s.subject = l.subject AND s.predicate = l.predicate) "
+                f"UNION ALL SELECT subject, predicate, object FROM {self.table}"
+            )
+
+
+class _Neo4jSimulationSandbox(_StoreSimulationSandbox):
+    """Marker-label-isolated Neo4j sandbox graph."""
+
+
+class SimulationSandbox(_LakebaseSimulationSandbox):
+    """Create the isolation implementation for the active graph backend."""
+
+    def __new__(cls, live_store: Any, graph_name: str, sim_id: str) -> Any:
+        from back.core.graphdb.delta import DeltaFlatStore
+        from back.core.graphdb.neo4j import Neo4jStore
+
+        if LakebaseFlatStore is not None and isinstance(live_store, LakebaseFlatStore):
+            return super().__new__(cls)
+        if isinstance(live_store, DeltaFlatStore):
+            return _DeltaSimulationSandbox(live_store, graph_name, sim_id)
+        if isinstance(live_store, Neo4jStore):
+            return _Neo4jSimulationSandbox(live_store, graph_name, sim_id)
+        raise ValidationError(
+            f"Simulations are unsupported for graph store {type(live_store).__name__}"
+        )
