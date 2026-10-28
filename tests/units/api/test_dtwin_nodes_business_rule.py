@@ -105,6 +105,28 @@ def test_confirm_runs_once_then_rejects_reuse(client, wired):
     wired.assert_called_once()
 
 
+def test_request_treats_live_source_as_no_simulation(client, wired, monkeypatch):
+    class FakeSim:
+        def __init__(self, *a, **k):
+            pass
+
+        def sandbox_relation(self, sid):
+            raise AssertionError(f"must not look up live source {sid!r}")
+
+    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
+    for sentinel in ("live", "live:inferred"):
+        resp = client.post(
+            "/dtwin/nodes/business-rule/request",
+            json={
+                "entity_uri": _ENTITY,
+                "rule": "VipCustomer",
+                "simulation_id": sentinel,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["pending_business_rule"]["simulation_id"] is None
+
+
 def test_confirm_forwards_simulation_id(client, wired, monkeypatch):
     class FakeSim:
         def __init__(self, *a, **k):

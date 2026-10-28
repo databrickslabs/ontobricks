@@ -8,6 +8,7 @@ const SimulationWorkbench = {
     _cohortsLoaded: false,
     _focusLabel: '',
     _focusLookupTimer: null,
+    _busy: {},
 
     init() {
         const on = (id, evt, fn) => {
@@ -63,12 +64,14 @@ const SimulationWorkbench = {
             });
         }
 
+        this.reset();
         if (window.SimulationRules) SimulationRules.bind();
         const tabs = document.getElementById('simWbTabs');
         if (tabs) {
             tabs.addEventListener('shown.bs.tab', (e) => {
                 const results = e.target && e.target.id === 'simWb-tab-results';
                 if (results && window.SimulationResults) SimulationResults.onShow();
+                this._syncTabLoading();
                 if (window.SimulationPage && this.currentId) {
                     SimulationPage.syncScenarioUrl(
                         { simulation: this.currentId, tab: results ? 'results' : '' },
@@ -77,7 +80,6 @@ const SimulationWorkbench = {
                 }
             });
         }
-        this.reset();
     },
 
     seedFromEntity(entity, urlLabel) {
@@ -102,6 +104,37 @@ const SimulationWorkbench = {
         return document.getElementById(id);
     },
 
+    setTabBusy(tab, busy) {
+        if (!this._busy) this._busy = {};
+        const n = (this._busy[tab] || 0) + (busy ? 1 : -1);
+        this._busy[tab] = Math.max(0, n);
+        this._syncTabLoading();
+    },
+
+    _activeTabName() {
+        const active = document.querySelector('#simWbTabs .nav-link.active');
+        if (!active || !active.id) return 'general';
+        return active.id.replace('simWb-tab-', '');
+    },
+
+    _syncTabLoading() {
+        const overlay = this._el('simWbTabLoading');
+        if (!overlay) return;
+        const tab = this._activeTabName();
+        const busy = (this._busy[tab] || 0) > 0;
+        overlay.classList.toggle('d-none', !busy);
+        overlay.setAttribute('aria-hidden', busy ? 'false' : 'true');
+        const label = this._el('simWbTabLoadingLabel');
+        if (label) {
+            label.textContent = {
+                general: 'Loading scenario…',
+                facts: 'Loading facts…',
+                reasoning: 'Loading rules…',
+                results: 'Loading results…',
+            }[tab] || 'Loading…';
+        }
+    },
+
     _set(id, value) {
         const el = this._el(id);
         if (el) el.value = value == null ? '' : value;
@@ -117,6 +150,7 @@ const SimulationWorkbench = {
         this._cohortsLoaded = true;
         const select = this._el('simWbCohort');
         if (!select) return;
+        this.setTabBusy('general', true);
         try {
             const data = await SimulationPage.api('/dtwin/cohorts/rules');
             const rules = data.rules || [];
@@ -125,6 +159,8 @@ const SimulationWorkbench = {
                 : '<option value="">No cohort rules defined</option>';
         } catch (err) {
             select.innerHTML = `<option value="">${SimulationPage.esc(err.message)}</option>`;
+        } finally {
+            this.setTabBusy('general', false);
         }
     },
 
@@ -187,6 +223,7 @@ const SimulationWorkbench = {
     reset() {
         this.currentId = null;
         this.patches = [];
+        this._syncTabLoading();
         const cfg = SimulationPage.config || {};
         this._set('simWbLabel', '');
         this._set('simWbDescription', '');
@@ -210,6 +247,7 @@ const SimulationWorkbench = {
     },
 
     async load(id) {
+        this.setTabBusy('general', true);
         try {
             const data = await SimulationPage.api(`/simulation/${encodeURIComponent(id)}`);
             const sim = data.simulation || {};
@@ -234,11 +272,12 @@ const SimulationWorkbench = {
             this._applyPhases(spec.phases, spec.rule_names);
             const title = this._el('simWbTitle');
             if (title) title.textContent = `— ${sim.label || sim.id}`;
-            this.renderPatches();
-            this._resolvePatchLabels();
+            await this._resolvePatchLabels();
             this.paintArtifacts(sim.artifacts, sim.status);
         } catch (err) {
             showNotification(`Could not open scenario: ${err.message}`, 'error');
+        } finally {
+            this.setTabBusy('general', false);
         }
     },
 
@@ -282,10 +321,18 @@ const SimulationWorkbench = {
             patch.op = typed;
             return;
         }
-        const shown = SimulationPage.termLabel(patch[field], patch[`${field}_label`]);
-        if (typed === shown) return;
+        const stored = patch[field] || '';
+        const idShown = SimulationPage.isUri(stored) ? SimulationPage.shortUri(stored) : stored;
+        if (typed === idShown || typed === stored) return;
         patch[field] = typed;
-        patch[`${field}_label`] = SimulationPage.isUri(typed) ? '' : typed;
+        patch[`${field}_label`] = '';
+        patch[`${field}_type`] = '';
+        patch[`${field}_type_uri`] = '';
+        if (field === 'predicate') {
+            patch.predicate_kind = '';
+            patch.predicate_range_label = '';
+        }
+        this._resolvePatchLabels();
     },
 
     renderPatches() {
@@ -305,55 +352,171 @@ const SimulationWorkbench = {
                     <option value="remove" ${p.op === 'remove' ? 'selected' : ''}>Remove</option>
                 </select>
             </td>
-            <td>${this._lookupInput('subject', i, p, 'Subject')}</td>
-            <td>${this._lookupInput('predicate', i, p, 'Predicate')}</td>
-            <td>${this._lookupInput('object', i, p, 'Value')}</td>
+            <td>${this._termCell('subject', i, p, 'Subject')}</td>
+            <td>${this._termCell('predicate', i, p, 'Predicate')}</td>
+            <td>${this._termCell('object', i, p, 'Value')}</td>
             <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" data-remove="${i}" title="Remove fact"><i class="bi bi-x-lg"></i></button></td>
         </tr>`).join('');
     },
 
-    _lookupInput(field, idx, patch, placeholder) {
+    _termCell(field, idx, patch, placeholder) {
         const esc = (v) => SimulationPage.esc(v);
         const uri = patch[field] || '';
-        const shown = SimulationPage.termLabel(uri, patch[`${field}_label`]);
-        return `<div class="input-group input-group-sm">
-            <input type="text" class="form-control" data-field="${field}" data-idx="${idx}"
-                   value="${esc(shown)}" title="${esc(uri)}" placeholder="${esc(placeholder)}"
-                   aria-label="${esc(placeholder)}">
-            <button type="button" class="btn btn-outline-secondary" data-lookup="${field}" data-idx="${idx}"
-                    title="Find existing ${esc(field)}"><i class="bi bi-search"></i></button>
+        const isUri = SimulationPage.isUri(uri);
+        const idShown = isUri ? SimulationPage.shortUri(uri) : uri;
+        const label = String(patch[`${field}_label`] || '').trim();
+        const caption = (label && label !== idShown && label !== uri) ? label : '';
+        return `<div class="sim-term">
+            ${this._termKindHtml(field, patch, uri, isUri, caption)}
+            <div class="input-group input-group-sm">
+                <input type="text" class="form-control" data-field="${field}" data-idx="${idx}"
+                       value="${esc(idShown)}" title="${esc(uri)}" placeholder="${esc(placeholder)}"
+                       aria-label="${esc(placeholder)}">
+                <button type="button" class="btn btn-outline-secondary" data-lookup="${field}" data-idx="${idx}"
+                        title="Find existing ${esc(field)}"><i class="bi bi-search"></i></button>
+            </div>
         </div>`;
     },
 
-    async _resolvePatchLabels() {
-        const jobs = [];
-        this.patches.forEach((patch, i) => {
-            ['subject', 'predicate', 'object'].forEach((field) => {
-                const value = patch[field];
-                if (!value || patch[`${field}_label`]) return;
-                if (field === 'predicate') {
-                    patch.predicate_label = SimulationPage.shortUri(value);
-                    return;
-                }
-                if (!SimulationPage.isUri(value)) {
-                    patch[`${field}_label`] = value;
-                    return;
-                }
-                jobs.push(
-                    SimulationPage.resolveEntityLabel(value).then((label) => {
-                        if (this.patches[i] && this.patches[i][field] === value) {
-                            this.patches[i][`${field}_label`] = label || SimulationPage.shortUri(value);
-                        }
-                    }),
-                );
-            });
-        });
-        if (!jobs.length) {
-            this.renderPatches();
-            return;
+    _termKindHtml(field, patch, uri, isUri, caption) {
+        const esc = (v) => SimulationPage.esc(v);
+        const labelBit = caption
+            ? ` <span class="sim-term-caption">(${esc(caption)})</span>`
+            : '';
+        if (field === 'predicate') {
+            if (!uri) return '';
+            const kind = patch.predicate_kind || this._predicateKind(uri);
+            const relationship = kind === 'relationship';
+            const icon = relationship ? 'bi-arrow-left-right' : 'bi-tag';
+            const text = relationship ? 'Relationship' : 'Attribute';
+            const range = patch.predicate_range_label || '';
+            return `<div class="sim-term-kind">
+                <i class="bi ${icon}" aria-hidden="true"></i>
+                <span>${esc(text)}${range ? ` → ${esc(range)}` : ''}${labelBit}</span>
+            </div>`;
         }
-        await Promise.all(jobs);
-        this.renderPatches();
+        if (isUri) {
+            const typeName = patch[`${field}_type`] || '';
+            const emoji = patch[`${field}_emoji`] || this._emojiForType(
+                typeName, patch[`${field}_type_uri`],
+            );
+            const shownType = typeName || 'Entity';
+            return `<div class="sim-term-kind">
+                <span class="sim-term-emoji" aria-hidden="true">${esc(emoji)}</span>
+                <span>${esc(shownType)}${labelBit}</span>
+            </div>`;
+        }
+        if (field === 'object' && uri) {
+            return `<div class="sim-term-kind">
+                <i class="bi bi-fonts" aria-hidden="true"></i>
+                <span>Value${labelBit}</span>
+            </div>`;
+        }
+        return '';
+    },
+
+    async _ensureOntology() {
+        if (window.SimulationFactWizard && typeof SimulationFactWizard._ensureOntology === 'function') {
+            await SimulationFactWizard._ensureOntology();
+        }
+    },
+
+    _ontologyClasses() {
+        return (window.SimulationFactWizard && SimulationFactWizard._ontology
+            && SimulationFactWizard._ontology.classes) || [];
+    },
+
+    _ontologyProperties() {
+        return (window.SimulationFactWizard && SimulationFactWizard._ontology
+            && SimulationFactWizard._ontology.properties) || [];
+    },
+
+    _emojiForType(type, typeUri) {
+        const cls = window.SimulationFactWizard
+            && typeof SimulationFactWizard._findClass === 'function'
+            ? SimulationFactWizard._findClass(type, typeUri)
+            : null;
+        return (cls && (cls.emoji || cls.icon)) || '📦';
+    },
+
+    _classTitle(type, typeUri) {
+        const cls = window.SimulationFactWizard
+            && typeof SimulationFactWizard._findClass === 'function'
+            ? SimulationFactWizard._findClass(type, typeUri)
+            : null;
+        if (cls) return cls.label || cls.name || type || SimulationPage.shortUri(typeUri);
+        return type || SimulationPage.shortUri(typeUri) || '';
+    },
+
+    _predicateKind(uri) {
+        const prop = this._findProperty(uri);
+        if (!prop) return 'attribute';
+        if (window.SimulationFactWizard && typeof SimulationFactWizard._isObjectProp === 'function') {
+            return SimulationFactWizard._isObjectProp(prop) ? 'relationship' : 'attribute';
+        }
+        return String(prop.type || '').indexOf('Object') >= 0 ? 'relationship' : 'attribute';
+    },
+
+    _findProperty(uri) {
+        const raw = String(uri || '');
+        if (!raw) return null;
+        const local = SimulationPage.shortUri(raw).toLowerCase();
+        return this._ontologyProperties().find((p) => {
+            const puri = String(p.uri || p.iri || '');
+            return puri === raw || SimulationPage.shortUri(puri).toLowerCase() === local;
+        }) || null;
+    },
+
+    _decoratePredicate(patch) {
+        const uri = patch.predicate || '';
+        if (!uri) return;
+        const prop = this._findProperty(uri);
+        const kind = this._predicateKind(uri);
+        patch.predicate_kind = kind;
+        if (prop) {
+            patch.predicate_label = prop.label || prop.name || SimulationPage.shortUri(uri);
+            if (kind === 'relationship' && prop.range) {
+                patch.predicate_range_label = this._classTitle(prop.range, prop.range)
+                    || SimulationPage.shortUri(prop.range);
+            }
+        } else if (!patch.predicate_label) {
+            patch.predicate_label = SimulationPage.shortUri(uri);
+        }
+    },
+
+    async _resolvePatchLabels() {
+        this.setTabBusy('facts', true);
+        try {
+            await this._ensureOntology();
+            const jobs = [];
+            this.patches.forEach((patch, i) => {
+                this._decoratePredicate(patch);
+                ['subject', 'object'].forEach((field) => {
+                    const value = patch[field];
+                    if (!value) return;
+                    if (!SimulationPage.isUri(value)) {
+                        if (!patch[`${field}_label`]) patch[`${field}_label`] = value;
+                        return;
+                    }
+                    jobs.push(
+                        SimulationPage.resolveEntitySeed(value).then((seed) => {
+                            if (!this.patches[i] || this.patches[i][field] !== value) return;
+                            const row = this.patches[i];
+                            row[`${field}_label`] = seed.label || SimulationPage.shortUri(value);
+                            if (seed.type) {
+                                row[`${field}_type`] = this._classTitle(seed.type, seed.type_uri) || seed.type;
+                                row[`${field}_type_uri`] = seed.type_uri || '';
+                                row[`${field}_emoji`] = this._emojiForType(seed.type, seed.type_uri);
+                            }
+                        }),
+                    );
+                });
+            });
+            if (jobs.length) await Promise.all(jobs);
+            this.renderPatches();
+        } finally {
+            this.setTabBusy('facts', false);
+        }
     },
 
     openScopeEntityPicker() {
@@ -497,13 +660,19 @@ const SimulationWorkbench = {
             subject_label: patch.subject_label || '',
             predicate_label: patch.predicate_label || '',
             object_label: patch.object_label || '',
+            subject_type: patch.subject_type || '',
+            subject_type_uri: patch.subject_type_uri || '',
+            subject_emoji: patch.subject_emoji || '',
+            predicate_kind: patch.predicate_kind || '',
+            predicate_range_label: patch.predicate_range_label || '',
+            object_type: patch.object_type || '',
+            object_type_uri: patch.object_type_uri || '',
+            object_emoji: patch.object_emoji || '',
         };
         if (idx == null || !this.patches[idx]) this.patches.push(row);
         else this.patches[idx] = row;
         this.renderPatches();
-        if (!row.subject_label || !row.predicate_label || (row.object && !row.object_label)) {
-            this._resolvePatchLabels();
-        }
+        this._resolvePatchLabels();
     },
 
     // -- Save / run --------------------------------------------------------

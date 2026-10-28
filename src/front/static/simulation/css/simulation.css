@@ -77,6 +77,37 @@ a.sim-uri-link:focus-visible {
     min-width: 10rem;
 }
 
+.sim-patches-table td {
+    vertical-align: top;
+}
+
+.sim-term {
+    min-width: 11rem;
+}
+
+.sim-term-kind {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.25rem;
+    color: var(--db-text-muted);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sim-term-emoji {
+    font-size: 0.95rem;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+.sim-term-caption {
+    color: var(--db-text-muted);
+}
+
 .sim-artifact-name {
     font-size: 0.75rem;
     white-space: nowrap;
@@ -121,4 +152,16 @@ a.sim-uri-link:focus-visible {
     display: flex;
     flex-direction: column;
     min-width: 4.5rem;
+}
+
+.sim-tab-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 8rem;
+    background: var(--db-surface-warm);
 }

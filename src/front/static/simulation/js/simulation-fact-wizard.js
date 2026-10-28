@@ -13,6 +13,11 @@ const SimulationFactWizard = {
     _pickMode: '',
     _predIsObject: false,
     _predRange: '',
+    _pickedPredLabel: '',
+    _pickedObjectLabel: '',
+    _pickedObjectUri: '',
+    _pickedObjectType: '',
+    _pickedObjectTypeUri: '',
     _busy: false,
 
     init() {
@@ -79,6 +84,8 @@ const SimulationFactWizard = {
             this._set('simFactObjectValue', btn.dataset.uri);
             this._pickedObjectUri = btn.dataset.uri;
             this._pickedObjectLabel = btn.dataset.label || this._local(btn.dataset.uri);
+            this._pickedObjectType = btn.dataset.type || '';
+            this._pickedObjectTypeUri = btn.dataset.typeUri || '';
             this._markActive('simFactObjectHits', btn);
         });
     },
@@ -95,6 +102,8 @@ const SimulationFactWizard = {
         this._pickedPredLabel = '';
         this._pickedObjectLabel = '';
         this._pickedObjectUri = '';
+        this._pickedObjectType = '';
+        this._pickedObjectTypeUri = '';
         await this._ensureOntology();
         const p = patch || {};
         this._set('simFactOp', p.op || 'set');
@@ -625,8 +634,14 @@ const SimulationFactWizard = {
                     predicate,
                     object,
                     subject_label: this._pickedLabel || this._local(subject),
+                    subject_type: this._subjectType || '',
+                    subject_type_uri: this._subjectTypeUri || '',
                     predicate_label: this._pickedPredLabel || this._local(predicate),
+                    predicate_kind: this._predIsObject ? 'relationship' : 'attribute',
+                    predicate_range_label: this._predRange || '',
                     object_label: this._objectDisplayLabel(object),
+                    object_type: this._pickedObjectType || '',
+                    object_type_uri: this._pickedObjectTypeUri || '',
                 },
                 this._idx,
             );

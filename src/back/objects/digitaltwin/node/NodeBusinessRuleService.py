@@ -18,6 +18,7 @@ from back.core.graphdb import get_graphdb
 from back.core.helpers import run_blocking
 from back.core.logging import get_logger
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
 from back.objects.digitaltwin.models import DomainSnapshot
 from back.objects.digitaltwin.build.TwinInferredMaterialize import TwinInferredMaterialize
 from back.objects.ontology.Rules import Rules
@@ -105,7 +106,7 @@ class NodeBusinessRuleService:
         )
         local_id = DigitalTwin.extract_local_id(entity_uri)
         snap = DomainSnapshot(domain)
-        sid = (simulation_id or "").strip() or None
+        sid = TwinGraphAccess.sandbox_id(simulation_id)
         store = get_graphdb(snap, settings, for_write=sid is None)
         if store is None:
             raise InfrastructureError("Graph store is not available for this domain")

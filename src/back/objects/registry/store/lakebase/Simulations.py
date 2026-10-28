@@ -182,6 +182,7 @@ class Simulations:
         """UPSERT one simulation row. Raises InfrastructureError on failure."""
         self._require_simulation_tables()
         sch = self._q(self._schema)
+        replace_diff = "diff" in entry or "diff_summary" in entry
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 f"""
@@ -196,8 +197,10 @@ class Simulations:
                     label        = EXCLUDED.label,
                     status       = EXCLUDED.status,
                     spec         = EXCLUDED.spec,
-                    diff_summary = EXCLUDED.diff_summary,
-                    diff         = EXCLUDED.diff,
+                    diff_summary = CASE WHEN %s THEN EXCLUDED.diff_summary
+                                        ELSE {sch}.simulations.diff_summary END,
+                    diff         = CASE WHEN %s THEN EXCLUDED.diff
+                                        ELSE {sch}.simulations.diff END,
                     task_id      = EXCLUDED.task_id,
                     error        = EXCLUDED.error,
                     last_run_at  = COALESCE(EXCLUDED.last_run_at,
@@ -218,6 +221,8 @@ class Simulations:
                     entry.get("last_run_at") or None,
                     self._registry(),
                     folder,
+                    replace_diff,
+                    replace_diff,
                 ),
             )
             if cur.rowcount == 0:

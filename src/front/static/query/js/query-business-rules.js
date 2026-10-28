@@ -135,8 +135,13 @@ async function openEntityBusinessRuleModal(entityUri, ruleName) {
 }
 
 function _brSimulationId() {
+    if (typeof KgGraphSource !== 'undefined') {
+        return KgGraphSource.current().simulationId || '';
+    }
     const sel = document.getElementById('sgSimulationSelect');
-    return (sel && sel.value) ? String(sel.value) : '';
+    const raw = (sel && sel.value) ? String(sel.value) : '';
+    if (!raw || raw === 'live' || raw === 'live:inferred') return '';
+    return raw.replace(/:asserted$/, '');
 }
 
 function _brRequestBody(entityUri, ruleName) {

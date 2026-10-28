@@ -97,6 +97,20 @@ def _registry_params(ctx: ToolContext) -> dict:
     return loopback_registry_params(ctx)
 
 
+def _graph_source_query(ctx: ToolContext) -> dict:
+    params = {"include_inferred": str(bool(ctx.dtwin_include_inferred)).lower()}
+    if ctx.dtwin_simulation_id:
+        params["simulation_id"] = ctx.dtwin_simulation_id
+    return params
+
+
+def _graph_source_body(ctx: ToolContext, body: dict) -> dict:
+    body["include_inferred"] = bool(ctx.dtwin_include_inferred)
+    if ctx.dtwin_simulation_id:
+        body["simulation_id"] = ctx.dtwin_simulation_id
+    return body
+
+
 def _error(msg: str) -> str:
     logger.warning("agent_dtwin_chat: %s", msg)
     return json.dumps({"error": msg})
@@ -179,7 +193,7 @@ def tool_list_entity_types(ctx: ToolContext, **_kwargs) -> str:
     """List entity types + counts + aggregate statistics."""
     try:
         with _client(ctx) as c:
-            resp = c.get("/dtwin/sync/stats")
+            resp = c.get("/dtwin/sync/stats", params=_graph_source_query(ctx))
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as exc:
@@ -273,6 +287,7 @@ def tool_describe_entity(
         params["search"] = search
     if entity_type:
         params["entity_type"] = entity_type
+    params.update(_graph_source_query(ctx))
 
     try:
         with _client(ctx) as c:
@@ -385,6 +400,7 @@ def tool_query_graphql(
                 body["variables"] = json.loads(variables)
             except json.JSONDecodeError:
                 return _error("Invalid JSON in 'variables' argument.")
+    body = _graph_source_body(ctx, body)
 
     try:
         with _client(ctx) as c:
@@ -421,6 +437,7 @@ def tool_get_entity_context(
         "dataset_row_limit": min(max(int(dataset_row_limit or 5), 1), 20),
         "follow_bridges": str(bool(follow_bridges)).lower(),
     }
+    params.update(_graph_source_query(ctx))
 
     try:
         with _client(ctx) as c:
@@ -500,7 +517,7 @@ def tool_run_sparql(
     except ValidationError as exc:
         return _error(exc.message)
 
-    payload: dict = {"query": query}
+    payload: dict = _graph_source_body(ctx, {"query": query})
     if limit is not None:
         try:
             payload["limit"] = int(limit)

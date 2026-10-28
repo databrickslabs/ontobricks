@@ -118,15 +118,27 @@ def test_entity_panel_links_to_workbench():
     assert "getDisplayLabel(entity)" in js
 
 
-def test_hypothetical_facts_show_labels_not_full_uris():
+def test_hypothetical_facts_show_id_type_and_predicate_kind():
     wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
     page = _read(FRONT / "static/simulation/js/simulation.js")
     wizard = _read(FRONT / "static/simulation/js/simulation-fact-wizard.js")
-    assert "termLabel" in page
-    assert "SimulationPage.termLabel" in wb
-    assert "_lookupInput('subject', i, p.subject" not in wb
-    assert "subject_label" in wb
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
+    assert "_termCell" in wb
+    assert "sim-term-caption" in wb
+    assert "(${esc(caption)})" in wb
+    assert "sim-term-kind" in css
+    assert "shortUri(uri)" in wb
+    assert "Relationship" in wb
+    assert "Attribute" in wb
+    assert "predicate_kind" in wb
+    assert "sim-term-emoji" in wb
+    assert "subject_type" in wb
+    assert "sim-patches-table" in html
+    assert "resolveEntitySeed" in page
+    assert "_lookupInput" not in wb
     assert wizard.count('text-muted">${SimulationPage.esc(s.uri)}</div>') == 0
+    assert "onclick=" not in html
 
 
 def test_workbench_prefers_entity_label_over_local_id():
@@ -184,6 +196,26 @@ def test_workbench_uses_four_ob_tabs():
     assert 'id="simWbBackBtn"' in html
     assert "Workbench.currentId" in res or "SimulationWorkbench.currentId" in res
     assert "onclick=" not in html
+
+
+def test_workbench_tabs_show_loading_spinner():
+    html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
+    wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
+    rules = _read(FRONT / "static/simulation/js/simulation-rules.js")
+    res = _read(FRONT / "static/simulation/js/simulation-results.js")
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    overlay = html.split('id="simWbTabLoading"', 1)[1]
+    assert 'class="sim-tab-loading d-none"' in html
+    assert "spinner-border" in overlay
+    assert 'id="simWbTabLoadingLabel"' in overlay
+    assert "setTabBusy" in wb
+    assert "setTabBusy('general'" in wb
+    assert "setTabBusy('facts'" in wb
+    assert "setTabBusy('reasoning'" in rules
+    assert "setTabBusy('results'" in res
+    assert ".sim-tab-loading" in css
+    assert "onclick=" not in html
+    assert "style=" not in html
 
 
 def test_workbench_general_tab_stacks_sections():

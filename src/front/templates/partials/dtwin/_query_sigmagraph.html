@@ -8,17 +8,9 @@
         <p class="text-muted mb-0 small">Interactive graph visualization</p>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
-        <div class="d-inline-flex align-items-center gap-1 mb-0">
-            <label class="form-label small mb-0 text-muted" for="sgSimulationSelect">Graph</label>
-            <select class="form-select form-select-sm py-0 sg-compact-select sg-sim-select"
-                    id="sgSimulationSelect"
-                    aria-label="Graph source"
-                    title="Live knowledge graph, inferred graph, or a ready simulation sandbox"
-                    data-sg-change="onSimulationChange">
-                <option value="live:inferred">Live graph (inferred)</option>
-                <option value="live">Live graph</option>
-            </select>
-        </div>
+        {% with select_id="sgSimulationSelect" %}
+        {% include "partials/dtwin/_kg_graph_source.html" %}
+        {% endwith %}
         <div class="d-inline-flex align-items-center gap-1 mb-0">
             <label class="form-label small mb-0 text-muted" for="sgMaxEntities"><i class="bi bi-speedometer2"></i></label>
             <select class="form-select form-select-sm py-0 sg-compact-select" id="sgMaxEntities" title="Max entities returned by graph search">

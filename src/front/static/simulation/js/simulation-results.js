@@ -90,6 +90,7 @@ const SimulationResults = {
             page_size: String(this.PAGE_SIZE),
             search,
         });
+        if (window.SimulationWorkbench) SimulationWorkbench.setTabBusy('results', true);
         try {
             const sim = (SimulationPage.scenarios || []).find((s) => s.id === this.selectedId) || {};
             const data = await SimulationPage.api(`/simulation/${encodeURIComponent(this.selectedId)}/diff?${qs}`);
@@ -99,6 +100,8 @@ const SimulationResults = {
         } catch (err) {
             this._toggle(false);
             showNotification(`Could not load results: ${err.message}`, 'error');
+        } finally {
+            if (window.SimulationWorkbench) SimulationWorkbench.setTabBusy('results', false);
         }
     },
 

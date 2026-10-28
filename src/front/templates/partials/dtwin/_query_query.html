@@ -8,7 +8,10 @@
             Query the current Knowledge Graph with GraphQL or SPARQL
         </p>
     </div>
-    <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        {% with select_id="queryGraphSource" %}
+        {% include "partials/dtwin/_kg_graph_source.html" %}
+        {% endwith %}
         <button type="button"
                 class="btn btn-sm btn-outline-primary"
                 data-query-action="ontology"

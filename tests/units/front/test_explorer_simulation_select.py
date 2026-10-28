@@ -13,11 +13,18 @@ RESULTS_JS = REPO_ROOT / "src/front/static/simulation/js/simulation-results.js"
 def test_explorer_header_has_simulation_select() -> None:
     html = SIGMA_HTML.read_text(encoding="utf-8")
     header = html.split('<div class="section-header', 1)[1].split("visualization-layout", 1)[0]
-    assert 'id="sgSimulationSelect"' in header
-    assert "Live graph" in header
-    assert "Live graph (inferred)" in header
+    shared = (REPO_ROOT / "src/front/templates/partials/dtwin/_kg_graph_source.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'select_id="sgSimulationSelect"' in header
+    assert "_kg_graph_source.html" in header
+    assert 'id="{{ select_id }}"' in shared
+    assert "Live graph" in shared
+    assert "Live graph (inferred)" in shared
     assert 'id="sgShowInferred"' not in html
-    assert 'data-sg-change="onSimulationChange"' in header
+    assert "onSimulationChange:" in (
+        REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
+    ).read_text(encoding="utf-8")
     assert 'id="sgSimulationBanner"' in html
     assert "unioned with" in html
     assert 'data-sg-action="openCanvasHelp"' in header

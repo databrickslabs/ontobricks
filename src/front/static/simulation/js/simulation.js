@@ -114,11 +114,12 @@ const SimulationPage = {
         return `<span class="sim-uri" title="${this.esc(uri)}">${this.esc(shown)}</span>`;
     },
 
-    async resolveEntityLabel(uri) {
+    async resolveEntitySeed(uri) {
         const key = String(uri || '').trim();
-        if (!key) return '';
-        this._labelCache = this._labelCache || {};
-        if (this._labelCache[key]) return this._labelCache[key];
+        const empty = { label: '', type: '', type_uri: '' };
+        if (!key) return empty;
+        this._seedCache = this._seedCache || {};
+        if (this._seedCache[key]) return this._seedCache[key];
         try {
             const data = await this.api('/dtwin/sync/filter', {
                 method: 'POST',
@@ -130,13 +131,24 @@ const SimulationPage = {
                     include_inferred: true,
                 },
             });
-            const seed = (data.seeds || []).find((s) => s.uri === key) || (data.seeds || [])[0];
-            const label = (seed && seed.label) ? String(seed.label) : '';
-            if (label) this._labelCache[key] = label;
-            return label;
+            const seed = (data.seeds || []).find((s) => s.uri === key) || (data.seeds || [])[0] || {};
+            const out = {
+                label: seed.label ? String(seed.label) : '',
+                type: seed.type ? String(seed.type) : '',
+                type_uri: seed.type_uri ? String(seed.type_uri) : '',
+            };
+            this._seedCache[key] = out;
+            this._labelCache = this._labelCache || {};
+            if (out.label) this._labelCache[key] = out.label;
+            return out;
         } catch (_) {
-            return '';
+            return empty;
         }
+    },
+
+    async resolveEntityLabel(uri) {
+        const seed = await this.resolveEntitySeed(uri);
+        return seed.label || '';
     },
 
     fmtDate(iso) {

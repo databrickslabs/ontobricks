@@ -35,6 +35,23 @@ class TestTwinGraphAccess:
         assert out == "cat.sch.g_data"
         assert seen == {"domain": "d", "settings": "s", "inf": False, "store": "st"}
 
+    def test_source_from_payload_coerces_flags(self):
+        assert TwinGraphAccess.source_from_payload(None) == (True, None)
+        assert TwinGraphAccess.source_from_payload({"include_inferred": "false"}) == (
+            False,
+            None,
+        )
+        assert TwinGraphAccess.source_from_payload(
+            {"include_inferred": False, "simulation_id": " s1 "}
+        ) == (False, "s1")
+        assert TwinGraphAccess.source_from_payload({"simulation_id": "live"}) == (
+            True,
+            None,
+        )
+        assert TwinGraphAccess.source_from_payload(
+            {"simulation_id": "live:inferred"}
+        ) == (True, None)
+
     def test_graph_query_table_uses_simulation_union(self, monkeypatch):
         from back.objects.simulation import Simulation
 

@@ -138,6 +138,55 @@ class TestSimulationFacade:
         with pytest.raises(NotFoundError):
             sim.get(row["id"])
 
+    def test_update_keeps_ready_results_when_scope_unchanged(self, monkeypatch):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        monkeypatch.setattr(sim, "_drop_sandbox", lambda sim_id: None)
+        row = sim.create(_body())
+        sim_id = row["id"]
+        reg.rows[sim_id]["status"] = "ready"
+        reg.rows[sim_id]["diff"] = {"added": [{"subject": "s"}]}
+        reg.rows[sim_id]["diff_summary"] = {"added_count": 1}
+        updated = sim.update(sim_id, _body(label="Jacob renamed"))
+        stored = reg.rows[sim_id]
+        assert updated["label"] == "Jacob renamed"
+        assert stored["status"] == "ready"
+        assert stored["diff"]["added"]
+        assert stored["diff_summary"]["added_count"] == 1
+
+    def test_update_keeps_diff_when_spec_changes(self, monkeypatch):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        monkeypatch.setattr(sim, "_drop_sandbox", lambda sim_id: None)
+        row = sim.create(_body())
+        sim_id = row["id"]
+        reg.rows[sim_id]["status"] = "ready"
+        reg.rows[sim_id]["diff"] = {"added": [{"subject": "s"}]}
+        changed = _body(
+            patches=[
+                {
+                    "op": "set",
+                    "subject": EX + "acme",
+                    "predicate": EX + "score",
+                    "object": "10",
+                }
+            ]
+        )
+        sim.update(sim_id, changed)
+        stored = reg.rows[sim_id]
+        assert stored["status"] == "draft"
+        assert stored["diff"]["added"]
+
+    def test_save_simulation_sql_keeps_diff_unless_provided(self):
+        import inspect
+
+        from back.objects.registry.store.lakebase.Simulations import Simulations
+
+        src = inspect.getsource(Simulations.save_simulation)
+        assert "replace_diff" in src
+        assert "CASE WHEN %s THEN EXCLUDED.diff" in src
+        assert "ELSE {sch}.simulations.diff END" in src
+
     def test_update_refused_while_running(self, monkeypatch):
         reg = _Registry()
         sim = Simulation(_Domain(), None, registry=reg)

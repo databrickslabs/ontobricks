@@ -684,11 +684,11 @@
             const response = await fetch('/dtwin/assistant/chat/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+                body: JSON.stringify(Object.assign({
                     message: text,
                     history: priorHistory,
                     depth: getDepth(),
-                }),
+                }, (typeof KgGraphSource !== 'undefined') ? KgGraphSource.payload() : {})),
                 credentials: 'same-origin',
             });
 

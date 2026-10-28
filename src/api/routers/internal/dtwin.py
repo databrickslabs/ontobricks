@@ -1335,17 +1335,26 @@ async def triplestore_stats(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
     refresh: bool = False,
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
 ):
     """Return content statistics about the triple store."""
     try:
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
-        graph_name = _graph_query_table(domain, settings, store)
+        sid = (simulation_id or "").strip() or None
+        graph_name = _graph_query_table(
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=sid,
+        )
 
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
-        if not refresh:
+        if not refresh and not sid and include_inferred:
             cached = DigitalTwin(domain).get_ts_cache("stats")
             if TwinGraphStats.cache_is_fresh(cached):
                 logger.debug("Returning cached graph stats")
@@ -1833,7 +1842,7 @@ async def dtwin_nodes_business_rule_request(
         domain, entity_uri=entity_uri, rule_name=rule_name
     )
     rule = resolved["rule"]
-    simulation_id = (data.get("simulation_id") or "").strip() or None
+    simulation_id = TwinGraphAccess.sandbox_id(data.get("simulation_id"))
     if simulation_id:
         from back.objects.simulation import Simulation
 
@@ -2083,6 +2092,21 @@ def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
     return TwinAssistantCache.chat_response_payload(agent_result, event_type)
 
 
+def _chat_forwarded_headers(request: Request) -> dict:
+    prefixes = ("x-forwarded-", "x-real-")
+    extra = {"x-csrf-token", "referer"}
+    return {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith(prefixes) or k.lower() in extra
+    }
+
+
+def _chat_graph_source_kwargs(data: dict) -> dict:
+    include_inferred, sid = TwinGraphAccess.source_from_payload(data)
+    return {"include_inferred": include_inferred, "simulation_id": sid or ""}
+
+
 @router.post("/assistant/chat")
 async def dtwin_assistant_chat(
     request: Request,
@@ -2140,6 +2164,7 @@ async def dtwin_assistant_chat(
         "registry_catalog": reg.get("catalog") or "",
         "registry_schema": reg.get("schema") or "",
         "registry_volume": reg.get("volume") or "",
+        **_chat_graph_source_kwargs(data),
     }
 
     # Build the loopback base URL used by the agent's HTTPX client to
@@ -2152,18 +2177,7 @@ async def dtwin_assistant_chat(
     # Forward the caller's session cookies so the loopback routes
     # resolve the same user session and active domain.
     session_cookies = dict(request.cookies or {})
-
-    # Forward the Databricks-Apps identity + CSRF headers so the loopback
-    # call passes PermissionMiddleware (which otherwise 302-redirects the
-    # anonymous internal request to ``/access-denied``).
-    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
-    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
-    session_headers = {
-        k: v
-        for k, v in request.headers.items()
-        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
-        or k.lower() in _FORWARDED_EXTRA_HEADERS
-    }
+    session_headers = _chat_forwarded_headers(request)
 
     domain_name = _chat_resolve_domain_name(domain)
 
@@ -2276,20 +2290,13 @@ async def dtwin_assistant_chat_stream(
         "registry_catalog": reg.get("catalog") or "",
         "registry_schema": reg.get("schema") or "",
         "registry_volume": reg.get("volume") or "",
+        **_chat_graph_source_kwargs(data),
     }
 
     app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
     base_url = f"http://localhost:{app_port}"
     session_cookies = dict(request.cookies or {})
-
-    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
-    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
-    session_headers = {
-        k: v
-        for k, v in request.headers.items()
-        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
-        or k.lower() in _FORWARDED_EXTRA_HEADERS
-    }
+    session_headers = _chat_forwarded_headers(request)
 
     domain_name = _chat_resolve_domain_name(domain)
 
@@ -2526,6 +2533,7 @@ async def dtwin_graphql_execute(
     variables = body.get("variables") or None
     operation_name = body.get("operationName")
     depth = body.get("depth")
+    include_inferred, simulation_id = TwinGraphAccess.source_from_payload(body)
 
     ontology = domain.ontology or {}
     classes = ontology.get("classes", []) or []
@@ -2543,7 +2551,13 @@ async def dtwin_graphql_execute(
 
     context = {
         "triplestore": store,
-        "table_name": _graph_query_table(domain, settings, store),
+        "table_name": _graph_query_table(
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=simulation_id,
+        ),
         "base_uri": base_uri,
     }
     if depth is not None:
@@ -2579,6 +2593,8 @@ async def dtwin_triples_find(
     limit: int = 1000,
     offset: int = 0,
     cache: Optional[str] = None,
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -2608,7 +2624,13 @@ async def dtwin_triples_find(
     )
 
     apply_search_cache_to_store(store, domain, parse_cache_param(cache))
-    table = _graph_query_table(domain, settings, store)
+    table = _graph_query_table(
+        domain,
+        settings,
+        store,
+        include_inferred=include_inferred,
+        simulation_id=(simulation_id or "").strip() or None,
+    )
     if not table:
         raise ValidationError("Graph name not configured")
 

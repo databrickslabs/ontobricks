@@ -212,10 +212,40 @@ class Simulation:
         self.registry.save_simulation(
             self.folder,
             self.version,
-            {"id": sim_id, "label": spec.label, "status": "draft",
-             "spec": spec.to_dict(), "owner": current.get("owner", "")},
+            {
+                "id": sim_id,
+                "label": spec.label,
+                "status": self._status_after_spec_save(current, spec),
+                "spec": spec.to_dict(),
+                "owner": current.get("owner", ""),
+                "task_id": current.get("task_id", "") or "",
+                "error": current.get("error", "") or "",
+            },
         )
         return self.get(sim_id)
+
+    @staticmethod
+    def _results_fingerprint(spec: Any) -> dict:
+        data = spec.to_dict() if hasattr(spec, "to_dict") else dict(spec or {})
+        return {
+            "scope": data.get("scope") or {},
+            "patches": data.get("patches") or [],
+            "phases": data.get("phases") or [],
+            "rule_names": data.get("rule_names") or {},
+        }
+
+    @classmethod
+    def _status_after_spec_save(cls, current: Dict[str, Any], spec: SimulationSpec) -> str:
+        status = str(current.get("status") or "draft")
+        if status == "running":
+            return "draft"
+        if status == "ready" and cls._results_fingerprint(current.get("spec")) != (
+            cls._results_fingerprint(spec)
+        ):
+            return "draft"
+        if status == "failed":
+            return "draft"
+        return status
 
     def delete(self, sim_id: str) -> bool:
         self.get(sim_id)

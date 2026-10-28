@@ -82,7 +82,12 @@
                 </li>
             </ul>
 
-            <div class="tab-content p-3" id="simWbTabContent">
+            <div class="tab-content p-3 position-relative" id="simWbTabContent">
+                <div id="simWbTabLoading" class="sim-tab-loading d-none" role="status"
+                     aria-live="polite" aria-hidden="true">
+                    <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                    <span class="text-muted small" id="simWbTabLoadingLabel">Loading…</span>
+                </div>
                 <div class="tab-pane fade show active" id="simWb-pane-general" role="tabpanel"
                      aria-labelledby="simWb-tab-general">
                     <div class="d-flex flex-column gap-4" id="simWbGeneralStack">
@@ -165,7 +170,7 @@
                         </button>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0 sim-table">
+                        <table class="table table-sm align-middle mb-0 sim-table sim-patches-table">
                             <thead>
                                 <tr>
                                     <th class="sim-col-op">Operation</th>

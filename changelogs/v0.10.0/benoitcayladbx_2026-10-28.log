@@ -331,4 +331,188 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 57.88s.
 
+================================================================================
+## Share the Graph source picker with Query and Chat
+================================================================================
+
+Context: Explorer already switched between live inferred, live asserted, and a
+ready simulation sandbox. Query (GraphQL) and Chat still always hit the live
+inferred table, so sandbox what-if triples were invisible outside Explorer.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_kg_graph_source.html
+   Shared Graph dropdown used by Explorer, Query, and Chat.
+2. src/front/static/query/js/query-graph-source.js
+   Populate ready sandboxes, persist the choice, and apply include_inferred /
+   simulation_id to request bodies.
+3. src/back/objects/digitaltwin/TwinGraphAccess.py
+   Parse graph-source flags from request payloads.
+4. src/back/fastapi/graphql_routes.py
+   Resolve GraphQL against the selected overlay table.
+5. src/api/routers/internal/dtwin.py
+   Pass the same overlay into GraphQL execute, stats, triples/find, and Chat.
+6. src/agents/agent_dtwin_chat/tools.py
+   Forward the selected graph on loopback GraphQL, stats, and describe calls.
+
+Modified files:
+- src/front/templates/partials/dtwin/_kg_graph_source.html
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-graph-source.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-graphql.js
+- src/front/static/query/js/query-execute.js
+- src/front/static/query/js/query-chat.js
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/internal/dtwin.py
+- src/agents/tools/context.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/agent_dtwin_chat/tools.py
+- docs/user-guide.md
+- tests/units/front/test_kg_graph_source.py
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9759 passed, 326 skipped, 8 deselected, 0 failed in 48.79s.
+
+================================================================================
+## Keep last simulation results across save
+================================================================================
+
+Context: Saving a ready scenario (or aborting / reaping a run) UPSERT-ed
+empty JSON into ``diff`` / ``diff_summary``, so Results went blank. The
+Jacob Martin contracts run was still in the scenario list but had no
+stored triples.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/Simulations.py
+   Leave existing diff columns in place unless the payload includes them.
+2. src/back/objects/simulation/Simulation.py
+   Spec save keeps ``ready`` when scope/facts/rules are unchanged; otherwise
+   draft, still without wiping the last diff.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Cover ready-preserving save and spec-change that retains the diff.
+4. docs/user-guide.md
+   Document that Save keeps Results until Clear or a new successful run.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/back/objects/simulation/Simulation.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9762 passed, 326 skipped, 8 deselected, 0 failed in 50.44s.
+
+================================================================================
+## Show ID, type and predicate kind on hypothetical facts
+================================================================================
+
+Context: Hypothetical-fact rows showed only a label in the subject/predicate/
+object inputs, so operators could not see the URI local ID, the entity type,
+or whether the predicate was a relationship.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Stack type+icon, URI local ID, and optional label on each term; tag
+   predicates as Relationship or Attribute.
+2. src/front/static/simulation/js/simulation.js
+   Resolve entity type with the label from the live-graph preview.
+3. src/front/static/simulation/js/simulation-fact-wizard.js
+   Carry type and predicate kind from the wizard onto the patch row.
+4. src/front/static/simulation/css/simulation.css
+   Caption and type-row styles for stacked fact cells.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_workbench.html
+- docs/user-guide.md
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9762 passed, 326 skipped, 8 deselected, 0 failed in 56.96s.
+
+================================================================================
+## Treat Explorer live graph as no simulation for SWRL
+================================================================================
+
+Context: Triggering a class SWRL business rule from Knowledge Graph →
+Explorer failed with ``Simulation 'live' was not found``. The Explorer
+source picker uses ``live`` / ``live:inferred`` as option values; the
+rule request posted those tokens as ``simulation_id``, and the API looked
+them up in the simulation registry.
+
+Changes:
+
+1. src/front/static/query/js/query-business-rules.js
+   Resolve the sandbox id through KgGraphSource so live picker tokens are
+   omitted from the request body.
+2. src/back/objects/digitaltwin/TwinGraphAccess.py
+   Map ``live`` / ``live:inferred`` to no sandbox for every graph source
+   payload.
+3. src/api/routers/internal/dtwin.py
+   Skip sandbox lookup when the business-rule request carries a live token.
+4. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+   Run against the live graph when the caller sends a live source token.
+5. tests/units/api/test_dtwin_nodes_business_rule.py
+   Cover live source tokens on the request route.
+
+Modified files:
+- src/front/static/query/js/query-business-rules.js
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9763 passed, 326 skipped, 8 deselected, 0 failed in 49.38s.
+
+================================================================================
+## Show a spinner while workbench tabs load
+================================================================================
+
+Context: Opening a scenario or switching to Hypothetical facts, Reasoning, or
+Results painted incomplete content until ontology labels, rule lists, or the
+diff fetch finished. The pane now covers itself with the brand spinner for
+that in-flight load.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Add a tab-content overlay with Bootstrap spinner-border and a live label.
+2. src/front/static/simulation/css/simulation.css
+   Center the overlay on the tab pane with the warm surface token.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Toggle the overlay while the scenario, cohort list, and fact labels load.
+4. src/front/static/simulation/js/simulation-rules.js
+   Show the overlay while ontology rule lists are fetched.
+5. src/front/static/simulation/js/simulation-results.js
+   Show the overlay while the last-run diff is fetched.
+6. tests/units/front/test_simulation_page_contract.py
+   Contract that each tab wires setTabBusy and the overlay uses spinner-border.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/static/simulation/js/simulation-results.js
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 49.39s.
+
 

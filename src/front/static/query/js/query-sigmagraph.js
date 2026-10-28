@@ -173,6 +173,7 @@ var SigmaGraph = (function () {
     var LIVE_ASSERTED = 'live';
 
     function _graphSourceFromSelect() {
+        if (typeof KgGraphSource !== 'undefined') return KgGraphSource.current();
         var sel = document.getElementById('sgSimulationSelect');
         var raw = (sel && sel.value) ? String(sel.value) : LIVE_INFERRED;
         if (raw === LIVE_INFERRED) return { simulationId: '', includeInferred: true };
@@ -242,6 +243,20 @@ var SigmaGraph = (function () {
 
     async function _loadSimulationSelect(opts) {
         opts = opts || {};
+        if (typeof KgGraphSource !== 'undefined') {
+            _simulationSelectLoading = true;
+            try {
+                await KgGraphSource.populate({ simulationId: opts.simulationId });
+                var src = KgGraphSource.current();
+                _rememberSimulationChoice(src.value || LIVE_INFERRED);
+            } catch (err) {
+                console.warn('[SigmaGraph] could not load simulations', err);
+            } finally {
+                _simulationSelectLoading = false;
+                _applySimulationChrome();
+            }
+            return;
+        }
         var sel = document.getElementById('sgSimulationSelect');
         if (!sel) return;
         var previous = sel.value || _chosenSimulationId;
@@ -292,8 +307,12 @@ var SigmaGraph = (function () {
 
     async function _onSimulationChange() {
         if (_simulationSelectLoading) return;
+        if (typeof KgGraphSource !== 'undefined' && KgGraphSource.isLoading()) return;
         var sel = document.getElementById('sgSimulationSelect');
         _rememberSimulationChoice(sel ? sel.value : LIVE_INFERRED);
+        if (typeof KgGraphSource !== 'undefined') {
+            _rememberSimulationChoice(KgGraphSource.current().value || LIVE_INFERRED);
+        }
         _applySimulationChrome();
         await _retargetCurrentView();
     }
@@ -4133,6 +4152,13 @@ document.addEventListener('DOMContentLoaded', function () {
             && typeof SigmaGraph !== 'undefined'
             && typeof SigmaGraph.loadSimulations === 'function') {
         SigmaGraph.loadSimulations();
+    }
+    if (typeof KgGraphSource !== 'undefined') {
+        document.addEventListener(KgGraphSource.CHANGE_EVENT, function () {
+            if (typeof SigmaGraph !== 'undefined' && typeof SigmaGraph.onSimulationChange === 'function') {
+                SigmaGraph.onSimulationChange();
+            }
+        });
     }
 
     document.addEventListener('click', function (e) {

@@ -41,6 +41,7 @@ const SimulationRules = {
             this.apply(this._pending);
             return;
         }
+        if (window.SimulationWorkbench) SimulationWorkbench.setTabBusy('reasoning', true);
         try {
             const [swrl, tables, sparql, aggregate] = await Promise.all([
                 SimulationPage.api('/ontology/swrl/list'),
@@ -57,10 +58,12 @@ const SimulationRules = {
         } catch (err) {
             console.error('[Simulation] Could not load reasoning rules:', err);
             this._cache = { swrl: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] };
+        } finally {
+            this._loaded = true;
+            this._render();
+            this.apply(this._pending);
+            if (window.SimulationWorkbench) SimulationWorkbench.setTabBusy('reasoning', false);
         }
-        this._loaded = true;
-        this._render();
-        this.apply(this._pending);
     },
 
     apply(ruleNames) {

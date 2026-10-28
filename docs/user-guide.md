@@ -1291,6 +1291,8 @@ sidebar item.
 ### Scenario editor
 
 The editor has four tabs. **Save** and **Run** stay in the page header.
+Opening a scenario, or switching to a tab that still has to fetch facts,
+rules, or results, shows the brand spinner over that pane.
 
 1. **General** — three stacked rows: scenario name and description, the
    graph slice, then the sandbox objects the run creates, each with its
@@ -1312,7 +1314,10 @@ The editor has four tabs. **Save** and **Run** stay in the page header.
 2. **Hypothetical facts** — add rows of *subject / predicate / value*:
    **Set** replaces every value of the predicate on the subject (e.g. a new
    credit score), **Add** asserts an extra triple, **Remove** retracts one.
-   The table shows labels (or the local name); hover a cell for the full URI.
+   Each cell shows one line above the ID: icon, entity type, and the
+   human label in parentheses. The predicate line is *relationship* or
+   *attribute* (with the range class when it is a relationship). Hover
+   the ID for the full URI.
    **Fact wizard** (or the search icon on a cell) looks up existing graph
    entities, ontology predicates declared on the subject's class (including
    inherited), and related instances so you do not have to paste URIs by hand.
@@ -1337,6 +1342,10 @@ The editor has four tabs. **Save** and **Run** stay in the page header.
    Explorer's Graph dropdown). Explorer keeps that Graph choice until you
    switch it or leave the page; later Explorer refreshes do not snap back
    to the live graph.
+
+**Save** keeps the last run's Results unless you **Clear** the sandbox.
+Changing scope, facts, or rules marks the scenario as a draft so you can
+re-run; the previous diff stays until the next successful run.
 
 **Run** saves the scenario and starts it as a background task. Follow it in
 the navbar **Background Tasks** hourglass (click the row to return to the
@@ -3022,7 +3031,7 @@ After import you can:
 - **Mapping Diagnostics**: **Mapping → Diagnostics** lists only warnings and errors. Queries that return rows are informational (row count badge), not failures. Excluded attributes and relationship ID columns are not reported as missing, including Spark implicit aliases (`obj_id s` → `s`).
 
 ### Simulation
-- **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Graph Explorer's **Graph** dropdown lists live asserted, live inferred, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox).
+- **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
 - **Cohort design and run**: **Simulation → Cohorts** authors grouping rules; **Simulation → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
 
 ### Knowledge Graph (Sync & Explore)

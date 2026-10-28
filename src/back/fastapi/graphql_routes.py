@@ -32,7 +32,8 @@ from back.core.errors import (
 from back.objects.registry import RegistryService
 from back.core.graphdb import get_graphdb
 from shared.config.constants import DEFAULT_BASE_URI
-from back.core.helpers import effective_graph_name, effective_graph_query_table
+from back.core.helpers import effective_graph_name
+from back.objects.digitaltwin import TwinGraphAccess
 from shared.fastapi.ui_branding import (
     get_request_ui_branding,
     render_ui_branding_css_vars,
@@ -87,6 +88,14 @@ class GraphQLRequest(BaseModel):
     operationName: Optional[str] = Field(None, description="Operation name")
     depth: Optional[int] = Field(
         None, description="Relationship traversal depth (1–5, default 2)"
+    )
+    include_inferred: Optional[bool] = Field(
+        True,
+        description="Read the inferred live graph (true) or asserted triples only",
+    )
+    simulation_id: Optional[str] = Field(
+        None,
+        description="Ready simulation sandbox id; omitted reads the live graph",
     )
 
 
@@ -220,7 +229,13 @@ def _diagnose_empty_ontology(classes, properties_list):
     return None
 
 
-def _get_schema_and_context(domain, settings):
+def _get_schema_and_context(
+    domain,
+    settings,
+    *,
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
+):
     """Build (or retrieve cached) GraphQL schema and execution context.
 
     Raises :class:`ValidationError` only when the ontology is genuinely
@@ -258,7 +273,13 @@ def _get_schema_and_context(domain, settings):
             "Graph backend not configured or unreachable."
         )
 
-    table = effective_graph_query_table(domain, settings, store=store)
+    table = TwinGraphAccess.graph_query_table(
+        domain,
+        settings,
+        store,
+        include_inferred=include_inferred,
+        simulation_id=simulation_id,
+    )
 
     logger.info(
         "GraphQL context: table=%s, store=%s, classes=%d",
@@ -383,7 +404,18 @@ async def graphql_execute(
         domain_name, session_mgr, settings, external=is_external
     )
     assert_public_graph_read(request, domain, settings)
-    schema, context = _get_schema_and_context(domain, settings)
+    include_inferred, simulation_id = TwinGraphAccess.source_from_payload(
+        {
+            "include_inferred": body.include_inferred,
+            "simulation_id": body.simulation_id,
+        }
+    )
+    schema, context = _get_schema_and_context(
+        domain,
+        settings,
+        include_inferred=include_inferred,
+        simulation_id=simulation_id,
+    )
     store = context.get("triplestore")
     if store is not None:
         from back.core.graphdb.search_cache import (
