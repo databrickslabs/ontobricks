@@ -29,7 +29,6 @@ The regenerated locks now satisfy the declared security floors for patchable Dep
 - `uv.lock`
 - `src/mcp-server/uv.lock`
 - `changelogs/v0.10.0/benoitcayladbx_2026-10-28.log`
-- `.superpowers/sdd/task-2-report.md`
 
 ### Test and audit results
 - `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv lock --check` (root + MCP): **passed** (online/public-index evidence)
