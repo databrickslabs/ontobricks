@@ -130,6 +130,21 @@ const SimulationResults = {
         if (cap) cap.textContent = summary.capped ? `Showing the first ${summary.row_cap} rows per list` : '';
     },
 
+    explorerHref(uri) {
+        if (!this.selectedId || !SimulationPage.isUri(uri)) return '';
+        return '/dtwin/?section=sigmagraph'
+            + '&simulation=' + encodeURIComponent(this.selectedId)
+            + '&focus=' + encodeURIComponent(uri);
+    },
+
+    explorerCell(uri) {
+        const raw = String(uri || '');
+        const href = this.explorerHref(raw);
+        if (!href) return SimulationPage.uriCell(raw);
+        const shown = SimulationPage.termLabel(raw);
+        return `<a class="sim-uri sim-uri-link" href="${SimulationPage.esc(href)}" title="${SimulationPage.esc(raw)}">${SimulationPage.esc(shown)}</a>`;
+    },
+
     _renderRows(data) {
         const body = document.getElementById('simResultsRows');
         const info = document.getElementById('simResultsPageInfo');
@@ -144,9 +159,9 @@ const SimulationResults = {
                         ? `<span class="badge sim-origin-inferred" title="${SimulationPage.esc(r.provenance || '')}">inferred</span>`
                         : '<span class="badge sim-origin-patch">your fact</span>';
                     return `<tr>
-                        <td>${SimulationPage.uriCell(r.subject)}</td>
+                        <td>${this.explorerCell(r.subject)}</td>
                         <td>${SimulationPage.uriCell(r.predicate)}</td>
-                        <td>${SimulationPage.uriCell(r.object)}</td>
+                        <td>${this.explorerCell(r.object)}</td>
                         <td>${origin}</td>
                     </tr>`;
                 }).join('')

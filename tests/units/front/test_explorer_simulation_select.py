@@ -70,3 +70,12 @@ def test_results_open_in_explorer() -> None:
     assert 'id="simResultsExplorerBtn"' in html
     js = RESULTS_JS.read_text(encoding="utf-8")
     assert "section=sigmagraph&simulation=" in js
+    assert "&focus=" in js
+    assert "explorerCell" in js
+    assert "isUri" in js
+    assert "onclick=" not in html
+    sigma = SIGMA_JS.read_text(encoding="utf-8")
+    focus = sigma.split("focusEntityByUri:", 1)[1]
+    assert "isFullUri ? 'exact' : 'contains'" in focus
+    assert "field: field" in focus
+    assert "match_type: matchType" in focus

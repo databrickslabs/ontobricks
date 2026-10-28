@@ -19,6 +19,16 @@
     word-break: break-all;
 }
 
+a.sim-uri-link {
+    color: var(--db-primary);
+    text-decoration: none;
+}
+
+a.sim-uri-link:hover,
+a.sim-uri-link:focus-visible {
+    text-decoration: underline;
+}
+
 .sim-progress-track {
     height: 0.5rem;
 }

@@ -1328,8 +1328,10 @@ The editor has four tabs. **Save** and **Run** stay in the page header.
    inferences, removed triples, affected entities) and two paged,
    searchable tables for this scenario's last run: **Added** — each row
    tagged *your fact* or *inferred* (hover for the rule that produced it)
-   — and **Removed**. Lists show the first 2000 rows; the counts are
-   always exact. A warning lists reasoning phases that failed.
+   — and **Removed**. Subject and object URIs open Explorer on this
+   sandbox, filtered to that entity, and load its neighbourhood. Lists
+   show the first 2000 rows; the counts are always exact. A warning lists
+   reasoning phases that failed.
    **Explorer** opens Knowledge Graph Explorer on this sandbox so you can
    walk the after picture as a graph (same as picking the scenario in
    Explorer's Graph dropdown). Explorer keeps that Graph choice until you

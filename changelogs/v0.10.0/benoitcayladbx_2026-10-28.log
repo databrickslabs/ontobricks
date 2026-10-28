@@ -303,4 +303,32 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 48.40s.
 
+================================================================================
+## Open Explorer from Results subject and object
+================================================================================
+
+Context: The Results table showed subject and object as plain labels. Operators
+needed a click through to Explorer on that sandbox, filtered to the entity,
+with the neighbourhood already loaded.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-results.js
+   Link URI subjects and objects to Explorer with simulation and focus query params.
+2. src/front/static/query/js/query-sigmagraph.js
+   Focus a full URI with exact id match so the filter seeds one entity and expands it.
+3. src/front/static/simulation/css/simulation.css
+   Style the Results URI links with the brand primary colour.
+
+Modified files:
+- src/front/static/simulation/js/simulation-results.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/simulation/css/simulation.css
+- docs/user-guide.md
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_explorer_match_default.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 57.88s.
+
 

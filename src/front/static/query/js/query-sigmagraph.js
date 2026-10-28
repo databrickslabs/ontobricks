@@ -3173,10 +3173,14 @@ var SigmaGraph = (function () {
             }
             if (!localName) return false;
 
+            var isFullUri = /^https?:\/\//i.test(uri) || uri.indexOf('urn:') === 0;
+            var searchValue = isFullUri ? uri : localName;
+            var matchType = isFullUri ? 'exact' : 'contains';
+            var field = isFullUri ? 'id' : 'any';
             var filterInput = document.getElementById('sgFilterValue');
-            if (filterInput) filterInput.value = localName;
+            if (filterInput) filterInput.value = searchValue;
             var matchSel = document.getElementById('sgFilterMatchType');
-            if (matchSel) matchSel.value = 'contains';
+            if (matchSel) matchSel.value = matchType;
             _showGraphLoading('Searching…');
 
             try {
@@ -3186,9 +3190,9 @@ var SigmaGraph = (function () {
                     body: JSON.stringify(_withGraphSource({
                         phase: 'preview',
                         entity_type: '',
-                        field: 'any',
-                        match_type: 'contains',
-                        value: localName,
+                        field: field,
+                        match_type: matchType,
+                        value: searchValue,
                     })),
                     credentials: 'same-origin'
                 }, 45000, 'Search request timed out');
@@ -3199,7 +3203,9 @@ var SigmaGraph = (function () {
                     return false;
                 }
 
-                var seedUris = previewData.seeds.map(function (s) { return s.uri; });
+                var seeds = previewData.seeds || [];
+                var exact = seeds.filter(function (s) { return s.uri === uri; });
+                var seedUris = (exact.length ? exact : seeds).map(function (s) { return s.uri; });
                 var data = await _expandAndRenderGraph(seedUris, { highlightTerm: localName });
                 if (!data) return false;
 
