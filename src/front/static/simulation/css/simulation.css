@@ -157,7 +157,7 @@ a.sim-uri-link:focus-visible {
 .sim-tab-loading {
     position: absolute;
     inset: 0;
-    z-index: 2;
+    z-index: 10;
     display: flex;
     align-items: center;
     justify-content: center;

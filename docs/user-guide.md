@@ -931,7 +931,9 @@ stays visible. Explorer behaviour is unchanged (search, expand, hops,
 inferred, max entities). Entity **Inference rules (SWRL)** run against
 the sandbox (not the live graph) and write inferred triples there, so a
 rule such as attach-meter can see extra contracts asserted by the
-scenario. Use **Live graph** to query the built knowledge graph only.
+scenario. Opening Explorer from a scenario Results URI (or the Results
+**Explorer** button) lands on that sandbox via ``?simulation=``. Use
+**Live graph** to query the built knowledge graph only.
 
 **Find & Filter:**
 - **Find**: Search for entities by label or URI — matching entities and their neighbors are highlighted and the camera zooms to focus on results
@@ -1339,9 +1341,9 @@ rules, or results, shows the brand spinner over that pane.
    reasoning phases that failed.
    **Explorer** opens Knowledge Graph Explorer on this sandbox so you can
    walk the after picture as a graph (same as picking the scenario in
-   Explorer's Graph dropdown). Explorer keeps that Graph choice until you
-   switch it or leave the page; later Explorer refreshes do not snap back
-   to the live graph.
+   Explorer's Graph dropdown). A ``?simulation=`` link always selects that
+   sandbox, even if Explorer last showed the live graph. After that,
+   Explorer keeps the Graph choice until you switch it.
 
 **Save** keeps the last run's Results unless you **Clear** the sandbox.
 Changing scope, facts, or rules marks the scenario as a draft so you can

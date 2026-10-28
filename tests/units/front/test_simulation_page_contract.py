@@ -208,6 +208,9 @@ def test_workbench_tabs_show_loading_spinner():
     assert 'class="sim-tab-loading d-none"' in html
     assert "spinner-border" in overlay
     assert 'id="simWbTabLoadingLabel"' in overlay
+    assert html.index('id="simWb-pane-general"') < html.index('id="simWbTabLoading"')
+    loading_css = css.split(".sim-tab-loading", 1)[1].split("}", 1)[0]
+    assert "z-index: 10" in loading_css
     assert "setTabBusy" in wb
     assert "setTabBusy('general'" in wb
     assert "setTabBusy('facts'" in wb

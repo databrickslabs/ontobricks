@@ -58,12 +58,9 @@ const KgGraphSource = (function () {
 
     function wanted(explicit) {
         if (explicit) return explicit;
-        var stored = readStored() || LIVE_INFERRED;
-        if (!stored || stored === LIVE_INFERRED) {
-            var fromUrl = wantedFromUrl();
-            if (fromUrl) return fromUrl;
-        }
-        return stored;
+        var fromUrl = wantedFromUrl();
+        if (fromUrl) return fromUrl;
+        return readStored() || LIVE_INFERRED;
     }
 
     function selects() {

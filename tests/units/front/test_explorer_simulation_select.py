@@ -68,7 +68,8 @@ def test_simulation_select_keeps_user_choice_across_reloads() -> None:
     js = SIGMA_JS.read_text(encoding="utf-8")
     assert "var _chosenSimulationId = 'live:inferred'" in js
     assert "_rememberSimulationChoice(sel ? sel.value" in js
-    assert "wanted = opts.simulationId || _chosenSimulationId" in js
+    assert "wanted = opts.simulationId || _urlSimulationId() || _chosenSimulationId" in js
+    assert "_loadSimulationSelect({ simulationId: _urlSimulationId() })" in js
     assert "alreadyInitialized && !focusUri" in js
 
 

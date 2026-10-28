@@ -515,4 +515,55 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 49.39s.
 
+================================================================================
+## Honour Results Explorer deep links over stored graph source
+================================================================================
+
+Context: Clicking a subject/object URI (or Explorer) on a scenario Results
+tab opened Knowledge Graph Explorer on the live graph. The Graph picker
+kept the last sessionStorage choice and ignored ``?simulation=`` unless
+that stored value was already live inferred.
+
+Changes:
+
+1. src/front/static/query/js/query-graph-source.js
+   Prefer the URL ``simulation`` param over the stored picker value.
+2. src/front/static/query/js/query-sigmagraph.js
+   Pass the URL sandbox id into the picker before focusing the entity.
+3. docs/user-guide.md
+   Document that Results and Explorer links select the sandbox.
+
+Modified files:
+- src/front/static/query/js/query-graph-source.js
+- src/front/static/query/js/query-sigmagraph.js
+- docs/user-guide.md
+- tests/units/front/test_kg_graph_source.py
+- tests/units/front/test_explorer_simulation_select.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 48.89s.
+
+================================================================================
+## Cover General tab controls while the workbench loads
+================================================================================
+
+Context: Opening a scenario showed the entity search button (``bi-search``)
+on top of the General tab spinner. Bootstrap input-group buttons sit at
+z-index 5, above the overlay's previous z-index 2.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   Raise the tab overlay above input-group buttons.
+2. src/front/templates/partials/simulation/_sim_workbench.html
+   Paint the overlay after the tab panes so it covers them.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 47.39s.
+
 
