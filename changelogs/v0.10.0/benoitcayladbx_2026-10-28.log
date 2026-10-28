@@ -1,0 +1,32 @@
+## Task 2 - Dependabot remediation on 0.10.0
+
+### Context
+Task 2 implementation on branch `fix/dependabot-010-lock-refresh` for the dedicated 0.10.0 worktree. The goal was to align CI lock validation with Task 1, refresh both lockfiles using explicit public index variables, run mandatory security/test checks, and document outcomes.
+
+### Changes
+1. Updated `.github/workflows/ci.yml`
+   - Expanded CI branch filters to include `0.9.1` and `0.10.0` on both `push` and `pull_request`.
+   - Added the dual lock guard (`uv lock --check` at root and in `src/mcp-server`) before dependency installation in each CI job, mirroring Task 1 behavior.
+2. Attempted root and MCP lock refresh with explicit public index variables
+   - Ran lock operations with `UV_INDEX_URL=https://pypi.org/simple` and `PIP_INDEX_URL=https://pypi.org/simple`.
+   - Online lock operations failed due local network refusal to `https://pypi.org/simple`.
+   - Offline lock operations failed on resolver checks for the `python_full_version >= '3.15'` split (`databricks-sql-connector[kernel]>=4.4.0` unavailable in local cache for that marker split).
+3. Ran mandatory security and test checks
+   - `pip-audit --strict` failed due local tool behavior (`ensurepip` subprocess abort in temporary virtualenv creation).
+   - Completed fallback OSV audit on the frozen local environment (`pip-audit --local --vulnerability-service osv`) and recorded all findings without suppression.
+   - Ran repository-required frozen pytest suite and MCP tests to completion.
+
+### Modified files
+- `.github/workflows/ci.yml`
+- `changelogs/v0.10.0/benoitcayladbx_2026-10-28.log`
+- `.superpowers/sdd/task-2-report.md`
+
+### Test results
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv lock` (root): **failed** (network connect refused to pypi.org)
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv lock` (`src/mcp-server`): **blocked** by root lock failure in same sequence
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv lock --check` (root + MCP): **failed** (network connect refused to pypi.org)
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv lock --check --offline` (root + MCP): **failed** (unsatisfied `python_full_version >= '3.15'` split in offline cache)
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv run --frozen pip-audit --requirement requirements.txt --strict`: **failed** (`ensurepip` SIGABRT while creating audit temp venv)
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv run --frozen pip-audit --local --vulnerability-service osv --format json`: **completed**; 35 vulnerabilities across 12 packages
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv run --frozen pytest -q -m "not scenario"`: **passed** (`9604 passed, 338 skipped, 8 deselected`)
+- `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv run --frozen pytest tests/mcp/ -m mcp -q`: **passed** (`60 passed`)

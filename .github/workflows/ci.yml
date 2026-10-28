@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master, main, develop]
+    branches: [master, main, develop, 0.9.1, 0.10.0]
   pull_request:
-    branches: [master, main, develop]
+    branches: [master, main, develop, 0.9.1, 0.10.0]
 
 permissions:
   contents: read
@@ -29,6 +29,12 @@ jobs:
 
       - name: Set up Python
         run: uv python install 3.11
+
+      - name: Check lockfiles are up to date
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
 
       - name: Install dependencies
         run: uv sync --dev
@@ -84,6 +90,12 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
+      - name: Check lockfiles are up to date
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
+
       - name: Install dependencies
         run: uv sync --dev
 
@@ -115,6 +127,12 @@ jobs:
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
+
+      - name: Check lockfiles are up to date
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
 
       - name: Install dependencies
         run: uv sync --dev
@@ -169,6 +187,12 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
+      - name: Check lockfiles are up to date
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
+
       - name: Install dependencies
         run: uv sync --dev
 
@@ -209,6 +233,13 @@ jobs:
         if: steps.changes.outputs.mcp_changed == 'true'
         run: uv python install 3.11
 
+      - name: Check lockfiles are up to date
+        if: steps.changes.outputs.mcp_changed == 'true'
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
+
       - name: Install dependencies
         if: steps.changes.outputs.mcp_changed == 'true'
         run: uv sync --dev
@@ -239,6 +270,12 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
+      - name: Check lockfiles are up to date
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
+
       - name: Install dependencies
         run: uv sync --dev
 
@@ -267,6 +304,12 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
+      - name: Check lockfiles are up to date
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
+
       - name: Install dependencies
         run: uv sync --dev
 
@@ -291,6 +334,12 @@ jobs:
 
       - name: Set up Python
         run: uv python install 3.11
+
+      - name: Check lockfiles are up to date
+        run: |
+          uv lock --check
+          cd src/mcp-server
+          uv lock --check
 
       - name: Install dependencies
         run: uv sync --dev
