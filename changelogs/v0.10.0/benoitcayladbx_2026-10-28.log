@@ -228,3 +228,79 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 47.98s.
+
+================================================================================
+## Explain sandbox objects on the General tab
+================================================================================
+
+Context: Operators seeing Explorer inferred vs asserted overlay names in
+Sandbox objects had no in-page explanation of what each object is for.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Add a purpose line under each sandbox / overlay role (including Neo4j).
+2. src/front/static/simulation/css/simulation.css
+   Cap the hint width so the artifact table stays readable.
+3. tests/units/front/test_simulation_page_contract.py
+   Assert the overlay and sandbox hint copy.
+4. docs/user-guide.md
+   Document inferred vs asserted overlay on the Scenario editor General tab.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 57.69s.
+
+================================================================================
+## Keep sandbox object names on one line
+================================================================================
+
+Context: Global `.table-sm td` ellipsized the overlay purpose text until hover.
+Un-ellipsizing the whole artifact table then wrapped Unity Catalog names onto
+two lines.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   Wrap Role hints; keep the Name cell on one nowrap/ellipsis line.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Mark the Name cell so the CSS can target it.
+3. tests/units/front/test_simulation_page_contract.py
+   Assert hint wrap vs name nowrap.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units/front/test_simulation_page_contract.py → 19 passed.
+
+================================================================================
+## Shrink the sandbox Role column
+================================================================================
+
+Context: Overlay purpose text lived in the Role cell, so that column ate most
+of the artifact table. Role should be the short label only.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Keep Role as a nowrap label; move the purpose hint under Name.
+2. src/front/static/simulation/css/simulation.css
+   Shrink-wrap the Role column; ellipsize only the object name.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 48.40s.
+
+

@@ -1293,9 +1293,17 @@ sidebar item.
 The editor has four tabs. **Save** and **Run** stay in the page header.
 
 1. **General** — three stacked rows: scenario name and description, the
-   graph slice, then the sandbox objects the run creates (Lakebase/Delta
-   table or Neo4j graph, Explorer overlay views, and after a run the item
-   counts). Scope is a slice of the graph:
+   graph slice, then the sandbox objects the run creates, each with its
+   purpose. The **sandbox** is the private copy of in-scope triples
+   (Lakebase/Delta table or Neo4j graph) that hypothetical facts and
+   scenario reasoning write to. The **Explorer inferred overlay** is the
+   live graph *with* production inferences **UNION** that sandbox; the
+   **Explorer asserted overlay** is the live asserted graph only **UNION**
+   the same sandbox. In both overlays, sandbox `(subject, predicate)`
+   pairs replace live ones; other live facts stay visible. Scenario-run
+   inferences show in both because they were written into the sandbox.
+   After a run the item counts appear under the table. Scope is a slice
+   of the graph:
    - *Entity neighbourhood*: an entity URI and a number of hops (default 2).
      The search button opens the same live-graph picker as the fact wizard;
    - *Cohort*: one of the saved Cohort Discovery rules;

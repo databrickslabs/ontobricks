@@ -418,18 +418,37 @@ const SimulationWorkbench = {
         }
         const esc = (v) => SimulationPage.esc(v);
         const roles = {
-            sandbox: 'Sandbox triples',
-            explorer_inferred: 'Explorer inferred overlay',
-            explorer_asserted: 'Explorer asserted overlay',
+            sandbox: {
+                label: 'Sandbox triples',
+                hint: objKind => objKind === 'graph'
+                    ? 'Private Neo4j graph of the in-scope triples. Hypothetical facts and scenario reasoning write here. Explorer overlays this marker graph onto the live neighbourhood.'
+                    : 'Private copy of the in-scope triples. Hypothetical facts and scenario reasoning write here. Explorer never reads this table directly; it uses the overlay views below.',
+            },
+            explorer_inferred: {
+                label: 'Explorer inferred overlay',
+                hint: () => 'Live graph with inferred triples, UNION the sandbox. Sandbox (subject, predicate) pairs replace live ones; other live facts stay visible. Explorer uses this when Inferred is on. Scenario-run inferences appear because they were written into the sandbox.',
+            },
+            explorer_asserted: {
+                label: 'Explorer asserted overlay',
+                hint: () => 'Live asserted graph only, UNION the sandbox. Production inferences are hidden; scenario-run inferences still appear because they live in the sandbox. Explorer uses this when Inferred is off.',
+            },
         };
         const rows = objects.map((obj) => {
+            const role = roles[obj.role] || {};
+            const label = role.label || obj.role || '';
+            const hint = typeof role.hint === 'function'
+                ? role.hint(obj.kind)
+                : (role.hint || '');
             const items = created && obj.role === 'sandbox' && counts.triples != null
                 ? `${Number(counts.triples).toLocaleString()} triples`
                 : '—';
             return `<tr>
                 <td><span class="badge bg-secondary bg-opacity-25 text-dark">${esc(obj.kind || 'object')}</span></td>
-                <td>${esc(roles[obj.role] || obj.role || '')}</td>
-                <td><code class="sim-artifact-name" title="${esc(obj.name || '')}">${esc(obj.name || '')}</code></td>
+                <td class="sim-col-role text-nowrap">${esc(label)}</td>
+                <td class="sim-artifact-name-cell">
+                    <code class="sim-artifact-name" title="${esc(obj.name || '')}">${esc(obj.name || '')}</code>
+                    ${hint ? `<p class="form-text small mb-0 sim-artifact-hint">${esc(hint)}</p>` : ''}
+                </td>
                 <td class="text-muted text-nowrap">${items}</td>
             </tr>`;
         }).join('');

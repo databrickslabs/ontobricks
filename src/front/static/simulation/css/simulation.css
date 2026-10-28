@@ -68,8 +68,37 @@
 }
 
 .sim-artifact-name {
-    word-break: break-all;
     font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.sim-artifact-table .sim-col-role {
+    width: 1%;
+    white-space: nowrap;
+}
+
+/* pages.css ellipsizes every .table-sm td at 300px until hover — hints must wrap. */
+.sim-artifact-table.table-sm td,
+.sim-artifact-table.table-sm td:hover {
+    max-width: none;
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: top;
+}
+
+.sim-artifact-table.table-sm td.sim-artifact-name-cell .sim-artifact-name {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.sim-artifact-hint {
+    white-space: normal;
 }
 
 .sim-artifact-counts {

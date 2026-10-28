@@ -202,6 +202,17 @@ def test_workbench_general_tab_stacks_sections():
     assert "paintArtifacts" in js
     assert "refreshArtifacts" in js
     assert "SimulationWorkbench.refreshArtifacts" in page
+    assert "sim-artifact-hint" in js
+    assert "sim-col-role" in js
+    assert "Live graph with inferred triples" in js
+    assert "Live asserted graph only" in js
+    assert "Private copy of the in-scope triples" in js
+    assert "Private Neo4j graph of the in-scope triples" in js
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert ".sim-artifact-table.table-sm td" in css
+    assert "white-space: nowrap" in css.split(".sim-col-role", 1)[1].split("}", 1)[0]
+    assert "white-space: normal" in css.split(".sim-artifact-hint", 1)[1]
+    assert "sim-artifact-name-cell" in js
 
 
 def test_workbench_save_aborts_stale_run():
