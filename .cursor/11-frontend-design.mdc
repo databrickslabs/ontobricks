@@ -502,7 +502,7 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
   utilities (warehouse, tasks, notifications, help, user menu).
 - L1 no longer carries a Domain link target. Domain identity and the workspace
   map launcher live in L2 as `#domainContextTrigger`.
-- Other menus (Knowledge Graph / digitaltwin) may be hidden via
+- Other menus (Graph / digitaltwin) may be hidden via
   `"navbar_hidden": true` in `menu_config.json`.
 - Visual contract: white L1 surface, warm one-pixel divider, dark text, indigo
   active/hover emphasis.
@@ -516,13 +516,13 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 | Domain | `domain` | `bi-box` |
 | Ontology | `ontology` | `bi-bezier2` |
 | Mapping | `assignment` | `bi-shuffle` |
-| Knowledge Graph | `digitaltwin` | `bi-radar` |
+| Graph | `digitaltwin` | `bi-radar` |
 | Simulation | `simulation` | `bi-sliders2-vertical` |
 | Settings | `settings` | `bi-gear` |
 
-Do not reuse Domain's `bi-box` for Knowledge Graph (or any other
+Do not reuse Domain's `bi-box` for Graph (or any other
 top-level menu). `tests/units/front/test_knowledge_graph_icon.py`
-asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
+asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
 
 #### L2 Subnav (`#obSubnav`)
 
@@ -543,7 +543,7 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
      accessible label from `/navbar/state`.
   2. **Workspace segmented control** (`.ob-subnav-workspaces` containing
      `.ob-subnav-workspace-list`): Domain, divider, Ontology, Mapping, and
-     Knowledge Graph. The current workspace is a static `aria-current="page"`
+     Graph. The current workspace is a static `aria-current="page"`
      target; only the other workspace targets retain Bootstrap dropdowns.
   3. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
   4. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
@@ -567,7 +567,7 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
   the existing Bootstrap menu; selecting an item navigates to its existing
   route/section.
 - Visual contract: the L2 row is transparent with no full-width bottom
-  border. Domain / Ontology / Mapping / Knowledge Graph sit in one compact
+  border. Domain / Ontology / Mapping / Graph sit in one compact
   white segmented control (`--db-surface-warm`, one-pixel `--db-border`,
   `--db-radius-control`). The selected workspace uses
   `--db-primary-light` fill, `--db-primary-darker` text, and no dropdown;
@@ -710,7 +710,7 @@ shows/hides `#obBreadcrumbWrap` (not `#obBreadcrumb`).
   and removes `d-none` from `#obBreadcrumbWrap` only when there is
   more than one crumb to show.
 - The route hierarchy is fixed in `breadcrumb.js`:
-  Registry → Domain → Ontology → Mapping → Knowledge Graph (plus
+  Registry → Domain → Ontology → Mapping → Graph (plus
   Settings as a flat entry). Adding a new top-level page means
   extending `_ROUTE_MAP` and `_HIERARCHY` — not patching templates.
 - The "Domain" crumb label is read from `#currentDomainName` (set by

@@ -93,7 +93,7 @@ months-long integration project.
 | **1** | **Import Metadata** — Domain &gt; Metadata | Fetches table &amp; column metadata from Unity Catalog | Unity Catalog |
 | **2** | **Generate Ontology** — Ontology &gt; Wizard | The LLM designs entities, relationships &amp; attributes from your metadata | AI Gateway / Model Serving |
 | **3** | **Auto-Map** — Mapping &gt; Auto-Map | The LLM generates SQL mappings for every entity and relationship | AI Gateway / Model Serving |
-| **4** | **Synchronize** — Knowledge Graph &gt; Status | Executes the mappings and populates the triple store | SQL Warehouse |
+| **4** | **Synchronize** — Graph &gt; Build | Executes the mappings and populates the triple store | SQL Warehouse |
 
 Prefer full control? Every step is also available as a guided **manual
 workflow** — design, map, build, query, and reason at column-level precision.
@@ -142,7 +142,7 @@ per-dimension gauges), one of its **SWRL business rules**, or a class action
 (Unity Catalog function or **Databricks Job**) — the same checks and actions are
 MCP tools. Lakehouse domains can optionally read from a **Lakehouse//RT**
 query warehouse while builds stay on a classic or serverless warehouse. Query
-everything through an auto-generated **GraphQL** API or open **Knowledge Graph
+everything through an auto-generated **GraphQL** API or open **Graph
 → Query → SPARQL** for read-only SELECT queries, sample queries, CSV export,
 generated SQL inspection, and triple-shaped results that open in Explorer.
 See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
@@ -188,7 +188,7 @@ sources ([Settings → GitHub](docs/user-guide.md#configuration--github-reposito
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
 **Lakehouse** (governed Delta triple tables, zero extra infra), **Neo4j**, or
 **No Backend** for ontology-only domains that publish their ontology with no
-graph built (Mapping and Knowledge Graph are disabled and the MCP surface
+graph built (Mapping and Graph are disabled and the MCP surface
 serves only ontology information).
 Connection config stays workspace-global. Lakehouse and Lakebase Build also
 materialise Explorer indexes (`_adj_out` / `_adj_in`, `_entity_search`,

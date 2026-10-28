@@ -96,7 +96,7 @@
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">4</span><div><strong>Mapping</strong><br><small>Map ontology to UC tables (R2RML)</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Knowledge Graph</strong><br><small>Synchronize, explore, query</small></div></div>
+                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Graph</strong><br><small>Synchronize, explore, query</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">6</span><div><strong>Simulation</strong><br><small>What-if sandboxes on a graph slice</small></div></div>
                             </div>
@@ -148,14 +148,14 @@
                                     <div class="help-step-badge">4</div>
                                     <div>
                                         <h5><i class="bi bi-shuffle me-2"></i>Map your data &amp; Sync</h5>
-                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Studio</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Knowledge Graph &rarr; Sync</strong> and click <em>Synchronize</em> &mdash; triples are materialized into your triple store.</p>
+                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Studio</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Graph &rarr; Build</strong> and click <em>Build</em> &mdash; triples are materialized into your triple store.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge"><i class="bi bi-check2"></i></div>
                                     <div>
                                         <h5><i class="bi bi-eye me-2"></i>Explore</h5>
-                                        <p>Head to <strong>Knowledge Graph &rarr; Graph Viewer</strong> to browse your data as an interactive graph, or use <strong>GraphQL</strong> for programmatic access.</p>
+                                        <p>Head to <strong>Graph &rarr; Explorer</strong> to browse your data as an interactive graph, or use <strong>Query</strong> for programmatic access.</p>
                                     </div>
                                 </div>
                             </div>
@@ -276,7 +276,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw5">
-                                            <i class="bi bi-radar me-2"></i><strong>5. Knowledge Graph</strong> &mdash; materialize &amp; explore
+                                            <i class="bi bi-radar me-2"></i><strong>5. Graph</strong> &mdash; materialize &amp; explore
                                         </button>
                                     </h2>
                                     <div id="hw5" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
@@ -307,7 +307,7 @@
                                             <ul>
                                                 <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
                                                 <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
-                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Knowledge Graph Inference, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed; <em>Explorer</em> opens that sandbox in the graph viewer</li>
+                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Inference, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
                                             </ul>
                                             <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass.</p>
@@ -368,7 +368,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-chat-dots"></i></div>
                                         <h5>Graph Chat</h5>
-                                        <p>Ask natural-language questions about your materialized graph from <strong>Knowledge Graph &rarr; Chat</strong> and get answers grounded in real entities and relationships.</p>
+                                        <p>Ask natural-language questions about your materialized graph from <strong>Graph &rarr; Chat</strong> and get answers grounded in real entities and relationships.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -414,7 +414,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
-                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Domain &rarr; General</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Knowledge Graph then become enabled.</div></div>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Domain &rarr; General</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>

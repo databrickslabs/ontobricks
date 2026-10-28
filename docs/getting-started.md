@@ -341,9 +341,9 @@ Then map those tables on the **Mapping** page:
 
 4. Click **Validate** (in navbar) to verify all mappings are complete
 
-### 6. Explore Your Data (Knowledge Graph)
+### 6. Explore Your Data (Graph)
 
-1. Go to the **Knowledge Graph** page
+1. Go to the **Graph** page
 2. Click **Build** in the sidebar, then click **Synchronize** to generate triples from your mappings and write them to Unity Catalog and Lakebase
 3. Click **Explorer** in the sidebar to explore your graph viewer interactively:
    - Click on entities to see details in the right panel
@@ -387,7 +387,7 @@ The OntoBricks interface has a navigation bar with status indicators:
 |---------|-------------|
 | **Ontology** | Shows ✓ (green) when ontology is loaded, ✗ (red) otherwise |
 | **Mapping** | Shows ✓ (green) when R2RML mapping exists, ✗ (red) otherwise |
-| **Knowledge Graph** | Access the sync, graph viewer, and quality checks interface |
+| **Graph** | Access the build, graph viewer, and quality checks interface |
 | **Settings** | Manage Databricks connection and settings |
 | **Versions** (navbar popup) | Switch or reload versions (then opens Domain → General); **New Version** branches the open domain without opening Domain → Versions |
 | **Load Domain** | Loads a registry domain/version and always opens **Domain → General** |
@@ -413,7 +413,7 @@ quickly, uncheck **Use CloudFetch** in **Settings → Databricks**. Databricks
 Apps cannot always reach the CloudFetch storage host used to download result
 files.
 
-In **Knowledge Graph → Explorer**, the bottom-left stopwatch reports the latest
+In **Graph → Explorer**, the bottom-left stopwatch reports the latest
 search's total browser-observed response time. Click it to see Preview request,
 Expansion request, Display, and Total. Time spent choosing seeds is excluded
 from Total. With the Delta/Lakehouse backend, Expansion traverses the selected

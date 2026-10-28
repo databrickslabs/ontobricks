@@ -566,4 +566,61 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 47.39s.
 
+================================================================================
+## Rename the Knowledge Graph menu to Graph
+================================================================================
+
+Context: The top-level workspace was labelled Knowledge Graph in the menu,
+breadcrumb, page title, help walkthrough, and in-app paths. Operators
+asked for the shorter Graph name on that navigation surface. API tags and
+scheduled "Knowledge Graph Build" jobs stay unchanged.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Set the digitaltwin menu label to Graph (workspace map follows).
+2. src/front/static/global/js/breadcrumb.js
+   Match the /dtwin/ crumb to Graph.
+3. src/front/templates/dtwin.html
+   Use Graph as the browser title.
+4. src/front/templates/partials/layout/help_modal.html
+   Walkthrough step 5 and Graph → Build / Explorer / Chat paths.
+5. docs/user-guide.md
+   Navigation copy and Graph → section paths.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/static/global/js/breadcrumb.js
+- src/front/templates/dtwin.html
+- src/front/templates/base.html
+- src/front/templates/about.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/dtwin/_query_insights.html
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-analytics.js
+- src/front/static/simulation/js/simulation.js
+- README.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/architecture.md
+- docs/development.md
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_breadcrumb.py
+- tests/units/front/test_knowledge_graph_icon.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/navigation/test_navigation_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.20s.
+
 

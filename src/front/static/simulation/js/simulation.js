@@ -211,7 +211,7 @@ const SimulationPage = {
         if (!this.scenarios.length) {
             body.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">'
                 + '<i class="bi bi-sliders2-vertical d-block fs-3 mb-2"></i>'
-                + 'No scenarios yet — create one, or use <em>Simulate from here</em> on an entity in the Knowledge Graph.'
+                + 'No scenarios yet — create one, or use <em>Simulate from here</em> on an entity in Graph.'
                 + '</td></tr>';
             return;
         }

@@ -583,7 +583,7 @@ async function initSyncSection() {
 
         var targetLabel = document.getElementById('syncTargetLabel');
         if (targetLabel) {
-            targetLabel.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Knowledge Graph';
+            targetLabel.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Graph';
         }
 
         if (typeof refreshNavbarIndicators === 'function') refreshNavbarIndicators();

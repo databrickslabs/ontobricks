@@ -10,7 +10,7 @@
 - [Application Workflow](#application-workflow)
 - [Step 1: Design Ontology](#step-1-design-ontology)
 - [Step 2: Map Data Assets (Mapping)](#step-2-map-data-assets-mapping)
-- [Step 3: Knowledge Graph (Sync & Explore)](#step-3-knowledge-graph-sync--explore)
+- [Step 3: Graph (Sync & Explore)](#step-3-graph-sync--explore)
 - [Step 4: Simulation (What-if Sandboxes)](#step-4-simulation-what-if-sandboxes)
 - [Domain Management & Version Control](#domain-management--version-control)
 - [Best Practices](#best-practices)
@@ -118,7 +118,7 @@ parsed documents forward.
 OntoBricks follows a 3-step workflow:
 
 ```
-1. Design Ontology → 2. Assign Data Assets → 3. Knowledge Graph (Sync & Explore)
+1. Design Ontology → 2. Assign Data Assets → 3. Graph (Sync & Explore)
 ```
 
 ### Settings page navigation behavior
@@ -392,7 +392,7 @@ with no conditions applies to every instance, exactly as before.
 
 **Import/Export**: Shapes can be exported as W3C-compliant SHACL Turtle and imported from existing SHACL files. A guarded rule is exported as its own node shape with a SHACL-AF `sh:target [ a sh:SPARQLTarget ]`. Conditions are not reconstructed on import: the constraint comes back unguarded and the import result reports how many rules lost their conditions.
 
-**Validation**: Shapes are executed in the Knowledge Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on Lakebase, Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.
+**Validation**: Shapes are executed in the Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on Lakebase, Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.
 
 ### Dashboard Mapping
 
@@ -826,9 +826,9 @@ The R2RML mapping output is available from **Mapping → Studio → Export** (to
 
 ---
 
-## Step 3: Knowledge Graph (Sync & Explore)
+## Step 3: Graph (Sync & Explore)
 
-Navigate to the **Knowledge Graph** page by clicking "Knowledge Graph" in the navigation bar (URL: `/dtwin`).
+Navigate to the **Graph** page by clicking **Graph** in the navigation bar (URL: `/dtwin`).
 
 > **Note**: You need both Ontology and Mapping loaded (green checkmarks in navbar). The Sync page shows a readiness status and disables actions until both are ready.
 
@@ -970,7 +970,7 @@ Right-click any entity node and pick **Expand neighbours (N hops)** to enrich th
 
 ### SPARQL Playground
 
-Open **Knowledge Graph → Query → SPARQL** to run read-only SPARQL against the
+Open **Graph → Query → SPARQL** to run read-only SPARQL against the
 current domain mapping. The editor starts with the ontology prefix and an
 all-triples SELECT; the **Samples** menu also provides by-class, by-label, and
 entity-type queries.
@@ -1052,7 +1052,7 @@ Because the job can take a while on large graphs, it runs **asynchronously** in 
 2. (Optional) Pick an **entity type** to restrict the analysis to one class (e.g. "Customer"). The scope resets to **All types (full graph)** every time the dialog opens, so each run is a deliberate choice. Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is applied in SQL inside the Lakeflow job, against the Delta snapshot — not by the graph store — so there is no in-memory limit to work around. **Cancel** closes the dialog without running.
 3. Click **Run Analysis** in the dialog to launch. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows on the page behind while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically on the **Dashboard** tab: six KPI tiles appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed), a distribution strip of five histogram tiles, and one full-width ranking chart for the selected metric. Each new run replaces the previous stored result for that domain version.
 
-> **Looking for past runs?** The Analytics page itself only ever shows the **last** result per domain version. The full run history — every analysis ever launched, across every version, including failed runs — lives on **Knowledge Graph → Management → Runs** as a second table below the build-runs table (see **Runs (Sidebar)** above).
+> **Looking for past runs?** The Analytics page itself only ever shows the **last** result per domain version. The full run history — every analysis ever launched, across every version, including failed runs — lives on **Graph → Management → Runs** as a second table below the build-runs table (see **Runs (Sidebar)** above).
 
 #### Reading the Dashboard
 
@@ -1326,7 +1326,7 @@ rules, or results, shows the brand spinner over that pane.
    Ontology predicate URIs are resolved to the mapped data predicate when
    the sandbox applies the fact, so an added relationship participates in
    SWRL joins with the existing graph.
-3. **Reasoning** — the same phase tiles as Knowledge Graph → Inference.
+3. **Reasoning** — the same phase tiles as Graph → Inference.
    SWRL and graph reasoning are on by default; decision tables, SPARQL
    CONSTRUCT, aggregate rules and OWL 2 RL are optional. Expand a SWRL /
    decision-table / SPARQL / aggregate tile to tick individual rules; the
@@ -1996,7 +1996,7 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 ### Step 3: Explore (Knowledge Graph)
 
-1. Go to **Knowledge Graph** → **Status** and click **Synchronize** to generate triples from your mappings
+1. Go to **Graph** → **Build** and click **Build** to generate triples from your mappings
 2. Once synced, click **Triples** to browse all generated triples in a sortable grid
 3. Click **Explorer** to explore the graph viewer as an interactive sigma.js WebGL graph
 4. Click on any entity node to see its type, label, attributes, and values in the details panel
@@ -2315,7 +2315,7 @@ import. The repository must already be configured and claimed in Settings.
 
 - **Deep-linked sections**: Sidebar section changes update the URL (`?section=<id>`), so you can bookmark or share a specific section. Browser Back/Forward navigates between previously visited sections.
 - **Domain identity target**: The contextual identity launcher (`Domain` name + version badge) lives in the L2 rail. Clicking it opens the workspace map.
-- **Workspace map launcher**: `Open workspace map` opens a four-column menu directory for Domain, Ontology, Mapping, and Knowledge Graph actions. It launches sections/routes without forcing a jump to `/domain/`.
+- **Workspace map launcher**: `Open workspace map` opens a five-column menu directory for Domain, Ontology, Mapping, Graph, and Simulation actions. It launches sections/routes without forcing a jump to `/domain/`.
 - **Workspace active state**: The current workspace becomes a static highlighted segment (`aria-current="page"`); only inactive workspace targets keep dropdown menus.
 - **Inline breadcrumb**: The breadcrumb trail is rendered inside the L2 rail (between workspace targets and actions) and appears only when there is more than one crumb.
 - **Mobile icon state**: On narrow screens, workspace and action labels are visually hidden and controls remain as titled icons with keyboard focus support.
@@ -2554,7 +2554,7 @@ You can verify individual mappings by switching to the **Studio** view:
 
 ### Step 6: Synchronize to the Triple Store
 
-Navigate to **Knowledge Graph** in the top navbar. The **Status** section opens by default.
+Navigate to **Graph** in the top navbar. The **Explorer** section opens by default.
 
 Before syncing, OntoBricks validates readiness:
 - **Ontology**: At least one entity with a valid URI
@@ -2595,7 +2595,7 @@ error state; build information and actions remain hidden until loading succeeds.
 
 ### Step 7: Validate with Quality Checks
 
-Still in the **Knowledge Graph** section, open **Data Quality** in the sidebar.
+Still in the **Graph** section, open **Data Quality** in the sidebar.
 
 Quality checks validate the triple store against your ontology using two complementary systems:
 
@@ -2636,7 +2636,7 @@ SHACL shapes are compiled to **Spark SQL** and executed on the SQL warehouse aga
 
 ### Step 7b: Run Reasoning (Optional)
 
-Still in the **Knowledge Graph** section, open **Inference** in the sidebar.
+Still in the **Graph** section, open **Inference** in the sidebar.
 
 Reasoning discovers new facts (inferred triples) from your ontology rules:
 
@@ -3036,7 +3036,7 @@ After import you can:
 - **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
 - **Cohort design and run**: **Simulation → Cohorts** authors grouping rules; **Simulation → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
 
-### Knowledge Graph (Sync & Explore)
+### Graph (Sync & Explore)
 - **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).
 - **Readiness Status**: Validates ontology, entity mappings, relationship mappings, and attribute mapping completeness before enabling sync and explore actions.
 - **Graph readiness indicator**: Each Knowledge Graph sub-page (Explorer, Chat, Insights, Analytics, GraphQL, Data Quality, Inference) and **Simulation → Run** shows a badge next to the title — *Building…*, *Graph ready · \<backend\>*, or *Graph not built* with a **Go to Build** shortcut. The backend label reflects the domain's selected engine (Lakebase / Lakehouse / Neo4j).
@@ -3057,11 +3057,11 @@ After import you can:
 - **Class Actions (Unity Catalog functions)**: Bind any number of UC functions to an ontology class in **Ontology → Studio → Behaviour → Functions**, each with its own description. Run them on a node from the details pane or its right-click menu; the result (scalar or table) opens in a popup. Each function must take exactly one argument — the entity's ID — and the invocation endpoint enforces an allow-list so only functions declared on the node's own class can be called. The same actions are surfaced to the MCP server through `get_entity_context` and `invoke_entity_action`.
 - **Class Actions (Databricks Jobs)**: In the same **Behaviour** tab (**Jobs** section), bind workspace Jobs that declare an `entity_id` parameter. OntoBricks only starts the Job (`run_now`); Spark still uses the Job's run-as identity. On Lakehouse domains in App mode the trigger is on-behalf-of the signed-in user. Triggering a Job from Explorer opens a popup that checks the run actually started and tells you right away whether it is **Running** or **Queued**, with a link to the run in Databricks. The popup keeps following the run while it is open (Running → Succeeded / Failed), and you can close it at any time: the run stays in the navbar **Background Tasks** hourglass, which shows its live state and the same run link. Invoke the same `job:<job_id>` name from Explorer or MCP `invoke_entity_action`.
 
-- **Entity Inference Rules (SWRL)**: In **Ontology → Studio → Behaviour → Inference rules (SWRL)**, attach one or more SWRL rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Knowledge Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the SWRL editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
+- **Entity Inference Rules (SWRL)**: In **Ontology → Studio → Behaviour → Inference rules (SWRL)**, attach one or more SWRL rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the SWRL editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
 - **Virtual Attributes (computed on demand)**: A class of attribute that no mapping feeds and no build materialises — a Unity Catalog function computes it from the entity's ID when someone asks. Declare them in **Ontology → Studio → Attrs. → Virtual attributes** by picking a UC function that takes exactly one parameter; one attribute is created per returned column (or a single one for a scalar function), read from `information_schema`. In the Graph Explorer they appear in their own **Virtual Attributes** section under the mapped ones with a per-function **Compute** button, a **Compute all**, and a right-click shortcut; computed values are cached per entity for the page's lifetime, with **Recompute** as the refresh. Over MCP the declarations always ride along with `get_entity_context`; when a question is about a virtual attribute's value, the model should call `compute_virtual_attributes(entity_uri)` to run the UC function — nothing is computed unless asked. A failing function reports its error without denying the attributes that still resolve. Because they are never materialised, virtual attributes are **not queryable** in SPARQL or GraphQL and take no part in mappings, R2RML, SHACL or data-quality checks.
-- **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Knowledge Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
+- **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
 check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. **View → Quality rings** hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.
-- **Graph Chat ↔ MCP alignment**: Knowledge Graph → Chat discovers Datasets, Bridges, and Class Actions the same way MCP does (`get_entity_context`). Executing an Action from Graph Chat is **confirmation-gated**: the agent proposes via `request_entity_action`, the UI shows a Confirm/Cancel card, and only Confirm runs the allow-listed UC function. Graph Chat does **not** expose MCP's direct `invoke_entity_action` tool.
+- **Graph Chat ↔ MCP alignment**: Graph → Chat discovers Datasets, Bridges, and Class Actions the same way MCP does (`get_entity_context`). Executing an Action from Graph Chat is **confirmation-gated**: the agent proposes via `request_entity_action`, the UI shows a Confirm/Cancel card, and only Confirm runs the allow-listed UC function. Graph Chat does **not** expose MCP's direct `invoke_entity_action` tool.
 - **Named Neo4j connections**: Settings → Neo4j holds multiple named Bolt profiles (URI, database, username, Databricks secret). Domains with Graph Backend = Neo4j must pick one connection on Domain → General → Knowledge Graph; Test connection / Objects operate on the selected profile.
 - **Violation Details**: View quality check violations in a detailed modal with entity information.
 
@@ -3084,7 +3084,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 
 ### Databricks Integration
 - **Native Unity Catalog Support**: Browse catalogs, schemas, tables, and volumes directly from the UI. Table, schema, and catalog names may start with a digit (for example `5_g_subscribers`) when they are backtick-quoted, matching Unity Catalog.
-- **SQL Warehouse Connectivity**: Connect to Databricks SQL Warehouses for query execution, with a dedicated Build warehouse and an optional Lakehouse Query warehouse (see Knowledge Graph → Lakehouse//RT query path).
+- **SQL Warehouse Connectivity**: Connect to Databricks SQL Warehouses for query execution, with a dedicated Build warehouse and an optional Lakehouse Query warehouse (see Graph → Lakehouse//RT query path).
 - **Dashboard Integration**: Fetch and embed Databricks dashboards with dynamic parameter mapping.
 - **LLM picker**: Domain → General → AI (and New Domain) browse Unity AI Gateway model services first, then legacy Model Serving endpoints. **No LLM** is a strict domain-level opt-out for every in-app LLM action.
 - **Secure Credentials**: Databricks credentials are never saved to project files.

@@ -518,7 +518,7 @@
 
         {
             "id": "digitaltwin",
-            "label": "Knowledge Graph",
+            "label": "Graph",
             "icon": "bi-radar",
             "route": "/dtwin/",
             "requires_domain_saved": true,
