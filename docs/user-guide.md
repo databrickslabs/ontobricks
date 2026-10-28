@@ -1283,18 +1283,25 @@ number of facts, status (`draft`, `running`, `ready`, `failed`) and the
 added / removed counts of the last run. Open, run, view results, **purge**
 (drop the sandbox after-picture, keep the scenario as a draft) or delete a
 scenario from its row. **New scenario** (or Explorer **Simulate from here**)
-opens the scenario editor — it is not a sidebar item.
+opens the editor on the same Scenarios page (`?section=scenarios&simulation=`
+the scenario id). Refresh keeps that scenario; the back arrow (or the
+Scenarios sidebar item) returns to the list. The editor is not a separate
+sidebar item.
 
 ### Scenario editor
 
-1. **Scenario** — give it a name and an optional description.
-2. **Scope** — choose the slice of the graph to copy into the sandbox:
+The editor has four tabs. **Save** and **Run** stay in the page header.
+
+1. **General** — three stacked rows: scenario name and description, the
+   graph slice, then the sandbox objects the run creates (Lakebase/Delta
+   table or Neo4j graph, Explorer overlay views, and after a run the item
+   counts). Scope is a slice of the graph:
    - *Entity neighbourhood*: an entity URI and a number of hops (default 2).
      The search button opens the same live-graph picker as the fact wizard;
    - *Cohort*: one of the saved Cohort Discovery rules;
    - *Class population*: every instance of a class, up to the entity cap
      (5000). A larger population fails the run — narrow the scope instead.
-3. **Hypothetical facts** — add rows of *subject / predicate / value*:
+2. **Hypothetical facts** — add rows of *subject / predicate / value*:
    **Set** replaces every value of the predicate on the subject (e.g. a new
    credit score), **Add** asserts an extra triple, **Remove** retracts one.
    The table shows labels (or the local name); hover a cell for the full URI.
@@ -1304,40 +1311,38 @@ opens the scenario editor — it is not a sidebar item.
    Ontology predicate URIs are resolved to the mapped data predicate when
    the sandbox applies the fact, so an added relationship participates in
    SWRL joins with the existing graph.
-4. **Sandbox objects** — the third column lists the physical objects this
-   scenario owns: the copy-on-write sandbox (Lakebase/Delta table or Neo4j
-   graph) and, on SQL backends, the two Explorer overlay views. After a run
-   it also shows item counts (entities in scope, triples, added / removed /
-   inferred). Purge or delete drops them.
-5. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
-   decision tables, SPARQL rules, aggregate rules and OWL 2 RL are optional.
-6. **Run** saves the scenario and starts it as a background task. Follow it in
-   the navbar **Background Tasks** hourglass (click the row to return to the
-   editor) and on the workbench progress bar, which follows the phases (scope,
-   seed, facts, reasoning, diff). Hypothetical
-   entities you **Add** (for example extra contracts) are copied from the live
-   graph with one hop of neighbours so SWRL can chain to meters, invoices,
-   and the rest. When it finishes, **Simulation → Results** opens with the
-   before/after diff. You can also click **View results** on the editor, or
-   the clipboard icon on the Scenarios list. If a previous run is still
-   marked running (stuck worker or app restart), **Save** aborts it and
-   writes the scenario so you can run again.
+3. **Reasoning** — the same phase tiles as Knowledge Graph → Inference.
+   SWRL and graph reasoning are on by default; decision tables, SPARQL
+   CONSTRUCT, aggregate rules and OWL 2 RL are optional. Expand a SWRL /
+   decision-table / SPARQL / aggregate tile to tick individual rules; the
+   scenario stores that selection and only those rules run in the sandbox.
+4. **Results** — KPIs (entities in scope, triples before / after, new
+   inferences, removed triples, affected entities) and two paged,
+   searchable tables for this scenario's last run: **Added** — each row
+   tagged *your fact* or *inferred* (hover for the rule that produced it)
+   — and **Removed**. Lists show the first 2000 rows; the counts are
+   always exact. A warning lists reasoning phases that failed.
+   **Explorer** opens Knowledge Graph Explorer on this sandbox so you can
+   walk the after picture as a graph (same as picking the scenario in
+   Explorer's Graph dropdown). Explorer keeps that Graph choice until you
+   switch it or leave the page; later Explorer refreshes do not snap back
+   to the live graph.
+
+**Run** saves the scenario and starts it as a background task. Follow it in
+the navbar **Background Tasks** hourglass (click the row to return to the
+editor) and on the workbench progress bar, which follows the phases (scope,
+seed, facts, reasoning, diff). Hypothetical entities you **Add** (for
+example extra contracts) are copied from the live graph with one hop of
+neighbours so SWRL can chain to meters, invoices, and the rest. When it
+finishes, the editor opens the **Results** tab with the before/after diff.
+You can also click **View results** on the progress bar, or the clipboard
+icon on the Scenarios list. If a previous run is still marked running
+(stuck worker or app restart), **Save** aborts it and writes the scenario
+so you can run again.
 
 Tip: in the Knowledge Graph Explorer, the entity details panel has a
 **Simulate from here** button that opens the editor pre-filled with that
 entity's neighbourhood and an empty *Set* fact.
-
-### Results (Sidebar)
-
-Pick a scenario to see KPIs (entities in scope, triples before / after, new
-inferences, removed triples, affected entities) and two paged, searchable
-tables: **Added** — each row tagged *your fact* or *inferred* (hover for the
-rule that produced it) — and **Removed**. Lists show the first 2000 rows; the
-counts are always exact. A warning lists reasoning phases that failed.
-**Explorer** opens Knowledge Graph Explorer on that sandbox so you can walk the
-after picture as a graph (same as picking the scenario in Explorer's Graph
-dropdown). Explorer keeps that Graph choice until you switch it or leave the
-page; later Explorer refreshes do not snap back to the live graph.
 
 ### Runs (Sidebar)
 

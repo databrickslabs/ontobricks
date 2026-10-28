@@ -22,7 +22,19 @@ const SimulationWorkbench = {
         });
         on('simWbSaveBtn', 'click', () => this.save());
         on('simWbRunBtn', 'click', () => this.run());
-        on('simWbResetBtn', 'click', () => this.reset());
+        on('simWbBackBtn', 'click', () => {
+            if (window.SimulationPage) SimulationPage.showList();
+        });
+        on('simWbClearBtn', 'click', () => {
+            if (window.SimulationPage) SimulationPage.showList();
+        });
+        on('simWbResetBtn', 'click', () => {
+            if (window.SimulationPage) SimulationPage.newScenario();
+            else {
+                this.reset();
+                this.showTab('general');
+            }
+        });
         on('simWbScopeType', 'change', () => this._syncScopeUi());
         on('simWbFocusSearchBtn', 'click', () => this.openScopeEntityPicker());
         on('simWbFocus', 'change', () => this._onFocusUriChanged());
@@ -51,30 +63,39 @@ const SimulationWorkbench = {
             });
         }
 
-        this.reset();
-        const params = new URLSearchParams(window.location.search);
-        const simId = (params.get('simulation') || '').trim();
-        if (simId) {
-            this.load(simId);
-            return;
-        }
-        const entity = params.get('entity');
-        if (entity) {
-            const urlLabel = (params.get('label') || '').trim();
-            this._set('simWbScopeType', 'entity');
-            this._set('simWbFocus', entity);
-            this._applyFocusLabel(urlLabel, entity);
-            this._set('simWbLabel', `What if: ${this._focusLabel || SimulationPage.shortUri(entity)}`);
-            this._syncScopeUi();
-            this.addPatch({
-                op: 'set',
-                subject: entity,
-                subject_label: this._focusLabel || SimulationPage.shortUri(entity),
-                predicate: '',
-                object: '',
+        if (window.SimulationRules) SimulationRules.bind();
+        const tabs = document.getElementById('simWbTabs');
+        if (tabs) {
+            tabs.addEventListener('shown.bs.tab', (e) => {
+                const results = e.target && e.target.id === 'simWb-tab-results';
+                if (results && window.SimulationResults) SimulationResults.onShow();
+                if (window.SimulationPage && this.currentId) {
+                    SimulationPage.syncScenarioUrl(
+                        { simulation: this.currentId, tab: results ? 'results' : '' },
+                        { replace: true },
+                    );
+                }
             });
-            if (!urlLabel) this._onFocusUriChanged();
         }
+        this.reset();
+    },
+
+    seedFromEntity(entity, urlLabel) {
+        this.reset();
+        this.showTab('general');
+        this._set('simWbScopeType', 'entity');
+        this._set('simWbFocus', entity);
+        this._applyFocusLabel(urlLabel, entity);
+        this._set('simWbLabel', `What if: ${this._focusLabel || SimulationPage.shortUri(entity)}`);
+        this._syncScopeUi();
+        this.addPatch({
+            op: 'set',
+            subject: entity,
+            subject_label: this._focusLabel || SimulationPage.shortUri(entity),
+            predicate: '',
+            object: '',
+        });
+        if (!urlLabel) this._onFocusUriChanged();
     },
 
     _el(id) {
@@ -180,6 +201,12 @@ const SimulationWorkbench = {
         this._syncScopeUi();
         this.renderPatches();
         this.paintArtifacts(null);
+        if (window.SimulationResults) SimulationResults.select(null);
+    },
+
+    showTab(name) {
+        const btn = this._el(`simWb-tab-${name}`);
+        if (btn) btn.click();
     },
 
     async load(id) {
@@ -204,7 +231,7 @@ const SimulationWorkbench = {
             this._set('simWbHops', scope.hops);
             this._set('simWbCap', scope.cap);
             this.patches = (spec.patches || []).map((p) => ({ ...p }));
-            this._applyPhases(spec.phases);
+            this._applyPhases(spec.phases, spec.rule_names);
             const title = this._el('simWbTitle');
             if (title) title.textContent = `— ${sim.label || sim.id}`;
             this.renderPatches();
@@ -215,15 +242,18 @@ const SimulationWorkbench = {
         }
     },
 
-    _applyPhases(phases) {
+    _applyPhases(phases, ruleNames) {
         document.querySelectorAll('#simWbPhases [data-phase]').forEach((cb) => {
             if (cb.disabled) {
                 cb.checked = false;
+                cb.indeterminate = false;
                 return;
             }
             const key = cb.dataset.phase;
             cb.checked = phases ? !!phases[key] : (key === 'swrl' || key === 'graph');
+            cb.indeterminate = false;
         });
+        if (window.SimulationRules) SimulationRules.apply(ruleNames || null);
     },
 
     // -- Patches -----------------------------------------------------------
@@ -394,22 +424,21 @@ const SimulationWorkbench = {
         };
         const rows = objects.map((obj) => {
             const items = created && obj.role === 'sandbox' && counts.triples != null
-                ? `<div class="text-muted">${Number(counts.triples).toLocaleString()} triples</div>`
-                : '';
-            return `<li class="mb-2">
-                <div class="d-flex align-items-center gap-1 mb-1">
-                    <span class="badge bg-secondary bg-opacity-25 text-dark">${esc(obj.kind || 'object')}</span>
-                    <span class="small">${esc(roles[obj.role] || obj.role || '')}</span>
-                </div>
-                <code class="sim-artifact-name" title="${esc(obj.name || '')}">${esc(obj.name || '')}</code>
-                ${items}
-            </li>`;
+                ? `${Number(counts.triples).toLocaleString()} triples`
+                : '—';
+            return `<tr>
+                <td><span class="badge bg-secondary bg-opacity-25 text-dark">${esc(obj.kind || 'object')}</span></td>
+                <td>${esc(roles[obj.role] || obj.role || '')}</td>
+                <td><code class="sim-artifact-name" title="${esc(obj.name || '')}">${esc(obj.name || '')}</code></td>
+                <td class="text-muted text-nowrap">${items}</td>
+            </tr>`;
         }).join('');
         let stats = '';
         if (created) {
-            const cell = (label, value) => `<div><span class="text-muted">${esc(label)}</span> `
+            const cell = (label, value) => `<div class="sim-artifact-stat">`
+                + `<span class="text-muted">${esc(label)}</span>`
                 + `<strong>${Number(value || 0).toLocaleString()}</strong></div>`;
-            stats = `<div class="sim-artifact-counts small mt-3 pt-2 border-top">
+            stats = `<div class="sim-artifact-counts small mt-3">
                 ${cell('Entities', counts.entities)}
                 ${cell('Triples', counts.triples)}
                 ${cell('Added', counts.added)}
@@ -420,7 +449,10 @@ const SimulationWorkbench = {
         } else {
             stats = '<p class="text-muted small mb-0 mt-2">Run the scenario to materialise these objects.</p>';
         }
-        box.innerHTML = `<ul class="list-unstyled mb-0">${rows}</ul>${stats}`;
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle mb-0 sim-table sim-artifact-table">
+            <thead><tr><th>Kind</th><th>Role</th><th>Name</th><th>Items</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>${stats}`;
     },
 
     async refreshArtifacts() {
@@ -459,10 +491,14 @@ const SimulationWorkbench = {
 
     collect() {
         const type = this._val('simWbScopeType') || 'entity';
-        const phases = {};
-        document.querySelectorAll('#simWbPhases [data-phase]').forEach((cb) => {
-            phases[cb.dataset.phase] = cb.checked;
-        });
+        const phases = window.SimulationRules
+            ? SimulationRules.collectPhases()
+            : {};
+        if (!Object.keys(phases).length) {
+            document.querySelectorAll('#simWbPhases [data-phase]').forEach((cb) => {
+                phases[cb.dataset.phase] = cb.checked;
+            });
+        }
         return {
             label: this._val('simWbLabel'),
             description: this._val('simWbDescription'),
@@ -482,6 +518,9 @@ const SimulationWorkbench = {
                     object: String(p.object || ''),
                 })),
             phases,
+            rule_names: window.SimulationRules
+                ? SimulationRules.collectRuleNames(phases)
+                : {},
         };
     },
 
@@ -534,6 +573,10 @@ const SimulationWorkbench = {
         const title = this._el('simWbTitle');
         if (title) title.textContent = `— ${sim.label || sim.id}`;
         this.paintArtifacts(sim.artifacts, sim.status);
+        if (window.SimulationPage) {
+            SimulationPage.rememberScenario(sim.id);
+            SimulationPage.syncScenarioUrl({ simulation: sim.id }, { replace: true });
+        }
         if (!quiet) showNotification('Scenario saved', 'success');
         SimulationPage.loadScenarios();
         return sim.id;

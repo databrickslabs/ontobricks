@@ -1,9 +1,15 @@
 <!-- Workbench Section - edit scope, patches and reasoning phases, then run -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
-        <div class="me-auto">
-            <h4 class="mb-1"><i class="bi bi-tools me-2"></i>Workbench <span class="text-muted fs-6" id="simWbTitle"></span></h4>
-            <p class="text-muted mb-0 small">Pick a graph slice, add hypothetical facts, choose the reasoning phases, then run.</p>
+        <div class="d-flex align-items-start gap-2 me-auto">
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" id="simWbBackBtn"
+                    title="Back to scenario list">
+                <i class="bi bi-arrow-left"></i>
+            </button>
+            <div>
+                <h4 class="mb-1"><i class="bi bi-tools me-2"></i>Workbench <span class="text-muted fs-6" id="simWbTitle"></span></h4>
+                <p class="text-muted mb-0 small">Pick a graph slice, add hypothetical facts, choose which rules to run, then run.</p>
+            </div>
         </div>
         <div class="d-flex align-items-center gap-2">
             <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbResetBtn" title="New blank scenario">
@@ -16,6 +22,10 @@
             <button type="button" class="btn btn-sm btn-primary" id="simWbRunBtn"
                     {% if not simulation_ctx.supported %}disabled{% endif %}>
                 <i class="bi bi-play-fill me-1"></i>Run
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbClearBtn"
+                    title="Close this scenario">
+                <i class="bi bi-x-lg me-1"></i>Clear
             </button>
         </div>
     </div>
@@ -37,79 +47,116 @@
         </div>
     </div>
 
-    <div class="row g-3">
-        <div class="col-12 col-xl-4">
-            <div class="card h-100">
-                <div class="card-header"><i class="bi bi-info-circle me-1"></i>Scenario</div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="simWbLabel" class="form-label small">Name</label>
-                        <input type="text" class="form-control form-control-sm" id="simWbLabel" maxlength="200" placeholder="e.g. Credit score drops for ACME">
-                    </div>
-                    <div class="mb-0">
-                        <label for="simWbDescription" class="form-label small">Description</label>
-                        <textarea class="form-control form-control-sm" id="simWbDescription" rows="2"></textarea>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="simWbTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="simWb-tab-general" data-bs-toggle="tab"
+                            data-bs-target="#simWb-pane-general" type="button" role="tab"
+                            aria-controls="simWb-pane-general" aria-selected="true">
+                        <i class="bi bi-info-circle me-1"></i>General
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="simWb-tab-facts" data-bs-toggle="tab"
+                            data-bs-target="#simWb-pane-facts" type="button" role="tab"
+                            aria-controls="simWb-pane-facts" aria-selected="false">
+                        <i class="bi bi-pencil-square me-1"></i>Hypothetical facts
+                        <span class="badge bg-secondary ms-1" id="simWbPatchCount">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="simWb-tab-reasoning" data-bs-toggle="tab"
+                            data-bs-target="#simWb-pane-reasoning" type="button" role="tab"
+                            aria-controls="simWb-pane-reasoning" aria-selected="false">
+                        <i class="bi bi-lightning me-1"></i>Reasoning
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="simWb-tab-results" data-bs-toggle="tab"
+                            data-bs-target="#simWb-pane-results" type="button" role="tab"
+                            aria-controls="simWb-pane-results" aria-selected="false">
+                        <i class="bi bi-clipboard-data me-1"></i>Results
+                        <span class="badge bg-secondary ms-1" id="simWbResultBadge"></span>
+                    </button>
+                </li>
+            </ul>
 
-        <div class="col-12 col-xl-4">
-            <div class="card h-100">
-                <div class="card-header"><i class="bi bi-bullseye me-1"></i>Scope</div>
-                <div class="card-body">
-                    <div class="row g-2">
-                        <div class="col-12 col-md-4">
-                            <label for="simWbScopeType" class="form-label small">Slice</label>
-                            <select class="form-select form-select-sm" id="simWbScopeType">
-                                <option value="entity">Entity neighbourhood</option>
-                                <option value="cohort" {% if not simulation_ctx.cohort_rules_count %}disabled{% endif %}>Cohort</option>
-                                <option value="class">Class population</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-8">
-                            <label for="simWbFocus" class="form-label small" id="simWbFocusLabel">Entity</label>
-                            <div class="input-group input-group-sm" id="simWbFocusGroup">
-                                <input type="text" class="form-control" id="simWbFocus" placeholder="https://…">
-                                <button type="button" class="btn btn-outline-secondary" id="simWbFocusSearchBtn"
-                                        title="Search the live graph">
-                                    <i class="bi bi-search"></i>
-                                </button>
+            <div class="tab-content p-3" id="simWbTabContent">
+                <div class="tab-pane fade show active" id="simWb-pane-general" role="tabpanel"
+                     aria-labelledby="simWb-tab-general">
+                    <div class="d-flex flex-column gap-4" id="simWbGeneralStack">
+                        <section>
+                            <h6 class="small text-muted text-uppercase mb-2">Scenario</h6>
+                            <div class="row g-3">
+                                <div class="col-12 col-lg-5">
+                                    <label for="simWbLabel" class="form-label small">Name</label>
+                                    <input type="text" class="form-control form-control-sm" id="simWbLabel"
+                                           maxlength="200" placeholder="e.g. Credit score drops for ACME">
+                                </div>
+                                <div class="col-12 col-lg-7">
+                                    <label for="simWbDescription" class="form-label small">Description</label>
+                                    <textarea class="form-control form-control-sm" id="simWbDescription" rows="2"></textarea>
+                                </div>
                             </div>
-                            <select class="form-select form-select-sm d-none" id="simWbCohort"></select>
-                            <div id="simWbFocusCaption" class="form-text d-none"></div>
-                        </div>
-                        <div class="col-6 col-md-4" id="simWbHopsGroup">
-                            <label for="simWbHops" class="form-label small">Hops</label>
-                            <input type="number" class="form-control form-control-sm" id="simWbHops" min="0" max="4" value="{{ simulation_ctx.default_hops }}">
-                        </div>
-                        <div class="col-6 col-md-4">
-                            <label for="simWbCap" class="form-label small">Entity cap</label>
-                            <input type="number" class="form-control form-control-sm" id="simWbCap" min="1" max="{{ simulation_ctx.class_cap }}" value="{{ simulation_ctx.class_cap }}">
-                        </div>
+                        </section>
+
+                        <section>
+                            <h6 class="small text-muted text-uppercase mb-2">Scope</h6>
+                            <div class="row g-2 align-items-start">
+                                <div class="col-12 col-md-3 col-xl-2">
+                                    <label for="simWbScopeType" class="form-label small">Slice</label>
+                                    <select class="form-select form-select-sm" id="simWbScopeType">
+                                        <option value="entity">Entity neighbourhood</option>
+                                        <option value="cohort" {% if not simulation_ctx.cohort_rules_count %}disabled{% endif %}>Cohort</option>
+                                        <option value="class">Class population</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-5 col-xl-6">
+                                    <label for="simWbFocus" class="form-label small" id="simWbFocusLabel">Entity</label>
+                                    <div class="input-group input-group-sm" id="simWbFocusGroup">
+                                        <input type="text" class="form-control" id="simWbFocus" placeholder="https://…">
+                                        <button type="button" class="btn btn-outline-secondary" id="simWbFocusSearchBtn"
+                                                title="Search the live graph">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                    </div>
+                                    <select class="form-select form-select-sm d-none" id="simWbCohort"></select>
+                                </div>
+                                <div class="col-6 col-md-2" id="simWbHopsGroup">
+                                    <label for="simWbHops" class="form-label small">Hops</label>
+                                    <input type="number" class="form-control form-control-sm" id="simWbHops" min="0" max="4"
+                                           value="{{ simulation_ctx.default_hops }}">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label for="simWbCap" class="form-label small">Entity cap</label>
+                                    <input type="number" class="form-control form-control-sm" id="simWbCap" min="1"
+                                           max="{{ simulation_ctx.class_cap }}" value="{{ simulation_ctx.class_cap }}">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-12 col-md-3 col-xl-2 d-none d-md-block"></div>
+                                <div class="col-12 col-md-5 col-xl-6">
+                                    <div id="simWbFocusCaption" class="form-text d-none"></div>
+                                </div>
+                            </div>
+                            <p class="text-muted small mb-0 mt-2">The slice copies every triple whose subject is in scope into a private sandbox table.</p>
+                        </section>
+
+                        <section>
+                            <h6 class="small text-muted text-uppercase mb-2 d-flex justify-content-between align-items-center">
+                                <span>Sandbox objects</span>
+                                <span class="badge bg-secondary" id="simWbArtifactStatus">none</span>
+                            </h6>
+                            <div id="simWbArtifacts">
+                                <p class="text-muted small mb-0">Save and run the scenario to create the sandbox table and Explorer overlay views.</p>
+                            </div>
+                        </section>
                     </div>
-                    <p class="text-muted small mb-0 mt-2">The slice copies every triple whose subject is in scope into a private sandbox table.</p>
                 </div>
-            </div>
-        </div>
 
-        <div class="col-12 col-xl-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-database me-1"></i>Sandbox objects</span>
-                    <span class="badge bg-secondary" id="simWbArtifactStatus">none</span>
-                </div>
-                <div class="card-body" id="simWbArtifacts">
-                    <p class="text-muted small mb-0">Save and run the scenario to create the sandbox table and Explorer overlay views.</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-pencil-square me-1"></i>Hypothetical facts <span class="badge bg-secondary ms-1" id="simWbPatchCount">0</span></span>
-                    <div class="d-flex gap-2">
+                <div class="tab-pane fade" id="simWb-pane-facts" role="tabpanel" aria-labelledby="simWb-tab-facts">
+                    <div class="d-flex justify-content-end gap-2 mb-3">
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbFactWizardBtn">
                             <i class="bi bi-magic me-1"></i>Fact wizard
                         </button>
@@ -117,8 +164,6 @@
                             <i class="bi bi-plus-lg me-1"></i>Add fact
                         </button>
                     </div>
-                </div>
-                <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0 sim-table">
                             <thead>
@@ -133,42 +178,119 @@
                             <tbody id="simWbPatchesBody"></tbody>
                         </table>
                     </div>
-                    <p class="text-muted small px-3 py-2 mb-0">
+                    <p class="text-muted small mb-0 mt-2">
                         <strong>Add</strong> asserts a triple, <strong>Remove</strong> retracts it,
                         <strong>Set</strong> replaces every value of the predicate on the subject.
                     </p>
                 </div>
-            </div>
-        </div>
 
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header"><i class="bi bi-lightning me-1"></i>Reasoning phases</div>
-                <div class="card-body d-flex flex-wrap gap-4" id="simWbPhases">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="simPhaseSwrl" data-phase="swrl" checked>
-                        <label class="form-check-label small" for="simPhaseSwrl">SWRL rules <span class="text-muted">({{ simulation_ctx.swrl_rules_count }})</span></label>
+                <div class="tab-pane fade" id="simWb-pane-reasoning" role="tabpanel"
+                     aria-labelledby="simWb-tab-reasoning">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <p class="text-muted small mb-0">Same phases as Knowledge Graph → Inference. Expand a tile to pick individual rules.</p>
+                        <div class="d-flex gap-2 small">
+                            <button type="button" class="btn btn-link btn-sm py-0" id="simWbRulesAll">Select all</button>
+                            <button type="button" class="btn btn-link btn-sm py-0" id="simWbRulesNone">Unselect all</button>
+                        </div>
                     </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="simPhaseGraph" data-phase="graph" checked>
-                        <label class="form-check-label small" for="simPhaseGraph">Graph reasoning</label>
+                    <div id="simWbPhases">
+                        <div class="row g-2">
+                            <div class="col-6 col-md-4">
+                                <label class="reasoning-tile active w-100" for="simPhaseSwrl" id="simTileSwrl">
+                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseSwrl" data-phase="swrl" checked>
+                                    <i class="bi bi-code-square rt-icon text-primary"></i>
+                                    <span class="rt-title">SWRL rules</span>
+                                    {% if simulation_ctx.swrl_rules_count > 0 %}
+                                    <span class="badge bg-primary bg-opacity-75 rt-badge">{{ simulation_ctx.swrl_rules_count }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary rt-badge">no rules</span>
+                                    {% endif %}
+                                    <button type="button" class="dq-rules-toggle d-none" data-sim-expand="swrl" title="Show individual rules">
+                                        <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                        <span class="dq-rules-count"></span>
+                                    </button>
+                                </label>
+                                <div class="dq-rule-list d-none" data-sim-rulelist="swrl"></div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="reasoning-tile active w-100" for="simPhaseGraph">
+                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseGraph" data-phase="graph" checked>
+                                    <i class="bi bi-share rt-icon text-info"></i>
+                                    <span class="rt-title">Graph reasoning</span>
+                                    <span class="rt-desc">Transitive / symmetric closure</span>
+                                </label>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="reasoning-tile w-100" for="simPhaseDt">
+                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseDt" data-phase="decision_tables">
+                                    <i class="bi bi-table rt-icon text-warning"></i>
+                                    <span class="rt-title">Decision tables</span>
+                                    {% if simulation_ctx.decision_tables_count > 0 %}
+                                    <span class="badge bg-primary bg-opacity-75 rt-badge">{{ simulation_ctx.decision_tables_count }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary rt-badge">no tables</span>
+                                    {% endif %}
+                                    <button type="button" class="dq-rules-toggle d-none" data-sim-expand="decision_tables" title="Show individual tables">
+                                        <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                        <span class="dq-rules-count"></span>
+                                    </button>
+                                </label>
+                                <div class="dq-rule-list d-none" data-sim-rulelist="decision_tables"></div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="reasoning-tile w-100" for="simPhaseSparql">
+                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseSparql" data-phase="sparql_rules">
+                                    <i class="bi bi-braces rt-icon text-danger"></i>
+                                    <span class="rt-title">SPARQL CONSTRUCT</span>
+                                    {% if simulation_ctx.sparql_rules_count > 0 %}
+                                    <span class="badge bg-primary bg-opacity-75 rt-badge">{{ simulation_ctx.sparql_rules_count }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary rt-badge">no rules</span>
+                                    {% endif %}
+                                    <button type="button" class="dq-rules-toggle d-none" data-sim-expand="sparql_rules" title="Show individual rules">
+                                        <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                        <span class="dq-rules-count"></span>
+                                    </button>
+                                </label>
+                                <div class="dq-rule-list d-none" data-sim-rulelist="sparql_rules"></div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="reasoning-tile w-100" for="simPhaseAgg">
+                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseAgg" data-phase="aggregate_rules">
+                                    <i class="bi bi-calculator rt-icon"></i>
+                                    <span class="rt-title">Aggregate rules</span>
+                                    {% if simulation_ctx.aggregate_rules_count > 0 %}
+                                    <span class="badge bg-primary bg-opacity-75 rt-badge">{{ simulation_ctx.aggregate_rules_count }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary rt-badge">no rules</span>
+                                    {% endif %}
+                                    <button type="button" class="dq-rules-toggle d-none" data-sim-expand="aggregate_rules" title="Show individual rules">
+                                        <i class="bi bi-chevron-down dq-expand-chevron"></i>
+                                        <span class="dq-rules-count"></span>
+                                    </button>
+                                </label>
+                                <div class="dq-rule-list d-none" data-sim-rulelist="aggregate_rules"></div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="reasoning-tile w-100" for="simPhaseTbox">
+                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseTbox" data-phase="tbox"
+                                           {% if not simulation_ctx.owlrl_available %}disabled{% endif %}>
+                                    <i class="bi bi-diagram-3 rt-icon text-primary"></i>
+                                    <span class="rt-title">T-Box (OWL 2 RL)</span>
+                                    {% if simulation_ctx.owlrl_available %}
+                                    <span class="badge bg-success bg-opacity-75 rt-badge">owlrl ready</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark rt-badge">owlrl missing</span>
+                                    {% endif %}
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="simPhaseDt" data-phase="decision_tables">
-                        <label class="form-check-label small" for="simPhaseDt">Decision tables <span class="text-muted">({{ simulation_ctx.decision_tables_count }})</span></label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="simPhaseSparql" data-phase="sparql_rules">
-                        <label class="form-check-label small" for="simPhaseSparql">SPARQL rules <span class="text-muted">({{ simulation_ctx.sparql_rules_count }})</span></label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="simPhaseAgg" data-phase="aggregate_rules">
-                        <label class="form-check-label small" for="simPhaseAgg">Aggregate rules <span class="text-muted">({{ simulation_ctx.aggregate_rules_count }})</span></label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="simPhaseTbox" data-phase="tbox" {% if not simulation_ctx.owlrl_available %}disabled{% endif %}>
-                        <label class="form-check-label small" for="simPhaseTbox">OWL 2 RL (T-Box)</label>
-                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="simWb-pane-results" role="tabpanel"
+                     aria-labelledby="simWb-tab-results">
+                    {% include "partials/simulation/_sim_results.html" %}
                 </div>
             </div>
         </div>

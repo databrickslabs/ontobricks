@@ -662,20 +662,6 @@
                             "icon": "bi-collection",
                             "default": true,
                             "requires": null
-                        }
-                    ]
-                },
-                {
-                    "id": "simulation-results",
-                    "title": "Results",
-                    "icon": "bi-clipboard-data",
-                    "items": [
-                        {
-                            "id": "results",
-                            "label": "Results",
-                            "icon": "bi-plus-slash-minus",
-                            "default": false,
-                            "requires": null
                         },
                         {
                             "id": "runs",

@@ -77,10 +77,8 @@ SECTION_INVENTORY = {
     },
     "simulation.html": {
         "scenarios",
-        "workbench",
         "cohorts",
         "cohort-run",
-        "results",
         "runs",
     },
     "settings.html": {

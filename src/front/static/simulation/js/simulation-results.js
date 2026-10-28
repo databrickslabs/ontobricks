@@ -1,6 +1,6 @@
 /**
  * Simulation Results — KPIs and paged added / removed triples of the
- * last run of the selected scenario.
+ * last run of the scenario open in the workbench.
  */
 const SimulationResults = {
     selectedId: null,
@@ -10,8 +10,6 @@ const SimulationResults = {
     _searchTimer: null,
 
     init() {
-        const picker = document.getElementById('simResultsPicker');
-        if (picker) picker.addEventListener('change', () => this.select(picker.value));
         const refresh = document.getElementById('simResultsRefreshBtn');
         if (refresh) refresh.addEventListener('click', () => this.load());
         document.querySelectorAll('#simResultsTabs [data-kind]').forEach((btn) => {
@@ -41,37 +39,28 @@ const SimulationResults = {
         if (next) next.addEventListener('click', () => { this.page += 1; this.load(); });
     },
 
-    _readyScenarios() {
-        return (SimulationPage.scenarios || []).filter((s) => s.status === 'ready' || s.last_run_at);
-    },
-
-    refreshPicker() {
-        const picker = document.getElementById('simResultsPicker');
-        if (!picker) return;
-        const list = this._readyScenarios();
-        picker.innerHTML = list.length
-            ? list.map((s) => `<option value="${SimulationPage.esc(s.id)}">${SimulationPage.esc(s.label || s.id)}</option>`).join('')
-            : '<option value="">No results yet</option>';
-        if (this.selectedId && list.some((s) => s.id === this.selectedId)) {
-            picker.value = this.selectedId;
-        }
-    },
-
     onShow() {
-        this.refreshPicker();
-        if (!this.selectedId) {
-            const first = this._readyScenarios()[0];
-            if (first) this.selectedId = first.id;
-        }
-        this.load();
+        const id = (window.SimulationWorkbench && SimulationWorkbench.currentId) || this.selectedId;
+        if (id) this.select(id);
+        else this._toggle(false);
     },
 
     select(id) {
         this.selectedId = id || null;
         this.page = 1;
-        const picker = document.getElementById('simResultsPicker');
-        if (picker && id) picker.value = id;
         this.load();
+    },
+
+    _paintBadge(summary) {
+        const badge = document.getElementById('simWbResultBadge');
+        if (!badge) return;
+        const added = summary && summary.added_count;
+        const removed = summary && summary.removed_count;
+        if (added == null && removed == null) {
+            badge.textContent = '';
+            return;
+        }
+        badge.textContent = `+${added || 0} / −${removed || 0}`;
     },
 
     _toggle(hasResult) {
@@ -86,6 +75,7 @@ const SimulationResults = {
                 ? `/dtwin/?section=sigmagraph&simulation=${encodeURIComponent(this.selectedId)}`
                 : '/dtwin/?section=sigmagraph';
         }
+        if (!hasResult) this._paintBadge(null);
     },
 
     async load() {
@@ -117,6 +107,7 @@ const SimulationResults = {
             const v = summary[el.dataset.kpi];
             el.textContent = v == null ? '–' : Number(v).toLocaleString();
         });
+        this._paintBadge(summary);
         const added = document.getElementById('simTabBadgeAdded');
         const removed = document.getElementById('simTabBadgeRemoved');
         if (added) added.textContent = summary.added_count != null ? summary.added_count : '';

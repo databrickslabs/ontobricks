@@ -1,0 +1,230 @@
+================================================================================
+## Pick individual inference rules in a scenario
+================================================================================
+
+Context: Scenario runs could only toggle whole reasoning phases. Operators
+needed the same per-rule selection as Knowledge Graph → Inference so a
+what-if sandbox can execute a subset of SWRL, decision tables, SPARQL
+CONSTRUCT, and aggregate rules.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSpec.py
+   Persist rule_names per phase and pass them as ReasoningService filters.
+2. src/front/templates/partials/simulation/_sim_workbench.html
+   Replace phase checkboxes with Inference-style tiles and expandable lists.
+3. src/front/static/simulation/js/simulation-rules.js
+   Load ontology rules and collect the ticked names on save/run.
+4. src/front/templates/simulation.html
+   Wire query-reasoning.css and the new picker script.
+5. tests/units/simulation/test_simulation_core.py
+   Cover subset filters, ignored names when a phase is off, and invalid input.
+
+Modified files:
+- src/back/objects/simulation/SimulationSpec.py
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/simulation.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/simulation/test_simulation_core.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9751 passed, 326 skipped, 8 deselected, 0 failed in 55.42s.
+
+================================================================================
+## Split the scenario workbench into three tabs
+================================================================================
+
+Context: The scenario editor stacked identity, scope, sandbox objects,
+hypothetical facts, and reasoning on one long page. Operators asked for the
+same card-integrated tab pattern used elsewhere: General, Hypothetical
+facts, and Reasoning, with Save / Run / Reset staying on the header.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Card-integrated ob-tabs: General (scenario, scope, artifacts), Hypothetical
+   facts (wizard + table, patch-count badge), Reasoning (phase tiles).
+2. tests/units/front/test_simulation_page_contract.py
+   Assert the three tab buttons, pane ids, and that Save/Run stay outside panes.
+3. docs/user-guide.md
+   Document the Scenario editor as the three-tab flow.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 49.36s.
+
+================================================================================
+## Stack General sections as rows
+================================================================================
+
+Context: After the workbench moved to tabs, General still laid out Scenario,
+Scope, and Sandbox objects as three xl columns. Operators asked for those
+blocks as stacked rows with compact fields inside each row.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Vertical stack for Scenario, Scope, and Sandbox objects; artifacts as a table.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Paint sandbox objects as a full-width table plus a horizontal count strip.
+3. src/front/static/simulation/css/simulation.css
+   Horizontal artifact count strip instead of a two-column grid.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 49.36s.
+
+================================================================================
+## Move scenario Results onto the workbench
+================================================================================
+
+Context: Results lived in a separate sidebar item with a scenario picker, so
+the diff was detached from the run that produced it. Results belong to one
+scenario and should be a workbench tab.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Drop the Results sidebar item; keep Runs under Scenarios.
+2. src/front/templates/partials/simulation/_sim_workbench.html
+   Add a Results tab that includes the diff pane for the open scenario.
+3. src/front/templates/partials/simulation/_sim_results.html
+   Remove the scenario picker; empty state is "no results for this scenario".
+4. src/front/static/simulation/js/simulation.js
+   Open Results as a workbench tab instead of switching sidebar section.
+5. src/front/static/global/js/task-tracker.js
+   Completed simulation tasks open workbench with tab=results.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/simulation/_sim_results.html
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-results.js
+- src/front/static/simulation/css/simulation.css
+- src/front/static/global/js/task-tracker.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 48.87s.
+
+================================================================================
+## Align Scope controls on the General tab
+================================================================================
+
+Context: The Scope row used bottom alignment, so the Slice dropdown lined up
+with the entity caption under the Entity field instead of with the Entity
+input.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Top-align Slice, Entity, Hops, and Entity cap; keep the caption under the
+   Entity column so it no longer stretches the control row.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 48.72s.
+
+================================================================================
+## Keep list and editor on one Scenarios URL
+================================================================================
+
+Context: Refreshing /simulation/?section=workbench opened a blank scenario
+because the open id was not in the URL. List and editor should share
+?section=scenarios, with simulation=<id> selecting the editor.
+
+Changes:
+
+1. src/front/templates/simulation.html
+   Nest list and editor in the Scenarios section; drop workbench-section.
+2. src/front/static/simulation/js/simulation.js
+   Sync simulation/tab query params, restore the last id on legacy workbench URLs.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Back-to-list control; write the saved id into the URL.
+4. src/front/static/global/js/task-tracker.js
+   Open completed runs at section=scenarios&simulation=.
+5. src/front/static/query/js/query-entity-details.js
+   Simulate from here uses the Scenarios section.
+
+Modified files:
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 50.95s.
+
+================================================================================
+## Opening a scenario no longer bounces back to the list
+================================================================================
+
+Context: Clicking a scenario name used href="#" and a sidebarSectionChanged
+handler that always showed the list. The hash navigation dropped the
+simulation query param, so the editor closed immediately.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation.js
+   preventDefault on row actions, real editor href, showList only from the
+   Scenarios sidebar click.
+
+Modified files:
+- src/front/static/simulation/js/simulation.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 50.00s.
+
+================================================================================
+## Add Clear on the open scenario header
+================================================================================
+
+Context: With a scenario open, the editor had Save / Run on the right but no
+explicit control to leave the editor besides the back arrow.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Add a Clear button at the right of the workbench header.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Clear returns to the scenario list.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 47.98s.

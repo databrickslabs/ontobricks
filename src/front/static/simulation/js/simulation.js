@@ -10,6 +10,8 @@ const SimulationPage = {
     _pollBusy: false,
     POLL_MS: 2000,
     TASK_KEY: 'ontobricks_simulation_task',
+    LAST_KEY: 'ontobricks_simulation_open',
+    _openingEditor: false,
 
     init() {
         const cfgEl = document.getElementById('simulation-config');
@@ -24,9 +26,13 @@ const SimulationPage = {
         document.addEventListener('sidebarSectionChanged', (e) => {
             const section = e.detail && e.detail.section;
             if (section === 'runs') this.loadRuns();
-            if (section === 'results' && window.SimulationResults) SimulationResults.onShow();
-            if (section === 'scenarios') this.loadScenarios();
         });
+        const scenariosLink = document.querySelector('.sidebar-nav .nav-link[data-section="scenarios"]');
+        if (scenariosLink) {
+            scenariosLink.addEventListener('click', () => this.showList({ replace: true }));
+        }
+        window.addEventListener('popstate', () => this.applyScenarioView({ fromPop: true }));
+        setTimeout(() => this.applyScenarioView({ replace: true }), 0);
     },
 
     _bind() {
@@ -36,15 +42,14 @@ const SimulationPage = {
         };
         on('simRefreshBtn', () => this.loadScenarios());
         on('simRunsRefreshBtn', () => this.loadRuns());
-        on('simNewBtn', () => {
-            if (window.SimulationWorkbench) SimulationWorkbench.reset();
-            SidebarNav.switchTo('workbench');
-        });
+        on('simNewBtn', () => this.newScenario());
         const body = document.getElementById('simScenariosBody');
         if (body) {
             body.addEventListener('click', (e) => {
                 const btn = e.target.closest('[data-action]');
                 if (!btn) return;
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
+                e.preventDefault();
                 const id = btn.dataset.id;
                 const action = btn.dataset.action;
                 if (action === 'open') this.openScenario(id);
@@ -185,7 +190,7 @@ const SimulationPage = {
         } finally {
             if (refresh) refresh.disabled = false;
         }
-        if (window.SimulationResults) SimulationResults.refreshPicker();
+        if (window.SimulationResults && SimulationResults.selectedId) SimulationResults.load();
     },
 
     renderScenarios() {
@@ -204,7 +209,7 @@ const SimulationPage = {
             const ready = s.status === 'ready';
             const running = s.status === 'running';
             return `<tr>
-                <td><a href="#" data-action="open" data-id="${this.esc(s.id)}" class="fw-semibold">${this.esc(s.label || s.id)}</a></td>
+                <td><a href="/simulation/?section=scenarios&simulation=${this.esc(s.id)}" data-action="open" data-id="${this.esc(s.id)}" class="fw-semibold">${this.esc(s.label || s.id)}</a></td>
                 <td class="small">${this.scopeLabel(spec.scope)}</td>
                 <td class="text-end">${(spec.patches || []).length}</td>
                 <td>${this.statusBadge(s.status)}</td>
@@ -221,14 +226,130 @@ const SimulationPage = {
         }).join('');
     },
 
-    openScenario(id) {
-        if (window.SimulationWorkbench) SimulationWorkbench.load(id);
-        SidebarNav.switchTo('workbench');
+    openScenario(id, { tab } = {}) {
+        this._openEditor({ id, tab, sync: true });
     },
 
     showResults(id) {
-        if (window.SimulationResults) SimulationResults.select(id);
-        SidebarNav.switchTo('results');
+        this._openEditor({ id, tab: 'results', sync: true });
+    },
+
+    newScenario({ entity, label, sync = true, replace = false } = {}) {
+        this._showEditorPane();
+        if (window.SimulationWorkbench) {
+            if (entity) SimulationWorkbench.seedFromEntity(entity, label);
+            else {
+                SimulationWorkbench.reset();
+                SimulationWorkbench.showTab('general');
+            }
+        }
+        if (sync) this.syncScenarioUrl({ simulation: 'new', entity, label }, { replace });
+    },
+
+    showList({ replace = false } = {}) {
+        this._toggleEditor(false);
+        this.syncScenarioUrl({}, { replace });
+        this.loadScenarios();
+    },
+
+    rememberScenario(id) {
+        if (!id || id === 'new') return;
+        try { sessionStorage.setItem(this.LAST_KEY, id); } catch (_) { /* ignore */ }
+    },
+
+    syncScenarioUrl({ simulation, tab, entity, label } = {}, { replace = false } = {}) {
+        const url = new URL(window.location.href);
+        url.hash = '';
+        url.searchParams.set('section', 'scenarios');
+        const setOrDel = (key, value) => {
+            const text = String(value || '').trim();
+            if (text) url.searchParams.set(key, text);
+            else url.searchParams.delete(key);
+        };
+        setOrDel('simulation', simulation);
+        setOrDel('tab', tab);
+        setOrDel('entity', entity);
+        setOrDel('label', label);
+        const state = { section: 'scenarios', simulation: simulation || null, tab: tab || null };
+        const method = replace ? 'replaceState' : 'pushState';
+        if (window.history && window.history[method]) window.history[method](state, '', url);
+    },
+
+    applyScenarioView({ replace = false, fromPop = false } = {}) {
+        const params = new URLSearchParams(window.location.search);
+        const rawSection = (params.get('section') || '').trim();
+        if (rawSection && rawSection !== 'scenarios' && rawSection !== 'workbench' && rawSection !== 'results') {
+            return;
+        }
+        const simId = (params.get('simulation') || '').trim();
+        const entity = (params.get('entity') || '').trim();
+        const tab = (params.get('tab') || '').trim() === 'results' || rawSection === 'results'
+            ? 'results' : '';
+        const label = (params.get('label') || '').trim();
+        const last = (() => {
+            try { return sessionStorage.getItem(this.LAST_KEY) || ''; } catch (_) { return ''; }
+        })();
+
+        if (simId && simId !== 'new') {
+            this._openEditor({
+                id: simId,
+                tab,
+                sync: rawSection !== 'scenarios' && !fromPop,
+                replace: true,
+            });
+            return;
+        }
+        if (simId === 'new' || entity) {
+            this.newScenario({
+                entity,
+                label,
+                sync: rawSection !== 'scenarios' && !fromPop,
+                replace: true,
+            });
+            return;
+        }
+        if ((rawSection === 'workbench' || rawSection === 'results') && last) {
+            this._openEditor({ id: last, tab, sync: !fromPop, replace: true });
+            return;
+        }
+        this._toggleEditor(false);
+        if (rawSection === 'workbench' || rawSection === 'results') {
+            this.syncScenarioUrl({}, { replace: true });
+        }
+    },
+
+    _showEditorPane() {
+        this._openingEditor = true;
+        if (window.SidebarNav && SidebarNav.getActiveSection() !== 'scenarios') {
+            SidebarNav._showSection('scenarios');
+        }
+        this._toggleEditor(true);
+        this._openingEditor = false;
+    },
+
+    _toggleEditor(on) {
+        const list = document.getElementById('simScenariosList');
+        const editor = document.getElementById('simScenariosEditor');
+        if (list) list.classList.toggle('d-none', on);
+        if (editor) editor.classList.toggle('d-none', !on);
+    },
+
+    _openEditor({ id, tab, sync = false, replace = false } = {}) {
+        if (!id) return;
+        this._showEditorPane();
+        this.rememberScenario(id);
+        if (sync) this.syncScenarioUrl({ simulation: id, tab }, { replace });
+        const openTab = () => {
+            if (window.SimulationWorkbench && tab) SimulationWorkbench.showTab(tab);
+            if (tab === 'results' && window.SimulationResults) SimulationResults.select(id);
+        };
+        if (window.SimulationWorkbench) {
+            if (SimulationWorkbench.currentId !== id) {
+                Promise.resolve(SimulationWorkbench.load(id)).then(openTab);
+            } else {
+                openTab();
+            }
+        }
     },
 
     async purgeScenario(id) {
@@ -260,7 +381,9 @@ const SimulationPage = {
         try {
             await this.api(`/simulation/${encodeURIComponent(id)}`, { method: 'DELETE' });
             showNotification('Scenario deleted', 'success');
-            if (window.SimulationWorkbench && SimulationWorkbench.currentId === id) SimulationWorkbench.reset();
+            if (window.SimulationWorkbench && SimulationWorkbench.currentId === id) {
+                this.showList({ replace: true });
+            }
             this.loadScenarios();
         } catch (err) {
             showNotification(`Delete failed: ${err.message}`, 'error');

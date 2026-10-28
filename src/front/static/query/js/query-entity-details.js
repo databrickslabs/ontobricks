@@ -506,7 +506,7 @@ async function showEntityDetails(entity) {
     }
 
     if (entity.id && _simulationAvailable()) {
-        const simUrl = '/simulation/?section=workbench'
+        const simUrl = '/simulation/?section=scenarios'
             + '&entity=' + encodeURIComponent(entity.id)
             + '&label=' + encodeURIComponent(displayLabel || '');
         html += `

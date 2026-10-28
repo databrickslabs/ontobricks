@@ -7,6 +7,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='simulation/css/simulation.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -27,15 +28,12 @@
             </div>
 
             <div id="scenarios-section" class="sidebar-section active">
-                {% include "partials/simulation/_sim_scenarios.html" %}
-            </div>
-
-            <div id="workbench-section" class="sidebar-section">
-                {% include "partials/simulation/_sim_workbench.html" %}
-            </div>
-
-            <div id="results-section" class="sidebar-section">
-                {% include "partials/simulation/_sim_results.html" %}
+                <div id="simScenariosList">
+                    {% include "partials/simulation/_sim_scenarios.html" %}
+                </div>
+                <div id="simScenariosEditor" class="d-none">
+                    {% include "partials/simulation/_sim_workbench.html" %}
+                </div>
             </div>
 
             <div id="runs-section" class="sidebar-section">
@@ -61,6 +59,7 @@
 </script>
 
 <script defer src="{{ url_for('static', filename='simulation/js/simulation.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-rules.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-workbench.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-fact-wizard.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-results.js') }}?v={{ asset_version }}"></script>

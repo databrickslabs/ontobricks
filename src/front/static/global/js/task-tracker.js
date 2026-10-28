@@ -32,7 +32,7 @@ const TASK_TYPE_URLS = {
     'quality_checks': '/dtwin#quality',
     'graph_analytics': '/dtwin#analytics',
     'entity_job_action': '/dtwin',
-    'simulation': '/simulation/?section=workbench'
+    'simulation': '/simulation/?section=scenarios'
 };
 
 function taskOpenUrl(task) {
@@ -41,9 +41,9 @@ function taskOpenUrl(task) {
     if (type !== 'simulation') return base;
     const sid = task.result && task.result.simulation_id;
     if (!sid) return base;
-    const section = task.status === 'completed' ? 'results' : 'workbench';
-    return '/simulation/?section=' + encodeURIComponent(section)
-        + '&simulation=' + encodeURIComponent(sid);
+    let url = '/simulation/?section=scenarios&simulation=' + encodeURIComponent(sid);
+    if (task.status === 'completed') url += '&tab=results';
+    return url;
 }
 
 // =====================================================

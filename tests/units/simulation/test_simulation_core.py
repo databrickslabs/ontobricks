@@ -211,6 +211,8 @@ class TestSimulationSpec:
         opts = spec.reasoning_options()
         assert opts["materialize"] is False
         assert opts["tbox"] is False and opts["swrl"] is True
+        assert "swrl_rule_names" not in opts
+        assert spec.rule_names == {}
 
     def test_cap_is_clamped_to_default(self):
         body = self._body(scope={"type": "class", "focus": EX + "Customer", "cap": 99999})
@@ -229,6 +231,7 @@ class TestSimulationSpec:
             {"scope": {"type": "entity", "focus": "not a uri"}},
             {"scope": {"type": "entity", "focus": EX + "a", "hops": 9}},
             {"patches": "nope"},
+            {"rule_names": "nope"},
         ],
     )
     def test_invalid(self, over):
@@ -239,6 +242,28 @@ class TestSimulationSpec:
         spec = SimulationSpec.from_dict(self._body(), default_hops=2, default_cap=10)
         again = SimulationSpec.from_dict(spec.to_dict(), default_hops=2, default_cap=10, sim_id=spec.id)
         assert again.to_dict() == spec.to_dict()
+
+    def test_selected_rule_names_filter_reasoning_options(self):
+        spec = SimulationSpec.from_dict(
+            self._body(
+                phases={"swrl": True, "graph": False},
+                rule_names={"swrl": ["AttachMeter", "AttachMeter", ""], "decision_tables": []},
+            ),
+            default_hops=2,
+            default_cap=10,
+        )
+        assert spec.rule_names == {"swrl": ["AttachMeter"]}
+        opts = spec.reasoning_options()
+        assert opts["swrl_rule_names"] == {"AttachMeter"}
+        assert "decision_table_names" not in opts
+
+    def test_rule_names_ignored_when_phase_off(self):
+        spec = SimulationSpec.from_dict(
+            self._body(phases={"swrl": False}, rule_names={"swrl": ["AttachMeter"]}),
+            default_hops=2,
+            default_cap=10,
+        )
+        assert "swrl_rule_names" not in spec.reasoning_options()
 
 
 class _LiveStore:
