@@ -11,7 +11,7 @@ Final Task 2 completion on branch `fix/dependabot-010-lock-refresh` in the dedic
      - `https://pypi.org/simple`
      - `https://files.pythonhosted.org/...`
 2. Verified no internal resolver hostnames remain in committed lockfiles.
-3. Kept CI dual lock-check guard and branch filters already introduced during Task 2.
+3. Updated `.github/workflows/ci.yml` with CI branch-filter coverage (`0.9.1`, `0.10.0`) and dual lock checks (`uv lock --check` at root and `src/mcp-server`) across CI jobs.
 4. Re-ran required checks and tests with public index variables.
 
 ### Remediated 0.10.0 alert packages/versions
@@ -26,9 +26,10 @@ The regenerated locks now satisfy the declared security floors for patchable Dep
 8. `setuptools==84.2.1`
 
 ### Modified files
-- `uv.lock`
-- `src/mcp-server/uv.lock`
+- `.github/workflows/ci.yml`
 - `changelogs/v0.10.0/benoitcayladbx_2026-10-28.log`
+- `src/mcp-server/uv.lock`
+- `uv.lock`
 
 ### Test and audit results
 - `UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple uv lock --check` (root + MCP): **passed** (online/public-index evidence)
