@@ -134,11 +134,23 @@ def test_hypothetical_facts_show_id_type_and_predicate_kind():
     assert "predicate_kind" in wb
     assert "sim-term-emoji" in wb
     assert "subject_type" in wb
-    assert "sim-patches-table" in html
+    assert 'id="simWbPatchesBody"' in html
+    assert "sim-patch-card" in wb
+    assert "col-lg-4" in wb
+    assert "sim-patch-fields" in wb
+    assert "align-items-center" in wb
+    assert "align-items-start" not in wb.split("sim-patch-card", 1)[1].split("_termCell", 1)[0]
+    assert "sim-term-field-label" not in wb
+    assert "sim-patches-list" in html
+    assert "gap-1" in html
+    assert "sim-patches-table" not in html
+    assert "table-sm" not in html.split('id="simWb-pane-facts"', 1)[1].split('id="simWb-pane-reasoning"', 1)[0]
+    assert "padding: 0.35rem 0.5rem" in css.split(".sim-patch-card .card-body", 1)[1].split("}", 1)[0]
     assert "resolveEntitySeed" in page
     assert "_lookupInput" not in wb
     assert wizard.count('text-muted">${SimulationPage.esc(s.uri)}</div>') == 0
     assert "onclick=" not in html
+    assert "style=" not in html
 
 
 def test_workbench_prefers_entity_label_over_local_id():

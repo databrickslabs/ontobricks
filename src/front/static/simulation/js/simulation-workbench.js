@@ -341,22 +341,28 @@ const SimulationWorkbench = {
         if (count) count.textContent = String(this.patches.length);
         if (!body) return;
         if (!this.patches.length) {
-            body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3 small">No hypothetical facts yet — add one to describe what changes.</td></tr>';
+            body.innerHTML = '<p class="text-center text-muted py-3 small mb-0">No hypothetical facts yet — add one to describe what changes.</p>';
             return;
         }
-        body.innerHTML = this.patches.map((p, i) => `<tr>
-            <td>
-                <select class="form-select form-select-sm" data-field="op" data-idx="${i}" aria-label="Operation">
-                    <option value="set" ${p.op === 'set' ? 'selected' : ''}>Set</option>
-                    <option value="add" ${p.op === 'add' ? 'selected' : ''}>Add</option>
-                    <option value="remove" ${p.op === 'remove' ? 'selected' : ''}>Remove</option>
-                </select>
-            </td>
-            <td>${this._termCell('subject', i, p, 'Subject')}</td>
-            <td>${this._termCell('predicate', i, p, 'Predicate')}</td>
-            <td>${this._termCell('object', i, p, 'Value')}</td>
-            <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" data-remove="${i}" title="Remove fact"><i class="bi bi-x-lg"></i></button></td>
-        </tr>`).join('');
+        body.innerHTML = this.patches.map((p, i) => `<article class="card sim-patch-card">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-2">
+                    <select class="form-select form-select-sm sim-patch-op" data-field="op" data-idx="${i}" aria-label="Operation">
+                        <option value="set" ${p.op === 'set' ? 'selected' : ''}>Set</option>
+                        <option value="add" ${p.op === 'add' ? 'selected' : ''}>Add</option>
+                        <option value="remove" ${p.op === 'remove' ? 'selected' : ''}>Remove</option>
+                    </select>
+                    <div class="row g-2 sim-patch-fields">
+                        <div class="col-12 col-lg-4">${this._termCell('subject', i, p, 'Subject')}</div>
+                        <div class="col-12 col-lg-4">${this._termCell('predicate', i, p, 'Predicate')}</div>
+                        <div class="col-12 col-lg-4">${this._termCell('object', i, p, 'Object / value')}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-remove="${i}" title="Remove fact">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </article>`).join('');
     },
 
     _termCell(field, idx, patch, placeholder) {
@@ -369,7 +375,7 @@ const SimulationWorkbench = {
         return `<div class="sim-term">
             ${this._termKindHtml(field, patch, uri, isUri, caption)}
             <div class="input-group input-group-sm">
-                <input type="text" class="form-control" data-field="${field}" data-idx="${idx}"
+                <input type="text" class="form-control sim-term-id" data-field="${field}" data-idx="${idx}"
                        value="${esc(idShown)}" title="${esc(uri)}" placeholder="${esc(placeholder)}"
                        aria-label="${esc(placeholder)}">
                 <button type="button" class="btn btn-outline-secondary" data-lookup="${field}" data-idx="${idx}"

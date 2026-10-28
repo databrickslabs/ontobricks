@@ -77,19 +77,31 @@ a.sim-uri-link:focus-visible {
     min-width: 10rem;
 }
 
-.sim-patches-table td {
-    vertical-align: top;
+.sim-patch-card {
+    border-color: var(--db-border);
+    border-radius: var(--db-radius-control);
 }
 
-.sim-term {
-    min-width: 11rem;
+.sim-patch-card .card-body {
+    padding: 0.35rem 0.5rem;
+}
+
+.sim-patch-op {
+    width: 6.75rem;
+    flex: 0 0 6.75rem;
+}
+
+.sim-patch-fields {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .sim-term-kind {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    margin-bottom: 0.25rem;
+    gap: 0.25rem;
+    min-height: 1rem;
+    margin-bottom: 0.125rem;
     color: var(--db-text-muted);
     font-size: 0.75rem;
     line-height: 1.2;
@@ -99,13 +111,18 @@ a.sim-uri-link:focus-visible {
 }
 
 .sim-term-emoji {
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     line-height: 1;
     flex: 0 0 auto;
 }
 
 .sim-term-caption {
-    color: var(--db-text-muted);
+    color: var(--db-text);
+    font-weight: 500;
+}
+
+.sim-term-id {
+    font-family: var(--bs-font-monospace);
 }
 
 .sim-artifact-name {

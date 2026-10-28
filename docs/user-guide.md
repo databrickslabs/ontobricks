@@ -1316,10 +1316,11 @@ rules, or results, shows the brand spinner over that pane.
 2. **Hypothetical facts** — add rows of *subject / predicate / value*:
    **Set** replaces every value of the predicate on the subject (e.g. a new
    credit score), **Add** asserts an extra triple, **Remove** retracts one.
-   Each cell shows one line above the ID: icon, entity type, and the
-   human label in parentheses. The predicate line is *relationship* or
-   *attribute* (with the range class when it is a relationship). Hover
-   the ID for the full URI.
+   Each fact is a compact card: operation, then subject, predicate, and
+   object side by side. Each field shows a type line (icon, entity type,
+   human label in parentheses) above a local-ID control. The predicate
+   line is *relationship* or *attribute* (with the range class when it is
+   a relationship). Hover the ID for the full URI.
    **Fact wizard** (or the search icon on a cell) looks up existing graph
    entities, ontology predicates declared on the subject's class (including
    inherited), and related instances so you do not have to paste URIs by hand.

@@ -623,4 +623,80 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.20s.
 
+================================================================================
+## Make hypothetical facts easier to scan
+================================================================================
+
+Context: The Hypothetical facts tab packed operation, subject, predicate,
+object, and delete into one five-column table. Global table-sm truncation
+cut type/label lines, so a triple was hard to read. Each fact is now a
+card with a header and three labelled fields.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Replace the facts table with a list container for per-fact cards.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Render each fact as a card: operation + remove, then S/P/O in three columns.
+3. src/front/static/simulation/css/simulation.css
+   Style the card, field labels, wrapping type line, and monospace IDs.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract the card layout and drop the table-sm facts markup.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 65.05s.
+
+================================================================================
+## Compact hypothetical fact cards
+================================================================================
+
+Context: Fact cards were too tall (header row, field labels, large padding).
+Operators asked to shrink the blocks so more triples fit on screen.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Put operation, S/P/O, and delete on one band; drop extra field labels.
+2. src/front/static/simulation/css/simulation.css
+   Cut card padding, type-line height, and gaps.
+3. src/front/templates/partials/simulation/_sim_workbench.html
+   Tighten the list gap between cards.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.59s.
+
+================================================================================
+## Vertically center fact operation controls
+================================================================================
+
+Context: The Set/Add/Remove dropdown and the delete button sat at the top of
+each fact card, above the ID fields. They now share the vertical center of
+the triple row.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Align the fact card flex row with align-items-center.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.90s.
+
 

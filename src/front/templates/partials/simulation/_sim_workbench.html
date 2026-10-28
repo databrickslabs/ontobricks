@@ -164,20 +164,7 @@
                             <i class="bi bi-plus-lg me-1"></i>Add fact
                         </button>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0 sim-table sim-patches-table">
-                            <thead>
-                                <tr>
-                                    <th class="sim-col-op">Operation</th>
-                                    <th>Subject</th>
-                                    <th>Predicate</th>
-                                    <th>Object / value</th>
-                                    <th class="sim-col-action"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="simWbPatchesBody"></tbody>
-                        </table>
-                    </div>
+                    <div id="simWbPatchesBody" class="sim-patches-list d-flex flex-column gap-1"></div>
                     <p class="text-muted small mb-0 mt-2">
                         <strong>Add</strong> asserts a triple, <strong>Remove</strong> retracts it,
                         <strong>Set</strong> replaces every value of the predicate on the subject.
