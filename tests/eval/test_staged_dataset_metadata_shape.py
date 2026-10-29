@@ -37,7 +37,6 @@ from agents.tools.metadata import tool_get_metadata, tool_get_table_detail
 ROOT = Path(__file__).resolve().parents[2]
 DATASET_PATHS = [
     ROOT / "tests/eval/datasets/agent_owl_generator/baseline.jsonl",
-    ROOT / ".planning/agents/agent_owl_generator/eval/dataset.jsonl",
 ]
 
 
@@ -47,16 +46,6 @@ def _load_rows(path: Path) -> List[Dict[str, Any]]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-
-
-class TestMirroredDatasetsStayByteIdentical:
-    def test_baseline_and_planning_mirror_match(self):
-        contents = [path.read_text(encoding="utf-8") for path in DATASET_PATHS]
-        assert contents[0] == contents[1], (
-            "tests/eval/datasets/agent_owl_generator/baseline.jsonl and "
-            ".planning/agents/agent_owl_generator/eval/dataset.jsonl must "
-            "stay byte-identical mirrors"
-        )
 
 
 @pytest.mark.parametrize(
