@@ -332,9 +332,9 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             return len(rows)
 
     monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
-    monkeypatch.setattr("back.objects.simulation.SimulationSandbox", FakeSandbox)
+    monkeypatch.setattr("back.objects.simulation.Sandbox", FakeSandbox)
     monkeypatch.setattr(
-        "back.objects.simulation.SimulationReasoningService",
+        "back.objects.simulation.Reasoning",
         FakeSimReasoning,
     )
     monkeypatch.setattr(

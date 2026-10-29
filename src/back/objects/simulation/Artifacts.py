@@ -13,7 +13,7 @@ _ROLE_INFERRED = "explorer_inferred"
 _ROLE_ASSERTED = "explorer_asserted"
 
 
-class SimulationArtifacts:
+class Artifacts:
     """Name and count the sandbox table/views (or Neo4j graph) of one scenario."""
 
     @classmethod
@@ -102,12 +102,12 @@ class SimulationArtifacts:
         from back.core.graphdb.lakebase import _companion_ddl
 
         return [
-            SimulationArtifacts._object(
+            Artifacts._object(
                 "view",
                 _ROLE_INFERRED,
                 _companion_ddl.sim_union_phy(graph_name, sim_id, include_inferred=True),
             ),
-            SimulationArtifacts._object(
+            Artifacts._object(
                 "view",
                 _ROLE_ASSERTED,
                 _companion_ddl.sim_union_phy(graph_name, sim_id, include_inferred=False),

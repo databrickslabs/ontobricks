@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterable, List, Set, Tuple
 TripleKey = Tuple[str, str, str]
 
 
-class SimulationDiff:
+class Diff:
     """Set difference between the seeded slice (S0) and the final sandbox (S2).
 
     ``added`` triples are tagged ``patch`` when a user patch introduced them

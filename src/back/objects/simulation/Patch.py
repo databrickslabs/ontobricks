@@ -9,7 +9,7 @@ from back.core.errors import ValidationError
 
 
 @dataclass
-class SimulationPatch:
+class Patch:
     """A single ``add`` / ``remove`` / ``set`` edit on a triple.
 
     ``set`` replaces every ``(subject, predicate, *)`` value with ``object``
@@ -26,7 +26,7 @@ class SimulationPatch:
     datatype: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SimulationPatch":
+    def from_dict(cls, data: Dict[str, Any]) -> "Patch":
         if not isinstance(data, dict):
             raise ValidationError("Each patch must be an object")
         patch = cls(

@@ -245,17 +245,17 @@ class NodeBusinessRuleService:
         from back.core.helpers import effective_graph_name, effective_graph_query_table
         from back.objects.simulation import (
             Simulation,
-            SimulationReasoningService,
-            SimulationSandbox,
+            Reasoning,
+            Sandbox,
         )
 
         sim = Simulation(domain, settings)
         sim.sandbox_relation(simulation_id)
-        sandbox = SimulationSandbox(store, effective_graph_name(domain), simulation_id)
+        sandbox = Sandbox(store, effective_graph_name(domain), simulation_id)
         seed = getattr(sandbox, "seed_focus_for_swrl", None)
         if callable(seed):
             seed(entity_uri)
-        svc = SimulationReasoningService(snap, sandbox.store, sandbox.table)
+        svc = Reasoning(snap, sandbox.store, sandbox.table)
 
         def _refresh_views() -> None:
             ensure = getattr(sandbox, "ensure_explorer_views", None)

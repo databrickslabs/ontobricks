@@ -7,7 +7,7 @@ from typing import Any
 from back.core.reasoning.ReasoningService import ReasoningService
 
 
-class SimulationReasoningService(ReasoningService):
+class Reasoning(ReasoningService):
     """Run every reasoning phase against ``sandbox_table`` instead of the live graph.
 
     All phases resolve their table through :meth:`_get_graph_name`, so

@@ -7,12 +7,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from back.core.errors import ValidationError
-from back.objects.simulation.SimulationPatch import SimulationPatch
-from back.objects.simulation.SimulationScope import SimulationScope
+from back.objects.simulation.Patch import Patch
+from back.objects.simulation.Scope import Scope
 
 
 @dataclass
-class SimulationSpec:
+class Spec:
     """User-editable part of a simulation (persisted as ``spec`` jsonb)."""
 
     DEFAULT_PHASES = {
@@ -41,8 +41,8 @@ class SimulationSpec:
 
     id: str
     label: str
-    scope: SimulationScope
-    patches: List[SimulationPatch] = field(default_factory=list)
+    scope: Scope
+    patches: List[Patch] = field(default_factory=list)
     phases: Dict[str, bool] = field(default_factory=dict)
     rule_names: Dict[str, List[str]] = field(default_factory=dict)
     description: str = ""
@@ -60,7 +60,7 @@ class SimulationSpec:
         default_hops: int,
         default_cap: int,
         sim_id: Optional[str] = None,
-    ) -> "SimulationSpec":
+    ) -> "Spec":
         if not isinstance(data, dict):
             raise ValidationError("Simulation body must be an object")
         label = str(data.get("label", "") or "").strip()
@@ -86,10 +86,10 @@ class SimulationSpec:
             id=sim_id or cls.new_id(),
             label=label,
             description=str(data.get("description", "") or "").strip(),
-            scope=SimulationScope.from_dict(
+            scope=Scope.from_dict(
                 data.get("scope"), default_hops=default_hops, default_cap=default_cap
             ),
-            patches=[SimulationPatch.from_dict(p) for p in raw_patches],
+            patches=[Patch.from_dict(p) for p in raw_patches],
             phases=phases,
             rule_names=cls._parse_rule_names(data.get("rule_names")),
         )

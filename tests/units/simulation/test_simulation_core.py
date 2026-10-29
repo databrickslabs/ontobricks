@@ -12,13 +12,13 @@ from back.objects.digitaltwin.constants import RDF_TYPE
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase.LakebaseSimulationStore import LakebaseSimulationStore
 from back.objects.simulation import (
-    SimulationDiff,
-    SimulationPatch,
-    SimulationReasoningService,
-    SimulationScope,
-    SimulationSpec,
+    Diff,
+    Patch,
+    Reasoning,
+    Sandbox,
+    Scope,
+    Spec,
 )
-from back.objects.simulation.SimulationSandbox import SimulationSandbox
 
 pytestmark = pytest.mark.unit
 
@@ -170,9 +170,9 @@ class TestSimulationStoreGuard:
 # -- patches / scope / spec -----------------------------------------------
 
 
-class TestSimulationPatch:
+class TestPatch:
     def test_valid_set(self):
-        p = SimulationPatch.from_dict({"op": "SET", "subject": "s", "predicate": "p", "object": "7"})
+        p = Patch.from_dict({"op": "SET", "subject": "s", "predicate": "p", "object": "7"})
         assert p.op == "set"
         assert p.triple() == {"subject": "s", "predicate": "p", "object": "7"}
 
@@ -187,13 +187,13 @@ class TestSimulationPatch:
     )
     def test_invalid(self, data):
         with pytest.raises(ValidationError):
-            SimulationPatch.from_dict(data)
+            Patch.from_dict(data)
 
     def test_remove_allows_empty_object(self):
-        SimulationPatch.from_dict({"op": "remove", "subject": "s", "predicate": "p"})
+        Patch.from_dict({"op": "remove", "subject": "s", "predicate": "p"})
 
 
-class TestSimulationSpec:
+class TestSpec:
     def _body(self, **over):
         body = {
             "label": "Score drop",
@@ -204,10 +204,10 @@ class TestSimulationSpec:
         return body
 
     def test_defaults_and_never_materialise(self):
-        spec = SimulationSpec.from_dict(self._body(), default_hops=2, default_cap=5000)
+        spec = Spec.from_dict(self._body(), default_hops=2, default_cap=5000)
         assert spec.id.startswith("s")
         assert spec.scope.hops == 2
-        assert spec.phases == SimulationSpec.DEFAULT_PHASES
+        assert spec.phases == Spec.DEFAULT_PHASES
         opts = spec.reasoning_options()
         assert opts["materialize"] is False
         assert opts["tbox"] is False and opts["swrl"] is True
@@ -216,11 +216,11 @@ class TestSimulationSpec:
 
     def test_cap_is_clamped_to_default(self):
         body = self._body(scope={"type": "class", "focus": EX + "Customer", "cap": 99999})
-        spec = SimulationSpec.from_dict(body, default_hops=2, default_cap=5000)
+        spec = Spec.from_dict(body, default_hops=2, default_cap=5000)
         assert spec.scope.cap == 5000
 
     def test_body_id_is_ignored(self):
-        spec = SimulationSpec.from_dict(self._body(id="x; drop"), default_hops=2, default_cap=10)
+        spec = Spec.from_dict(self._body(id="x; drop"), default_hops=2, default_cap=10)
         assert spec.id != "x; drop"
 
     @pytest.mark.parametrize(
@@ -236,15 +236,15 @@ class TestSimulationSpec:
     )
     def test_invalid(self, over):
         with pytest.raises(ValidationError):
-            SimulationSpec.from_dict(self._body(**over), default_hops=2, default_cap=10)
+            Spec.from_dict(self._body(**over), default_hops=2, default_cap=10)
 
     def test_round_trip(self):
-        spec = SimulationSpec.from_dict(self._body(), default_hops=2, default_cap=10)
-        again = SimulationSpec.from_dict(spec.to_dict(), default_hops=2, default_cap=10, sim_id=spec.id)
+        spec = Spec.from_dict(self._body(), default_hops=2, default_cap=10)
+        again = Spec.from_dict(spec.to_dict(), default_hops=2, default_cap=10, sim_id=spec.id)
         assert again.to_dict() == spec.to_dict()
 
     def test_selected_rule_names_filter_reasoning_options(self):
-        spec = SimulationSpec.from_dict(
+        spec = Spec.from_dict(
             self._body(
                 phases={"swrl": True, "graph": False},
                 rule_names={"swrl": ["AttachMeter", "AttachMeter", ""], "decision_tables": []},
@@ -258,7 +258,7 @@ class TestSimulationSpec:
         assert "decision_table_names" not in opts
 
     def test_rule_names_ignored_when_phase_off(self):
-        spec = SimulationSpec.from_dict(
+        spec = Spec.from_dict(
             self._body(phases={"swrl": False}, rule_names={"swrl": ["AttachMeter"]}),
             default_hops=2,
             default_cap=10,
@@ -281,9 +281,9 @@ class _LiveStore:
         return self._typed[:limit]
 
 
-class TestSimulationScope:
+class TestScope:
     def test_focus_label_roundtrips(self):
-        scope = SimulationScope.from_dict(
+        scope = Scope.from_dict(
             {
                 "type": "entity",
                 "focus": EX + "CUST0000037",
@@ -303,37 +303,37 @@ class TestSimulationScope:
             {"subject": EX + "a", "predicate": RDF_TYPE, "object": EX + "Person"},
             {"subject": EX + "b", "predicate": EX + "age", "object": "42"},
         ])
-        scope = SimulationScope(type="entity", focus=EX + "a", hops=1, cap=10)
+        scope = Scope(type="entity", focus=EX + "a", hops=1, cap=10)
         assert scope.resolve_entities(store, "g") == [EX + "a", EX + "b"]
         assert store.calls[0][:4] == ("expand", "g", (EX + "a",), 1)
 
     def test_class_population_cap_exceeded(self):
         store = _LiveStore(typed=[EX + str(i) for i in range(5)])
-        scope = SimulationScope(type="class", focus=EX + "C", cap=3)
+        scope = Scope(type="class", focus=EX + "C", cap=3)
         with pytest.raises(ValidationError):
             scope.resolve_entities(store, "g")
         assert store.calls[0][3] == 4
 
     def test_class_population_within_cap(self):
         store = _LiveStore(typed=[EX + "1", EX + "2"])
-        scope = SimulationScope(type="class", focus=EX + "C", cap=3)
+        scope = Scope(type="class", focus=EX + "C", cap=3)
         assert scope.resolve_entities(store, "g") == [EX + "1", EX + "2"]
 
     def test_cohort_members(self):
         svc = SimpleNamespace(dry_run=lambda rule, store, g: {
             "cohorts": [{"members": [{"uri": EX + "m1"}, {"uri": EX + "m2"}]}, {"members": [{"uri": EX + "m1"}]}]
         })
-        scope = SimulationScope(type="cohort", focus="r1", cap=10)
+        scope = Scope(type="cohort", focus="r1", cap=10)
         got = scope.resolve_entities(_LiveStore(), "g", cohort_service=svc, cohort_rule={"id": "r1"})
         assert got == [EX + "m1", EX + "m2"]
 
     def test_cohort_requires_rule(self):
-        scope = SimulationScope(type="cohort", focus="r1", cap=10)
+        scope = Scope(type="cohort", focus="r1", cap=10)
         with pytest.raises(ValidationError):
             scope.resolve_entities(_LiveStore(), "g")
 
     def test_empty_scope_rejected(self):
-        scope = SimulationScope(type="class", focus=EX + "C", cap=3)
+        scope = Scope(type="class", focus=EX + "C", cap=3)
         with pytest.raises(ValidationError):
             scope.resolve_entities(_LiveStore(), "g")
 
@@ -341,13 +341,13 @@ class TestSimulationScope:
 # -- diff ---------------------------------------------------------------
 
 
-class TestSimulationDiff:
+class TestDiff:
     def test_tags_patch_and_inferred_additions(self):
         before = [_t("a", "score", "700"), _t("a", "name", "Acme")]
         after = [_t("a", "score", "300"), _t("a", "name", "Acme"), _t("a", "risk", "high")]
-        patch_key = SimulationDiff.key(_t("a", "score", "300"))
-        risk_key = SimulationDiff.key(_t("a", "risk", "high"))
-        diff = SimulationDiff.compute(
+        patch_key = Diff.key(_t("a", "score", "300"))
+        risk_key = Diff.key(_t("a", "risk", "high"))
+        diff = Diff.compute(
             before, after, patch_added={patch_key}, provenance={risk_key: "swrl:Risk"}
         )
         s = diff["summary"]
@@ -361,19 +361,19 @@ class TestSimulationDiff:
 
     def test_row_cap(self):
         after = [_t(str(i), "p", "o") for i in range(10)]
-        diff = SimulationDiff.compute([], after, patch_added=set(), row_cap=4)
+        diff = Diff.compute([], after, patch_added=set(), row_cap=4)
         assert len(diff["added"]) == 4
         assert diff["summary"]["added_count"] == 10
         assert diff["summary"]["capped"] is True
 
     def test_page_and_search(self):
         rows = [{"subject": f"s{i}", "predicate": "p", "object": "o"} for i in range(7)]
-        page = SimulationDiff.page({"added": rows}, "added", page=2, page_size=3)
+        page = Diff.page({"added": rows}, "added", page=2, page_size=3)
         assert [r["subject"] for r in page["rows"]] == ["s3", "s4", "s5"]
         assert page["total"] == 7
-        found = SimulationDiff.page({"added": rows}, "added", search="S6")
+        found = Diff.page({"added": rows}, "added", search="S6")
         assert found["total"] == 1
-        assert SimulationDiff.page({"added": rows}, "bogus")["kind"] == "added"
+        assert Diff.page({"added": rows}, "bogus")["kind"] == "added"
 
 
 # -- sandbox patch semantics -----------------------------------------------
@@ -381,16 +381,16 @@ class TestSimulationDiff:
 
 class _SandboxStore:
     def __init__(self, triples):
-        self.rows = {SimulationDiff.key(t) for t in triples}
+        self.rows = {Diff.key(t) for t in triples}
 
     def insert_triples(self, table, triples):
         for t in triples:
-            self.rows.add(SimulationDiff.key(t))
+            self.rows.add(Diff.key(t))
         return len(triples)
 
     def delete_triples(self, table, triples):
         for t in triples:
-            self.rows.discard(SimulationDiff.key(t))
+            self.rows.discard(Diff.key(t))
         return len(triples)
 
     def delete_subject_predicate(self, table, pairs):
@@ -407,26 +407,26 @@ class _SandboxStore:
 
 class TestSandboxApply:
     def test_set_add_remove(self):
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         sandbox.table = "g__sim_s1"
         sandbox.store = _SandboxStore([_t("a", "score", "700"), _t("a", "score", "650"), _t("a", "tag", "x")])
         asserted = sandbox.apply([
-            SimulationPatch("set", EX + "a", EX + "score", "300"),
-            SimulationPatch("add", EX + "a", EX + "tag", "y"),
-            SimulationPatch("remove", EX + "a", EX + "tag", "x"),
+            Patch("set", EX + "a", EX + "score", "300"),
+            Patch("add", EX + "a", EX + "tag", "y"),
+            Patch("remove", EX + "a", EX + "tag", "x"),
         ])
         assert sandbox.store.rows == {
-            SimulationDiff.key(_t("a", "score", "300")),
-            SimulationDiff.key(_t("a", "tag", "y")),
+            Diff.key(_t("a", "score", "300")),
+            Diff.key(_t("a", "tag", "y")),
         }
         assert asserted == sandbox.store.rows
 
     def test_sandbox_requires_lakebase_store(self):
         with pytest.raises(ValidationError):
-            SimulationSandbox(object(), "g", "s1")
+            Sandbox(object(), "g", "s1")
 
     def test_seed_neighbourhood_copies_related_subjects(self):
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         seeded: list = []
         sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
         sandbox._graph_name = "g"
@@ -457,7 +457,7 @@ class TestSandboxApply:
         assert EX + "Meter" not in seeded
 
     def test_seed_neighbourhood_skips_inbound_when_disabled(self):
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         seeded: list = []
         sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
         sandbox._graph_name = "g"
@@ -476,7 +476,7 @@ class TestSandboxApply:
         assert EX + "otherCustomer" not in seeded
 
     def test_seed_referrers_copies_subjects_pointing_at_focus(self):
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         seeded: list = []
         sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
         sandbox._graph_name = "g"
@@ -507,7 +507,7 @@ class TestSandboxApply:
         assert EX + "jacob" not in seeded
 
     def test_seed_neighbourhood_walks_sandbox_objects_when_expand_empty(self):
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         seeded: list = []
         sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
         sandbox._graph_name = "g"
@@ -525,7 +525,7 @@ class TestSandboxApply:
         assert EX + "m1" in seeded
 
     def test_seed_focus_for_swrl_copies_sandbox_objects(self):
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         calls = []
         sandbox.seed_neighbourhood = (
             lambda uris, hops=1: calls.append((list(uris), hops)) or len(uris)
@@ -536,7 +536,7 @@ class TestSandboxApply:
         assert calls[1] == ([EX + "c2"], 1)
 
     def test_uri_objects_of_skips_rdf_type(self):
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         sandbox.table = "g__sim_s1"
 
         class Store:
@@ -577,7 +577,7 @@ class TestSandboxLifecycle:
         import back.core.graphdb.lakebase as lakebase
 
         monkeypatch.setattr(lakebase, "LakebaseSimulationUnion", Union)
-        sandbox = object.__new__(SimulationSandbox)
+        sandbox = object.__new__(Sandbox)
         sandbox._live = object()
         sandbox._graph_name = "g_v1"
         sandbox._sim_id = "s1"
@@ -594,7 +594,7 @@ class TestSandboxLifecycle:
 
 
 def test_reasoning_service_targets_sandbox():
-    svc = SimulationReasoningService(SimpleNamespace(info={"name": "Dom"}, current_version="1"), None, "dom_v1__sim_s1")
+    svc = Reasoning(SimpleNamespace(info={"name": "Dom"}, current_version="1"), None, "dom_v1__sim_s1")
     assert svc._get_graph_name() == "dom_v1__sim_s1"
 
 

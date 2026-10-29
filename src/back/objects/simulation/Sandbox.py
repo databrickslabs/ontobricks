@@ -9,12 +9,12 @@ from back.core.graphdb.lakebase import LakebaseFlatStore, LakebaseSimulationStor
 from back.core.helpers import is_uri
 from back.core.logging import get_logger
 from back.objects.digitaltwin.constants import RDF_TYPE
-from back.objects.simulation.SimulationDiff import SimulationDiff, TripleKey
-from back.objects.simulation.SimulationPatch import SimulationPatch
+from back.objects.simulation.Diff import Diff, TripleKey
+from back.objects.simulation.Patch import Patch
 
 logger = get_logger(__name__)
 
-class _LakebaseSimulationSandbox:
+class _LakebaseSandbox:
     """Seed, patch and read a standalone sandbox copy of a live graph slice.
 
     The live store is only read (``copy_subjects_from``); every write goes
@@ -235,7 +235,7 @@ class _LakebaseSimulationSandbox:
     def triples(self) -> List[Dict[str, str]]:
         return self.store.query_triples(self.table)
 
-    def apply(self, patches: List[SimulationPatch]) -> Set[TripleKey]:
+    def apply(self, patches: List[Patch]) -> Set[TripleKey]:
         """Apply *patches* in order; return the keys asserted by add/set patches."""
         asserted: Set[TripleKey] = set()
         for patch in patches:
@@ -247,18 +247,18 @@ class _LakebaseSimulationSandbox:
                 asserted = {
                     k for k in asserted if (k[0], k[1]) != (patch.subject, patch.predicate)
                 }
-                asserted.add(SimulationDiff.key(patch.triple()))
+                asserted.add(Diff.key(patch.triple()))
             elif patch.op == "add":
                 self.store.insert_triples(self.table, [patch.triple()])
-                asserted.add(SimulationDiff.key(patch.triple()))
+                asserted.add(Diff.key(patch.triple()))
             else:
                 self.store.delete_triples(self.table, [patch.triple()])
-                asserted.discard(SimulationDiff.key(patch.triple()))
+                asserted.discard(Diff.key(patch.triple()))
         logger.info("Applied %d patches to sandbox %s", len(patches), self.table)
         return asserted
 
 
-class _StoreSimulationSandbox:
+class _StoreSandbox:
     """Backend-neutral copy-on-write sandbox for Delta and Neo4j.
 
     Both engines support an independently named SPO graph.  The source graph
@@ -267,7 +267,7 @@ class _StoreSimulationSandbox:
     mutations into the live domain.
     """
 
-    MAX_TRIPLES = _LakebaseSimulationSandbox.MAX_TRIPLES
+    MAX_TRIPLES = _LakebaseSandbox.MAX_TRIPLES
 
     def __init__(self, live_store: Any, graph_name: str, sim_id: str) -> None:
         self._live = live_store
@@ -390,7 +390,7 @@ class _StoreSimulationSandbox:
     def triples(self) -> List[Dict[str, str]]:
         return self.store.query_triples(self.table)
 
-    def apply(self, patches: List[SimulationPatch]) -> Set[TripleKey]:
+    def apply(self, patches: List[Patch]) -> Set[TripleKey]:
         asserted: Set[TripleKey] = set()
         for patch in patches:
             if patch.op == "set":
@@ -406,17 +406,17 @@ class _StoreSimulationSandbox:
                     key for key in asserted
                     if (key[0], key[1]) != (patch.subject, patch.predicate)
                 }
-                asserted.add(SimulationDiff.key(patch.triple()))
+                asserted.add(Diff.key(patch.triple()))
             elif patch.op == "add":
                 self.store.insert_triples(self.table, [patch.triple()])
-                asserted.add(SimulationDiff.key(patch.triple()))
+                asserted.add(Diff.key(patch.triple()))
             else:
                 self.store.delete_triples(self.table, [patch.triple()])
-                asserted.discard(SimulationDiff.key(patch.triple()))
+                asserted.discard(Diff.key(patch.triple()))
         return asserted
 
 
-class _DeltaSimulationSandbox(_StoreSimulationSandbox):
+class _DeltaSandbox(_StoreSandbox):
     """UC Delta sandbox table and predicate-overlay Explorer views."""
 
     def _sandbox_name(self, graph_name: str, sim_id: str) -> str:
@@ -450,11 +450,11 @@ class _DeltaSimulationSandbox(_StoreSimulationSandbox):
             )
 
 
-class _Neo4jSimulationSandbox(_StoreSimulationSandbox):
+class _Neo4jSandbox(_StoreSandbox):
     """Marker-label-isolated Neo4j sandbox graph."""
 
 
-class SimulationSandbox(_LakebaseSimulationSandbox):
+class Sandbox(_LakebaseSandbox):
     """Create the isolation implementation for the active graph backend."""
 
     def __new__(cls, live_store: Any, graph_name: str, sim_id: str) -> Any:
@@ -464,9 +464,9 @@ class SimulationSandbox(_LakebaseSimulationSandbox):
         if LakebaseFlatStore is not None and isinstance(live_store, LakebaseFlatStore):
             return super().__new__(cls)
         if isinstance(live_store, DeltaFlatStore):
-            return _DeltaSimulationSandbox(live_store, graph_name, sim_id)
+            return _DeltaSandbox(live_store, graph_name, sim_id)
         if isinstance(live_store, Neo4jStore):
-            return _Neo4jSimulationSandbox(live_store, graph_name, sim_id)
+            return _Neo4jSandbox(live_store, graph_name, sim_id)
         raise ValidationError(
             f"Simulations are unsupported for graph store {type(live_store).__name__}"
         )

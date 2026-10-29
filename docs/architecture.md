@@ -1338,22 +1338,22 @@ domains redirect to Domain, other backends show a disabled page.
 
 ### Run pipeline
 
-1. **Scope** (`SimulationScope`) resolves an entity set on the live graph
+1. **Scope** (`Scope`) resolves an entity set on the live graph
    (read-only): an entity neighbourhood (`expand_and_fetch_subgraph`, default 2
    hops), a saved cohort rule (`CohortService.dry_run`), or a class population
    (`find_subjects_by_type`, capped at 5000 entities — exceeding the cap fails
    the run instead of truncating).
-2. **Seed** (`SimulationSandbox`) creates a standalone table
+2. **Seed** (`Sandbox`) creates a standalone table
    `<graph>__sim_<id>` and copies every live triple whose *subject* is in scope
    with one `INSERT … SELECT … WHERE subject = ANY(…)` (datatype / lang kept).
    Slices above 250k triples are rejected.
 3. **Patch** applies the hypothetical facts in order: `add`, `remove`, or `set`
    (delete every `(s, p, *)` then assert the new value).
-4. **Reason** with `SimulationReasoningService`, a `ReasoningService` subclass
+4. **Reason** with `Reasoning`, a `ReasoningService` subclass
    whose `_get_graph_name()` returns the sandbox table, so every phase (SWRL,
    graph, decision tables, SPARQL, aggregate, optional T-Box) reads the
    sandbox. Inferred triples are materialised into the sandbox only.
-5. **Diff** (`SimulationDiff`) compares the seeded slice (S0) with the final
+5. **Diff** (`Diff`) compares the seeded slice (S0) with the final
    sandbox (S2): added triples are tagged `patch` or `inferred` (with rule
    provenance), removed triples come from patches. Exact counts plus the first
    2000 rows per list are stored on the simulation row.
@@ -1381,7 +1381,7 @@ stats, not the capped triple diff). Domain Save that only rewrites
 ontology/mapping leaves the simulation tables alone. Sandbox triples stay
 in the graph schema and are rebuilt by the next run. Runs execute as
 `TaskManager` background tasks.
-`SimulationArtifacts` names the physical objects of a scenario — sandbox
+`Artifacts` names the physical objects of a scenario — sandbox
 table (Lakebase/Delta), Explorer overlay views (`__smu_` / `__sms_`), or
 the isolated Neo4j graph — and the last-run item counts. The scenario
 editor shows that catalog in a third column.
@@ -1401,8 +1401,8 @@ editor shows that catalog in a third column.
 | File | Purpose |
 |------|---------|
 | `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging |
-| `src/back/objects/simulation/SimulationRunner.py` | Background run: scope → seed → patch → reason → diff → persist |
-| `src/back/objects/simulation/SimulationSandbox.py` | Sandbox lifecycle and patch semantics |
+| `src/back/objects/simulation/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
+| `src/back/objects/simulation/Sandbox.py` | Sandbox lifecycle and patch semantics |
 | `src/back/core/graphdb/lakebase/LakebaseSimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
 | `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
 | `src/api/routers/internal/simulation.py` | Internal JSON API |

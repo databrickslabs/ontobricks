@@ -554,4 +554,50 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9813 passed, 326 skipped, 8 deselected, 0 failed in 49.01s
 
+================================================================================
+## Drop redundant Simulation prefix on simulation package modules
+================================================================================
+
+Context: Every module under back.objects.simulation repeated the package
+name in the filename and class (SimulationRunner, SimulationSandbox, …).
+The prefix added no information once the package already scopes the types.
+
+Changes:
+
+1. src/back/objects/simulation/
+   Rename modules/classes to Artifacts, Diff, Patch, Reasoning, Runner,
+   Sandbox, Scope, Spec. Keep Simulation.py as the package facade.
+2. Callers, tests, and docs/architecture.md
+   Update imports and references; no compatibility shims.
+3. tests/units/architecture/baseline.json
+   Ratchet after the move.
+
+Modified files:
+- src/back/objects/simulation/Artifacts.py
+- src/back/objects/simulation/Diff.py
+- src/back/objects/simulation/Patch.py
+- src/back/objects/simulation/Reasoning.py
+- src/back/objects/simulation/Runner.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Scope.py
+- src/back/objects/simulation/Spec.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/__init__.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/agents/agent_simulation_facts/tools.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/simulation/test_simulation_fact_generation.py
+- tests/units/simulation/test_simulation_artifacts.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/eval/judges/simulation_facts.py
+- tests/eval/run_agent_simulation_facts.py
+- tests/units/architecture/baseline.json
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9813 passed, 326 skipped, 8 deselected, 0 failed in 59.47s
+
+
 

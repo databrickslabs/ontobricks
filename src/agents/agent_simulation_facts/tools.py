@@ -2,7 +2,7 @@
 
 ``list_classes`` / ``list_properties_of`` reuse the cohort ontology
 introspectors. ``search_entities`` hits the same live-graph preview as
-the fact wizard. ``propose_patches`` validates :class:`SimulationPatch`.
+the fact wizard. ``propose_patches`` validates :class:`Patch`.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from agents.tools.loopback_http import loopback_client
 from back.core.errors import ValidationError
 from back.core.helpers import extract_local_name, is_uri
 from back.core.logging import get_logger
-from back.objects.simulation.SimulationPatch import SimulationPatch
+from back.objects.simulation import Patch
 
 logger = get_logger(__name__)
 
@@ -144,7 +144,7 @@ def tool_propose_patches(
     canonical = []
     for i, raw in enumerate(patches):
         try:
-            patch = SimulationPatch.from_dict(raw)
+            patch = Patch.from_dict(raw)
         except (ValidationError, TypeError, ValueError) as exc:
             return _error(f"patches[{i}]: {exc}")
         canonical.append(patch.to_dict())

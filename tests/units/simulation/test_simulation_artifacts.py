@@ -7,14 +7,14 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.graphdb.lakebase import _companion_ddl
-from back.objects.simulation import SimulationArtifacts
+from back.objects.simulation import Artifacts
 
 pytestmark = pytest.mark.unit
 
 
-class TestSimulationArtifacts:
+class TestArtifacts:
     def test_lakebase_expected_names(self):
-        objects = SimulationArtifacts.expected("lakebase", "Dom_V1", "sAbc")
+        objects = Artifacts.expected("lakebase", "Dom_V1", "sAbc")
         kinds = {o["role"]: o for o in objects}
         assert kinds["sandbox"]["kind"] == "table"
         assert kinds["sandbox"]["name"] == _companion_ddl.sim_phy("Dom_V1", "sAbc")
@@ -26,18 +26,18 @@ class TestSimulationArtifacts:
         )
 
     def test_delta_and_neo4j_expected_names(self):
-        delta = SimulationArtifacts.expected(
+        delta = Artifacts.expected(
             "databricks", "cat.sch.tbl", "s1", sandbox_table="cat.sch.tbl__sim_s1"
         )
         assert [o["kind"] for o in delta] == ["table", "view", "view"]
         assert delta[1]["name"] == "cat.sch.tbl__smu_s1"
-        neo = SimulationArtifacts.expected("neo4j", "G_V1", "s1")
+        neo = Artifacts.expected("neo4j", "G_V1", "s1")
         assert neo == [{"kind": "graph", "role": "sandbox", "name": "G_V1__sim_s1"}]
 
     def test_describe_draft_has_names_without_counts(self):
         row = {"id": "s1", "status": "draft", "diff_summary": {}}
         domain = SimpleNamespace(info={"name": "Dom", "graph_backend": "lakebase"}, current_version="1")
-        out = SimulationArtifacts.describe(domain, row)
+        out = Artifacts.describe(domain, row)
         assert out["counts"] == {}
         assert out["objects"][0]["name"] == _companion_ddl.sim_phy("Dom_V1", "s1")
 
@@ -58,7 +58,7 @@ class TestSimulationArtifacts:
             },
         }
         domain = SimpleNamespace(info={"name": "Dom"}, current_version="1")
-        out = SimulationArtifacts.describe(domain, row)
+        out = Artifacts.describe(domain, row)
         assert out["objects"] == objects
         assert out["counts"]["entities"] == 12
         assert out["counts"]["triples"] == 40
@@ -73,7 +73,7 @@ class TestSimulationArtifacts:
                 "cat.sch.g__smu_s1" if inferred else "cat.sch.g__sms_s1"
             ),
         )
-        objects = SimulationArtifacts.from_sandbox(sandbox, "databricks")
+        objects = Artifacts.from_sandbox(sandbox, "databricks")
         assert [o["name"] for o in objects] == [
             "cat.sch.g__sim_s1",
             "cat.sch.g__smu_s1",

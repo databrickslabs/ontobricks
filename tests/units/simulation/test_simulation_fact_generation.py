@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import pytest
 
-from back.objects.simulation import SimulationDiff, SimulationPatch, SimulationSandbox
+from back.objects.simulation import Diff, Patch, Sandbox
 from tests.units.agents.test_agent_simulation_facts import (
     _PATCH,
     _llm_full_generation,
@@ -28,16 +28,16 @@ DATASET = (
 
 class _SandboxStore:
     def __init__(self, triples):
-        self.rows = {SimulationDiff.key(t) for t in triples}
+        self.rows = {Diff.key(t) for t in triples}
 
     def insert_triples(self, table, triples):
         for t in triples:
-            self.rows.add(SimulationDiff.key(t))
+            self.rows.add(Diff.key(t))
         return len(triples)
 
     def delete_triples(self, table, triples):
         for t in triples:
-            self.rows.discard(SimulationDiff.key(t))
+            self.rows.discard(Diff.key(t))
         return len(triples)
 
     def delete_subject_predicate(self, table, pairs):
@@ -54,7 +54,7 @@ class _SandboxStore:
 
 
 def _sandbox(triples):
-    sandbox = object.__new__(SimulationSandbox)
+    sandbox = object.__new__(Sandbox)
     sandbox.table = "g__sim_s1"
     sandbox.store = _SandboxStore(triples)
     return sandbox
@@ -70,9 +70,9 @@ def _dataset_rows():
 
 def _apply_generated(before, patches):
     sandbox = _sandbox(before)
-    parsed = [SimulationPatch.from_dict(raw) for raw in patches]
+    parsed = [Patch.from_dict(raw) for raw in patches]
     asserted = sandbox.apply(parsed)
-    diff = SimulationDiff.compute(before, sandbox.triples(), patch_added=asserted)
+    diff = Diff.compute(before, sandbox.triples(), patch_added=asserted)
     return asserted, diff
 
 
@@ -94,7 +94,7 @@ class TestGeneratedFactsCheckResults:
         added = diff["added"][0]
         assert added["origin"] == "patch"
         assert added["object"] == "420"
-        assert SimulationDiff.key(added) in asserted
+        assert Diff.key(added) in asserted
 
     def test_eval_set_score_fact_replaces_prior_value(self):
         row = next(r for r in _dataset_rows() if r["id"] == "set-score-001")
@@ -164,7 +164,7 @@ class TestGeneratedFactsCheckResults:
         assert diff["added"][0]["object"] == "410"
 
     def test_generated_facts_do_not_steal_inferred_origin(self):
-        patch = SimulationPatch.from_dict(_PATCH)
+        patch = Patch.from_dict(_PATCH)
         before = [
             {
                 "subject": patch.subject,
@@ -180,8 +180,8 @@ class TestGeneratedFactsCheckResults:
             "object": "high",
         }
         sandbox.store.insert_triples(sandbox.table, [inferred])
-        risk_key = SimulationDiff.key(inferred)
-        diff = SimulationDiff.compute(
+        risk_key = Diff.key(inferred)
+        diff = Diff.compute(
             before,
             sandbox.triples(),
             patch_added=asserted,

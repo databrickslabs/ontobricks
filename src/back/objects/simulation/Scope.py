@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 
 @dataclass
-class SimulationScope:
+class Scope:
     """Entity neighbourhood, cohort, or class population (capped).
 
     The slice is every live triple whose *subject* belongs to the resolved
@@ -33,7 +33,7 @@ class SimulationScope:
     @classmethod
     def from_dict(
         cls, data: Optional[Dict[str, Any]], *, default_hops: int, default_cap: int
-    ) -> "SimulationScope":
+    ) -> "Scope":
         data = data or {}
         try:
             hops = int(data.get("hops", default_hops))

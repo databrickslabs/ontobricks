@@ -1,7 +1,7 @@
 """Eval runner for agent_simulation_facts.
 
 Dry run (default) scores the baseline dataset contract — every expected
-patch must be a valid SimulationPatch — without calling the LLM::
+patch must be a valid Patch — without calling the LLM::
 
     uv run --frozen python tests/eval/run_agent_simulation_facts.py
 """
@@ -58,7 +58,7 @@ def main() -> None:
     if args.live:
         parser.error(
             "Live simulation-facts scoring is not wired yet; dry-run "
-            "validates expected.patches against SimulationPatch."
+            "validates expected.patches against Patch."
         )
 
     rows = _load_rows(DATASET)

@@ -10,12 +10,12 @@ from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.helpers import effective_graph_name, extract_local_name, is_uri
 from back.core.logging import get_logger
 from back.core.graphdb.GraphDBFactory import normalize_graph_backend
-from back.objects.simulation.SimulationArtifacts import SimulationArtifacts
-from back.objects.simulation.SimulationDiff import SimulationDiff
-from back.objects.simulation.SimulationPatch import SimulationPatch
-from back.objects.simulation.SimulationReasoningService import SimulationReasoningService
-from back.objects.simulation.SimulationSandbox import SimulationSandbox
-from back.objects.simulation.SimulationSpec import SimulationSpec
+from back.objects.simulation.Artifacts import Artifacts
+from back.objects.simulation.Diff import Diff
+from back.objects.simulation.Patch import Patch
+from back.objects.simulation.Reasoning import Reasoning
+from back.objects.simulation.Sandbox import Sandbox
+from back.objects.simulation.Spec import Spec
 
 logger = get_logger(__name__)
 
@@ -24,7 +24,7 @@ def _now_iso() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
-class SimulationRunner:
+class Runner:
     """Scope → seed sandbox → apply patches → reason → diff → persist.
 
     Everything except the initial scope read happens inside the sandbox
@@ -41,7 +41,7 @@ class SimulationRunner:
         registry: Any,
         folder: str,
         version: str,
-        spec: SimulationSpec,
+        spec: Spec,
         owner: str = "",
         cohort_rule: Optional[Dict[str, Any]] = None,
         get_store: Any = None,
@@ -94,7 +94,7 @@ class SimulationRunner:
             )
         )
 
-    def _sandbox_patches(self) -> list[SimulationPatch]:
+    def _sandbox_patches(self) -> list[Patch]:
         """Resolve ontology predicate URIs to the R2RML data namespace.
 
         The fact picker supplies ontology URIs (normally ``...#hascontract``),
@@ -117,7 +117,7 @@ class SimulationRunner:
                 if key:
                     aliases[key.lower()] = canonical
         return [
-            SimulationPatch(
+            Patch(
                 op=patch.op,
                 subject=patch.subject,
                 predicate=aliases.get(patch.predicate.lower(), patch.predicate),
@@ -317,7 +317,7 @@ class SimulationRunner:
             cohort_rule=self._cohort_rule,
         )
 
-        sandbox = SimulationSandbox(live, graph_name, self._spec.id)
+        sandbox = Sandbox(live, graph_name, self._spec.id)
         self._progress(20, f"Seeding sandbox with {len(entities)} entities")
         sandbox.reset()
         sandbox.seed(entities)
@@ -331,7 +331,7 @@ class SimulationRunner:
         self._relink_hypothesis(sandbox)
 
         self._progress(50, "Running reasoning in the sandbox")
-        svc = SimulationReasoningService(self._domain, sandbox.store, sandbox.table)
+        svc = Reasoning(self._domain, sandbox.store, sandbox.table)
 
         def _swrl_progress(idx: int, total: int, rule_name: str) -> None:
             self._progress(50 + int((idx / max(total, 1)) * 30), f"SWRL {idx + 1}/{total}: {rule_name}")
@@ -341,7 +341,7 @@ class SimulationRunner:
         )
         self._require_swrl(reasoning.stats or {})
         provenance = {
-            SimulationDiff.key(
+            Diff.key(
                 {"subject": t.subject, "predicate": t.predicate, "object": t.object}
             ): t.provenance
             for t in reasoning.inferred_triples
@@ -350,7 +350,7 @@ class SimulationRunner:
         svc.materialize_inferred(reasoning)
 
         self._progress(92, "Computing before/after diff")
-        diff = SimulationDiff.compute(
+        diff = Diff.compute(
             before,
             sandbox.triples(),
             patch_added=asserted,
@@ -390,5 +390,5 @@ class SimulationRunner:
         backend = normalize_graph_backend(
             (getattr(self._domain, "info", None) or {}).get("graph_backend")
         )
-        diff["summary"]["artifacts"] = SimulationArtifacts.from_sandbox(sandbox, backend)
+        diff["summary"]["artifacts"] = Artifacts.from_sandbox(sandbox, backend)
         return diff

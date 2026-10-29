@@ -13,7 +13,7 @@ from agents.agent_simulation_facts import tools as facts_tools
 from agents.agent_cohort import tools as cohort_tools
 from agents.tools.context import ToolContext
 from back.core.errors import ValidationError
-from back.objects.simulation.SimulationPatch import SimulationPatch
+from back.objects.simulation import Patch
 
 pytestmark = pytest.mark.unit
 
@@ -162,7 +162,7 @@ def test_propose_patches_validates_and_parks():
     assert out["valid"] is True and out["count"] == 1
     assert ctx.metadata["proposed_patches"][0]["op"] == "set"
     assert "420" in ctx.metadata["proposed_description"]
-    SimulationPatch.from_dict(ctx.metadata["proposed_patches"][0])
+    Patch.from_dict(ctx.metadata["proposed_patches"][0])
 
 
 def test_propose_patches_allows_empty_list_with_description():
@@ -391,7 +391,7 @@ def test_run_agent_generates_facts_via_ontology_and_search(monkeypatch):
     ]
     assert result.success is True
     assert result.proposed_patches == [_PATCH]
-    SimulationPatch.from_dict(result.proposed_patches[0])
+    Patch.from_dict(result.proposed_patches[0])
 
 
 def test_run_agent_proposes_exact_claim_removal(monkeypatch):
@@ -468,4 +468,4 @@ def test_eval_dataset_patches_are_valid():
     assert len(rows) >= 20
     assert all(score_dataset_row(row) == 1.0 for row in rows)
     with pytest.raises(ValidationError):
-        SimulationPatch.from_dict({"op": "set", "subject": "s", "predicate": "p"})
+        Patch.from_dict({"op": "set", "subject": "s", "predicate": "p"})

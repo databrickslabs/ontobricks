@@ -9,10 +9,10 @@ from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 from back.core.helpers import effective_graph_name, effective_graph_query_table
 from back.core.logging import get_logger
-from back.objects.simulation.SimulationArtifacts import SimulationArtifacts
-from back.objects.simulation.SimulationDiff import SimulationDiff
-from back.objects.simulation.SimulationRunner import SimulationRunner
-from back.objects.simulation.SimulationSpec import SimulationSpec
+from back.objects.simulation.Artifacts import Artifacts
+from back.objects.simulation.Diff import Diff
+from back.objects.simulation.Runner import Runner
+from back.objects.simulation.Spec import Spec
 
 logger = get_logger(__name__)
 
@@ -72,8 +72,8 @@ class Simulation:
             self._registry = RegistryService.from_context(self._domain, self._settings).store
         return self._registry
 
-    def parse_spec(self, body: Dict[str, Any], sim_id: Optional[str] = None) -> SimulationSpec:
-        return SimulationSpec.from_dict(
+    def parse_spec(self, body: Dict[str, Any], sim_id: Optional[str] = None) -> Spec:
+        return Spec.from_dict(
             body,
             default_hops=self.DEFAULT_HOPS,
             default_cap=self.DEFAULT_CLASS_CAP,
@@ -97,7 +97,7 @@ class Simulation:
     def _with_artifacts(self, row: Dict[str, Any]) -> Dict[str, Any]:
         if not row:
             return row
-        row["artifacts"] = SimulationArtifacts.describe(self._domain, row)
+        row["artifacts"] = Artifacts.describe(self._domain, row)
         return row
 
     def sandbox_relation(self, sim_id: str, *, store: Any = None) -> str:
@@ -121,7 +121,7 @@ class Simulation:
             return LakebaseSimulationStore.sandbox_table_name(
                 effective_graph_name(self._domain), sim_id
             )
-        from back.objects.simulation.SimulationSandbox import SimulationSandbox
+        from back.objects.simulation.Sandbox import Sandbox
 
         if store is None:
             from back.core.graphdb import get_graphdb
@@ -129,7 +129,7 @@ class Simulation:
             store = get_graphdb(self._domain, self._settings)
         if store is None:
             raise InfrastructureError("Graph backend is not configured")
-        return SimulationSandbox(store, effective_graph_name(self._domain), sim_id).table
+        return Sandbox(store, effective_graph_name(self._domain), sim_id).table
 
     def explorer_relation(
         self,
@@ -172,9 +172,9 @@ class Simulation:
             )
             return view
         sandbox = self.sandbox_relation(sim_id, store=graph_store)
-        from back.objects.simulation.SimulationSandbox import SimulationSandbox
+        from back.objects.simulation.Sandbox import Sandbox
 
-        simulation_sandbox = SimulationSandbox(graph_store, graph_name, sim_id)
+        simulation_sandbox = Sandbox(graph_store, graph_name, sim_id)
         simulation_sandbox.ensure_explorer_views(
             effective_graph_query_table(
                 self._domain, self._settings, include_inferred=True, store=graph_store
@@ -240,7 +240,7 @@ class Simulation:
         }
 
     @classmethod
-    def _status_after_spec_save(cls, current: Dict[str, Any], spec: SimulationSpec) -> str:
+    def _status_after_spec_save(cls, current: Dict[str, Any], spec: Spec) -> str:
         status = str(current.get("status") or "draft")
         if status == "running":
             return "draft"
@@ -288,11 +288,11 @@ class Simulation:
             return
         try:
             from back.core.graphdb import get_graphdb
-            from back.objects.simulation.SimulationSandbox import SimulationSandbox
+            from back.objects.simulation.Sandbox import Sandbox
 
             store = get_graphdb(self._domain, self._settings)
             if store is not None:
-                SimulationSandbox(store, effective_graph_name(self._domain), sim_id).drop()
+                Sandbox(store, effective_graph_name(self._domain), sim_id).drop()
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not drop sandbox for simulation %s: %s", sim_id, exc)
 
@@ -324,7 +324,7 @@ class Simulation:
             task_type="simulation",
             steps=[{"name": "running", "description": "Running what-if simulation"}],
         )
-        runner = SimulationRunner(
+        runner = Runner(
             tm=tm,
             task_id=task.id,
             settings=self._settings,
@@ -427,6 +427,6 @@ class Simulation:
         self, sim_id: str, kind: str, page: int, page_size: int, search: str = ""
     ) -> Dict[str, Any]:
         row = self.get(sim_id)
-        out = SimulationDiff.page(row.get("diff") or {}, kind, page, page_size, search)
+        out = Diff.page(row.get("diff") or {}, kind, page, page_size, search)
         out["summary"] = row.get("diff_summary") or {}
         return out

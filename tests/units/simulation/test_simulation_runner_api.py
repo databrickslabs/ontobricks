@@ -13,13 +13,13 @@ from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from back.objects.simulation import (
     Simulation,
-    SimulationDiff,
-    SimulationRunner,
-    SimulationScope,
-    SimulationSpec,
+    Diff,
+    Runner,
+    Scope,
+    Spec,
 )
 
-runner_mod = sys.modules["back.objects.simulation.SimulationRunner"]
+runner_mod = sys.modules["back.objects.simulation.Runner"]
 sim_mod = sys.modules["back.objects.simulation.Simulation"]
 
 pytestmark = pytest.mark.unit
@@ -239,7 +239,7 @@ class TestSimulationFacade:
         ran = []
         monkeypatch.setattr(task_manager, "get_task_manager", lambda: tm)
         monkeypatch.setattr(dt_pkg, "DomainSnapshot", lambda d: d)
-        monkeypatch.setattr(sim_mod.SimulationRunner, "run", lambda self: ran.append(self._spec.id))
+        monkeypatch.setattr(sim_mod.Runner, "run", lambda self: ran.append(self._spec.id))
         started = []
 
         class _Thread:
@@ -344,7 +344,7 @@ class _FakeSandbox:
         self.seed_calls = getattr(self, "seed_calls", [])
         self.seed_calls.append(list(entities))
         for t in ({"subject": EX + "acme", "predicate": EX + "score", "object": "700"},):
-            self.rows[SimulationDiff.key(t)] = t
+            self.rows[Diff.key(t)] = t
 
     def seed_neighbourhood(self, uris, hops=1, inbound=True):
         self.neighbourhood_calls = getattr(self, "neighbourhood_calls", [])
@@ -366,8 +366,8 @@ class _FakeSandbox:
         out = set()
         for p in patches:
             self.rows = {k: v for k, v in self.rows.items() if (k[0], k[1]) != (p.subject, p.predicate)}
-            self.rows[SimulationDiff.key(p.triple())] = p.triple()
-            out.add(SimulationDiff.key(p.triple()))
+            self.rows[Diff.key(p.triple())] = p.triple()
+            out.add(Diff.key(p.triple()))
         return out
 
 
@@ -386,13 +386,13 @@ class _FakeReasoning:
     def materialize_inferred(self, result):
         for t in result.inferred_triples:
             row = {"subject": t.subject, "predicate": t.predicate, "object": t.object}
-            self.sandbox.rows[SimulationDiff.key(row)] = row
+            self.sandbox.rows[Diff.key(row)] = row
         return len(result.inferred_triples)
 
 
 def _runner(reg, tm, live_store=object()):
-    spec = SimulationSpec.from_dict(_body(), default_hops=2, default_cap=100, sim_id="s1")
-    return SimulationRunner(
+    spec = Spec.from_dict(_body(), default_hops=2, default_cap=100, sim_id="s1")
+    return Runner(
         tm=tm,
         task_id="task-1",
         settings=None,
@@ -406,13 +406,13 @@ def _runner(reg, tm, live_store=object()):
     )
 
 
-class TestSimulationRunner:
+class TestRunner:
     def test_success_persists_diff_and_run(self, monkeypatch):
         _FakeSandbox.instances = []
-        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _FakeReasoning)
+        monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "Reasoning", _FakeReasoning)
         monkeypatch.setattr(
-            SimulationScope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+            Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
         reg, tm = _Registry(), _TM()
         _runner(reg, tm).run()
@@ -432,15 +432,15 @@ class TestSimulationRunner:
 
     def test_seeds_added_contract_neighbourhood(self, monkeypatch):
         _FakeSandbox.instances = []
-        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _FakeReasoning)
+        monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "Reasoning", _FakeReasoning)
         monkeypatch.setattr(
-            SimulationScope,
+            Scope,
             "resolve_entities",
             lambda self, store, g, **kw: [EX + "acme"],
         )
         contract = EX + "contract2"
-        spec = SimulationSpec.from_dict(
+        spec = Spec.from_dict(
             _body(
                 patches=[
                     {
@@ -456,7 +456,7 @@ class TestSimulationRunner:
             sim_id="s1",
         )
         reg, tm = _Registry(), _TM()
-        SimulationRunner(
+        Runner(
             tm=tm,
             task_id="task-1",
             settings=None,
@@ -480,12 +480,12 @@ class TestSimulationRunner:
 
     def test_normalizes_ontology_patch_predicate_for_sandbox(self, monkeypatch):
         _FakeSandbox.instances = []
-        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _FakeReasoning)
+        monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "Reasoning", _FakeReasoning)
         monkeypatch.setattr(
-            SimulationScope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+            Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
-        spec = SimulationSpec.from_dict(
+        spec = Spec.from_dict(
             _body(
                 patches=[
                     {
@@ -508,7 +508,7 @@ class TestSimulationRunner:
             ],
         }
         reg, tm = _Registry(), _TM()
-        SimulationRunner(
+        Runner(
             tm=tm,
             task_id="task-1",
             settings=None,
@@ -529,7 +529,7 @@ class TestSimulationRunner:
         def _boom(self, *a, **kw):
             raise RuntimeError("psycopg secret dsn")
 
-        monkeypatch.setattr(SimulationScope, "resolve_entities", _boom)
+        monkeypatch.setattr(Scope, "resolve_entities", _boom)
         _runner(reg, tm).run()
         assert reg.rows["s1"]["status"] == "failed"
         assert "secret" not in reg.rows["s1"]["error"]
@@ -547,10 +547,10 @@ class TestSimulationRunner:
                 )
 
         _FakeSandbox.instances = []
-        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _SkipSwrl)
+        monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "Reasoning", _SkipSwrl)
         monkeypatch.setattr(
-            SimulationScope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+            Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
         reg, tm = _Registry(), _TM()
         _runner(reg, tm).run()
@@ -568,10 +568,10 @@ class TestSimulationRunner:
                 )
 
         _FakeSandbox.instances = []
-        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _BrokenSwrl)
+        monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "Reasoning", _BrokenSwrl)
         monkeypatch.setattr(
-            SimulationScope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+            Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
         reg, tm = _Registry(), _TM()
         _runner(reg, tm).run()
@@ -585,7 +585,7 @@ class TestSimulationRunner:
         def _cap(self, *a, **kw):
             raise ValidationError("Class population exceeds the cap")
 
-        monkeypatch.setattr(SimulationScope, "resolve_entities", _cap)
+        monkeypatch.setattr(Scope, "resolve_entities", _cap)
         _runner(reg, tm).run()
         assert tm.failed == ["Class population exceeds the cap"]
 

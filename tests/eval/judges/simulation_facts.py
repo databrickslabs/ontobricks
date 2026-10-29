@@ -1,7 +1,7 @@
 """Rule-based judges for ``agent_simulation_facts``.
 
 Dry-run scores the dataset contract: every ``expected.patches`` item must
-parse as :class:`SimulationPatch`. Live scoring compares an agent result
+parse as :class:`Patch`. Live scoring compares an agent result
 the same way.
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from back.objects.simulation.SimulationPatch import SimulationPatch
+from back.objects.simulation import Patch
 from back.core.errors import ValidationError
 
 
@@ -21,7 +21,7 @@ def patches_are_valid(patches: Iterable[Any] | None) -> bool:
         return False
     for raw in patches:
         try:
-            SimulationPatch.from_dict(raw)
+            Patch.from_dict(raw)
         except (ValidationError, TypeError, ValueError):
             return False
     return True
