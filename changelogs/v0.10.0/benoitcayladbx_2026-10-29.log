@@ -129,3 +129,234 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9774 passed, 326 skipped, 8 deselected, 0 failed in 54.20s.
 
+================================================================================
+## Place Hypothetical facts actions on the prompt row
+================================================================================
+
+Context: Propose facts sat under the textarea, and Fact wizard / Add fact
+sat above the S/P/O cards. Operators asked for Propose facts beside the
+prompt and the manual actions at the top right of the tab.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Fact wizard and Add fact at the tab top-right; Propose facts in a
+   flex row to the right of the textarea.
+2. tests/units/front/test_simulation_page_contract.py
+   Lock DOM order: manual buttons, then prompt, then Propose facts.
+3. docs/user-guide.md
+   Describe the new Hypothetical facts toolbar layout.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9770 passed, 326 skipped, 8 deselected, 0 failed in 63.36s.
+
+================================================================================
+## Enrich General description from Propose facts
+================================================================================
+
+Context: Propose facts filled S/P/O cards but left General → Description
+untouched. Operators asked the agent to rewrite that field as a complete
+what-if, keeping any existing description and adding the new facts.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/tools.py
+   propose_patches now takes scenario_description and parks it on the
+   tool context.
+2. src/agents/agent_simulation_facts/engine.py
+   Prompt the agent to merge CURRENT DESCRIPTION into a complete
+   scenario write-up.
+3. src/api/routers/internal/simulation.py
+   Pass the current description into the agent; return description
+   (fallback merge if the model omits it).
+4. src/front/static/simulation/js/simulation-workbench.js
+   Send simWbDescription with the prompt and write the returned text
+   back to the General tab.
+5. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+   25-row eval delta with scenario_contains needles.
+
+Modified files:
+- src/agents/agent_simulation_facts/__init__.py
+- src/agents/agent_simulation_facts/AgentResult.py
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_facts/tools.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/judges/simulation_facts.py
+- tests/eval/README.md
+- tests/eval/thresholds.yaml
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9773 passed, 326 skipped, 8 deselected, 0 failed in 58.55s. Dry-run eval: simulation_facts schema_valid=1.000 n=25.
+
+================================================================================
+## Add tests for simulation fact generation and result checks
+================================================================================
+
+Context: Hypothetical-facts generation needed coverage that the proposed
+S/P/O patches actually show up as patch-origin rows in the simulation
+Results diff (the check operators use after a run), plus engine/tool
+edge cases around search, validation, and the ontology→search→propose
+loop.
+
+Changes:
+
+1. tests/units/agents/test_agent_simulation_facts.py
+   Cover the full generation tool loop, search simulation scoping and
+   errors, patch validation (empty, cap, datatype), and LLM no-choice /
+   max-iteration outcomes.
+2. tests/units/simulation/test_simulation_fact_generation.py
+   Apply agent-generated and eval-dataset facts to a sandbox and assert
+   Results tags: set/add/remove, multi-op, skip-existing, inferred vs
+   patch origin.
+
+Modified files:
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_fact_generation.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/agents/test_agent_simulation_facts.py tests/units/simulation/test_simulation_fact_generation.py → 23 passed. Full `uv run --frozen pytest -q -m "not scenario"` → 9790 passed, 326 skipped, 8 deselected, 6 failed in 53.66s (failures pre-exist in this worktree: TwinSandboxSparql re-export, size budget, SPARQL identity, MCP tool descriptions, dtwin simulation_id Query param).
+
+================================================================================
+## List Simulation REST endpoints on Settings → API
+================================================================================
+
+Context: Settings → API only showed GET /api/v1/simulations, with create/run
+and the rest buried in prose. Operators could not see the new Simulation
+catalog entries next to Knowledge Graph and Cohort.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_api.html
+   Add a Simulation section with cards for list, create, get, update,
+   delete, run, poll, abort, purge, diff, and runs. Document
+   simulation_id on stats, triples, and GraphQL.
+2. tests/units/front/test_settings_api_contract.py
+   Contract the Simulation heading, endpoint paths, and simulation_id
+   on graph-query cards.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_api.html
+- tests/units/front/test_settings_api_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_settings_api_contract.py → 10 passed. Live GET /settings?section=api includes OpenAPI: Simulation and /api/v1/simulations/{sim_id}/run.
+
+================================================================================
+## Add public Simulation API and sandbox graph source on queries
+================================================================================
+
+Context: Operators could create and run what-if scenarios in the UI, and
+Explorer already picked a ready sandbox, but the external REST catalog,
+SPARQL playground, Knowledge Graph reads, and MCP tools still hit only
+the live graph. Programmatic callers needed CRUD + run, and every graph
+query surface needed the same sandbox overlay as Explorer.
+
+Changes:
+
+1. src/api/routers/simulation.py
+   External CRUD, run, abort, purge, diff, runs, and task poll at
+   /api/v1/simulations.
+2. src/api/external_app.py
+   Mount the Simulation router with the Simulation OpenAPI tag.
+3. src/api/routers/digitaltwin.py
+   triples / triples/find / stats accept simulation_id and
+   include_inferred (same overlay as Explorer).
+4. src/back/objects/digitaltwin/query/TwinSandboxSparql.py
+   Read-only SPARQL against a ready sandbox snapshot (RDFLib, 20k cap).
+5. src/api/routers/internal/dtwin.py
+   POST /dtwin/execute routes sandbox SPARQL when simulation_id is set.
+6. src/mcp-server/server/simulation_tools.py
+   MCP list_simulations, select_simulation, create_simulation,
+   run_simulation.
+7. src/mcp-server/server/session.py
+   domain_params and GraphQL body inject the selected sandbox.
+8. src/front/static/query/js/query-api.js
+   Settings → API Graph picker appends simulation_id on graph queries.
+9. docs/api.md
+   Document the Simulation API and simulation_id on KG reads.
+
+Modified files:
+- src/api/routers/simulation.py
+- src/api/constants.py
+- src/api/external_app.py
+- src/api/routers/__init__.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/query/TwinSandboxSparql.py
+- src/back/objects/digitaltwin/query/__init__.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/core/mcp_tools.py
+- src/mcp-server/server/simulation_tools.py
+- src/mcp-server/server/constants.py
+- src/mcp-server/server/factory.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/tools.py
+- src/front/static/query/js/query-api.js
+- src/front/templates/settings.html
+- tests/units/simulation/test_simulation_external_api.py
+- tests/units/dtwin/test_twin_sandbox_sparql.py
+- tests/units/api/test_dtwin_sparql_routes.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- tests/units/core/test_mcp_tools_policy.py
+- docs/api.md
+- docs/architecture.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9798 passed, 326 skipped, 8 deselected, 0 failed in 58.32s.
+
+================================================================================
+## Serve every domain version on the external API
+================================================================================
+
+Context: Settings → API hid DRAFT versions (cust360auto v5), and
+DigitalTwin.resolve_domain rejected non-PUBLISHED domain_version. Operators
+need the API/MCP/GraphQL against any lifecycle status.
+
+Changes:
+
+1. src/back/objects/digitaltwin/TwinResolve.py
+   Load explicit versions regardless of DRAFT / IN-REVIEW / PUBLISHED;
+   default to numeric-latest via load_latest_domain_data.
+2. src/back/objects/registry/RegistryService.py
+   list_mcp_domains includes draft-only domains; has_graph from latest
+   version of any status.
+3. src/back/fastapi/graphql_routes.py
+   External GraphQL uses TwinResolve and accepts domain_version.
+4. src/front/static/query/js/query-api.js
+   Version dropdown lists every status (v5 · DRAFT selectable).
+5. docs/api.md, docs/architecture.md, docs/user-guide.md, docs/mcp.md
+   Document that the API serves every version.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinResolve.py
+- src/back/objects/registry/RegistryService.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/domains.py
+- src/front/static/query/js/query-api.js
+- src/front/templates/partials/dtwin/_query_api.html
+- src/mcp-server/server/tools.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- tests/units/registry/test_registry_published.py
+- tests/units/front/test_settings_api_contract.py
+- docs/api.md
+- docs/architecture.md
+- docs/user-guide.md
+- docs/mcp.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/test_v090_graph_access_twin_helpers.py tests/units/dtwin/test_digitaltwin_api.py tests/units/registry/test_registry_published.py tests/units/front/test_settings_api_contract.py tests/units/api/test_external_api.py tests/units/api/test_graph_access_gate.py tests/mcp --ignore=tests/mcp/integration → 189 passed.
+

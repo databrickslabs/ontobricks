@@ -27,10 +27,21 @@ def patches_are_valid(patches: Iterable[Any] | None) -> bool:
     return True
 
 
+def description_needles_are_valid(needles: Any) -> bool:
+    """True when scenario_contains is omitted or a non-empty string list."""
+    if needles is None:
+        return True
+    if not isinstance(needles, list) or not needles:
+        return False
+    return all(isinstance(item, str) and item.strip() for item in needles)
+
+
 def score_dataset_row(row: dict) -> float:
-    """1.0 if the row's expected patches are schema-valid, else 0.0."""
+    """1.0 if expected patches and scenario_contains are valid, else 0.0."""
     expected = row.get("expected") or {}
-    return 1.0 if patches_are_valid(expected.get("patches")) else 0.0
+    ok_patches = patches_are_valid(expected.get("patches"))
+    ok_desc = description_needles_are_valid(expected.get("scenario_contains"))
+    return 1.0 if ok_patches and ok_desc else 0.0
 
 
 def score_agent_patches(patches: Iterable[Any] | None) -> float:

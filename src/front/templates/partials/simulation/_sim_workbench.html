@@ -95,7 +95,9 @@
                                 </div>
                                 <div class="col-12 col-lg-7">
                                     <label for="simWbDescription" class="form-label small">Description</label>
-                                    <textarea class="form-control form-control-sm" id="simWbDescription" rows="2"></textarea>
+                                    <textarea class="form-control form-control-sm" id="simWbDescription"
+                                              rows="4" maxlength="4000"
+                                              placeholder="What this what-if is testing"></textarea>
                                 </div>
                             </div>
                         </section>
@@ -155,24 +157,24 @@
                 </div>
 
                 <div class="tab-pane fade" id="simWb-pane-facts" role="tabpanel" aria-labelledby="simWb-tab-facts">
-                    <div class="sim-fact-prompt mb-3">
-                        <label for="simWbFactPrompt" class="form-label small">Describe the facts</label>
-                        <textarea class="form-control form-control-sm" id="simWbFactPrompt" rows="3"
-                                  maxlength="4000"
-                                  placeholder="e.g. Jacob Martin now has three contracts with ACME, and his credit score dropped to 420"></textarea>
-                        <div class="d-flex justify-content-end mt-2">
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="simWbFactPromptBtn">
-                                <i class="bi bi-stars me-1"></i>Propose facts
-                            </button>
-                        </div>
-                    </div>
-                    <div class="d-flex justify-content-end gap-2 mb-3">
+                    <div class="d-flex justify-content-end gap-2 mb-2">
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbFactWizardBtn">
                             <i class="bi bi-magic me-1"></i>Fact wizard
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-primary" id="simWbAddPatchBtn">
                             <i class="bi bi-plus-lg me-1"></i>Add fact
                         </button>
+                    </div>
+                    <div class="sim-fact-prompt mb-3">
+                        <label for="simWbFactPrompt" class="form-label small">Describe the facts</label>
+                        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+                            <textarea class="form-control form-control-sm flex-grow-1" id="simWbFactPrompt" rows="3"
+                                      maxlength="4000"
+                                      placeholder="e.g. Jacob Martin now has three contracts with ACME, and his credit score dropped to 420"></textarea>
+                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="simWbFactPromptBtn">
+                                <i class="bi bi-stars me-1"></i>Propose facts
+                            </button>
+                        </div>
                     </div>
                     <div id="simWbPatchesBody" class="sim-patches-list d-flex flex-column gap-1"></div>
                     <p class="text-muted small mb-0 mt-2">

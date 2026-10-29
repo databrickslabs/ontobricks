@@ -17,6 +17,7 @@ from fastapi.openapi.utils import get_openapi
 from api.constants import (
     API_DIGITALTWIN_PREFIX,
     API_GRAPHQL_PREFIX,
+    API_SIMULATIONS_PREFIX,
     API_V1_PREFIX,
     API_VERSION,
     EXTERNAL_API_CONTACT,
@@ -47,12 +48,16 @@ def create_external_api_app() -> FastAPI:
     from api.routers.v1 import router as api_v1_router
     from api.routers.digitaltwin import router as dt_api_router
     from api.routers.domains import router as domains_router
+    from api.routers.simulation import router as simulations_router
     from back.fastapi.graphql_routes import router as graphql_router
 
     app.include_router(api_v1_router, prefix=API_V1_PREFIX, tags=["API v1"])
     app.include_router(domains_router, prefix=API_V1_PREFIX, tags=["Domain"])
     app.include_router(
         dt_api_router, prefix=API_DIGITALTWIN_PREFIX, tags=["Knowledge Graph"]
+    )
+    app.include_router(
+        simulations_router, prefix=API_SIMULATIONS_PREFIX, tags=["Simulation"]
     )
     app.include_router(graphql_router, prefix=API_GRAPHQL_PREFIX, tags=["GraphQL"])
 

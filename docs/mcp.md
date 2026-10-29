@@ -429,7 +429,7 @@ requires *either* a build *or* a valid ontology, so an ontology-only version
 goes through the same `DRAFT → IN-REVIEW → PUBLISHED` workflow.
 
 `GET /api/v1/domains` flags such a domain with `has_graph: false` (the
-numeric-latest PUBLISHED version has never been built). When a client selects
+numeric-latest version has never been built). When a client selects
 it, the MCP server hides **every** graph tool and leaves `describe_ontology`
 as the only domain-scoped tool — on top of, and independent from, the
 per-domain policy. `describe_ontology` reads the ontology schema (not the

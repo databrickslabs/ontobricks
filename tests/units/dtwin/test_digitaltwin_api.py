@@ -42,9 +42,9 @@ class TestResolveDomainReadOnly:
             patch("back.objects.registry.RegistryService", return_value=svc),
         )
 
-    def test_read_only_uses_cache_and_skips_gen_and_save(self):
+    def test_read_only_uses_latest_and_skips_gen_and_save(self):
         svc = MagicMock()
-        svc.load_published_domain_data_cached.return_value = (True, {"info": {}}, "2", "")
+        svc.load_latest_domain_data.return_value = (True, {"info": {}}, "2", "")
         p_get, p_reg, p_uc, p_svc = self._patch(svc)
         with p_get as get_domain, p_reg, p_uc, p_svc:
             domain = MagicMock()
@@ -55,7 +55,7 @@ class TestResolveDomainReadOnly:
             )
 
         assert out is domain
-        svc.load_published_domain_data_cached.assert_called_once_with("mydom")
+        svc.load_latest_domain_data.assert_called_once_with("mydom")
         svc.load_published_domain_data.assert_not_called()
         domain.import_from_file.assert_called_once()
         domain.ensure_generated_content.assert_not_called()
@@ -63,7 +63,7 @@ class TestResolveDomainReadOnly:
 
     def test_write_path_generates_and_saves(self):
         svc = MagicMock()
-        svc.load_published_domain_data.return_value = (True, {"info": {}}, "2", "")
+        svc.load_latest_domain_data.return_value = (True, {"info": {}}, "2", "")
         p_get, p_reg, p_uc, p_svc = self._patch(svc)
         with p_get as get_domain, p_reg, p_uc, p_svc:
             domain = MagicMock()
@@ -71,8 +71,8 @@ class TestResolveDomainReadOnly:
 
             DigitalTwin.resolve_domain("mydom", MagicMock(), MagicMock())
 
-        svc.load_published_domain_data.assert_called_once_with("mydom")
-        svc.load_published_domain_data_cached.assert_not_called()
+        svc.load_latest_domain_data.assert_called_once_with("mydom")
+        svc.load_published_domain_data.assert_not_called()
         domain.ensure_generated_content.assert_called_once()
         domain.save.assert_called_once()
 
@@ -602,7 +602,7 @@ class TestDtTriplesBackendSelection:
 
     @patch("api.routers.digitaltwin.effective_view_table", return_value="c.s.view_V1")
     @patch(
-        "api.routers.digitaltwin.effective_graph_query_table",
+        "api.routers.digitaltwin.TwinGraphAccess.graph_query_table",
         return_value="c.s.graph_V1",
     )
     @patch("api.routers.digitaltwin.get_graphdb")
@@ -628,7 +628,7 @@ class TestDtTriplesBackendSelection:
 
     @patch("api.routers.digitaltwin.effective_view_table", return_value="c.s.view_V1")
     @patch(
-        "api.routers.digitaltwin.effective_graph_query_table",
+        "api.routers.digitaltwin.TwinGraphAccess.graph_query_table",
         return_value="c.s.graph_V1",
     )
     @patch("api.routers.digitaltwin.get_graphdb")
@@ -654,7 +654,10 @@ class TestDtTriplesBackendSelection:
 
 class TestTriplesFindHasMorePropagation:
     @patch("api.routers.digitaltwin.run_blocking")
-    @patch("api.routers.digitaltwin.effective_graph_query_table", return_value="c.s.graph_V1")
+    @patch(
+        "api.routers.digitaltwin.TwinGraphAccess.graph_query_table",
+        return_value="c.s.graph_V1",
+    )
     @patch("api.routers.digitaltwin.get_graphdb")
     @patch("api.routers.digitaltwin.DigitalTwin.find_triples_bfs")
     @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")

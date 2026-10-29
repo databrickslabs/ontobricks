@@ -675,7 +675,12 @@ class TestSimulationApi:
             "predicate": "http://ex.org/score",
             "object": "420",
         }
-        fake = AgentResult(success=True, reply="Set the score.", proposed_patches=[patch])
+        fake = AgentResult(
+            success=True,
+            reply="Set the score.",
+            proposed_patches=[patch],
+            proposed_description="Neighbourhood around p1: score set to 420.",
+        )
 
         async def _inline(fn, *args, **kwargs):
             return fn(*args, **kwargs)
@@ -696,13 +701,17 @@ class TestSimulationApi:
         monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
         out = await self.api.propose_facts(
             _Req(body={"prompt": "score to 420"}),
-            body={"prompt": "score to 420"},
+            body={
+                "prompt": "score to 420",
+                "description": "Credit review on p1.",
+            },
             session_mgr=SimpleNamespace(),
             settings=SimpleNamespace(),
         )
         assert out["success"] is True
         assert out["patches"] == [patch]
         assert "score" in out["reply"]
+        assert "420" in out["description"]
 
     async def test_propose_facts_requires_prompt(self, monkeypatch):
         with pytest.raises(ValidationError):
@@ -712,6 +721,54 @@ class TestSimulationApi:
                 session_mgr=SimpleNamespace(),
                 settings=SimpleNamespace(),
             )
+
+    async def test_propose_facts_falls_back_to_merged_description(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        patch = {
+            "op": "set",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/score",
+            "object": "420",
+        }
+        fake = AgentResult(success=True, reply="ok", proposed_patches=[patch])
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr("agents.agent_simulation_facts.run_agent", lambda **kwargs: fake)
+        monkeypatch.setattr(
+            self.api, "require_domain_llm", lambda domain, settings: ("h", "t", "ep", "")
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        out = await self.api.propose_facts(
+            _Req(body={"prompt": "score to 420"}),
+            body={
+                "prompt": "score to 420",
+                "description": "Credit review on Jacob.",
+                "scope": {"focus_label": "Jacob"},
+            },
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert "Credit review on Jacob." in out["description"]
+        assert "score to 420" in out["description"]
+
+    def test_facts_user_message_includes_current_description(self):
+        msg = self.api._facts_user_message(
+            "set score", {"type": "entity", "focus": "u1"}, [], "Prior text."
+        )
+        assert "REQUEST" in msg
+        assert "CURRENT DESCRIPTION" in msg
+        assert "Prior text." in msg
 
     async def test_run_returns_task_id(self, monkeypatch):
         sim = self._sim(monkeypatch)

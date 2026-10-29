@@ -502,7 +502,7 @@ src/
 │       │   ├── cohort/                 # CohortService, CohortEngineContext
 │       │   ├── explorer/               # GraphFilter, GraphFind, neighbours, ontology groups
 │       │   ├── node/                   # Node context, business rules, virtual attributes
-│       │   ├── query/                  # TwinMapping, TwinSparqlTranslate
+│       │   ├── query/                  # TwinMapping, TwinSparqlTranslate, TwinSandboxSparql
 │       │   └── cache/                  # TwinStoreCache, TwinAssistantCache
 │       ├── session/                    # Session management
 │       │   ├── middleware.py           # File-based session middleware (cookie + ASGI)
@@ -1399,6 +1399,8 @@ editor shows that catalog in a third column.
 | `src/back/core/graphdb/lakebase/LakebaseSimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
 | `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
+| `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
+| `src/back/objects/digitaltwin/query/TwinSandboxSparql.py` | SPARQL over a ready sandbox snapshot |
 | `src/front/templates/simulation.html` | Cohorts / Run / Scenarios / Results / Runs page (scenario editor is not a sidebar item) |
 
 Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
@@ -1764,8 +1766,8 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 > **Version lifecycle & API access.** Each domain version has a lifecycle status
 > — `DRAFT` → `IN-REVIEW` → `PUBLISHED` (transitions enforced server-side in
 > `back.objects.registry.version_lifecycle`). The external REST API, GraphQL
-> (`/api/v1/graphql`) and MCP only serve **PUBLISHED** versions and default to
-> the **numeric-latest PUBLISHED** version.
+> (`/api/v1/graphql`) and MCP serve **every** version and default to
+> the **numeric-latest** version (any lifecycle status).
 >
 > The `PermissionMiddleware` lifecycle gate distinguishes between **design
 > edits** and **data-refresh ops**:
@@ -1836,7 +1838,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/domains` | GET | List registry domains with ≥1 PUBLISHED version, configured backend, and graph availability |
+| `/api/v1/domains` | GET | List registry domains with ≥1 version, configured backend, and graph availability |
 | `/api/v1/domain/versions` | GET | List versions for a named domain |
 | `/api/v1/domain/design-status` | GET | Design status (ontology, metadata, mapping readiness) |
 | `/api/v1/domain/ontology` | GET | Get domain OWL ontology (Turtle) |
@@ -1851,7 +1853,9 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 | `/api/v1/digitaltwin/status` | GET | Triple store status |
 | `/api/v1/digitaltwin/stats` | GET | Triple store statistics |
 | `/api/v1/digitaltwin/build` | POST | Trigger triple store build |
-| `/api/v1/digitaltwin/triples/find` | GET | BFS entity search/traversal |
+| `/api/v1/digitaltwin/triples/find` | GET | BFS entity search/traversal (`simulation_id` selects a ready sandbox) |
+| `/api/v1/simulations` | GET/POST | List / create what-if scenarios |
+| `/api/v1/simulations/{id}/run` | POST | Run a scenario; poll `/simulations/tasks/{task_id}` |
 
 **Legacy v1 API**:
 
@@ -3111,14 +3115,12 @@ traffic. Data-plane routes are fail-closed when no user token is forwarded.
 > ontology schema — so it is always available and the call-time guard refuses
 > the graph tools for such a domain even if a stale client calls them.
 
-> **Note.** MCP and the external REST/GraphQL API only see versions whose
-> lifecycle status is **PUBLISHED** — they default to the numeric-latest
-> PUBLISHED version and reject explicit requests for `DRAFT`/`IN-REVIEW`
-> versions. A version becomes servable by transitioning it
-> DRAFT → IN-REVIEW → PUBLISHED from **Registry → Browse** (this replaces the
-> former "Active"/`mcp_enabled` toggle). To query an unsaved working session,
-> use the Graph Chat (next section), which talks to the session-aware
-> `/dtwin/...` internal routes instead.
+> **Note.** MCP and the external REST/GraphQL API serve every registry
+> version (`DRAFT`, `IN-REVIEW`, `PUBLISHED`). They default to the
+> numeric-latest version and accept an explicit `domain_version`. Design
+> edits remain locked on non-DRAFT versions. To query an unsaved working
+> session, use the Graph Chat (next section), which talks to the
+> session-aware `/dtwin/...` internal routes instead.
 
 ---
 

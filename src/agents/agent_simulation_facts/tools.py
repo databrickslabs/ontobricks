@@ -89,11 +89,17 @@ def tool_search_entities(
 
 
 def tool_propose_patches(
-    ctx: ToolContext, *, patches: list | None = None, **_kwargs
+    ctx: ToolContext,
+    *,
+    patches: list | None = None,
+    scenario_description: str | None = None,
+    **_kwargs,
 ) -> str:
     """Validate hypothetical facts and park them on the context."""
-    if not isinstance(patches, list) or not patches:
-        return _error("'patches' must be a non-empty list.")
+    if patches is None:
+        patches = []
+    if not isinstance(patches, list):
+        return _error("'patches' must be a list.")
     if len(patches) > _MAX_PATCHES:
         return _error(f"At most {_MAX_PATCHES} patches per proposal.")
     canonical = []
@@ -103,8 +109,13 @@ def tool_propose_patches(
         except (ValidationError, TypeError, ValueError) as exc:
             return _error(f"patches[{i}]: {exc}")
         canonical.append(patch.to_dict())
+    desc = str(scenario_description or "").strip()[:4000]
+    if not canonical and not desc:
+        return _error("Provide patches or a scenario_description.")
     ctx.metadata["proposed_patches"] = canonical
-    return _ok({"valid": True, "count": len(canonical)})
+    if desc:
+        ctx.metadata["proposed_description"] = desc
+    return _ok({"valid": True, "count": len(canonical), "has_description": bool(desc)})
 
 
 _SEARCH_DEF = {
@@ -136,10 +147,12 @@ _PROPOSE_DEF = {
         "name": "propose_patches",
         "description": (
             "Validate the hypothetical facts and register them for the UI. "
-            "REQUIRED terminator: call this with the full patch list before "
-            "your final reply. op is add, set, or remove. Use ontology "
-            "property URIs and instance URIs from search_entities (or a "
-            "minted URI only after search returned no hit)."
+            "REQUIRED terminator: call this with the patch list and a "
+            "complete scenario_description before your final reply. op is "
+            "add, set, or remove. Use ontology property URIs and instance "
+            "URIs from search_entities (or a minted URI only after search "
+            "returned no hit). scenario_description merges CURRENT "
+            "DESCRIPTION with the new what-if in 1–3 short paragraphs."
         ),
         "parameters": {
             "type": "object",
@@ -158,8 +171,15 @@ _PROPOSE_DEF = {
                         "required": ["op", "subject", "predicate", "object"],
                     },
                 },
+                "scenario_description": {
+                    "type": "string",
+                    "description": (
+                        "Complete General-tab description of this scenario. "
+                        "Keep prior intent from CURRENT DESCRIPTION."
+                    ),
+                },
             },
-            "required": ["patches"],
+            "required": ["patches", "scenario_description"],
         },
     },
 }

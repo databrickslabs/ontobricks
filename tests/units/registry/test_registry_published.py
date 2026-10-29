@@ -103,7 +103,7 @@ def test_load_published_domain_data_cached_serves_from_cache():
     invalidate_registry_cache()
 
 
-def test_list_mcp_domains_filters_published_via_metadata():
+def test_list_mcp_domains_includes_draft_only_domains():
     from back.objects.registry.registry_cache import invalidate_registry_cache
 
     invalidate_registry_cache()
@@ -114,7 +114,7 @@ def test_list_mcp_domains_filters_published_via_metadata():
     ok, items, _ = svc.list_mcp_domains()
     assert ok
     names = {d["name"] for d in items}
-    assert names == {"pub"}
+    assert names == {"pub", "draft_only"}
     invalidate_registry_cache()
 
 

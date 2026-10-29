@@ -168,6 +168,9 @@ class _Svc:
     def load_published_domain_data(self, name):
         return self.live_result
 
+    def load_latest_domain_data(self, name):
+        return self.live_result
+
 
 @pytest.fixture
 def resolve_env(monkeypatch):
@@ -219,18 +222,25 @@ class TestResolveDomain:
         with pytest.raises(InfrastructureError):
             TwinResolve.resolve_domain("dom", None, None, domain_version="7")
 
-    def test_explicit_draft_version_rejected(self, resolve_env):
-        resolve_env.svc.read_version_result = (True, {"info": {"status": "DRAFT"}}, "")
-        with pytest.raises(ValidationError, match="not PUBLISHED"):
-            TwinResolve.resolve_domain("dom", None, None, domain_version="7")
+    def test_explicit_draft_version_is_imported(self, resolve_env):
+        data = {"info": {"status": "DRAFT"}}
+        resolve_env.svc.read_version_result = (True, data, "")
+        d = TwinResolve.resolve_domain("dom", None, None, domain_version="7")
+        assert ("import", data, "7") in d.events
 
-    def test_read_only_uses_cache_and_skips_generation_and_save(self, resolve_env):
+    def test_explicit_in_review_version_is_imported(self, resolve_env):
+        data = {"info": {"status": "IN-REVIEW"}}
+        resolve_env.svc.read_version_result = (True, data, "")
+        d = TwinResolve.resolve_domain("dom", None, None, domain_version="7")
+        assert ("import", data, "7") in d.events
+
+    def test_read_only_loads_latest_and_skips_generation_and_save(self, resolve_env):
         d = TwinResolve.resolve_domain("dom", None, None, read_only=True)
-        assert d.events == ["clear", ("import", {"k": "cached"}, "3")]
+        assert d.events == ["clear", ("import", {"k": "live"}, "4")]
 
-    def test_read_only_cache_miss_is_not_found(self, resolve_env):
-        resolve_env.svc.cached_result = (False, None, None, "no published version")
-        with pytest.raises(NotFoundError, match="no published version"):
+    def test_read_only_latest_miss_is_not_found(self, resolve_env):
+        resolve_env.svc.live_result = (False, None, None, "no versions")
+        with pytest.raises(NotFoundError, match="no versions"):
             TwinResolve.resolve_domain("dom", None, None, read_only=True)
 
     def test_write_path_uses_live_registry(self, resolve_env):
@@ -238,7 +248,7 @@ class TestResolveDomain:
         assert ("import", {"k": "live"}, "4") in d.events
         assert d.events[-1] == "save"
 
-    def test_write_path_missing_published_is_not_found(self, resolve_env):
+    def test_write_path_missing_latest_is_not_found(self, resolve_env):
         resolve_env.svc.live_result = (False, None, None, "missing")
         with pytest.raises(NotFoundError, match="missing"):
             TwinResolve.resolve_domain("dom", None, None)

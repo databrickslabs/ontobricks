@@ -406,17 +406,16 @@ class RegistryService:
     def list_mcp_domains(
         self, require_ontology: bool = False
     ) -> Tuple[bool, List[Dict[str, Any]], str]:
-        """List domains that have an MCP-enabled version.
+        """List domains that have at least one registry version.
 
         Returns ``(ok, domains, message)`` where each domain includes its name,
         description, MCP policy, configured graph backend, and graph
         availability. When *require_ontology* is ``True`` only domains whose
-        MCP version has a non-empty ``classes`` list are included.
+        numeric-latest version has a non-empty ``classes`` list are included.
         """
         # Fast path: the cached two-query metadata listing already carries
-        # per-version ``status`` + description, so a domain's PUBLISHED
-        # membership can be decided without the O(domains × versions)
-        # full-document scan the previous implementation performed.
+        # per-version ``status`` + description, so membership can be decided
+        # without the O(domains × versions) full-document scan.
         ok, details, msg = self.list_domain_details_cached()
         if not ok:
             return False, [], msg
@@ -424,34 +423,25 @@ class RegistryService:
         result: List[Dict[str, Any]] = []
         for d in details:
             name = d.get("name", "")
-            published = [
-                v
-                for v in d.get("versions", [])
-                if (v.get("status") or "").upper() == "PUBLISHED"
-            ]
-            if not published:
+            versions = list(d.get("versions") or [])
+            if not versions:
                 continue
-            # ``has_graph`` reflects the numeric-latest PUBLISHED version (the
-            # one the external API/MCP serves): True once it has been built at
-            # least once. An ontology-only domain publishes with no build, so
-            # this stays False and the MCP surface falls back to the ontology
-            # tool alone.
-            latest_published = max(
-                published, key=RegistryService._version_sort_key
-            )
+            # ``has_graph`` reflects the numeric-latest version (any
+            # lifecycle status) — the one the external API/MCP serves
+            # when ``domain_version`` is omitted.
+            latest = max(versions, key=RegistryService._version_sort_key)
             from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 
             graph_backend = normalize_graph_backend(
-                latest_published.get("graph_backend")
+                latest.get("graph_backend")
             )
-            has_graph = bool(latest_published.get("last_build"))
+            has_graph = bool(latest.get("last_build"))
             if require_ontology:
-                # Metadata only carries the latest version's ontology, so
-                # confirm the PUBLISHED version has classes with one targeted
-                # read (still far cheaper than scanning every version).
                 try:
-                    mcp_ver, mcp_data = self.find_published_version(name)
-                    if not mcp_ver:
+                    ok_latest, mcp_data, mcp_ver, _err = self.load_latest_domain_data(
+                        name
+                    )
+                    if not ok_latest:
                         continue
                     ver_data = mcp_data.get("versions", {}).get(mcp_ver, {})
                     ont = ver_data.get("ontology", mcp_data.get("ontology", {}))
@@ -820,8 +810,8 @@ class RegistryService:
         """Load the numeric-latest PUBLISHED version for *folder*.
 
         Unlike :meth:`load_latest_domain_data` there is **no fallback** to
-        a non-PUBLISHED version — the API/MCP surface only serves data for
-        PUBLISHED versions.
+        a non-PUBLISHED version. The API/MCP default path uses
+        :meth:`load_latest_domain_data` instead.
 
         Returns ``(ok, data_dict, version_str, error_msg)``.
         """

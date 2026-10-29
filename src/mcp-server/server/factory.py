@@ -17,6 +17,7 @@ from server import http_client as _http
 from server.resources import register_resources
 from server.session import MCPServerSession
 from server.session_scope import SessionScopeMiddleware
+from server.simulation_tools import register_simulation_tools
 from server.tools import register_tools
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     mcp.add_middleware(SessionScopeMiddleware())
 
     register_tools(mcp, session)
+    register_simulation_tools(mcp, session)
     register_resources(mcp, session)
 
     return mcp

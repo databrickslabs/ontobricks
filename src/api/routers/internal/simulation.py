@@ -61,8 +61,13 @@ def _forwarded_headers(request: Request) -> dict:
     }
 
 
-def _facts_user_message(prompt: str, scope: dict, existing: list) -> str:
-    parts = [prompt]
+def _facts_user_message(
+    prompt: str, scope: dict, existing: list, description: str = ""
+) -> str:
+    parts = [f"REQUEST\n{prompt}"]
+    text = str(description or "").strip()
+    if text:
+        parts.append("CURRENT DESCRIPTION\n" + text[:_MAX_FACT_PROMPT])
     if isinstance(scope, dict) and (scope.get("focus") or scope.get("type")):
         parts.append(
             "SCOPE\n"
@@ -81,6 +86,27 @@ def _facts_user_message(prompt: str, scope: dict, existing: list) -> str:
     if lines:
         parts.append("EXISTING FACTS\n" + "\n".join(lines))
     return "\n\n".join(parts)
+
+
+def _fallback_scenario_description(existing: str, prompt: str, scope: dict) -> str:
+    prior = str(existing or "").strip()
+    label = ""
+    if isinstance(scope, dict):
+        label = str(scope.get("focus_label") or scope.get("focus") or "").strip()
+    heading = f"Hypothetical facts for {label}" if label else "Hypothetical facts"
+    body = f"{heading}: {str(prompt or '').strip()}"
+    merged = f"{prior}\n\n{body}".strip() if prior else body
+    return merged[:_MAX_FACT_PROMPT]
+
+
+def _scenario_description(result, prompt: str, scope, existing: str) -> str:
+    text = str(getattr(result, "proposed_description", "") or "").strip()
+    patches = getattr(result, "proposed_patches", None) or []
+    if text:
+        return text[:_MAX_FACT_PROMPT]
+    if patches:
+        return _fallback_scenario_description(existing, prompt, scope or {})
+    return ""
 
 
 @router.get("/list")
@@ -148,7 +174,10 @@ async def propose_facts(
             session_cookies=dict(request.cookies or {}),
             session_headers=_forwarded_headers(request),
             user_message=_facts_user_message(
-                prompt, body.get("scope") or {}, body.get("existing_patches") or []
+                prompt,
+                body.get("scope") or {},
+                body.get("existing_patches") or [],
+                str(body.get("description") or ""),
             ),
         )
     if not result.success:
@@ -159,6 +188,9 @@ async def propose_facts(
     return {
         "success": True,
         "patches": result.proposed_patches or [],
+        "description": _scenario_description(
+            result, prompt, body.get("scope") or {}, str(body.get("description") or "")
+        ),
         "reply": result.reply or "",
         "usage": result.usage,
     }

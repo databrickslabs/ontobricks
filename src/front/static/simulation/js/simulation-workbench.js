@@ -318,6 +318,7 @@ const SimulationWorkbench = {
                 body: {
                     prompt,
                     simulation_id: this.currentId || '',
+                    description: this._val('simWbDescription'),
                     scope: {
                         type: this._val('simWbScopeType'),
                         focus: this._val('simWbFocus') || this._val('simWbCohort'),
@@ -331,6 +332,7 @@ const SimulationWorkbench = {
                     })),
                 },
             });
+            if (data.description) this._set('simWbDescription', data.description);
             const rows = data.patches || [];
             if (!rows.length) {
                 showNotification(

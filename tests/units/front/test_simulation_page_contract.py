@@ -157,11 +157,16 @@ def test_hypothetical_facts_prompt_uses_agent():
     html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
     wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
     pane = html.split('id="simWb-pane-facts"', 1)[1].split('id="simWb-pane-reasoning"', 1)[0]
-    assert 'id="simWbFactPrompt"' in pane
-    assert 'id="simWbFactPromptBtn"' in pane
-    assert pane.index('id="simWbFactPrompt"') < pane.index('id="simWbPatchesBody"')
+    assert pane.index('id="simWbFactWizardBtn"') < pane.index('id="simWbFactPrompt"')
+    assert pane.index('id="simWbAddPatchBtn"') < pane.index('id="simWbFactPrompt"')
+    assert pane.index('id="simWbFactPrompt"') < pane.index('id="simWbFactPromptBtn"')
+    assert pane.index('id="simWbFactPromptBtn"') < pane.index('id="simWbPatchesBody"')
+    assert "flex-sm-row" in pane
+    assert "justify-content-end mt-2" not in pane
     assert "proposeFacts" in wb
     assert "/simulation/facts/agent" in wb
+    assert "description: this._val('simWbDescription')" in wb
+    assert "this._set('simWbDescription', data.description)" in wb
     assert "onclick=" not in html
     assert "style=" not in html
 

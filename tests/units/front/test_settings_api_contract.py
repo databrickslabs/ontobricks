@@ -48,10 +48,12 @@ def test_domain_selector_uses_the_external_contract():
     assert "fetch('/settings/registry/domains'" not in script
 
 
-def test_versions_are_limited_to_published_versions():
+def test_versions_list_every_lifecycle_status():
     script = _read(SCRIPT)
-    assert "data.versions.filter(v => v.is_published)" in script
-    assert "latest PUBLISHED" in script
+    assert "data.versions.filter(v => v.is_published)" not in script
+    assert "latest PUBLISHED" not in script
+    assert "v.status" in script
+    assert "is_published" in script
 
 
 def test_domain_capabilities_control_graph_actions():
@@ -62,6 +64,50 @@ def test_domain_capabilities_control_graph_actions():
     assert "document.querySelectorAll('[data-requires-graph]')" in script
     assert "control.disabled = hasSelection && !hasGraph" in script
     assert "clearApiResponses();" in script
+
+
+def test_graph_source_and_simulations_are_on_the_api_catalog():
+    template = _read(TEMPLATE)
+    script = _read(SCRIPT)
+    assert 'id="apiGraphSource"' in template
+    assert "/api/v1/simulations" in template
+    assert "<code>simulation_id</code>" in template
+    assert "function appendGraphSource(path)" in script
+    assert "KgGraphSource.applyToParams" in script
+    assert "KgGraphSource.applyToBody" in script
+
+
+def test_simulation_api_section_lists_scenario_endpoints():
+    template = _read(TEMPLATE)
+    heading = template.index("OpenAPI: Simulation")
+    cohort = template.index("OpenAPI: Cohort")
+    assert heading < cohort
+    section = template[heading:cohort]
+    for path in (
+        "/api/v1/simulations",
+        "/api/v1/simulations/{sim_id}",
+        "/api/v1/simulations/{sim_id}/run",
+        "/api/v1/simulations/tasks/{task_id}",
+        "/api/v1/simulations/{sim_id}/abort",
+        "/api/v1/simulations/{sim_id}/purge",
+        "/api/v1/simulations/{sim_id}/diff",
+        "/api/v1/simulations/runs",
+    ):
+        assert f">{path}</code>" in section
+    assert 'href="/api/docs#/Simulation"' in template
+    assert "Hypothetical facts" in section
+    assert template.count('data-try-endpoint="/api/v1/simulations"') == 1
+
+
+def test_graph_query_cards_document_simulation_id():
+    template = _read(TEMPLATE)
+    assert template.count("<code>simulation_id</code>") >= 4
+    stats = template[template.index("/api/v1/digitaltwin/stats") :]
+    assert "<code>simulation_id</code>" in stats[:2500]
+    triples = template[template.index("/api/v1/digitaltwin/triples</code>") :]
+    assert "<code>simulation_id</code>" in triples[:2500]
+    graphql = template[template.index("Execute GraphQL query") :]
+    assert "<code>simulation_id</code>" in graphql[:3500]
 
 
 def test_triples_find_depth_default_matches_public_contract():

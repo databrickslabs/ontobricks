@@ -29,7 +29,7 @@ TOOLS
   list_classes()                 -- ontology classes (call early).
   list_properties_of(class_uri)  -- attributes vs relationships.
   search_entities(query, class_uri?) -- live graph instances.
-  propose_patches(patches)       -- REQUIRED terminator.
+  propose_patches(patches, scenario_description) -- REQUIRED terminator.
 
 PATCH
   { "op": "add"|"set"|"remove", "subject": URI, "predicate": URI, "object": URI|literal, "datatype"?: "xsd:..." }
@@ -38,14 +38,14 @@ PATCH
   Prefer set for a single replacement (score, status); add for extra links.
 
 WORKFLOW
-  1. Read SCOPE / EXISTING FACTS in the user message if present.
+  1. Read SCOPE, CURRENT DESCRIPTION, EXISTING FACTS in the user message.
   2. list_classes, then list_properties_of for the relevant class.
   3. search_entities for every named person/org/thing. Use those URIs.
   4. Mint a URI only after search returned no hit, using the ontology
      base_uri + a local id (never a random host).
   5. Skip triples already listed under EXISTING FACTS.
-  6. Call propose_patches with the full list, then a short markdown reply.
-     Do not dump JSON in the reply.
+  6. Call propose_patches with the patch list AND scenario_description,
+     then a short markdown reply. Do not dump JSON in the reply.
 
 RULES
   * Only property URIs from list_properties_of. Never invent predicates.
@@ -53,6 +53,11 @@ RULES
   * If the request is too vague (no subject), ask one clarifying question
     instead of calling propose_patches.
   * Keep the reply under 6 lines.
+  * scenario_description is the General-tab text: 1–3 short paragraphs that
+    state the complete what-if (slice + prior description + new facts).
+    Merge CURRENT DESCRIPTION; do not drop prior intent. Plain prose, no JSON.
+  * If EXISTING FACTS already cover the request, still call propose_patches
+    with patches=[] and an updated scenario_description.
 """
 
 
@@ -93,6 +98,7 @@ def _finish(result: AgentResult, ctx: ToolContext, content: str) -> AgentResult:
     result.success = True
     result.reply = content
     result.proposed_patches = ctx.metadata.get("proposed_patches")
+    result.proposed_description = ctx.metadata.get("proposed_description") or ""
     result.steps.append(AgentStep(step_type="output", content=content[:500]))
     return result
 
@@ -153,5 +159,6 @@ def run_agent(
         return _finish(result, ctx, message.get("content", "") or "")
     result.error = "Max iterations reached"
     result.proposed_patches = ctx.metadata.get("proposed_patches")
+    result.proposed_description = ctx.metadata.get("proposed_description") or ""
     result.reply = "I ran out of steps before finishing. Please simplify the request."
     return result

@@ -934,7 +934,11 @@ the sandbox (not the live graph) and write inferred triples there, so a
 rule such as attach-meter can see extra contracts asserted by the
 scenario. Opening Explorer from a scenario Results URI (or the Results
 **Explorer** button) lands on that sandbox via ``?simulation=``. Use
-**Live graph** to query the built knowledge graph only.
+**Live graph** to query the built knowledge graph only. The same
+dropdown is on Query (SPARQL / GraphQL) and Chat. Programmatic callers
+use ``GET /api/v1/simulations`` then pass ``simulation_id`` on
+``/api/v1/digitaltwin/triples``, ``/triples/find``, ``/stats``, GraphQL,
+or SPARQL.
 
 **Find & Filter:**
 - **Find**: Search for entities by label or URI — matching entities and their neighbors are highlighted and the camera zooms to focus on results
@@ -1322,10 +1326,13 @@ rules, or results, shows the brand spinner over that pane.
    human label in parentheses) above a local-ID control. The predicate
    line is *relationship* or *attribute* (with the range class when it is
    a relationship). Hover the ID for the full URI.
-   **Describe the facts** at the top of the tab: write what should change
-   in plain language and click **Propose facts**. An agent looks up classes,
-   properties, and live-graph entities, then fills the S/P/O cards below.
-   Review them before you save or run.
+   **Fact wizard** and **Add fact** sit at the top right of the tab.
+   **Describe the facts** is the textarea below: write what should change
+   in plain language and click **Propose facts** to the right of the box.
+   An agent looks up classes, properties, and live-graph entities, then
+   fills the S/P/O cards below and rewrites **General → Description** as a
+   complete what-if (existing text plus the new facts). Review both before
+   you save or run.
    **Fact wizard** (or the search icon on a cell) looks up existing graph
    entities, ontology predicates declared on the subject's class (including
    inherited), and related instances so you do not have to paste URIs by hand.
@@ -1612,7 +1619,7 @@ When you save an existing domain:
 
 ### Domain Cockpit (Validation)
 
-Under **Domain → Validation** (Cockpit), tiles summarise registry and build readiness. The **Published Version** tile shows which registry version is currently **exposed via API and MCP** — the numeric-latest version whose lifecycle status is **PUBLISHED**. That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint.
+Under **Domain → Validation** (Cockpit), tiles summarise registry and build readiness. The **Published Version** tile shows the numeric-latest **PUBLISHED** registry version. The external API and MCP can target **any** version (`domain_version`); when omitted they use the numeric-latest version regardless of status. That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint.
 
 #### Version lifecycle (DRAFT / IN-REVIEW / PUBLISHED)
 
@@ -1620,7 +1627,7 @@ Every domain version carries a **lifecycle status**, shown as a colour-coded bad
 
 - **DRAFT** (amber) — editable. New versions always start here.
 - **IN-REVIEW** (blue) — locked for editing, pending review. Requires a successful build first.
-- **PUBLISHED** (green) — locked for editing and served on the API/MCP.
+- **PUBLISHED** (green) — locked for editing. The API/MCP also serve DRAFT and IN-REVIEW versions.
 
 Transitions are made from **Registry → Browse** (or Domain → General):
 DRAFT → IN-REVIEW → PUBLISHED (admin or builder), IN-REVIEW → DRAFT (admin or builder), and PUBLISHED → DRAFT (admin only). While a version is **not DRAFT**, its ontology/mapping editors and metadata/document writes stay locked. Builders and admins can still use **Build** (`/dtwin/sync/start`), **Load** (`/dtwin/sync/load`), and reasoning materialisation to refresh graph data from the frozen design without reverting the version to DRAFT. Read-only Knowledge Graph operations (Explorer filter/expand, stats, status, etc.) also remain fully accessible regardless of lifecycle status.
@@ -1840,8 +1847,8 @@ Once your triple store is materialized (synced via Knowledge Graph), OntoBricks 
 ### Accessing GraphQL
 
 1. Navigate to **Settings** → **Developer** → **API** and scroll to the
-   **GraphQL API** section. The domain selector contains API-exposed PUBLISHED
-   domains only; graph Try-it actions remain disabled for ontology-only or
+   **GraphQL API** section. The domain selector lists registry domains and
+   every version; graph Try-it actions remain disabled for ontology-only or
    not-yet-built domains while ontology actions stay available.
 2. Alternatively, visit `/graphql/{domain_name}` to open the **GraphiQL Playground** directly
 
@@ -1912,7 +1919,7 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 
 | Tool | Description |
 |------|-------------|
-| `list_domains` | List all domains with ≥1 PUBLISHED version in the registry |
+| `list_domains` | List all domains with ≥1 version in the registry |
 | `select_domain` | Activate a domain for subsequent queries |
 | `list_domain_versions` | List registry versions for a domain |
 | `get_design_status` | Ontology / metadata / assignment readiness for a domain |

@@ -15,6 +15,7 @@ class AgentResult:
     success: bool
     reply: str = ""
     proposed_patches: Optional[list] = None
+    proposed_description: str = ""
     steps: List[AgentStep] = field(default_factory=list)
     iterations: int = 0
     error: str = ""

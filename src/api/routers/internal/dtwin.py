@@ -122,8 +122,16 @@ async def execute_sparql(
     data = await request.json()
     query = sparql.require_read_only_sparql(data.get("query", ""))
     limit = data.get("limit")
+    _inferred, simulation_id = TwinGraphAccess.source_from_payload(data)
 
     domain = get_domain(session_mgr)
+    if simulation_id:
+        from back.objects.digitaltwin.query.TwinSandboxSparql import TwinSandboxSparql
+
+        return await run_blocking(
+            TwinSandboxSparql(domain, settings).execute, query, limit, simulation_id
+        )
+
     domain.ensure_generated_content()
     r2rml_content = domain.get_r2rml()
 
