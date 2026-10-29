@@ -53,3 +53,22 @@ Modified files:
 - (index) .planning/**, .superpowers/**, docs/superpowers/** untracked
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9625 passed, 326 skipped, 8 deselected, 40 warnings in 52.36s
+
+================================================================================
+## Shrink the README logo
+================================================================================
+
+Context: The README used a bare Markdown image for the OntoBricks SVG. GitHub
+and the preview render that at the SVG's full display size, so the icon
+dominated the header. HTML `<img>` is required to set an explicit pixel size.
+
+Changes:
+
+1. README.md
+   Render the logo as a centered 72×72 HTML image.
+
+Modified files:
+- README.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_help_api.py → 40 passed in 1.83s (README-only change).
