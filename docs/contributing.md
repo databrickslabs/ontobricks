@@ -74,7 +74,7 @@ Be respectful and professional. OntoBricks is a Databricks Labs project: explora
 
 ## 2. Prerequisites
 
-- **Python 3.10+** (`requires-python` in `pyproject.toml`)
+- **Python 3.11+** (`requires-python` in `pyproject.toml`)
 - **[uv](https://docs.astral.sh/uv/)** for deps and the lockfile
 - **Git**
 - Optional for local Databricks calls: [Databricks CLI](https://docs.databricks.com/dev-tools/cli/index.html) (`databricks auth login`)

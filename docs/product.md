@@ -444,7 +444,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 
 | Layer      | Technology                                                                                |
 | ---------- | ----------------------------------------------------------------------------------------- |
-| Backend    | Python 3.10+, FastAPI, RDFLib, Databricks SDK                                             |
+| Backend    | Python 3.11+, FastAPI, RDFLib, Databricks SDK                                             |
 | Reasoning  | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom SWRL engine (SQL translator) |
 | Graph DB   | Lakebase Postgres flat triple store (`psycopg`, `COPY FROM STDIN`, optional Lakeflow synced tables); pluggable behind `GraphDBBackend` |
 | Graph Analysis | NetworkX 3.0+ (community detection: Louvain, Label Propagation, Greedy Modularity)    |

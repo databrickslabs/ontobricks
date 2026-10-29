@@ -2,7 +2,7 @@
 
 **Release window:** October 2026<br>
 **Type:** Patch release (v0.9.0 → v0.9.1)<br>
-**Test status:** `uv run --frozen pytest -q -m "not scenario"`: 9625 passed, 326 skipped, 8 deselected.
+**Test status:** `uv run --frozen pytest -q -m "not scenario"`: 9625 passed, 326 skipped, 8 deselected. Live campaign on `ontobricks-09x` (2026-10-29): `make scenario-campaign` 7 passed in 22m; validation 13 passed, 0 failed.
 
 This release is additive on v0.9.0. Lakehouse//RT queries, staged Ontology
 Generate, Knowledge Store, Studio, SPARQL playground, entity quality / SWRL /

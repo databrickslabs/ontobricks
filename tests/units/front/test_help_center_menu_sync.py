@@ -232,3 +232,15 @@ def test_owl_and_r2rml_are_designer_exports_not_sidebar_items():
     assert "W3C Standards &rarr; OWL" not in help_html
     assert "Download OWL" not in help_html
     assert "Export</strong>" in help_html
+
+
+def test_help_registry_copy_is_lakebase_not_uc_volume():
+    """Starter / workflow / troubleshoot must not describe the pre-0.9 Volume registry."""
+    html = _help_html()
+    assert "stored in your Unity Catalog Volume" not in html
+    assert "folder structure in your Unity Catalog Volume" not in html
+    assert "A UC Volume for the domain registry" not in html
+    assert "stored in Lakebase Postgres" in html
+    assert "Knowledge Store" in html
+    assert "Stage 1 detects" in html
+    assert "appends" in html

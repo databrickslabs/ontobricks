@@ -2,7 +2,7 @@
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-archive me-2"></i>Registry Location</h4>
-            <p class="text-muted mb-0 small">Registry data (domains, versions, permissions, schedules, global config) lives in <strong>Lakebase</strong> (Postgres). The Unity Catalog Volume only stores domain-scoped binary artefacts (the <code>documents/</code> uploads imported by the ontology designer).</p>
+            <p class="text-muted mb-0 small">Registry data (domains, versions, permissions, schedules, global config) and the <strong>Knowledge Store</strong> live in <strong>Lakebase</strong> (Postgres). A Unity Catalog Volume is optional and only for ad-hoc OBX export bundles.</p>
         </div>
     </div>
 
@@ -50,13 +50,11 @@
                                 </div>
                                 <span id="registryVolumeCheckBadge"></span>
                             </div>
-                            <div class="text-muted registry-config-hint">Unity Catalog Volume — binary domain document uploads</div>
+                            <div class="text-muted registry-config-hint">Unity Catalog Volume — optional OBX export bundles</div>
                             <div class="text-muted mt-1" style="font-size:0.72rem;line-height:1.4">
-                                This Unity Catalog <strong>managed Volume</strong> stores the binary artefacts uploaded
-                                through the ontology designer (PDF, Word, images in each domain's <code>documents/</code> folder).
-                                It is <em>not</em> used for registry rows (those live in Lakebase).
-                                The app service principal needs <code>READ VOLUME</code> and <code>WRITE VOLUME</code>
-                                privileges to upload and serve document files.
+                                This Unity Catalog <strong>managed Volume</strong> is optional. Use it for ad-hoc
+                                OBX export bundles. Uploaded documents are parsed into the Lakebase Knowledge Store
+                                (originals are not kept). Registry rows also live in Lakebase, not on the Volume.
                             </div>
                             <div id="registryVolumeCheckDetail" class="mt-1" style="font-size:0.72rem;display:none;"></div>
                         </div>
@@ -128,8 +126,9 @@
                 <div>
                     Already running on a Volume-only registry? Use
                     <code>scripts/migrate-registry-to-lakebase.sh</code> to copy
-                    your existing JSON config into Lakebase. Domain-scoped
-                    <code>documents/</code> uploads stay on the Volume.
+                    your existing JSON config into Lakebase. Re-upload documents
+                    that must remain in Generate or Mapping context (they are
+                    not migrated off the Volume automatically).
                 </div>
             </div>
         </div>

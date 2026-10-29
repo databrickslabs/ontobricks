@@ -1430,7 +1430,7 @@ Shapes are organized into six data quality categories:
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Python | 3.10+ | Core language |
+| Python | 3.11+ | Core language |
 | FastAPI | 0.109+ | Web framework |
 | Uvicorn | latest | ASGI server |
 | RDFLib | 7.0+ | RDF/OWL operations |

@@ -140,3 +140,52 @@ Modified files:
 - changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9625 passed, 326 skipped, 8 deselected, 40 warnings in 51.37s
+
+================================================================================
+## Align Help Center and operator docs with 0.9.1
+================================================================================
+
+Context: The in-app Help modal and About page still described a UC Volume
+registry and Python 3.10. Operator guides repeated 3.10 after
+`requires-python` moved to 3.11. Live Help is those templates plus docs/.
+
+Changes:
+
+1. src/front/templates/partials/layout/help_modal.html
+   Lakebase registry, Knowledge Store, staged Generate, Explorer/SPARQL,
+   Viewer search/chat; Initialize no longer creates a Volume tree.
+2. src/front/templates/about.html
+   Python 3.11+; Lakebase registry and Knowledge Store.
+3. README.md, docs/getting-started.md, contributing.md, development.md,
+   deployment.md, architecture.md, product.md
+   Python 3.11+ to match pyproject.toml.
+4. CONTRIBUTING.md
+   Drop folded code_organization / PR_REVIEW_CHECKLIST paths.
+5. docs/user-guide.md
+   Viewers can search Explorer and use Graph Chat.
+6. tests/units/front/test_help_center_menu_sync.py
+   Contract: Help copy is Lakebase, not the Volume registry.
+7. src/front/templates/partials/registry/_registry_configuration.html
+   Volume is optional OBX bundles; Knowledge Store is Lakebase.
+8. src/front/static/global/js/navbar.js
+   Comment: load from Lakebase, not a UC Volume.
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/about.html
+- README.md
+- CONTRIBUTING.md
+- docs/getting-started.md
+- docs/contributing.md
+- docs/development.md
+- docs/deployment.md
+- docs/architecture.md
+- docs/product.md
+- docs/user-guide.md
+- releases/ReleaseNotes_V0.9.1.md
+- tests/units/front/test_help_center_menu_sync.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/global/js/navbar.js
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9626 passed, 326 skipped, 8 deselected, 40 warnings in 50.49s
