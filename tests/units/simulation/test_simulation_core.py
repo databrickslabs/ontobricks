@@ -357,6 +357,7 @@ class TestSimulationDiff:
         inferred = [r for r in diff["added"] if r["origin"] == "inferred"]
         assert inferred[0]["provenance"] == "swrl:Risk"
         assert diff["removed"][0]["object"] == "700"
+        assert diff["removed"][0]["origin"] == "patch"
 
     def test_row_cap(self):
         after = [_t(str(i), "p", "o") for i in range(10)]
@@ -396,6 +397,12 @@ class _SandboxStore:
         for pair in pairs:
             self.rows = {r for r in self.rows if (r[0], r[1]) != (pair["subject"], pair["predicate"])}
         return 1
+
+    def query_triples(self, table):
+        return [
+            {"subject": subject, "predicate": predicate, "object": obj}
+            for subject, predicate, obj in self.rows
+        ]
 
 
 class TestSandboxApply:
@@ -448,6 +455,56 @@ class TestSandboxApply:
         assert EX + "c2" in seeded
         assert EX + "m1" in seeded
         assert EX + "Meter" not in seeded
+
+    def test_seed_neighbourhood_skips_inbound_when_disabled(self):
+        sandbox = object.__new__(SimulationSandbox)
+        seeded: list = []
+        sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
+        sandbox._graph_name = "g"
+        sandbox.uri_objects_of_many = lambda subjects: (
+            [EX + "m1"] if EX + "c2" in subjects else []
+        )
+
+        class Live:
+            def expand_and_fetch_subgraph(self, *a):
+                raise AssertionError("inbound expand must not run")
+
+        sandbox._live = Live()
+        sandbox.seed_neighbourhood([EX + "c2"], hops=1, inbound=False)
+        assert EX + "c2" in seeded
+        assert EX + "m1" in seeded
+        assert EX + "otherCustomer" not in seeded
+
+    def test_seed_referrers_copies_subjects_pointing_at_focus(self):
+        sandbox = object.__new__(SimulationSandbox)
+        seeded: list = []
+        sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
+        sandbox._graph_name = "g"
+
+        class Live:
+            def expand_and_fetch_subgraph(self, table, uris, hops, *a):
+                assert uris == [EX + "jacob"]
+                assert hops == 1
+                return {
+                    "results": [
+                        {
+                            "subject": EX + "CLM0000030",
+                            "predicate": EX + "hasCustomer",
+                            "object": EX + "jacob",
+                        },
+                        {
+                            "subject": EX + "otherCust",
+                            "predicate": EX + "hasContract",
+                            "object": EX + "c2",
+                        },
+                    ]
+                }
+
+        sandbox._live = Live()
+        sandbox.seed_referrers([EX + "jacob"])
+        assert EX + "CLM0000030" in seeded
+        assert EX + "otherCust" not in seeded
+        assert EX + "jacob" not in seeded
 
     def test_seed_neighbourhood_walks_sandbox_objects_when_expand_empty(self):
         sandbox = object.__new__(SimulationSandbox)

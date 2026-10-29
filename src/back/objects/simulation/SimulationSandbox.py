@@ -14,7 +14,6 @@ from back.objects.simulation.SimulationPatch import SimulationPatch
 
 logger = get_logger(__name__)
 
-
 class _LakebaseSimulationSandbox:
     """Seed, patch and read a standalone sandbox copy of a live graph slice.
 
@@ -72,25 +71,71 @@ class _LakebaseSimulationSandbox:
             )
         return copied
 
-    def seed_neighbourhood(self, uris: List[str], hops: int = 1) -> int:
+    def seed_neighbourhood(
+        self, uris: List[str], hops: int = 1, inbound: bool = True
+    ) -> int:
         """Copy *uris* from live plus *hops* of related subjects.
 
         Patch objects (e.g. extra contracts on a customer) are often outside
         the original scope slice. Without their outgoing triples — and the
         meter subjects those triples point at — SWRL cannot chain
         ``hasContract`` to ``hasMeter``.
+
+        *inbound* follows live reverse edges (who already points at this
+        contract). Leave it off for hypothesis objects: those contracts
+        still belong to other customers in the live graph, and pulling
+        their claims into the sandbox makes SWRL fire on the wrong people.
         """
         unique = list(dict.fromkeys(u for u in uris if u))
         if not unique:
             return 0
         copied = self.seed(unique)
         seen: Dict[str, None] = {u: None for u in unique}
-        copied += self._seed_live_expand(unique, hops, seen)
+        if inbound:
+            copied += self._seed_live_expand(unique, hops, seen)
         # Walk only the URIs we were asked to seed — not every live-expand
         # neighbour (that is one SQL round-trip per subject and freezes the
         # run at "30% seeding neighbours").
         copied += self._seed_sandbox_walk(unique, max(hops, 1), seen)
         return copied
+
+    def seed_referrers(self, uris: List[str]) -> int:
+        """Copy live subjects that point at *uris* (incoming edges only).
+
+        The scoped customer's claims are often ``Claim → customer`` rather
+        than ``customer → hasClaim``. Hypothesis seeding must not pull
+        every inbound neighbour of a patched contract, but the focus
+        entity still needs those claim subjects in the sandbox.
+        """
+        unique = list(dict.fromkeys(u for u in uris if u))
+        if not unique:
+            return 0
+        expand = getattr(self._live, "expand_and_fetch_subgraph", None)
+        if not callable(expand):
+            return 0
+        cap_entities = min(max(len(unique) * 40, 200), 5000)
+        try:
+            sub = expand(
+                self._graph_name,
+                unique,
+                1,
+                cap_entities,
+                cap_entities * 50,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Live referrer expand failed: %s", exc)
+            return 0
+        wanted = set(unique)
+        extra: List[str] = []
+        for triple in sub.get("results") or []:
+            pred = (triple or {}).get("predicate") or ""
+            obj = (triple or {}).get("object") or ""
+            subj = (triple or {}).get("subject") or ""
+            if pred == RDF_TYPE or obj not in wanted or not subj or subj in wanted:
+                continue
+            extra.append(subj)
+        more = list(dict.fromkeys(extra))
+        return self.seed(more) if more else 0
 
     def _seed_live_expand(
         self, unique: List[str], hops: int, seen: Dict[str, None]
@@ -271,7 +316,9 @@ class _StoreSimulationSandbox:
             )
         return copied
 
-    def seed_neighbourhood(self, uris: List[str], hops: int = 1) -> int:
+    def seed_neighbourhood(
+        self, uris: List[str], hops: int = 1, inbound: bool = True
+    ) -> int:
         unique = list(dict.fromkeys(uri for uri in uris if uri))
         if not unique:
             return 0
@@ -293,6 +340,28 @@ class _StoreSimulationSandbox:
             seen.update(frontier)
             copied += self.seed(frontier)
         return copied
+
+    def seed_referrers(self, uris: List[str]) -> int:
+        unique = list(dict.fromkeys(uri for uri in uris if uri))
+        if not unique:
+            return 0
+        expand = getattr(self._live, "expand_and_fetch_subgraph", None)
+        if not callable(expand):
+            return 0
+        try:
+            sub = expand(self._graph_name, unique, 1, 200, 10_000)
+        except Exception:  # noqa: BLE001
+            return 0
+        wanted = set(unique)
+        extra = [
+            (triple or {}).get("subject") or ""
+            for triple in sub.get("results") or []
+            if (triple or {}).get("predicate") != RDF_TYPE
+            and (triple or {}).get("object") in wanted
+            and (triple or {}).get("subject") not in wanted
+        ]
+        more = [uri for uri in dict.fromkeys(extra) if uri]
+        return self.seed(more) if more else 0
 
     def seed_focus_for_swrl(self, entity_uri: str, hops: int = 2) -> int:
         return self.seed_neighbourhood([entity_uri], hops=hops)

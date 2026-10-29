@@ -1373,7 +1373,14 @@ sandbox table.
 Scenario definitions and the last diff live in the registry tables
 `simulations` (PK `(domain_id, version, id)`) and `simulation_runs`
 (append-only trace), created lazily by the `Simulations` mixin of
-`LakebaseRegistryStore`. Runs execute as `TaskManager` background tasks.
+`LakebaseRegistryStore`. Both travel with the domain version: creating a
+new version copies scenario specs (as drafts) and the run history;
+deleting a version drops those rows; GitHub/OBX export writes
+`simulation/scenarios.json` and `simulation/runs.json` (specs and run
+stats, not the capped triple diff). Domain Save that only rewrites
+ontology/mapping leaves the simulation tables alone. Sandbox triples stay
+in the graph schema and are rebuilt by the next run. Runs execute as
+`TaskManager` background tasks.
 `SimulationArtifacts` names the physical objects of a scenario — sandbox
 table (Lakebase/Delta), Explorer overlay views (`__smu_` / `__sms_`), or
 the isolated Neo4j graph — and the last-run item counts. The scenario

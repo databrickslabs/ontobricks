@@ -141,7 +141,7 @@ class SimulationRunner:
         self._progress(30, f"Seeding {len(uris)} hypothesis entities and neighbours")
         seed_nb = getattr(sandbox, "seed_neighbourhood", None)
         if callable(seed_nb):
-            seed_nb(uris, hops=1)
+            seed_nb(uris, hops=1, inbound=False)
         else:
             sandbox.seed(uris)
 
@@ -185,9 +185,26 @@ class SimulationRunner:
         self._progress(42, f"Copying {len(extra)} linked entities for reasoning")
         seed_nb = getattr(sandbox, "seed_neighbourhood", None)
         if callable(seed_nb):
-            seed_nb(extra, hops=1)
+            seed_nb(extra, hops=1, inbound=False)
         else:
             sandbox.seed(extra)
+
+    def _seed_focus_referrers(self, sandbox: Any) -> None:
+        """Copy live subjects that point at the scoped entity (e.g. claims).
+
+        Skip this for patched contracts — those inbound neighbours are
+        other customers in the live graph.
+        """
+        if self._spec.scope.type != "entity":
+            return
+        focus = self._spec.scope.focus
+        if not focus:
+            return
+        seed_ref = getattr(sandbox, "seed_referrers", None)
+        if not callable(seed_ref):
+            return
+        self._progress(44, "Copying entities that point at the scoped customer")
+        seed_ref([focus])
 
     def run(self) -> None:
         started_at = _now_iso()
@@ -305,6 +322,7 @@ class SimulationRunner:
         sandbox.reset()
         sandbox.seed(entities)
         self._seed_hypothesis(sandbox, skip=entities)
+        self._seed_focus_referrers(sandbox)
         self._progress(38, "Recording the before-picture")
         before = sandbox.triples()
 
@@ -333,7 +351,10 @@ class SimulationRunner:
 
         self._progress(92, "Computing before/after diff")
         diff = SimulationDiff.compute(
-            before, sandbox.triples(), patch_added=asserted, provenance=provenance
+            before,
+            sandbox.triples(),
+            patch_added=asserted,
+            provenance=provenance,
         )
         stats = reasoning.stats or {}
         diff["summary"].update(

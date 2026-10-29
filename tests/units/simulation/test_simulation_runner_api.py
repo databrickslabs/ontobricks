@@ -154,7 +154,7 @@ class TestSimulationFacade:
         assert stored["diff"]["added"]
         assert stored["diff_summary"]["added_count"] == 1
 
-    def test_update_keeps_diff_when_spec_changes(self, monkeypatch):
+    def test_update_clears_stale_diff_when_spec_changes(self, monkeypatch):
         reg = _Registry()
         sim = Simulation(_Domain(), None, registry=reg)
         monkeypatch.setattr(sim, "_drop_sandbox", lambda sim_id: None)
@@ -175,7 +175,8 @@ class TestSimulationFacade:
         sim.update(sim_id, changed)
         stored = reg.rows[sim_id]
         assert stored["status"] == "draft"
-        assert stored["diff"]["added"]
+        assert stored["diff"] == {}
+        assert stored["diff_summary"] == {}
 
     def test_save_simulation_sql_keeps_diff_unless_provided(self):
         import inspect
@@ -345,12 +346,18 @@ class _FakeSandbox:
         for t in ({"subject": EX + "acme", "predicate": EX + "score", "object": "700"},):
             self.rows[SimulationDiff.key(t)] = t
 
-    def seed_neighbourhood(self, uris, hops=1):
+    def seed_neighbourhood(self, uris, hops=1, inbound=True):
         self.neighbourhood_calls = getattr(self, "neighbourhood_calls", [])
-        self.neighbourhood_calls.append((list(uris), hops))
+        self.neighbourhood_calls.append((list(uris), hops, inbound))
         self.neighbourhood = list(uris)
         self.neighbourhood_hops = hops
+        self.neighbourhood_inbound = inbound
         return self.seed(uris)
+
+    def seed_referrers(self, uris):
+        self.referrer_calls = getattr(self, "referrer_calls", [])
+        self.referrer_calls.append(list(uris))
+        return 0
 
     def triples(self):
         return list(self.rows.values())
@@ -463,10 +470,13 @@ class TestSimulationRunner:
         ).run()
         sandbox = _FakeSandbox.instances[0]
         assert any(
-            contract in uris and hops == 1
-            for uris, hops in sandbox.neighbourhood_calls
+            contract in uris and hops == 1 and inbound is False
+            for uris, hops, inbound in sandbox.neighbourhood_calls
         )
-        assert all(EX + "acme" not in uris for uris, _hops in sandbox.neighbourhood_calls)
+        assert all(
+            EX + "acme" not in uris for uris, _hops, _in in sandbox.neighbourhood_calls
+        )
+        assert sandbox.referrer_calls == [[EX + "acme"]]
 
     def test_normalizes_ontology_patch_predicate_for_sandbox(self, monkeypatch):
         _FakeSandbox.instances = []

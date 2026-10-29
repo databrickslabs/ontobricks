@@ -23,6 +23,12 @@ _PATCH = {
     "predicate": "https://ex.com/onto/creditScore",
     "object": "420",
 }
+_REMOVE_CLAIM = {
+    "op": "remove",
+    "subject": "https://ex.com/Person/JacobMartin",
+    "predicate": "https://ex.com/onto/hasClaim",
+    "object": "https://ex.com/Claim/CLM0000030",
+}
 
 _ONT = {
     "success": True,
@@ -271,6 +277,53 @@ def test_search_entities_http_error(monkeypatch):
     assert "503" in out["error"]
 
 
+def test_list_entity_relationships_returns_exact_live_triples(monkeypatch):
+    entity = "https://ex.com/Person/JacobMartin"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/dtwin/triples/find"
+        assert request.url.params["search"] == entity
+        return httpx.Response(
+            200,
+            json={
+                "triples": [
+                    {
+                        "subject": entity,
+                        "predicate": "https://ex.com/onto/hasClaim",
+                        "object": _REMOVE_CLAIM["object"],
+                    },
+                    {
+                        "subject": entity,
+                        "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                        "object": "https://ex.com/onto/Person",
+                    },
+                ]
+            },
+        )
+
+    monkeypatch.setattr(
+        facts_tools,
+        "_client",
+        lambda ctx: httpx.Client(
+            base_url=ctx.dtwin_base_url,
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    out = json.loads(facts_tools.tool_list_entity_relationships(_ctx(), entity_uri=entity))
+    assert out["relationships"] == [
+        {
+            "subject": entity,
+            "predicate": _REMOVE_CLAIM["predicate"],
+            "object": _REMOVE_CLAIM["object"],
+        }
+    ]
+
+
+def test_list_entity_relationships_requires_uri():
+    out = json.loads(facts_tools.tool_list_entity_relationships(_ctx(), entity_uri="Jacob"))
+    assert "error" in out
+
+
 def _run(monkeypatch, llm_turns, **kwargs):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/ontology/get-loaded-ontology":
@@ -283,6 +336,19 @@ def _run(monkeypatch, llm_turns, **kwargs):
                         {
                             "uri": "https://ex.com/Person/JacobMartin",
                             "label": "Jacob Martin",
+                        }
+                    ]
+                },
+            )
+        if request.url.path == "/dtwin/triples/find":
+            return httpx.Response(
+                200,
+                json={
+                    "triples": [
+                        {
+                            "subject": "https://ex.com/Person/JacobMartin",
+                            "predicate": "https://ex.com/onto/hasClaim",
+                            "object": _REMOVE_CLAIM["object"],
                         }
                     ]
                 },
@@ -326,6 +392,32 @@ def test_run_agent_generates_facts_via_ontology_and_search(monkeypatch):
     assert result.success is True
     assert result.proposed_patches == [_PATCH]
     SimulationPatch.from_dict(result.proposed_patches[0])
+
+
+def test_run_agent_proposes_exact_claim_removal(monkeypatch):
+    turns = [
+        _tool_turn(
+            "list_entity_relationships",
+            {"entity_uri": _REMOVE_CLAIM["subject"]},
+            "tc-links",
+        ),
+        _tool_turn(
+            "propose_patches",
+            {
+                "patches": [_REMOVE_CLAIM],
+                "scenario_description": "Jacob Martin has no associated claims.",
+            },
+            "tc-propose",
+        ),
+        {"choices": [{"message": {"content": "I removed Jacob's claim link."}}]},
+    ]
+    result = _run(
+        monkeypatch,
+        turns,
+        user_message="Detach all claims from Jacob Martin.",
+    )
+    assert result.success is True
+    assert result.proposed_patches == [_REMOVE_CLAIM]
 
 
 def test_run_agent_reports_llm_failure():

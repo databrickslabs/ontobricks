@@ -116,6 +116,7 @@ class TestCreateVersionBackendIgnoresReadiness:
         assert "mapping_valid" not in src
         assert "is_ontology_valid" not in src
         assert "mapping_complete" not in src
+        assert "copy_version_documents" in src
 
     def test_creates_version_with_incomplete_mappings(self, monkeypatch):
         from unittest.mock import MagicMock
@@ -155,3 +156,4 @@ class TestCreateVersionBackendIgnoresReadiness:
         assert result["success"] is True
         assert result["new_version"] == "2"
         svc.write_version.assert_called_once()
+        svc.copy_version_documents.assert_called_once()

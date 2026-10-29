@@ -1287,7 +1287,12 @@ Cohorts page.
 
 Lists the saved scenarios of the active domain version with their scope,
 number of facts, status (`draft`, `running`, `ready`, `failed`) and the
-added / removed counts of the last run. Open, run, view results, **purge**
+added / removed counts of the last run. Scenario specs and the run history
+are stored in the domain registry (not only in the browser session). Saving
+a scenario, finishing a run, or saving the domain writes them there.
+Creating a **new domain version** copies the scenarios (as drafts) and
+their run history; sandboxes are not copied — run again on the new version
+to rebuild them. Open, run, view results, **purge**
 (drop the sandbox after-picture, keep the scenario as a draft) or delete a
 scenario from its row. **New scenario** (or Explorer **Simulate from here**)
 opens the editor on the same Scenarios page (`?section=scenarios&simulation=`
@@ -1338,7 +1343,15 @@ rules, or results, shows the brand spinner over that pane.
    inherited), and related instances so you do not have to paste URIs by hand.
    Ontology predicate URIs are resolved to the mapped data predicate when
    the sandbox applies the fact, so an added relationship participates in
-   SWRL joins with the existing graph.
+   SWRL joins with the existing graph. Attaching an existing contract to
+   the scoped person copies that contract's own facts and outgoing parts
+   (meters, literals), not other customers who already hold it in the live
+   graph. Claims that point at the scoped person are copied so rules can
+   join *that* customer's claims, not a neighbour's. To detach a claim,
+   describe that intent explicitly: the facts agent looks up the customer's
+   existing relationship and proposes a reviewed **Remove** card with the
+   exact subject, predicate, and claim URI. Contract termination does not
+   implicitly remove claims.
 3. **Reasoning** — the same phase tiles as Graph → Inference.
    SWRL and graph reasoning are on by default; decision tables, SPARQL
    CONSTRUCT, aggregate rules and OWL 2 RL are optional. Expand a SWRL /
@@ -1381,7 +1394,8 @@ entity's neighbourhood and an empty *Set* fact.
 ### Runs (Sidebar)
 
 History of every simulation run on the domain version: start time, scenario,
-status, outcome, duration and who ran it.
+status, outcome, duration and who ran it. That history is stored in the
+registry with the domain version and is copied when you branch a new version.
 
 ---
 

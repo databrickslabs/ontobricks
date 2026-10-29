@@ -13,6 +13,7 @@ class _Cursor:
         self.rowcount = rowcount
         self.sql = ""
         self.params = ()
+        self.calls = []
 
     def __enter__(self):
         return self
@@ -20,9 +21,10 @@ class _Cursor:
     def __exit__(self, *_args):
         return False
 
-    def execute(self, sql, params):
+    def execute(self, sql, params=None):
         self.sql = sql
         self.params = params
+        self.calls.append((sql, params))
 
 
 class _Connection:
@@ -39,6 +41,7 @@ def _store(rowcount):
     store._schema = "registry"
     store._registry_id = "registry-id"
     store._status_column_ready = True
+    store._simulation_tables_ready = True
     store._cfg = type("Cfg", (), {"catalog": "c", "schema": "s", "volume": "v"})()
     store._auth = type("Auth", (), {"host": "host", "database": "db"})()
     store._database = ""
@@ -57,8 +60,13 @@ def test_delete_version_sql_guards_draft_state():
     ok, message = store.delete_version("acme", "1")
 
     assert (ok, message) == (True, "")
-    assert "AND v.status = %s" in cursor.sql
-    assert cursor.params == ("registry-id", "acme", "1", "DRAFT")
+    version_sql, version_params = next(
+        (sql, params) for sql, params in cursor.calls if "domain_versions" in sql
+    )
+    assert "AND v.status = %s" in version_sql
+    assert version_params == ("registry-id", "acme", "1", "DRAFT")
+    assert any("simulation_runs" in sql for sql, _params in cursor.calls)
+    assert any("simulations s" in sql for sql, _params in cursor.calls)
 
 
 def test_zero_row_guarded_delete_reports_conflict():

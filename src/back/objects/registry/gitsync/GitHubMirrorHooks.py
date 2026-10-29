@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from back.objects.registry.gitsync.GitHubMirror import github_mirror
 
@@ -20,6 +20,16 @@ class GitHubMirrorHooks:
         if ok:
             github_mirror.notify_write(self, folder, version)
         return ok, msg
+
+    def save_simulation(self, folder: str, version: str, entry: Dict[str, Any]) -> None:
+        super().save_simulation(folder, version, entry)  # type: ignore[misc]
+        github_mirror.notify_write(self, folder, version)
+
+    def record_simulation_run(
+        self, folder: str, version: str, entry: Dict[str, Any]
+    ) -> None:
+        super().record_simulation_run(folder, version, entry)  # type: ignore[misc]
+        github_mirror.notify_write(self, folder, version)
 
     def update_version_status(
         self, folder: str, version: str, status: str

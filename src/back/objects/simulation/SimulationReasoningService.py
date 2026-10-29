@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from back.core.reasoning import ReasoningService
+from back.core.reasoning.ReasoningService import ReasoningService
 
 
 class SimulationReasoningService(ReasoningService):

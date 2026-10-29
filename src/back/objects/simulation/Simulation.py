@@ -209,18 +209,23 @@ class Simulation:
         ):
             raise ValidationError("Simulation is running — wait for it to finish")
         spec = self.parse_spec(body, sim_id=sim_id)
+        status = self._status_after_spec_save(current, spec)
+        changed_results = status == "draft" and current.get("status") == "ready"
+        entry = {
+            "id": sim_id,
+            "label": spec.label,
+            "status": status,
+            "spec": spec.to_dict(),
+            "owner": current.get("owner", ""),
+            "task_id": current.get("task_id", "") or "",
+            "error": current.get("error", "") or "",
+        }
+        if changed_results:
+            entry.update({"diff_summary": {}, "diff": {}, "last_run_at": None})
         self.registry.save_simulation(
             self.folder,
             self.version,
-            {
-                "id": sim_id,
-                "label": spec.label,
-                "status": self._status_after_spec_save(current, spec),
-                "spec": spec.to_dict(),
-                "owner": current.get("owner", ""),
-                "task_id": current.get("task_id", "") or "",
-                "error": current.get("error", "") or "",
-            },
+            entry,
         )
         return self.get(sim_id)
 

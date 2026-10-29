@@ -360,3 +360,198 @@ Modified files:
 
 Tests: uv run --frozen pytest -q tests/units/graphdb/test_v090_graph_access_twin_helpers.py tests/units/dtwin/test_digitaltwin_api.py tests/units/registry/test_registry_published.py tests/units/front/test_settings_api_contract.py tests/units/api/test_external_api.py tests/units/api/test_graph_access_gate.py tests/mcp --ignore=tests/mcp/integration → 189 passed.
 
+================================================================================
+## Keep simulation claim reasoning on the scoped customer
+================================================================================
+
+Context: What-if "Jacob Martin has contracts ECON00040/20/18, terminate
+ECON00020" removed 14 claims that belonged to other live holders of those
+contracts, and left Jacob's real claim CLM0000030 untouched. Hypothesis
+seeding followed undirected live hops from the patched contracts, so SWRL
+ran on the wrong neighbourhood.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   Hypothesis neighbourhood is outbound-only; seed_referrers copies only
+   subjects that point at the scoped person (their claims).
+2. src/back/objects/simulation/SimulationRunner.py
+   Seed patched contracts without inbound neighbours, then copy referrers
+   of the entity-scope focus.
+3. src/agents/agent_simulation_facts/engine.py
+   Attaching contracts is add/set; do not mass-remove unnamed claims.
+4. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+   Eval row: three contract adds plus terminated status, no claim removes.
+5. docs/user-guide.md
+   Document outbound hypothesis seed vs inbound claims of the focus.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/agents/agent_simulation_facts/engine.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/README.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9801 passed, 326 skipped, 8 deselected, 0 failed in 53.32s. Dry-run eval: simulation_facts schema_valid=1.000 n=26.
+
+================================================================================
+## Retract the scoped customer's claims when a contract is terminated
+================================================================================
+
+Context: After outbound-only hypothesis seeding, Results no longer dropped
+foreign claims, but Jacob Martin's real claim CLM0000030 still stayed. SWRL
+only inserts consequents, so terminating ECON00020 never deleted hasClaim.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   retract_claims_of drops the focus customer's claim edges and those
+   claim subjects.
+2. src/back/objects/simulation/SimulationRunner.py
+   Seed claim referrers before the before-picture; after a terminal
+   status patch, retract the scoped person's claims.
+3. src/back/objects/simulation/SimulationDiff.py
+   Tag those drops as inferred removals (provenance
+   simulation:terminated-contract).
+4. docs/user-guide.md
+   Document the terminated-contract claim drop.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/simulation/SimulationDiff.py
+- src/agents/agent_simulation_facts/engine.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9804 passed, 326 skipped, 8 deselected, 0 failed in 54.97s.
+
+================================================================================
+## Clear stale simulation results after fact edits
+================================================================================
+
+Context: The Jacob Martin scenario was a draft with zero saved patches, but
+the Results pane still exposed a prior run. Its description stated that
+ECON00020 was terminated, yet no corresponding fact was available to trigger
+the claim retraction. A changed scenario must not present results from an
+older specification as current.
+
+Changes:
+
+1. src/back/objects/simulation/Simulation.py
+   Clear the stored diff, summary, and last-run timestamp when a ready
+   simulation is saved with a results-affecting specification change.
+2. src/back/objects/simulation/SimulationReasoningService.py
+   Import the base service directly to avoid an import-order cycle during
+   simulation test collection.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Cover stale-diff clearing after a patch change.
+
+Modified files:
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/SimulationReasoningService.py
+- tests/units/simulation/test_simulation_runner_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9804 passed, 326 skipped, 8 deselected, 0 failed in 50.92s. Dry-run eval: simulation_facts schema_valid=1.000 n=26.
+
+================================================================================
+## Generate explicit claim-removal facts from live relationships
+================================================================================
+
+Context: Jacob Martin's claim CLM0000030 must be removed as a reviewed
+hypothetical fact when the operator asks to detach claims. Terminating
+ECON00020 cannot infer that removal: the claim is linked to CON0000010.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/tools.py
+   Add a relationship lookup tool that returns exact outgoing live triples
+   for a requested entity.
+2. src/agents/agent_simulation_facts/engine.py
+   Require relationship lookup before proposing removals and distinguish
+   explicit claim detachment from contract termination.
+3. src/back/objects/simulation/SimulationRunner.py
+   Remove the invalid automatic claim retraction on terminal contract
+   status; Remove cards now control every claim removal.
+4. src/back/objects/simulation/SimulationDiff.py
+   Restore patch provenance for all removed triples.
+5. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+   Add the Jacob Martin / CLM0000030 regression example.
+6. docs/user-guide.md
+   Explain the reviewed Remove-card behaviour.
+
+Modified files:
+- src/agents/agent_simulation_facts/tools.py
+- src/agents/agent_simulation_facts/engine.py
+- src/back/objects/simulation/SimulationDiff.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/simulation/SimulationSandbox.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/README.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9804 passed, 326 skipped, 8 deselected, 0 failed in 52.69s. Dry-run eval: simulation_facts schema_valid=1.000 n=27.
+
+================================================================================
+## Persist simulation scenarios and runs with the domain version
+================================================================================
+
+Context: What-if scenarios and their run history lived in registry sidecar
+tables keyed by domain version, but branching a version, deleting a version,
+and GitHub/OBX export did not carry them. Operators could lose scenarios and
+the Runs tab after a New Version or registry restore.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/Simulations.py
+   Copy scenario specs (as drafts) plus run history to a new version;
+   delete both when a version is removed; attach specs/runs on version
+   read; restore them from a version payload that includes those keys.
+2. src/back/objects/registry/store/lakebase/Documents.py
+   New Version document copy also copies simulations so Domain stays
+   within the size budget.
+3. src/back/objects/registry/store/lakebase/Catalog.py
+   read_version attaches scenarios and runs; write_version persists them
+   only when the payload carries the keys (ontology-only saves do not
+   wipe the tables); delete_version drops the sidecar rows.
+4. src/back/objects/registry/gitsync/DomainRepoLayout.py
+   Mirror simulation/scenarios.json and simulation/runs.json.
+5. src/back/objects/registry/gitsync/GitHubMirrorHooks.py
+   Push the domain version after a scenario save or recorded run.
+6. docs/architecture.md
+   Document version copy, delete, and GitHub/OBX persistence.
+7. docs/user-guide.md
+   Scenarios and run history are stored in the domain registry.
+
+Modified files:
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/back/objects/registry/store/lakebase/Documents.py
+- src/back/objects/registry/store/lakebase/Catalog.py
+- src/back/objects/registry/gitsync/DomainRepoLayout.py
+- src/back/objects/registry/gitsync/GitHubMirrorHooks.py
+- tests/units/registry/_v090_fake_pg.py
+- tests/units/registry/test_v090_lakebase_simulations.py
+- tests/units/registry/test_v090_lakebase_documents.py
+- tests/units/registry/test_v090_lakebase_catalog.py
+- tests/units/registry/test_github_layout.py
+- tests/units/registry/test_lakebase_guarded_version_delete.py
+- tests/units/front/test_create_version_ungated.py
+- docs/architecture.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9813 passed, 326 skipped, 8 deselected, 0 failed in 49.01s
+
+

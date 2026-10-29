@@ -245,6 +245,9 @@ class Catalog:
                     }
                 },
             }
+            attach = getattr(self, "attach_simulations_to_doc", None)
+            if callable(attach):
+                attach(doc, folder, version)
             return True, doc, ""
         except Exception as exc:  # noqa: BLE001
             return False, {}, str(exc)
@@ -335,6 +338,9 @@ class Catalog:
                     ),
                 )
             invalidate_registry_cache(self.cache_key)
+            persist = getattr(self, "persist_version_simulations", None)
+            if callable(persist):
+                persist(folder, version, data)
             return True, ""
         except Exception as exc:  # noqa: BLE001
             logger.exception("write_version failed for %s/%s", folder, version)
@@ -361,6 +367,9 @@ class Catalog:
                         f"Version {version} is no longer Draft or no longer exists; "
                         "refresh and try again"
                     )
+            drop_sims = getattr(self, "delete_simulations_for_version", None)
+            if callable(drop_sims):
+                drop_sims(folder, version)
             invalidate_registry_cache(self.cache_key)
             return True, ""
         except ConflictError:

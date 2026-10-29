@@ -8,7 +8,7 @@ live in the graph schema as ``<graph>__sim_<id>`` tables.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
@@ -339,3 +339,209 @@ class Simulations:
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_simulation_runs(%s) failed: %s", folder, exc)
             return []
+
+    def copy_simulations_to_version(
+        self, folder: str, from_version: str, to_version: str
+    ) -> Tuple[bool, str]:
+        """Copy scenario specs (as drafts) and run history onto a new version.
+
+        Sandbox tables and last-run diffs stay on the source version — the
+        new version is a DRAFT snapshot of the *definitions*, not the
+        after-picture.
+        """
+        if not self._ensure_simulation_tables():
+            return False, "simulation tables unavailable"
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.simulations
+                        (domain_id, version, id, label, status, spec,
+                         diff_summary, diff, owner, task_id, error,
+                         created_at, updated_at, last_run_at)
+                    SELECT s.domain_id, %s, s.id, s.label, 'draft', s.spec,
+                           '{{}}'::jsonb, '{{}}'::jsonb, s.owner, '', '',
+                           s.created_at, now(), NULL
+                    FROM {sch}.simulations s
+                    JOIN {sch}.domains d ON d.id = s.domain_id
+                    WHERE d.registry_id = %s AND d.folder = %s
+                      AND s.version = %s
+                    ON CONFLICT (domain_id, version, id) DO NOTHING
+                    """,
+                    (
+                        str(to_version),
+                        self._registry(),
+                        folder,
+                        str(from_version),
+                    ),
+                )
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.simulation_runs
+                        (domain_id, version, simulation_id, status, message,
+                         error, task_id, started_at, finished_at, duration_s,
+                         stats, owner)
+                    SELECT r.domain_id, %s, r.simulation_id, r.status,
+                           r.message, r.error, r.task_id, r.started_at,
+                           r.finished_at, r.duration_s, r.stats, r.owner
+                    FROM {sch}.simulation_runs r
+                    JOIN {sch}.domains d ON d.id = r.domain_id
+                    WHERE d.registry_id = %s AND d.folder = %s
+                      AND r.version = %s
+                    """,
+                    (
+                        str(to_version),
+                        self._registry(),
+                        folder,
+                        str(from_version),
+                    ),
+                )
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("copy_simulations_to_version(%s) failed: %s", folder, exc)
+            return False, str(exc)
+
+    def delete_simulations_for_version(
+        self, folder: str, version: str
+    ) -> Tuple[bool, str]:
+        """Remove scenario rows and run history for one domain version."""
+        if not self._ensure_simulation_tables():
+            return False, "simulation tables unavailable"
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    DELETE FROM {sch}.simulation_runs r
+                    USING {sch}.domains d
+                    WHERE d.id = r.domain_id AND d.registry_id = %s
+                      AND d.folder = %s AND r.version = %s
+                    """,
+                    (self._registry(), folder, str(version)),
+                )
+                cur.execute(
+                    f"""
+                    DELETE FROM {sch}.simulations s
+                    USING {sch}.domains d
+                    WHERE d.id = s.domain_id AND d.registry_id = %s
+                      AND d.folder = %s AND s.version = %s
+                    """,
+                    (self._registry(), folder, str(version)),
+                )
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("delete_simulations_for_version(%s) failed: %s", folder, exc)
+            return False, str(exc)
+
+    def attach_simulations_to_doc(
+        self, doc: Dict[str, Any], folder: str, version: str
+    ) -> None:
+        """Put scenario specs and run history on ``doc['versions'][version]``."""
+        blob = ((doc.get("versions") or {}).get(version)) if isinstance(doc, dict) else None
+        if not isinstance(blob, dict):
+            return
+        try:
+            blob["simulations"] = [
+                self._simulation_export_entry(row)
+                for row in self.list_simulations(folder, version)
+            ]
+            blob["simulation_runs"] = self.load_simulation_runs(
+                folder, version, limit=500
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "attach_simulations_to_doc(%s/V%s) failed: %s", folder, version, exc
+            )
+
+    def persist_version_simulations(
+        self, folder: str, version: str, data: Dict[str, Any]
+    ) -> None:
+        """Replace scenarios/runs when the version payload carries them.
+
+        Absent keys leave the existing rows alone so a domain save that
+        only rewrites ontology/mapping cannot wipe the simulation tables.
+        """
+        payload = self._simulation_import_payload(data, version)
+        if payload is None:
+            return
+        try:
+            if payload["has_sims"]:
+                ok, msg = self.delete_simulations_for_version(folder, version)
+                if not ok:
+                    logger.warning(
+                        "persist_version_simulations delete %s/V%s: %s",
+                        folder,
+                        version,
+                        msg,
+                    )
+                    return
+                for entry in payload["simulations"] or []:
+                    if not isinstance(entry, dict) or not entry.get("id"):
+                        continue
+                    Simulations.save_simulation(self, folder, version, entry)
+            if payload["has_runs"]:
+                if not payload["has_sims"]:
+                    self._delete_simulation_runs_only(folder, version)
+                for entry in payload["runs"] or []:
+                    if not isinstance(entry, dict):
+                        continue
+                    Simulations.record_simulation_run(self, folder, version, entry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "persist_version_simulations(%s/V%s) failed: %s", folder, version, exc
+            )
+
+    @staticmethod
+    def _simulation_export_entry(row: Dict[str, Any]) -> Dict[str, Any]:
+        """GitHub/OBX shape: spec + last-run summary, not the capped triple diff."""
+        return {
+            "id": row.get("id"),
+            "label": row.get("label") or "",
+            "status": row.get("status") or "draft",
+            "spec": dict(row.get("spec") or {}),
+            "diff_summary": dict(row.get("diff_summary") or {}),
+            "owner": row.get("owner") or "",
+            "last_run_at": row.get("last_run_at") or "",
+        }
+
+    @staticmethod
+    def _simulation_import_payload(
+        data: Dict[str, Any], version: str
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(data, dict):
+            return None
+        blob = (data.get("versions") or {}).get(version) or {}
+        if not isinstance(blob, dict):
+            blob = {}
+        inner = blob.get("versions")
+        if isinstance(inner, dict) and (
+            "simulations" in (inner.get(version) or {})
+            or "simulation_runs" in (inner.get(version) or {})
+        ):
+            blob = inner.get(version) or {}
+        if "simulations" not in blob and "simulation_runs" not in blob:
+            if "simulations" not in data and "simulation_runs" not in data:
+                return None
+            blob = data
+        return {
+            "has_sims": "simulations" in blob,
+            "has_runs": "simulation_runs" in blob,
+            "simulations": blob.get("simulations"),
+            "runs": blob.get("simulation_runs"),
+        }
+
+    def _delete_simulation_runs_only(self, folder: str, version: str) -> None:
+        if not self._ensure_simulation_tables():
+            return
+        sch = self._q(self._schema)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                DELETE FROM {sch}.simulation_runs r
+                USING {sch}.domains d
+                WHERE d.id = r.domain_id AND d.registry_id = %s
+                  AND d.folder = %s AND r.version = %s
+                """,
+                (self._registry(), folder, str(version)),
+            )

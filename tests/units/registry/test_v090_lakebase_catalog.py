@@ -331,9 +331,12 @@ def test_delete_version_of_draft_succeeds_with_scoped_delete():
     db = FakeDB().on("DELETE FROM", rowcount=1)
 
     assert make_store(db).delete_version("acme", "1") == (True, "")
-    call = db.one("DELETE FROM")
+    deletes = db.sql_with("DELETE FROM")
+    call = next(c for c in deletes if "domain_versions" in c.sql)
     assert f"DELETE FROM {QSCHEMA}.domain_versions AS v USING {QSCHEMA}.domains AS d" in call.sql
     assert call.params == (REGISTRY_ID, "acme", "1", "DRAFT")
+    assert any("simulation_runs" in c.sql for c in deletes)
+    assert any("simulations s" in c.sql for c in deletes)
 
 
 def test_delete_version_non_conflict_errors_become_tuples():

@@ -16,6 +16,7 @@ from agents.agent_cohort.tools import tool_list_classes, tool_list_properties_of
 from agents.tools.context import ToolContext
 from agents.tools.loopback_http import loopback_client
 from back.core.errors import ValidationError
+from back.core.helpers import extract_local_name, is_uri
 from back.core.logging import get_logger
 from back.objects.simulation.SimulationPatch import SimulationPatch
 
@@ -88,6 +89,44 @@ def tool_search_entities(
     return _ok({"query": q, "class_uri": class_uri or "", "seeds": seeds})
 
 
+def tool_list_entity_relationships(
+    ctx: ToolContext, *, entity_uri: str | None = None, **_kwargs
+) -> str:
+    """Return exact outgoing relationship triples for one live entity."""
+    uri = str(entity_uri or "").strip()
+    if not is_uri(uri):
+        return _error("'entity_uri' must be an absolute URI.")
+    try:
+        with _client(ctx) as client:
+            resp = client.get(
+                "/dtwin/triples/find",
+                params={"search": uri, "depth": 1, "limit": 500},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as exc:
+        return _error(
+            f"relationship lookup failed ({exc.response.status_code}): "
+            f"{exc.response.text[:200]}"
+        )
+    except Exception as exc:  # pragma: no cover
+        return _error(f"relationship lookup error: {exc}")
+
+    relationships = [
+        {
+            "subject": uri,
+            "predicate": str(row.get("predicate") or ""),
+            "object": str(row.get("object") or ""),
+        }
+        for row in data.get("triples") or []
+        if (row.get("subject") or "") == uri
+        and is_uri(str(row.get("object") or ""))
+        and extract_local_name(str(row.get("predicate") or "")).lower()
+        not in {"type", "label"}
+    ]
+    return _ok({"entity_uri": uri, "relationships": relationships[:100]})
+
+
 def tool_propose_patches(
     ctx: ToolContext,
     *,
@@ -137,6 +176,23 @@ _SEARCH_DEF = {
                 },
             },
             "required": ["query"],
+        },
+    },
+}
+
+_RELATIONSHIPS_DEF = {
+    "type": "function",
+    "function": {
+        "name": "list_entity_relationships",
+        "description": (
+            "List exact outgoing relationship triples for one live entity. "
+            "Use this before proposing a remove patch for an existing link; "
+            "copy the returned subject, predicate, and object exactly."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"entity_uri": {"type": "string"}},
+            "required": ["entity_uri"],
         },
     },
 }
@@ -213,6 +269,7 @@ TOOL_DEFINITIONS: List[dict] = [
     _LIST_CLASSES_DEF,
     _LIST_PROPERTIES_DEF,
     _SEARCH_DEF,
+    _RELATIONSHIPS_DEF,
     _PROPOSE_DEF,
 ]
 
@@ -220,5 +277,6 @@ TOOL_HANDLERS: Dict[str, Callable] = {
     "list_classes": tool_list_classes,
     "list_properties_of": tool_list_properties_of,
     "search_entities": tool_search_entities,
+    "list_entity_relationships": tool_list_entity_relationships,
     "propose_patches": tool_propose_patches,
 }

@@ -578,6 +578,26 @@ class RegistryStore(ABC):
         """Newest-first simulation runs, optionally for one simulation."""
         return []
 
+    def copy_simulations_to_version(
+        self, folder: str, from_version: str, to_version: str
+    ) -> Tuple[bool, str]:
+        """Copy scenario specs and run history to a new version. Default: no-op."""
+        return True, ""
+
+    def delete_simulations_for_version(self, folder: str, version: str) -> Tuple[bool, str]:
+        """Drop every simulation row and run for ``(folder, version)``. Default: no-op."""
+        return True, ""
+
+    def persist_version_simulations(
+        self, folder: str, version: str, data: Dict[str, Any]
+    ) -> None:
+        """Replace scenarios/runs when the version payload carries them. Default: no-op."""
+
+    def attach_simulations_to_doc(
+        self, doc: Dict[str, Any], folder: str, version: str
+    ) -> None:
+        """Attach scenario specs and run history onto a version document. Default: no-op."""
+
     # ------------------------------------------------------------------
     # Graph analytics cache
     #

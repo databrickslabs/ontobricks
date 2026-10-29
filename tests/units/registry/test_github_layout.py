@@ -98,6 +98,42 @@ class TestSplitMerge:
         files, _ = DomainRepoLayout.split_version(doc, "Empty", "1")
         assert DomainRepoLayout.merge_version(files, "1") == doc
 
+    def test_simulations_round_trip(self):
+        doc = _doc()
+        doc["versions"]["2"]["simulations"] = [
+            {
+                "id": "se1",
+                "label": "Jacob",
+                "status": "draft",
+                "spec": {"label": "Jacob", "patches": []},
+                "diff_summary": {},
+                "owner": "a@x",
+                "last_run_at": "",
+            }
+        ]
+        doc["versions"]["2"]["simulation_runs"] = [
+            {
+                "id": 1,
+                "simulation_id": "se1",
+                "status": "success",
+                "message": "+1 / -0",
+                "error": "",
+                "task_id": "t",
+                "started_at": "",
+                "finished_at": "",
+                "duration_s": 1.0,
+                "stats": {"added_count": 1},
+                "owner": "a@x",
+            }
+        ]
+        files, errors = DomainRepoLayout.split_version(doc, "Sales", "2")
+        assert errors == []
+        assert "simulation/scenarios.json" in files
+        assert "simulation/runs.json" in files
+        merged = DomainRepoLayout.merge_version(files, "2")
+        expected = _expected_round_trip(doc)
+        assert merged == expected
+
     def test_one_file_per_concern(self):
         files, _ = DomainRepoLayout.split_version(_doc(), "Sales", "2")
         for rel in (

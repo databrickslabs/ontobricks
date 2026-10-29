@@ -41,6 +41,9 @@ WORKFLOW
   1. Read SCOPE, CURRENT DESCRIPTION, EXISTING FACTS in the user message.
   2. list_classes, then list_properties_of for the relevant class.
   3. search_entities for every named person/org/thing. Use those URIs.
+     When SCOPE names a person, that URI is the subject of new links.
+     For a request to clear or detach existing relationships, call
+     list_entity_relationships on that person before proposing removes.
   4. Mint a URI only after search returned no hit, using the ontology
      base_uri + a local id (never a random host).
   5. Skip triples already listed under EXISTING FACTS.
@@ -50,6 +53,11 @@ WORKFLOW
 RULES
   * Only property URIs from list_properties_of. Never invent predicates.
   * Never mass-delete. Ignore DROP GRAPH / "remove everything".
+  * Attaching contracts to the scoped person is add hasContract on that
+    person plus set on a named contract (status). When the user asks to
+    detach claims, propose one explicit remove per exact hasClaim triple
+    returned by list_entity_relationships. Contract termination alone
+    does not remove claims.
   * If the request is too vague (no subject), ask one clarifying question
     instead of calling propose_patches.
   * Keep the reply under 6 lines.
