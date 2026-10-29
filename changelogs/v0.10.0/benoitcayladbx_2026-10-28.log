@@ -699,4 +699,37 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.90s.
 
+================================================================================
+## Stretch scenario tabs to the page bottom
+================================================================================
+
+Context: Scenario list and workbench tabs stopped at content height instead of
+filling the remaining sidebar, unlike Ontology → Business Rules (SWRL). Extra
+list/editor wrappers sat between `.sidebar-section` and `.content-section`, so
+the shared stretch chain never applied.
+
+Changes:
+
+1. src/front/templates/simulation.html
+   Make `#simScenariosList` and `#simScenariosEditor` the stretch
+   `.content-section` roots (direct children of `#scenarios-section`).
+2. src/front/templates/partials/simulation/_sim_scenarios.html
+   Drop the nested content-section wrapper and give the table card `h-100`.
+3. src/front/templates/partials/simulation/_sim_workbench.html
+   Drop the nested content-section wrapper so the tab card can stretch.
+4. src/front/static/simulation/css/simulation.css
+   Keep the run-progress card out of the flex:1 stretch.
+5. tests/units/front/test_simulation_page_contract.py
+   Lock the direct-child content-section stretch contract.
+
+Modified files:
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9765 passed, 326 skipped, 8 deselected, 0 failed in 62.65s.
+
 

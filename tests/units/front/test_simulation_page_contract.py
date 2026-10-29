@@ -187,6 +187,35 @@ def test_workbench_picks_individual_inference_rules():
     assert "onclick=" not in html
 
 
+def test_scenario_panes_use_direct_content_section_stretch():
+    page = _read(PAGE)
+    list_html = _read(FRONT / "templates/partials/simulation/_sim_scenarios.html")
+    wb = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
+    section = page.split('id="scenarios-section"', 1)[1]
+    assert re.search(
+        r'id="simScenariosList"\s+class="[^"]*\bcontent-section\b',
+        section,
+    )
+    assert re.search(
+        r'id="simScenariosEditor"\s+class="[^"]*\bcontent-section\b',
+        section,
+    )
+    assert not re.search(
+        r'id="simScenariosList"[^>]*>\s*<div class="content-section"',
+        section,
+    )
+    assert '<div class="content-section">' not in list_html
+    assert '<div class="content-section">' not in wb
+    assert 'class="card h-100"' in list_html
+    assert 'class="card h-100"' in wb
+    assert "ob-tabs-wrap" in wb
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert ".sidebar-section > .content-section > #simWbProgress.card" in css
+    assert "flex: 0 0 auto" in css.split(
+        ".sidebar-section > .content-section > #simWbProgress.card", 1
+    )[1].split("}", 1)[0]
+
+
 def test_workbench_uses_four_ob_tabs():
     html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
     results = _read(FRONT / "templates/partials/simulation/_sim_results.html")

@@ -1,5 +1,13 @@
 /* Simulation page (what-if sandboxes) */
 
+/* Progress is a sibling card of the workbench tabs; keep it out of the
+   shared `.content-section > .card { flex: 1 }` stretch so the tabs still
+   fill the remaining viewport like Ontology → Business Rules. */
+.sidebar-section > .content-section > #simWbProgress.card {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
 .sim-table td,
 .sim-table th {
     font-size: 0.8125rem;
