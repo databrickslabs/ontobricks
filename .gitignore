@@ -117,11 +117,6 @@ syncs/
 /docs/superpowers/
 .worktrees/
 
-# .planning/ tracks SPECs, eval datasets, and ROADMAP (AI-feature PR gate).
-# Local design explorations stay out of git: mockups, screenshots, renders,
-# implementation plans. Images under .planning/ are regenerable and heavy.
-.planning/ui-refresh/
-.planning/**/*.png
-.planning/**/*.jpg
-.planning/**/*.gif
-.planning/**/*.webp
+# Local AI-feature SPECs, ROADMAP, and implementation plans. Committed eval
+# datasets live under tests/eval/datasets/ (see .cursor/12-ai-feature-lifecycle).
+.planning/

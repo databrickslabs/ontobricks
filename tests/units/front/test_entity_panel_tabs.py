@@ -143,10 +143,14 @@ def test_designer_context_menu_mirrors_the_entity_rail():
     assert "<span>Refs.</span>" not in menu
 
 
-def test_graph_explorer_calls_swrl_triggers_inference_rules():
+def test_graph_explorer_groups_behaviour_actions():
     sigma = SIGMA_JS.read_text(encoding="utf-8")
-    assert "'<div class=\"ctx-header\">Inference rules</div>'" in sigma
-    assert "'Inference rules (' + nodeRules.length + ')'" in sigma
+    assert "'<div class=\"ctx-header\">Behaviour</div>'" in sigma
+    assert "'Behaviour (' + behaviourCount + ')'" in sigma
+    assert "'<div class=\"ctx-header\">Inference rules</div>'" not in sigma
+    assert "'<div class=\"ctx-header\">Actions</div>'" not in sigma
     assert "Business rules" not in sigma
     details = DETAILS_JS.read_text(encoding="utf-8")
-    assert '<i class="bi bi-diagram-3"></i> Inference rules</h6>' in details
+    assert '<i class="bi bi-lightning"></i> Behaviour</h6>' in details
+    assert "Inference rules</h6>" not in details
+    assert "Actions</h6>" not in details

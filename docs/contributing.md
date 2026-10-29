@@ -273,12 +273,11 @@ Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool w
 
 **Required in the PR**
 
-1. `.planning/<slug>/SPEC.md` (prompt, tools, success/failure, metrics).
-2. Eval dataset: ≥ **20** examples for a new agent, ≥ **10** for a material change (`tests/eval/datasets/<agent>/` and/or `.planning/<slug>/eval/dataset.jsonl` as the gate currently expects).
-3. Linked **MLflow eval run URI** in the PR body.
-4. Passing eval (judge ≥ baseline + delta) **or** an explicit reviewer waiver.
+1. Eval dataset: ≥ **20** examples for a new agent, ≥ **10** for a material change (`tests/eval/datasets/<agent>/baseline.jsonl`).
+2. Linked **MLflow eval run URI** in the PR body.
+3. Passing eval (judge ≥ baseline + delta) **or** an explicit reviewer waiver.
 
-No new agent without SPEC. No prompt/tool tweak without an eval delta. Trace every Foundation Model API path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
+SPEC.md and PLAN.md live under gitignored `.planning/` (local author drafts). No new agent without a local SPEC and a committed eval dataset. No prompt/tool tweak without an eval delta. Trace every Foundation Model API path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
 
 ---
 
@@ -387,7 +386,7 @@ Confirm `uv.lock` is untouched.
 ### PR bar
 
 - **Title**: Conventional Commit (`feat(ontology): add OWL import from URL`).
-- **Body**: what / why / how to test; screenshots for UI; plan path (`.planning/<slug>/PLAN.md`) when used.
+- **Body**: what / why / how to test; screenshots for UI; local plan path (`.planning/<slug>/PLAN.md`, gitignored) when used.
 - **Size**: one concern. Split large features.
 - **Author checklist** (from the template): tests for behaviour changes, changelog, agents SPEC/eval if applicable, no `gsd-*` references.
 - **Reviews**: at least one approval; address comments. Reviewers cite checklist numbers (`#3: missing OntoBricksError subclass`).

@@ -17,6 +17,7 @@ const SimulationWorkbench = {
         };
         on('simWbAddPatchBtn', 'click', () => this.addPatch());
         on('simWbFactWizardBtn', 'click', () => this.openFactWizard());
+        on('simWbFactPromptBtn', 'click', () => this.proposeFacts());
         on('simWbViewResultsBtn', 'click', () => {
             const id = this.currentId || (window.SimulationPage && SimulationPage.runningId);
             if (id && window.SimulationPage) SimulationPage.showResults(id);
@@ -227,6 +228,7 @@ const SimulationWorkbench = {
         const cfg = SimulationPage.config || {};
         this._set('simWbLabel', '');
         this._set('simWbDescription', '');
+        this._set('simWbFactPrompt', '');
         this._set('simWbScopeType', 'entity');
         this._set('simWbFocus', '');
         this._applyFocusLabel('', '');
@@ -296,6 +298,60 @@ const SimulationWorkbench = {
     },
 
     // -- Patches -----------------------------------------------------------
+
+    async proposeFacts() {
+        const prompt = this._val('simWbFactPrompt');
+        if (!prompt) {
+            showNotification('Describe the facts to add.', 'warning');
+            return;
+        }
+        const btn = this._el('simWbFactPromptBtn');
+        const idle = '<i class="bi bi-stars me-1"></i>Propose facts';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Proposing…';
+        }
+        this.setTabBusy('facts', true);
+        try {
+            const data = await SimulationPage.api('/simulation/facts/agent', {
+                method: 'POST',
+                body: {
+                    prompt,
+                    simulation_id: this.currentId || '',
+                    scope: {
+                        type: this._val('simWbScopeType'),
+                        focus: this._val('simWbFocus') || this._val('simWbCohort'),
+                        focus_label: this._focusLabel || '',
+                    },
+                    existing_patches: this.patches.map((p) => ({
+                        op: p.op,
+                        subject: p.subject,
+                        predicate: p.predicate,
+                        object: p.object,
+                    })),
+                },
+            });
+            const rows = data.patches || [];
+            if (!rows.length) {
+                showNotification(
+                    data.reply || 'No facts proposed. Try a more specific description.',
+                    'warning',
+                );
+                return;
+            }
+            rows.forEach((row) => this.patches.push({ ...row }));
+            await this._resolvePatchLabels();
+            if (data.reply) showNotification(data.reply, 'success');
+        } catch (err) {
+            showNotification(err.message, 'error');
+        } finally {
+            this.setTabBusy('facts', false);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = idle;
+            }
+        }
+    },
 
     addPatch(patch) {
         const focus = this._val('simWbScopeType') === 'entity' ? this._val('simWbFocus') : '';

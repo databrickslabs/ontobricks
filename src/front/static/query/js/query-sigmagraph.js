@@ -1853,36 +1853,35 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-table', 'Dataset', dsBody);
         }
 
-        // Unity Catalog function actions — each takes the entity ID as its only argument
+        // Behaviour: UC functions, jobs, and SWRL rules — one section.
         var nodeActions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
-        if (nodeActions.length > 0) {
-            var actionBody = '';
-            nodeActions.forEach(function (action) {
-                var isJob = typeof _entityActionIsJob === 'function' && _entityActionIsJob(action);
-                var actFullName = action.fullName
-                    || (isJob ? ('job:' + action.job_id) : [action.catalog, action.schema, action.function].filter(Boolean).join('.'));
-                if (!actFullName) return;
-                var actLabel = action.job_name || action.function || actFullName;
-                var actTitle = action.description || ('Run ' + actFullName);
-                var actDesc = action.description || '';
-                var icon = isJob ? 'bi bi-play-circle' : 'bi bi-lightning-charge';
-                actionBody += '<div class="entity-detail-item"><button type="button" onclick="openEntityActionModal(\'' +
-                    esc(entity.id) + '\', \'' + esc(actFullName) + '\', \'' + esc(actLabel) + '\', \'' + esc(actDesc) +
-                    '\')" class="btn btn-sm btn-outline-primary w-100" title="' + esc(actTitle) + '">' +
-                    '<i class="' + icon + ' me-1"></i>' + esc(actLabel) + '</button></div>';
-            });
-            if (actionBody) {
-                html += _sec('bi bi-lightning-charge', 'Actions (' + nodeActions.length + ')', actionBody);
-            }
-        }
-
-        // SWRL business rules declared on the class — applied to this entity only
         var nodeRules = (classInfo && classInfo.businessRules) || [];
+        var behaviourBody = '';
+        var behaviourCount = 0;
+        nodeActions.forEach(function (action) {
+            var isJob = typeof _entityActionIsJob === 'function' && _entityActionIsJob(action);
+            var actFullName = action.fullName
+                || (isJob ? ('job:' + action.job_id) : [action.catalog, action.schema, action.function].filter(Boolean).join('.'));
+            if (!actFullName) return;
+            var actLabel = action.job_name || action.function || actFullName;
+            var actTitle = action.description || ('Run ' + actFullName);
+            var actDesc = action.description || '';
+            var icon = isJob ? 'bi bi-play-circle' : 'bi bi-lightning-charge';
+            behaviourBody += '<div class="entity-detail-item"><button type="button" onclick="openEntityActionModal(\'' +
+                esc(entity.id) + '\', \'' + esc(actFullName) + '\', \'' + esc(actLabel) + '\', \'' + esc(actDesc) +
+                '\')" class="btn btn-sm btn-outline-primary w-100" title="' + esc(actTitle) + '">' +
+                '<i class="' + icon + ' me-1"></i>' + esc(actLabel) + '</button></div>';
+            behaviourCount += 1;
+        });
         if (nodeRules.length > 0 && typeof renderBusinessRuleSection === 'function') {
             var ruleBody = renderBusinessRuleSection(entity.id, nodeRules);
             if (ruleBody) {
-                html += _sec('bi bi-diagram-3', 'Inference rules (' + nodeRules.length + ')', ruleBody);
+                behaviourBody += ruleBody;
+                behaviourCount += nodeRules.length;
             }
+        }
+        if (behaviourBody) {
+            html += _sec('bi bi-lightning', 'Behaviour (' + behaviourCount + ')', behaviourBody);
         }
 
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
@@ -2709,8 +2708,9 @@ var SigmaGraph = (function () {
         }
 
         var ctxActions = meta.actions || [];
+        var ctxRules = meta.businessRules || [];
+        var behaviourItems = '';
         if (ctxActions.length > 0 && meta.entity && meta.entity.id) {
-            var actionItems = '';
             ctxActions.forEach(function (action) {
                 var isJob = typeof _entityActionIsJob === 'function' && _entityActionIsJob(action);
                 var actFullName = action.fullName
@@ -2719,28 +2719,24 @@ var SigmaGraph = (function () {
                 var actLabel = action.job_name || action.function || actFullName;
                 var actDesc = action.description || '';
                 var icon = isJob ? 'bi bi-play-circle' : 'bi bi-lightning-charge';
-                actionItems += '<div class="ctx-item" data-sg-node-action="action-invoke" data-uri="' + esc(meta.entity.id) +
+                behaviourItems += '<div class="ctx-item" data-sg-node-action="action-invoke" data-uri="' + esc(meta.entity.id) +
                     '" data-action="' + esc(actFullName) + '" data-label="' + esc(actLabel) +
                     '" data-description="' + esc(actDesc) + '">' +
                     '<i class="' + icon + '"></i> ' + esc(actLabel) + '</div>';
             });
-            if (actionItems) {
-                if (items) items += '<div class="ctx-divider"></div>';
-                items += '<div class="ctx-header">Actions</div>' + actionItems;
-            }
         }
-
-        var ctxRules = meta.businessRules || [];
         if (ctxRules.length > 0 && meta.entity && meta.entity.id
             && (typeof canRunBusinessRules !== 'function' || canRunBusinessRules())) {
-            if (items) items += '<div class="ctx-divider"></div>';
-            items += '<div class="ctx-header">Inference rules</div>';
             ctxRules.forEach(function (rule) {
                 if (!rule || !rule.name) return;
-                items += '<div class="ctx-item" data-sg-node-action="business-rule" data-uri="' + esc(meta.entity.id) +
+                behaviourItems += '<div class="ctx-item" data-sg-node-action="business-rule" data-uri="' + esc(meta.entity.id) +
                     '" data-rule="' + esc(rule.name) + '">' +
                     '<i class="bi bi-diagram-3"></i> ' + esc(rule.name) + '</div>';
             });
+        }
+        if (behaviourItems) {
+            if (items) items += '<div class="ctx-divider"></div>';
+            items += '<div class="ctx-header">Behaviour</div>' + behaviourItems;
         }
 
         // Shortcut to the detail panel's "Compute all": right-click does not

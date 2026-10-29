@@ -1,14 +1,16 @@
 """Internal API -- what-if simulation sandboxes (Simulation menu)."""
 
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 
 from api.routers.internal._graph_access import assert_domain_graph_read
 from api.routers.internal._guards import require
-from back.core.errors import ValidationError
-from back.core.helpers import run_blocking
+from back.core.errors import InfrastructureError, ValidationError
+from back.core.helpers import require_domain_llm, run_blocking
 from back.core.logging import get_logger
+from back.objects.digitaltwin import DigitalTwin
 from back.objects.registry import ROLE_BUILDER
 from back.objects.session import SessionManager, get_domain, get_session_manager
 from back.objects.simulation import Simulation
@@ -41,6 +43,46 @@ async def _json_object(request: Request) -> dict:
     return data
 
 
+_MAX_FACT_PROMPT = 4000
+
+
+def _loopback_base_url() -> str:
+    port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    return f"http://localhost:{port}"
+
+
+def _forwarded_headers(request: Request) -> dict:
+    prefixes = ("x-forwarded-", "x-real-")
+    extra = {"x-csrf-token", "referer"}
+    return {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith(prefixes) or k.lower() in extra
+    }
+
+
+def _facts_user_message(prompt: str, scope: dict, existing: list) -> str:
+    parts = [prompt]
+    if isinstance(scope, dict) and (scope.get("focus") or scope.get("type")):
+        parts.append(
+            "SCOPE\n"
+            f"type: {scope.get('type') or ''}\n"
+            f"focus: {scope.get('focus') or ''}\n"
+            f"focus_label: {scope.get('focus_label') or ''}"
+        )
+    lines = []
+    for row in existing[:50] if isinstance(existing, list) else []:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"- {row.get('op')} {row.get('subject')} "
+            f"{row.get('predicate')} {row.get('object')}"
+        )
+    if lines:
+        parts.append("EXISTING FACTS\n" + "\n".join(lines))
+    return "\n\n".join(parts)
+
+
 @router.get("/list")
 async def list_simulations(request: Request, sim: Simulation = Depends(_simulation)):
     """Return every simulation of the active domain version (no diff payload)."""
@@ -65,6 +107,61 @@ async def list_runs(
     assert_domain_graph_read(request)
     runs = await run_blocking(sim.runs, simulation_id, limit)
     return {"success": True, "runs": runs, "count": len(runs)}
+
+
+@router.post("/facts/agent", dependencies=_builder_only)
+async def propose_facts(
+    request: Request,
+    body: dict = Depends(_json_object),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Translate a free-text description into hypothetical S/P/O patches."""
+    import asyncio
+
+    from agents.agent_simulation_facts import run_agent
+    from api.routers.internal._helpers import map_route_errors
+
+    prompt = str(body.get("prompt") or "").strip()
+    if not prompt:
+        raise ValidationError("Describe the facts to add")
+    if len(prompt) > _MAX_FACT_PROMPT:
+        raise ValidationError("Fact description is too long")
+    domain = get_domain(session_mgr)
+    host, token, llm_endpoint, _kind = require_domain_llm(domain, settings)
+    reg = DigitalTwin.resolve_registry(session_mgr, settings)
+    info = getattr(domain, "info", None) or {}
+    with map_route_errors("Simulation facts agent request failed", logger):
+        result = await asyncio.to_thread(
+            run_agent,
+            host=host,
+            token=token,
+            endpoint_name=llm_endpoint,
+            base_url=_loopback_base_url(),
+            domain_name=str(info.get("name") or ""),
+            registry_params={
+                "registry_catalog": reg.get("catalog") or "",
+                "registry_schema": reg.get("schema") or "",
+                "registry_volume": reg.get("volume") or "",
+                "simulation_id": str(body.get("simulation_id") or ""),
+            },
+            session_cookies=dict(request.cookies or {}),
+            session_headers=_forwarded_headers(request),
+            user_message=_facts_user_message(
+                prompt, body.get("scope") or {}, body.get("existing_patches") or []
+            ),
+        )
+    if not result.success:
+        raise InfrastructureError(
+            "Could not propose hypothetical facts",
+            detail=result.error or None,
+        )
+    return {
+        "success": True,
+        "patches": result.proposed_patches or [],
+        "reply": result.reply or "",
+        "usage": result.usage,
+    }
 
 
 @router.post("/create", dependencies=_builder_only)

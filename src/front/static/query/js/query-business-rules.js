@@ -13,7 +13,7 @@ function canRunBusinessRules() {
 }
 
 /**
- * Render the Inference rules section body for a node.
+ * Render SWRL rule buttons for the Explorer Behaviour section.
  *
  * @param {string} entityUri Instance URI of the node.
  * @param {Array} rules Class business rules: [{ name, description }].

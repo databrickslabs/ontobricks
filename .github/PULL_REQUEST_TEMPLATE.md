@@ -9,14 +9,11 @@ See .github/PR_REVIEW_CHECKLIST.md for the reviewer's pass.
 
 ## Linked Issue / milestone
 
-Closes #<issue-number>. Part of `M<n>.<phase>` in `.planning/ROADMAP.md`.
+Closes #<issue-number>.
 
 ## Plan
 
-`.planning/<slug>/PLAN.md`
-
-<!-- For T4 (agent feature) work, link the SPEC too: -->
-<!-- `.planning/<slug>/SPEC.md` -->
+Local-only (not in git): `.planning/<slug>/PLAN.md` / `SPEC.md`.
 
 ## Type of change
 
@@ -36,8 +33,8 @@ Closes #<issue-number>. Part of `M<n>.<phase>` in `.planning/ROADMAP.md`.
 - [ ] `uv run pytest tests/<scope>/` green locally.
 - [ ] `pre-commit run --all-files` clean (or skipped hooks documented).
 - [ ] If `src/agents/**` or any MLflow-traced LLM path changed:
-  - [ ] `SPEC.md` present in `.planning/<slug>/`.
-  - [ ] `tests/eval/datasets/<agent>/dataset.jsonl` has ≥20 examples (new) or ≥10 (change).
+  - [ ] Local `SPEC.md` written under `.planning/` (gitignored).
+  - [ ] `tests/eval/datasets/<agent>/baseline.jsonl` has ≥20 examples (new) or ≥10 (change).
   - [ ] MLflow eval run URI in PR body below.
   - [ ] Judge score ≥ baseline + delta, or explicit waiver here.
 - [ ] If `src/mcp-server/**` changed: `uv run pytest tests/mcp/ -m mcp` green.

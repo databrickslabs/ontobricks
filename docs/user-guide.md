@@ -503,9 +503,10 @@ graph**: the triples it infers for that entity are materialised.
    parents
 4. Click **Apply** (writes into the session; publish the domain to persist)
 
-In the Graph Explorer the rules appear under **Inference rules** in the entity
-details panel and the node right-click menu. Running one requires the Builder
-role on the domain and asks for confirmation first.
+In the Graph Explorer the rules appear in the **Behaviour** section of the
+entity details panel and the node right-click menu, together with class
+functions, jobs, and **Simulate from here**. Running a rule requires the
+Builder role on the domain and asks for confirmation first.
 
 ### Entity Panel Tabs (Ontology Studio)
 
@@ -966,7 +967,7 @@ Right-click any entity node and pick **Expand neighbours (N hops)** to enrich th
 - The hop count follows the **Depth** slider in the right-pane filter panel (default `2`).
 - The centered canvas overlay reports the expansion and rendering phases and blocks graph interaction until the update finishes.
 - Newly added entities are merged with the existing graph, briefly ringed with a highlight, and the camera zooms to frame them.
-- The same context menu still exposes the existing **View Dashboard**, **Dataset preview**, **Actions**, **Bridges** and **Compute virtual attributes** entries when configured for the entity's class.
+- The same context menu still exposes **View Dashboard**, **Dataset preview**, **Behaviour** (functions, jobs, inference rules), **Bridges** and **Compute virtual attributes** when configured for the entity's class.
 
 ### SPARQL Playground
 
@@ -1321,6 +1322,10 @@ rules, or results, shows the brand spinner over that pane.
    human label in parentheses) above a local-ID control. The predicate
    line is *relationship* or *attribute* (with the range class when it is
    a relationship). Hover the ID for the full URI.
+   **Describe the facts** at the top of the tab: write what should change
+   in plain language and click **Propose facts**. An agent looks up classes,
+   properties, and live-graph entities, then fills the S/P/O cards below.
+   Review them before you save or run.
    **Fact wizard** (or the search icon on a cell) looks up existing graph
    entities, ontology predicates declared on the subject's class (including
    inherited), and related instances so you do not have to paste URIs by hand.

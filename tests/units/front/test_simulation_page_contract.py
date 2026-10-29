@@ -153,6 +153,19 @@ def test_hypothetical_facts_show_id_type_and_predicate_kind():
     assert "style=" not in html
 
 
+def test_hypothetical_facts_prompt_uses_agent():
+    html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
+    wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
+    pane = html.split('id="simWb-pane-facts"', 1)[1].split('id="simWb-pane-reasoning"', 1)[0]
+    assert 'id="simWbFactPrompt"' in pane
+    assert 'id="simWbFactPromptBtn"' in pane
+    assert pane.index('id="simWbFactPrompt"') < pane.index('id="simWbPatchesBody"')
+    assert "proposeFacts" in wb
+    assert "/simulation/facts/agent" in wb
+    assert "onclick=" not in html
+    assert "style=" not in html
+
+
 def test_workbench_prefers_entity_label_over_local_id():
     js = _read(FRONT / "static/simulation/js/simulation-workbench.js")
     assert "seedFromEntity" in js

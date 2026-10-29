@@ -588,6 +588,7 @@ class _Req:
         self._body = body
         self.state = SimpleNamespace(user_email="a@b.c")
         self.headers = {}
+        self.cookies = {}
 
     async def json(self):
         return self._body
@@ -663,6 +664,55 @@ class TestSimulationApi:
         with pytest.raises(ValidationError):
             await self.api._json_object(_Req(body=[1, 2]))
 
+    async def test_propose_facts_returns_agent_patches(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        patch = {
+            "op": "set",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/score",
+            "object": "420",
+        }
+        fake = AgentResult(success=True, reply="Set the score.", proposed_patches=[patch])
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr(
+            "agents.agent_simulation_facts.run_agent",
+            lambda **kwargs: fake,
+        )
+        monkeypatch.setattr(
+            self.api, "require_domain_llm", lambda domain, settings: ("h", "t", "ep", "")
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        out = await self.api.propose_facts(
+            _Req(body={"prompt": "score to 420"}),
+            body={"prompt": "score to 420"},
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert out["success"] is True
+        assert out["patches"] == [patch]
+        assert "score" in out["reply"]
+
+    async def test_propose_facts_requires_prompt(self, monkeypatch):
+        with pytest.raises(ValidationError):
+            await self.api.propose_facts(
+                _Req(body={"prompt": "  "}),
+                body={"prompt": "  "},
+                session_mgr=SimpleNamespace(),
+                settings=SimpleNamespace(),
+            )
+
     async def test_run_returns_task_id(self, monkeypatch):
         sim = self._sim(monkeypatch)
         monkeypatch.setattr(sim, "start_run", lambda sim_id, owner="": "task-9")
@@ -676,6 +726,7 @@ class TestSimulationApi:
             if route.dependencies
         }
         assert ("/simulation/create", ("POST",)) in guarded
+        assert ("/simulation/facts/agent", ("POST",)) in guarded
         assert ("/simulation/{sim_id}", ("PUT",)) in guarded
         assert ("/simulation/{sim_id}", ("DELETE",)) in guarded
         assert ("/simulation/{sim_id}/run", ("POST",)) in guarded

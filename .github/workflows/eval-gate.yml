@@ -1,8 +1,8 @@
 name: G2 LLM Eval Gate (CNS §3.5)
 
 # Gate: any PR touching src/agents/** or an MLflow-traced LLM path must include
-# a SPEC.md, an eval dataset, and a linked MLflow eval run URI. See
-# .cursor/12-ai-feature-lifecycle.mdc for the full contract.
+# a committed eval dataset and a linked MLflow eval run URI. SPEC.md stays
+# local under gitignored .planning/. See .cursor/12-ai-feature-lifecycle.mdc.
 #
 # Calibration: for the first 2 weeks after this lands, set `continue-on-error: true`
 # on each step so failures report-but-don't-block. After 2 weeks, flip it off.
@@ -48,61 +48,6 @@ jobs:
                  | tr '\n' ' ')
           echo "Changed agents: $paths"
           echo "changed_agents=$paths" >> "$GITHUB_OUTPUT"
-
-  spec_present:
-    name: SPEC.md present for changed agents
-    runs-on: ubuntu-latest
-    needs: detect
-    if: needs.detect.outputs.changed_agents != ''
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Each changed agent has a SPEC.md
-        env:
-          CHANGED: ${{ needs.detect.outputs.changed_agents }}
-        run: |
-          set -e
-          missing=()
-          for a in $CHANGED; do
-            spec=".planning/agents/${a}/SPEC.md"
-            if [ ! -f "$spec" ]; then
-              missing+=("$a")
-            fi
-          done
-          if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::SPEC.md missing for: ${missing[*]}"
-            echo "Each agent under src/agents/<name>/ must have .planning/agents/<name>/SPEC.md."
-            echo "Invoke the 'ai-feature' skill to scaffold it."
-            if [ "${CALIBRATION_MODE}" = "false" ]; then exit 1; fi
-            echo "::warning::CALIBRATION_MODE=true — not failing PR; flip in 2 weeks."
-          fi
-
-      - name: SPEC.md has non-empty eval-dimensions table
-        env:
-          CHANGED: ${{ needs.detect.outputs.changed_agents }}
-        run: |
-          set -e
-          incomplete=()
-          for a in $CHANGED; do
-            spec=".planning/agents/${a}/SPEC.md"
-            [ -f "$spec" ] || continue
-            # Heuristic: §5 must contain at least one row with a numeric threshold.
-            if ! awk '/^## 5\. Eval dimensions/,/^## 6\./' "$spec" \
-                  | grep -qE '\| `?[a-z_]+`? *\|'; then
-              incomplete+=("$a (no eval-dim rows)")
-              continue
-            fi
-            if ! awk '/^## 5\. Eval dimensions/,/^## 6\./' "$spec" \
-                  | grep -qE '0\.[0-9]+'; then
-              incomplete+=("$a (eval-dim rows have no thresholds)")
-            fi
-          done
-          if [ ${#incomplete[@]} -gt 0 ]; then
-            echo "::error::SPEC.md eval-dimensions table is missing or empty:"
-            for x in "${incomplete[@]}"; do echo "  - $x"; done
-            if [ "${CALIBRATION_MODE}" = "false" ]; then exit 1; fi
-            echo "::warning::CALIBRATION_MODE=true — reporting only."
-          fi
 
   dataset_present:
     name: Eval dataset present + adequately sized
