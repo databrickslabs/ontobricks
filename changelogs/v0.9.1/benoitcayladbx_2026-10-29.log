@@ -72,3 +72,71 @@ Modified files:
 - changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
 
 Tests: uv run --frozen pytest -q tests/units/api/test_help_api.py → 40 passed in 1.83s (README-only change).
+
+================================================================================
+## Publish 0.9.1 release notes
+================================================================================
+
+Context: Open the 0.9.1 line with operator-facing notes (patch on 0.9.0) and
+put both 0.9.1 and 0.9.0 highlight lists back at the top of the README.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.1.md
+   Patch notes: Viewer search/chat, SWRL builtins, Auto-Map Metric Views,
+   Data Quality snapshot + live log, Lakebase Build warehouse, Dependabot
+   floors (lock regen pending), upgrade notes.
+2. README.md
+   Add What's new in 0.9.1 then What's new in 0.9.0 after the header.
+3. docs/README.md
+   Point the hub at V0.9.1 release notes.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.1.md
+- README.md
+- docs/README.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9625 passed, 326 skipped, 8 deselected, 40 warnings in 54.86s
+
+================================================================================
+## Retarget folded docs links and fill 0.9.1 gaps
+================================================================================
+
+Context: An audit of 0.9.1 documentation found GitHub-facing links still
+pointing at satellite files that were folded into host guides
+(get-started.md, features.md, lakebase-graphdb.md, …). Operator guides also
+under-described Viewer POSTs, DQ snapshots, and SWRL builtins.
+
+Changes:
+
+1. README.md
+   Point Get Started, cohort, import/export, Graph DB, and features at the
+   host guides and section anchors that exist on disk.
+2. docs/README.md
+   Add a 0.9.1 feature → doc table.
+3. docs/contributing.md
+   Replace folded-file and deleted update_to_0.8.md links.
+4. docs/development.md / docs/user-guide.md
+   Document Viewer read-only POSTs, DQ snapshot + live log, SWRL builtins.
+5. docs/backend.md, architecture.md, deployment.md
+   Replace leftover graphdb-integration.md path strings with backend.md
+   anchors; point Updating at update_to_0.9.0.md.
+6. releases/ReleaseNotes_V0.9.1.md, Roadmap_2026-10.md, update_to_0.9.0.md
+   Drop phantom README paths; mark 0.9.1 as the current product.
+
+Modified files:
+- README.md
+- docs/README.md
+- docs/contributing.md
+- docs/development.md
+- docs/user-guide.md
+- docs/backend.md
+- docs/architecture.md
+- docs/deployment.md
+- releases/ReleaseNotes_V0.9.1.md
+- releases/Roadmap_2026-10.md
+- update_to_0.9.0.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9625 passed, 326 skipped, 8 deselected, 40 warnings in 51.37s

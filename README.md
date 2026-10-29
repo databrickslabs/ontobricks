@@ -27,6 +27,38 @@
 
 ---
 
+### What's new in 0.9.1
+
+- **Viewer search and Graph Chat**: Viewers can search / expand Explorer and chat over the graph; load and node-action writes stay blocked.
+- **SWRL builtins**: `swrlb:` filters apply on inference **and** materialization (Lakebase `TRY_CAST` included).
+- **Auto-Map Metric Views**: the agent emits `MEASURE(...)` + `GROUP BY` and rejects table-style `SELECT *`.
+- **Faster Data Quality**: bulk checks snapshot the gateway VIEW once, run in parallel, and stream a live activity log (entity checks too).
+- **Lakebase quality SQL** always uses the Build warehouse, not a Lakehouse//RT query warehouse.
+- **Security floors** raised (Pillow, certifi, GitPython, MLflow, …); `uv.lock` regeneration is still required.
+
+Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.1.md).
+
+### What's new in 0.9.0
+
+- **Lakehouse//RT graph queries**: Knowledge Graph reads can run on a serverless Lakehouse//RT warehouse, while builds keep a classic or serverless one.
+- **Three-stage Ontology Generate**: detect entities, lock the catalog, then complete relations, attributes and axioms. The result is appended to your ontology instead of replacing it.
+- **Knowledge Store**: parsed documents live in Lakebase and are shared by Generate and Mapping. No Volume grants are needed.
+- **Unity Catalog Metric Views**: Metric Views import as data assets with dimension/measure roles.
+- **Entity Data Quality Checks**: right-click a node in Explorer, or call it from MCP, to check that entity against every SHACL shape that applies, with gauges for each dimension.
+- **Entity business rules**: attach SWRL rules, aggregate rules and decision tables to a class, then run them on one entity from Explorer or MCP.
+- **Databricks Jobs as class actions**: trigger a workspace Job for an entity next to Unity Catalog functions.
+- **SPARQL playground**: query the graph in SPARQL and inspect the generated SQL.
+- **GitHub domain mirror**: push the domain configuration (OWL, R2RML, SHACL, rules) to a GitHub repository and restore it from there.
+- **OBX Import as**: rename a domain on import; a renamed copy does not reuse the previous graph objects.
+- **Faster Explorer**: indexed search, paged expansion and no blocking `COUNT(*)` on first load.
+- **Ontology Studio**: the renamed Designer adds multi-select, Business Views, cross-domain import, and OWL/R2RML export from the canvas.
+- **Load opens Domain → General**: opening a domain from Home, the navbar, Registry, or Versions lands on Domain → General instead of staying on the current page.
+- **Security hardening**: stricter CSRF, a `/health` that leaks no internals, dialect-aware SQL escaping and sanitised Markdown.
+
+Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.0.md).
+
+---
+
 Every enterprise has the data. Almost none have the **meaning**. Your Lakehouse
 stores billions of rows, but nothing captures what they *represent* — that a
 *Customer* holds *Contracts*, which contain *Invoices*, governed by rules only
@@ -115,8 +147,8 @@ everything through an auto-generated **GraphQL** API or open **Knowledge Graph
 → Query → SPARQL** for read-only SELECT queries, sample queries, CSV export,
 generated SQL inspection, and triple-shaped results that open in Explorer.
 See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
-[Get Started](docs/get-started.md), and
-[Cohort Discovery](docs/cohort_discovery.md).
+[Get Started](docs/getting-started.md), and
+[Cohort Discovery](docs/advanced_features.md#cohort-discovery).
 
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks
@@ -132,7 +164,7 @@ server-side. A **single editor** holds a DRAFT at a time (auto-releasing leases,
 admin take-over), a business-friendly **review workflow** collects sign-offs
 with a configurable quorum, and every decision is persisted append-only. Move
 domains between environments with the **OBX** export/import (UI or
-[CLI](docs/import-export.md)).
+[CLI](docs/advanced_features.md#registry-import-and-export)).
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
@@ -143,9 +175,9 @@ serves only ontology information).
 Connection config stays workspace-global. Lakehouse and Lakebase Build also
 materialise Explorer indexes (`_adj_out` / `_adj_in`, `_entity_search`,
 `_entity_search_asserted`, `_props`); Neo4j keeps native traversal. Full reference:
-[Lakebase Graph DB](docs/lakebase-graphdb.md) ·
-[Graph DB Integration](docs/graphdb-integration.md) ·
-[Graph Query Optimizations](docs/optimizations.md).
+[Lakebase Graph DB](docs/backend.md#lakebase-graph-store) ·
+[Graph DB Integration](docs/backend.md#engine-integration) ·
+[Graph Query Optimizations](docs/backend.md#graph-query-optimizations).
 
 ## Runs entirely on your Databricks
 
@@ -183,7 +215,7 @@ Prerequisites (Databricks workspace with Apps enabled, a SQL Warehouse, a
 **Lakebase Autoscaling** database, and a Unity Catalog Volume) and the full,
 idempotent deploy checklist — including one-click graph-DB provisioning and
 permission bootstrap — are in the
-**[Get Started](docs/get-started.md)** and
+**[Get Started](docs/getting-started.md)** and
 **[Deployment Guide](docs/deployment.md)**.
 
 The bundle syncs only runtime source, the MCP and graph-job files, dependency
@@ -195,8 +227,8 @@ by the Databricks CLI.
 
 - **[Documentation hub](docs/README.md)** — start here
 - **[Value proposition](docs/product.md)** — the business case &amp; go-to-market
-- **[User Guide](docs/user-guide.md)** · **[Features](docs/features.md)** · **[Architecture](docs/architecture.md)** · **[API](docs/api.md)**
-- **[MCP](docs/mcp.md)** · **[Graph DB](docs/lakebase-graphdb.md)** · **[Import / Export](docs/import-export.md)**
+- **[User Guide](docs/user-guide.md)** · **[Feature inventory](docs/user-guide.md#feature-inventory)** · **[Architecture](docs/architecture.md)** · **[API](docs/api.md)**
+- **[MCP](docs/mcp.md)** · **[Graph DB](docs/backend.md)** · **[Import / Export](docs/advanced_features.md#registry-import-and-export)**
 - **[Developing OntoBricks](docs/development.md)** — build, test, contribute
 
 Product overview, screenshots and videos:

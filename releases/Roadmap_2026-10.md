@@ -1,7 +1,7 @@
 # OntoBricks — Product Roadmap
 
-> **Version:** 0.9.0 shipped → 0.10.0 and beyond<br>
-> **Last updated:** 2026-10-21<br>
+> **Version:** 0.9.1 shipped → 0.10.0 and beyond<br>
+> **Last updated:** 2026-10-29<br>
 > **Status:** Living vision — direction of travel, not a delivery contract<br>
 > **Scheduling policy:** themes and sequencing are directional. This document
 > contains no delivery-date commitments.
@@ -23,11 +23,14 @@ OWL ontologies, map Unity Catalog data, build interchangeable Lakehouse /
 Lakebase / Neo4j knowledge graphs, apply rules and reasoning, and publish
 governed graph capabilities through REST, GraphQL, Graph Chat, and MCP.
 
-**v0.9.0 is the current product.** It delivered Lakehouse//RT queries, staged
-Ontology Generate, Knowledge Store, GitHub domain mirror, Metric Views, SPARQL
-playground, entity SWRL rules, Job class actions, Ontology Studio, OBO / No-LLM
-gates, and security hardening. See `releases/ReleaseNotes_V0.9.0.md` (and
-`releases/ReleaseNotes_V0.8.0.md` for the previous line).
+**v0.9.1 is the current product** (patch on v0.9.0). v0.9.0 delivered
+Lakehouse//RT queries, staged Ontology Generate, Knowledge Store, GitHub
+domain mirror, Metric Views, SPARQL playground, entity SWRL rules, Job class
+actions, Ontology Studio, OBO / No-LLM gates, and security hardening.
+v0.9.1 adds Viewer graph search / Graph Chat, SWRL builtin materialization,
+Auto-Map Metric View SQL, faster Data Quality with a live log, and Lakebase
+quality SQL on the Build warehouse. See `releases/ReleaseNotes_V0.9.1.md`
+and `releases/ReleaseNotes_V0.9.0.md`.
 
 The next product line (**v0.10.0**) is about finishing the authoring journey
 and connecting OntoBricks to the rest of the Databricks semantic surface.

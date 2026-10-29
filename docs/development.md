@@ -879,7 +879,7 @@ A user's effective role is determined by combining all three layers.
 | **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can create domains in the registry, view, edit, build, and manage the Settings page including the permission list. |
 | **Builder** | In-app permission list | Can view, edit, **import and manage data sources**, and **build graph viewers**. Cannot change shared Settings (SQL Warehouse, Teams, branding). |
 | **Editor** | In-app permission list | Can view all pages and modify assigned domains, ontologies, mappings, and **data sources**. Cannot create a domain (Admin only). **Cannot build graph viewers.** Cannot change shared Settings. |
-| **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
+| **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results; can **search / expand Explorer** and **use Graph Chat** (those POSTs only read). Other writes (POST, PUT, PATCH, DELETE) stay blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
 
 Role hierarchy: `admin > builder > editor > viewer > none`.

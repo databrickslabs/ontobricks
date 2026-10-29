@@ -1,8 +1,9 @@
 # Updating OntoBricks to 0.9.0
 
 This guide covers a fresh 0.9.0 install and an in-place upgrade from 0.8.x.
-Older lines must reach 0.8 first (`update_to_0.8.md` and
-`scripts/migrations/upgrade_0.7_to_0.8.sql`).
+The current patch on this line is **0.9.1** — apply this upgrade, then read
+[`releases/ReleaseNotes_V0.9.1.md`](releases/ReleaseNotes_V0.9.1.md).
+Older lines must reach 0.8 first (`scripts/migrations/upgrade_0.7_to_0.8.sql`).
 
 There is **no 0.8 → 0.9 warehouse registry DDL**. Bootstrap still creates the
 new Knowledge Store table `domain_documents`. Previously stored Unity Catalog
