@@ -78,10 +78,11 @@ pitfalls = [
     # trust_remote_code (GHSA-jhr6-gm9c-rqjv / CVE-2026-68770).
     "sentence-transformers>=5.6.0",
     "scikit-learn>=1.3.0",
-    # nltk 3.10.3 is the latest published release. GHSA-8mgp-746c-j5xp
-    # (CVE-2026-81726, model-artifact APIs bypass pathsec) has no patched
-    # version yet; pitfalls only uses NLTK via SentenceTransformer tokenization.
-    "nltk>=3.10.3",
+    # nltk>=3.10.4: WekaClassifier passed an unvalidated model path to the
+    # weka JVM (GHSA-j456-xh4h-cpf2, Dependabot #284). GHSA-8mgp-746c-j5xp
+    # (model-artifact APIs bypass pathsec) still has no patched version;
+    # pitfalls only uses NLTK via SentenceTransformer tokenization.
+    "nltk>=3.10.4",
     "scipy>=1.11.0",
 ]
 
@@ -215,9 +216,16 @@ constraint-dependencies = [
     # unauthenticated RecursionError (GHSA-42vr-xj54-vc7v), and options-dict
     # mutation (GHSA-gvp8-978c-rx2q, affected <=2.13.0). Transitive.
     "pyjwt>=2.15.0",
-    # msgpack>=1.2.1: out-of-bounds read / crash on Unpacker reuse after a caught error
-    # (GHSA-6v7p-g79w-8964) — DoS when Unpacker is reused on untrusted streaming input.
-    "msgpack>=1.2.1",
+    # msgpack>=1.2.3: unbounded memory leak in the C extension on
+    # strict_map_key validation failure (GHSA-j586-36cw-2gc2, Dependabot #285).
+    "msgpack>=1.2.3",
+    # authlib>=1.9.1: empty HMAC key JWS/JWT forgery (GHSA-8m4g-j4wp-wgcg,
+    # Dependabot #299) plus the 1.9.0 JAR/SSRF, nonce, audience,
+    # alg-confusion, and empty-signature series. Transitive via databricks-sdk.
+    "authlib>=1.9.1",
+    # dnspython>=2.9.0: from_wire_parser() excessive CPU
+    # (GHSA-45c3-73f7-pv4m, Dependabot #292). Transitive via email-validator.
+    "dnspython>=2.9.0",
     # cryptography>=50.0.0: PKCS#7 Bleichenbacher oracle (GHSA-g6cj-pr64-35w5),
     # exponential path-building (GHSA-jwv3-5hgf-82ww), wildcard DNS NC
     # (GHSA-m2h6-j472-rp4c). mlflow 3.16.1 allows cryptography<51.

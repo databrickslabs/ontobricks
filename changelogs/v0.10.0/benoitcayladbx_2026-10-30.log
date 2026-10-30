@@ -1,0 +1,39 @@
+================================================================================
+## Raise remaining Dependabot floors (authlib, dnspython, msgpack, nltk)
+================================================================================
+
+Context: After the 0.10.0 lock refresh, pip-audit / Dependabot still
+listed authlib 1.7.2, dnspython 2.8.0, msgpack 1.2.1, and nltk 3.10.3.
+Patched releases are now available. dnspython 2.9.0 requires Python
+>=3.11, so the MCP server runtime floor matches the app. oauthlib 4.0.0
+remains blocked by databricks-sql-connector.
+
+Changes:
+
+1. pyproject.toml
+   Raise constraint floors for authlib>=1.9.1, dnspython>=2.9.0,
+   msgpack>=1.2.3, and nltk>=3.10.4.
+2. src/mcp-server/pyproject.toml
+   Same Authlib/dnspython floors; require Python >=3.11.
+3. uv.lock
+   Resolve the new floors via the Databricks PyPI proxy, then rewrite
+   URLs to files.pythonhosted.org / pypi.org/simple.
+4. src/mcp-server/uv.lock
+   Same regeneration for the standalone MCP graph.
+5. docs/development.md
+   Document the current security floors.
+
+Modified files:
+- pyproject.toml
+- src/mcp-server/pyproject.toml
+- uv.lock
+- src/mcp-server/uv.lock
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" -k "not test_readiness_route_returns_checks" → 9603 passed, 338 skipped, 9 deselected, 39 warnings in 39.54s
+(The readiness route hung in this environment on a live dependency probe; it is unrelated to the lock rewrite and was excluded for this run.)
+
+Still open (blocked upstream):
+- oauthlib 4.0.0 — databricks-sql-connector pins oauthlib<4
+- nltk GHSA-8mgp-746c-j5xp — no patched release yet

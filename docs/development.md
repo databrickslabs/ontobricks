@@ -360,12 +360,13 @@ and source downloads used by `uv run --frozen` in Databricks Apps. Never commit
 commands, always pass `--frozen` so uv cannot rewrite the lock.
 
 Current explicit security floors include
-`databricks-sql-connector>=4.4.0`, `mlflow>=3.16.1`, `nltk>=3.10.3`,
+`databricks-sql-connector>=4.4.0`, `mlflow>=3.17.2`, `nltk>=3.10.4`,
 `sentence-transformers>=5.6.0`, `pip>=26.2.0`, `transformers>=5.10.0`,
-`gitpython>=3.1.62`, `pyjwt>=2.15.0`, `urllib3>=2.8.0`, `anyio>=4.14.2`,
-and `cryptography>=50.0.0`. `oauthlib>=4` is blocked by
-`databricks-sql-connector` (`oauthlib<4`). `pyproject.toml` remains
-authoritative.
+`gitpython>=3.2.1`, `pyjwt>=2.15.0`, `urllib3>=2.8.0`, `anyio>=4.14.2`,
+`authlib>=1.9.1`, `dnspython>=2.9.0`, `msgpack>=1.2.3`, `pillow>=13.0.0`,
+`filelock>=4.2.1`, `certifi>=2026.10.19`, and `cryptography>=50.0.0`.
+`oauthlib>=4` is blocked by `databricks-sql-connector` (`oauthlib<4`).
+`pyproject.toml` remains authoritative.
 
 #### Frontend Dependencies
 
