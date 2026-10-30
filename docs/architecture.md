@@ -198,6 +198,7 @@ LIMIT 100
 **OntoBricks SPARQL-to-SQL Translation**:
 - `SparqlTranslator` (`src/back/core/w3c/sparql/SparqlTranslator.py`) implements the translator
 - `SparqlCapabilityValidator` (`src/back/core/w3c/sparql/SparqlCapabilityValidator.py`) enforces a fail-closed Spark subset before SQL generation
+- `SparqlValueFilterSql` compiles accepted string `FILTER`s into SQL on typed BGPs (fail closed if a filter cannot map to a column)
 - Parses SPARQL patterns (subject, predicate, object)
 - Maps patterns to table columns using R2RML mappings
 - Generates Spark SQL with JOINs, UNION ALL, and STACK functions
