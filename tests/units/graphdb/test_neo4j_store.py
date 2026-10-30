@@ -382,16 +382,22 @@ class TestReasoningTranslator:
         assert isinstance(translator, SWRLFlatCypherTranslator)
         assert translator.node_label == "dom_V1"
 
-    def test_translator_methods_return_none_with_warning(self, caplog):
+    def test_translator_builds_read_only_inference_query(self):
         from back.core.reasoning.swrl.SWRLFlatCypherTranslator import (
             SWRLFlatCypherTranslator,
         )
 
         t = SWRLFlatCypherTranslator(node_label="dom_V1")
-        assert t.build_violation_sql("dom_V1", {}) is None
-        assert t.build_antecedent_count_sql("dom_V1", {}) is None
-        assert t.build_materialization_sql("dom_V1", {}) is None
-        assert t.build_inference_sql("dom_V1", {}) is None
+        query = t.build_inference_sql(
+            "dom_V1",
+            {
+                "antecedent": "Customer(?customer) ∧ hasMeter(?customer, ?meter)",
+                "consequent": "owns(?customer, ?meter)",
+                "uri_map": {},
+            },
+        )
+        assert query.startswith("MATCH ")
+        assert "RETURN DISTINCT" in query
 
 
 # ---------------------------------------------------------------------------

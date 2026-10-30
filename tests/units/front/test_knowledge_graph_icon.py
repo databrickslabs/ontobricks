@@ -39,7 +39,7 @@ def test_breadcrumb_dtwin_matches_menu_icon():
 def test_help_modal_walkthrough_uses_kg_icon():
     text = _HELP.read_text(encoding="utf-8")
     assert re.search(
-        rf'<i class="bi {_KG_ICON}[^"]*"></i>\s*<strong>5\. Knowledge Graph</strong>',
+        rf'<i class="bi {_KG_ICON}[^"]*"></i>\s*<strong>5\. Graph</strong>',
         text,
     )
 
@@ -47,6 +47,6 @@ def test_help_modal_walkthrough_uses_kg_icon():
 def test_domain_validation_card_uses_kg_icon():
     text = _VALIDATION.read_text(encoding="utf-8")
     assert re.search(
-        rf'<i class="bi {_KG_ICON}[^"]*"></i>\s*Knowledge Graph',
+        rf'<i class="bi {_KG_ICON}[^"]*"></i>\s*Graph',
         text,
     )

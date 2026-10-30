@@ -1,7 +1,6 @@
 <!--
-    Shared cohort modals — included from both:
-      - partials/ontology/_ontology_cohorts.html (design page)
-      - partials/dtwin/_query_cohorts.html (run page)
+    Shared cohort modals — included once from simulation.html
+    (design + run sections share this DOM).
 
     Each modal is self-contained and triggered by ``CohortModule`` calls
     (``openOutputsModal``, ``openMaterializeModal``, ``_pickSampleValue``).
@@ -89,7 +88,8 @@
             <div class="modal-body" id="cohortMaterializeBody"></div>
             <div class="modal-footer">
                 <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-sm btn-success" onclick="CohortModule.materialize()">
+                <button class="btn btn-sm btn-success" id="cohortMaterializeNowBtn"
+                        onclick="CohortModule.materialize()">
                     <i class="bi bi-cloud-upload me-1"></i>Materialise now
                 </button>
             </div>

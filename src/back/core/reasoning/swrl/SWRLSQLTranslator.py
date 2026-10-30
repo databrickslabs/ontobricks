@@ -6,7 +6,7 @@ reasoning engine and quality-check pipeline.
 
 from typing import Dict, List, Optional
 
-from back.core.helpers import sql_escape
+from back.core.helpers import SQL_DIALECT_SPARK, sql_escape
 from back.core.logging import get_logger
 from back.core.reasoning.constants import RDF_TYPE
 from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
@@ -19,6 +19,9 @@ class SWRLSQLTranslator:
     """Build SQL from SWRL rules for the flat triple-store table."""
 
     _escape = staticmethod(sql_escape)
+
+    def __init__(self, dialect: str = SQL_DIALECT_SPARK) -> None:
+        self._dialect = dialect or SQL_DIALECT_SPARK
 
     @staticmethod
     def _resolve_arg(token: str, var_bindings: Dict[str, tuple]) -> str:
@@ -40,6 +43,7 @@ class SWRLSQLTranslator:
     def _build_builtin_filters(
         builtin_atoms: List[Dict],
         var_bindings: Dict[str, tuple],
+        dialect: str = SQL_DIALECT_SPARK,
     ) -> List[str]:
         filters: List[str] = []
         for atom in builtin_atoms:
@@ -49,26 +53,32 @@ class SWRLSQLTranslator:
             resolved = [
                 SWRLSQLTranslator._resolve_arg(a, var_bindings) for a in atom["args"]
             ]
+            template = SWRLBuiltinRegistry.sql_template_for(bi, dialect)
             if bi.category == "comparison" and bi.arity == 2:
-                expr = bi.sql_template.format(*resolved[:2])
+                expr = template.format(*resolved[:2])
                 filters.append(expr)
             elif bi.category == "string" and bi.arity == 2:
-                expr = bi.sql_template.format(*resolved[:2])
+                expr = template.format(*resolved[:2])
                 filters.append(expr)
             elif bi.category == "math" and bi.arity == 3:
-                expr = bi.sql_template.format(*resolved[:2])
+                expr = template.format(*resolved[:2])
                 result_ref = SWRLSQLTranslator._resolve_arg(
                     atom["args"][2],
                     var_bindings,
                 )
                 filters.append(f"{result_ref} = ({expr})")
             elif bi.category == "date" and bi.arity == 2:
-                expr = bi.sql_template.format(*resolved[:2])
+                expr = template.format(*resolved[:2])
                 filters.append(expr)
             elif bi.arity <= len(resolved):
-                expr = bi.sql_template.format(*resolved[: bi.arity])
+                expr = template.format(*resolved[: bi.arity])
                 filters.append(expr)
         return filters
+
+    def _filters(self, builtin_atoms: List[Dict], var_bindings: Dict[str, tuple]) -> List[str]:
+        return self._build_builtin_filters(
+            builtin_atoms, var_bindings, dialect=self._dialect
+        )
 
     @staticmethod
     def _build_focus_filter(focus: Optional[Dict], var_bindings: Dict[str, tuple]):
@@ -251,10 +261,7 @@ class SWRLSQLTranslator:
                     var_bindings[new_var] = (a_prop, col)
 
         # -- Built-in filter atoms (Phase 1) ----------------------------------
-        builtin_filters = SWRLSQLTranslator._build_builtin_filters(
-            builtin_atoms,
-            var_bindings,
-        )
+        builtin_filters = self._filters(builtin_atoms, var_bindings)
         if builtin_filters:
             where_parts.extend(builtin_filters)
 
@@ -452,10 +459,7 @@ class SWRLSQLTranslator:
                 else:
                     var_bindings[new_var] = (a_prop, col)
 
-        builtin_filters = SWRLSQLTranslator._build_builtin_filters(
-            builtin_atoms,
-            var_bindings,
-        )
+        builtin_filters = self._filters(builtin_atoms, var_bindings)
         if builtin_filters:
             where_parts.extend(builtin_filters)
 
@@ -705,7 +709,7 @@ class SWRLSQLTranslator:
                 else:
                     var_bindings[new_var] = (a_prop, new_col)
 
-        builtin_filters = self._build_builtin_filters(builtin_atoms, var_bindings)
+        builtin_filters = self._filters(builtin_atoms, var_bindings)
         if builtin_filters:
             where_parts.extend(builtin_filters)
 

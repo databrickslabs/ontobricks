@@ -237,6 +237,97 @@ class TestExpand:
             )
 
 
+class _SliceStore:
+    def __init__(self, triples):
+        self.triples = triples
+        self.fetch_batches = []
+
+    def query_triples(self, graph_name):
+        return list(self.triples)
+
+    def get_triples_for_subjects(self, graph_name, subjects):
+        self.fetch_batches.append(list(subjects))
+        wanted = set(subjects)
+        return [t for t in self.triples if t["subject"] in wanted]
+
+
+class TestSandboxSlice:
+    def test_empty_sandbox(self):
+        out = GraphFilter.sandbox_slice(_SliceStore([]), "g_sim")
+        assert out["phase"] == "sandbox"
+        assert out["count"] == 0
+        assert "empty" in (out.get("message") or "").lower()
+
+    def test_collects_subjects_without_neighbour_hops(self):
+        triples = [
+            {"subject": "a", "predicate": "p", "object": "1"},
+            {"subject": "a", "predicate": "q", "object": "2"},
+            {"subject": "b", "predicate": "p", "object": "3"},
+        ]
+        store = _SliceStore(triples)
+        out = GraphFilter.sandbox_slice(store, "g_sim")
+        assert out["phase"] == "sandbox"
+        assert out["expanded_count"] == 2
+        assert out["count"] == 3
+        assert store.fetch_batches
+        assert set(store.fetch_batches[0]) == {"a", "b"}
+
+    def test_caps_distinct_subjects(self):
+        triples = [
+            {"subject": f"s{i}", "predicate": "p", "object": "o"} for i in range(5)
+        ]
+        out = GraphFilter.sandbox_slice(_SliceStore(triples), "g_sim", max_entities=2)
+        assert out["capped"] is True
+        assert out["expanded_count"] == 2
+
+    def test_does_not_call_single_statement_expand(self):
+        class S(_SliceStore):
+            def expand_and_fetch_subgraph(self, *a, **k):
+                raise AssertionError("sandbox_slice must not expand")
+
+        triples = [{"subject": "a", "predicate": "p", "object": "1"}]
+        out = GraphFilter.sandbox_slice(S(triples), "g_sim")
+        assert out["count"] == 1
+        assert out["phase"] == "sandbox"
+
+    def test_unions_live_neighbours_and_keeps_sandbox_outgoing(self):
+        rdf = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        sandbox = [
+            {"subject": "cohort1", "predicate": rdf, "object": "http://ex/Person"},
+            {"subject": "cohort1", "predicate": "http://ex/worksAt", "object": "http://ex/org"},
+            {"subject": "cohort1", "predicate": "http://ex/score", "object": "300"},
+        ]
+
+        class Store(_SliceStore):
+            def expand_and_fetch_subgraph(self, table, uris, depth, max_e, max_t):
+                assert table == "g_live"
+                assert "cohort1" in uris
+                assert "http://ex/org" in uris
+                assert depth >= 1
+                return {
+                    "results": [
+                        {"subject": "cohort1", "predicate": "http://ex/score", "object": "800"},
+                        {"subject": "cohort1", "predicate": "http://ex/hasName", "object": "Alice"},
+                        {"subject": "http://ex/org", "predicate": rdf, "object": "http://ex/Org"},
+                        {"subject": "http://ex/org", "predicate": "http://ex/inCity", "object": "http://ex/paris"},
+                        {"subject": "http://ex/paris", "predicate": rdf, "object": "http://ex/City"},
+                    ],
+                    "count": 4,
+                    "capped": False,
+                    "expanded_count": 3,
+                }
+
+        out = GraphFilter.sandbox_slice(
+            Store(sandbox), "g_sim", live_table="g_live", depth=2
+        )
+        spo = {(t["subject"], t["predicate"], t["object"]) for t in out["results"]}
+        assert ("cohort1", "http://ex/score", "300") in spo
+        assert ("cohort1", "http://ex/score", "800") not in spo
+        assert ("cohort1", "http://ex/hasName", "Alice") in spo
+        assert ("http://ex/org", rdf, "http://ex/Org") in spo
+        assert ("http://ex/paris", rdf, "http://ex/City") in spo
+
+
 # ---------------------------------------------------------------------------
 # Find paging (has_more)
 # ---------------------------------------------------------------------------

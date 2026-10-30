@@ -12,6 +12,7 @@ HTTP calls go through :mod:`server.http_client` resolved via the module object
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections import OrderedDict
@@ -48,12 +49,20 @@ class _DomainState:
     policy, the pooled HTTP client) is server-wide and safely shared.
     """
 
-    __slots__ = ("selected_domain_name", "ontology_labels", "class_actions")
+    __slots__ = (
+        "selected_domain_name",
+        "ontology_labels",
+        "class_actions",
+        "simulation_id",
+        "include_inferred",
+    )
 
     def __init__(self) -> None:
         self.selected_domain_name: Optional[str] = None
         self.ontology_labels: dict[str, str] = {}  # uri/name (lower) → label
         self.class_actions: dict[str, dict] = {}   # class URI → {dataset, …}
+        self.simulation_id: str = ""
+        self.include_inferred: bool = True
 
 
 class MCPServerSession:
@@ -148,7 +157,27 @@ class MCPServerSession:
 
     @selected_domain_name.setter
     def selected_domain_name(self, value: Optional[str]) -> None:
-        self._state().selected_domain_name = value
+        st = self._state()
+        if st.selected_domain_name != value:
+            st.simulation_id = ""
+            st.include_inferred = True
+        st.selected_domain_name = value
+
+    @property
+    def simulation_id(self) -> str:
+        return self._state().simulation_id
+
+    @simulation_id.setter
+    def simulation_id(self, value: str) -> None:
+        self._state().simulation_id = str(value or "").strip()
+
+    @property
+    def include_inferred(self) -> bool:
+        return self._state().include_inferred
+
+    @include_inferred.setter
+    def include_inferred(self, value: bool) -> None:
+        self._state().include_inferred = bool(value)
 
     @property
     def ontology_labels(self) -> dict[str, str]:
@@ -215,7 +244,26 @@ class MCPServerSession:
             params.update(extra)
         if self.selected_domain_name:
             params["domain_name"] = self.selected_domain_name
+        if self.simulation_id:
+            params["simulation_id"] = self.simulation_id
+        if not self.include_inferred:
+            params["include_inferred"] = "false"
         return params
+
+    def graph_query_body(self, query: str, variables: str | None = None):
+        """GraphQL POST body, including the current sandbox overlay when set."""
+        body: dict = {"query": query}
+        if not self.include_inferred:
+            body["include_inferred"] = False
+        if self.simulation_id:
+            body["simulation_id"] = self.simulation_id
+        if not variables:
+            return body
+        try:
+            body["variables"] = json.loads(variables)
+        except json.JSONDecodeError:
+            return "Invalid JSON in 'variables' parameter."
+        return body
 
     def label_or_local(self, uri: str) -> str:
         """Return the ontology label for a URI, falling back to its local name."""

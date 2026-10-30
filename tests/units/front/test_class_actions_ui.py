@@ -111,7 +111,7 @@ def test_sigmagraph_details_renders_actions_section():
     js = SIGMA_JS.read_text(encoding="utf-8")
     assert "entityMapping && entityMapping.actions" in js
     assert "openEntityActionModal(" in js
-    assert "'Actions ('" in js
+    assert "'Behaviour ('" in js
 
 
 def test_sigmagraph_context_menu_has_action_items_and_dispatch():

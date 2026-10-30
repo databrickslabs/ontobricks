@@ -215,6 +215,22 @@ class TestRunFullReasoning:
         result = svc.run_full_reasoning({"tbox": False, "graph": False})
         assert result.stats.get("swrl_skipped") is True
 
+    def test_swrl_uses_ontology_rules_when_attr_empty(self):
+        domain = _domain_session(swrl_rules=[])
+        domain.swrl_rules = []
+        domain.ontology["swrl_rules"] = [
+            {
+                "name": "keep",
+                "antecedent": "Customer(?x) \u2227 hasOrder(?x, ?y)",
+                "consequent": "hasOrder(?x, ?y)",
+            }
+        ]
+        store = MagicMock()
+        store.execute_query.return_value = []
+        result = ReasoningService(domain, store).run_swrl_rules()
+        assert result.stats.get("skipped") is not True
+        assert result.stats.get("rules_count") == 1
+
     def test_graph_skipped_when_no_store(self):
         svc = ReasoningService(_domain_session(), triplestore_backend=None)
         result = svc.run_full_reasoning({"tbox": False, "swrl": False})

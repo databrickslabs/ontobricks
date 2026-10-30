@@ -25,6 +25,10 @@ GRAPH_TOOLS = frozenset(
         "get_status",
         "get_graphql_schema",
         "query_graphql",
+        "list_simulations",
+        "select_simulation",
+        "create_simulation",
+        "run_simulation",
         "get_entity_context",
         "invoke_entity_action",
         "compute_virtual_attributes",
@@ -43,6 +47,7 @@ API_V1_DT_REGISTRY = "/api/v1/digitaltwin/registry"
 API_V1_DT_STATUS = "/api/v1/digitaltwin/status"
 API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
 API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
+API_V1_SIMULATIONS = "/api/v1/simulations"
 API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
 API_V1_DOMAIN_ONTOLOGY = "/api/v1/domain/ontology"
 API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"

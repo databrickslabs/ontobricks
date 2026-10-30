@@ -190,6 +190,19 @@ def test_expand_and_fetch_subgraph_uses_adjacency_tables_when_ready(auth):
     assert payload["capped"] is False
 
 
+def test_expand_and_fetch_subgraph_depth_zero_spo_is_plain_select(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "table_exists", return_value=False), patch.object(
+        store, "execute_query", return_value=[]
+    ) as mock_query:
+        store.expand_and_fetch_subgraph("G_V1", ["http://ex/a"], 0, 50, 100)
+
+    sql = mock_query.call_args.args[0]
+    assert sql.lstrip().upper().startswith("SELECT")
+    assert "WITH adj_out" not in sql
+    assert "WHERE subject IN" in sql
+
+
 def test_expand_and_fetch_subgraph_falls_back_to_spo_when_adj_missing(auth):
     store = LakebaseFlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "table_exists", return_value=False), patch.object(

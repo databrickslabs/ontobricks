@@ -1,0 +1,11 @@
+<div class="d-inline-flex align-items-center gap-1 mb-0">
+    <label class="form-label small mb-0 text-muted" for="{{ select_id }}">Graph</label>
+    <select class="form-select form-select-sm py-0 sg-compact-select sg-sim-select kg-graph-source"
+            id="{{ select_id }}"
+            aria-label="Graph source"
+            title="Live knowledge graph, inferred graph, or a ready simulation sandbox"
+            {% if change_attr %}data-sg-change="{{ change_attr }}"{% endif %}>
+        <option value="live:inferred">Live graph (inferred)</option>
+        <option value="live">Live graph</option>
+    </select>
+</div>

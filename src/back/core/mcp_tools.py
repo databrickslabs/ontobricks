@@ -90,6 +90,31 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
         "requires_graph": True,
     },
     {
+        "name": "list_simulations",
+        "label": "List simulations",
+        "description": "List what-if scenarios. Ready rows are selectable sandboxes.",
+        "requires_graph": True,
+    },
+    {
+        "name": "select_simulation",
+        "label": "Select simulation",
+        "description": "Read subsequent graph tools against a ready sandbox, "
+        "or the live graph when id is omitted.",
+        "requires_graph": True,
+    },
+    {
+        "name": "create_simulation",
+        "label": "Create simulation",
+        "description": "Create a draft what-if scenario (label, scope, patches).",
+        "requires_graph": True,
+    },
+    {
+        "name": "run_simulation",
+        "label": "Run simulation",
+        "description": "Run a scenario: seed sandbox, apply facts, reason.",
+        "requires_graph": True,
+    },
+    {
         "name": "get_entity_context",
         "label": "Get entity context",
         "description": "A node's dataset rows, cross-domain bridges and "

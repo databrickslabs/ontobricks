@@ -82,6 +82,7 @@ def test_request_mints_token_without_running(client, wired):
     assert pending["rule"] == "VipCustomer"
     assert pending["entity_label"] == "CUST001"
     assert pending["consequent"] == "VIP(?c)"
+    assert pending["simulation_id"] is None
     wired.assert_not_called()
 
 
@@ -97,10 +98,57 @@ def test_confirm_runs_once_then_rejects_reuse(client, wired):
     wired.assert_called_once()
     assert wired.call_args.kwargs["rule_name"] == "VipCustomer"
     assert wired.call_args.kwargs["entity_uri"] == _ENTITY
+    assert wired.call_args.kwargs.get("simulation_id") in (None, "")
 
     second = client.post("/dtwin/nodes/business-rule/confirm", json={"token": token})
     assert second.status_code == 400
     wired.assert_called_once()
+
+
+def test_request_treats_live_source_as_no_simulation(client, wired, monkeypatch):
+    class FakeSim:
+        def __init__(self, *a, **k):
+            pass
+
+        def sandbox_relation(self, sid):
+            raise AssertionError(f"must not look up live source {sid!r}")
+
+    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
+    for sentinel in ("live", "live:inferred"):
+        resp = client.post(
+            "/dtwin/nodes/business-rule/request",
+            json={
+                "entity_uri": _ENTITY,
+                "rule": "VipCustomer",
+                "simulation_id": sentinel,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["pending_business_rule"]["simulation_id"] is None
+
+
+def test_confirm_forwards_simulation_id(client, wired, monkeypatch):
+    class FakeSim:
+        def __init__(self, *a, **k):
+            pass
+
+        def sandbox_relation(self, sid):
+            assert sid == "sim1"
+            return "g__sim_sim1"
+
+    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
+    token = client.post(
+        "/dtwin/nodes/business-rule/request",
+        json={
+            "entity_uri": _ENTITY,
+            "rule": "VipCustomer",
+            "simulation_id": "sim1",
+        },
+    ).json()["pending_business_rule"]["token"]
+
+    first = client.post("/dtwin/nodes/business-rule/confirm", json={"token": token})
+    assert first.status_code == 200
+    assert wired.call_args.kwargs["simulation_id"] == "sim1"
 
 
 def test_request_rejects_rule_not_on_class(client, wired):

@@ -37,3 +37,32 @@ Tests: uv run --frozen pytest -q -m "not scenario" -k "not test_readiness_route_
 Still open (blocked upstream):
 - oauthlib 4.0.0 — databricks-sql-connector pins oauthlib<4
 - nltk GHSA-8mgp-746c-j5xp — no patched release yet
+
+================================================================================
+## Merge what-if simulation sandbox into 0.10.0
+================================================================================
+
+Context: Simulation work lived on `feat/simulation-whatif-sandbox` (what-if
+scenarios, Explorer overlay, NL fact agent, public Simulation API). It needs
+to ship on the 0.10.0 release branch. Merge that branch into `0.10.0` and
+keep both changelog histories.
+
+Changes:
+
+1. feat/simulation-whatif-sandbox (merged)
+   Land the Simulation workspace, sandbox graph source, and related tests.
+2. changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+   Keep Dependabot floors plus simulation sections from both sides.
+3. changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+   Keep lock remediation plus simulation workbench/Explorer sections.
+4. changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+   Keep planning-gitignore plus simulation API/agent sections.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+- changelogs/v0.10.0/benoitcayladbx_2026-10-30.log
+- (merge) feat/simulation-whatif-sandbox into 0.10.0
+
+Tests: uv run --frozen pytest -q -m "not scenario" -k "not test_readiness_route_returns_checks" → 9800 passed, 338 skipped, 9 deselected, 39 warnings in 40.31s. Simulation subset: 170 passed in 2.12s.

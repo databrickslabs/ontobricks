@@ -82,3 +82,928 @@ against the UNCHANGED (old, still-vulnerable) uv.lock. test_routes.py
 excluded: it hangs on a fresh checkout of this worktree regardless of this
 change (reproduced before any edits here too). Does not validate the new
 floors; uv.lock regeneration is still required.
+
+================================================================================
+## Move cohort design and run into Simulation
+================================================================================
+
+Context: Cohort rule authoring lived under Ontology → Advanced and execution
+under Knowledge Graph. Both belong with Simulation. Bookmarks to the old
+URLs redirect. The Cohorts sidebar group is first in Simulation; Scenarios
+remains the default landing section.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Drop cohorts from Ontology/KG; add Simulation Cohorts + Run as the first group.
+2. src/front/templates/simulation.html
+   Mount design and run partials; load cohort CSS/JS and shared modals.
+3. src/front/templates/ontology.html
+   Unmount the cohort design section and assets.
+4. src/front/templates/dtwin.html
+   Unmount the cohort run section (purge script stays for Inference/Build).
+5. src/front/templates/partials/ontology/_ontology_cohorts.html
+   Retitle as Simulation → Cohorts; drop the in-partial modal include.
+6. src/front/templates/partials/dtwin/_query_cohorts.html
+   Retitle as Run cohorts; unique rail IDs so both UIs can share one page.
+7. src/front/templates/partials/_cohort_modals.html
+   Included once from the Simulation page.
+8. src/front/static/query/js/query-cohorts.js
+   Deep-link and edit hrefs to /simulation/; fill both rails; init on either section.
+9. src/front/routes/ontology.py
+   303 /ontology/?section=cohorts to Simulation Cohorts (rule query preserved).
+10. src/front/routes/dtwin.py
+    303 /dtwin/?section=cohorts to Simulation → Run.
+11. src/front/routes/simulation.py
+    Pass reasoning_ctx.cohort_rules_count and triplestore config for the run UI.
+12. src/front/templates/partials/layout/help_modal.html
+    Workflow, glossary and feature card point at Simulation; Cohorts listed first.
+13. tests/units/front/test_simulation_page_contract.py
+    Pin Cohorts as the first Simulation menu group.
+14. tests/units/front/test_help_center_menu_sync.py
+    Help Center Simulation labels follow menu order.
+15. tests/units/front/test_sidebar_content_stretch_contract.py
+    Inventory: cohorts on simulation.html, off ontology/dtwin.
+16. tests/units/front/test_kg_section_headers.py
+    Cohort-run header still has no Domain/Graph DB chrome.
+17. docs/user-guide.md, docs/advanced_features.md, docs/getting-started.md,
+    docs/development.md, docs/architecture.md
+    Document the new home and sidebar order.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/ontology.html
+- src/front/templates/dtwin.html
+- src/front/templates/partials/ontology/_ontology_cohorts.html
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/templates/partials/_cohort_modals.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-cohorts.js
+- src/front/routes/ontology.py
+- src/front/routes/dtwin.py
+- src/front/routes/simulation.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_kg_section_headers.py
+- docs/user-guide.md
+- docs/advanced_features.md
+- docs/getting-started.md
+- docs/development.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9682 passed, 326 skipped, 8 deselected, 0 failed in 56.88s
+
+================================================================================
+## Show a spinner on cohort Preview and Materialise
+================================================================================
+
+Context: Preview and materialise can take tens of seconds on a cold warehouse.
+Clicking again queued a second request. Disable the buttons and show Bootstrap's
+branded in-button spinner until the round-trip finishes.
+
+Changes:
+
+1. src/front/static/query/js/query-cohorts.js
+   `_setBusy` swaps button HTML for a spinner, `aria-busy`, and disabled; preview
+   and materialise restore idle markup in `finally`.
+2. src/front/templates/partials/_cohort_modals.html
+   Stable id `cohortMaterializeNowBtn` on the confirm action.
+3. src/front/static/global/css/permissions.css
+   Gate the confirm button the same way as header Materialise.
+4. tests/units/front/test_cohort_run_busy_buttons.py
+   Contract: spinner, finally-restore, and button ids.
+5. tests/units/front/test_view_mode_write_gates.py
+   Read-only gate covers `#cohortMaterializeNowBtn`.
+
+Modified files:
+- src/front/static/query/js/query-cohorts.js
+- src/front/templates/partials/_cohort_modals.html
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_cohort_run_busy_buttons.py
+- tests/units/front/test_view_mode_write_gates.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9684 passed, 326 skipped, 8 deselected, 0 failed in 56.84s
+
+================================================================================
+## Add a hypothetical-fact lookup wizard
+================================================================================
+
+Context: Workbench fact rows required pasting subject, predicate and object
+URIs. A three-step wizard searches the live graph and the ontology so builders
+can pick existing assets (or still type a new URI/literal).
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Modal: Subject / Predicate / Object steps, class filter, search, typed URI.
+2. src/front/static/simulation/js/simulation-fact-wizard.js
+   Preview search via /dtwin/sync/filter; predicates from loaded ontology;
+   Apply writes the row.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Fact wizard CTA and per-cell search buttons.
+4. src/front/templates/partials/simulation/_sim_workbench.html
+   Fact wizard button next to Add fact.
+5. src/front/templates/simulation.html
+   Include the modal and script.
+6. src/front/static/simulation/css/simulation.css
+   Scrollable result list.
+7. tests/units/front/test_simulation_fact_wizard.py
+   Structural contract for steps, wiring, and search endpoints.
+8. docs/user-guide.md, help_modal.html
+   Document the wizard.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/simulation.html
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9688 passed, 326 skipped, 8 deselected, 0 failed in 51.22s
+
+================================================================================
+## Lock fact-wizard operation after the subject step
+================================================================================
+
+Context: Operation stayed editable on every wizard step, and Set / Add /
+Remove shared the same predicate and object copy. Lock the select after
+step 1 and retarget the remaining steps to the chosen op.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-fact-wizard.js
+   Disable `#simFactOp` on steps 2–3; swap intro, predicate hint, object
+   label/placeholder, and Apply label for set / add / remove.
+2. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Predicate hint and object label ids for the copy swap.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Contract for the lock and per-op Apply labels.
+
+Modified files:
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- tests/units/front/test_simulation_fact_wizard.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9689 passed, 326 skipped, 8 deselected, 0 failed in 52.18s
+
+================================================================================
+## Open Results after a simulation run
+================================================================================
+
+Context: After Run finished, the Workbench progress bar disappeared and the
+diff lived on a separate sidebar item, so it looked like nothing happened.
+Keep the completion banner, add View results, and jump to Results as soon as
+the task completes.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation.js
+   Poll immediately; on success keep the progress card at 100% and call
+   showResults; on failure keep the error on the Workbench.
+2. src/front/templates/partials/simulation/_sim_workbench.html
+   View results button on the completion banner.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Wire the button to Results.
+4. src/front/templates/partials/simulation/_sim_results.html
+   Empty-state copy that names Scenarios and the Results dropdown.
+5. docs/user-guide.md, help_modal.html
+   Document the post-run path.
+6. tests/units/front/test_simulation_page_contract.py
+   Contract for the CTA and immediate poll.
+
+Modified files:
+- src/front/static/simulation/js/simulation.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_results.html
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9690 passed, 326 skipped, 8 deselected, 0 failed in 50.71s
+
+================================================================================
+## Open a simulation sandbox in Graph Explorer
+================================================================================
+
+Context: Simulation Results listed added/removed triples but Explorer always
+read the live graph. Users need a Graph dropdown of ready simulations so they
+can see the after picture as a graph.
+
+Changes:
+
+1. src/back/objects/simulation/Simulation.py
+   sandbox_relation() returns the ready sandbox table or rejects draft/running.
+2. src/back/objects/digitaltwin/TwinGraphAccess.py
+   graph_query_table(simulation_id=…) resolves that sandbox instead of the live graph.
+3. src/back/objects/digitaltwin/explorer/GraphFilter.py
+   sandbox_slice() loads the sandbox subgraph without hopping into the live graph.
+4. src/api/routers/internal/dtwin.py
+   filter (preview/expand/sandbox), neighbors, and sync/load accept simulation_id.
+5. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Graph dropdown and sandbox banner on Explorer.
+6. src/front/static/query/js/query-sigmagraph.js
+   Populate ready simulations, pass simulation_id, auto-load the sandbox.
+7. src/front/static/query/js/query-sync.js
+   Load triples from the selected sandbox.
+8. src/front/static/query/css/query-sigmagraph.css
+   Compact width for the Graph select.
+9. src/front/templates/partials/simulation/_sim_results.html
+   Explorer button on Results.
+10. src/front/static/simulation/js/simulation-results.js
+    Deep-link /dtwin/?section=sigmagraph&simulation=<id>.
+11. docs/user-guide.md, README.md, help_modal.html
+    Document the Graph dropdown and Results → Explorer path.
+12. tests/units/front/test_explorer_simulation_select.py
+    Header, filter body, and Results CTA contracts.
+13. tests/units/graphdb/test_v090_graph_access_filter.py
+    sandbox_slice empty, fetch, and cap.
+14. tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+    graph_query_table uses the sandbox relation.
+15. tests/units/simulation/test_simulation_runner_api.py
+    sandbox_relation requires ready status.
+
+Modified files:
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/objects/digitaltwin/explorer/GraphFilter.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/css/query-sigmagraph.css
+- src/front/templates/partials/simulation/_sim_results.html
+- src/front/static/simulation/js/simulation-results.js
+- docs/user-guide.md
+- README.md
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/graphdb/test_v090_graph_access_filter.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/simulation/test_simulation_runner_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9698 passed, 326 skipped, 8 deselected, 0 failed in 52.42s
+
+================================================================================
+## Fix Explorer sandbox load SQL
+================================================================================
+
+Context: Picking a ready simulation in Explorer failed with "Error filtering
+the triple store". The sandbox path called GraphFilter.expand at depth 0;
+Lakebase wrapped that SELECT in adjacency CTEs and Postgres rejected
+``WITH adj_out AS (...), SELECT ...``.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Depth-0 SPO expand is a plain SELECT; do not prefix adjacency CTEs.
+2. src/back/objects/digitaltwin/explorer/GraphFilter.py
+   sandbox_slice fetches the sandbox triples directly (no expand hop).
+3. tests/units/graphdb/test_lakebase_adjacency.py
+   Depth-0 SPO SQL starts with SELECT and has no WITH adj_out.
+4. tests/units/graphdb/test_v090_graph_access_filter.py
+   sandbox_slice must not call expand_and_fetch_subgraph.
+
+Modified files:
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/objects/digitaltwin/explorer/GraphFilter.py
+- tests/units/graphdb/test_lakebase_adjacency.py
+- tests/units/graphdb/test_v090_graph_access_filter.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9700 passed, 326 skipped, 8 deselected, 0 failed in 51.75s
+
+================================================================================
+## Union live graph with the simulation in Explorer
+================================================================================
+
+Context: Explorer showed only cohort members from the sandbox. Related
+entities exist as objects without their own sandbox triples, so the graph
+looked empty around the cohort. Overlay the live neighbourhood and keep
+sandbox triples for in-scope subjects (after-picture wins).
+
+Changes:
+
+1. src/back/objects/digitaltwin/explorer/GraphFilter.py
+   sandbox_slice unions a live expand around sandbox entities with sandbox
+   outgoing triples; in-scope live triples are dropped so removed facts stay gone.
+2. src/api/routers/internal/dtwin.py
+   Sandbox filter passes the live query table and Explorer depth.
+3. src/front/static/query/js/query-sigmagraph.js
+   Send depth with the sandbox load.
+4. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Banner: simulation overlaid on the live graph.
+5. docs/user-guide.md
+   Document the union view.
+6. tests/units/graphdb/test_v090_graph_access_filter.py
+   Overlay keeps sandbox score and live neighbour types.
+7. tests/units/front/test_explorer_simulation_select.py
+   Sandbox request includes depth.
+
+Modified files:
+- src/back/objects/digitaltwin/explorer/GraphFilter.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- docs/user-guide.md
+- tests/units/graphdb/test_v090_graph_access_filter.py
+- tests/units/front/test_explorer_simulation_select.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9701 passed, 326 skipped, 8 deselected, 0 failed in 53.27s
+
+================================================================================
+## Explorer simulation is the same view, retargeted
+================================================================================
+
+Context: DOMContentLoaded called private `_loadSimulationSelect` outside the
+SigmaGraph IIFE (`ReferenceError` on Explorer load). Picking a simulation
+also dumped a special overlay graph and disabled Inferred. Explorer now
+keeps search/expand/hops/inferred; only the targeted table changes.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Expose `loadSimulations`; remove sandbox dump; retarget the current
+   expansion; keep Inferred enabled.
+2. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Banner copy: viewing this simulation, same Explorer.
+3. docs/user-guide.md
+   Graph source switches the table, not Explorer behaviour.
+4. tests/units/front/test_explorer_simulation_select.py
+   No sandbox phase; DOM-ready uses the public API.
+5. tests/units/front/test_explorer_loading_overlay.py
+   Inferred overlay is owned by `_retargetCurrentView`.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- docs/user-guide.md
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_explorer_loading_overlay.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9702 passed, 326 skipped, 8 deselected, 0 failed in 51.23s
+
+================================================================================
+## Explorer simulation target is live UNION sandbox
+================================================================================
+
+Context: Choosing a simulation in Explorer must keep the same search/expand
+UX, with the targeted view equal to the live graph UNION the simulation
+after-picture (in-scope subjects replaced by sandbox facts).
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   `__smu_` / `__sms_` view names and CREATE VIEW live EXCEPT sandbox
+   subjects UNION ALL sandbox.
+2. src/back/core/graphdb/lakebase/LakebaseSimulationUnion.py
+   Ensure/drop those Explorer union views on the live store.
+3. src/back/core/graphdb/lakebase/__init__.py
+   Re-export LakebaseSimulationUnion.
+4. src/back/objects/simulation/Simulation.py
+   explorer_relation() is the Explorer query target for a ready simulation.
+5. src/back/objects/simulation/SimulationSandbox.py
+   Create union views after a run; drop them with the sandbox.
+6. src/back/objects/simulation/SimulationRunner.py
+   Materialise inferred and asserted Explorer union views at end of run.
+7. src/back/objects/digitaltwin/TwinGraphAccess.py
+   simulation_id resolves to the union view, inferred toggle still applies
+   to the live side.
+8. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Banner: live graph unioned with the selected simulation.
+9. docs/user-guide.md
+   Graph source is live UNION sandbox after-picture.
+10. tests/units/simulation/test_simulation_core.py
+    Union naming, overlay SQL, drop both views.
+11. tests/units/simulation/test_simulation_runner_api.py
+    explorer_relation creates the union SQL.
+12. tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+    graph_query_table uses explorer_relation.
+13. tests/units/front/test_explorer_simulation_select.py
+    Banner mentions the union.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseSimulationUnion.py
+- src/back/core/graphdb/lakebase/__init__.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- docs/user-guide.md
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/front/test_explorer_simulation_select.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9706 passed, 326 skipped, 8 deselected, 0 failed in 51.33s
+
+================================================================================
+## Show entity labels in simulation scope
+================================================================================
+
+Context: Simulate from here named the scenario after the URI local id
+(CUST0000037) instead of the graph display label. Persist and show
+rdfs:label / mapping label for the scoped entity.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationScope.py
+   Optional focus_label on the persisted scope.
+2. src/front/static/query/js/query-entity-details.js
+   Pass getDisplayLabel on the workbench deep link.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Use the URL label, look up rdfs:label, caption under the URI, auto-name
+   "What if: {label}".
+4. src/front/static/simulation/js/simulation.js
+   resolveEntityLabel; scenarios table shows focus_label.
+5. src/front/templates/partials/simulation/_sim_workbench.html
+   Focus caption under the entity URI.
+6. tests/units/simulation/test_simulation_core.py
+   focus_label round-trip.
+7. tests/units/front/test_simulation_page_contract.py
+   Deep link and workbench prefer the label.
+
+Modified files:
+- src/back/objects/simulation/SimulationScope.py
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/simulation/test_simulation_core.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9708 passed, 326 skipped, 8 deselected, 0 failed in 54.66s
+
+================================================================================
+## Drop simulation Explorer views before rerun
+================================================================================
+
+Context: Rerunning a simulation failed because its previous Explorer UNION
+views depend on the sandbox table. PostgreSQL correctly prevents dropping
+that table while the views still exist.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   Drop inferred and asserted Explorer union views before recreating or
+   deleting the sandbox table.
+2. tests/units/simulation/test_simulation_core.py
+   Assert lifecycle order: views, sandbox table, then new table.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- tests/units/simulation/test_simulation_core.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9709 passed, 326 skipped, 8 deselected, 0 failed in 52.17s
+
+================================================================================
+## Drop Workbench from the Simulation sidebar
+================================================================================
+
+Context: The scenario editor is reached from New / Open / Simulate from here.
+A sidebar item next to Scenarios was redundant.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Remove the Workbench sidebar item; keep the workbench page section.
+2. src/front/static/global/js/sidebar-nav.js
+   Activate a section even when it has no sidebar link (deep links, New).
+3. src/front/templates/partials/layout/help_modal.html
+   Fold the editor into the Scenarios workflow step.
+4. docs/user-guide.md, README.md, docs/development.md, docs/architecture.md
+   Stop listing Workbench as a sidebar destination.
+5. tests/units/front/test_simulation_page_contract.py
+   Assert workbench is not a menu item and the section still exists.
+6. tests/units/front/test_workspace_map_modal.py
+   Workspace map has Scenarios, not Workbench.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/static/global/js/sidebar-nav.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- README.md
+- docs/development.md
+- docs/architecture.md
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_workspace_map_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9711 passed, 326 skipped, 8 deselected, 0 failed in 52.68s
+
+================================================================================
+## Keep live facts on simulated Explorer entities
+================================================================================
+
+Context: Selecting a simulation in Explorer showed the added entity
+(CUST0000037) but dropped its existing properties and relations. The union
+view replaced every live triple whose subject appeared in the sandbox, so a
+sparse after-picture hid the rest of the entity.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Overlay live vs sandbox on (subject, predicate), not the whole subject.
+2. src/back/objects/simulation/Simulation.py
+   Document predicate-level Explorer union.
+3. src/back/objects/digitaltwin/TwinGraphAccess.py
+   Same union contract on the graph-query resolver.
+4. src/back/objects/digitaltwin/explorer/GraphFilter.py
+   sandbox_slice live overlay keeps unpatched predicates of sandbox subjects.
+5. src/back/objects/simulation/SimulationRunner.py
+   Seed patch subjects that were not in the resolved scope.
+6. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Banner: simulated predicates overlay live facts; existing facts stay.
+7. docs/user-guide.md
+   Graph source: existing properties and relations stay visible.
+8. tests/units/simulation/test_simulation_core.py
+   Union SQL asserts predicate overlay.
+9. tests/units/graphdb/test_v090_graph_access_filter.py
+   Live name on a patched cohort member survives the overlay.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/objects/digitaltwin/explorer/GraphFilter.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- docs/user-guide.md
+- tests/units/simulation/test_simulation_core.py
+- tests/units/graphdb/test_v090_graph_access_filter.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9711 passed, 326 skipped, 8 deselected, 0 failed in 52.89s
+
+================================================================================
+## Add Purge on the Scenarios list
+================================================================================
+
+Context: Operators needed a way to drop a simulation sandbox without deleting
+the scenario definition. Delete still removes the whole scenario.
+
+Changes:
+
+1. src/back/objects/simulation/Simulation.py
+   purge() drops the sandbox and resets the row to draft, keeping the spec.
+2. src/api/routers/internal/simulation.py
+   POST /simulation/{id}/purge (builder).
+3. src/front/static/simulation/js/simulation.js
+   Eraser action with confirm; disabled for draft/running.
+4. src/front/templates/partials/layout/help_modal.html
+   Scenarios help mentions purge vs delete.
+5. docs/user-guide.md, docs/architecture.md
+   Document the row action and the API.
+6. tests/units/simulation/test_simulation_runner_api.py
+   Purge keeps spec, refuses running, builder-guarded.
+7. tests/units/front/test_simulation_page_contract.py
+   List exposes the purge action.
+
+Modified files:
+- src/back/objects/simulation/Simulation.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: covered with the fact-wizard suite below
+
+================================================================================
+## Fact wizard: only properties of the subject class
+================================================================================
+
+Context: Step 2 of the hypothetical-fact wizard listed every ontology property
+(Show all was on by default). It should only propose predicates declared on
+the chosen subject's class, including inherited ones.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Drop the Show all checkbox; label the list as class-scoped.
+2. src/front/static/simulation/js/simulation-fact-wizard.js
+   Filter by domain + ancestor chain; resolve type from search or exact URI.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Contract: no Show all, declaring-class filter helpers present.
+4. docs/user-guide.md
+   Fact wizard uses predicates of the subject's class.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9715 passed, 326 skipped, 8 deselected, 0 failed in 51.13s
+
+================================================================================
+## Spinner while loading Scenarios
+================================================================================
+
+Context: The Scenarios table showed plain "Loading scenarios…" text with no
+spinner, including on refresh.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_scenarios.html
+   Initial table row uses the branded Bootstrap spinner.
+2. src/front/static/simulation/js/simulation.js
+   loadScenarios() paints the spinner row and disables Refresh until done.
+3. tests/units/front/test_simulation_page_contract.py
+   Contract for the spinner markup and JS helper.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/static/simulation/js/simulation.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9716 passed, 326 skipped, 8 deselected, 0 failed in 51.12s
+
+================================================================================
+## Search picker for entity neighbourhood scope
+================================================================================
+
+Context: Entity neighbourhood required pasting a URI. The fact wizard already
+knew how to search the live graph; reuse it as a one-step entity picker.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Search button on the entity URI field.
+2. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Wrap the operation field so the picker can hide it.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Open the wizard in scope-pick mode and apply URI + label.
+4. src/front/static/simulation/js/simulation-fact-wizard.js
+   pick:'scope' — subject search only, Use this entity.
+5. tests/units/front/test_simulation_fact_wizard.py
+   Contract for the neighbourhood search picker.
+6. docs/user-guide.md
+   Entity neighbourhood search button.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9717 passed, 326 skipped, 8 deselected, 0 failed in 52.64s
+
+================================================================================
+## Seed patch-object neighbourhood so SWRL can fire
+================================================================================
+
+Context: A scenario that Add-ed extra contracts on Jacob Martin showed the
+patches but no SWRL consequences (meters on the customer). The sandbox only
+copied the original entity slice, so the added contracts had no live
+hasMeter triples for the rules to join on.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   seed_neighbourhood() copies URIs plus one live hop of related subjects.
+2. src/back/objects/simulation/SimulationRunner.py
+   Before reasoning, seed patch subjects and URI objects with that hop.
+3. tests/units/simulation/test_simulation_core.py
+   Neighbourhood seed includes related meters, not rdf:type class objects.
+4. tests/units/simulation/test_simulation_runner_api.py
+   Runner seeds an added contract URI.
+5. docs/user-guide.md
+   Added entities are copied from live with one neighbour hop.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9719 passed, 326 skipped, 8 deselected, 0 failed in 53.01s
+
+================================================================================
+## Run Explorer entity SWRL against the simulation sandbox
+================================================================================
+
+Context: In Explorer simulation view, applying the entity SWRL rule
+"attach meter …" on Jacob Martin produced no results. The request wrote
+to the live graph, which does not contain extra contracts asserted in the
+sandbox, so the rule had nothing to join.
+
+Changes:
+
+1. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+   With simulation_id, run SWRL on the sandbox store and materialise there.
+2. src/back/objects/digitaltwin/node/NodeContextService.py
+   Forward simulation_id from the Explorer confirm path.
+3. src/back/objects/simulation/SimulationSandbox.py
+   seed_focus_for_swrl copies the entity neighbourhood plus sandbox URI objects.
+4. src/api/routers/internal/dtwin.py
+   Persist simulation_id on the one-time token; confirm retargets execution.
+5. src/front/static/query/js/query-business-rules.js
+   Send the Explorer Graph dropdown id; warn that writes go to the sandbox.
+6. tests/units/dtwin/test_entity_business_rules.py
+   Simulation execution writes the sandbox, not the live store.
+7. tests/units/api/test_dtwin_nodes_business_rule.py
+   Confirm forwards simulation_id from the minted token.
+8. tests/units/simulation/test_simulation_core.py
+   Focus seed copies extra contract objects, skipping rdf:type.
+9. tests/units/front/test_entity_business_rules_ui.py
+   Explorer request body includes simulation_id.
+10. docs/user-guide.md
+    Entity SWRL in simulation view writes the sandbox.
+11. tests/units/architecture/baseline.json
+    Drop the execute() size-budget exception after the extract.
+
+Modified files:
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/simulation/SimulationSandbox.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/digitaltwin.py
+- src/front/static/query/js/query-business-rules.js
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/architecture/baseline.json
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9723 passed, 326 skipped, 8 deselected, 0 failed in 54.07s
+
+================================================================================
+## Fire ticked SWRL after simulation hypotheses
+================================================================================
+
+Context: With SWRL ticked on a scenario, attach-meter still did not run
+after extra contracts were added. The runner called SWRL, but extra
+contracts were copied without their meter subjects, so the join had
+nothing to match. Re-seeding the patched customer from live after a Set
+would also restore the old value.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   After seeding, walk sandbox URI objects (and live expand) for two hops
+   so meters of extra contracts are copied.
+2. src/back/objects/simulation/SimulationRunner.py
+   Seed every hypothesis URI at 2 hops before the before-picture; after
+   apply, copy objects of new links only (not the patched subjects).
+3. src/back/objects/digitaltwin/models.py
+   DomainSnapshot falls back to ontology.swrl_rules / classes / properties.
+4. tests/units/simulation/test_simulation_core.py
+   Empty live expand still seeds meter objects; snapshot loads SWRL.
+5. tests/units/simulation/test_simulation_runner_api.py
+   Hypothesis neighbourhood is copied at 2 hops.
+6. docs/user-guide.md
+   Ticked SWRL runs after hypotheses; extra entities bring two hops.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/digitaltwin/models.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9725 passed, 326 skipped, 8 deselected, 0 failed in 60.68s
+
+================================================================================
+## Unstick simulation progress at 30%
+================================================================================
+
+Context: After seeding extra-contract neighbourhoods so SWRL can fire, the
+run bar sat at 30%. Hypothesis seed re-expanded the already-scoped customer
+at two hops, then issued one SQL query per expanded neighbour.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationRunner.py
+   Seed only URIs not already in the slice, at one hop; advance the bar
+   before the before-picture dump.
+2. src/back/objects/simulation/SimulationSandbox.py
+   Walk URI objects of the seeded URIs only, in batched IN-list SQL.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Extra contracts are seeded; the scoped customer is not re-expanded.
+4. tests/units/simulation/test_simulation_core.py
+   Sandbox object walk uses the batched helper.
+5. docs/user-guide.md
+   Extra hypothesis entities copy one neighbour hop.
+
+Modified files:
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/simulation/SimulationSandbox.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/simulation/test_simulation_core.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9725 passed, 326 skipped, 8 deselected, 0 failed in 53.75s
+
+================================================================================
+## Unlock Save after a stuck simulation run
+================================================================================
+
+Context: After a run froze at 30%, the scenario stayed ``running`` and
+Save failed with "Simulation is running — wait for it to finish". The
+worker may still be in TM, or already gone after a restart.
+
+Changes:
+
+1. src/back/objects/simulation/Simulation.py
+   Reap running rows whose task is gone; abort() cancels the task and
+   marks the scenario failed so it can be edited.
+2. src/back/objects/simulation/SimulationRunner.py
+   Ignore a late finish if the scenario was aborted (task_id mismatch).
+3. src/api/routers/internal/simulation.py
+   POST /simulation/{id}/abort.
+4. src/front/static/simulation/js/simulation-workbench.js
+   Save retries after abort when the lock is still held.
+5. tests + docs
+   Stale lock, abort route, workbench retry.
+
+Modified files:
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9729 passed, 326 skipped, 8 deselected, 0 failed in 51.29s
+
+================================================================================
+## Fail loudly when simulation SWRL does not run
+================================================================================
+
+Context: With the SWRL checkbox ticked, a simulation could still finish
+ready with zero inferences. Lakebase is Postgres, but SWRL SQL used Spark
+TRY_CAST / RLIKE / CURRENT_TIMESTAMP(); each rule error was swallowed so
+attach-meter never showed up. Empty DomainSnapshot.swrl_rules also skipped
+the phase even when ontology.swrl_rules had the rules.
+
+Changes:
+
+1. src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+   Postgres templates: numeric CASE casts, ~ instead of RLIKE, CURRENT_TIMESTAMP.
+2. src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+   Dialect from the store; built-in filters use the Postgres templates.
+3. src/back/core/graphdb/GraphDBBackend.py
+   get_query_translator passes sql_flavor() into the translator.
+4. src/back/core/reasoning/swrl/SWRLEngine.py
+   Keep per-rule error details on the result stats.
+5. src/back/core/reasoning/ReasoningService.py
+   Copy SWRL errors into full-run stats; fall back to ontology.swrl_rules.
+6. src/back/objects/simulation/SimulationRunner.py
+   Fail the run when SWRL is requested but skipped or errored.
+7. tests + docs/user-guide.md
+   Postgres SQL, ontology fallback, runner fails on skip/SQL errors.
+
+Modified files:
+- src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+- src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/reasoning/swrl/SWRLEngine.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/objects/simulation/SimulationRunner.py
+- tests/units/ontology/test_swrl_engine.py
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9734 passed, 326 skipped, 8 deselected, 0 failed in 49.36s
+
+

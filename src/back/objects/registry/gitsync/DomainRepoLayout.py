@@ -17,6 +17,8 @@ Repository layout (relative to the configured base path)::
         layout/views/<View>.json
         layout/map.json
         metadata/tables.json
+        simulation/scenarios.json            # what-if scenario specs
+        simulation/runs.json                 # simulation run history
 
 JSON files are the source of truth; ``.ttl`` files and ``manifest.json``
 are derived and ignored by :meth:`DomainRepoLayout.merge_version`.
@@ -116,7 +118,14 @@ class DomainRepoLayout:
             return blob
         return {
             k: doc.get(k)
-            for k in ("ontology", "assignment", "design_layout", "metadata")
+            for k in (
+                "ontology",
+                "assignment",
+                "design_layout",
+                "metadata",
+                "simulations",
+                "simulation_runs",
+            )
             if k in doc
         }
 
@@ -166,6 +175,10 @@ class DomainRepoLayout:
         metadata = blob.get("metadata")
         if metadata:
             files["metadata/tables.json"] = cls.dump(metadata)
+        if "simulations" in blob:
+            files["simulation/scenarios.json"] = cls.dump(blob.get("simulations") or [])
+        if "simulation_runs" in blob:
+            files["simulation/runs.json"] = cls.dump(blob.get("simulation_runs") or [])
         return files
 
     @classmethod
@@ -357,14 +370,17 @@ class DomainRepoLayout:
         if "layout/map.json" in files:
             layout["map"] = load("layout/map.json", {})
 
+        blob = {
+            "ontology": ontology,
+            "assignment": load("mapping/assignment.json", {}),
+            "design_layout": layout,
+            "metadata": load("metadata/tables.json", {}),
+        }
+        if "simulation/scenarios.json" in files:
+            blob["simulations"] = load("simulation/scenarios.json", [])
+        if "simulation/runs.json" in files:
+            blob["simulation_runs"] = load("simulation/runs.json", [])
         return {
             "info": load("info.json", {}),
-            "versions": {
-                str(version): {
-                    "ontology": ontology,
-                    "assignment": load("mapping/assignment.json", {}),
-                    "design_layout": layout,
-                    "metadata": load("metadata/tables.json", {}),
-                }
-            },
+            "versions": {str(version): blob},
         }

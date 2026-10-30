@@ -19,6 +19,20 @@ logger = get_logger(__name__)
 class TwinGraphAccess:
     """Resolve query/DQ tables, require a graph store, load cached metrics."""
 
+    # Explorer source-picker tokens. They are not simulation registry ids
+    # (those are ``s`` + hex) and must never be looked up as sandboxes.
+    LIVE_GRAPH_SENTINELS = frozenset({"live", "live:inferred"})
+
+    @staticmethod
+    def sandbox_id(raw: Optional[str]) -> Optional[str]:
+        """Return a real sandbox id, or ``None`` for the live graph."""
+        if not isinstance(raw, str):
+            return None
+        sid = raw.strip()
+        if not sid or sid.lower() in TwinGraphAccess.LIVE_GRAPH_SENTINELS:
+            return None
+        return sid
+
     @staticmethod
     def graph_query_table(
         domain,
@@ -26,14 +40,41 @@ class TwinGraphAccess:
         store=None,
         *,
         include_inferred: bool = True,
+        simulation_id: Optional[str] = None,
     ) -> str:
-        """Resolve the physical graph table for read queries (Lakebase or Delta)."""
+        """Resolve the physical graph table for read queries (Lakebase or Delta).
+
+        When *simulation_id* is set, return the Explorer union view: live
+        graph with that scenario's sandbox after-picture on overlapping
+        predicates. *include_inferred* still switches the live side
+        (union view vs synced bulk table).
+        """
+        sid = TwinGraphAccess.sandbox_id(simulation_id)
+        if sid:
+            from back.objects.simulation import Simulation
+
+            return Simulation(domain, settings).explorer_relation(
+                sid, include_inferred=include_inferred, store=store
+            )
         return effective_graph_query_table(
             domain,
             settings,
             include_inferred=include_inferred,
             store=store,
         )
+
+    @staticmethod
+    def source_from_payload(data: Any) -> tuple[bool, Optional[str]]:
+        """Parse include_inferred + simulation_id from a request body or mapping."""
+        payload = data if isinstance(data, dict) else {}
+        raw = payload.get("include_inferred", True)
+        if raw is None:
+            include_inferred = True
+        elif isinstance(raw, str):
+            include_inferred = raw.strip().lower() not in {"0", "false", "no", "off"}
+        else:
+            include_inferred = bool(raw)
+        return include_inferred, TwinGraphAccess.sandbox_id(payload.get("simulation_id"))
 
     @staticmethod
     def dataquality_table(domain, settings, *, view_table_fn=None) -> str:

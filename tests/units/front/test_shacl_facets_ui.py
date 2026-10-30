@@ -269,11 +269,12 @@ def test_panel_section_offers_check_then_details_and_recheck():
 # ---------------------------------------------------------------------------
 
 
-def test_quality_toggle_sits_next_to_inferred():
+def test_quality_toggle_lives_in_canvas_help_modal():
     html = _read(SIGMA_HTML)
-    assert 'id="sgShowQualityRings"' in html
-    assert 'data-sg-change="toggleQualityRings"' in html
-    assert html.index('id="sgShowInferred"') < html.index('id="sgShowQualityRings"')
+    modal = _read(FRONT / "templates/partials/dtwin/_query_sigmagraph_canvas_help_modal.html")
+    assert 'id="sgShowQualityRings"' not in html.split("visualization-layout", 1)[0]
+    assert 'id="sgShowQualityRings"' in modal
+    assert 'data-sg-change="toggleQualityRings"' in modal
 
 
 def test_ring_is_drawn_before_highlights_so_they_win():

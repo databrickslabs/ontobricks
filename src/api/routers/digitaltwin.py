@@ -28,6 +28,11 @@ from api.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.graphdb import get_graphdb
+from back.core.graphdb.search_cache import (
+    apply_search_cache_to_store,
+    parse_cache_param,
+    search_cache_usage,
+)
 from back.core.helpers import (
     get_triplestore_sql_credentials,
     get_databricks_client,
@@ -45,6 +50,7 @@ from back.objects.digitaltwin import (
     NodeShaclResponse,
     NodeShaclService,
 )
+from back.objects.digitaltwin.TwinGraphAccess import TwinGraphAccess
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
 _resolve_registry = DigitalTwin.resolve_registry
@@ -350,6 +356,7 @@ class NodeBusinessRuleResponse(BaseModel):
     entity_local_id: str = ""
     class_name: Optional[str] = None
     rule: Optional[str] = None
+    graph_target: str = "live"
     inferred_count: int = 0
     materialized_count: int = 0
     triples: List[InferredTripleOut] = []
@@ -532,6 +539,26 @@ async def dt_status(
         ) from e
 
 
+def _graph_read_table(
+    domain,
+    settings,
+    store,
+    include_inferred,
+    simulation_id,
+    backend=None,
+) -> str:
+    """Live inferred/asserted graph, a ready sandbox, or the R2RML view."""
+    if backend == "view" and not TwinGraphAccess.sandbox_id(simulation_id):
+        return effective_view_table(domain, settings).strip()
+    return TwinGraphAccess.graph_query_table(
+        domain,
+        settings,
+        store=store,
+        include_inferred=include_inferred,
+        simulation_id=simulation_id,
+    )
+
+
 # ---------------------------------------------------------------------------
 # GET /stats
 # ---------------------------------------------------------------------------
@@ -565,6 +592,8 @@ async def dt_stats(
     registry_volume: Optional[str] = Query(
         None, description="Override registry volume"
     ),
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -588,7 +617,9 @@ async def dt_stats(
     if not store:
         raise ValidationError("Graph backend not configured")
 
-    query_table = effective_graph_query_table(domain, settings, store=store)
+    query_table = _graph_read_table(
+        domain, settings, store, include_inferred, simulation_id
+    )
 
     cached = _stats_cache.get(query_table)
     if cached and (time.monotonic() - cached["_ts"]) < _STATS_CACHE_TTL_SECONDS:
@@ -815,6 +846,8 @@ async def dt_triples_find(
     registry_volume: Optional[str] = Query(
         None, description="Override registry volume"
     ),
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -839,16 +872,12 @@ async def dt_triples_find(
     if not store:
         raise ValidationError("Graph backend not configured")
 
-    from back.core.graphdb.search_cache import (
-        apply_search_cache_to_store,
-        parse_cache_param,
-        search_cache_usage,
-    )
-
     request_cache = parse_cache_param(cache)
     apply_search_cache_to_store(store, domain, request_cache)
 
-    table = effective_graph_query_table(domain, settings, store=store)
+    table = _graph_read_table(
+        domain, settings, store, include_inferred, simulation_id
+    )
     if not table:
         raise ValidationError("Graph name not configured")
 
@@ -961,6 +990,8 @@ async def dt_triples(
     registry_volume: Optional[str] = Query(
         None, description="Override registry volume"
     ),
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -979,10 +1010,8 @@ async def dt_triples(
     if not store:
         raise ValidationError("Backend not configured")
 
-    table = (
-        effective_view_table(domain, settings).strip()
-        if backend == "view"
-        else effective_graph_query_table(domain, settings, store=store)
+    table = _graph_read_table(
+        domain, settings, store, include_inferred, simulation_id, backend=backend
     )
     if not table:
         raise ValidationError("Triple store not configured")

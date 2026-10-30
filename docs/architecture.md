@@ -14,6 +14,7 @@
 - [Registry Storage](#registry-storage)
 - [Triple Store & Graph DB Backends](#triple-store--graph-db-backends)
 - [Reasoning Engine](#reasoning-engine)
+- [Simulation — What-if Sandboxes](#simulation--what-if-sandboxes)
 - [Graph Analysis — Community Detection](#graph-analysis--community-detection)
 - [SHACL Data Quality](#shacl-data-quality)
 - [Technology Stack](#technology-stack)
@@ -285,7 +286,7 @@ OntoBricks separates configuration into several layers:
 |------|---------|---------|
 | `src/shared/config/settings.py` | **Environment-specific settings** loaded from `.env` / env vars via Pydantic `BaseSettings` | Databricks host, token, session directory |
 | `src/shared/config/constants.py` | **Static constants and defaults** that rarely change and are shared across modules | App name/version, OWL namespaces, LLM defaults, wizard quick-templates |
-| `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Knowledge Graph `bi-radar`) and match `breadcrumb.js` `_ROUTE_MAP` |
+| `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Graph `bi-radar`) and match `breadcrumb.js` `_ROUTE_MAP` |
 | `src/back/objects/session/GlobalConfigService.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in the registry (`global_config` JSONB, or `.global_config.json` on Volume-backed registries), shared across all user sessions | SQL Warehouse ID, default base URI, default class icon, UI branding (`ui_branding`) |
 | `src/back/objects/registry/PermissionService.py` | **`PermissionService`** — stores per-user permission levels in `.permissions.json` (app-wide) and per-domain overrides in `.domain_permissions.json` (per domain folder). Defines the role hierarchy: `admin > builder > editor > viewer > none`. | `CAN MANAGE` admin flag |
 
@@ -501,7 +502,7 @@ src/
 │       │   ├── cohort/                 # CohortService, CohortEngineContext
 │       │   ├── explorer/               # GraphFilter, GraphFind, neighbours, ontology groups
 │       │   ├── node/                   # Node context, business rules, virtual attributes
-│       │   ├── query/                  # TwinMapping, TwinSparqlTranslate
+│       │   ├── query/                  # TwinMapping, TwinSparqlTranslate, TwinSandboxSparql
 │       │   └── cache/                  # TwinStoreCache, TwinAssistantCache
 │       ├── session/                    # Session management
 │       │   ├── middleware.py           # File-based session middleware (cookie + ASGI)
@@ -1328,6 +1329,94 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 
 ---
 
+## Simulation — What-if Sandboxes
+
+The **Simulation** menu (after Graph) answers *"what
+would the graph conclude if these facts were true?"* without touching the live
+knowledge graph. v1 supports the **Lakebase** graph backend only; graphless
+domains redirect to Domain, other backends show a disabled page.
+
+### Run pipeline
+
+1. **Scope** (`Scope`) resolves an entity set on the live graph
+   (read-only): an entity neighbourhood (`expand_and_fetch_subgraph`, default 2
+   hops), a saved cohort rule (`CohortService.dry_run`), or a class population
+   (`find_subjects_by_type`, capped at 5000 entities — exceeding the cap fails
+   the run instead of truncating).
+2. **Seed** (`Sandbox`) creates a standalone table
+   `<graph>__sim_<id>` and copies every live triple whose *subject* is in scope
+   with one `INSERT … SELECT … WHERE subject = ANY(…)` (datatype / lang kept).
+   Slices above 250k triples are rejected.
+3. **Patch** applies the hypothetical facts in order: `add`, `remove`, or `set`
+   (delete every `(s, p, *)` then assert the new value).
+4. **Reason** with `Reasoning`, a `ReasoningService` subclass
+   whose `_get_graph_name()` returns the sandbox table, so every phase (SWRL,
+   graph, decision tables, SPARQL, aggregate, optional T-Box) reads the
+   sandbox. Inferred triples are materialised into the sandbox only.
+5. **Diff** (`Diff`) compares the seeded slice (S0) with the final
+   sandbox (S2): added triples are tagged `patch` or `inferred` (with rule
+   provenance), removed triples come from patches. Exact counts plus the first
+   2000 rows per list are stored on the simulation row.
+
+### Isolation guarantees
+
+`LakebaseSimulationStore` (a `LakebaseFlatStore` subclass) resolves every
+table name to the sandbox itself — no `_sync` / `__app` / union-view trio — and
+raises `ValidationError` for any name without the `__sim_` marker, on reads,
+writes, DDL and generated SQL (`_sql_relation`). Purge, synced bulk load and
+adjacency rebuilds are refused. The live store is only used for the scope read
+and as the read-only source of the seed copy. Deleting a simulation drops its
+sandbox table.
+
+### Persistence and API
+
+Scenario definitions and the last diff live in the registry tables
+`simulations` (PK `(domain_id, version, id)`) and `simulation_runs`
+(append-only trace), created lazily by the `Simulations` mixin of
+`LakebaseRegistryStore`. Both travel with the domain version: creating a
+new version copies scenario specs (as drafts) and the run history;
+deleting a version drops those rows; GitHub/OBX export writes
+`simulation/scenarios.json` and `simulation/runs.json` (specs and run
+stats, not the capped triple diff). Domain Save that only rewrites
+ontology/mapping leaves the simulation tables alone. Sandbox triples stay
+in the graph schema and are rebuilt by the next run. Runs execute as
+`TaskManager` background tasks.
+`Artifacts` names the physical objects of a scenario — sandbox
+table (Lakebase/Delta), Explorer overlay views (`__smu_` / `__sms_`), or
+the isolated Neo4j graph — and the last-run item counts. The scenario
+editor shows that catalog in a third column.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /simulation/list` | Scenarios of the active domain version |
+| `POST /simulation/create` | Create a draft (Builder) |
+| `GET / PUT / DELETE /simulation/{id}` | Read, replace spec (Builder), delete + drop sandbox (Builder) |
+| `POST /simulation/{id}/run` | Start the run; poll `GET /tasks/{task_id}` (Builder) |
+| `POST /simulation/{id}/purge` | Drop sandbox after-picture; keep spec as draft (Builder) |
+| `GET /simulation/{id}/diff?kind=added\|removed&page=&search=` | Paged diff rows + summary |
+| `GET /simulation/runs?simulation_id=` | Run history |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging |
+| `src/back/objects/simulation/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
+| `src/back/objects/simulation/Sandbox.py` | Sandbox lifecycle and patch semantics |
+| `src/back/core/graphdb/lakebase/LakebaseSimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
+| `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
+| `src/api/routers/internal/simulation.py` | Internal JSON API |
+| `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
+| `src/back/objects/digitaltwin/query/TwinSandboxSparql.py` | SPARQL over a ready sandbox snapshot |
+| `src/front/templates/simulation.html` | Cohorts / Run / Scenarios / Results / Runs page (scenario editor is not a sidebar item) |
+
+Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
+(former Knowledge Graph → Cohorts) live under this menu. Bookmarks to
+`/ontology/?section=cohorts` and `/dtwin/?section=cohorts` redirect here.
+Materialise still writes to the live graph via `/dtwin/cohorts/*`.
+
+---
+
 ## Graph Analysis — Community Detection
 
 OntoBricks provides **data cluster detection** on the graph viewer, allowing users to discover communities of densely connected entities. Detection is available at two levels:
@@ -1684,8 +1773,8 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 > **Version lifecycle & API access.** Each domain version has a lifecycle status
 > — `DRAFT` → `IN-REVIEW` → `PUBLISHED` (transitions enforced server-side in
 > `back.objects.registry.version_lifecycle`). The external REST API, GraphQL
-> (`/api/v1/graphql`) and MCP only serve **PUBLISHED** versions and default to
-> the **numeric-latest PUBLISHED** version.
+> (`/api/v1/graphql`) and MCP serve **every** version and default to
+> the **numeric-latest** version (any lifecycle status).
 >
 > The `PermissionMiddleware` lifecycle gate distinguishes between **design
 > edits** and **data-refresh ops**:
@@ -1756,7 +1845,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/domains` | GET | List registry domains with ≥1 PUBLISHED version, configured backend, and graph availability |
+| `/api/v1/domains` | GET | List registry domains with ≥1 version, configured backend, and graph availability |
 | `/api/v1/domain/versions` | GET | List versions for a named domain |
 | `/api/v1/domain/design-status` | GET | Design status (ontology, metadata, mapping readiness) |
 | `/api/v1/domain/ontology` | GET | Get domain OWL ontology (Turtle) |
@@ -1771,7 +1860,9 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 | `/api/v1/digitaltwin/status` | GET | Triple store status |
 | `/api/v1/digitaltwin/stats` | GET | Triple store statistics |
 | `/api/v1/digitaltwin/build` | POST | Trigger triple store build |
-| `/api/v1/digitaltwin/triples/find` | GET | BFS entity search/traversal |
+| `/api/v1/digitaltwin/triples/find` | GET | BFS entity search/traversal (`simulation_id` selects a ready sandbox) |
+| `/api/v1/simulations` | GET/POST | List / create what-if scenarios |
+| `/api/v1/simulations/{id}/run` | POST | Run a scenario; poll `/simulations/tasks/{task_id}` |
 
 **Legacy v1 API**:
 
@@ -3031,14 +3122,12 @@ traffic. Data-plane routes are fail-closed when no user token is forwarded.
 > ontology schema — so it is always available and the call-time guard refuses
 > the graph tools for such a domain even if a stale client calls them.
 
-> **Note.** MCP and the external REST/GraphQL API only see versions whose
-> lifecycle status is **PUBLISHED** — they default to the numeric-latest
-> PUBLISHED version and reject explicit requests for `DRAFT`/`IN-REVIEW`
-> versions. A version becomes servable by transitioning it
-> DRAFT → IN-REVIEW → PUBLISHED from **Registry → Browse** (this replaces the
-> former "Active"/`mcp_enabled` toggle). To query an unsaved working session,
-> use the Graph Chat (next section), which talks to the session-aware
-> `/dtwin/...` internal routes instead.
+> **Note.** MCP and the external REST/GraphQL API serve every registry
+> version (`DRAFT`, `IN-REVIEW`, `PUBLISHED`). They default to the
+> numeric-latest version and accept an explicit `domain_version`. Design
+> edits remain locked on non-DRAFT versions. To query an unsaved working
+> session, use the Graph Chat (next section), which talks to the
+> session-aware `/dtwin/...` internal routes instead.
 
 ---
 

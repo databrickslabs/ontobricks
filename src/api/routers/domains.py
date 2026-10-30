@@ -71,13 +71,13 @@ class DomainInfo(BaseModel):
     description: str = ""
     graph_backend: Literal["none", "lakebase", "databricks", "neo4j"] = Field(
         default="lakebase",
-        description="Backend configured on the numeric-latest PUBLISHED version; "
+        description="Backend configured on the numeric-latest version; "
         "'none' denotes an ontology-only domain.",
     )
     # Per-domain MCP surface policy. Empty means "every tool exposed, every
     # ontology attachment surfaced normally".
     mcp_policy: Dict[str, Any] = Field(default_factory=dict)
-    # False when the numeric-latest PUBLISHED version has never been built:
+    # False when the numeric-latest version has never been built:
     # the domain is ontology-only, so the MCP surface exposes describe_ontology
     # (plus the registry tools) and hides every graph tool. Defaults True so a
     # client that predates the field keeps the full surface.

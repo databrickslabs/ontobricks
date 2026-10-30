@@ -1,7 +1,7 @@
 """Contract tests for the top-right breadcrumb (navbar).
 
 The breadcrumb must show only the current main menu (Ontology, Mapping,
-Domain, Knowledge Graph, Registry, Settings) and the sub menu (sidebar
+Domain, Graph, Registry, Settings) and the sub menu (sidebar
 section) selected within it — no Registry/Domain ancestor crumbs.
 """
 
@@ -50,7 +50,7 @@ def test_route_map_still_covers_all_main_menus():
         ("/domain/", "Domain"),
         ("/ontology/", "Ontology"),
         ("/mapping/", "Mapping"),
-        ("/dtwin/", "Knowledge Graph"),
+        ("/dtwin/", "Graph"),
         ("/settings", "Settings"),
     ]:
         assert f"'{route}':" in js

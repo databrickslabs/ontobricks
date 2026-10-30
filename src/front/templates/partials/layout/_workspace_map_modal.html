@@ -3,13 +3,15 @@
 {% set ontology_m = namespace(v=none) %}
 {% set mapping_m = namespace(v=none) %}
 {% set kg_m = namespace(v=none) %}
+{% set sim_m = namespace(v=none) %}
 {% for menu in menu_config.menus %}
     {% if menu.id == 'domain' %}{% set domain_m.v = menu %}{% endif %}
     {% if menu.id == 'ontology' %}{% set ontology_m.v = menu %}{% endif %}
     {% if menu.id == 'assignment' %}{% set mapping_m.v = menu %}{% endif %}
     {% if menu.id == 'digitaltwin' %}{% set kg_m.v = menu %}{% endif %}
+    {% if menu.id == 'simulation' %}{% set sim_m.v = menu %}{% endif %}
 {% endfor %}
-{% set workspace_map_menus = [domain_m.v, ontology_m.v, mapping_m.v, kg_m.v] %}
+{% set workspace_map_menus = [domain_m.v, ontology_m.v, mapping_m.v, kg_m.v, sim_m.v] %}
 
 <div class="modal fade" id="workspaceMapModal" tabindex="-1"
      aria-labelledby="workspaceMapTitle" aria-hidden="true">
@@ -43,7 +45,7 @@
                         </div>
                         {% endif %}
                         {% for item in group['items'] %}
-                        <a class="ob-workspace-map-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}{% if menu.id in ['assignment', 'digitaltwin'] %} nav-requires-graph{% endif %}"
+                        <a class="ob-workspace-map-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}{% if menu.id in ['assignment', 'digitaltwin', 'simulation'] %} nav-requires-graph{% endif %}"
                            data-workspace-map-item
                            {% if item.default|default(false) %}data-workspace-map-default="true"{% endif %}
                            href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}">

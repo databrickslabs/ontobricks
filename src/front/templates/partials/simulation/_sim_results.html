@@ -1,0 +1,67 @@
+<!-- Diff of the last run of the scenario open in the workbench -->
+<div class="d-flex justify-content-end gap-2 mb-3">
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="simResultsRefreshBtn" title="Refresh">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+    <a class="btn btn-sm btn-outline-primary d-none" id="simResultsExplorerBtn"
+       href="/dtwin/?section=sigmagraph" title="Open this sandbox in Graph Explorer">
+        <i class="bi bi-share me-1"></i>Explorer
+    </a>
+</div>
+
+<div id="simResultsEmpty" class="text-center text-muted py-5">
+    <i class="bi bi-clipboard-data fs-2 d-block mb-2"></i>
+    <p class="mb-2">No results for this scenario yet.</p>
+    <p class="small mb-0">Run the scenario to see the triples the facts and reasoning added or removed.</p>
+</div>
+
+<div id="simResultsBody" class="d-none">
+    <div id="simResultsError" class="alert alert-danger d-none" role="alert"></div>
+    <div id="simResultsWarnings" class="alert alert-warning d-none" role="alert"></div>
+
+    <div class="row g-3 mb-3" id="simResultsKpis">
+        <div class="col-6 col-lg-2"><div class="card sim-kpi"><div class="card-body"><div class="sim-kpi-value" data-kpi="entity_count">–</div><div class="sim-kpi-label">Entities in scope</div></div></div></div>
+        <div class="col-6 col-lg-2"><div class="card sim-kpi"><div class="card-body"><div class="sim-kpi-value" data-kpi="before_count">–</div><div class="sim-kpi-label">Triples before</div></div></div></div>
+        <div class="col-6 col-lg-2"><div class="card sim-kpi"><div class="card-body"><div class="sim-kpi-value" data-kpi="after_count">–</div><div class="sim-kpi-label">Triples after</div></div></div></div>
+        <div class="col-6 col-lg-2"><div class="card sim-kpi sim-kpi-added"><div class="card-body"><div class="sim-kpi-value" data-kpi="added_inferred_count">–</div><div class="sim-kpi-label">New inferences</div></div></div></div>
+        <div class="col-6 col-lg-2"><div class="card sim-kpi sim-kpi-removed"><div class="card-body"><div class="sim-kpi-value" data-kpi="removed_count">–</div><div class="sim-kpi-label">Removed</div></div></div></div>
+        <div class="col-6 col-lg-2"><div class="card sim-kpi"><div class="card-body"><div class="sim-kpi-value" data-kpi="touched_entity_count">–</div><div class="sim-kpi-label">Entities affected</div></div></div></div>
+    </div>
+
+    <ul class="nav nav-tabs ob-tabs" id="simResultsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" type="button" role="tab" data-kind="added" aria-selected="true">
+                <i class="bi bi-plus-circle me-1"></i>Added <span class="badge bg-success bg-opacity-75 ms-1" id="simTabBadgeAdded"></span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" type="button" role="tab" data-kind="removed" aria-selected="false">
+                <i class="bi bi-dash-circle me-1"></i>Removed <span class="badge bg-danger bg-opacity-75 ms-1" id="simTabBadgeRemoved"></span>
+            </button>
+        </li>
+    </ul>
+    <div class="d-flex align-items-center gap-2 p-2 border-bottom">
+        <input type="search" class="form-control form-control-sm sim-results-search" id="simResultsSearch" placeholder="Filter subject, predicate or object…">
+        <span class="text-muted small ms-auto" id="simResultsCapNote"></span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0 sim-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Predicate</th>
+                    <th>Object</th>
+                    <th>Origin</th>
+                </tr>
+            </thead>
+            <tbody id="simResultsRows"></tbody>
+        </table>
+    </div>
+    <div class="d-flex justify-content-between align-items-center p-2 border-top small">
+        <span class="text-muted" id="simResultsPageInfo"></span>
+        <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" id="simResultsPrev"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" class="btn btn-outline-secondary" id="simResultsNext"><i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+</div>

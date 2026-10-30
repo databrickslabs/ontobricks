@@ -30,8 +30,8 @@ http://localhost:8000/api/v1
 ## Interactive references
 
 Use **Settings → Developer → API** for the curated endpoint catalog and
-interactive Try-it controls. Its selectors list only API-exposed PUBLISHED
-domains and PUBLISHED versions. The selected-domain status distinguishes
+interactive Try-it controls. Its selectors list registry domains and every
+version (DRAFT, IN-REVIEW, and PUBLISHED). The selected-domain status distinguishes
 ontology-only domains, graph-backed domains awaiting their first build, and
 graph-ready domains; controls that require graph data are disabled until a
 graph exists while ontology operations remain available.
@@ -577,6 +577,8 @@ type Query {
 
 The Knowledge Graph API provides stateless, programmatic access to the graph viewer — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional `project_name` query parameter to load a domain from the registry instead of the browser session.
 
+Pass `simulation_id` (and optional `include_inferred`) on `GET /digitaltwin/triples`, `GET /digitaltwin/triples/find`, `GET /digitaltwin/stats`, and GraphQL to read a **ready** what-if sandbox — the same overlay Explorer uses. Create and run scenarios with [`/api/v1/simulations`](#simulation-api).
+
 ### Base URL
 
 ```
@@ -597,7 +599,7 @@ Returns the domain registry location (catalog, schema, volume).
 
 #### `GET /api/v1/domains`
 
-List all domains that have at least one **PUBLISHED** version in the registry.
+List all domains that have at least one version in the registry.
 
 **Response:**
 ```json
@@ -635,19 +637,18 @@ The MCP server reads this field to decide which tools to publish for the
 session; it is informational for other clients, since the disabling itself is
 also enforced server-side on the endpoints below.
 
-`graph_backend` is the backend configured on the numeric-latest PUBLISHED
-version: `none`, `lakebase`, `databricks`, or `neo4j`. `has_graph` reports
+`graph_backend` is the backend configured on the numeric-latest version
+(any lifecycle status): `none`, `lakebase`, `databricks`, or `neo4j`. `has_graph` reports
 runtime availability, not configuration: it is `true` only after that version
 has a successful graph build. Clients can therefore distinguish an
 ontology-only domain (`graph_backend: "none"`) from a graph-backed domain that
 has not been built yet.
 
 > **Lifecycle & API access.** Each domain version has a lifecycle status —
-> `DRAFT` → `IN-REVIEW` → `PUBLISHED`. The external API and MCP only serve data
-> for **PUBLISHED** versions; when no version is requested the **numeric-latest
-> PUBLISHED** version is used. Requesting a non-PUBLISHED version explicitly
-> (e.g. `domain_version=2`) returns an error. Multiple PUBLISHED versions may
-> coexist.
+> `DRAFT` → `IN-REVIEW` → `PUBLISHED`. The external API, GraphQL, and MCP
+> serve **every** version. Pass `domain_version` to target one; when omitted
+> the **numeric-latest** version is used regardless of status. Lifecycle
+> still locks **design edits** on non-DRAFT versions.
 
 ---
 
@@ -711,8 +712,8 @@ attributes are declarations only — their values come from
 #### `GET /api/v1/domain/versions`
 
 Returns all versions for a domain in the registry, latest first. Each version is
-annotated with its lifecycle `status` and an `is_published` flag (only PUBLISHED
-versions are data-accessible via the API/MCP).
+annotated with its lifecycle `status` and an `is_published` flag. Every
+version is data-accessible via the API/MCP.
 
 **Parameters:**
 - `domain_name` (query, required): Domain name in the registry
@@ -727,8 +728,8 @@ Returns a comprehensive readiness status including ontology, metadata, and mappi
 
 **Parameters:**
 - `domain_name` (query, optional): Domain name in the registry
-- `domain_version` (query, optional): Specific PUBLISHED version to load
-  (numeric-latest PUBLISHED if omitted)
+- `domain_version` (query, optional): Specific version to load (any
+  lifecycle status; numeric-latest if omitted)
 
 **Response:**
 ```json
@@ -799,6 +800,24 @@ Return the Spark SQL that produces triples from the source tables.
 
 **Parameters:**
 - `project_name` (query, optional): Domain name in the registry
+
+---
+
+### Simulation API
+
+#### `GET /api/v1/simulations`
+
+List what-if scenarios for the domain (`domain_name` / `domain_version` like the Knowledge Graph API). Ready rows can be passed as `simulation_id` on graph queries.
+
+#### `POST /api/v1/simulations`
+
+Create a draft scenario. Body: `label`, `description`, `scope` (`type`, `focus`, `hops`), `patches`, `phases`.
+
+#### `POST /api/v1/simulations/{id}/run`
+
+Seed the sandbox, apply hypothetical facts, reason. Returns `{task_id}`. Poll `GET /api/v1/simulations/tasks/{task_id}` until the scenario `status` is `ready`.
+
+Also: `GET /{id}`, `PUT /{id}`, `DELETE /{id}`, `POST /{id}/abort`, `POST /{id}/purge`, `GET /{id}/diff`, `GET /runs`.
 
 ---
 
@@ -2752,8 +2771,8 @@ Returns the domain registry location (catalog, schema, volume).
 GET /api/v1/domains
 ```
 
-List all domains that have at least one PUBLISHED version in the registry. The
-API/MCP serves the numeric-latest PUBLISHED version (see the lifecycle note
+List all domains that have at least one version in the registry. The
+API/MCP serves the numeric-latest version of any status (see the lifecycle note
 above). Each entry carries the domain's `mcp_policy`, configured
 `graph_backend` (`none`, `lakebase`, `databricks`, or `neo4j`), and `has_graph`
 availability flag.

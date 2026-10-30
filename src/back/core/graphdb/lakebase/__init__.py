@@ -13,11 +13,19 @@ try:
 
     _require_psycopg()
     from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore  # noqa: F401
+    from back.core.graphdb.lakebase.LakebaseSimulationStore import (  # noqa: F401
+        LakebaseSimulationStore,
+    )
+    from back.core.graphdb.lakebase.LakebaseSimulationUnion import (  # noqa: F401
+        LakebaseSimulationUnion,
+    )
 
     LAKEBASE_AVAILABLE = True
 except ImportError:  # pragma: no cover
     LAKEBASE_AVAILABLE = False
     LakebaseFlatStore = None  # type: ignore[misc, assignment]
+    LakebaseSimulationStore = None  # type: ignore[misc, assignment]
+    LakebaseSimulationUnion = None  # type: ignore[misc, assignment]
 
 from back.core.graphdb.lakebase.SyncedTableManager import SyncedTableManager  # noqa: E402
 
@@ -25,6 +33,8 @@ __all__ = [
     "DEFAULT_GRAPH_SCHEMA",
     "LAKEBASE_AVAILABLE",
     "LakebaseFlatStore",
+    "LakebaseSimulationStore",
+    "LakebaseSimulationUnion",
     "SyncedTableManager",
     "default_schema",
     "normalize_sync_table_mode",

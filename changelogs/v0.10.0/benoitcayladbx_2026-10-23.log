@@ -144,6 +144,7 @@ Changes:
 
 Modified files:
 - README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-23.log
 - docs/architecture.md
 - docs/contributing.md
 - docs/deployment.md
@@ -155,7 +156,11 @@ Modified files:
 - src/mcp-server/uv.lock
 - uv.lock
 
-Tests: pending
+Tests: uv run --frozen pytest -q -m "not scenario" stalled in the pre-existing
+live readiness probe; rerun with
+`-k "not readiness_route_returns_checks"` → 9530 passed, 338 skipped,
+9 deselected, 40 warnings in 38.39s. Frozen root and MCP dependency syncs
+installed Pillow 13.0.0 and certifi 2026.10.19 successfully.
 
 ================================================================================
 ## Teach Auto-Map to emit Unity Catalog metric-view SQL
@@ -194,3 +199,92 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" tests/units/agents/test_auto_assignment_metric_views.py tests/units/agents/test_metric_view_eval_contract.py tests/units/agents/test_mapping_tools.py tests/units/architecture/test_size_budget.py → 19 passed; eval dry-run aggregate 1.000
 
+
+================================================================================
+## Simulation menu (what-if sandbox) — v1
+================================================================================
+
+Context: New 5th workspace "Simulation" (after Domain, Ontology, Mapping,
+Knowledge Graph). Users assert hypothetical facts on a sandbox copy of a graph
+slice (entity neighbourhood, cohort, or class population capped at 5000),
+re-run reasoning there, and compare before/after. The live knowledge graph is
+never written. Lakebase backend only; graphless domains are redirected.
+
+Changes:
+
+1. src/front/config/menu_config.json, src/front/templates/base.html,
+   src/front/templates/partials/layout/_workspace_map_modal.html,
+   src/front/static/global/css/components.css, src/front/static/global/js/breadcrumb.js,
+   src/front/templates/partials/layout/help_modal.html
+   Simulation menu (bi-sliders2-vertical): 5th ordinal subnav item, 5-column
+   workspace map, breadcrumb entry, help pipeline/workflow/glossary entries.
+2. src/front/routes/simulation.py, src/front/templates/simulation.html,
+   src/front/templates/partials/simulation/*.html,
+   src/front/static/simulation/{js,css}/*
+   Page with Scenarios, Workbench, Results, Runs sections; task polling.
+3. src/front/static/query/js/query-entity-details.js
+   "Simulate from here" button in the KG entity panel (Lakebase only).
+4. src/back/core/graphdb/lakebase/_companion_ddl.py,
+   src/back/core/graphdb/lakebase/LakebaseSimulationStore.py
+   sim_phy/is_sim_phy helpers and a sandbox-pinned store that refuses any
+   non "__sim_" table on reads, writes, DDL and generated SQL.
+5. src/back/objects/registry/store/lakebase/Simulations.py, store.py, schema.sql,
+   src/back/objects/registry/store/base.py
+   simulations / simulation_runs tables (lazy-created) and store defaults.
+6. src/back/objects/simulation/
+   Simulation facade, SimulationSpec/Patch/Scope, SimulationSandbox,
+   SimulationReasoningService (retargets every phase), SimulationDiff,
+   SimulationRunner (scope → seed → patch → reason → diff → persist).
+7. src/api/routers/internal/simulation.py
+   list/create/get/update/delete/run/diff/runs; writes are Builder-only.
+8. src/shared/fastapi/main.py, src/front/fastapi/dependencies.py, routers __init__
+   Route registration and domain-scoped prefix.
+9. docs/user-guide.md ("Step 4: Simulation" incl. "How it works"),
+   docs/architecture.md, docs/product.md, README.md, .cursor/11-frontend-design.mdc
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/simulation/_sim_results.html
+- src/front/templates/partials/simulation/_sim_runs.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-results.js
+- src/front/static/simulation/css/simulation.css
+- src/front/static/global/css/components.css
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/routes/simulation.py
+- src/front/routes/__init__.py
+- src/front/fastapi/dependencies.py
+- src/shared/fastapi/main.py
+- src/api/routers/internal/simulation.py
+- src/api/routers/internal/__init__.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseSimulationStore.py
+- src/back/core/graphdb/lakebase/__init__.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/lakebase/__init__.py
+- src/back/objects/simulation/*.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_workspace_map_modal.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/product.md
+- README.md
+- .cursor/11-frontend-design.mdc
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9607 passed, 326 skipped,
+8 deselected.

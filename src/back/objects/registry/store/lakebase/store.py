@@ -69,6 +69,7 @@ from .Documents import Documents
 from .Analytics import Analytics
 from .Bootstrap import Bootstrap
 from .BuildRuns import BuildRuns
+from .Simulations import Simulations
 from .GlobalConfig import GlobalConfig
 from .Catalog import Catalog
 from .Schedules import Schedules
@@ -108,6 +109,8 @@ _KNOWN_TABLES = frozenset(
         "schedules",
         "schedule_runs",
         "build_runs",
+        "simulations",
+        "simulation_runs",
         "graph_analytics",
         "graph_analytics_runs",
         "domain_review_events",
@@ -264,6 +267,7 @@ class LakebaseRegistryStore(
     ReviewEvents,
     ChangeEvents,
     BuildRuns,
+    Simulations,
     Catalog,
     Schedules,
     Bootstrap,
@@ -312,6 +316,9 @@ class LakebaseRegistryStore(
         # self-heal deployments created before the build-run trace existed
         # (the full DDL only runs from the Settings "Initialize" action).
         self._build_runs_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS simulations /
+        # simulation_runs`` (same pattern as ``_build_runs_ready``).
+        self._simulation_tables_ready = False
         # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics`` used
         # to self-heal deployments created before the async graph-analytics
         # cache existed (same pattern as ``_build_runs_ready``).

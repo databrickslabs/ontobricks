@@ -583,7 +583,7 @@ async function initSyncSection() {
 
         var targetLabel = document.getElementById('syncTargetLabel');
         if (targetLabel) {
-            targetLabel.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Knowledge Graph';
+            targetLabel.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Graph';
         }
 
         if (typeof refreshNavbarIndicators === 'function') refreshNavbarIndicators();
@@ -1398,13 +1398,20 @@ async function loadTripleStore(options = {}) {
     const loadingHtml = '<span class="spinner-border spinner-border-sm me-1"></span>Loading...';
     if (syncBtn) { syncBtn.disabled = true; syncBtn.innerHTML = loadingHtml; }
 
-    const includeInferred = document.getElementById('sgShowInferred')?.checked !== false;
+    const source = (typeof SigmaGraph !== 'undefined' && typeof SigmaGraph.graphSource === 'function')
+        ? SigmaGraph.graphSource()
+        : { includeInferred: true, simulationId: '' };
+    const includeInferred = source.includeInferred !== false;
+    const simulationId = source.simulationId || '';
 
     try {
         const response = await fetch('/dtwin/sync/load', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ include_inferred: includeInferred }),
+            body: JSON.stringify({
+                include_inferred: includeInferred,
+                ...(simulationId ? { simulation_id: simulationId } : {}),
+            }),
             credentials: 'same-origin'
         });
 

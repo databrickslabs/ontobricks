@@ -96,7 +96,9 @@
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">4</span><div><strong>Mapping</strong><br><small>Map ontology to UC tables (R2RML)</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Knowledge Graph</strong><br><small>Synchronize, explore, query</small></div></div>
+                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Graph</strong><br><small>Synchronize, explore, query</small></div></div>
+                                <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
+                                <div class="help-step"><span class="help-step-num">6</span><div><strong>Simulation</strong><br><small>What-if sandboxes on a graph slice</small></div></div>
                             </div>
                         </section>
 
@@ -146,20 +148,20 @@
                                     <div class="help-step-badge">4</div>
                                     <div>
                                         <h5><i class="bi bi-shuffle me-2"></i>Map your data &amp; Sync</h5>
-                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Studio</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Knowledge Graph &rarr; Sync</strong> and click <em>Synchronize</em> &mdash; triples are materialized into your triple store.</p>
+                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Studio</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Graph &rarr; Build</strong> and click <em>Build</em> &mdash; triples are materialized into your triple store.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge"><i class="bi bi-check2"></i></div>
                                     <div>
                                         <h5><i class="bi bi-eye me-2"></i>Explore</h5>
-                                        <p>Head to <strong>Knowledge Graph &rarr; Graph Viewer</strong> to browse your data as an interactive graph, or use <strong>GraphQL</strong> for programmatic access.</p>
+                                        <p>Head to <strong>Graph &rarr; Explorer</strong> to browse your data as an interactive graph, or use <strong>Query</strong> for programmatic access.</p>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="alert alert-info mt-3">
-                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-hourglass-split"></i> <strong>Background Tasks</strong> panel in the navbar.
+                                <i class="bi bi-lightbulb me-2"></i><strong>Tip:</strong> You can navigate away from long-running tasks (Auto-Map, Sync, Data Quality, Simulation) &mdash; they run in the background and their progress is tracked in the <i class="bi bi-hourglass-split"></i> <strong>Background Tasks</strong> panel in the navbar.
                             </div>
                         </section>
 
@@ -238,7 +240,6 @@
                                             <ul>
                                                 <li><strong>Data Quality (SHACL)</strong> &mdash; define shapes for completeness, cardinality, pattern, consistency...</li>
                                                 <li><strong>Business Rules (SWRL)</strong> &mdash; author inference rules using the graphical D3 editor</li>
-                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;); run &amp; preview them from <strong>Knowledge Graph &rarr; Cohorts</strong>. See the <a href="#help-docs/advanced-features#cohort-discovery" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="cohort-discovery">Cohort discovery</a> guide.</li>
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
                                                 <li><strong>Pitfalls</strong> &mdash; detect structural, logical and semantic modeling issues, with a precision score</li>
                                             </ul>
@@ -275,7 +276,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw5">
-                                            <i class="bi bi-radar me-2"></i><strong>5. Knowledge Graph</strong> &mdash; materialize &amp; explore
+                                            <i class="bi bi-radar me-2"></i><strong>5. Graph</strong> &mdash; materialize &amp; explore
                                         </button>
                                     </h2>
                                     <div id="hw5" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
@@ -283,14 +284,33 @@
                                             <ul>
                                                 <li><strong>Build</strong> / <strong>Runs</strong> &mdash; trigger a synchronization and inspect its run history</li>
                                                 <li><strong>Overview</strong> / <strong>Analytics</strong> &mdash; insight dashboards: entity &amp; relationship counts, last sync timestamp, quality status, usage trends</li>
-                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
+                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, pick live asserted, live inferred, or one ready sandbox per scenario from Graph, open canvas labels and quality rings from View, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
                                                 <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
                                                 <li><strong>Chat</strong> &mdash; ask natural-language questions over the materialized graph</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
                                                 <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning (SQL on Delta / Lakebase; Cypher on Neo4j)</li>
-                                                <li><strong>Cohorts</strong> &mdash; run &amp; preview the constraint-based grouping rules designed in <strong>Ontology &rarr; Advanced &rarr; Cohorts</strong></li>
                                             </ul>
                                             <p>A <em>Readiness Status</em> indicator tells you when ontology &amp; mapping are both ready to sync.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Simulation -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw6">
+                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>6. Simulation</strong> &mdash; what-if sandboxes
+                                        </button>
+                                    </h2>
+                                    <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
+                                        <div class="accordion-body">
+                                            <ul>
+                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
+                                                <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
+                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Inference, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed; <em>Explorer</em> opens that sandbox in the graph viewer</li>
+                                                <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
+                                            </ul>
+                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Follow a running scenario from the navbar Background Tasks hourglass.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -313,7 +333,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-share"></i></div>
                                         <h5>Interactive Graph Viewer</h5>
-                                        <p>Two-phase search, configurable depth, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
+                                        <p>Two-phase search, configurable depth, Graph dropdown to view a ready simulation sandbox, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -348,14 +368,14 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-chat-dots"></i></div>
                                         <h5>Graph Chat</h5>
-                                        <p>Ask natural-language questions about your materialized graph from <strong>Knowledge Graph &rarr; Chat</strong> and get answers grounded in real entities and relationships.</p>
+                                        <p>Ask natural-language questions about your materialized graph from <strong>Graph &rarr; Chat</strong> and get answers grounded in real entities and relationships.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
                                         <h5>Cohort Discovery</h5>
-                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Ontology &rarr; Advanced &rarr; Cohorts</strong>, run &amp; preview in <strong>Knowledge Graph &rarr; Cohorts</strong>.</p>
+                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Simulation &rarr; Cohorts</strong>, run &amp; preview in <strong>Simulation &rarr; Run</strong>.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -394,11 +414,11 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
-                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Domain &rarr; General</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Knowledge Graph then become enabled.</div></div>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Domain &rarr; General</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
-                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality and Inference all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-hourglass-split"></i> navbar icon &mdash; you can navigate anywhere and come back.</div></div>
+                                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Auto-Map, Sync, Data Quality, Inference and Simulation all run as <em>background tasks</em>. Their progress is tracked in the <i class="bi bi-hourglass-split"></i> navbar icon &mdash; you can navigate anywhere and come back.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">How does the LLM automation pick the right model?</button></h2>
@@ -494,7 +514,8 @@
                                 <dt>SWRL</dt><dd>Semantic Web Rule Language &mdash; &ldquo;IF ... THEN ...&rdquo; inference rules.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
-                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Ontology &rarr; Advanced &rarr; Cohorts</em>, run under <em>Knowledge Graph &rarr; Cohorts</em>.</dd>
+                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Simulation &rarr; Cohorts</em>, run under <em>Simulation &rarr; Run</em>.</dd>
+                                <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
                                 <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the domain Graph DB.</dd>
                                 <dt>Graph DB</dt><dd>Per-domain engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
                                 <dt>Neo4j</dt><dd>Optional Graph DB backend that stores the Knowledge Graph as a typed property graph (nodes, labels, relationships) instead of flat triples. Requires Neo4j 5.x (Aura recommended).</dd>

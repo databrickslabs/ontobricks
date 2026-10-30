@@ -137,7 +137,11 @@ class ReasoningService:
                     rule_names=rn,
                 ),
                 True,
-                {"rules_count": "swrl_rules_count"},
+                {
+                    "rules_count": "swrl_rules_count",
+                    "errors": "swrl_errors",
+                    "error_details": "swrl_error_details",
+                },
             ),
             ("graph", "graph", True, lambda: self.run_graph_reasoning(opts), False, {}),
             (
@@ -585,12 +589,11 @@ class ReasoningService:
         return data.get("generated", {}).get("owl", "")
 
     def _get_swrl_rules(self) -> List[Dict]:
-        if hasattr(self._domain, "swrl_rules"):
-            return self._domain.swrl_rules or []
-        ontology = getattr(self._domain, "ontology", None)
-        if isinstance(ontology, dict):
-            return ontology.get("swrl_rules", [])
-        return []
+        rules = getattr(self._domain, "swrl_rules", None)
+        if rules:
+            return list(rules)
+        ontology = self._get_ontology_dict()
+        return list(ontology.get("swrl_rules") or [])
 
     def _get_ontology_dict(self) -> Dict:
         ontology = getattr(self._domain, "ontology", None)

@@ -35,6 +35,7 @@ _READY_FLAGS = (
     "_schedule_columns_ready",
     "_cohort_schedules_imported",
     "_domain_documents_ready",
+    "_simulation_tables_ready",
 )
 
 

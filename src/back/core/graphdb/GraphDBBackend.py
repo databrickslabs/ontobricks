@@ -1225,4 +1225,4 @@ class GraphDBBackend(ABC):
         """
         from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 
-        return SWRLSQLTranslator()
+        return SWRLSQLTranslator(dialect=self.sql_flavor() or SQL_DIALECT_SPARK)

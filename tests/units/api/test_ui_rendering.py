@@ -192,7 +192,7 @@ class TestBaseTemplate:
         assert _find(_tags(html), id_="subnavDomainDropdown") is not None
 
     def test_subnav_has_knowledge_graph_dropdown(self, client):
-        """Knowledge Graph is a dropdown in the L2 subnav with its sections."""
+        """Graph is a dropdown in the L2 subnav with its sections."""
         html = _html(client, "/")
         tags = _tags(html)
         kg_toggles = [t for t in tags if t[0] == "a" and t[1].get("data-subnav-route") == "/dtwin/"]
@@ -610,7 +610,7 @@ class TestDomainPage:
 class TestDigitalTwinPage:
     def test_title(self, client):
         html = _html(client, "/dtwin/")
-        assert "Knowledge Graph" in _title_text(html)
+        assert "Graph" in _title_text(html)
 
     def test_sidebar_present(self, client):
         html = _html(client, "/dtwin/")

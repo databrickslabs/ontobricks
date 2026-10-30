@@ -32,7 +32,8 @@ from back.core.errors import (
 from back.objects.registry import RegistryService
 from back.core.graphdb import get_graphdb
 from shared.config.constants import DEFAULT_BASE_URI
-from back.core.helpers import effective_graph_name, effective_graph_query_table
+from back.core.helpers import effective_graph_name
+from back.objects.digitaltwin import TwinGraphAccess
 from shared.fastapi.ui_branding import (
     get_request_ui_branding,
     render_ui_branding_css_vars,
@@ -88,6 +89,14 @@ class GraphQLRequest(BaseModel):
     depth: Optional[int] = Field(
         None, description="Relationship traversal depth (1–5, default 2)"
     )
+    include_inferred: Optional[bool] = Field(
+        True,
+        description="Read the inferred live graph (true) or asserted triples only",
+    )
+    simulation_id: Optional[str] = Field(
+        None,
+        description="Ready simulation sandbox id; omitted reads the live graph",
+    )
 
 
 class GraphQLDomainInfo(BaseModel):
@@ -106,14 +115,16 @@ class GraphQLDomainsResponse(BaseModel):
 # ------------------------------------------------------------------
 
 
-def _load_domain_from_registry(domain_name, session_mgr, settings, *, external=False):
+def _load_domain_from_registry(
+    domain_name, session_mgr, settings, *, external=False, domain_version=None
+):
     """Load a domain by name from the registry and return a DomainSession.
 
     When *external* is ``True`` (the public ``/api/v1/graphql`` mount) the
-    resolution is strict PUBLISHED-only: the session-folder shortcut is
-    skipped and only the latest PUBLISHED version is served. Internal UI
+    session-folder shortcut is skipped and the requested version (or the
+    numeric-latest version of any lifecycle status) is served. Internal UI
     GraphiQL (*external* ``False``) keeps the session shortcut and falls
-    back to the latest version when nothing is open/published.
+    back to the latest version when nothing is open.
     """
     domain = get_domain(session_mgr)
 
@@ -121,21 +132,16 @@ def _load_domain_from_registry(domain_name, session_mgr, settings, *, external=F
     if not svc.cfg.is_configured:
         raise ValidationError("Registry not configured")
 
-    if external:
-        # Public API surface: only PUBLISHED versions are data-accessible.
-        ok, data, version, err = svc.load_published_domain_data(domain_name)
-        if not ok:
-            raise NotFoundError(err)
-        domain.clear_generated_content()
-        domain.import_from_file(data, version=version)
-        domain.domain_folder = domain_name
-        domain.save()
-        logger.info(
-            "GraphQL(external): loaded PUBLISHED domain '%s' version %s",
+    if external or domain_version:
+        from back.objects.digitaltwin import TwinResolve
+
+        return TwinResolve.resolve_domain(
             domain_name,
-            version,
+            session_mgr,
+            settings,
+            domain_version=domain_version,
+            read_only=True,
         )
-        return domain
 
     # If the user already has this registry folder open at a chosen version,
     # keep it. Otherwise GraphQL would resolve to the latest PUBLISHED
@@ -220,7 +226,13 @@ def _diagnose_empty_ontology(classes, properties_list):
     return None
 
 
-def _get_schema_and_context(domain, settings):
+def _get_schema_and_context(
+    domain,
+    settings,
+    *,
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
+):
     """Build (or retrieve cached) GraphQL schema and execution context.
 
     Raises :class:`ValidationError` only when the ontology is genuinely
@@ -258,7 +270,13 @@ def _get_schema_and_context(domain, settings):
             "Graph backend not configured or unreachable."
         )
 
-    table = effective_graph_query_table(domain, settings, store=store)
+    table = TwinGraphAccess.graph_query_table(
+        domain,
+        settings,
+        store,
+        include_inferred=include_inferred,
+        simulation_id=simulation_id,
+    )
 
     logger.info(
         "GraphQL context: table=%s, store=%s, classes=%d",
@@ -333,12 +351,17 @@ async def graphql_depth_settings():
 async def graphql_playground(
     request: Request,
     domain_name: str,
+    domain_version: Optional[str] = Query(None),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
-        domain_name, session_mgr, settings, external=is_external
+        domain_name,
+        session_mgr,
+        settings,
+        external=is_external,
+        domain_version=domain_version,
     )
     _get_schema_and_context(domain, settings)
 
@@ -375,15 +398,33 @@ async def graphql_execute(
         description="true/false: force search companions on or off. "
         "Omitted uses Domain → General → Backend Search cache.",
     ),
+    domain_version: Optional[str] = Query(
+        None, description="Registry version (any lifecycle status)."
+    ),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
-        domain_name, session_mgr, settings, external=is_external
+        domain_name,
+        session_mgr,
+        settings,
+        external=is_external,
+        domain_version=domain_version,
     )
     assert_public_graph_read(request, domain, settings)
-    schema, context = _get_schema_and_context(domain, settings)
+    include_inferred, simulation_id = TwinGraphAccess.source_from_payload(
+        {
+            "include_inferred": body.include_inferred,
+            "simulation_id": body.simulation_id,
+        }
+    )
+    schema, context = _get_schema_and_context(
+        domain,
+        settings,
+        include_inferred=include_inferred,
+        simulation_id=simulation_id,
+    )
     store = context.get("triplestore")
     if store is not None:
         from back.core.graphdb.search_cache import (
@@ -434,12 +475,17 @@ async def graphql_execute(
 async def graphql_sdl(
     request: Request,
     domain_name: str,
+    domain_version: Optional[str] = Query(None),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
-        domain_name, session_mgr, settings, external=is_external
+        domain_name,
+        session_mgr,
+        settings,
+        external=is_external,
+        domain_version=domain_version,
     )
 
     # Friendly fallback: when the ontology is too thin to back a GraphQL
@@ -482,12 +528,17 @@ async def graphql_debug(
     domain_name: str,
     type_name: str = Query(None, description="Type to inspect (e.g. Customer)"),
     search: str = Query(None, description="Test search string (e.g. Martinez)"),
+    domain_version: Optional[str] = Query(None),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     is_external = _is_external_request(request)
     domain = _load_domain_from_registry(
-        domain_name, session_mgr, settings, external=is_external
+        domain_name,
+        session_mgr,
+        settings,
+        external=is_external,
+        domain_version=domain_version,
     )
     assert_public_graph_read(request, domain, settings)
     schema, context = _get_schema_and_context(domain, settings)

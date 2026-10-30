@@ -1,4 +1,82 @@
 ================================================================================
+## Group Explorer entity behaviour into one section
+================================================================================
+
+Context: Clicking an entity in Graph Explorer showed separate Actions and
+Inference rules blocks (and a What-if block on the details pane). Operators
+asked to regroup those runtime triggers the way Ontology Studio groups them
+under Behaviour.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Merge functions, jobs, and SWRL rules into one Behaviour section and
+   context-menu group.
+2. src/front/static/query/js/query-entity-details.js
+   Same grouping, including Simulate from here.
+3. tests/units/front/test_entity_panel_tabs.py
+   Contract the single Behaviour heading.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-business-rules.js
+- tests/units/front/test_entity_panel_tabs.py
+- tests/units/front/test_class_actions_ui.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9765 passed, 326 skipped, 8 deselected, 0 failed in 50.23s.
+
+================================================================================
+## Add Hypothetical-facts NL agent and Describe-the-facts textarea
+================================================================================
+
+Context: Operators wanted to describe hypothetical facts in prose on Simulation
+→ Hypothetical facts, then have an agent turn that into S/P/O cards. The
+textarea was missing because the workbench pane, loopback API, and
+`agent_simulation_facts` package were not wired yet. Cards still wait for
+Save / Run — the agent only proposes patches.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/engine.py
+   New cohort agent: list classes/properties, search live entities, propose
+   SimulationPatch rows via propose_patches.
+2. src/api/routers/internal/simulation.py
+   POST /simulation/facts/agent (before /{sim_id}) runs the agent on the
+   domain LLM and returns patches without persisting them.
+3. src/front/templates/partials/simulation/_sim_workbench.html
+   Describe the facts textarea and Propose facts button above the card list.
+4. src/front/static/simulation/js/simulation-workbench.js
+   proposeFacts() posts the prompt and appends returned patches for review.
+5. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+   22-row eval dataset, dry-run judge, and schema_valid threshold 1.00.
+6. docs/user-guide.md
+   Document the prompt box and Propose facts flow.
+
+Modified files:
+- src/agents/agent_simulation_facts/__init__.py
+- src/agents/agent_simulation_facts/AgentResult.py
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_facts/tools.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/eval/README.md
+- tests/eval/thresholds.yaml
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/judges/simulation_facts.py
+- tests/eval/run_agent_simulation_facts.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9774 passed, 326 skipped, 8 deselected, 0 failed in 54.20s. Dry-run eval: simulation_facts schema_valid=1.000 n=22.
+
+================================================================================
 ## Stop tracking local planning trees on GitHub
 ================================================================================
 
@@ -50,4 +128,475 @@ Modified files:
 - (index) .planning/**, .superpowers/**, docs/superpowers/** untracked
 
 Tests: uv run --frozen pytest -q tests/eval/test_staged_dataset_metadata_shape.py → 5 passed in 0.14s. Full `pytest -q -m "not scenario"` hung in tests/units/api/test_routes.py (~16%, unrelated to this diff).
+
+================================================================================
+## Place Hypothetical facts actions on the prompt row
+================================================================================
+
+Context: Propose facts sat under the textarea, and Fact wizard / Add fact
+sat above the S/P/O cards. Operators asked for Propose facts beside the
+prompt and the manual actions at the top right of the tab.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Fact wizard and Add fact at the tab top-right; Propose facts in a
+   flex row to the right of the textarea.
+2. tests/units/front/test_simulation_page_contract.py
+   Lock DOM order: manual buttons, then prompt, then Propose facts.
+3. docs/user-guide.md
+   Describe the new Hypothetical facts toolbar layout.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9770 passed, 326 skipped, 8 deselected, 0 failed in 63.36s.
+
+================================================================================
+## Enrich General description from Propose facts
+================================================================================
+
+Context: Propose facts filled S/P/O cards but left General → Description
+untouched. Operators asked the agent to rewrite that field as a complete
+what-if, keeping any existing description and adding the new facts.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/tools.py
+   propose_patches now takes scenario_description and parks it on the
+   tool context.
+2. src/agents/agent_simulation_facts/engine.py
+   Prompt the agent to merge CURRENT DESCRIPTION into a complete
+   scenario write-up.
+3. src/api/routers/internal/simulation.py
+   Pass the current description into the agent; return description
+   (fallback merge if the model omits it).
+4. src/front/static/simulation/js/simulation-workbench.js
+   Send simWbDescription with the prompt and write the returned text
+   back to the General tab.
+5. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+   25-row eval delta with scenario_contains needles.
+
+Modified files:
+- src/agents/agent_simulation_facts/__init__.py
+- src/agents/agent_simulation_facts/AgentResult.py
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_facts/tools.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/judges/simulation_facts.py
+- tests/eval/README.md
+- tests/eval/thresholds.yaml
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9773 passed, 326 skipped, 8 deselected, 0 failed in 58.55s. Dry-run eval: simulation_facts schema_valid=1.000 n=25.
+
+================================================================================
+## Add tests for simulation fact generation and result checks
+================================================================================
+
+Context: Hypothetical-facts generation needed coverage that the proposed
+S/P/O patches actually show up as patch-origin rows in the simulation
+Results diff (the check operators use after a run), plus engine/tool
+edge cases around search, validation, and the ontology→search→propose
+loop.
+
+Changes:
+
+1. tests/units/agents/test_agent_simulation_facts.py
+   Cover the full generation tool loop, search simulation scoping and
+   errors, patch validation (empty, cap, datatype), and LLM no-choice /
+   max-iteration outcomes.
+2. tests/units/simulation/test_simulation_fact_generation.py
+   Apply agent-generated and eval-dataset facts to a sandbox and assert
+   Results tags: set/add/remove, multi-op, skip-existing, inferred vs
+   patch origin.
+
+Modified files:
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_fact_generation.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/agents/test_agent_simulation_facts.py tests/units/simulation/test_simulation_fact_generation.py → 23 passed. Full `uv run --frozen pytest -q -m "not scenario"` → 9790 passed, 326 skipped, 8 deselected, 6 failed in 53.66s (failures pre-exist in this worktree: TwinSandboxSparql re-export, size budget, SPARQL identity, MCP tool descriptions, dtwin simulation_id Query param).
+
+================================================================================
+## List Simulation REST endpoints on Settings → API
+================================================================================
+
+Context: Settings → API only showed GET /api/v1/simulations, with create/run
+and the rest buried in prose. Operators could not see the new Simulation
+catalog entries next to Knowledge Graph and Cohort.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_api.html
+   Add a Simulation section with cards for list, create, get, update,
+   delete, run, poll, abort, purge, diff, and runs. Document
+   simulation_id on stats, triples, and GraphQL.
+2. tests/units/front/test_settings_api_contract.py
+   Contract the Simulation heading, endpoint paths, and simulation_id
+   on graph-query cards.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_api.html
+- tests/units/front/test_settings_api_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_settings_api_contract.py → 10 passed. Live GET /settings?section=api includes OpenAPI: Simulation and /api/v1/simulations/{sim_id}/run.
+
+================================================================================
+## Add public Simulation API and sandbox graph source on queries
+================================================================================
+
+Context: Operators could create and run what-if scenarios in the UI, and
+Explorer already picked a ready sandbox, but the external REST catalog,
+SPARQL playground, Knowledge Graph reads, and MCP tools still hit only
+the live graph. Programmatic callers needed CRUD + run, and every graph
+query surface needed the same sandbox overlay as Explorer.
+
+Changes:
+
+1. src/api/routers/simulation.py
+   External CRUD, run, abort, purge, diff, runs, and task poll at
+   /api/v1/simulations.
+2. src/api/external_app.py
+   Mount the Simulation router with the Simulation OpenAPI tag.
+3. src/api/routers/digitaltwin.py
+   triples / triples/find / stats accept simulation_id and
+   include_inferred (same overlay as Explorer).
+4. src/back/objects/digitaltwin/query/TwinSandboxSparql.py
+   Read-only SPARQL against a ready sandbox snapshot (RDFLib, 20k cap).
+5. src/api/routers/internal/dtwin.py
+   POST /dtwin/execute routes sandbox SPARQL when simulation_id is set.
+6. src/mcp-server/server/simulation_tools.py
+   MCP list_simulations, select_simulation, create_simulation,
+   run_simulation.
+7. src/mcp-server/server/session.py
+   domain_params and GraphQL body inject the selected sandbox.
+8. src/front/static/query/js/query-api.js
+   Settings → API Graph picker appends simulation_id on graph queries.
+9. docs/api.md
+   Document the Simulation API and simulation_id on KG reads.
+
+Modified files:
+- src/api/routers/simulation.py
+- src/api/constants.py
+- src/api/external_app.py
+- src/api/routers/__init__.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/query/TwinSandboxSparql.py
+- src/back/objects/digitaltwin/query/__init__.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/core/mcp_tools.py
+- src/mcp-server/server/simulation_tools.py
+- src/mcp-server/server/constants.py
+- src/mcp-server/server/factory.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/tools.py
+- src/front/static/query/js/query-api.js
+- src/front/templates/settings.html
+- tests/units/simulation/test_simulation_external_api.py
+- tests/units/dtwin/test_twin_sandbox_sparql.py
+- tests/units/api/test_dtwin_sparql_routes.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- tests/units/core/test_mcp_tools_policy.py
+- docs/api.md
+- docs/architecture.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9798 passed, 326 skipped, 8 deselected, 0 failed in 58.32s.
+
+================================================================================
+## Serve every domain version on the external API
+================================================================================
+
+Context: Settings → API hid DRAFT versions (cust360auto v5), and
+DigitalTwin.resolve_domain rejected non-PUBLISHED domain_version. Operators
+need the API/MCP/GraphQL against any lifecycle status.
+
+Changes:
+
+1. src/back/objects/digitaltwin/TwinResolve.py
+   Load explicit versions regardless of DRAFT / IN-REVIEW / PUBLISHED;
+   default to numeric-latest via load_latest_domain_data.
+2. src/back/objects/registry/RegistryService.py
+   list_mcp_domains includes draft-only domains; has_graph from latest
+   version of any status.
+3. src/back/fastapi/graphql_routes.py
+   External GraphQL uses TwinResolve and accepts domain_version.
+4. src/front/static/query/js/query-api.js
+   Version dropdown lists every status (v5 · DRAFT selectable).
+5. docs/api.md, docs/architecture.md, docs/user-guide.md, docs/mcp.md
+   Document that the API serves every version.
+
+Modified files:
+- src/back/objects/digitaltwin/TwinResolve.py
+- src/back/objects/registry/RegistryService.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/domains.py
+- src/front/static/query/js/query-api.js
+- src/front/templates/partials/dtwin/_query_api.html
+- src/mcp-server/server/tools.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- tests/units/registry/test_registry_published.py
+- tests/units/front/test_settings_api_contract.py
+- docs/api.md
+- docs/architecture.md
+- docs/user-guide.md
+- docs/mcp.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/test_v090_graph_access_twin_helpers.py tests/units/dtwin/test_digitaltwin_api.py tests/units/registry/test_registry_published.py tests/units/front/test_settings_api_contract.py tests/units/api/test_external_api.py tests/units/api/test_graph_access_gate.py tests/mcp --ignore=tests/mcp/integration → 189 passed.
+
+================================================================================
+## Keep simulation claim reasoning on the scoped customer
+================================================================================
+
+Context: What-if "Jacob Martin has contracts ECON00040/20/18, terminate
+ECON00020" removed 14 claims that belonged to other live holders of those
+contracts, and left Jacob's real claim CLM0000030 untouched. Hypothesis
+seeding followed undirected live hops from the patched contracts, so SWRL
+ran on the wrong neighbourhood.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   Hypothesis neighbourhood is outbound-only; seed_referrers copies only
+   subjects that point at the scoped person (their claims).
+2. src/back/objects/simulation/SimulationRunner.py
+   Seed patched contracts without inbound neighbours, then copy referrers
+   of the entity-scope focus.
+3. src/agents/agent_simulation_facts/engine.py
+   Attaching contracts is add/set; do not mass-remove unnamed claims.
+4. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+   Eval row: three contract adds plus terminated status, no claim removes.
+5. docs/user-guide.md
+   Document outbound hypothesis seed vs inbound claims of the focus.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/agents/agent_simulation_facts/engine.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/README.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9801 passed, 326 skipped, 8 deselected, 0 failed in 53.32s. Dry-run eval: simulation_facts schema_valid=1.000 n=26.
+
+================================================================================
+## Retract the scoped customer's claims when a contract is terminated
+================================================================================
+
+Context: After outbound-only hypothesis seeding, Results no longer dropped
+foreign claims, but Jacob Martin's real claim CLM0000030 still stayed. SWRL
+only inserts consequents, so terminating ECON00020 never deleted hasClaim.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   retract_claims_of drops the focus customer's claim edges and those
+   claim subjects.
+2. src/back/objects/simulation/SimulationRunner.py
+   Seed claim referrers before the before-picture; after a terminal
+   status patch, retract the scoped person's claims.
+3. src/back/objects/simulation/SimulationDiff.py
+   Tag those drops as inferred removals (provenance
+   simulation:terminated-contract).
+4. docs/user-guide.md
+   Document the terminated-contract claim drop.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/simulation/SimulationDiff.py
+- src/agents/agent_simulation_facts/engine.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9804 passed, 326 skipped, 8 deselected, 0 failed in 54.97s.
+
+================================================================================
+## Clear stale simulation results after fact edits
+================================================================================
+
+Context: The Jacob Martin scenario was a draft with zero saved patches, but
+the Results pane still exposed a prior run. Its description stated that
+ECON00020 was terminated, yet no corresponding fact was available to trigger
+the claim retraction. A changed scenario must not present results from an
+older specification as current.
+
+Changes:
+
+1. src/back/objects/simulation/Simulation.py
+   Clear the stored diff, summary, and last-run timestamp when a ready
+   simulation is saved with a results-affecting specification change.
+2. src/back/objects/simulation/SimulationReasoningService.py
+   Import the base service directly to avoid an import-order cycle during
+   simulation test collection.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Cover stale-diff clearing after a patch change.
+
+Modified files:
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/SimulationReasoningService.py
+- tests/units/simulation/test_simulation_runner_api.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9804 passed, 326 skipped, 8 deselected, 0 failed in 50.92s. Dry-run eval: simulation_facts schema_valid=1.000 n=26.
+
+================================================================================
+## Generate explicit claim-removal facts from live relationships
+================================================================================
+
+Context: Jacob Martin's claim CLM0000030 must be removed as a reviewed
+hypothetical fact when the operator asks to detach claims. Terminating
+ECON00020 cannot infer that removal: the claim is linked to CON0000010.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/tools.py
+   Add a relationship lookup tool that returns exact outgoing live triples
+   for a requested entity.
+2. src/agents/agent_simulation_facts/engine.py
+   Require relationship lookup before proposing removals and distinguish
+   explicit claim detachment from contract termination.
+3. src/back/objects/simulation/SimulationRunner.py
+   Remove the invalid automatic claim retraction on terminal contract
+   status; Remove cards now control every claim removal.
+4. src/back/objects/simulation/SimulationDiff.py
+   Restore patch provenance for all removed triples.
+5. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+   Add the Jacob Martin / CLM0000030 regression example.
+6. docs/user-guide.md
+   Explain the reviewed Remove-card behaviour.
+
+Modified files:
+- src/agents/agent_simulation_facts/tools.py
+- src/agents/agent_simulation_facts/engine.py
+- src/back/objects/simulation/SimulationDiff.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/simulation/SimulationSandbox.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/README.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9804 passed, 326 skipped, 8 deselected, 0 failed in 52.69s. Dry-run eval: simulation_facts schema_valid=1.000 n=27.
+
+================================================================================
+## Persist simulation scenarios and runs with the domain version
+================================================================================
+
+Context: What-if scenarios and their run history lived in registry sidecar
+tables keyed by domain version, but branching a version, deleting a version,
+and GitHub/OBX export did not carry them. Operators could lose scenarios and
+the Runs tab after a New Version or registry restore.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/Simulations.py
+   Copy scenario specs (as drafts) plus run history to a new version;
+   delete both when a version is removed; attach specs/runs on version
+   read; restore them from a version payload that includes those keys.
+2. src/back/objects/registry/store/lakebase/Documents.py
+   New Version document copy also copies simulations so Domain stays
+   within the size budget.
+3. src/back/objects/registry/store/lakebase/Catalog.py
+   read_version attaches scenarios and runs; write_version persists them
+   only when the payload carries the keys (ontology-only saves do not
+   wipe the tables); delete_version drops the sidecar rows.
+4. src/back/objects/registry/gitsync/DomainRepoLayout.py
+   Mirror simulation/scenarios.json and simulation/runs.json.
+5. src/back/objects/registry/gitsync/GitHubMirrorHooks.py
+   Push the domain version after a scenario save or recorded run.
+6. docs/architecture.md
+   Document version copy, delete, and GitHub/OBX persistence.
+7. docs/user-guide.md
+   Scenarios and run history are stored in the domain registry.
+
+Modified files:
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/back/objects/registry/store/lakebase/Documents.py
+- src/back/objects/registry/store/lakebase/Catalog.py
+- src/back/objects/registry/gitsync/DomainRepoLayout.py
+- src/back/objects/registry/gitsync/GitHubMirrorHooks.py
+- tests/units/registry/_v090_fake_pg.py
+- tests/units/registry/test_v090_lakebase_simulations.py
+- tests/units/registry/test_v090_lakebase_documents.py
+- tests/units/registry/test_v090_lakebase_catalog.py
+- tests/units/registry/test_github_layout.py
+- tests/units/registry/test_lakebase_guarded_version_delete.py
+- tests/units/front/test_create_version_ungated.py
+- docs/architecture.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9813 passed, 326 skipped, 8 deselected, 0 failed in 49.01s
+
+================================================================================
+## Drop redundant Simulation prefix on simulation package modules
+================================================================================
+
+Context: Every module under back.objects.simulation repeated the package
+name in the filename and class (SimulationRunner, SimulationSandbox, …).
+The prefix added no information once the package already scopes the types.
+
+Changes:
+
+1. src/back/objects/simulation/
+   Rename modules/classes to Artifacts, Diff, Patch, Reasoning, Runner,
+   Sandbox, Scope, Spec. Keep Simulation.py as the package facade.
+2. Callers, tests, and docs/architecture.md
+   Update imports and references; no compatibility shims.
+3. tests/units/architecture/baseline.json
+   Ratchet after the move.
+
+Modified files:
+- src/back/objects/simulation/Artifacts.py
+- src/back/objects/simulation/Diff.py
+- src/back/objects/simulation/Patch.py
+- src/back/objects/simulation/Reasoning.py
+- src/back/objects/simulation/Runner.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Scope.py
+- src/back/objects/simulation/Spec.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/__init__.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/agents/agent_simulation_facts/tools.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/simulation/test_simulation_fact_generation.py
+- tests/units/simulation/test_simulation_artifacts.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/eval/judges/simulation_facts.py
+- tests/eval/run_agent_simulation_facts.py
+- tests/units/architecture/baseline.json
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9813 passed, 326 skipped, 8 deselected, 0 failed in 59.47s
+
 

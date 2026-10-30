@@ -116,9 +116,14 @@ def test_render_reload_focus_and_inferred_refresh_use_overlay() -> None:
     assert "_showGraphLoading('Loading graph data…');" in js.split(
         "function init(focusUri)", 1
     )[1].split("function _hasData", 1)[0]
-    assert "_showGraphLoading('Loading graph data…');" in public_api.split(
-        "toggleInferred: async function", 1
-    )[1].split("expandHop: async function", 1)[0]
+    retarget = js.split("async function _retargetCurrentView()", 1)[1].split(
+        "async function _onSimulationChange()", 1
+    )[0]
+    change = js.split("async function _onSimulationChange()", 1)[1].split(
+        "var TYPE_COLORS", 1
+    )[0]
+    assert "_showGraphLoading('Loading graph data…');" in retarget
+    assert "await _retargetCurrentView();" in change
 
 
 def test_neighbor_expansion_uses_overlay_and_error_notification() -> None:
@@ -144,16 +149,20 @@ def test_refresh_and_inferred_failures_release_the_overlay() -> None:
     refresh = js.split("refreshCurrentExpansion: async function", 1)[1].split(
         "selectEntity: function", 1
     )[0]
-    inferred = js.split("toggleInferred: async function", 1)[1].split(
-        "expandHop: async function", 1
+    change = js.split("async function _onSimulationChange()", 1)[1].split(
+        "var TYPE_COLORS", 1
+    )[0]
+    retarget = js.split("async function _retargetCurrentView()", 1)[1].split(
+        "async function _onSimulationChange()", 1
     )[0]
     assert "_hideGraphLoading();" in refresh
     assert "showNotification" in refresh
     assert "'error'" in refresh
-    assert "catch (error)" in inferred
-    assert "showNotification" in inferred
-    assert "finally {" in inferred
-    assert "_hideGraphLoading();" in inferred
+    assert "await _retargetCurrentView();" in change
+    assert "catch (error)" in retarget
+    assert "showNotification" in retarget
+    assert "finally {" in retarget
+    assert "_hideGraphLoading();" in retarget
 
 
 def test_filter_status_dom_is_not_referenced() -> None:

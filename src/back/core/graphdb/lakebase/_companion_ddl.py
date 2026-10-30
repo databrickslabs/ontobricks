@@ -73,6 +73,79 @@ def view_phy(name: str) -> str:
     return _safe(name)
 
 
+SIM_TABLE_MARKER = "__sim_"
+SIM_UNION_INFERRED_MARKER = "__smu_"
+SIM_UNION_ASSERTED_MARKER = "__sms_"
+_PG_IDENTIFIER_MAX_BYTES = 63
+
+
+def _sim_named(name: str, sim_id: str, marker: str) -> str:
+    if not (sim_id or "").strip():
+        raise ValueError("Simulation id is required")
+    sid = safe_identifier(sim_id.strip()).lower()
+    suffix = f"{marker}{sid}"
+    budget = _PG_IDENTIFIER_MAX_BYTES - len(suffix)
+    if budget < 1:
+        raise ValueError(f"Simulation id too long: {sim_id!r}")
+    stem = _safe(name)[:budget].rstrip("_") or "g"
+    return f"{stem}{suffix}"
+
+
+def sim_phy(name: str, sim_id: str) -> str:
+    """Postgres table name for one simulation sandbox of graph *name*.
+
+    The result is its own physical identifier (``physical_table_id`` maps it
+    to itself), so it can be passed to the store as a logical table name.
+    The graph stem is trimmed so the identifier stays within Postgres's
+    63-byte limit while the ``__sim_<id>`` suffix is always preserved.
+    """
+    return _sim_named(name, sim_id, SIM_TABLE_MARKER)
+
+
+def sim_union_phy(name: str, sim_id: str, *, include_inferred: bool) -> str:
+    """Read-only view: live graph with sandbox after-picture per patched predicate."""
+    marker = SIM_UNION_INFERRED_MARKER if include_inferred else SIM_UNION_ASSERTED_MARKER
+    return _sim_named(name, sim_id, marker)
+
+
+def is_sim_phy(table: str) -> bool:
+    """True when *table* is a simulation sandbox table name."""
+    return SIM_TABLE_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def ensure_sim_table(cur: Any, schema: str, table: str) -> None:
+    """Create a standalone simulation triple table + standard indexes."""
+    ensure_pgcrypto(cur)
+    _create_triple_table(cur, schema, table)
+
+
+def drop_sim_table(cur: Any, table: str) -> None:
+    cur.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def ensure_sim_union_view(cur: Any, view: str, live: str, sandbox: str) -> None:
+    """Live graph UNION sandbox, overlaying only predicates the sandbox wrote.
+
+    Subject-level replace hid every live fact as soon as a patch mentioned the
+    entity (e.g. a new type triple). Predicate-level overlay keeps existing
+    properties and relations, and lets SET/ADD replace that predicate.
+    """
+    sql = (
+        f"CREATE OR REPLACE VIEW {view} AS "
+        f"SELECT l.subject, l.predicate, l.object, "
+        f"NULL::TEXT AS datatype, NULL::TEXT AS lang "
+        f"FROM {live} l "
+        f"WHERE NOT EXISTS ("
+        f"SELECT 1 FROM {sandbox} s "
+        f"WHERE s.subject = l.subject AND s.predicate = l.predicate"
+        f") "
+        f"UNION ALL "
+        f"SELECT s.subject, s.predicate, s.object, s.datatype, s.lang "
+        f"FROM {sandbox} s"
+    )
+    cur.execute(sql)
+
+
 def _idx_name(table: str, suffix: str) -> str:
     base = f"g_{table}_{suffix}".lower()
     return base[:63]

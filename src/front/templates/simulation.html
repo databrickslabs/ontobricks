@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}{{ brand_page_title('Simulation') }}{% endblock %}
+
+{% block page_id %}simulation{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='simulation/css/simulation.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('simulation') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+
+        <div class="sidebar-content">
+            <div id="cohorts-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_cohorts.html" %}
+            </div>
+
+            <div id="cohort-run-section" class="sidebar-section">
+                {% include "partials/dtwin/_query_cohorts.html" %}
+            </div>
+
+            <div id="scenarios-section" class="sidebar-section active">
+                <div id="simScenariosList" class="content-section">
+                    {% include "partials/simulation/_sim_scenarios.html" %}
+                </div>
+                <div id="simScenariosEditor" class="content-section d-none">
+                    {% include "partials/simulation/_sim_workbench.html" %}
+                </div>
+            </div>
+
+            <div id="runs-section" class="sidebar-section">
+                {% include "partials/simulation/_sim_runs.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include "partials/_cohort_modals.html" %}
+{% include "partials/simulation/_sim_fact_wizard.html" %}
+
+<script id="simulation-config" type="application/json">{{ simulation_ctx|tojson }}</script>
+<script id="triplestore-config" type="application/json">
+{
+    "view_table": "{{ view_table|default('', true) }}",
+    "graph_name": "{{ graph_name|default('', true) }}",
+    "data_table": "{{ data_table|default('', true) }}",
+    "graph_engine": "{{ graph_engine|default('lakebase', true) }}",
+    "triple_store_backend": "{{ triple_store_backend|default('lakebase', true) }}",
+    "cache": {{ triplestore_cache|default({})|tojson }}
+}
+</script>
+
+<script defer src="{{ url_for('static', filename='simulation/js/simulation.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-rules.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-workbench.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-fact-wizard.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-results.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-purge-inferences.js') }}?v={{ asset_version }}"></script>
+{% endblock %}

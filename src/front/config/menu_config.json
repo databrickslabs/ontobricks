@@ -257,13 +257,6 @@
                             "requires": null
                         },
                         {
-                            "id": "cohorts",
-                            "label": "Cohorts",
-                            "icon": "bi-people-fill",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
                             "id": "axioms",
                             "label": "Expr. & Axioms",
                             "icon": "bi-diagram-2",
@@ -525,7 +518,7 @@
 
         {
             "id": "digitaltwin",
-            "label": "Knowledge Graph",
+            "label": "Graph",
             "icon": "bi-radar",
             "route": "/dtwin/",
             "requires_domain_saved": true,
@@ -621,11 +614,59 @@
                             "icon": "bi-lightning",
                             "default": false,
                             "requires": null
-                        },
+                        }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "id": "simulation",
+            "label": "Simulation",
+            "icon": "bi-sliders2-vertical",
+            "route": "/simulation/",
+            "requires_domain_saved": true,
+            "navbar_hidden": true,
+            "status_indicator": null,
+            "navbar_actions": [],
+            "groups": [
+                {
+                    "id": "simulation-cohorts",
+                    "title": "Cohorts",
+                    "icon": "bi-people-fill",
+                    "items": [
                         {
                             "id": "cohorts",
                             "label": "Cohorts",
                             "icon": "bi-people-fill",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "cohort-run",
+                            "label": "Run",
+                            "icon": "bi-play-circle",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "simulation-scenarios",
+                    "title": "Scenarios",
+                    "icon": "bi-sliders2-vertical",
+                    "items": [
+                        {
+                            "id": "scenarios",
+                            "label": "Scenarios",
+                            "icon": "bi-collection",
+                            "default": true,
+                            "requires": null
+                        },
+                        {
+                            "id": "runs",
+                            "label": "Runs",
+                            "icon": "bi-list-check",
                             "default": false,
                             "requires": null
                         }

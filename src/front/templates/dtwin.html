@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}{{ brand_page_title('Knowledge Graph') }}{% endblock %}
+{% block title %}{{ brand_page_title('Graph') }}{% endblock %}
 
 {# The Knowledge Graph is a read / analysis surface (query, explore, run
-   reasoning, discover cohorts). Lifecycle / viewer read-only gating must NOT
+   reasoning). Lifecycle / viewer read-only gating must NOT
    disable its filter / search / query controls — see permissions.css. #}
 {% block page_id %}digitaltwin{% endblock %}
 
@@ -15,7 +15,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-dataquality.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-shacl-facets.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-reasoning.css') }}?v={{ asset_version }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-chat.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-analytics.css') }}?v={{ asset_version }}">
@@ -65,11 +64,6 @@
             <!-- Inference Section -->
             <div id="reasoning-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_reasoning.html" %}
-            </div>
-
-            <!-- Cohorts Section (Cohort Discovery) -->
-            <div id="cohorts-section" class="sidebar-section">
-                {% include "partials/dtwin/_query_cohorts.html" %}
             </div>
 
             <!-- Graph Analytics Section -->
@@ -149,6 +143,7 @@
      CDN libs (D3, Graphology, Sigma, GraphiQL) are lazy-loaded on first use by their modules. -->
 <script defer src="{{ url_for('static', filename='query/js/query.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-loaders.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-graph-source.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-execute.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/timed-task-log.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-databricks-build.js') }}?v={{ asset_version }}"></script>
@@ -166,7 +161,6 @@
 <script defer src="{{ url_for('static', filename='query/js/query-analytics.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dataquality.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-reasoning.js') }}?v={{ asset_version }}"></script>
-<script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-purge-inferences.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sigmagraph.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-find-path.js') }}?v={{ asset_version }}"></script>

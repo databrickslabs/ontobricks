@@ -1,0 +1,100 @@
+<div class="modal fade" id="simFactWizardModal" tabindex="-1" aria-labelledby="simFactWizardTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="simFactWizardTitle">
+                    <i class="bi bi-magic me-2"></i>Hypothetical fact
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3" id="simFactIntro">
+                    Look up an existing subject, predicate and value from the ontology and the live graph.
+                    You can still type a new URI or literal if the asset does not exist yet.
+                </p>
+                <ul class="nav nav-tabs ob-tabs ob-tabs--compact mb-3" id="simFactWizardTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button type="button" class="nav-link active" id="simFactTabSubject" data-step="1">1. Subject</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button type="button" class="nav-link" id="simFactTabPredicate" data-step="2">2. Predicate</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button type="button" class="nav-link" id="simFactTabObject" data-step="3">3. Object</button>
+                    </li>
+                </ul>
+
+                <div class="mb-3" id="simFactOpWrap">
+                    <label for="simFactOp" class="form-label small">Operation</label>
+                    <select class="form-select form-select-sm" id="simFactOp">
+                        <option value="set">Set — replace every value of this predicate</option>
+                        <option value="add">Add — assert an extra triple</option>
+                        <option value="remove">Remove — retract this triple</option>
+                    </select>
+                </div>
+
+                <div id="simFactStepSubject">
+                    <div class="row g-2 mb-2">
+                        <div class="col-12 col-md-4">
+                            <label for="simFactClass" class="form-label small">Class</label>
+                            <select class="form-select form-select-sm" id="simFactClass">
+                                <option value="">Any class</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label for="simFactSearch" class="form-label small">Search live graph</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" id="simFactSearch"
+                                       placeholder="Label, id or URI fragment" autocomplete="off">
+                                <button type="button" class="btn btn-outline-primary" id="simFactSearchBtn">
+                                    <i class="bi bi-search me-1"></i>Search
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="list-group list-group-flush sim-fact-wizard-list border rounded mb-2" id="simFactSubjectHits" role="listbox"></div>
+                    <label for="simFactSubjectUri" class="form-label small">Subject URI</label>
+                    <input type="text" class="form-control form-control-sm" id="simFactSubjectUri"
+                           placeholder="Selected or typed URI" autocomplete="off">
+                </div>
+
+                <div id="simFactStepPredicate" class="d-none">
+                    <p class="small text-muted mb-2" id="simFactPredHint">Choose a predicate declared on this subject's class.</p>
+                    <label for="simFactPredFilter" class="form-label small">Ontology properties of this subject</label>
+                    <input type="text" class="form-control form-control-sm mb-2" id="simFactPredFilter"
+                           placeholder="Filter by name" autocomplete="off">
+                    <div class="list-group list-group-flush sim-fact-wizard-list border rounded mb-2" id="simFactPredHits" role="listbox"></div>
+                    <label for="simFactPredicateUri" class="form-label small">Predicate URI</label>
+                    <input type="text" class="form-control form-control-sm" id="simFactPredicateUri"
+                           placeholder="Selected or typed URI" autocomplete="off">
+                </div>
+
+                <div id="simFactStepObject" class="d-none">
+                    <p class="small text-muted mb-2" id="simFactObjectHint">Type a literal, or search for a related entity.</p>
+                    <div id="simFactObjectSearchWrap">
+                        <label for="simFactObjectSearch" class="form-label small">Search entities</label>
+                        <div class="input-group input-group-sm mb-2">
+                            <input type="text" class="form-control" id="simFactObjectSearch"
+                                   placeholder="Label, id or URI fragment" autocomplete="off">
+                            <button type="button" class="btn btn-outline-primary" id="simFactObjectSearchBtn">
+                                <i class="bi bi-search me-1"></i>Search
+                            </button>
+                        </div>
+                        <div class="list-group list-group-flush sim-fact-wizard-list border rounded mb-2" id="simFactObjectHits" role="listbox"></div>
+                    </div>
+                    <label for="simFactObjectValue" class="form-label small" id="simFactObjectValueLabel">Object URI or literal</label>
+                    <input type="text" class="form-control form-control-sm" id="simFactObjectValue"
+                           placeholder="Selected entity or typed value" autocomplete="off">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="simFactBackBtn">Back</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="simFactNextBtn">Next</button>
+                <button type="button" class="btn btn-sm btn-primary" id="simFactApplyBtn">
+                    <i class="bi bi-check2 me-1"></i>Apply fact
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

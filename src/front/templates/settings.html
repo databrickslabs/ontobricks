@@ -1357,6 +1357,7 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='config/js/settings.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/schedule.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='query/js/query-graph-source.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-api.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
 <script src="{{ url_for('static', filename='global/js/runs-render.js') }}?v={{ asset_version }}"></script>

@@ -765,10 +765,11 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
 | Registry modal (`/?open=registry`) | Navbar boxes icon (`bi-boxes`) → Browse + Bridges modal |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
-| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Cohorts, Expr. & Axioms, Pitfalls); Studio **Export** (OWL); section divs, OntoViz script |
+| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms, Pitfalls); Studio **Export** (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with section links (General, Import, Studio, Manual, Auto-Map, Diagnostics, Spark SQL), Studio **Export** (R2RML), mapping-core.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Knowledge Store, My Tasks, Discussions, Cockpit, Audit trail, OWL, R2RML), section divs |
-| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Graph Viewer, GraphQL), Advanced (Data Quality, Reasoning); Sigma.js script |
+| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Explorer, Query, Chat), Build, Advanced (Data Quality, Inference, Analytics); Sigma.js script |
+| Simulation `/simulation/` | Sidebar: Cohorts, Run, Scenarios, Results, Runs; scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**
@@ -1514,7 +1515,7 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 
 #### 3.4 Menu and client-side navigation
 
-- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, Knowledge Graph, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update `breadcrumb.js` `_ROUTE_MAP` (and any hardcoded labels such as the help walkthrough); `tests/units/front/test_knowledge_graph_icon.py` guards Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
+- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, Graph, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update `breadcrumb.js` `_ROUTE_MAP` (and any hardcoded labels such as the help walkthrough); `tests/units/front/test_knowledge_graph_icon.py` guards Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
 - **JavaScript:** under `src/front/static/global/js/` (sidebar, navbar, domain actions). Pages load shared layout partials from templates and drive **in-page tabs** via menu item IDs rather than full page loads for every interaction.
 
 #### 3.5 Core UI concerns (conceptual)

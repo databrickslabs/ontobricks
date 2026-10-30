@@ -44,3 +44,739 @@ The regenerated locks now satisfy the declared security floors for patchable Dep
 - `dnspython==2.8.0` (1)
 - `msgpack==1.2.1` (1)
 - `oauthlib==3.3.1` (5, documented ecosystem exception still applies)
+
+================================================================================
+## Pick individual inference rules in a scenario
+================================================================================
+
+Context: Scenario runs could only toggle whole reasoning phases. Operators
+needed the same per-rule selection as Knowledge Graph → Inference so a
+what-if sandbox can execute a subset of SWRL, decision tables, SPARQL
+CONSTRUCT, and aggregate rules.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSpec.py
+   Persist rule_names per phase and pass them as ReasoningService filters.
+2. src/front/templates/partials/simulation/_sim_workbench.html
+   Replace phase checkboxes with Inference-style tiles and expandable lists.
+3. src/front/static/simulation/js/simulation-rules.js
+   Load ontology rules and collect the ticked names on save/run.
+4. src/front/templates/simulation.html
+   Wire query-reasoning.css and the new picker script.
+5. tests/units/simulation/test_simulation_core.py
+   Cover subset filters, ignored names when a phase is off, and invalid input.
+
+Modified files:
+- src/back/objects/simulation/SimulationSpec.py
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/simulation.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/simulation/test_simulation_core.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9751 passed, 326 skipped, 8 deselected, 0 failed in 55.42s.
+
+================================================================================
+## Split the scenario workbench into three tabs
+================================================================================
+
+Context: The scenario editor stacked identity, scope, sandbox objects,
+hypothetical facts, and reasoning on one long page. Operators asked for the
+same card-integrated tab pattern used elsewhere: General, Hypothetical
+facts, and Reasoning, with Save / Run / Reset staying on the header.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Card-integrated ob-tabs: General (scenario, scope, artifacts), Hypothetical
+   facts (wizard + table, patch-count badge), Reasoning (phase tiles).
+2. tests/units/front/test_simulation_page_contract.py
+   Assert the three tab buttons, pane ids, and that Save/Run stay outside panes.
+3. docs/user-guide.md
+   Document the Scenario editor as the three-tab flow.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 49.36s.
+
+================================================================================
+## Stack General sections as rows
+================================================================================
+
+Context: After the workbench moved to tabs, General still laid out Scenario,
+Scope, and Sandbox objects as three xl columns. Operators asked for those
+blocks as stacked rows with compact fields inside each row.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Vertical stack for Scenario, Scope, and Sandbox objects; artifacts as a table.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Paint sandbox objects as a full-width table plus a horizontal count strip.
+3. src/front/static/simulation/css/simulation.css
+   Horizontal artifact count strip instead of a two-column grid.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 49.36s.
+
+================================================================================
+## Move scenario Results onto the workbench
+================================================================================
+
+Context: Results lived in a separate sidebar item with a scenario picker, so
+the diff was detached from the run that produced it. Results belong to one
+scenario and should be a workbench tab.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Drop the Results sidebar item; keep Runs under Scenarios.
+2. src/front/templates/partials/simulation/_sim_workbench.html
+   Add a Results tab that includes the diff pane for the open scenario.
+3. src/front/templates/partials/simulation/_sim_results.html
+   Remove the scenario picker; empty state is "no results for this scenario".
+4. src/front/static/simulation/js/simulation.js
+   Open Results as a workbench tab instead of switching sidebar section.
+5. src/front/static/global/js/task-tracker.js
+   Completed simulation tasks open workbench with tab=results.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/simulation/_sim_results.html
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-results.js
+- src/front/static/simulation/css/simulation.css
+- src/front/static/global/js/task-tracker.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 48.87s.
+
+================================================================================
+## Align Scope controls on the General tab
+================================================================================
+
+Context: The Scope row used bottom alignment, so the Slice dropdown lined up
+with the entity caption under the Entity field instead of with the Entity
+input.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Top-align Slice, Entity, Hops, and Entity cap; keep the caption under the
+   Entity column so it no longer stretches the control row.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 48.72s.
+
+================================================================================
+## Keep list and editor on one Scenarios URL
+================================================================================
+
+Context: Refreshing /simulation/?section=workbench opened a blank scenario
+because the open id was not in the URL. List and editor should share
+?section=scenarios, with simulation=<id> selecting the editor.
+
+Changes:
+
+1. src/front/templates/simulation.html
+   Nest list and editor in the Scenarios section; drop workbench-section.
+2. src/front/static/simulation/js/simulation.js
+   Sync simulation/tab query params, restore the last id on legacy workbench URLs.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Back-to-list control; write the saved id into the URL.
+4. src/front/static/global/js/task-tracker.js
+   Open completed runs at section=scenarios&simulation=.
+5. src/front/static/query/js/query-entity-details.js
+   Simulate from here uses the Scenarios section.
+
+Modified files:
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/global/js/task-tracker.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_task_tracker_job_actions.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9752 passed, 326 skipped, 8 deselected, 0 failed in 50.95s.
+
+================================================================================
+## Opening a scenario no longer bounces back to the list
+================================================================================
+
+Context: Clicking a scenario name used href="#" and a sidebarSectionChanged
+handler that always showed the list. The hash navigation dropped the
+simulation query param, so the editor closed immediately.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation.js
+   preventDefault on row actions, real editor href, showList only from the
+   Scenarios sidebar click.
+
+Modified files:
+- src/front/static/simulation/js/simulation.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 50.00s.
+
+================================================================================
+## Add Clear on the open scenario header
+================================================================================
+
+Context: With a scenario open, the editor had Save / Run on the right but no
+explicit control to leave the editor besides the back arrow.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Add a Clear button at the right of the workbench header.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Clear returns to the scenario list.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 47.98s.
+
+================================================================================
+## Explain sandbox objects on the General tab
+================================================================================
+
+Context: Operators seeing Explorer inferred vs asserted overlay names in
+Sandbox objects had no in-page explanation of what each object is for.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Add a purpose line under each sandbox / overlay role (including Neo4j).
+2. src/front/static/simulation/css/simulation.css
+   Cap the hint width so the artifact table stays readable.
+3. tests/units/front/test_simulation_page_contract.py
+   Assert the overlay and sandbox hint copy.
+4. docs/user-guide.md
+   Document inferred vs asserted overlay on the Scenario editor General tab.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 57.69s.
+
+================================================================================
+## Keep sandbox object names on one line
+================================================================================
+
+Context: Global `.table-sm td` ellipsized the overlay purpose text until hover.
+Un-ellipsizing the whole artifact table then wrapped Unity Catalog names onto
+two lines.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   Wrap Role hints; keep the Name cell on one nowrap/ellipsis line.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Mark the Name cell so the CSS can target it.
+3. tests/units/front/test_simulation_page_contract.py
+   Assert hint wrap vs name nowrap.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units/front/test_simulation_page_contract.py → 19 passed.
+
+================================================================================
+## Shrink the sandbox Role column
+================================================================================
+
+Context: Overlay purpose text lived in the Role cell, so that column ate most
+of the artifact table. Role should be the short label only.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Keep Role as a nowrap label; move the purpose hint under Name.
+2. src/front/static/simulation/css/simulation.css
+   Shrink-wrap the Role column; ellipsize only the object name.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 48.40s.
+
+================================================================================
+## Open Explorer from Results subject and object
+================================================================================
+
+Context: The Results table showed subject and object as plain labels. Operators
+needed a click through to Explorer on that sandbox, filtered to the entity,
+with the neighbourhood already loaded.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-results.js
+   Link URI subjects and objects to Explorer with simulation and focus query params.
+2. src/front/static/query/js/query-sigmagraph.js
+   Focus a full URI with exact id match so the filter seeds one entity and expands it.
+3. src/front/static/simulation/css/simulation.css
+   Style the Results URI links with the brand primary colour.
+
+Modified files:
+- src/front/static/simulation/js/simulation-results.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/simulation/css/simulation.css
+- docs/user-guide.md
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_explorer_match_default.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9753 passed, 326 skipped, 8 deselected, 0 failed in 57.88s.
+
+================================================================================
+## Share the Graph source picker with Query and Chat
+================================================================================
+
+Context: Explorer already switched between live inferred, live asserted, and a
+ready simulation sandbox. Query (GraphQL) and Chat still always hit the live
+inferred table, so sandbox what-if triples were invisible outside Explorer.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_kg_graph_source.html
+   Shared Graph dropdown used by Explorer, Query, and Chat.
+2. src/front/static/query/js/query-graph-source.js
+   Populate ready sandboxes, persist the choice, and apply include_inferred /
+   simulation_id to request bodies.
+3. src/back/objects/digitaltwin/TwinGraphAccess.py
+   Parse graph-source flags from request payloads.
+4. src/back/fastapi/graphql_routes.py
+   Resolve GraphQL against the selected overlay table.
+5. src/api/routers/internal/dtwin.py
+   Pass the same overlay into GraphQL execute, stats, triples/find, and Chat.
+6. src/agents/agent_dtwin_chat/tools.py
+   Forward the selected graph on loopback GraphQL, stats, and describe calls.
+
+Modified files:
+- src/front/templates/partials/dtwin/_kg_graph_source.html
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-graph-source.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-graphql.js
+- src/front/static/query/js/query-execute.js
+- src/front/static/query/js/query-chat.js
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/internal/dtwin.py
+- src/agents/tools/context.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/agent_dtwin_chat/tools.py
+- docs/user-guide.md
+- tests/units/front/test_kg_graph_source.py
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9759 passed, 326 skipped, 8 deselected, 0 failed in 48.79s.
+
+================================================================================
+## Keep last simulation results across save
+================================================================================
+
+Context: Saving a ready scenario (or aborting / reaping a run) UPSERT-ed
+empty JSON into ``diff`` / ``diff_summary``, so Results went blank. The
+Jacob Martin contracts run was still in the scenario list but had no
+stored triples.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/Simulations.py
+   Leave existing diff columns in place unless the payload includes them.
+2. src/back/objects/simulation/Simulation.py
+   Spec save keeps ``ready`` when scope/facts/rules are unchanged; otherwise
+   draft, still without wiping the last diff.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Cover ready-preserving save and spec-change that retains the diff.
+4. docs/user-guide.md
+   Document that Save keeps Results until Clear or a new successful run.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/back/objects/simulation/Simulation.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9762 passed, 326 skipped, 8 deselected, 0 failed in 50.44s.
+
+================================================================================
+## Show ID, type and predicate kind on hypothetical facts
+================================================================================
+
+Context: Hypothetical-fact rows showed only a label in the subject/predicate/
+object inputs, so operators could not see the URI local ID, the entity type,
+or whether the predicate was a relationship.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Stack type+icon, URI local ID, and optional label on each term; tag
+   predicates as Relationship or Attribute.
+2. src/front/static/simulation/js/simulation.js
+   Resolve entity type with the label from the live-graph preview.
+3. src/front/static/simulation/js/simulation-fact-wizard.js
+   Carry type and predicate kind from the wizard onto the patch row.
+4. src/front/static/simulation/css/simulation.css
+   Caption and type-row styles for stacked fact cells.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_workbench.html
+- docs/user-guide.md
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9762 passed, 326 skipped, 8 deselected, 0 failed in 56.96s.
+
+================================================================================
+## Treat Explorer live graph as no simulation for SWRL
+================================================================================
+
+Context: Triggering a class SWRL business rule from Knowledge Graph →
+Explorer failed with ``Simulation 'live' was not found``. The Explorer
+source picker uses ``live`` / ``live:inferred`` as option values; the
+rule request posted those tokens as ``simulation_id``, and the API looked
+them up in the simulation registry.
+
+Changes:
+
+1. src/front/static/query/js/query-business-rules.js
+   Resolve the sandbox id through KgGraphSource so live picker tokens are
+   omitted from the request body.
+2. src/back/objects/digitaltwin/TwinGraphAccess.py
+   Map ``live`` / ``live:inferred`` to no sandbox for every graph source
+   payload.
+3. src/api/routers/internal/dtwin.py
+   Skip sandbox lookup when the business-rule request carries a live token.
+4. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+   Run against the live graph when the caller sends a live source token.
+5. tests/units/api/test_dtwin_nodes_business_rule.py
+   Cover live source tokens on the request route.
+
+Modified files:
+- src/front/static/query/js/query-business-rules.js
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9763 passed, 326 skipped, 8 deselected, 0 failed in 49.38s.
+
+================================================================================
+## Show a spinner while workbench tabs load
+================================================================================
+
+Context: Opening a scenario or switching to Hypothetical facts, Reasoning, or
+Results painted incomplete content until ontology labels, rule lists, or the
+diff fetch finished. The pane now covers itself with the brand spinner for
+that in-flight load.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Add a tab-content overlay with Bootstrap spinner-border and a live label.
+2. src/front/static/simulation/css/simulation.css
+   Center the overlay on the tab pane with the warm surface token.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Toggle the overlay while the scenario, cohort list, and fact labels load.
+4. src/front/static/simulation/js/simulation-rules.js
+   Show the overlay while ontology rule lists are fetched.
+5. src/front/static/simulation/js/simulation-results.js
+   Show the overlay while the last-run diff is fetched.
+6. tests/units/front/test_simulation_page_contract.py
+   Contract that each tab wires setTabBusy and the overlay uses spinner-border.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/static/simulation/js/simulation-results.js
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 49.39s.
+
+================================================================================
+## Honour Results Explorer deep links over stored graph source
+================================================================================
+
+Context: Clicking a subject/object URI (or Explorer) on a scenario Results
+tab opened Knowledge Graph Explorer on the live graph. The Graph picker
+kept the last sessionStorage choice and ignored ``?simulation=`` unless
+that stored value was already live inferred.
+
+Changes:
+
+1. src/front/static/query/js/query-graph-source.js
+   Prefer the URL ``simulation`` param over the stored picker value.
+2. src/front/static/query/js/query-sigmagraph.js
+   Pass the URL sandbox id into the picker before focusing the entity.
+3. docs/user-guide.md
+   Document that Results and Explorer links select the sandbox.
+
+Modified files:
+- src/front/static/query/js/query-graph-source.js
+- src/front/static/query/js/query-sigmagraph.js
+- docs/user-guide.md
+- tests/units/front/test_kg_graph_source.py
+- tests/units/front/test_explorer_simulation_select.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 48.89s.
+
+================================================================================
+## Cover General tab controls while the workbench loads
+================================================================================
+
+Context: Opening a scenario showed the entity search button (``bi-search``)
+on top of the General tab spinner. Bootstrap input-group buttons sit at
+z-index 5, above the overlay's previous z-index 2.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   Raise the tab overlay above input-group buttons.
+2. src/front/templates/partials/simulation/_sim_workbench.html
+   Paint the overlay after the tab panes so it covers them.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 47.39s.
+
+================================================================================
+## Rename the Knowledge Graph menu to Graph
+================================================================================
+
+Context: The top-level workspace was labelled Knowledge Graph in the menu,
+breadcrumb, page title, help walkthrough, and in-app paths. Operators
+asked for the shorter Graph name on that navigation surface. API tags and
+scheduled "Knowledge Graph Build" jobs stay unchanged.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Set the digitaltwin menu label to Graph (workspace map follows).
+2. src/front/static/global/js/breadcrumb.js
+   Match the /dtwin/ crumb to Graph.
+3. src/front/templates/dtwin.html
+   Use Graph as the browser title.
+4. src/front/templates/partials/layout/help_modal.html
+   Walkthrough step 5 and Graph → Build / Explorer / Chat paths.
+5. docs/user-guide.md
+   Navigation copy and Graph → section paths.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/static/global/js/breadcrumb.js
+- src/front/templates/dtwin.html
+- src/front/templates/base.html
+- src/front/templates/about.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/dtwin/_query_insights.html
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/query/js/query-analytics.js
+- src/front/static/simulation/js/simulation.js
+- README.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/architecture.md
+- docs/development.md
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_breadcrumb.py
+- tests/units/front/test_knowledge_graph_icon.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/navigation/test_navigation_flows.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.20s.
+
+================================================================================
+## Make hypothetical facts easier to scan
+================================================================================
+
+Context: The Hypothetical facts tab packed operation, subject, predicate,
+object, and delete into one five-column table. Global table-sm truncation
+cut type/label lines, so a triple was hard to read. Each fact is now a
+card with a header and three labelled fields.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Replace the facts table with a list container for per-fact cards.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Render each fact as a card: operation + remove, then S/P/O in three columns.
+3. src/front/static/simulation/css/simulation.css
+   Style the card, field labels, wrapping type line, and monospace IDs.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract the card layout and drop the table-sm facts markup.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 65.05s.
+
+================================================================================
+## Compact hypothetical fact cards
+================================================================================
+
+Context: Fact cards were too tall (header row, field labels, large padding).
+Operators asked to shrink the blocks so more triples fit on screen.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Put operation, S/P/O, and delete on one band; drop extra field labels.
+2. src/front/static/simulation/css/simulation.css
+   Cut card padding, type-line height, and gaps.
+3. src/front/templates/partials/simulation/_sim_workbench.html
+   Tighten the list gap between cards.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_workbench.html
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.59s.
+
+================================================================================
+## Vertically center fact operation controls
+================================================================================
+
+Context: The Set/Add/Remove dropdown and the delete button sat at the top of
+each fact card, above the ID fields. They now share the vertical center of
+the triple row.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Align the fact card flex row with align-items-center.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9764 passed, 326 skipped, 8 deselected, 0 failed in 58.90s.
+
+================================================================================
+## Stretch scenario tabs to the page bottom
+================================================================================
+
+Context: Scenario list and workbench tabs stopped at content height instead of
+filling the remaining sidebar, unlike Ontology → Business Rules (SWRL). Extra
+list/editor wrappers sat between `.sidebar-section` and `.content-section`, so
+the shared stretch chain never applied.
+
+Changes:
+
+1. src/front/templates/simulation.html
+   Make `#simScenariosList` and `#simScenariosEditor` the stretch
+   `.content-section` roots (direct children of `#scenarios-section`).
+2. src/front/templates/partials/simulation/_sim_scenarios.html
+   Drop the nested content-section wrapper and give the table card `h-100`.
+3. src/front/templates/partials/simulation/_sim_workbench.html
+   Drop the nested content-section wrapper so the tab card can stretch.
+4. src/front/static/simulation/css/simulation.css
+   Keep the run-progress card out of the flex:1 stretch.
+5. tests/units/front/test_simulation_page_contract.py
+   Lock the direct-child content-section stretch contract.
+
+Modified files:
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-28.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9765 passed, 326 skipped, 8 deselected, 0 failed in 62.65s.
+
+

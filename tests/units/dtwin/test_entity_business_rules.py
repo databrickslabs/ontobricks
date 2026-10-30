@@ -266,4 +266,98 @@ async def test_run_business_rule_without_new_facts_writes_nothing(monkeypatch):
     )
     assert result["inferred_count"] == 0
     assert result["materialized_count"] == 0
+    assert result["graph_target"] == "live"
     assert store.inserted == []
+
+
+async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
+    live = _FakeStore([])
+    sandbox_store = _FakeStore(
+        [
+            {
+                "subject": ENTITY,
+                "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                "object": BASE + "VIP",
+            }
+        ]
+    )
+    _patch_store(monkeypatch, live)
+    seeded = []
+    views = []
+
+    class FakeSandbox:
+        def __init__(self, store, graph_name, sim_id):
+            assert store is live
+            assert sim_id == "sim1"
+            self.store = sandbox_store
+            self.table = "g__sim_sim1"
+
+        def seed_focus_for_swrl(self, uri, hops=2):
+            seeded.append((uri, hops))
+
+        def ensure_explorer_views(self, live_union, live_asserted):
+            views.append((live_union, live_asserted))
+
+    class FakeSim:
+        def __init__(self, *a, **k):
+            pass
+
+        def sandbox_relation(self, sid):
+            assert sid == "sim1"
+            return "g__sim_sim1"
+
+    class FakeSimReasoning:
+        def __init__(self, snap, store, table):
+            assert store is sandbox_store
+            assert table == "g__sim_sim1"
+            self._store = store
+
+        def run_swrl_rules(self, rule_names=None, focus=None):
+            assert focus["uri"] == ENTITY
+            return SimpleNamespace(
+                inferred_triples=[
+                    SimpleNamespace(
+                        subject=ENTITY, predicate=BASE + "p", object=BASE + "o"
+                    )
+                ],
+                stats={},
+            )
+
+        def materialize_inferred(self, result):
+            rows = [
+                {"subject": t.subject, "predicate": t.predicate, "object": t.object}
+                for t in result.inferred_triples
+            ]
+            self._store.insert_triples("g__sim_sim1", rows)
+            return len(rows)
+
+    monkeypatch.setattr("back.objects.simulation.Simulation", FakeSim)
+    monkeypatch.setattr("back.objects.simulation.Sandbox", FakeSandbox)
+    monkeypatch.setattr(
+        "back.objects.simulation.Reasoning",
+        FakeSimReasoning,
+    )
+    monkeypatch.setattr(
+        "back.core.helpers.effective_graph_name", lambda domain: "g"
+    )
+    monkeypatch.setattr(
+        "back.core.helpers.effective_graph_query_table",
+        lambda *a, **k: "g__sync",
+    )
+
+    result = await NodeContextService.run_business_rule(
+        _domain(),
+        object(),
+        entity_uri=ENTITY,
+        rule_name="VipCustomer",
+        simulation_id="sim1",
+    )
+
+    assert live.for_write is False
+    assert live.inserted == []
+    assert sandbox_store.inserted
+    assert seeded == [(ENTITY, 2)]
+    assert views
+    assert result["graph_target"] == "simulation"
+    assert result["inferred_count"] == 1
+    assert result["materialized_count"] == 1

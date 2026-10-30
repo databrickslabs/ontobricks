@@ -184,6 +184,20 @@ def test_ontology_entities_uses_list_nested_icon():
     )
 
 
+def test_simulation_workflow_follows_menu_order():
+    page = _help_html()
+    labels = [
+        item["label"]
+        for group in _menus()["simulation"]["groups"]
+        for item in group["items"]
+    ]
+    hw6_start = page.index('id="hw6"')
+    hw6_end = page.index("</div>\n                                </div>", hw6_start)
+    hw6_body = page[hw6_start:hw6_end]
+    positions = [hw6_body.index(f"<strong>{html.escape(label)}</strong>") for label in labels]
+    assert positions == sorted(positions)
+
+
 def test_ontology_advanced_list_matches_menu_items():
     """ontology-advanced group items must all be named under 'Advanced features'."""
     page = _help_html()
