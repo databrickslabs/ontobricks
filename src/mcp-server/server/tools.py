@@ -164,7 +164,8 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             domain_name: Registry domain name, or omit to use selected domain.
         """
         await session.ensure_registry()
-        name = domain_name or session.selected_domain_name
+        await session.ensure_domain_policies()
+        name = session.resolve_domain_name(domain_name)
         if not name:
             return (
                 "Provide domain_name or call select_domain first "
@@ -246,6 +247,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             # contract) and only added a wasted round trip.
             session.ontology_labels.clear()
             session.class_actions.clear()
+            session._state().class_actions_loaded = False
             # Fetch class Actions for the selected domain — reuse the same client
             try:
                 cls_data = await _http._get(
@@ -253,21 +255,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                     API_V1_DOMAIN_CLASSES,
                     params={**session.registry_params(), "domain_name": domain_name},
                 )
-                shacl_on = session.ensure_tool_allowed(SHACL_TOOL) is None
-                for cls in cls_data.get("classes", []):
-                    uri = cls.get("uri", "")
-                    if uri:
-                        session.class_actions[uri] = {
-                            "name": cls.get("name", ""),
-                            "dataset": cls.get("dataset") or None,
-                            "bridges": cls.get("bridges") or [],
-                            "actions": cls.get("actions") or [],
-                            "business_rules": cls.get("business_rules") or [],
-                            "virtualAttributes": cls.get("virtualAttributes") or [],
-                            "shacl_shape_count": (
-                                (cls.get("shacl_shape_count") or 0) if shacl_on else 0
-                            ),
-                        }
+                session._ingest_class_actions(cls_data.get("classes") or [])
                 logger.info(
                     "select_domain: loaded class Actions for %d classes",
                     len(session.class_actions),
@@ -335,24 +323,11 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         Args:
             domain_name: Registry domain name, or omit to use the selected one.
         """
-        name = domain_name or session.selected_domain_name
-        if not name:
-            return (
-                "No domain selected. Call list_domains first, then "
-                "select_domain to choose one (or pass domain_name)."
-            )
-
+        blocked = await session.require_domain("describe_ontology", domain_name)
+        if blocked:
+            return blocked
+        name = session.selected_domain_name
         await session.ensure_registry()
-        await session.ensure_domain_policies()
-        # describe_ontology is never gated by has_graph (it is the fallback for
-        # ontology-only domains), but a domain can still hide it via policy.
-        if "describe_ontology" in session.disabled_tools(
-            session.domain_policy.get(name, {})
-        ):
-            return (
-                f"The tool 'describe_ontology' is not available for domain "
-                f"'{name}' — its MCP policy does not expose it."
-            )
         params = {**session.registry_params(), "domain_name": name}
 
         async with session.client() as client:
@@ -412,7 +387,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
     @mcp.tool()
     @_http.http_errors_as_text("retrieve the graph statistics")
-    async def list_entity_types() -> str:
+    async def list_entity_types(domain_name: Optional[str] = None) -> str:
         """List all entity types available in the selected domain's knowledge graph.
 
         Returns a readable summary of every entity type (rdf:type) present
@@ -422,11 +397,13 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         When a type has a linked external dataset in the ontology, also
         includes the dataset full name and Description.
 
-        A domain must be selected first via ``select_domain``.
+        Pass ``domain_name`` when the client does not reuse an MCP session
+        (e.g. Databricks Playground). Otherwise call ``select_domain`` first.
         """
-        blocked = session.require_domain("list_entity_types")
+        blocked = await session.require_domain("list_entity_types", domain_name)
         if blocked:
             return blocked
+        await session.ensure_class_actions()
 
         async with session.client() as client:
             data = await _http._get(client, API_V1_DT_STATS, params=session.domain_params())
@@ -498,6 +475,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         entity_type: Optional[str] = None,
         depth: int = MAX_DEPTH,
         cache: Optional[bool] = None,
+        domain_name: Optional[str] = None,
     ) -> str:
         """Search for an entity and return a full-text description.
 
@@ -522,7 +500,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         entity. Do NOT rely on ``query_graphql`` alone — it may miss
         inferred/materialised relationships.
 
-        A domain must be selected first via ``select_domain``.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
         At least one of ``search`` or ``entity_type`` must be provided.
 
         Args:
@@ -535,6 +513,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             cache: If true, require search-cache companions. If false, read
                 the live triple store. Omit to use the domain Search cache
                 setting.
+            domain_name: Registry domain name, or omit to use the selected one.
 
         Returns:
             A full-text description of the matching entities, their
@@ -543,9 +522,10 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             reported ``has_more=true`` for this page; narrow the query and/or
             keep ``depth=1`` for broad type scans before deepening traversal.
         """
-        blocked = session.require_domain("describe_entity")
+        blocked = await session.require_domain("describe_entity", domain_name)
         if blocked:
             return blocked
+        await session.ensure_class_actions()
         if not search and not entity_type:
             return "Please provide at least a search term or an entity type."
 
@@ -585,15 +565,15 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
     @mcp.tool()
     @_http.http_errors_as_text("check the graph status")
-    async def get_status() -> str:
+    async def get_status(domain_name: Optional[str] = None) -> str:
         """Check whether the selected domain's knowledge graph is ready.
 
         Returns view name, graph name, whether data exists, and row count.
         Call this if other tools report errors to diagnose configuration issues.
 
-        A domain must be selected first via ``select_domain``.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
         """
-        blocked = session.require_domain("get_status")
+        blocked = await session.require_domain("get_status", domain_name)
         if blocked:
             return blocked
 
@@ -619,7 +599,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
     @mcp.tool()
     @_http.http_errors_as_text("retrieve the GraphQL schema")
-    async def get_graphql_schema() -> str:
+    async def get_graphql_schema(domain_name: Optional[str] = None) -> str:
         """Get the GraphQL schema (SDL) for the selected domain.
 
         Returns the auto-generated schema in Schema Definition Language
@@ -627,9 +607,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         Use this to understand what data you can query before calling
         ``query_graphql``.
 
-        A domain must be selected first via ``select_domain``.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
         """
-        blocked = session.require_domain("get_graphql_schema")
+        blocked = await session.require_domain("get_graphql_schema", domain_name)
         if blocked:
             return blocked
 
@@ -659,6 +639,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     async def query_graphql(
         query: str,
         variables: Optional[str] = None,
+        domain_name: Optional[str] = None,
     ) -> str:
         """Execute a GraphQL query against the selected domain's knowledge graph.
 
@@ -679,18 +660,19 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
           - Nested relationship traversal in a single request
           - Filtering and pagination (``limit``, ``offset``, ``search``)
 
-        A domain must be selected first via ``select_domain``.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
 
         Args:
             query: A valid GraphQL query string.
                 Example: ``{ allCustomer(limit: 5) { id label email } }``
             variables: Optional JSON string of query variables.
                 Example: ``{"limit": 10}``
+            domain_name: Registry domain name, or omit to use the selected one.
 
         Returns:
             The query result as formatted text, or an error message.
         """
-        blocked = session.require_domain("query_graphql")
+        blocked = await session.require_domain("query_graphql", domain_name)
         if blocked:
             return blocked
 
@@ -723,11 +705,12 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         dataset_row_limit: int = 5,
         follow_bridges: bool = False,
         compute_virtual_attributes: bool = False,
+        domain_name: Optional[str] = None,
     ) -> str:
         """Return complete context for an entity node: linked dataset rows,
         cross-domain bridge entities and/or computed virtual attributes.
 
-        Requires a domain to be selected first via select_domain.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
         The class must have dataset / bridges configured in the ontology.
         Use the entity URI from describe_entity output.
 
@@ -760,8 +743,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                 for a real hop.
             compute_virtual_attributes: If true, run the class's virtual
                 attribute functions and return their values.
+            domain_name: Registry domain name, or omit to use the selected one.
         """
-        blocked = session.require_domain("get_entity_context")
+        blocked = await session.require_domain("get_entity_context", domain_name)
         if blocked:
             return blocked
 
@@ -807,14 +791,15 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     async def compute_virtual_attributes(
         entity_uri: str,
         function: Optional[str] = None,
+        domain_name: Optional[str] = None,
     ) -> str:
         """Compute one or all virtual attributes declared on an entity's class.
 
-        Requires a domain to be selected first via select_domain. Use this
-        tool whenever the user asks about the **value** of a virtual attribute
-        — risk score, live standing, distance, and so on. Those values are not
-        stored in the knowledge graph; only a Unity Catalog function can
-        produce them.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
+        Use this tool whenever the user asks about the **value** of a virtual
+        attribute — risk score, live standing, distance, and so on. Those
+        values are not stored in the knowledge graph; only a Unity Catalog
+        function can produce them.
 
         Discover what is available with ``describe_entity`` or
         ``get_entity_context`` (declarations only). Then call this tool to run
@@ -830,8 +815,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
             function: Optional fully qualified UC function name. When omitted,
                 every virtual attribute group declared on the class is computed.
+            domain_name: Registry domain name, or omit to use the selected one.
         """
-        blocked = session.require_domain("compute_virtual_attributes")
+        blocked = await session.require_domain("compute_virtual_attributes", domain_name)
         if blocked:
             return blocked
         blocked = session.ensure_context_allowed(
@@ -852,17 +838,23 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
     @mcp.tool()
     @_http.http_errors_as_text("invoke the action")
-    async def invoke_entity_action(entity_uri: str, action: str) -> str:
+    async def invoke_entity_action(
+        entity_uri: str,
+        action: str,
+        domain_name: Optional[str] = None,
+    ) -> str:
         """Run a UC function or Job (job:<id>) declared on the entity's class.
 
-        Requires select_domain. Discover names via get_entity_context. UC
-        functions receive the entity local ID; Jobs start in Background Tasks.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
+        Discover names via get_entity_context. UC functions receive the entity
+        local ID; Jobs start in Background Tasks.
 
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
             action: catalog.schema.function or job:<job_id>.
+            domain_name: Registry domain name, or omit to use the selected one.
         """
-        blocked = session.require_domain("invoke_entity_action")
+        blocked = await session.require_domain("invoke_entity_action", domain_name)
         if blocked:
             return blocked
         # Disabling the actions element also stops invocation, even when the
@@ -881,11 +873,15 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
     @mcp.tool()
     @_http.http_errors_as_text("run the business rule")
-    async def run_entity_business_rule(entity_uri: str, rule: str) -> str:
+    async def run_entity_business_rule(
+        entity_uri: str,
+        rule: str,
+        domain_name: Optional[str] = None,
+    ) -> str:
         """Trigger a SWRL business rule declared on an entity's class.
 
-        Requires a domain to be selected first via select_domain and the
-        Builder role on that domain. Discover the available rules with
+        Pass ``domain_name`` when the client does not reuse an MCP session.
+        Requires the Builder role on that domain. Discover the available rules with
         get_entity_context or describe_entity — only rules declared on the
         entity's ontology class can be triggered.
 
@@ -896,8 +892,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
             rule: Name of the business rule.
+            domain_name: Registry domain name, or omit to use the selected one.
         """
-        blocked = session.require_domain("run_entity_business_rule")
+        blocked = await session.require_domain("run_entity_business_rule", domain_name)
         if blocked:
             return blocked
         # Disabling the business_rules element also stops execution, even
@@ -922,10 +919,13 @@ def _register_shacl_tool(mcp: FastMCP, session: MCPServerSession) -> None:
 
     @mcp.tool()
     @_http.http_errors_as_text("check the SHACL facets")
-    async def check_entity_shacl_facets(entity_uri: str) -> str:
+    async def check_entity_shacl_facets(
+        entity_uri: str,
+        domain_name: Optional[str] = None,
+    ) -> str:
         """Check one entity against every SHACL shape that applies to it.
 
-        Requires a domain to be selected first via select_domain. The shapes
+        Pass ``domain_name`` when the client does not reuse an MCP session. The shapes
         are those targeting the entity's class, any of its ancestor classes,
         or the whole graph. Each one is evaluated against this entity only and
         reported as PASS, FAIL (with its severity), NOT APPLICABLE (its guard
@@ -940,8 +940,9 @@ def _register_shacl_tool(mcp: FastMCP, session: MCPServerSession) -> None:
 
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
+            domain_name: Registry domain name, or omit to use the selected one.
         """
-        blocked = session.require_domain(SHACL_TOOL)
+        blocked = await session.require_domain(SHACL_TOOL, domain_name)
         if blocked:
             return blocked
 

@@ -1953,6 +1953,10 @@ domain chooses which of them to publish, from its [MCP tab](#mcp-tab).
 
 ### Using in Databricks Playground
 
+Playground opens a new MCP session per tool call, so `select_domain` does not
+stick. Pass `domain_name` on graph tools, set `MCP_DEFAULT_DOMAIN` on the MCP
+app, or publish a single MCP domain. See [docs/mcp.md](mcp.md).
+
 1. Deploy the MCP server as `mcp-ontobricks` (see [Deployment Guide](deployment.md))
 2. In your Databricks workspace, navigate to **Playground**
 3. Select **mcp-ontobricks** from the MCP Servers list
@@ -3130,7 +3134,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Entity Discovery**: `list_entity_types` and `describe_entity` provide human-readable text descriptions with BFS traversal. `describe_entity` accepts optional `cache` (true = require companions, false = live SPO).
 - **GraphQL via MCP**: `get_graphql_schema` and `query_graphql` tools let LLM agents introspect and query the typed GraphQL API.
 - **Per-Domain MCP Policy**: Each domain picks, in **Domain → General → MCP**, which of the eight domain-scoped tools it publishes and how its ontology attachments (Datasets, Bridges, Actions, Virtual attributes) are surfaced — **Preferred** (the hint becomes a directive instruction), **Normal**, or **Disabled** (withheld from every MCP *and* external REST response). The four registry-level tools stay always-on, since they run before a domain is resolved. An unconfigured domain behaves exactly as before.
-- **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. Note that the *selected domain* itself remains process-global in the MCP proxy (a pre-existing limitation), so the policy is reliable for one concurrent client per process.
+- **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. The selected domain is isolated per MCP session id; clients that do not reuse a session (Playground) must pass `domain_name` or set `MCP_DEFAULT_DOMAIN`.
 - **Databricks Playground**: Deployed as `mcp-ontobricks`, auto-discoverable by LLM agents in the Databricks Playground.
 - **Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client.
 

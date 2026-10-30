@@ -70,6 +70,49 @@ def test_selected_domain_does_not_leak_between_sessions() -> None:
         assert s.selected_domain_name == "mercuriamarkets"
 
 
+def test_resolve_domain_prefers_explicit_name_over_session() -> None:
+    """Playground-style: a later session can pass domain_name without select_domain."""
+    s = MCPServerSession("standalone")
+    with _in_session("sid-A"):
+        s.selected_domain_name = "mercuriatrading"
+        assert s.resolve_domain_name("mercuriamarkets") == "mercuriamarkets"
+        assert s.resolve_domain_name(None) == "mercuriatrading"
+        assert s.resolve_domain_name("  ") == "mercuriatrading"
+
+
+def test_resolve_domain_uses_env_when_session_is_empty(monkeypatch) -> None:
+    monkeypatch.setenv("MCP_DEFAULT_DOMAIN", "from-env")
+    s = MCPServerSession("standalone")
+    with _in_session("sid-B"):
+        assert s.resolve_domain_name() == "from-env"
+        assert s.resolve_domain_name("explicit") == "explicit"
+
+
+def test_resolve_domain_uses_the_only_published_domain() -> None:
+    s = MCPServerSession("standalone")
+    s.domain_policy["onlyone"] = {}
+    with _in_session("sid-C"):
+        assert s.resolve_domain_name() == "onlyone"
+
+
+def test_resolve_domain_does_not_guess_when_several_domains_are_published() -> None:
+    s = MCPServerSession("standalone")
+    s.domain_policy["a"] = {}
+    s.domain_policy["b"] = {}
+    with _in_session("sid-D"):
+        assert s.resolve_domain_name() is None
+
+
+def test_explicit_domain_on_a_new_session_does_not_read_another_session() -> None:
+    """#209: session B must not inherit A's select_domain; explicit name is enough."""
+    s = MCPServerSession("standalone")
+    with _in_session("sid-A"):
+        s.selected_domain_name = "mercuriatrading"
+    with _in_session("sid-B"):
+        assert s.selected_domain_name is None
+        assert s.resolve_domain_name("mercuriamarkets") == "mercuriamarkets"
+
+
 def test_shared_state_is_not_isolated() -> None:
     """Registry + policy are server-wide facts and stay shared across sessions."""
     s = MCPServerSession("standalone")

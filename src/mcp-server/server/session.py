@@ -23,6 +23,7 @@ import httpx
 
 from server import http_client as _http
 from server.constants import (
+    API_V1_DOMAIN_CLASSES,
     API_V1_DOMAINS,
     API_V1_DT_REGISTRY,
     GRAPH_TOOLS,
@@ -53,6 +54,7 @@ class _DomainState:
         "selected_domain_name",
         "ontology_labels",
         "class_actions",
+        "class_actions_loaded",
         "simulation_id",
         "include_inferred",
     )
@@ -61,6 +63,7 @@ class _DomainState:
         self.selected_domain_name: Optional[str] = None
         self.ontology_labels: dict[str, str] = {}  # uri/name (lower) → label
         self.class_actions: dict[str, dict] = {}   # class URI → {dataset, …}
+        self.class_actions_loaded: bool = False
         self.simulation_id: str = ""
         self.include_inferred: bool = True
 
@@ -327,6 +330,77 @@ class MCPServerSession:
             self.domain_policy.get(name, {})
         ) | self.graph_hidden_for(name)
 
+    def resolve_domain_name(self, domain_name: Optional[str] = None) -> Optional[str]:
+        """Pick the domain for this call without requiring a sticky MCP session.
+
+        Order: explicit ``domain_name`` → this connection's ``select_domain``
+        → ``MCP_DEFAULT_DOMAIN`` → the only name in the policy cache.
+        Clients that open a new StreamableHTTP session per tool call
+        (Databricks Playground) never reuse ``select_domain``; they must
+        pass ``domain_name`` or rely on the env / single-domain fallback.
+        """
+        explicit = (domain_name or "").strip()
+        if explicit:
+            return explicit
+        if self.selected_domain_name:
+            return self.selected_domain_name
+        env = (os.getenv("MCP_DEFAULT_DOMAIN") or "").strip()
+        if env:
+            return env
+        names = [n for n in self.domain_policy if n]
+        if len(names) == 1:
+            return names[0]
+        return None
+
+    def _bind_domain(self, name: str) -> None:
+        """Point this connection at *name*, dropping caches when it changes."""
+        if self.selected_domain_name == name:
+            return
+        self.selected_domain_name = name
+        self.ontology_labels.clear()
+        self.class_actions.clear()
+        self._state().class_actions_loaded = False
+
+    def _ingest_class_actions(self, classes: list) -> None:
+        """Fill ``class_actions`` from a ``GET /api/v1/domain/classes`` payload."""
+        shacl_on = self.ensure_tool_allowed("check_entity_shacl_facets") is None
+        for cls in classes:
+            uri = cls.get("uri", "")
+            if not uri:
+                continue
+            self.class_actions[uri] = {
+                "name": cls.get("name", ""),
+                "dataset": cls.get("dataset") or None,
+                "bridges": cls.get("bridges") or [],
+                "actions": cls.get("actions") or [],
+                "business_rules": cls.get("business_rules") or [],
+                "virtualAttributes": cls.get("virtualAttributes") or [],
+                "shacl_shape_count": (
+                    (cls.get("shacl_shape_count") or 0) if shacl_on else 0
+                ),
+            }
+        self._state().class_actions_loaded = True
+
+    async def ensure_class_actions(self) -> None:
+        """Load class attachments when this session skipped ``select_domain``."""
+        st = self._state()
+        if st.class_actions_loaded or not st.selected_domain_name:
+            return
+        try:
+            async with self.client() as client:
+                cls_data = await _http._get(
+                    client,
+                    API_V1_DOMAIN_CLASSES,
+                    params={
+                        **self.registry_params(),
+                        "domain_name": st.selected_domain_name,
+                    },
+                )
+            self._ingest_class_actions(cls_data.get("classes") or [])
+        except Exception as exc:
+            logger.warning("could not load class Actions: %s", exc)
+        st.class_actions_loaded = True
+
     def ensure_tool_allowed(self, tool_name: str) -> Optional[str]:
         """Return a refusal message when *tool_name* is disabled, else None.
 
@@ -348,17 +422,32 @@ class MCPServerSession:
             )
         return None
 
-    def require_domain(self, tool_name: str) -> Optional[str]:
+    async def require_domain(
+        self, tool_name: str, domain_name: Optional[str] = None
+    ) -> Optional[str]:
         """Single entry guard for every domain-scoped tool.
 
         Returns the message to hand back to the model, or None to proceed.
+        Resolves the domain from the argument, this MCP session, env, or a
+        unique published domain — so clients that do not reuse a session
+        (Databricks Playground) can still query.
         """
-        if not self.selected_domain_name:
+        name = self.resolve_domain_name(domain_name)
+        if not name:
+            await self.ensure_domain_policies()
+            name = self.resolve_domain_name(domain_name)
+        if not name:
             return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
+                "No domain selected. Pass domain_name, call list_domains "
+                "then select_domain, or set MCP_DEFAULT_DOMAIN."
             )
-        return self.ensure_tool_allowed(tool_name)
+        self._bind_domain(name)
+        if not self.domain_policy:
+            await self.ensure_domain_policies()
+        blocked = self.ensure_tool_allowed(tool_name)
+        if blocked:
+            return blocked
+        return None
 
     def ensure_context_allowed(self, feature: str, label: str) -> Optional[str]:
         """Return a refusal message when *feature* is disabled, else None."""

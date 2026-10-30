@@ -110,7 +110,7 @@ async def test_get_graphql_schema_forwards_identity_and_encodes_name(harness) ->
     text = await (await harness.tool("get_graphql_schema"))()
 
     assert "type Query { a: Int }" in text
-    (request,) = harness.requests
+    request = next(r for r in harness.requests if b"/graphql/" in r.url.raw_path)
     _assert_forwarded(request)
     assert request.url.raw_path.startswith(f"/graphql/{_ENCODED}/schema?".encode())
     assert request.url.params["registry_catalog"] == "cat"
@@ -124,7 +124,7 @@ async def test_query_graphql_forwards_identity_and_encodes_name(harness) -> None
     text = await (await harness.tool("query_graphql"))(query="{ allCustomer { id } }")
 
     assert "allCustomer" in text
-    (request,) = harness.requests
+    request = next(r for r in harness.requests if b"/graphql/" in r.url.raw_path)
     _assert_forwarded(request)
     assert request.url.raw_path.startswith(f"/graphql/{_ENCODED}?".encode())
     assert request.url.params["registry_schema"] == "sch"

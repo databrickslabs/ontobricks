@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from fastmcp import FastMCP
 
 from server import http_client as _http
@@ -18,13 +20,14 @@ def register_simulation_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 def _register_read_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     @mcp.tool()
     @_http.http_errors_as_text("list simulations")
-    async def list_simulations() -> str:
+    async def list_simulations(domain_name: Optional[str] = None) -> str:
         """List what-if scenarios for the selected domain.
 
         Ready scenarios can be selected with ``select_simulation`` so later
         graph reads (describe_entity, GraphQL, stats) hit that sandbox.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
         """
-        blocked = session.require_domain("list_simulations")
+        blocked = await session.require_domain("list_simulations", domain_name)
         if blocked:
             return blocked
         async with session.client() as client:
@@ -50,12 +53,14 @@ def _register_read_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     async def select_simulation(
         simulation_id: str = "",
         include_inferred: bool = True,
+        domain_name: Optional[str] = None,
     ) -> str:
         """Select a ready scenario sandbox for subsequent graph tools.
 
         Pass an empty simulation_id to return to the live graph.
+        Pass ``domain_name`` when the client does not reuse an MCP session.
         """
-        blocked = session.require_domain("select_simulation")
+        blocked = await session.require_domain("select_simulation", domain_name)
         if blocked:
             return blocked
         sid = (simulation_id or "").strip()
@@ -91,9 +96,10 @@ def _register_write_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         focus: str = "",
         description: str = "",
         hops: int = 2,
+        domain_name: Optional[str] = None,
     ) -> str:
         """Create a draft what-if scenario. Add patches in the UI or API, then run_simulation."""
-        blocked = session.require_domain("create_simulation")
+        blocked = await session.require_domain("create_simulation", domain_name)
         if blocked:
             return blocked
         body = {
@@ -114,9 +120,12 @@ def _register_write_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
     @mcp.tool()
     @_http.http_errors_as_text("run a simulation")
-    async def run_simulation(simulation_id: str) -> str:
+    async def run_simulation(
+        simulation_id: str,
+        domain_name: Optional[str] = None,
+    ) -> str:
         """Run a scenario (seed, patch, reason). Poll list_simulations until ready."""
-        blocked = session.require_domain("run_simulation")
+        blocked = await session.require_domain("run_simulation", domain_name)
         if blocked:
             return blocked
         sid = (simulation_id or "").strip()
