@@ -80,6 +80,12 @@ env:
   # graph permission grants resolve the right service principal (#137).
   - name: MCP_APP_NAME
     value: "${MCP_APP_NAME}"
+  # MCP app SP client id. PermissionMiddleware trusts acting-identity
+  # headers only when the Apps proxy identity matches this value (#208).
+  # Empty on first-ever deploy (app does not exist yet); the next deploy
+  # fills it from ``databricks apps get``.
+  - name: MCP_SP_CLIENT_ID  # optional
+    value: "${MCP_SP_CLIENT_ID}"
   # ── Lakebase (optional) ───────────────────────────────────────
   # When the bundle is deployed to a *-lakebase target the DAB binds
   # a `database` resource to this app. Databricks Apps then

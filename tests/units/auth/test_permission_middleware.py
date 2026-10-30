@@ -1766,3 +1766,111 @@ class TestBypassBindsForwardedTokenForOBO:
 
         assert seen["token"] == ""
         assert req.state.user_token == ""
+
+
+class TestMcpActingIdentitySwap:
+    """Issue #208: MCP → UI hop. Apps stamps x-forwarded-* from the MCP SP;
+    acting headers restore the end user only for that SP."""
+
+    @staticmethod
+    def _settings():
+        s = MagicMock()
+        s.mcp_sp_client_id = "mcp-sp-id"
+        s.ontobricks_app_name = "ontobricks"
+        return s
+
+    def test_bypass_swaps_to_acting_user(self):
+        from shared.fastapi.main import PermissionMiddleware
+        from back.core.databricks.ActingIdentity import ActingIdentity
+        from back.core.databricks.request_identity import get_request_identity
+
+        req = _make_request(
+            method="GET",
+            path="/api/v1/digitaltwin/status",
+            email="mcp-sp-id",
+            headers={
+                "x-forwarded-access-token": "m2m",
+                ActingIdentity.HEADER_EMAIL: "user@x",
+                ActingIdentity.HEADER_TOKEN: "UT",
+            },
+        )
+        seen = {}
+
+        async def call_next(r):
+            ident = get_request_identity()
+            seen["email"] = ident.email
+            seen["token"] = ident.user_token
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch("shared.fastapi.main.get_settings", return_value=self._settings()),
+        ):
+            _run(middleware.dispatch(req, call_next))
+
+        assert seen["email"] == "user@x"
+        assert seen["token"] == "UT"
+        assert req.state.user_email == "user@x"
+        assert req.state.user_token == "UT"
+
+    def test_browser_user_cannot_spoof_acting_headers(self):
+        from shared.fastapi.main import PermissionMiddleware
+        from back.core.databricks.ActingIdentity import ActingIdentity
+        from back.core.databricks.request_identity import get_request_identity
+
+        req = _make_request(
+            method="GET",
+            path="/api/v1/digitaltwin/status",
+            email="alice@x",
+            headers={
+                "x-forwarded-access-token": "alice-tok",
+                ActingIdentity.HEADER_EMAIL: "eve@x",
+                ActingIdentity.HEADER_TOKEN: "stolen",
+            },
+        )
+        seen = {}
+
+        async def call_next(r):
+            ident = get_request_identity()
+            seen["email"] = ident.email
+            seen["token"] = ident.user_token
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch("shared.fastapi.main.get_settings", return_value=self._settings()),
+        ):
+            _run(middleware.dispatch(req, call_next))
+
+        assert seen["email"] == "alice@x"
+        assert seen["token"] == "alice-tok"
+
+    def test_mcp_sp_without_acting_email_stays_sp(self):
+        from shared.fastapi.main import PermissionMiddleware
+        from back.core.databricks.request_identity import get_request_identity
+
+        req = _make_request(
+            method="GET",
+            path="/api/v1/digitaltwin/status",
+            email="mcp-sp-id",
+            headers={"x-forwarded-access-token": "m2m"},
+        )
+        seen = {}
+
+        async def call_next(r):
+            ident = get_request_identity()
+            seen["email"] = ident.email
+            seen["token"] = ident.user_token
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch("shared.fastapi.main.get_settings", return_value=self._settings()),
+        ):
+            _run(middleware.dispatch(req, call_next))
+
+        assert seen["email"] == "mcp-sp-id"
+        assert seen["token"] == "m2m"

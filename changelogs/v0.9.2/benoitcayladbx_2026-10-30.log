@@ -72,3 +72,69 @@ Tests: uv run --frozen pytest -q -m "not scenario" → 9629 passed, 326 skipped,
 Still open (blocked upstream):
 - oauthlib 4.0.0 — databricks-sql-connector pins oauthlib<4
 - nltk GHSA-8mgp-746c-j5xp — no patched release yet
+
+================================================================================
+## Forward MCP end-user identity past the Apps proxy overwrite
+================================================================================
+
+Context: Graph tools through the MCP server were authorised as the MCP app
+service principal (`You are not a member of this domain's team`) even for
+domain Builders. Databricks Apps overwrites `x-forwarded-*` on the MCP → UI
+hop from the M2M bearer, so the documented header-forwarding design never
+reached PermissionMiddleware (issue #208).
+
+Changes:
+
+1. src/back/core/databricks/ActingIdentity.py
+   Swap to acting email/token only when the proxy identity is the MCP SP.
+2. src/shared/fastapi/main.py
+   Apply that swap on every App-mode request, including `/api` and `/graphql`.
+3. src/mcp-server/server/http_client.py
+   Send `X-OntoBricks-Acting-*` instead of `x-forwarded-*` on outbound M2M calls.
+4. src/mcp-server/server/session_scope.py
+   Still capture inbound Apps `x-forwarded-*` (those are the end user).
+5. src/shared/config/settings.py
+   `MCP_SP_CLIENT_ID` is the allowlisted MCP SP for the swap.
+6. app.yaml.template / scripts/deploy.sh / scripts/deploy.config.sh
+   Inject `MCP_SP_CLIENT_ID` from `databricks apps get` on redeploy.
+7. databricks.yml
+   `user_api_scopes: sql`, `iam.current-user:read`, `iam.access-control:read`
+   on both apps so inbound MCP has a UC-capable user token.
+8. src/back/objects/domain/settings/RegistryDomainSettings.py
+   Prefer `request.state.user_token` after the swap for Team/group lookup.
+9. src/api/routers/internal/_permissions.py
+   Same token preference for domain filtering.
+10. docs/deployment.md, docs/architecture.md, docs/user-guide.md
+    Document acting headers vs Apps `x-forwarded-*` overwrite.
+11. tests/units/core/test_acting_identity.py
+    Unit coverage for swap / spoof / fail-closed.
+12. tests/units/auth/test_permission_middleware.py
+    Bypass-path swap, spoof ignore, MCP SP without acting email.
+13. tests/mcp/test_user_header_forwarding.py / test_tool_http_boundary.py
+    Outbound acting headers, not `x-forwarded-*`.
+14. tests/units/settings/test_bundle_job_resource.py
+    Both apps declare `user_api_scopes`.
+
+Modified files:
+- src/back/core/databricks/ActingIdentity.py
+- src/shared/fastapi/main.py
+- src/mcp-server/server/http_client.py
+- src/mcp-server/server/session_scope.py
+- src/shared/config/settings.py
+- src/back/objects/domain/settings/RegistryDomainSettings.py
+- src/api/routers/internal/_permissions.py
+- app.yaml.template
+- databricks.yml
+- scripts/deploy.sh
+- scripts/deploy.config.sh
+- docs/deployment.md
+- docs/architecture.md
+- docs/user-guide.md
+- tests/units/core/test_acting_identity.py
+- tests/units/auth/test_permission_middleware.py
+- tests/mcp/test_user_header_forwarding.py
+- tests/mcp/test_tool_http_boundary.py
+- tests/units/settings/test_bundle_job_resource.py
+- changelogs/v0.9.2/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9638 passed, 326 skipped, 8 deselected, 39 warnings in 50.98s

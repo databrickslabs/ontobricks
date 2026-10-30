@@ -85,9 +85,11 @@ def harness(monkeypatch):
 
 
 def _assert_forwarded(request: httpx.Request) -> None:
-    assert request.headers["x-forwarded-email"] == "user@example.com"
-    assert request.headers["x-forwarded-access-token"] == "USER-TOKEN"
+    assert request.headers["x-ontobricks-acting-email"] == "user@example.com"
+    assert request.headers["x-ontobricks-acting-token"] == "USER-TOKEN"
     assert request.headers["authorization"] == "Bearer M2M"
+    assert "x-forwarded-email" not in request.headers
+    assert "x-forwarded-access-token" not in request.headers
 
 
 def _assert_safe(text: str) -> None:
