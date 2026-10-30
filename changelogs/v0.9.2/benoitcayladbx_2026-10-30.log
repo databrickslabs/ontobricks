@@ -138,3 +138,48 @@ Modified files:
 - changelogs/v0.9.2/benoitcayladbx_2026-10-30.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9638 passed, 326 skipped, 8 deselected, 39 warnings in 50.98s
+
+================================================================================
+## Make MCP graph tools work without a sticky session
+================================================================================
+
+Context: Issue #209 — Databricks AI Playground opens a new StreamableHTTP
+session per tool call, so select_domain keyed by mcp-session-id never
+reaches the next graph tool. Keep per-session isolation (issue #185) and
+resolve the domain from an optional domain_name argument, MCP_DEFAULT_DOMAIN,
+or the only published MCP domain.
+
+Changes:
+
+1. src/mcp-server/server/session.py
+   Add resolve_domain_name / require_domain (async) / lazy class-action cache.
+2. src/mcp-server/server/tools.py
+   Optional domain_name on every domain-scoped tool; share class-action ingest.
+3. src/mcp-server/server/factory.py
+   Instruct clients to pass domain_name when the session is not reused.
+4. tests/units/mcp/test_session_isolation.py
+   Cover explicit / env / unique-domain resolution without leaking sessions.
+5. tests/units/mcp/test_domain_policy_gating.py
+   Cover Playground-style get_status and policy with domain_name, no select.
+6. tests/mcp/integration/test_more_smoke_tools.py
+   Two-domain registry so the unique fallback does not hide a missing select.
+7. tests/mcp/test_tool_http_boundary.py
+   Assert identity on the GraphQL hop when policy preload adds extra GETs.
+8. docs/mcp.md
+   Document Playground one-shot sessions, MCP_DEFAULT_DOMAIN, and OPT 2 limits.
+9. docs/user-guide.md
+   Same Playground guidance; drop the stale process-global selected-domain note.
+
+Modified files:
+- src/mcp-server/server/session.py
+- src/mcp-server/server/tools.py
+- src/mcp-server/server/factory.py
+- tests/units/mcp/test_session_isolation.py
+- tests/units/mcp/test_domain_policy_gating.py
+- tests/mcp/integration/test_more_smoke_tools.py
+- tests/mcp/test_tool_http_boundary.py
+- docs/mcp.md
+- docs/user-guide.md
+- changelogs/v0.9.2/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9647 passed, 326 skipped, 8 deselected, 39 warnings in 57.53s
