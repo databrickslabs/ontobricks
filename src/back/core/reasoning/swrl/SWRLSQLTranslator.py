@@ -9,66 +9,64 @@ from typing import Dict, List, Optional
 from back.core.helpers import sql_escape
 from back.core.logging import get_logger
 from back.core.reasoning.constants import RDF_TYPE
-from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
 from back.core.reasoning.swrl.SWRLParser import SWRLParser
+from back.core.reasoning.swrl.SWRLSQLBuiltinFilters import SWRLSQLBuiltinFilters
 
 logger = get_logger(__name__)
 
 
 class SWRLSQLTranslator:
-    """Build SQL from SWRL rules for the flat triple-store table."""
+    """Build SQL from SWRL rules for the flat triple-store table.
+
+    ``dialect`` selects the SQL flavour for built-in templates:
+    ``"databricks"`` (default, ``TRY_CAST``) or ``"postgres"`` (plain
+    ``CAST`` — Postgres has no ``TRY_CAST``, so Lakebase-backed stores
+    must pass ``dialect="postgres"`` or every built-in filter is a
+    syntax error). The Postgres mapping lives on
+    ``SWRLSQLBuiltinFilters`` and covers the numeric comparison and math
+    templates only.
+    """
 
     _escape = staticmethod(sql_escape)
 
-    @staticmethod
-    def _resolve_arg(token: str, var_bindings: Dict[str, tuple]) -> str:
-        """Resolve a SWRL argument to a SQL expression.
+    def __init__(self, dialect: str = "databricks") -> None:
+        self._dialect = dialect
+        self._builtin_filters = SWRLSQLBuiltinFilters(dialect)
 
-        Variables (``?x``) are resolved via *var_bindings*.  Literals are
-        converted to SQL literal syntax.
-        """
-        if not SWRLBuiltinRegistry.is_literal(token):
-            stripped = token.lstrip("?")
-            if stripped in var_bindings or token in var_bindings:
-                key = token if token in var_bindings else stripped
-                a, c = var_bindings[key]
-                return f"{a}.{c}"
-            return f"'{stripped}'"
-        return SWRLBuiltinRegistry.literal_sql(token)
-
-    @staticmethod
-    def _build_builtin_filters(
+    def _append_rule_filters(
+        self,
+        where_parts: List[str],
         builtin_atoms: List[Dict],
+        negated_atoms: List[Dict],
+        table: str,
         var_bindings: Dict[str, tuple],
-    ) -> List[str]:
-        filters: List[str] = []
-        for atom in builtin_atoms:
-            bi = SWRLBuiltinRegistry.get(atom["name"])
-            if bi is None:
-                continue
-            resolved = [
-                SWRLSQLTranslator._resolve_arg(a, var_bindings) for a in atom["args"]
-            ]
-            if bi.category == "comparison" and bi.arity == 2:
-                expr = bi.sql_template.format(*resolved[:2])
-                filters.append(expr)
-            elif bi.category == "string" and bi.arity == 2:
-                expr = bi.sql_template.format(*resolved[:2])
-                filters.append(expr)
-            elif bi.category == "math" and bi.arity == 3:
-                expr = bi.sql_template.format(*resolved[:2])
-                result_ref = SWRLSQLTranslator._resolve_arg(
-                    atom["args"][2],
-                    var_bindings,
-                )
-                filters.append(f"{result_ref} = ({expr})")
-            elif bi.category == "date" and bi.arity == 2:
-                expr = bi.sql_template.format(*resolved[:2])
-                filters.append(expr)
-            elif bi.arity <= len(resolved):
-                expr = bi.sql_template.format(*resolved[: bi.arity])
-                filters.append(expr)
-        return filters
+        base_uri: str,
+        uri_map: Dict,
+        alias_factory,
+    ) -> None:
+        builtin_filters = self._builtin_filters.build(builtin_atoms, var_bindings)
+        if builtin_filters:
+            where_parts.extend(builtin_filters)
+        negated_sql = self._build_negated_atoms(
+            negated_atoms,
+            table,
+            var_bindings,
+            base_uri,
+            uri_map,
+            alias_factory,
+        )
+        if negated_sql:
+            where_parts.extend(negated_sql)
+
+    def _var_class_map(
+        self, class_atoms: List[Dict], base_uri: str, uri_map: Dict
+    ) -> Dict[str, str]:
+        return {
+            a["args"][0]: self._escape(
+                SWRLParser.resolve_uri(a["name"], base_uri, uri_map),
+            )
+            for a in class_atoms
+        }
 
     @staticmethod
     def _build_focus_filter(focus: Optional[Dict], var_bindings: Dict[str, tuple]):
@@ -163,11 +161,7 @@ class SWRLSQLTranslator:
         negated_atoms = part.negated_atoms
         cons_atoms = part.consequent_atoms
 
-        var_class: Dict[str, str] = {}
-        for a in class_atoms:
-            var_class[a["args"][0]] = self._escape(
-                SWRLParser.resolve_uri(a["name"], base_uri, uri_map),
-            )
+        var_class = self._var_class_map(class_atoms, base_uri, uri_map)
 
         violation_var = SWRLParser.determine_violation_subject(cons_atoms, class_atoms)
         if not violation_var or violation_var not in var_class:
@@ -250,16 +244,10 @@ class SWRLSQLTranslator:
                 else:
                     var_bindings[new_var] = (a_prop, col)
 
-        # -- Built-in filter atoms (Phase 1) ----------------------------------
-        builtin_filters = SWRLSQLTranslator._build_builtin_filters(
+        # -- Built-in filters and negated antecedent atoms --------------------
+        self._append_rule_filters(
+            where_parts,
             builtin_atoms,
-            var_bindings,
-        )
-        if builtin_filters:
-            where_parts.extend(builtin_filters)
-
-        # -- Negated antecedent atoms (Phase 3: closed-world) ----------------
-        negated_sql = SWRLSQLTranslator._build_negated_atoms(
             negated_atoms,
             table,
             var_bindings,
@@ -267,8 +255,6 @@ class SWRLSQLTranslator:
             uri_map,
             _next,
         )
-        if negated_sql:
-            where_parts.extend(negated_sql)
 
         disconnected_class_uris: Dict[str, str] = {}
         for ca in class_atoms:
@@ -378,11 +364,7 @@ class SWRLSQLTranslator:
         if not class_atoms:
             return None
 
-        var_class: Dict[str, str] = {}
-        for a in class_atoms:
-            var_class[a["args"][0]] = self._escape(
-                SWRLParser.resolve_uri(a["name"], base_uri, uri_map),
-            )
+        var_class = self._var_class_map(class_atoms, base_uri, uri_map)
 
         violation_var = SWRLParser.determine_violation_subject(cons_atoms, class_atoms)
         if not violation_var or violation_var not in var_class:
@@ -452,14 +434,9 @@ class SWRLSQLTranslator:
                 else:
                     var_bindings[new_var] = (a_prop, col)
 
-        builtin_filters = SWRLSQLTranslator._build_builtin_filters(
+        self._append_rule_filters(
+            where_parts,
             builtin_atoms,
-            var_bindings,
-        )
-        if builtin_filters:
-            where_parts.extend(builtin_filters)
-
-        negated_sql = SWRLSQLTranslator._build_negated_atoms(
             negated_atoms,
             table,
             var_bindings,
@@ -467,8 +444,6 @@ class SWRLSQLTranslator:
             uri_map,
             _next,
         )
-        if negated_sql:
-            where_parts.extend(negated_sql)
 
         lines = [f"SELECT COUNT(DISTINCT {_ref(violation_var)}) AS cnt"]
         lines.append(f"FROM {from_part}")
@@ -483,26 +458,19 @@ class SWRLSQLTranslator:
         Finds rows where the antecedent matches AND the consequent is
         missing, then inserts the missing consequent triples.
         """
-        antecedent = params.get("antecedent", "")
-        consequent = params.get("consequent", "")
         base_uri = params.get("base_uri", "")
         uri_map = params.get("uri_map") or {}
 
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
-        if not ante_atoms or not cons_atoms:
+        part = SWRLParser.partition_rule_atoms(params)
+        if part is None:
             return None
+        class_atoms = part.class_atoms
+        prop_atoms = part.prop_atoms
+        builtin_atoms = part.builtin_atoms
+        negated_atoms = part.negated_atoms
+        cons_atoms = part.consequent_atoms
 
-        class_atoms = [a for a in ante_atoms if a["arity"] == 1]
-        prop_atoms = [a for a in ante_atoms if a["arity"] == 2]
-        if not class_atoms:
-            return None
-
-        var_class: Dict[str, str] = {}
-        for a in class_atoms:
-            var_class[a["args"][0]] = self._escape(
-                SWRLParser.resolve_uri(a["name"], base_uri, uri_map),
-            )
+        var_class = self._var_class_map(class_atoms, base_uri, uri_map)
 
         primary_var = class_atoms[0]["args"][0]
         primary_props = [p for p in prop_atoms if p["args"][0] == primary_var]
@@ -554,12 +522,50 @@ class SWRLSQLTranslator:
             else:
                 var_bindings[obj_var] = (a_prop, "object")
 
+        self._append_rule_filters(
+            where_parts,
+            builtin_atoms,
+            negated_atoms,
+            table,
+            var_bindings,
+            base_uri,
+            uri_map,
+            _next,
+        )
+
+        stmts = self._materialization_inserts(
+            table,
+            cons_atoms,
+            base_uri,
+            uri_map,
+            var_bindings,
+            from_part,
+            join_parts,
+            where_parts,
+            _next,
+            _ref,
+        )
+        return ";\n".join(stmts) if stmts else None
+
+    def _materialization_inserts(
+        self,
+        table: str,
+        cons_atoms: List[Dict],
+        base_uri: str,
+        uri_map: Dict,
+        var_bindings: Dict[str, tuple],
+        from_part: str,
+        join_parts: List[str],
+        where_parts: List[str],
+        alias_factory,
+        ref,
+    ) -> List[str]:
         stmts: List[str] = []
         for atom in cons_atoms:
             c_uri = self._escape(
                 SWRLParser.resolve_uri(atom["name"], base_uri, uri_map),
             )
-            c_alias = _next()
+            c_alias = alias_factory()
             if atom["arity"] == 1:
                 var = atom["args"][0]
                 if var not in var_bindings:
@@ -568,11 +574,11 @@ class SWRLSQLTranslator:
                     f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
                     f"WHERE {c_alias}.predicate = '{RDF_TYPE}' "
                     f"AND {c_alias}.object = '{c_uri}' "
-                    f"AND {c_alias}.subject = {_ref(var)})"
+                    f"AND {c_alias}.subject = {ref(var)})"
                 )
                 stmts.append(
                     f"INSERT INTO {table} (subject, predicate, object)\n"
-                    f"SELECT DISTINCT {_ref(var)}, '{RDF_TYPE}', '{c_uri}'\n"
+                    f"SELECT DISTINCT {ref(var)}, '{RDF_TYPE}', '{c_uri}'\n"
                     f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
                     f"WHERE {' AND '.join(where_parts)}\n"
                     f"  AND {not_exists}"
@@ -584,21 +590,20 @@ class SWRLSQLTranslator:
                 not_exists = (
                     f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
                     f"WHERE {c_alias}.predicate = '{c_uri}' "
-                    f"AND {c_alias}.subject = {_ref(var_s)}"
+                    f"AND {c_alias}.subject = {ref(var_s)}"
                 )
                 if var_o in var_bindings:
-                    not_exists += f" AND {c_alias}.object = {_ref(var_o)}"
+                    not_exists += f" AND {c_alias}.object = {ref(var_o)}"
                 not_exists += ")"
-                obj_expr = _ref(var_o) if var_o in var_bindings else "''"
+                obj_expr = ref(var_o) if var_o in var_bindings else "''"
                 stmts.append(
                     f"INSERT INTO {table} (subject, predicate, object)\n"
-                    f"SELECT DISTINCT {_ref(var_s)}, '{c_uri}', {obj_expr}\n"
+                    f"SELECT DISTINCT {ref(var_s)}, '{c_uri}', {obj_expr}\n"
                     f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
                     f"WHERE {' AND '.join(where_parts)}\n"
                     f"  AND {not_exists}"
                 )
-
-        return ";\n".join(stmts) if stmts else None
+        return stmts
 
     def build_inference_sql(self, table: str, params: Dict) -> Optional[str]:
         """Build SELECT SQL that returns inferred consequent triples.
@@ -613,26 +618,16 @@ class SWRLSQLTranslator:
         base_uri = params.get("base_uri", "")
         uri_map = params.get("uri_map") or {}
 
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
-        if not ante_atoms or not cons_atoms:
+        part = SWRLParser.partition_rule_atoms(params)
+        if part is None:
             return None
+        class_atoms = part.class_atoms
+        prop_atoms = part.prop_atoms
+        builtin_atoms = part.builtin_atoms
+        negated_atoms = part.negated_atoms
+        cons_atoms = part.consequent_atoms
 
-        class_atoms = [
-            a for a in ante_atoms if a["arity"] == 1 and not a.get("builtin")
-        ]
-        prop_atoms = [
-            a for a in ante_atoms if a["arity"] == 2 and not a.get("builtin")
-        ]
-        builtin_atoms = [a for a in ante_atoms if a.get("builtin")]
-        if not class_atoms:
-            return None
-
-        var_class: Dict[str, str] = {}
-        for a in class_atoms:
-            var_class[a["args"][0]] = self._escape(
-                SWRLParser.resolve_uri(a["name"], base_uri, uri_map),
-            )
+        var_class = self._var_class_map(class_atoms, base_uri, uri_map)
 
         primary_var = class_atoms[0]["args"][0]
 
@@ -705,9 +700,16 @@ class SWRLSQLTranslator:
                 else:
                     var_bindings[new_var] = (a_prop, new_col)
 
-        builtin_filters = self._build_builtin_filters(builtin_atoms, var_bindings)
-        if builtin_filters:
-            where_parts.extend(builtin_filters)
+        self._append_rule_filters(
+            where_parts,
+            builtin_atoms,
+            negated_atoms,
+            table,
+            var_bindings,
+            base_uri,
+            uri_map,
+            _next,
+        )
 
         focus_filter = self._build_focus_filter(params.get("focus"), var_bindings)
         if focus_filter is False:

@@ -142,3 +142,25 @@ button.shacl-chip:focus-visible {
 .shacl-gauge--warning { color: var(--db-status-warning); }
 .shacl-gauge--danger  { color: var(--db-status-danger); }
 .shacl-gauge--muted   { color: var(--db-status-draft); }
+
+/* Dedicated scrollport: global .task-activity-log uses overlay scrollbars. */
+#shaclFacetsProgressLog {
+    min-height: 6.5rem;
+    max-height: 9.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--db-text-muted) var(--db-surface-warm);
+}
+#shaclFacetsProgressLog::-webkit-scrollbar {
+    width: 8px;
+}
+#shaclFacetsProgressLog::-webkit-scrollbar-track {
+    background: var(--db-line-soft);
+    border-radius: var(--db-radius-control);
+}
+#shaclFacetsProgressLog::-webkit-scrollbar-thumb {
+    background: var(--db-text-muted);
+    border-radius: var(--db-radius-control);
+}

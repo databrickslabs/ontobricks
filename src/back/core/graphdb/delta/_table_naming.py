@@ -11,6 +11,7 @@ _SUFFIX_DATA = "_data"
 _SUFFIX_INFERRED = "_inferred"
 _SUFFIX_GRAPH = "_graph"
 _SUFFIX_ANALYTICS = "_analytics"
+_SUFFIX_DQ = "_dq"
 _SUFFIX_ADJ_OUT = "_adj_out"
 _SUFFIX_ADJ_IN = "_adj_in"
 _SUFFIX_ENTITY_SEARCH = "_entity_search"
@@ -84,6 +85,32 @@ def analytics_snapshot_fqn(domain: Any, settings: Any = None) -> str:
         return ""
     cat, sch, base = view.split(".", 2)
     return f"{cat}.{sch}.{base}{_SUFFIX_ANALYTICS}"
+
+
+def _sanitize_uc_token(value: str) -> str:
+    """Keep a Unity Catalog identifier fragment alphanumeric-plus-underscore."""
+    token = re.sub(r"[^a-z0-9_]+", "_", (value or "").strip().lower())
+    return token.strip("_")
+
+
+def dq_snapshot_fqn(domain: Any, settings: Any = None, task_id: str = "") -> str:
+    """Disposable Delta TABLE for one bulk Data Quality run.
+
+    Named off the R2RML gateway stem plus a sanitized *task_id* so two
+    concurrent runs never share a table. Exists only for the duration of
+    the run: checks scan this copy instead of re-expanding the VIEW.
+    """
+    try:
+        view = view_fqn(domain, settings)
+    except Exception:  # noqa: BLE001
+        return ""
+    if not view or view.count(".") != 2:
+        return ""
+    token = _sanitize_uc_token(task_id)
+    if not token:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_DQ}_{token}"
 
 
 def adj_out_fqn(domain: Any, settings: Any = None) -> str:

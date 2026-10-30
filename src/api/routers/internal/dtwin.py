@@ -1952,6 +1952,42 @@ async def dtwin_nodes_shacl(
     return await NodeShaclService.evaluate(domain, settings, entity_uri=entity_uri)
 
 
+@router.post("/nodes/shacl/start")
+async def dtwin_nodes_shacl_start(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Start an entity SHACL facet check as a TaskManager job (live activity log)."""
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
+    assert_domain_graph_read(request)
+    data = await request.json()
+    entity_uri = str((data or {}).get("entity_uri") or "").strip()
+    if not entity_uri:
+        raise ValidationError("entity_uri is required")
+
+    domain = get_domain(session_mgr)
+    domain_snap = DomainSnapshot(domain)
+    triplestore_table = _dataquality_table(domain, settings)
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Entity Data Quality Checks",
+        task_type="node_shacl_facets",
+        steps=[{"name": "running", "description": "Running data quality checks"}],
+    )
+
+    def run_check():
+        DigitalTwin.run_node_shacl_task(
+            tm, task.id, settings, domain_snap, entity_uri, triplestore_table
+        )
+
+    threading.Thread(target=run_check, daemon=True).start()
+    return {"success": True, "task_id": task.id}
+
+
 # Session key for the Graph Chat cache (history + limit + pending actions).
 # Shape: {
 #   "limit": int,

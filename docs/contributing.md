@@ -7,11 +7,11 @@ This is the **workflow** guide. Deep dives live next to it:
 | Need | Document |
 |------|----------|
 | Dependencies, full test campaign, permissions / SDK | [development.md](development.md) |
-| Code map, layering, logging, error hierarchy | [code_organization.md](code_organization.md) |
+| Code map, layering, logging, error hierarchy | [development.md — Code map](development.md#code-map) |
 | Long-form coding rules and Fowler catalog | [src/.coding_rules.md](../src/.coding_rules.md) |
-| Reviewer pass (numbered gates) | [PR_REVIEW_CHECKLIST.md](PR_REVIEW_CHECKLIST.md) |
-| Deploy / Databricks Apps | [deployment.md](deployment.md), [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md) |
-| First-run operator setup | [get-started.md](get-started.md) |
+| Reviewer pass (numbered gates) | [PR_REVIEW_CHECKLIST.md](../.github/PR_REVIEW_CHECKLIST.md) |
+| Deploy / Databricks Apps | [deployment.md](deployment.md), [Deployment checklist](deployment.md#deployment-checklist) |
+| First-run operator setup | [getting-started.md](getting-started.md) |
 | Changelog format | [changelogs/README.md](../changelogs/README.md) |
 
 GitHub also looks at the repo-root [CONTRIBUTING.md](../CONTRIBUTING.md), which points here.
@@ -74,7 +74,7 @@ Be respectful and professional. OntoBricks is a Databricks Labs project: explora
 
 ## 2. Prerequisites
 
-- **Python 3.10+** (`requires-python` in `pyproject.toml`)
+- **Python 3.11+** (`requires-python` in `pyproject.toml`)
 - **[uv](https://docs.astral.sh/uv/)** for deps and the lockfile
 - **Git**
 - Optional for local Databricks calls: [Databricks CLI](https://docs.databricks.com/dev-tools/cli/index.html) (`databricks auth login`)
@@ -121,7 +121,7 @@ cp .env.example .env
 
 If the workspace blocks PAT generation, leave `DATABRICKS_TOKEN` empty and use CLI auth (`databricks auth login`). The app reads `~/.databrickscfg`; set `DATABRICKS_CONFIG_PROFILE` for a non-default profile.
 
-Operator-facing Databricks, Lakebase, warehouse, and volume setup is in [get-started.md](get-started.md).
+Operator-facing Databricks, Lakebase, warehouse, and volume setup is in [getting-started.md](getting-started.md).
 
 ### Run locally
 
@@ -178,7 +178,7 @@ src/
 | LLM agent | `src/agents/<name>/` + SPEC + eval dataset |
 | Shared pure helper | `back/core/helpers/` |
 
-`service.py` files are legacy. Prefer routes → domain class. New subpackages: follow the checklist in [code_organization.md](code_organization.md) §11.3 (and the `adding-subpackage` skill).
+`service.py` files are legacy. Prefer routes → domain class. New subpackages: follow the checklist in [development.md — Code map](development.md#code-map) (and the `adding-subpackage` skill).
 
 ---
 
@@ -273,12 +273,11 @@ Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool w
 
 **Required in the PR**
 
-1. `.planning/<slug>/SPEC.md` (prompt, tools, success/failure, metrics).
-2. Eval dataset: ≥ **20** examples for a new agent, ≥ **10** for a material change (`tests/eval/datasets/<agent>/` and/or `.planning/<slug>/eval/dataset.jsonl` as the gate currently expects).
-3. Linked **MLflow eval run URI** in the PR body.
-4. Passing eval (judge ≥ baseline + delta) **or** an explicit reviewer waiver.
+1. Eval dataset: ≥ **20** examples for a new agent, ≥ **10** for a material change (`tests/eval/datasets/<agent>/baseline.jsonl`).
+2. Linked **MLflow eval run URI** in the PR body.
+3. Passing eval (judge ≥ baseline + delta) **or** an explicit reviewer waiver.
 
-No new agent without SPEC. No prompt/tool tweak without an eval delta. Trace every Foundation Model API path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
+SPEC.md and PLAN.md live under gitignored `.planning/` (local author drafts). No new agent without a local SPEC and a committed eval dataset. No prompt/tool tweak without an eval delta. Trace every Foundation Model API path (`@trace_agent` / `@trace_llm` / `@trace_tool` in `src/agents/tracing.py`). Judge model must not be the same endpoint as the agent.
 
 ---
 
@@ -372,7 +371,7 @@ Lowercase, hyphens, no spaces. Short-lived. Special: `release/<version>`, `hotfi
 
 ## 14. Pull requests
 
-Template: [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md). Reviewer list: [PR_REVIEW_CHECKLIST.md](PR_REVIEW_CHECKLIST.md). CODEOWNERS: `@databrickslabs/ontobricks-maintain`.
+Template: [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md). Reviewer list: [PR_REVIEW_CHECKLIST.md](../.github/PR_REVIEW_CHECKLIST.md). CODEOWNERS: `@databrickslabs/ontobricks-maintain`.
 
 ### Before you open
 
@@ -387,7 +386,7 @@ Confirm `uv.lock` is untouched.
 ### PR bar
 
 - **Title**: Conventional Commit (`feat(ontology): add OWL import from URL`).
-- **Body**: what / why / how to test; screenshots for UI; plan path (`.planning/<slug>/PLAN.md`) when used.
+- **Body**: what / why / how to test; screenshots for UI; local plan path (`.planning/<slug>/PLAN.md`, gitignored) when used.
 - **Size**: one concern. Split large features.
 - **Author checklist** (from the template): tests for behaviour changes, changelog, agents SPEC/eval if applicable, no `gsd-*` references.
 - **Reviews**: at least one approval; address comments. Reviewers cite checklist numbers (`#3: missing OntoBricksError subclass`).
@@ -398,8 +397,8 @@ After merge: delete the branch; pull `main`.
 
 ## 15. Documentation
 
-- User-facing behaviour → [user-guide.md](user-guide.md), [features.md](features.md), examples.
-- Structure / APIs → [architecture.md](architecture.md), [api.md](api.md), [code_organization.md](code_organization.md).
+- User-facing behaviour → [user-guide.md](user-guide.md) ([feature inventory](user-guide.md#feature-inventory)), examples.
+- Structure / APIs → [architecture.md](architecture.md), [api.md](api.md), [development.md — Code map](development.md#code-map).
 - New or dropped Python deps / CDN libs → table in [development.md](development.md).
 - Public Python symbols added/removed/renamed → Sphinx under `docs/sphinx/` (gitignored sources; build with `scripts/build_docs.sh`). New subpackages need a matching `.rst` and toctree entry.
 - Docstrings: Google or NumPy style, **English**.
@@ -419,7 +418,7 @@ Typical release flow:
 3. Release notes from `changelogs/vX.X.X/` using `releases/ReleaseNotes_V0.2.0.md` as template → `releases/ReleaseNotes_Vx.x.x.md`.
 4. Tag `vX.X.X`, GitHub Release, then deploy (`make deploy` / DAB — [deployment.md](deployment.md)).
 
-Operators on 0.7.x → 0.8: [update_to_0.8.md](../update_to_0.8.md).
+Operators on 0.8.x → 0.9: [update_to_0.9.0.md](../update_to_0.9.0.md). Patch notes: [Release notes V0.9.1](../releases/ReleaseNotes_V0.9.1.md).
 
 ---
 
@@ -449,6 +448,6 @@ Contributions are licensed under the project [Databricks License](../LICENSE.txt
 
 - Bugs and features: GitHub Issues (search first).
 - Design / “how should this work”: GitHub Discussions if enabled, otherwise an issue.
-- In-repo architecture questions: [code_organization.md](code_organization.md) and [architecture.md](architecture.md).
+- In-repo architecture questions: [development.md — Code map](development.md#code-map) and [architecture.md](architecture.md).
 
 Thank you for contributing to OntoBricks.

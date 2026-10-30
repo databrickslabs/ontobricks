@@ -330,7 +330,7 @@ All dependencies use permissive open-source licenses compatible with commercial 
 
 ### Version Compatibility
 
-- **Python**: ≥3.10
+- **Python**: ≥3.11 (app `pyproject.toml`; Pillow 13). The MCP server package still declares ≥3.10.
 - **Node.js**: Not required (all frontend assets via CDN)
 - **Browser**: Modern browsers (Chrome, Firefox, Safari, Edge)
 
@@ -879,7 +879,7 @@ A user's effective role is determined by combining all three layers.
 | **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can create domains in the registry, view, edit, build, and manage the Settings page including the permission list. |
 | **Builder** | In-app permission list | Can view, edit, **import and manage data sources**, and **build graph viewers**. Cannot change shared Settings (SQL Warehouse, Teams, branding). |
 | **Editor** | In-app permission list | Can view all pages and modify assigned domains, ontologies, mappings, and **data sources**. Cannot create a domain (Admin only). **Cannot build graph viewers.** Cannot change shared Settings. |
-| **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
+| **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results; can **search / expand Explorer** and **use Graph Chat** (those POSTs only read). Other writes (POST, PUT, PATCH, DELETE) stay blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
 
 Role hierarchy: `admin > builder > editor > viewer > none`.
@@ -930,7 +930,7 @@ Request arrives
 | Condition | Action |
 |-----------|--------|
 | `role = none` | JSON 403 (for fetch/XHR) or redirect to `/access-denied` (for page navigation). |
-| `role = viewer` + write method (POST/PUT/PATCH/DELETE) | JSON 403: "Viewer role does not allow write operations". |
+| `role = viewer` + write method (POST/PUT/PATCH/DELETE) | JSON 403: "Viewer role does not allow write operations", except POST to the exact read-only graph paths `/dtwin/sync/filter`, `/dtwin/assistant/chat`, `/dtwin/assistant/chat/stream`, and `/dtwin/graphql/execute`. PUT/PATCH/DELETE on those paths stay blocked. |
 | `role != admin` + path starts with `/settings` | JSON 403 or redirect to `/`, except an explicit GET allow-list (registry/warehouse status **and** Unity Catalog catalog/schema browse used by **Add Data Source**). Settings writes and warehouse selection stay admin-only. |
 | Digital twin build + effective domain role < `builder` | JSON 403: "Only builders and admins can build a graph viewer". |
 | Otherwise | Request proceeds normally. |

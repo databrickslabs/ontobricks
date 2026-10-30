@@ -448,6 +448,15 @@ class TestAdminOnlyPaths:
 # ------------------------------------------------------------------
 
 
+# Exact POST paths a Viewer may use (must match _VIEWER_READ_ONLY_POSTS).
+_VIEWER_READ_ONLY_POST_PATHS = (
+    "/dtwin/sync/filter",
+    "/dtwin/assistant/chat",
+    "/dtwin/assistant/chat/stream",
+    "/dtwin/graphql/execute",
+)
+
+
 class TestDomainScopedRoutes:
     """App users without a team entry on a domain are blocked there."""
 
@@ -477,6 +486,66 @@ class TestDomainScopedRoutes:
     def test_app_user_editor_can_write(self):
         _, _, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_EDITOR, method="POST", path="/ontology/"
+        )
+        assert result.get("passed")
+
+    @pytest.mark.parametrize("path", _VIEWER_READ_ONLY_POST_PATHS)
+    def test_viewer_can_post_to_read_only_graph_endpoints(self, path):
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="POST", path=path
+        )
+        assert result.get("passed")
+
+    @pytest.mark.parametrize("path", _VIEWER_READ_ONLY_POST_PATHS)
+    def test_viewer_can_get_read_only_graph_endpoints(self, path):
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="GET", path=path
+        )
+        assert result.get("passed")
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/dtwin/sync/start",
+            "/dtwin/sync/load",
+            "/dtwin/nodes/action/request",
+            "/dtwin/nodes/action/confirm",
+            "/dtwin/nodes/action/cancel",
+            "/dtwin/sync/filter/extra",
+            "/dtwin/assistant/chat/extra",
+            "/dtwin/graphql/execute/extra",
+            "/dtwin/execute",
+            "/dtwin/assistant/history/limit",
+        ],
+    )
+    def test_viewer_still_cannot_post_elsewhere_under_dtwin(self, path):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="POST", path=path
+        )
+        assert resp.status_code == 403 and not result.get("passed")
+
+    @pytest.mark.parametrize("path", _VIEWER_READ_ONLY_POST_PATHS)
+    @pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+    def test_read_only_paths_accept_post_only(self, method, path):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method=method, path=path
+        )
+        assert resp.status_code == 403 and not result.get("passed")
+
+    @pytest.mark.parametrize("path", _VIEWER_READ_ONLY_POST_PATHS)
+    def test_non_member_still_cannot_use_read_only_posts(self, path):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_NONE, method="POST", path=path
+        )
+        assert resp.status_code == 403 and not result.get("passed")
+
+    @pytest.mark.parametrize(
+        "path",
+        ["/dtwin/sync/load", "/dtwin/nodes/action/request", "/dtwin/execute"],
+    )
+    def test_editor_can_still_post_graph_writes(self, path):
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_EDITOR, method="POST", path=path
         )
         assert result.get("passed")
 
@@ -1239,6 +1308,60 @@ class TestDataRefreshNotStatusGated:
             assert result.get("passed"), (
                 f"builder should reach {path} on DRAFT version"
             )
+
+
+# ------------------------------------------------------------------
+# _viewer_write_blocked — pure function unit tests
+# ------------------------------------------------------------------
+
+
+class TestViewerWriteBlocked:
+    """Direct unit tests for the Viewer write-gate classifier."""
+
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        from shared.fastapi.main import (
+            _VIEWER_BLOCKED_METHODS,
+            _VIEWER_READ_ONLY_POSTS,
+            _viewer_write_blocked,
+        )
+
+        self._blocked_methods = _VIEWER_BLOCKED_METHODS
+        self._posts = _VIEWER_READ_ONLY_POSTS
+        self._fn = _viewer_write_blocked
+
+    def test_allowlist_matches_documented_graph_paths(self):
+        assert self._posts == frozenset(_VIEWER_READ_ONLY_POST_PATHS)
+
+    @pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS"])
+    @pytest.mark.parametrize(
+        "path",
+        list(_VIEWER_READ_ONLY_POST_PATHS) + ["/dtwin/sync/load"],
+    )
+    def test_safe_methods_never_blocked(self, method, path):
+        assert not self._fn(method, path)
+
+    @pytest.mark.parametrize("path", _VIEWER_READ_ONLY_POST_PATHS)
+    def test_post_on_allowlist_not_blocked(self, path):
+        assert not self._fn("POST", path)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/dtwin/sync/load",
+            "/dtwin/nodes/action/request",
+            "/dtwin/sync/filter/extra",
+            "/dtwin/graphql/execute/extra",
+        ],
+    )
+    def test_post_off_allowlist_blocked(self, path):
+        assert self._fn("POST", path)
+
+    @pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+    @pytest.mark.parametrize("path", _VIEWER_READ_ONLY_POST_PATHS)
+    def test_non_post_writes_on_allowlist_blocked(self, method, path):
+        assert method in self._blocked_methods
+        assert self._fn(method, path)
 
 
 # ------------------------------------------------------------------

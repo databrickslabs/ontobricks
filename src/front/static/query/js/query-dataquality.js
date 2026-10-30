@@ -248,7 +248,11 @@ window.DQExecModule = {
         document.getElementById('dqExecProgressArea').classList.remove('d-none');
         document.getElementById('dqExecProgressBar').style.width = '0%';
         document.getElementById('dqExecProgressBar').textContent = '0%';
+        document.getElementById('dqExecProgressBar').classList.add('progress-bar-animated', 'progress-bar-striped');
         document.getElementById('dqExecProgressStep').textContent = 'Starting data quality checks...';
+        const spinner = document.querySelector('#dqExecProgressArea .spinner-border');
+        if (spinner) spinner.classList.remove('d-none');
+        this._renderProgressLog({ log_entries: [], status: 'pending' });
 
         const payload = {
             violation_limit: parseInt(document.getElementById('dqViolationLimit')?.value || '10'),
@@ -281,7 +285,7 @@ window.DQExecModule = {
 
     _pollTask(taskId) {
         if (this._pollTimer) clearInterval(this._pollTimer);
-        this._pollTimer = setInterval(async () => {
+        const tick = async () => {
             try {
                 const resp = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
                 const data = await resp.json();
@@ -289,28 +293,74 @@ window.DQExecModule = {
                 if (!task) return;
 
                 if (task.status === 'running' || task.status === 'pending') {
-                    const pct = task.progress || 0;
-                    const bar = document.getElementById('dqExecProgressBar');
-                    bar.style.width = pct + '%';
-                    bar.textContent = pct + '%';
-                    document.getElementById('dqExecProgressStep').textContent = task.message || 'Running...';
+                    this._updateProgressChrome(task);
+                    this._renderProgressLog(task);
                 } else if (task.status === 'completed') {
                     clearInterval(this._pollTimer);
                     this._pollTimer = null;
-                    this._showResults(task.result || {});
+                    this._updateProgressChrome(task);
+                    this._renderProgressLog(task);
+                    this._showResults(task.result || {}, { keepProgress: true });
                 } else if (task.status === 'failed') {
                     clearInterval(this._pollTimer);
                     this._pollTimer = null;
+                    this._renderProgressLog(task);
                     this._showError(task.message || 'Checks failed');
                 }
             } catch (e) {
                 console.error('[DQExec] Poll error:', e);
             }
-        }, 1500);
+        };
+        tick();
+        this._pollTimer = setInterval(tick, 1500);
     },
 
-    _showResults(result) {
-        document.getElementById('dqExecProgressArea').classList.add('d-none');
+    _updateProgressChrome(task) {
+        const pct = task.progress || 0;
+        const bar = document.getElementById('dqExecProgressBar');
+        if (bar) {
+            bar.style.width = pct + '%';
+            bar.textContent = pct + '%';
+            if (task.status === 'completed') {
+                bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+            }
+        }
+        const step = document.getElementById('dqExecProgressStep');
+        if (step) step.textContent = task.message || 'Running...';
+        const spinner = document.querySelector('#dqExecProgressArea .spinner-border');
+        if (spinner && task.status === 'completed') spinner.classList.add('d-none');
+    },
+
+    _renderProgressLog(task) {
+        const el = document.getElementById('dqExecProgressLog');
+        if (!el) return;
+        if (window.TaskProgressUI && typeof TaskProgressUI.renderActivityLog === 'function') {
+            TaskProgressUI.renderActivityLog(el, task);
+            return;
+        }
+        const entries = (task && task.log_entries) || [];
+        if (!entries.length) {
+            el.innerHTML = '<div class="small text-muted">Waiting for activity…</div>';
+            return;
+        }
+        const active = task.status === 'running' || task.status === 'pending';
+        el.innerHTML = entries.map((entry, idx) => {
+            const running = active && idx === entries.length - 1;
+            const icon = running
+                ? '<span class="spinner-border spinner-border-sm text-primary flex-shrink-0" role="status"></span>'
+                : '<i class="bi bi-check-circle-fill text-success flex-shrink-0 mt-1"></i>';
+            const text = String((entry && entry.message) || '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return '<div class="task-activity-row d-flex align-items-start gap-2 mb-1 small">' +
+                icon + '<span class="flex-grow-1">' + text + '</span></div>';
+        }).join('');
+        el.scrollTop = el.scrollHeight;
+    },
+
+    _showResults(result, opts) {
+        const keepProgress = opts && opts.keepProgress;
+        const area = document.getElementById('dqExecProgressArea');
+        if (area && !keepProgress) area.classList.add('d-none');
         this._setDimensionsDisabled(false);
 
         const reportTab = document.getElementById('dq-tab-report');
@@ -578,7 +628,6 @@ window.DQExecModule = {
     },
 
     _showError(msg) {
-        document.getElementById('dqExecProgressArea').classList.add('d-none');
         this._setDimensionsDisabled(false);
         const reportTab = document.getElementById('dq-tab-report');
         if (reportTab) bootstrap.Tab.getOrCreateInstance(reportTab).show();

@@ -183,40 +183,101 @@ class TestAdjacencyRefresh:
 
 
 class TestDataQualityTask:
-    def _run(self, store, *, checks_exc=None, **kw):
+    def _domain(self):
+        return SimpleNamespace(
+            info={"name": "Dom"},
+            current_version=1,
+            delta={"catalog": "cat", "schema": "sch"},
+        )
+
+    def _run(
+        self,
+        store,
+        *,
+        checks_exc=None,
+        total=4,
+        table="c.s.v",
+        snapshot_ok=True,
+        snapshot_exc=None,
+        domain=None,
+        **kw,
+    ):
         tm = MagicMock()
         get_graphdb = MagicMock(return_value=store)
+        statements = []
+        domain = domain if domain is not None else self._domain()
+
+        def _client(dom, settings=None, *, for_write=False):
+            if not snapshot_ok:
+                return None
+            return SimpleNamespace(execute_statement=statements.append)
+
+        def _ctas(client, view_fqn, table_fqn):
+            if snapshot_exc:
+                raise snapshot_exc
+            client.execute_statement(f"CTAS {table_fqn} FROM {view_fqn}")
+
         with patch("back.core.graphdb.get_graphdb", get_graphdb), patch.object(
             DigitalTwin, "run_sql_checks", side_effect=checks_exc
-        ) as checks:
+        ) as checks, patch(
+            "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+            _client,
+        ), patch(
+            "back.core.graphdb.delta.materialize.materialize_from_view",
+            _ctas,
+        ), patch(
+            "back.core.graphdb.delta.materialize.drop_relation",
+            lambda client, fqn, *, kind: statements.append(f"DROP {fqn}"),
+        ):
             TwinBackgroundTasks.run_data_quality_task(
-                tm, "t1", "settings", "snap", ["shape"], "c.s.v", 4,
+                tm, "t1", "settings", domain, ["shape"], table, total,
                 swrl_rules=["r"], ontology_dict={"o": 1}, decision_tables=["d"],
                 aggregate_rules=["a"], violation_limit=50, **kw,
             )
-        return tm, get_graphdb, checks
+        return tm, get_graphdb, checks, statements
 
-    def test_checks_run_on_the_view_store(self):
+    def test_checks_run_on_a_task_scoped_snapshot_when_there_are_several(self):
         store = MagicMock()
-        tm, get_graphdb, checks = self._run(store)
+        tm, get_graphdb, checks, statements = self._run(store)
 
         tm.start_task.assert_called_once_with("t1", "Running 4 data quality checks...")
-        get_graphdb.assert_called_once_with("snap", "settings", engine="view")
+        tm.update_progress.assert_any_call("t1", 0, "Materializing DQ snapshot...")
+        get_graphdb.assert_called_once()
+        assert get_graphdb.call_args.args[1] == "settings"
+        assert get_graphdb.call_args.kwargs == {"engine": "view"}
         args, kwargs = checks.call_args
         assert args[1].id == "t1"
-        assert args[2:5] == (["shape"], "c.s.v", store)
+        assert args[2] == ["shape"]
+        assert args[3] == "cat.sch.triplestore_dom_V1_dq_t1"
+        assert args[4] is store
         assert args[6] == 4
-        assert kwargs == {
-            "swrl_rules": ["r"],
-            "ontology": {"o": 1},
-            "decision_tables": ["d"],
-            "aggregate_rules": ["a"],
-            "violation_limit": 50,
-        }
+        assert kwargs["parallel"] is True
+        assert kwargs["violation_limit"] == 50
+        assert any(s.startswith("CTAS ") for s in statements)
+        assert any(s.startswith("DROP ") for s in statements)
+        tm.fail_task.assert_not_called()
+
+    def test_a_single_check_stays_on_the_live_view(self):
+        store = MagicMock()
+        tm, _g, checks, statements = self._run(store, total=1)
+        args, kwargs = checks.call_args
+        assert args[3] == "c.s.v"
+        assert kwargs["parallel"] is False
+        assert statements == []
+        tm.update_progress.assert_not_called()
+
+    def test_ctas_failure_falls_back_to_the_live_view_sequentially(self):
+        store = MagicMock()
+        tm, _g, checks, _s = self._run(
+            store, snapshot_exc=RuntimeError("no CREATE TABLE")
+        )
+        args, kwargs = checks.call_args
+        assert args[3] == "c.s.v"
+        assert kwargs["parallel"] is False
         tm.fail_task.assert_not_called()
 
     def test_unreachable_warehouse_fails(self):
-        tm, _g, checks = self._run(None)
+        tm, _g, checks, _s = self._run(None)
         tm.fail_task.assert_called_once_with("t1", "Could not reach the SQL warehouse")
         checks.assert_not_called()
 
@@ -447,3 +508,57 @@ class TestInferenceTaskBranches:
         assert "violations" not in result
         assert "violations_count" not in result
         assert result["inferred_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# run_node_shacl_task
+# ---------------------------------------------------------------------------
+
+
+class TestNodeShaclTask:
+    def test_completes_with_the_facet_payload(self):
+        tm = MagicMock()
+        payload = {
+            "success": True,
+            "summary": {"total": 3, "fail": 1},
+            "facets": [{"shape_id": "s_email"}],
+        }
+
+        async def _evaluate(*_a, **kwargs):
+            kwargs["progress"](20, "Checking s_email (1/3)...")
+            return payload
+
+        with patch(
+            "back.objects.digitaltwin.node.NodeShaclService.NodeShaclService.evaluate",
+            _evaluate,
+        ):
+            TwinBackgroundTasks.run_node_shacl_task(
+                tm, "t1", "settings", SimpleNamespace(), "http://e/1", "c.s.v"
+            )
+
+        tm.start_task.assert_called_once_with("t1", "Running data quality checks...")
+        tm.update_progress.assert_called()
+        tm.complete_task.assert_called_once_with(
+            "t1",
+            result=payload,
+            message="Checked 3 shapes (1 failed)",
+        )
+
+    def test_infrastructure_error_fails_the_task(self):
+        from back.core.errors import InfrastructureError
+
+        tm = MagicMock()
+
+        async def _evaluate(*_a, **_kw):
+            raise InfrastructureError("Could not reach the SQL warehouse")
+
+        with patch(
+            "back.objects.digitaltwin.node.NodeShaclService.NodeShaclService.evaluate",
+            _evaluate,
+        ):
+            TwinBackgroundTasks.run_node_shacl_task(
+                tm, "t1", "settings", SimpleNamespace(), "http://e/1", "c.s.v"
+            )
+
+        tm.fail_task.assert_called_once_with("t1", "Could not reach the SQL warehouse")
+        tm.complete_task.assert_not_called()

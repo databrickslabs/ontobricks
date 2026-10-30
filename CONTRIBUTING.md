@@ -14,7 +14,6 @@ uv run --frozen pytest -q -m "not scenario"
 
 Related:
 
-- [docs/development.md](docs/development.md) — dependencies and the full test campaign
-- [docs/code_organization.md](docs/code_organization.md) — code map and layering
-- [docs/PR_REVIEW_CHECKLIST.md](docs/PR_REVIEW_CHECKLIST.md) — reviewer gates
+- [docs/development.md](docs/development.md) — dependencies, code map, and the full test campaign
+- [`.github/PR_REVIEW_CHECKLIST.md`](.github/PR_REVIEW_CHECKLIST.md) — reviewer gates
 - [src/.coding_rules.md](src/.coding_rules.md) — long-form coding rules

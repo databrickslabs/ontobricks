@@ -20,7 +20,11 @@ for _p in (ROOT / "src", ROOT / "tests" / "eval"):
 
 import metric_view_contract as mvc  # noqa: E402
 
-DATASET = ROOT / "tests/eval/datasets/agent_mapping_pge/metric_view.jsonl"
+DATASETS = (
+    ROOT / "tests/eval/datasets/agent_mapping_pge/metric_view.jsonl",
+    ROOT / "tests/eval/datasets/agent_auto_assignment/metric_view.jsonl",
+)
+DATASET = DATASETS[0]
 
 
 def _examples():
@@ -43,10 +47,11 @@ class TestTheJudgeAcceptsTheReferenceAnswer:
             score = mvc.score_example(example, sql, id_col)
             assert score["weighted"] == pytest.approx(1.0), example["id"]
 
-    def test_the_dry_run_aggregate_meets_the_threshold(self):
+    @pytest.mark.parametrize("dataset", DATASETS)
+    def test_the_dry_run_aggregate_meets_the_threshold(self, dataset):
         agg = mvc.run_contract(
             agent_name="mapping_pge",
-            dataset_path=DATASET,
+            dataset_path=dataset,
             threshold=0.95,
             dry_run=True,
         )

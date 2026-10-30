@@ -109,8 +109,8 @@
                             <ul>
                                 <li>A Databricks workspace with Unity Catalog enabled</li>
                                 <li>A running SQL Warehouse</li>
-                                <li>A UC Volume for the domain registry (configure via <em>Settings &rarr; Registry &rarr; Initialize</em> if empty)</li>
-                                <li>A Databricks Model Serving endpoint (for LLM-powered automation)</li>
+                                <li>A Lakebase Autoscaling database for the registry and Knowledge Store (configure via <em>Settings &rarr; Registry &rarr; Initialize</em> if empty)</li>
+                                <li>A Databricks AI Gateway model service or Model Serving endpoint (for LLM-powered automation)</li>
                             </ul>
 
                             <div class="help-steps">
@@ -132,14 +132,14 @@
                                     <div class="help-step-badge help-step-badge-optional"><i class="bi bi-plus-lg"></i></div>
                                     <div>
                                         <h5><i class="bi bi-file-earmark-text me-2"></i>Import Documents <span class="help-optional-tag">Optional</span></h5>
-                                        <p>Before generating, open <strong>Domain &rarr; Documents</strong> and attach any reference material (PDFs, schemas, data dictionaries, glossaries, &hellip;). The LLM uses these documents as additional context when producing the ontology &mdash; improving entity names, descriptions, and relationships.</p>
+                                        <p>Before generating, open <strong>Domain &rarr; Documents</strong> and attach reference material (PDFs, Office, images, text). Files are parsed into the versioned <strong>Knowledge Store</strong> (parsed text in Lakebase; originals are not kept). Generate and Mapping share that corpus.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge">3</div>
                                     <div>
                                         <h5><i class="bi bi-magic me-2"></i>Generate the Ontology</h5>
-                                        <p>Open <strong>Ontology &rarr; Generate</strong> (AI Wizard), select your LLM endpoint, optionally choose a <em>Quick Template</em> (CRM, IoT, Healthcare, Energy, ...) and click <em>Generate</em>. The LLM produces entities, relationships and attributes &mdash; grounded in the metadata and any documents you imported. Review in the <strong>Model</strong> tab.</p>
+                                        <p>Open <strong>Ontology &rarr; Generate</strong> (AI Wizard). Stage 1 detects entities, you review and lock the catalog, then Stage 3 completes relations, attributes and axioms. The merge <strong>appends</strong> to the ontology instead of replacing it. Review the result on the Studio canvas.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
@@ -153,7 +153,7 @@
                                     <div class="help-step-badge"><i class="bi bi-check2"></i></div>
                                     <div>
                                         <h5><i class="bi bi-eye me-2"></i>Explore</h5>
-                                        <p>Head to <strong>Knowledge Graph &rarr; Graph Viewer</strong> to browse your data as an interactive graph, or use <strong>GraphQL</strong> for programmatic access.</p>
+                                        <p>Head to <strong>Knowledge Graph &rarr; Explorer</strong> to browse the graph, or <strong>Query</strong> for GraphQL and SPARQL. Viewers can search Explorer and use Graph Chat; load and node-action writes stay blocked.</p>
                                     </div>
                                 </div>
                             </div>
@@ -178,15 +178,15 @@
                                     </h2>
                                     <div id="hw1" class="accordion-collapse collapse show" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
-                                            <p>The Registry is the central index of all domains (ontology + mapping + triple store) stored in your Unity Catalog Volume.</p>
+                                            <p>The Registry is the central index of all domains (ontology + mapping + triple store) stored in Lakebase Postgres. Loading a domain opens <strong>Domain &rarr; General</strong>.</p>
                                             <ul>
                                                 <li><strong>Browse</strong> &mdash; list and open existing domains</li>
                                                 <li><strong>New Domain</strong> (Admin only) &mdash; create a fresh domain</li>
-                                                <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from UC</li>
+                                                <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from the registry</li>
                                                 <li><strong>Export / Import</strong> &mdash; move domains between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/advanced-features#registry-import-and-export" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="registry-import-and-export">Registry import and export</a> guide)</li>
                                                 <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one graph viewer to another</li>
                                             </ul>
-                                            <p class="text-muted small mb-0">Automation (<em>Settings &rarr; Automation &rarr; Scheduler</em>), the REST <em>API</em> reference (<em>Settings &rarr; Developer</em>) and the <em>Registry Location</em> volume (<em>Settings &rarr; Registry</em>) are configured from Settings, not the Registry modal.</p>
+                                            <p class="text-muted small mb-0">Automation (<em>Settings &rarr; Automation &rarr; Scheduler</em>) and the REST <em>API</em> reference (<em>Settings &rarr; Developer</em>) are configured from Settings, not the Registry modal.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -433,7 +433,7 @@
                             </div>
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Registry is empty / no domains shown.&rdquo;</h5>
-                                <p>Open <strong>Settings &rarr; Registry</strong> and click <em>Initialize</em>. This creates the required folder structure in your Unity Catalog Volume.</p>
+                                <p>Open <strong>Settings &rarr; Registry</strong> and click <em>Initialize</em>. This creates or verifies the Lakebase registry schema (domains, versions, permissions, Knowledge Store). A UC Volume is no longer required for the registry.</p>
                             </div>
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;Auto-Map failed on some entities.&rdquo;</h5>

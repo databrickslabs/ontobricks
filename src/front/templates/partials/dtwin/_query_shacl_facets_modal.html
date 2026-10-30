@@ -15,6 +15,13 @@
             <div class="modal-body">
                 <div class="shacl-gauges mb-3" id="shaclFacetsGauges"></div>
                 <div class="shacl-facets-summary mb-3" id="shaclFacetsSummary" role="group" aria-label="Filter by status"></div>
+                <div id="shaclFacetsProgress" class="d-none mb-3">
+                    <div class="small text-muted mb-2" id="shaclFacetsProgressStep">
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Running data quality checks…
+                    </div>
+                    <div id="shaclFacetsProgressLog" class="task-activity-log text-start" aria-live="polite"></div>
+                </div>
                 <div id="shaclFacetsBody" aria-live="polite"></div>
             </div>
             <div class="modal-footer">

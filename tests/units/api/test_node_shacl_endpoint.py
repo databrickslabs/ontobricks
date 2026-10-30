@@ -136,6 +136,57 @@ class TestInternalEndpoint:
         assert resp.json()["entity_label"] == "ACME Corp"
         assert evaluate_calls[0]["domain"] is domain
 
+    def test_start_returns_a_task_id(self, client, domain, monkeypatch):
+        import threading
+
+        from api.routers.internal import dtwin
+
+        captured = {}
+
+        class _Task:
+            id = "shacl1"
+
+        class _Tm:
+            def create_task(self, **_kw):
+                return _Task()
+
+        class _FakeThread:
+            def __init__(self, target=None, **_kw):
+                self._target = target
+
+            def start(self):
+                self._target()
+
+        def _run(tm, task_id, settings, snap, entity_uri, table):
+            captured["entity_uri"] = entity_uri
+            captured["table"] = table
+            captured["task_id"] = task_id
+
+        monkeypatch.setattr(dtwin, "get_domain", lambda _session_mgr: domain)
+        monkeypatch.setattr(dtwin, "DomainSnapshot", lambda _d: object())
+        monkeypatch.setattr(dtwin, "_dataquality_table", lambda _d, _s: "c.s.v")
+        monkeypatch.setattr(
+            dtwin.DigitalTwin, "run_node_shacl_task", staticmethod(_run)
+        )
+        monkeypatch.setattr(
+            "back.core.task_manager.get_task_manager", lambda: _Tm()
+        )
+        monkeypatch.setattr(threading, "Thread", _FakeThread)
+
+        resp = client.post("/dtwin/nodes/shacl/start", json={"entity_uri": ENTITY})
+
+        assert resp.status_code == 200
+        assert resp.json() == {"success": True, "task_id": "shacl1"}
+        assert captured["entity_uri"] == ENTITY
+        assert captured["task_id"] == "shacl1"
+
+    def test_start_requires_entity_uri(self, client, domain, monkeypatch):
+        from api.routers.internal import dtwin
+
+        monkeypatch.setattr(dtwin, "get_domain", lambda _session_mgr: domain)
+        resp = client.post("/dtwin/nodes/shacl/start", json={})
+        assert resp.status_code == 400
+
 
 class TestShapeCounts:
     def test_node_context_counts_own_and_global_shapes(self, client, domain):

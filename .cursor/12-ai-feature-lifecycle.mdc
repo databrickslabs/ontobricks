@@ -15,12 +15,13 @@ This rule is the **gate** that closes the 5-agents-zero-eval gap. The companion 
 
 **Trigger:** any PR that touches `src/agents/**`, adds an MLflow-traced LLM call, or changes an MCP tool that wraps an agent.
 
-**Required artifacts in the PR** (CI enforces 1–3 by path-pattern; 4 is a required check):
+**Required artifacts in the PR** (CI enforces 1–2 by path-pattern; 3 is a required check):
 
-1. `.planning/<slug>/SPEC.md` — system prompt, tool surface, success criteria, failure modes, eval metrics. Template at `.claude/skills/ai-feature/SPEC.template.md`.
-2. `.planning/<slug>/eval/dataset.jsonl` — minimum **20 examples** for a new agent; minimum **10 examples** for a material change to an existing one.
-3. A linked **MLflow eval run URI** in the PR body (paste it under the "MLflow eval run" heading of the PR template).
-4. Either a **passing eval** (judge score ≥ baseline + delta as declared in SPEC.md), or an explicit **waiver comment** from a reviewer.
+1. **Eval dataset** under `tests/eval/datasets/<agent>/` — minimum **20 examples** for a new agent; minimum **10 examples** for a material change. Canonical file: `baseline.jsonl`.
+2. A linked **MLflow eval run URI** in the PR body (paste it under the "MLflow eval run" heading of the PR template).
+3. Either a **passing eval** (judge score ≥ baseline + delta as declared in the local SPEC.md), or an explicit **waiver comment** from a reviewer.
+
+**Local-only (not pushed):** `.planning/<slug>/SPEC.md` (template at `.claude/skills/ai-feature/SPEC.template.md`), `.planning/ROADMAP.md`, and implementation `PLAN.md` files. Keep them on disk for the author; they are gitignored.
 
 **Workflow** (when in doubt, invoke the orchestrator):
 
@@ -30,9 +31,9 @@ brainstorming → ai-feature skill → SPEC.md → dataset → eval harness → 
 
 **Hard rules**
 
-- **No new agent ships without SPEC.md.** The skill template fills it in interactively; CI rejects PRs without one.
+- **No new agent ships without a local SPEC.md and a committed eval dataset.** The skill template fills SPEC.md interactively under `.planning/` (gitignored); CI rejects PRs that lack `tests/eval/datasets/<agent>/baseline.jsonl`.
 - **No prompt or tool change without an eval delta.** Even a 3-line prompt edit must show a judge-score delta against the dataset.
-- **Eval datasets live under `tests/eval/datasets/<agent>/`** and are committed to the repo. Synthetic examples (`databricks-synthetic-data-generation`) are fine for cold-start; production-derived examples go in `regression.jsonl` so they're never retired by accident.
+- **Eval datasets live under `tests/eval/datasets/<agent>/`** and are committed to the repo. Do not mirror them under `.planning/`. Synthetic examples (`databricks-synthetic-data-generation`) are fine for cold-start; production-derived examples go in `regression.jsonl` so they're never retired by accident.
 - **MLflow tracing must be present** on every code path that calls the Foundation Model API. Use `@trace_agent`, `@trace_llm`, `@trace_tool` (`src/agents/tracing.py`).
 
 **Anti-patterns**

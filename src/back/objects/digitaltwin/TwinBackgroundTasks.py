@@ -196,11 +196,14 @@ class TwinBackgroundTasks:
         """Run SHACL / SWRL / DT / aggregate checks inside a worker thread.
 
         Every check is compiled to SQL and executed against the triple-store
-        VIEW on the SQL warehouse.
+        VIEW on the SQL warehouse, or against a run-scoped snapshot of it.
         """
         import time
 
         from back.core.graphdb import get_graphdb as _get_graphdb
+        from back.objects.digitaltwin.quality.DataQualitySnapshot import (
+            DataQualitySnapshot,
+        )
 
         task_ref = SimpleNamespace(id=task_id)
         t0 = time.time()
@@ -212,20 +215,31 @@ class TwinBackgroundTasks:
                 tm.fail_task(task_id, "Could not reach the SQL warehouse")
                 return
 
-            _dt().run_sql_checks(
-                tm,
-                task_ref,
-                shapes,
+            snapshot_enabled = total >= 2
+            if snapshot_enabled:
+                tm.update_progress(task_id, 0, "Materializing DQ snapshot...")
+            with DataQualitySnapshot(
+                domain_snap,
+                settings,
                 triplestore_table,
-                store,
-                t0,
-                total,
-                swrl_rules=swrl_rules,
-                ontology=ontology_dict,
-                decision_tables=decision_tables,
-                aggregate_rules=aggregate_rules,
-                violation_limit=violation_limit,
-            )
+                task_id,
+                enabled=snapshot_enabled,
+            ) as snap:
+                _dt().run_sql_checks(
+                    tm,
+                    task_ref,
+                    shapes,
+                    snap.table,
+                    store,
+                    t0,
+                    total,
+                    swrl_rules=swrl_rules,
+                    ontology=ontology_dict,
+                    decision_tables=decision_tables,
+                    aggregate_rules=aggregate_rules,
+                    violation_limit=violation_limit,
+                    parallel=snap.parallel,
+                )
 
         except Exception as exc:
             logger.exception("Data quality checks failed: %s", exc)
@@ -233,6 +247,47 @@ class TwinBackgroundTasks:
                 tm.fail_task(task_id, str(exc))
             else:
                 tm.fail_task(task_id, failure_message)
+
+    @staticmethod
+    def run_node_shacl_task(
+        tm,
+        task_id: str,
+        settings,
+        domain_snap: DomainSnapshot,
+        entity_uri: str,
+        triplestore_table: str,
+    ) -> None:
+        """Evaluate entity SHACL facets inside a worker thread."""
+        import asyncio
+
+        from back.core.errors import InfrastructureError
+        from back.objects.digitaltwin.node.NodeShaclService import NodeShaclService
+
+        tm.start_task(task_id, "Running data quality checks...")
+        try:
+            payload = asyncio.run(
+                NodeShaclService.evaluate(
+                    domain_snap,
+                    settings,
+                    entity_uri=entity_uri,
+                    table=triplestore_table,
+                    progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+                    snapshot_task_id=task_id,
+                )
+            )
+            summary = payload.get("summary") or {}
+            fail = int(summary.get("fail") or 0)
+            total = int(summary.get("total") or 0)
+            tm.complete_task(
+                task_id,
+                result=payload,
+                message=f"Checked {total} shapes ({fail} failed)",
+            )
+        except InfrastructureError as exc:
+            tm.fail_task(task_id, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Entity SHACL facet check failed: %s", exc)
+            tm.fail_task(task_id, "Could not run the data quality checks")
 
     @staticmethod
     def _analytics_run_entry(

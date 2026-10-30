@@ -998,8 +998,10 @@ and one `facets` entry per shape with its `status`:
 502 with a readable `message`.
 
 `/api/v1/digitaltwin/nodes/context` and `/api/v1/domain/classes` expose the
-matching `shacl_shape_count`. The Graph Explorer calls the internal twin
-`GET /dtwin/nodes/shacl` on the session domain.
+matching `shacl_shape_count`. The Graph Explorer starts the same check on the
+session domain with `POST /dtwin/nodes/shacl/start` and polls `/tasks/{id}`
+so the popup can show a live activity log; `GET /dtwin/nodes/shacl` remains
+for MCP and other synchronous callers.
 
 ---
 

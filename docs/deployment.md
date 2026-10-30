@@ -323,7 +323,7 @@ Implications for Layer 2:
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - `uv` package manager (recommended) or `pip`
 - Git
 - Access to a Databricks workspace (Databricks Apps must be enabled)
@@ -1322,7 +1322,7 @@ the bundle, and restarts both apps.
 
 ## 6. Triple Store & Graph DB Backend Configuration
 
-OntoBricks always materializes both a Delta view (Unity Catalog) and a Graph DB engine (Lakebase Postgres). Both layers are pluggable through their respective factories — see `docs/graphdb-integration.md` for adding a new Graph DB engine.
+OntoBricks always materializes both a Delta view (Unity Catalog) and a Graph DB engine (Lakebase Postgres). Both layers are pluggable through their respective factories — see [Engine integration](backend.md#engine-integration) for adding a new Graph DB engine.
 
 ### Delta view (`view`) — No Extra Setup Required
 
@@ -1791,11 +1791,13 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 
 ### Updating
 
-For a supported 0.7.x-to-0.8.0 in-place update, follow
-[`update_to_0.8.md`](../update_to_0.8.md). Back up `scripts/deploy.config.sh`
-first (0.8 defaults use a new `DEFAULT_INSTANCE_ID`), restore it after the
-checkout, then run the updater. The updater preserves the live configuration
-and applies pending registry SQL:
+For a supported 0.8.x-to-0.9 in-place update, follow
+[`update_to_0.9.0.md`](../update_to_0.9.0.md). v0.9.1 is a patch on that
+line — see [`ReleaseNotes_V0.9.1.md`](../releases/ReleaseNotes_V0.9.1.md).
+Back up `scripts/deploy.config.sh` first (0.9 defaults use
+`DEFAULT_INSTANCE_ID=09x`), restore it after the checkout, then run the
+updater. The updater preserves the live configuration and applies pending
+registry SQL:
 
 ```bash
 scripts/update-deployed-app.sh <UI_APP_NAME> <MCP_APP_NAME>
@@ -1821,7 +1823,7 @@ scripts/deploy.sh --dry-run
 
 | Requirement | Why | How to verify |
 |-------------|-----|---------------|
-| **Python ≥ 3.10** | App + tooling | `python3 --version` |
+| **Python ≥ 3.11** | App + tooling | `python3 --version` |
 | **uv** | Dependency install (`make install`, `make setup`) | `uv --version` (setup.sh installs it if missing) |
 | **Databricks CLI ≥ 0.250.0** | Bundle deploy, bootstrap scripts | `databricks version` |
 | **python3** | JSON parsing, app.yaml render | `python3 --version` |

@@ -46,7 +46,7 @@ const query = (selector) => {
 global.document = {
     querySelectorAll: (selector) => ({ forEach: (fn) => query(selector).forEach(fn) }),
     querySelector: () => null,
-    getElementById: () => ({ classList: { add() {}, remove() {} }, style: {}, value: '10' }),
+    getElementById: () => ({ classList: { add() {}, remove() {} }, style: {}, value: '10', innerHTML: '', scrollTop: 0, scrollHeight: 0 }),
 };
 global.fetch = async (url, options) => {
     sent = { url, body: JSON.parse(options.body) };

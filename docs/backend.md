@@ -52,7 +52,7 @@ This document covers everything you need to provision, configure, and operate it
 from the API gotchas that trip up fresh installs to the Postgres schema layout and
 troubleshooting runbook.
 
-For the developer guide on *adding a new engine*, see `docs/graphdb-integration.md`.
+For the developer guide on *adding a new engine*, see [Engine integration](#engine-integration).
 
 ---
 
@@ -998,7 +998,10 @@ OntoBricks stores all graph viewer data through a single abstraction:
 The single `GraphDBFactory` reads the **per-domain** backend choice from
 `DomainSession.info['graph_backend']` and constructs the matching backend. Calling
 `get_graphdb(domain, settings)` with no engine auto-resolves; passing
-`engine="view"` returns a raw read-only Delta store for health probes.
+`engine="view"` returns a raw read-only Delta store for health probes and
+quality SQL against the Unity Catalog view. It always uses the Build SQL
+Warehouse over Thrift — not the optional Lakehouse//RT query warehouse — so
+Lakebase domains do not inherit Kernel/SEA.
 
 ```
 get_graphdb(domain, settings)          # engine=None → auto-resolve

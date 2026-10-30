@@ -40,8 +40,24 @@ class DomainSnapshot:
         self.axioms = list(getattr(domain, "axioms", None) or [])
         self.expressions = list(getattr(domain, "expressions", None) or [])
         self.shacl_shapes = list(getattr(domain, "shacl_shapes", None) or [])
+        self._classes = self._copy_classes(domain)
 
         self._data = {
             "ontology": self.ontology,
             "generated": self.generated,
         }
+
+    @staticmethod
+    def _copy_classes(domain) -> list:
+        getter = getattr(domain, "get_classes", None)
+        if not callable(getter):
+            return []
+        try:
+            classes = getter()
+        except Exception:
+            return []
+        return list(classes) if isinstance(classes, list) else []
+
+    def get_classes(self) -> list:
+        """Ontology classes captured at snapshot time."""
+        return list(self._classes)

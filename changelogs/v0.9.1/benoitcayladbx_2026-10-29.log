@@ -1,0 +1,191 @@
+================================================================================
+## Stop tracking local planning trees on GitHub
+================================================================================
+
+Context: `.planning/`, `.superpowers/`, and `docs/superpowers/` were local
+agent working drafts (SPECs, SDD reports, brainstorming specs) that had
+already been committed. They do not belong on GitHub. Eval datasets that CI
+needs already live under `tests/eval/datasets/`. Untrack the trees, gitignore
+the whole `.planning/` directory, and retarget the AI-feature gate at the
+committed eval artifacts.
+
+Changes:
+
+1. .gitignore
+   Ignore the entire `.planning/` tree (SPECs, ROADMAP, PLAN.md stay local).
+2. .github/workflows/eval-gate.yml
+   Drop the SPEC.md-on-checkout job; keep dataset size + MLflow URI checks.
+3. .cursor/12-ai-feature-lifecycle.mdc
+   Gate on `tests/eval/datasets/<agent>/`; SPEC.md is local-only.
+4. .cursor/07-project-conventions.mdc
+   Document that planning trees are gitignored.
+5. .github/PULL_REQUEST_TEMPLATE.md
+   Stop requiring committed SPEC/PLAN paths.
+6. .github/PR_REVIEW_CHECKLIST.md
+   Reviewer blocks on committed eval datasets, not `.planning/`.
+7. docs/contributing.md
+   Required PR artifacts are eval dataset + MLflow URI.
+8. docs/README.md
+   Superpowers/sphinx extras described as local, not linked as published docs.
+9. tests/eval/test_staged_dataset_metadata_shape.py
+   Stop requiring a `.planning/` mirror of the owl-generator dataset.
+10. tests/eval/thresholds.yaml
+    Note that SPEC.md is local.
+11. .claude/skills/ai-feature/SKILL.md
+    Dataset output is `tests/eval/datasets/` only.
+12. README.md
+    Drop published links to local Superpowers/sphinx extras.
+
+Modified files:
+- .gitignore
+- .github/workflows/eval-gate.yml
+- .cursor/12-ai-feature-lifecycle.mdc
+- .cursor/07-project-conventions.mdc
+- .github/PULL_REQUEST_TEMPLATE.md
+- .github/PR_REVIEW_CHECKLIST.md
+- docs/contributing.md
+- docs/README.md
+- README.md
+- tests/eval/test_staged_dataset_metadata_shape.py
+- tests/eval/thresholds.yaml
+- .claude/skills/ai-feature/SKILL.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+- (index) .planning/**, .superpowers/**, docs/superpowers/** untracked
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9625 passed, 326 skipped, 8 deselected, 40 warnings in 52.36s
+
+================================================================================
+## Shrink the README logo
+================================================================================
+
+Context: The README used a bare Markdown image for the OntoBricks SVG. GitHub
+and the preview render that at the SVG's full display size, so the icon
+dominated the header. HTML `<img>` is required to set an explicit pixel size.
+
+Changes:
+
+1. README.md
+   Render the logo as a centered 72×72 HTML image.
+
+Modified files:
+- README.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_help_api.py → 40 passed in 1.83s (README-only change).
+
+================================================================================
+## Publish 0.9.1 release notes
+================================================================================
+
+Context: Open the 0.9.1 line with operator-facing notes (patch on 0.9.0) and
+put both 0.9.1 and 0.9.0 highlight lists back at the top of the README.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.1.md
+   Patch notes: Viewer search/chat, SWRL builtins, Auto-Map Metric Views,
+   Data Quality snapshot + live log, Lakebase Build warehouse, Dependabot
+   floors (lock regen pending), upgrade notes.
+2. README.md
+   Add What's new in 0.9.1 then What's new in 0.9.0 after the header.
+3. docs/README.md
+   Point the hub at V0.9.1 release notes.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.1.md
+- README.md
+- docs/README.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9625 passed, 326 skipped, 8 deselected, 40 warnings in 54.86s
+
+================================================================================
+## Retarget folded docs links and fill 0.9.1 gaps
+================================================================================
+
+Context: An audit of 0.9.1 documentation found GitHub-facing links still
+pointing at satellite files that were folded into host guides
+(get-started.md, features.md, lakebase-graphdb.md, …). Operator guides also
+under-described Viewer POSTs, DQ snapshots, and SWRL builtins.
+
+Changes:
+
+1. README.md
+   Point Get Started, cohort, import/export, Graph DB, and features at the
+   host guides and section anchors that exist on disk.
+2. docs/README.md
+   Add a 0.9.1 feature → doc table.
+3. docs/contributing.md
+   Replace folded-file and deleted update_to_0.8.md links.
+4. docs/development.md / docs/user-guide.md
+   Document Viewer read-only POSTs, DQ snapshot + live log, SWRL builtins.
+5. docs/backend.md, architecture.md, deployment.md
+   Replace leftover graphdb-integration.md path strings with backend.md
+   anchors; point Updating at update_to_0.9.0.md.
+6. releases/ReleaseNotes_V0.9.1.md, Roadmap_2026-10.md, update_to_0.9.0.md
+   Drop phantom README paths; mark 0.9.1 as the current product.
+
+Modified files:
+- README.md
+- docs/README.md
+- docs/contributing.md
+- docs/development.md
+- docs/user-guide.md
+- docs/backend.md
+- docs/architecture.md
+- docs/deployment.md
+- releases/ReleaseNotes_V0.9.1.md
+- releases/Roadmap_2026-10.md
+- update_to_0.9.0.md
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9625 passed, 326 skipped, 8 deselected, 40 warnings in 51.37s
+
+================================================================================
+## Align Help Center and operator docs with 0.9.1
+================================================================================
+
+Context: The in-app Help modal and About page still described a UC Volume
+registry and Python 3.10. Operator guides repeated 3.10 after
+`requires-python` moved to 3.11. Live Help is those templates plus docs/.
+
+Changes:
+
+1. src/front/templates/partials/layout/help_modal.html
+   Lakebase registry, Knowledge Store, staged Generate, Explorer/SPARQL,
+   Viewer search/chat; Initialize no longer creates a Volume tree.
+2. src/front/templates/about.html
+   Python 3.11+; Lakebase registry and Knowledge Store.
+3. README.md, docs/getting-started.md, contributing.md, development.md,
+   deployment.md, architecture.md, product.md
+   Python 3.11+ to match pyproject.toml.
+4. CONTRIBUTING.md
+   Drop folded code_organization / PR_REVIEW_CHECKLIST paths.
+5. docs/user-guide.md
+   Viewers can search Explorer and use Graph Chat.
+6. tests/units/front/test_help_center_menu_sync.py
+   Contract: Help copy is Lakebase, not the Volume registry.
+7. src/front/templates/partials/registry/_registry_configuration.html
+   Volume is optional OBX bundles; Knowledge Store is Lakebase.
+8. src/front/static/global/js/navbar.js
+   Comment: load from Lakebase, not a UC Volume.
+
+Modified files:
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/about.html
+- README.md
+- CONTRIBUTING.md
+- docs/getting-started.md
+- docs/contributing.md
+- docs/development.md
+- docs/deployment.md
+- docs/architecture.md
+- docs/product.md
+- docs/user-guide.md
+- releases/ReleaseNotes_V0.9.1.md
+- tests/units/front/test_help_center_menu_sync.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/global/js/navbar.js
+- changelogs/v0.9.1/benoitcayladbx_2026-10-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9626 passed, 326 skipped, 8 deselected, 40 warnings in 50.49s

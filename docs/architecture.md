@@ -320,6 +320,9 @@ Without an RT query override, `resolve_delta_warehouse_id()` intentionally
 falls back to the Build SQL Warehouse. The Settings UI represents this by
 disabling Query and mirroring Build. RT mode requires a distinct query
 warehouse; disabling it persists an empty Lakehouse warehouse ID.
+Quality checks and `engine="view"` always call `resolve_build_warehouse_id()`
+so a Lakehouse//RT query warehouse never serves UC-view SQL, including on
+Lakebase domains.
 In Databricks Apps, RT reads bypass the SQL connector's Kernel adapter and use
 Statement Execution directly with `JSON_ARRAY` / `INLINE`. Internal chunk links
 stay on the workspace host, external CloudFetch links are rejected, and a
@@ -1139,7 +1142,7 @@ rejects the `CREATE OR REPLACE TABLE` DDL used by graph-index refreshes.
 > adjacency snapshot while SPARQL sees `_graph` including `_inferred`.  A full
 > **Build** reconciles both.
 
-Full detail: [`docs/graphdb-integration.md` § Adjacency index objects](backend.md#adjacency-index-objects).
+Full detail: [Adjacency index objects](backend.md#adjacency-index-objects).
 
 ### Backend Abstraction
 
@@ -1159,7 +1162,7 @@ Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/
 
 **Two write modes** (Lakebase only), configured under **Settings → Back end → Lakebase**:
 
-- `managed_synced` (what **Settings → Lakebase** proposes when `sync_mode` is unset) — Databricks Lakeflow keeps a Postgres synced table (`g_<dom>_v<n>_sync`) in lock-step with the R2RML view via a **Snapshot** pipeline (the view has no Change Data Feed, so Triggered / Continuous cannot run). The app only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`); a writable companion table (`g_<dom>_v<n>__app`) absorbs reasoning / cohort writes; readers see both via a UNION view (`g_<dom>_v<n>`). See `docs/graphdb-integration.md §9` for the full architecture.
+- `managed_synced` (what **Settings → Lakebase** proposes when `sync_mode` is unset) — Databricks Lakeflow keeps a Postgres synced table (`g_<dom>_v<n>_sync`) in lock-step with the R2RML view via a **Snapshot** pipeline (the view has no Change Data Feed, so Triggered / Continuous cannot run). The app only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`); a writable companion table (`g_<dom>_v<n>__app`) absorbs reasoning / cohort writes; readers see both via a UNION view (`g_<dom>_v<n>`). See [Engine integration](backend.md#engine-integration) for the full architecture.
 - `app_managed` (runtime fallback when the key is omitted, so existing workspaces that never saved Settings keep COPY ingest) — the FastAPI app streams warehouse rows in `fetchmany` batches and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING`.
 
 ### Neo4j Graph DB Architecture
@@ -1427,7 +1430,7 @@ Shapes are organized into six data quality categories:
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Python | 3.10+ | Core language |
+| Python | 3.11+ | Core language |
 | FastAPI | 0.109+ | Web framework |
 | Uvicorn | latest | ASGI server |
 | RDFLib | 7.0+ | RDF/OWL operations |
@@ -1957,9 +1960,10 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 **Workflow**:
 1. Calls `get_ontology` to see entities, relationships, and their attributes
-2. Calls `get_metadata` to understand available tables and columns
+2. Calls `get_metadata` to understand available tables, views, and metric views (`object_kind` + column `role`)
 3. For each entity/relationship:
    - Writes a SQL query using `execute_sql` to validate it
+   - Metric-view sources must project dimensions, wrap measures in `MEASURE()`, and `GROUP BY` those dimensions (`SELECT *` is rejected on submit)
    - Iterates on SQL errors until the query succeeds
    - Calls `submit_entity_mapping` or `submit_relationship_mapping` to finalize
 4. Repeats until all items are mapped or iteration limit is reached
@@ -3003,7 +3007,7 @@ traffic. Data-plane routes are fail-closed when no user token is forwarded.
 | `compute_virtual_attributes` | `GET /api/v1/digitaltwin/nodes/virtual-attributes` | REST | **Unity Catalog function** call for declared virtual attributes |
 | `invoke_entity_action` | `POST /api/v1/digitaltwin/nodes/action` | REST | **Unity Catalog function** via SQL warehouse, or Databricks Job `run_now` (`job:<id>`) tracked in TaskManager |
 | `run_entity_business_rule` | `POST /api/v1/digitaltwin/nodes/business-rule` | REST | SWRL rule → entity-scoped **Spark SQL** inference + insert into the graph (Builder role required) |
-| `check_entity_shacl_facets` | `GET /api/v1/digitaltwin/nodes/shacl` | REST | Applicable SHACL shapes (class + ancestors + global) → one entity-scoped `UNION ALL` **Spark SQL** batch, per-shape fallback on error |
+| `check_entity_shacl_facets` | `GET /api/v1/digitaltwin/nodes/shacl` | REST | Applicable SHACL shapes (class + ancestors + global) → one entity-scoped `UNION ALL` **Spark SQL** batch, per-shape fallback on error. Explorer UI uses `POST /dtwin/nodes/shacl/start` + task poll for a live activity log |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
 | `get_graphql_schema` | `GET /graphql/{domain}/schema` | **GraphQL** | `GraphQLSchemaBuilder` (no DB hit; SDL only) |
 | `query_graphql` | `POST /graphql/{domain}` | **GraphQL** | Resolvers → SPARQL → **Spark SQL** |

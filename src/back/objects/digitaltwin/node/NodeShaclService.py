@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Sequence, Set
+from contextlib import nullcontext
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set
 
 from back.core.errors import InfrastructureError
 from back.core.graphdb import get_graphdb
@@ -183,49 +184,39 @@ class NodeShaclService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def evaluate(domain: Any, settings: Any, *, entity_uri: str) -> Dict[str, Any]:
+    def _emit(progress: Optional[Callable[[int, str], None]], pct: int, message: str) -> None:
+        if progress:
+            progress(pct, message)
+
+    @staticmethod
+    async def evaluate(
+        domain: Any,
+        settings: Any,
+        *,
+        entity_uri: str,
+        table: Optional[str] = None,
+        progress: Optional[Callable[[int, str], None]] = None,
+        snapshot_task_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Check every shape related to *entity_uri*'s type against that entity.
 
         Raises:
             InfrastructureError: no SQL warehouse to query, or the graph
                 cannot be read (typically: never built).
         """
-        table = NodeShaclService.triplestore_table(domain, settings)
+        table = table or NodeShaclService.triplestore_table(domain, settings)
         store = get_graphdb(domain, settings, engine="view")
         if store is None:
             raise InfrastructureError("Could not reach the SQL warehouse")
 
-        try:
-            triples = await run_blocking(
-                store.execute_query,
-                f"SELECT predicate, object FROM {table} "
-                f"WHERE subject = '{sql_escape(entity_uri)}'",
-            ) or []
-        except Exception as exc:
-            logger.warning("nodes/shacl: cannot read %s: %s", table, exc)
-            raise InfrastructureError(
-                "Could not read the knowledge graph — is it built? "
-                + SqlQualityChecks._sql_error_detail(exc)
-            ) from exc
-        objects_by_pred: Dict[str, List[str]] = {}
-        for t in triples:
-            pred = t.get("predicate") or ""
-            if pred:
-                objects_by_pred.setdefault(pred, []).append(t.get("object"))
-
-        classes = domain.get_classes() or []
-        own = NodeShaclService._own_classes(
-            entity_uri, objects_by_pred.get(RDF_TYPE, []), classes
+        NodeShaclService._emit(progress, 1, "Reading entity triples...")
+        objects_by_pred = await NodeShaclService._entity_triples(
+            store, table, entity_uri
         )
-        own_names = [c.get("name", "") for c in own]
-        lineage: List[str] = []
-        own_uri_by_lineage: Dict[str, str] = {}
-        for cls in own:
-            for name in Rules.class_lineage(classes, cls.get("name", "")):
-                if name not in lineage:
-                    lineage.append(name)
-                own_uri_by_lineage.setdefault(name, cls.get("uri", ""))
-
+        classes = domain.get_classes() or []
+        own, own_names, lineage, own_uri_by_lineage = NodeShaclService._lineage(
+            entity_uri, objects_by_pred, classes
+        )
         selected = NodeShaclService.applicable_shapes(
             getattr(domain, "shacl_shapes", None) or [], classes, own_names
         )
@@ -239,6 +230,7 @@ class NodeShaclService:
             "lineage": lineage,
         }
         if not selected:
+            NodeShaclService._emit(progress, 100, "No SHACL shape applies to this entity")
             payload.update(summary=NodeShaclService._summary([]), facets=[])
             return payload
 
@@ -253,7 +245,19 @@ class NodeShaclService:
                 SqlQualityChecks._resolve_shape_uri_for_sql(evaluated, predicates)
             )
 
-        rows, errors = await NodeShaclService._run(store, eval_shapes, table, entity_uri)
+        NodeShaclService._emit(
+            progress, 5, f"Found {len(eval_shapes)} applicable shapes"
+        )
+        rows, errors = await NodeShaclService._collect_rows(
+            store,
+            eval_shapes,
+            table,
+            entity_uri,
+            domain=domain,
+            settings=settings,
+            progress=progress,
+            snapshot_task_id=snapshot_task_id,
+        )
         facets = [
             NodeShaclService._facet(shape, evaluated, table, rows, errors, objects_by_pred)
             for shape, evaluated in zip(selected, eval_shapes)
@@ -268,6 +272,42 @@ class NodeShaclService:
             payload["summary"]["fail"],
         )
         return payload
+
+    @staticmethod
+    async def _entity_triples(store, table: str, entity_uri: str) -> Dict[str, List[str]]:
+        try:
+            triples = await run_blocking(
+                store.execute_query,
+                f"SELECT predicate, object FROM {table} "
+                f"WHERE subject = '{sql_escape(entity_uri)}'",
+            ) or []
+        except Exception as exc:
+            logger.warning("nodes/shacl: cannot read %s: %s", table, exc)
+            raise InfrastructureError(
+                "Could not read the knowledge graph — is it built? "
+                + SqlQualityChecks._sql_error_detail(exc)
+            ) from exc
+        objects_by_pred: Dict[str, List[str]] = {}
+        for triple in triples:
+            pred = triple.get("predicate") or ""
+            if pred:
+                objects_by_pred.setdefault(pred, []).append(triple.get("object"))
+        return objects_by_pred
+
+    @staticmethod
+    def _lineage(entity_uri, objects_by_pred, classes):
+        own = NodeShaclService._own_classes(
+            entity_uri, objects_by_pred.get(RDF_TYPE, []), classes
+        )
+        own_names = [c.get("name", "") for c in own]
+        lineage: List[str] = []
+        own_uri_by_lineage: Dict[str, str] = {}
+        for cls in own:
+            for name in Rules.class_lineage(classes, cls.get("name", "")):
+                if name not in lineage:
+                    lineage.append(name)
+                own_uri_by_lineage.setdefault(name, cls.get("uri", ""))
+        return own, own_names, lineage, own_uri_by_lineage
 
     @staticmethod
     def _own_classes(
@@ -285,6 +325,49 @@ class NodeShaclService:
 
         matched = NodeContextService.match_ontology_class(entity_uri, classes)
         return [matched] if matched else []
+
+    @staticmethod
+    async def _collect_rows(
+        store,
+        eval_shapes,
+        table: str,
+        entity_uri: str,
+        *,
+        domain,
+        settings,
+        progress,
+        snapshot_task_id,
+    ):
+        """Batch on the live VIEW; per-shape + log when a snapshot exists."""
+        n = len(eval_shapes)
+        run_each = bool(progress)
+        check_table = table
+        snap_cm = nullcontext()
+        if progress and snapshot_task_id and n >= 2:
+            from back.objects.digitaltwin.quality.DataQualitySnapshot import (
+                DataQualitySnapshot,
+            )
+
+            NodeShaclService._emit(progress, 6, "Materializing DQ snapshot...")
+            snap_cm = DataQualitySnapshot(
+                domain, settings, table, snapshot_task_id, enabled=True
+            )
+
+        with snap_cm as snap:
+            if snap is not None:
+                check_table = snap.table
+                if not snap.parallel:
+                    run_each = False
+            if run_each:
+                return await NodeShaclService._run_each(
+                    store, eval_shapes, check_table, entity_uri, progress
+                )
+            NodeShaclService._emit(
+                progress, 10, f"Running {n} checks on the warehouse..."
+            )
+            return await NodeShaclService._run(
+                store, eval_shapes, check_table, entity_uri
+            )
 
     @staticmethod
     async def _run(store, shapes, table, entity_uri):
@@ -306,6 +389,29 @@ class NodeShaclService:
                 rows.extend(await run_blocking(store.execute_query, one) or [])
             except Exception as exc:
                 errors[shape.get("id", "")] = SqlQualityChecks._sql_error_detail(exc)
+        return rows, errors
+
+    @staticmethod
+    async def _run_each(store, shapes, table, entity_uri, progress):
+        """One warehouse query per shape so the activity log can move."""
+        rows: List[Dict[str, Any]] = []
+        errors: Dict[str, str] = {}
+        n = len(shapes)
+        for i, shape in enumerate(shapes, 1):
+            label = shape.get("label") or shape.get("id") or "shape"
+            pct = 10 + int(80 * i / max(n, 1))
+            NodeShaclService._emit(
+                progress, pct, f"Checking {label} ({i}/{n})..."
+            )
+            one = NodeShaclService.batch_sql([shape], table, entity_uri)
+            if not one:
+                continue
+            try:
+                rows.extend(await run_blocking(store.execute_query, one) or [])
+            except Exception as exc:
+                errors[str(shape.get("id") or "")] = SqlQualityChecks._sql_error_detail(
+                    exc
+                )
         return rows, errors
 
     @staticmethod

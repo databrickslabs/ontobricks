@@ -11,6 +11,19 @@ Center and the Sphinx site include the same files, grouped the same way.
 **New here?** [Get Started](getting-started.md) → [Examples](examples.md) →
 [User Guide](user-guide.md).
 
+## What's new in 0.9.1
+
+Patch on 0.9.0. Full details:
+[Release notes V0.9.1](../releases/ReleaseNotes_V0.9.1.md).
+
+| Feature | Where it is documented |
+|---------|------------------------|
+| Viewer Explorer search and Graph Chat (read-only POSTs) | [Development](development.md#enforcement-rules) |
+| SWRL `swrlb:` builtins on inference and materialization | [User Guide](user-guide.md#feature-inventory) |
+| Auto-Map Metric View SQL (`MEASURE` + `GROUP BY`) | [User Guide](user-guide.md#auto-map-sidebar), [Architecture](architecture.md) |
+| Bulk / entity Data Quality snapshot and live activity log | [User Guide](user-guide.md#data-quality-sidebar), [API](api.md) |
+| Lakebase quality SQL on the Build warehouse | [Graph backends](backend.md) |
+
 ## What's new in 0.9.0
 
 Operator guides for this version. Full details:
@@ -79,10 +92,10 @@ Each domain picks a graph engine (Lakebase, Lakehouse / Delta, Neo4j, or none).
 
 The Databricks App bundle excludes these (`databricks.yml` / `.databricksignore`):
 
-- [sphinx/](sphinx/) — Sphinx build
-- [diagrams/](diagrams/) — diagram sources
-- [superpowers/](superpowers/) — agent planning scratch
-- [pr47-neo4j-demo/](pr47-neo4j-demo/) — historical Neo4j demo notes
+- `sphinx/` — Sphinx build (local)
+- `diagrams/` — diagram sources (local)
+- `superpowers/` — agent planning scratch (gitignored, not published)
+- `pr47-neo4j-demo/` — historical Neo4j demo notes (local)
 
 Reviewer process: [`.github/PR_REVIEW_CHECKLIST.md`](../.github/PR_REVIEW_CHECKLIST.md).
 Project overview: root [README](../README.md).
@@ -104,5 +117,6 @@ Project overview: root [README](../README.md).
 ## Quick links
 
 - [Main README](../README.md)
+- [Release notes V0.9.1](../releases/ReleaseNotes_V0.9.1.md)
 - [Release notes V0.9.0](../releases/ReleaseNotes_V0.9.0.md)
 - [Swagger UI](http://localhost:8000/docs) (local run)
