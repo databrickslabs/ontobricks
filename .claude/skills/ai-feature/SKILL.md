@@ -41,7 +41,7 @@ Required fields:
 
 ### 3. Build the eval dataset
 
-Output: `.planning/<slug>/eval/dataset.jsonl` AND a mirror at `tests/eval/datasets/<agent_name>/baseline.jsonl`.
+Output: `tests/eval/datasets/<agent_name>/baseline.jsonl` (committed). Optional local scratch copy under `.planning/<slug>/eval/` — do not commit it.
 
 Minimum sizes:
 

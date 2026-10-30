@@ -79,10 +79,10 @@ Each domain picks a graph engine (Lakebase, Lakehouse / Delta, Neo4j, or none).
 
 The Databricks App bundle excludes these (`databricks.yml` / `.databricksignore`):
 
-- [sphinx/](sphinx/) — Sphinx build
-- [diagrams/](diagrams/) — diagram sources
-- [superpowers/](superpowers/) — agent planning scratch
-- [pr47-neo4j-demo/](pr47-neo4j-demo/) — historical Neo4j demo notes
+- `sphinx/` — Sphinx build (local)
+- `diagrams/` — diagram sources (local)
+- `superpowers/` — agent planning scratch (gitignored, not published)
+- `pr47-neo4j-demo/` — historical Neo4j demo notes (local)
 
 Reviewer process: [`.github/PR_REVIEW_CHECKLIST.md`](../.github/PR_REVIEW_CHECKLIST.md).
 Project overview: root [README](../README.md).

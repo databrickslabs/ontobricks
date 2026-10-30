@@ -1,0 +1,53 @@
+================================================================================
+## Stop tracking local planning trees on GitHub
+================================================================================
+
+Context: `.planning/`, `.superpowers/`, and `docs/superpowers/` were local
+agent working drafts (SPECs, SDD reports, brainstorming specs) that had
+already been committed. They do not belong on GitHub. Eval datasets that CI
+needs already live under `tests/eval/datasets/`. Untrack the trees, gitignore
+the whole `.planning/` directory, and retarget the AI-feature gate at the
+committed eval artifacts.
+
+Changes:
+
+1. .gitignore
+   Ignore the entire `.planning/` tree (SPECs, ROADMAP, PLAN.md stay local).
+2. .github/workflows/eval-gate.yml
+   Drop the SPEC.md-on-checkout job; keep dataset size + MLflow URI checks.
+3. .cursor/12-ai-feature-lifecycle.mdc
+   Gate on `tests/eval/datasets/<agent>/`; SPEC.md is local-only.
+4. .cursor/07-project-conventions.mdc
+   Document that planning trees are gitignored.
+5. .github/PULL_REQUEST_TEMPLATE.md
+   Stop requiring committed SPEC/PLAN paths.
+6. .github/PR_REVIEW_CHECKLIST.md
+   Reviewer blocks on committed eval datasets, not `.planning/`.
+7. docs/contributing.md
+   Required PR artifacts are eval dataset + MLflow URI.
+8. docs/README.md
+   Superpowers/sphinx extras described as local, not linked as published docs.
+9. tests/eval/test_staged_dataset_metadata_shape.py
+   Stop requiring a `.planning/` mirror of the owl-generator dataset.
+10. tests/eval/thresholds.yaml
+    Note that SPEC.md is local.
+11. .claude/skills/ai-feature/SKILL.md
+    Dataset output is `tests/eval/datasets/` only.
+
+Modified files:
+- .gitignore
+- .github/workflows/eval-gate.yml
+- .cursor/12-ai-feature-lifecycle.mdc
+- .cursor/07-project-conventions.mdc
+- .github/PULL_REQUEST_TEMPLATE.md
+- .github/PR_REVIEW_CHECKLIST.md
+- docs/contributing.md
+- docs/README.md
+- tests/eval/test_staged_dataset_metadata_shape.py
+- tests/eval/thresholds.yaml
+- .claude/skills/ai-feature/SKILL.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-29.log
+- (index) .planning/**, .superpowers/**, docs/superpowers/** untracked
+
+Tests: uv run --frozen pytest -q tests/eval/test_staged_dataset_metadata_shape.py → 5 passed in 0.14s. Full `pytest -q -m "not scenario"` hung in tests/units/api/test_routes.py (~16%, unrelated to this diff).
+

@@ -68,16 +68,16 @@ Reviewers should walk the items in order. Items 1–10 are hard gates; CI enforc
 
 If the PR touches `src/agents/**` or adds an MLflow-traced LLM call:
 
-- `.planning/<slug>/SPEC.md` present? → **block** (CI G2 gate will too).
-- `.planning/<slug>/eval/dataset.jsonl` present with ≥10 (changes) or ≥20 (new agent) examples? → **block**.
+- `tests/eval/datasets/<agent>/baseline.jsonl` present with ≥10 (changes) or ≥20 (new agent) examples? → **block** (CI G2 gate will too).
 - MLflow eval run URI linked in the PR body? → **block**.
 - Judge score ≥ baseline + delta or explicit waiver comment? → **block**.
+- Local `.planning/` SPEC/PLAN are gitignored — do not ask authors to commit them.
 
 ## 11. Soft signals (reviewer judgment)
 
 - Could a Fowler refactoring make this clearer? Suggest it (cite the smell + name).
 - Is the diff bigger than ~400 LOC? Ask whether it should be split.
-- Does the PLAN.md in `.planning/<slug>/` exist and match the actual diff? Mismatch = either the plan changed or the implementation drifted. Either way, update.
+- If the author kept a local PLAN.md under `.planning/<slug>/`, does the diff match it? Mismatch = either the plan changed or the implementation drifted.
 - Could this be a one-line fix instead of N? Suggest the smaller version.
 
 ## 12. Anti-patterns specific to CNS (§ §3.12 of methodology plan)
@@ -92,4 +92,4 @@ If the PR touches `src/agents/**` or adds an MLflow-traced LLM call:
 
 ## After approval
 
-The author runs `superpowers:finishing-a-development-branch`, then merges. The reviewer checks the merge is clean and the milestone in `.planning/ROADMAP.md` is updated with the landing date.
+The author runs `superpowers:finishing-a-development-branch`, then merges. The reviewer checks the merge is clean.

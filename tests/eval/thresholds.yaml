@@ -1,8 +1,8 @@
 # Per-agent eval thresholds — read by tests/eval/run_<agent>.py and
 # .github/workflows/eval-gate.yml.
 #
-# Values match the proposed thresholds in each agent's SPEC.md
-# (.planning/agents/<agent>/SPEC.md §5). Calibrate after baseline runs.
+# Values match the proposed thresholds in each agent's local SPEC.md
+# (.planning/agents/<agent>/SPEC.md §5, gitignored). Calibrate after baseline runs.
 
 owl_generator:
   schema_validity: 0.95
