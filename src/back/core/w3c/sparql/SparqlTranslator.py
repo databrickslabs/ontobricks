@@ -11,6 +11,7 @@ from back.core.helpers import (
     sql_cast as _sql_cast,
 )
 from back.core.w3c.sparql.SparqlCapabilityValidator import SparqlCapabilityValidator
+from back.core.w3c.sparql.SparqlValueFilterSql import SparqlValueFilterSql
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 
 logger = get_logger(__name__)
@@ -734,37 +735,6 @@ class SparqlTranslator:
         return pred_to_column
 
     @staticmethod
-    def _sql_conditions_for_value_filters(
-        pred_to_column, value_filters, column_qualifier: str, dialect: str
-    ):
-        """Build SQL WHERE fragments for ``value_filters`` (``column_qualifier`` e.g. ``\"\"`` or ``\"e.\"``)."""
-        where_conditions = []
-        for vf in value_filters:
-            pred_uri = vf["predicate_uri"]
-            column = pred_to_column.get(pred_uri) or pred_to_column.get(
-                SparqlTranslator._predicate_local_name_key(pred_uri)
-            )
-            if not column:
-                continue
-            col_ref = f"{column_qualifier}{column}" if column_qualifier else column
-            operator = vf["operator"]
-            value = _escape_sql(vf["value"], dialect)
-            if operator == "contains":
-                where_conditions.append(f"LOWER({col_ref}) LIKE '%{value}%'")
-            elif operator == "equals":
-                where_conditions.append(
-                    f"{SparqlTranslator._cast_str(col_ref, dialect)} = '{value}'"
-                )
-            elif operator == "starts":
-                where_conditions.append(f"LOWER({col_ref}) LIKE '{value}%'")
-            elif operator == "ends":
-                where_conditions.append(f"LOWER({col_ref}) LIKE '%{value}'")
-            elif operator in ("gt", "lt", "gte", "lte"):
-                op_map = {"gt": ">", "lt": "<", "gte": ">=", "lte": "<="}
-                where_conditions.append(f"{col_ref} {op_map[operator]} {value}")
-        return where_conditions
-
-    @staticmethod
     def _entity_class_key_from_uri_template(template: str) -> Optional[str]:
         """Class key from a URI template (strip trailing ``{{id}}``); same rule as legacy path-only templates."""
         if not template:
@@ -849,7 +819,7 @@ class SparqlTranslator:
                 uri_template, id_column, "e", dialect
             )
             pred_to_column = SparqlTranslator._mapping_predicate_uri_to_column(mapping)
-            where_conditions = SparqlTranslator._sql_conditions_for_value_filters(
+            where_conditions = SparqlValueFilterSql.conditions_for(
                 pred_to_column, value_filters, "e.", dialect
             )
             if where_conditions:
@@ -1188,7 +1158,7 @@ class SparqlTranslator:
         where_conditions = []
         if value_filters and not relationship_filter:
             pred_to_column = SparqlTranslator._mapping_predicate_uri_to_column(mapping)
-            where_conditions = SparqlTranslator._sql_conditions_for_value_filters(
+            where_conditions = SparqlValueFilterSql.conditions_for(
                 pred_to_column, value_filters, "", dialect
             )
             for vf in value_filters:
@@ -2420,6 +2390,9 @@ class SparqlTranslator:
             joined_entity_vars,
             from_tables,
             var_to_column,
+        )
+        SparqlValueFilterSql.apply_to_typed_bgp(
+            value_filters, var_to_column, where_conditions, dialect
         )
 
         select_columns = SparqlTranslator._spark_build_select_columns_list(

@@ -183,3 +183,39 @@ Modified files:
 - changelogs/v0.9.2/benoitcayladbx_2026-10-30.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9647 passed, 326 skipped, 8 deselected, 39 warnings in 57.53s
+
+================================================================================
+## Compile typed SPARQL value FILTERs into SQL (#210)
+================================================================================
+
+Context: Knowledge Graph SPARQL queries of the form `?x rdf:type :Class` plus
+an attribute triple and `FILTER(STR(?v) = "…")` / `CONTAINS(LCASE(STR(?v)), …)`
+passed validation but generated `WHERE 1=1`. Results were unfiltered. Typed
+BGPs now compile those filters; unmapped filters fail closed.
+
+Changes:
+
+1. src/back/core/w3c/sparql/SparqlValueFilterSql.py
+   Extract SQL compilation for string FILTERs; apply them on typed BGPs.
+2. src/back/core/w3c/sparql/SparqlTranslator.py
+   Call the compiler from the typed SQL path; reuse it on generic triples.
+3. src/back/core/w3c/sparql/__init__.py
+   Re-export SparqlValueFilterSql.
+4. tests/back/core/w3c/sparql/test_sparql_translator_units.py
+   Assert each accepted FILTER shape reaches SQL; unmapped filters raise.
+5. tests/units/core/test_sql_literal_escaping.py
+   Point value-filter escape tests at SparqlValueFilterSql.
+6. docs/architecture.md
+   Note that typed BGP string FILTERs compile to SQL.
+
+Modified files:
+- src/back/core/w3c/sparql/SparqlValueFilterSql.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/w3c/sparql/__init__.py
+- tests/back/core/w3c/sparql/test_sparql_translator_units.py
+- tests/units/core/test_sql_literal_escaping.py
+- docs/architecture.md
+- changelogs/v0.9.2/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9653 passed, 326 skipped, 8 deselected, 39 warnings in 53.61s
+

@@ -452,3 +452,66 @@ class TestOptionalRelationshipSemantics:
         sql = result["sql"]
         assert "IS NOT NULL" not in sql
         assert " OR " not in sql
+
+
+@pytest.mark.unit
+class TestTypedBgpValueFiltersReachSql:
+    """#210: accepted string FILTERs on typed BGPs must compile into SQL."""
+
+    _TYPED_BGP = (
+        "SELECT ?s ?name WHERE {{ "
+        "?s a <http://ex/Person> . "
+        "?s <http://ex/name> ?name . "
+        "{filter} "
+        "}}"
+    )
+
+    @pytest.mark.parametrize(
+        ("filter_clause", "sql_needle"),
+        [
+            ('FILTER(STR(?name) = "Ann")', "Ann"),
+            ('FILTER(CONTAINS(LCASE(STR(?name)), "ann"))', "%ann%"),
+            ('FILTER(STRSTARTS(LCASE(STR(?name)), "an"))', "an%"),
+            ('FILTER(STRENDS(LCASE(STR(?name)), "nn"))', "%nn"),
+        ],
+    )
+    def test_typed_bgp_embeds_filter_literal_in_sql(
+        self, translator_entity_mappings, filter_clause, sql_needle
+    ):
+        result = _translate(
+            self._TYPED_BGP.format(filter=filter_clause),
+            translator_entity_mappings,
+        )
+        assert result["success"] is True
+        sql = result["sql"]
+        assert sql_needle in sql
+        assert "WHERE 1=1" not in sql
+
+    def test_unfiltered_typed_bgp_keeps_open_where(self, translator_entity_mappings):
+        result = _translate(
+            "SELECT ?s ?name WHERE { ?s a <http://ex/Person> . ?s <http://ex/name> ?name }",
+            translator_entity_mappings,
+        )
+        assert result["success"] is True
+        assert "Ann" not in result["sql"]
+
+    def test_unmapped_attribute_filter_fails_closed(self):
+        mappings = {
+            "http://ex/Person": {
+                "table": "people",
+                "sql_query": "SELECT * FROM people",
+                "id_column": "person_id",
+                "label_column": "name",
+                "uri_template": "http://ex/person/{person_id}",
+                "predicates": {},
+            }
+        }
+        query = (
+            "SELECT ?s WHERE { "
+            "?s a <http://ex/Person> . "
+            "?s <http://ex/name> ?name . "
+            'FILTER(STR(?name) = "Ann") '
+            "}"
+        )
+        with pytest.raises(ValidationError, match="FILTER"):
+            _translate(query, mappings)
