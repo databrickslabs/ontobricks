@@ -91,11 +91,11 @@ class GraphQLRequest(BaseModel):
     )
     include_inferred: Optional[bool] = Field(
         True,
-        description="Read the inferred live graph (true) or asserted triples only",
+        description="Live graph only: inferred (true) or asserted triples. Ignored when simulation_id is set.",
     )
     simulation_id: Optional[str] = Field(
         None,
-        description="Ready simulation sandbox id; omitted reads the live graph",
+        description="Ready simulation sandbox id; reads the inferred overlay. Omitted reads the live graph.",
     )
 
 

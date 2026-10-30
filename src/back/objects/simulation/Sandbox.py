@@ -48,16 +48,12 @@ class _LakebaseSandbox:
 
         LakebaseSimulationUnion(self._live).drop_all(self._graph_name, self._sim_id)
 
-    def ensure_explorer_views(self, live_union: str, live_asserted: str) -> None:
-        """Materialise inferred and asserted Explorer union views after a run."""
+    def ensure_explorer_views(self, live_union: str) -> None:
+        """Materialise the Explorer union view (live inferred ∪ sandbox) after a run."""
         from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
 
-        union = LakebaseSimulationUnion(self._live)
-        for include_inferred, live in ((True, live_union), (False, live_asserted)):
-            view = _companion_ddl.sim_union_phy(
-                self._graph_name, self._sim_id, include_inferred=include_inferred
-            )
-            union.ensure(view, live, self.table)
+        view = _companion_ddl.sim_union_phy(self._graph_name, self._sim_id)
+        LakebaseSimulationUnion(self._live).ensure(view, live_union, self.table)
 
     def seed(self, entities: List[str]) -> int:
         source = self._live.sql_table_reference(self._graph_name)
@@ -300,7 +296,7 @@ class _StoreSandbox:
     def _drop_explorer_views(self) -> None:
         return
 
-    def ensure_explorer_views(self, live_union: str, live_asserted: str) -> None:
+    def ensure_explorer_views(self, live_union: str) -> None:
         return
 
     def seed(self, entities: List[str]) -> int:
@@ -430,24 +426,21 @@ class _DeltaSandbox(_StoreSandbox):
 
         return DeltaFlatStore(live_store._client)
 
-    def _view_name(self, inferred: bool) -> str:
-        suffix = "smu" if inferred else "sms"
-        return self.table.replace("__sim_", f"__{suffix}_")
+    def _view_name(self) -> str:
+        return self.table.replace("__sim_", "__smu_")
 
     def _drop_explorer_views(self) -> None:
-        for inferred in (True, False):
-            self.store._client.execute_statement(f"DROP VIEW IF EXISTS {self._view_name(inferred)}")
+        self.store._client.execute_statement(f"DROP VIEW IF EXISTS {self._view_name()}")
 
-    def ensure_explorer_views(self, live_union: str, live_asserted: str) -> None:
-        for inferred, live in ((True, live_union), (False, live_asserted)):
-            view = self._view_name(inferred)
-            self.store._client.execute_statement(
-                f"CREATE OR REPLACE VIEW {view} AS "
-                f"SELECT l.subject, l.predicate, l.object FROM {live} l "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {self.table} s "
-                f"WHERE s.subject = l.subject AND s.predicate = l.predicate) "
-                f"UNION ALL SELECT subject, predicate, object FROM {self.table}"
-            )
+    def ensure_explorer_views(self, live_union: str) -> None:
+        view = self._view_name()
+        self.store._client.execute_statement(
+            f"CREATE OR REPLACE VIEW {view} AS "
+            f"SELECT l.subject, l.predicate, l.object FROM {live_union} l "
+            f"WHERE NOT EXISTS (SELECT 1 FROM {self.table} s "
+            f"WHERE s.subject = l.subject AND s.predicate = l.predicate) "
+            f"UNION ALL SELECT subject, predicate, object FROM {self.table}"
+        )
 
 
 class _Neo4jSandbox(_StoreSandbox):

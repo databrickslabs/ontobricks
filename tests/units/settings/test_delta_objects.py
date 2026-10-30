@@ -69,6 +69,26 @@ class TestDeltaObjectHelpers:
             "triplestore_a_V1_props",
         }
 
+    def test_object_base_folds_simulation_leaves(self):
+        assert object_base("triplestore_foo_V1__sim_s1") == "triplestore_foo_V1"
+        assert object_base("triplestore_foo_V1__smu_s1") == "triplestore_foo_V1"
+        assert object_base("triplestore_foo_V1__sms_s1") == "triplestore_foo_V1"
+
+    def test_group_folds_simulation_objects(self):
+        raw = [
+            {"name": "triplestore_a_V1", "table_type": "VIEW"},
+            {"name": "triplestore_a_V1__smu_s1", "table_type": "VIEW"},
+            {"name": "triplestore_a_V1__sim_s1", "table_type": "MANAGED"},
+        ]
+        groups = group_triplestore_objects(raw, "reg_cat", "reg_sch")
+        assert set(groups) == {"triplestore_a_V1"}
+        names = [i["name"] for i in groups["triplestore_a_V1"]["sorted_items"]]
+        assert names == [
+            "triplestore_a_V1__smu_s1",
+            "triplestore_a_V1",
+            "triplestore_a_V1__sim_s1",
+        ]
+
     def test_uc_object_kind(self):
         assert uc_object_kind("VIEW") == "view"
         assert uc_object_kind("MANAGED") == "table"

@@ -52,16 +52,12 @@ class TestSimPhy:
         assert not _companion_ddl.is_sim_phy("g_v1")
         assert not _companion_ddl.is_sim_phy("g_v1__app")
         assert not _companion_ddl.is_sim_phy("g_v1__smu_s1")
-        assert not _companion_ddl.is_sim_phy("g_v1__sms_s1")
 
-    def test_sim_union_phy_markers(self):
-        inferred = _companion_ddl.sim_union_phy("MyDomain_V3", "sAbc", include_inferred=True)
-        asserted = _companion_ddl.sim_union_phy("MyDomain_V3", "sAbc", include_inferred=False)
+    def test_sim_union_phy_marker(self):
+        inferred = _companion_ddl.sim_union_phy("MyDomain_V3", "sAbc")
         assert inferred == "mydomain_v3__smu_sabc"
-        assert asserted == "mydomain_v3__sms_sabc"
-        assert inferred != asserted
 
-    def test_simulation_union_drop_all_drops_both_views(self):
+    def test_simulation_union_drop_all_drops_overlay_view(self):
         from back.core.graphdb.lakebase.LakebaseSimulationUnion import (
             LakebaseSimulationUnion,
         )
@@ -75,10 +71,9 @@ class TestSimPhy:
 
         LakebaseSimulationUnion(Store()).drop_all("G_V1", "s1")
         sqls = [c[0] for c in cur.calls]
-        inferred = _companion_ddl.sim_union_phy("G_V1", "s1", include_inferred=True)
-        asserted = _companion_ddl.sim_union_phy("G_V1", "s1", include_inferred=False)
+        inferred = _companion_ddl.sim_union_phy("G_V1", "s1")
         assert any(inferred in s for s in sqls)
-        assert any(asserted in s for s in sqls)
+        assert len(sqls) == 1
 
     def test_sim_union_view_sql_overlays_sandbox_subjects(self):
         cur = _Cursor()

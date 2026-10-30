@@ -37,6 +37,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
     // Avoids embedding JSON in onclick HTML attributes (double quotes break the attribute).
     let _lkDomainRegistry = {};
+    // Simulation object groups keyed by "domainBase::simId"; rebuilt with the domain registry.
+    let _lkSimRegistry = {};
     // UC/Lakeflow objects keyed by domain base name; populated by loadLakebaseSyncObjects.
     let _lkUCRegistry = {};
     // UC analytics tables keyed by domain base name; populated by loadLakebaseAnalyticsObjects.
@@ -45,8 +47,63 @@ document.addEventListener('DOMContentLoaded', function () {
     let _lkOrphanRegistry = {};
     // Delta UC objects keyed by domain base name (triplestore_<safe>_V<n>).
     let _dtDomainRegistry = {};
+    // Delta simulation groups keyed by "domainBase::simId".
+    let _dtSimRegistry = {};
     // Analytics groups whose slug matches no domain, keyed by that slug.
     let _dtOrphanRegistry = {};
+    function simulationSuffix(name) {
+        const match = String(name || '').match(/__(sim|smu|sms)_([a-z0-9]+)$/i);
+        if (!match) return null;
+        return { marker: match[1].toLowerCase(), id: match[2].toLowerCase() };
+    }
+
+    function simulationSectionHtml(domainKey, schema, simItems, registry, dropClass, dataAttr, rowHtml) {
+        if (!simItems.length) return '';
+        const bySim = {};
+        simItems.forEach(function (o) {
+            const sim = simulationSuffix(o.name);
+            const sid = sim ? sim.id : 'simulation';
+            if (!bySim[sid]) bySim[sid] = [];
+            bySim[sid].push(o);
+        });
+        let html = '<div class="lk-sim-section">';
+        html += '<div class="lk-sim-header">'
+            + '<i class="bi bi-diagram-3 text-muted"></i>'
+            + '<span>Simulations</span>'
+            + '<span class="badge bg-secondary-subtle text-secondary-emphasis border">'
+            + simItems.length + '</span></div>';
+        html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
+            + '<th class="lk-col-type">Type</th><th>Name</th>'
+            + '<th class="text-end lk-col-action">Action</th>'
+            + '</tr></thead><tbody>';
+        Object.keys(bySim).sort().forEach(function (sid) {
+            const bundle = [...bySim[sid]].sort(function (a, b) {
+                if (a.kind === b.kind) return 0;
+                return a.kind === 'view' ? -1 : 1;
+            });
+            registry[domainKey + '::' + sid] = {
+                domain: domainKey,
+                id: sid,
+                schema: schema,
+                items: bundle,
+            };
+            html += '<tr class="lk-sim-group-row">'
+                + '<td colspan="2">'
+                + '<span class="font-monospace">' + escapeHtmlSettings(sid) + '</span>'
+                + '<span class="badge bg-secondary-subtle text-secondary-emphasis border ms-2">'
+                + bundle.length + '</span></td>'
+                + '<td class="text-end">'
+                + '<button type="button" class="btn btn-sm btn-outline-danger lk-sim-delete-btn '
+                + dropClass + '" ' + dataAttr + '="' + escapeHtmlSettings(domainKey + '::' + sid) + '"'
+                + ' title="Drop this simulation sandbox and overlay">'
+                + '<i class="bi bi-trash3 me-1"></i>Delete</button>'
+                + '</td></tr>';
+            bundle.forEach(function (o) { html += rowHtml(o); });
+        });
+        html += '</tbody></table></div>';
+        return html;
+    }
+
     const UI_BRANDING_DEFAULTS = {
         version: 1,
         app_title: 'OntoBricks',
@@ -2682,6 +2739,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 analyticsByKey[grp.key] = grp.items || [];
             });
             _dtDomainRegistry = {};
+            _dtSimRegistry = {};
             _dtOrphanRegistry = {};
 
             const analyticsWarning = data.analytics_message
@@ -2783,14 +2841,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     + '<i class="bi bi-trash3 me-1"></i>Delete</button>';
                 html += '</div>';
                 html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
-                html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
-                    + '<th style="width:90px">Type</th><th>Name</th>'
-                    + '<th class="text-end" style="width:90px">Action</th>'
-                    + '</tr></thead><tbody>';
-                (grp.items || []).forEach(function (o) {
-                    html += mkObjectRow(o.kind, o.name, o.full_name);
-                });
-                html += '</tbody></table>';
+                const liveItems = (grp.items || []).filter(function (o) { return !simulationSuffix(o.name); });
+                const simItems = (grp.items || []).filter(function (o) { return simulationSuffix(o.name); });
+                if (liveItems.length) {
+                    html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
+                        + '<th class="lk-col-type">Type</th><th>Name</th>'
+                        + '<th class="text-end lk-col-action">Action</th>'
+                        + '</tr></thead><tbody>';
+                    liveItems.forEach(function (o) {
+                        html += mkObjectRow(o.kind, o.name, o.full_name);
+                    });
+                    html += '</tbody></table>';
+                }
+                html += simulationSectionHtml(
+                    key, '', simItems, _dtSimRegistry, 'dt-drop-sim-btn', 'data-dt-sim',
+                    function (o) { return mkObjectRow(o.kind, o.name, o.full_name); }
+                );
                 html += analyticsBlock(analyticsItems, false);
                 html += '</div></div>';
             });
@@ -2829,6 +2895,11 @@ document.addEventListener('DOMContentLoaded', function () {
             result.querySelectorAll('.dt-drop-domain-btn').forEach(function (el) {
                 el.addEventListener('click', function () {
                     dropDeltaDomainObjects(this.dataset.dtDomain);
+                });
+            });
+            result.querySelectorAll('.dt-drop-sim-btn').forEach(function (el) {
+                el.addEventListener('click', function () {
+                    dropDeltaSimulationObjects(this.dataset.dtSim);
                 });
             });
             result.querySelectorAll('.dt-drop-orphan-btn').forEach(function (el) {
@@ -2948,6 +3019,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         showNotification('All objects dropped', 'success');
         await loadDeltaObjects();
+    }
+
+    function dropDeltaSimulationObjects(simKey) {
+        const entry = _dtSimRegistry[simKey];
+        if (!entry) {
+            showNotification('Simulation not found: ' + simKey, 'danger');
+            return;
+        }
+        _confirmDropDelta(entry.id, entry.items || []);
     }
 
     function dropDeltaDomainObjects(domainKey) {
@@ -3110,7 +3190,19 @@ document.addEventListener('DOMContentLoaded', function () {
             // Tables: "{base}_sync", "{base}__app", "{base}_adj_*",
             //         "{base}_entity_search", and "{base}_props" → base
             // Views:  "{base}"                          → base
+            // Simulations: "{base}__sim_<id>", "{base}__smu_<id>",
+            //              leftover "{base}__sms_<id>" → base
+            function simulationSuffix(name) {
+                const match = String(name || '').match(/__(sim|smu|sms)_([a-z0-9]+)$/i);
+                if (!match) return null;
+                return { marker: match[1].toLowerCase(), id: match[2].toLowerCase() };
+            }
+
             function objectBase(name, kind) {
+                const sim = simulationSuffix(name);
+                if (sim) {
+                    return name.slice(0, -(3 + sim.marker.length + sim.id.length));
+                }
                 if (kind === 'table') {
                     const domainSuffixes = [
                         '_entity_search',
@@ -3145,6 +3237,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // up items by key without embedding JSON in HTML attributes
             // (embedded JSON with " quotes breaks onclick="..." delimiters).
             _lkDomainRegistry = {};   // reset for this load
+            _lkSimRegistry = {};
             _lkUCRegistry = {};
 
             [...tables.map(o => ({ kind: 'table', schemaName: o.schema, name: o.name })),
@@ -3200,14 +3293,64 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // ── body ──────────────────────────────────────────────
                     html += '<div id="' + collapseId + '" class="collapse lk-domain-body">';
-                    html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
-                        + '<th style="width:90px">Type</th><th>Name</th>'
-                        + '<th class="text-end" style="width:90px">Action</th>'
-                        + '</tr></thead><tbody>';
-                    sorted.forEach(o => {
-                        html += mkObjectRow(o.kind, o.schemaName, o.name);
-                    });
-                    html += '</tbody></table>';
+                    const liveItems = sorted.filter(o => !simulationSuffix(o.name));
+                    const simItems = sorted.filter(o => simulationSuffix(o.name));
+                    if (liveItems.length) {
+                        html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
+                            + '<th class="lk-col-type">Type</th><th>Name</th>'
+                            + '<th class="text-end lk-col-action">Action</th>'
+                            + '</tr></thead><tbody>';
+                        liveItems.forEach(o => {
+                            html += mkObjectRow(o.kind, o.schemaName, o.name);
+                        });
+                        html += '</tbody></table>';
+                    }
+                    if (simItems.length) {
+                        const bySim = {};
+                        simItems.forEach(o => {
+                            const sim = simulationSuffix(o.name);
+                            const sid = sim ? sim.id : 'simulation';
+                            if (!bySim[sid]) bySim[sid] = [];
+                            bySim[sid].push(o);
+                        });
+                        html += '<div class="lk-sim-section">';
+                        html += '<div class="lk-sim-header">'
+                            + '<i class="bi bi-diagram-3 text-muted"></i>'
+                            + '<span>Simulations</span>'
+                            + '<span class="badge bg-secondary-subtle text-secondary-emphasis border">'
+                            + simItems.length + '</span></div>';
+                        html += '<table class="table table-sm mb-0"><thead class="table-light"><tr>'
+                            + '<th class="lk-col-type">Type</th><th>Name</th>'
+                            + '<th class="text-end lk-col-action">Action</th>'
+                            + '</tr></thead><tbody>';
+                        Object.keys(bySim).sort().forEach(sid => {
+                            const bundle = [...bySim[sid]].sort((a, b) => {
+                                if (a.kind === b.kind) return 0;
+                                return a.kind === 'view' ? -1 : 1;
+                            });
+                            _lkSimRegistry[key + '::' + sid] = {
+                                domain: key,
+                                id: sid,
+                                schema: grp.schema,
+                                items: bundle,
+                            };
+                            html += '<tr class="lk-sim-group-row">'
+                                + '<td colspan="2">'
+                                + '<span class="font-monospace">' + escapeHtmlSettings(sid) + '</span>'
+                                + '<span class="badge bg-secondary-subtle text-secondary-emphasis border ms-2">'
+                                + bundle.length + '</span></td>'
+                                + '<td class="text-end">'
+                                + '<button type="button" class="btn btn-sm btn-outline-danger lk-sim-delete-btn lk-drop-sim-btn"'
+                                + ' data-lk-sim="' + escapeHtmlSettings(key + '::' + sid) + '"'
+                                + ' title="Drop this simulation sandbox and overlay">'
+                                + '<i class="bi bi-trash3 me-1"></i>Delete</button>'
+                                + '</td></tr>';
+                            bundle.forEach(o => {
+                                html += mkObjectRow(o.kind, o.schemaName, o.name);
+                            });
+                        });
+                        html += '</tbody></table></div>';
+                    }
                     // Placeholders filled after the main load by loadLakebaseSyncObjects()
                     // and loadLakebaseAnalyticsObjects()
                     html += '<div class="lk-sync-slot" data-lk-base="' + escapeHtmlSettings(key) + '"></div>';
@@ -3226,6 +3369,11 @@ document.addEventListener('DOMContentLoaded', function () {
             result.querySelectorAll('.lk-drop-domain-btn').forEach(btn => {
                 btn.addEventListener('click', function () {
                     dropDomainObjects(this.dataset.lkDomain);
+                });
+            });
+            result.querySelectorAll('.lk-drop-sim-btn').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    dropSimulationObjects(this.dataset.lkSim);
                 });
             });
             result.querySelectorAll('.lk-drop-obj-btn').forEach(btn => {
@@ -3493,6 +3641,45 @@ document.addEventListener('DOMContentLoaded', function () {
             refreshBtn.addEventListener('click', function () { loadLakebasePermissions(); });
         }
     }());
+
+    /** Drop one simulation sandbox + overlay views (views first, then the table). */
+    function dropSimulationObjects(simKey) {
+        const entry = _lkSimRegistry[simKey];
+        if (!entry) {
+            showNotification('Simulation not found: ' + simKey, 'danger');
+            return;
+        }
+        const items = entry.items || [];
+        const schema = entry.schema;
+        const database = document.getElementById('lakebaseGraphDb')?.value || '';
+        const count = items.length;
+        const listHtml = items.map(o =>
+            '<li class="font-monospace small">' + escapeHtmlSettings(o.kind) + ': '
+            + escapeHtmlSettings(o.name) + '</li>'
+        ).join('');
+        const bodyContent = 'Drop <strong>' + count + ' object' + (count !== 1 ? 's' : '')
+            + '</strong> for simulation <code>' + escapeHtmlSettings(entry.id) + '</code>?'
+            + '<ul class="mt-2 mb-0 ps-3">' + listHtml + '</ul>';
+
+        const modalEl = document.getElementById('lkDropConfirmModal');
+        const bodyEl = document.getElementById('lkDropConfirmModalBody');
+        const confirmBtn = document.getElementById('lkDropConfirmBtn');
+        if (!modalEl || !bodyEl || !confirmBtn) {
+            if (window.confirm('Drop ' + count + ' objects for simulation ' + entry.id + '?')) {
+                _execDropAll(items, schema, database, '', []);
+            }
+            return;
+        }
+        bodyEl.innerHTML = bodyContent;
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        newBtn.addEventListener('click', function () {
+            modal.hide();
+            _execDropAll(items, schema, database, '', []);
+        });
+        modal.show();
+    }
 
     /** Drop all objects for a domain (views first, then tables, then UC/Lakeflow sync objects).
      *  Takes only the registry key — items are looked up from _lkDomainRegistry

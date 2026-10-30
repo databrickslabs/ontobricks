@@ -1383,7 +1383,7 @@ ontology/mapping leaves the simulation tables alone. Sandbox triples stay
 in the graph schema and are rebuilt by the next run. Runs execute as
 `TaskManager` background tasks.
 `Artifacts` names the physical objects of a scenario — sandbox
-table (Lakebase/Delta), Explorer overlay views (`__smu_` / `__sms_`), or
+table (Lakebase/Delta), Explorer overlay view (`__smu_`), or
 the isolated Neo4j graph — and the last-run item counts. The scenario
 editor shows that catalog in a third column.
 

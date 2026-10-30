@@ -264,11 +264,6 @@ class NodeBusinessRuleService:
             live_union = effective_graph_query_table(
                 domain, settings, include_inferred=True, store=store
             )
-            live_asserted = (
-                store.synced_table_name(effective_graph_name(domain))
-                if hasattr(store, "synced_table_name")
-                else live_union
-            )
-            ensure(live_union, live_asserted)
+            ensure(live_union)
 
         return svc, "simulation", _refresh_views

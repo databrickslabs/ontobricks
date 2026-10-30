@@ -33,6 +33,18 @@ def test_lakebase_domain_grouping_keeps_unrecognized_names_unchanged():
     assert "return name;" in _object_base_block()
 
 
+def test_lakebase_domain_grouping_folds_simulation_objects_into_graph_base():
+    source = SETTINGS_JS.read_text(encoding="utf-8")
+    assert "__(sim|smu|sms)_" in source
+    assert "lk-sim-section" in source
+    assert "lk-sim-group-row" in source
+    assert "lk-drop-sim-btn" in source
+    assert "dt-drop-sim-btn" in source
+    assert "function dropSimulationObjects" in source
+    assert "function dropDeltaSimulationObjects" in source
+    assert "Simulations" in source
+
+
 def test_lakebase_group_count_and_delete_registry_use_normalized_base():
     source = SETTINGS_JS.read_text(encoding="utf-8")
     assert "const base = objectBase(o.name, o.kind);" in source

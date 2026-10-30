@@ -392,6 +392,44 @@
     font-size: 0.82rem;
 }
 
+.lk-col-type {
+    width: 90px;
+}
+
+.lk-col-action {
+    width: 90px;
+}
+
+.lk-sim-section {
+    background: var(--db-surface-warm);
+    border-top: 1px solid var(--db-border-light);
+}
+
+.lk-sim-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.75rem 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--db-text-secondary);
+}
+
+.lk-sim-group-row td {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.72rem;
+    color: var(--db-text-muted);
+    background: var(--db-line-soft);
+    border-bottom: 1px solid var(--db-border-light);
+    vertical-align: middle;
+}
+
+.lk-sim-delete-btn {
+    font-size: 0.7rem;
+    line-height: 1;
+    padding: 0.2rem 0.45rem;
+}
+
 /* Lakeflow sync sub-section inside each domain card */
 .lk-sync-section {
     background: #ffffff;

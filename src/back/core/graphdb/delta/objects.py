@@ -18,16 +18,19 @@ _ANALYTICS_SUFFIXES = ("_type_predicates", "_type_profiles", "_summary")
 _WORK_RE = re.compile(r"_work(?:_.*)?$")
 
 _VIEW_NAME_RE = re.compile(r"^triplestore_(?P<safe>.+)_V(?P<version>[^_]+)$", re.I)
+_SIM_LEAF_RE = re.compile(r"__(?P<marker>sim|smu|sms)_(?P<id>[a-z0-9]+)$", re.I)
 
 
 def object_base(name: str) -> str:
     """Strip a companion suffix to get the domain group key.
 
-    Delegates to :func:`strip_graph_leaf_suffix` so Settings → Lakehouse
-    Delete groups adjacency, entity-search, and props tables with the
-    gateway view they belong to.
+    Simulation sandboxes (``__sim_<id>``) and Explorer overlays
+    (``__smu_<id>``, leftover ``__sms_<id>``) fold into the same card as
+    the live graph. Other companions go through
+    :func:`strip_graph_leaf_suffix` (adjacency, entity-search, props).
     """
-    return strip_graph_leaf_suffix(name)
+    stem = _SIM_LEAF_RE.sub("", name or "")
+    return strip_graph_leaf_suffix(stem)
 
 
 def uc_object_kind(table_type: str) -> str:
@@ -38,11 +41,18 @@ def uc_object_kind(table_type: str) -> str:
 def _drop_sort_key(name: str, kind: str) -> tuple:
     """Order a domain's UC objects so a dependent always drops before its source.
 
-    Views before tables, and within views ``_graph`` then ``_data`` then the
-    R2RML gateway. ``_data`` only appears among the views for a domain built in
-    view-only materialization, where it *is* a view over the gateway — hence it
-    has to drop between the two.
+    Overlay views first, then other views (``_graph`` then ``_data`` then the
+    R2RML gateway), then the simulation sandbox table, then remaining tables.
+    ``_data`` only appears among the views for a domain built in view-only
+    materialization, where it *is* a view over the gateway — hence it has to
+    drop between the two.
     """
+    marker = ""
+    match = _SIM_LEAF_RE.search(name or "")
+    if match:
+        marker = match.group("marker").lower()
+    if marker in {"smu", "sms"}:
+        return (0, -1, name)
     if kind == "view":
         if name.endswith("_graph"):
             order = 0
@@ -51,6 +61,8 @@ def _drop_sort_key(name: str, kind: str) -> tuple:
         else:
             order = 2
         return (0, order, name)
+    if marker == "sim":
+        return (1, -1, name)
     order = 0 if name.endswith("_data") else 1
     return (1, order, name)
 

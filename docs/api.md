@@ -577,7 +577,7 @@ type Query {
 
 The Knowledge Graph API provides stateless, programmatic access to the graph viewer — triple store status, entity search, ontology artifacts, and build triggers. All endpoints accept an optional `project_name` query parameter to load a domain from the registry instead of the browser session.
 
-Pass `simulation_id` (and optional `include_inferred`) on `GET /digitaltwin/triples`, `GET /digitaltwin/triples/find`, `GET /digitaltwin/stats`, and GraphQL to read a **ready** what-if sandbox — the same overlay Explorer uses. Create and run scenarios with [`/api/v1/simulations`](#simulation-api).
+Pass `simulation_id` on `GET /digitaltwin/triples`, `GET /digitaltwin/triples/find`, `GET /digitaltwin/stats`, and GraphQL to read a **ready** what-if sandbox — the same inferred overlay Explorer uses (`include_inferred` only switches the live graph). Create and run scenarios with [`/api/v1/simulations`](#simulation-api).
 
 ### Base URL
 

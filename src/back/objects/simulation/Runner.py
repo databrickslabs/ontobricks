@@ -381,12 +381,7 @@ class Runner:
             live_union = effective_graph_query_table(
                 self._domain, self._settings, include_inferred=True, store=live
             )
-            live_asserted = (
-                live.synced_table_name(graph_name)
-                if hasattr(live, "synced_table_name")
-                else live_union
-            )
-            ensure(live_union, live_asserted)
+            ensure(live_union)
         backend = normalize_graph_backend(
             (getattr(self._domain, "info", None) or {}).get("graph_backend")
         )

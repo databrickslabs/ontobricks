@@ -19,17 +19,15 @@ class TestArtifacts:
         assert kinds["sandbox"]["kind"] == "table"
         assert kinds["sandbox"]["name"] == _companion_ddl.sim_phy("Dom_V1", "sAbc")
         assert kinds["explorer_inferred"]["name"] == _companion_ddl.sim_union_phy(
-            "Dom_V1", "sAbc", include_inferred=True
+            "Dom_V1", "sAbc"
         )
-        assert kinds["explorer_asserted"]["name"] == _companion_ddl.sim_union_phy(
-            "Dom_V1", "sAbc", include_inferred=False
-        )
+        assert "explorer_asserted" not in kinds
 
     def test_delta_and_neo4j_expected_names(self):
         delta = Artifacts.expected(
             "databricks", "cat.sch.tbl", "s1", sandbox_table="cat.sch.tbl__sim_s1"
         )
-        assert [o["kind"] for o in delta] == ["table", "view", "view"]
+        assert [o["kind"] for o in delta] == ["table", "view"]
         assert delta[1]["name"] == "cat.sch.tbl__smu_s1"
         neo = Artifacts.expected("neo4j", "G_V1", "s1")
         assert neo == [{"kind": "graph", "role": "sandbox", "name": "G_V1__sim_s1"}]
@@ -69,13 +67,10 @@ class TestArtifacts:
             table="cat.sch.g__sim_s1",
             _graph_name="g",
             _sim_id="s1",
-            _view_name=lambda inferred: (
-                "cat.sch.g__smu_s1" if inferred else "cat.sch.g__sms_s1"
-            ),
+            _view_name=lambda: "cat.sch.g__smu_s1",
         )
         objects = Artifacts.from_sandbox(sandbox, "databricks")
         assert [o["name"] for o in objects] == [
             "cat.sch.g__sim_s1",
             "cat.sch.g__smu_s1",
-            "cat.sch.g__sms_s1",
         ]

@@ -436,20 +436,20 @@ const SimulationPage = {
         if (!box) return;
         box.classList.toggle('d-none', !visible);
         const bar = document.getElementById('simWbProgressBar');
-        const pctEl = document.getElementById('simWbProgressPct');
         const msgEl = document.getElementById('simWbProgressMsg');
-        const doneBox = document.getElementById('simWbProgressDone');
+        const running = visible && !done && !failed;
         if (bar) {
             bar.style.width = `${pct || 0}%`;
+            bar.textContent = `${pct || 0}%`;
             bar.setAttribute('aria-valuenow', String(pct || 0));
             bar.classList.toggle('bg-success', done);
             bar.classList.toggle('bg-danger', failed);
+            bar.classList.toggle('progress-bar-animated', running);
+            bar.classList.toggle('progress-bar-striped', true);
         }
-        if (pctEl) pctEl.textContent = `${pct || 0}%`;
         if (msgEl && msg) msgEl.textContent = msg;
-        if (doneBox) doneBox.classList.toggle('d-none', !done);
         const runBtn = document.getElementById('simWbRunBtn');
-        if (runBtn && this.config.supported) runBtn.disabled = visible && !done && !failed;
+        if (runBtn && this.config.supported) runBtn.disabled = running;
     },
 
     _stopPolling({ keepProgress = false } = {}) {
@@ -477,13 +477,11 @@ const SimulationPage = {
                 }
                 const task = data.task;
                 if (task.status === 'completed') {
-                    this._stopPolling({ keepProgress: true });
-                    this._setProgress(true, 100, task.message || 'Simulation complete', { done: true });
+                    this._stopPolling();
                     if (typeof refreshTasks === 'function') refreshTasks();
-                    showNotification(task.message || 'Simulation complete — open Results', 'success');
+                    showNotification(task.message || 'Simulation complete', 'success');
                     await this.loadScenarios();
                     if (window.SimulationWorkbench) SimulationWorkbench.refreshArtifacts();
-                    this.showResults(simId);
                 } else if (task.status === 'failed' || task.status === 'cancelled') {
                     this._stopPolling({ keepProgress: true });
                     if (typeof refreshTasks === 'function') refreshTasks();

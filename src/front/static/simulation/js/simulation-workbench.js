@@ -18,10 +18,6 @@ const SimulationWorkbench = {
         on('simWbAddPatchBtn', 'click', () => this.addPatch());
         on('simWbFactWizardBtn', 'click', () => this.openFactWizard());
         on('simWbFactPromptBtn', 'click', () => this.proposeFacts());
-        on('simWbViewResultsBtn', 'click', () => {
-            const id = this.currentId || (window.SimulationPage && SimulationPage.runningId);
-            if (id && window.SimulationPage) SimulationPage.showResults(id);
-        });
         on('simWbSaveBtn', 'click', () => this.save());
         on('simWbRunBtn', 'click', () => this.run());
         on('simWbBackBtn', 'click', () => {
@@ -640,7 +636,7 @@ const SimulationWorkbench = {
         }
         if (!box) return;
         if (!objects.length) {
-            box.innerHTML = '<p class="text-muted small mb-0">Save and run the scenario to create the sandbox table and Explorer overlay views.</p>';
+            box.innerHTML = '<p class="text-muted small mb-0">Save and run the scenario to create the sandbox table and Explorer overlay view.</p>';
             return;
         }
         const esc = (v) => SimulationPage.esc(v);
@@ -649,15 +645,11 @@ const SimulationWorkbench = {
                 label: 'Sandbox triples',
                 hint: objKind => objKind === 'graph'
                     ? 'Private Neo4j graph of the in-scope triples. Hypothetical facts and scenario reasoning write here. Explorer overlays this marker graph onto the live neighbourhood.'
-                    : 'Private copy of the in-scope triples. Hypothetical facts and scenario reasoning write here. Explorer never reads this table directly; it uses the overlay views below.',
+                    : 'Private copy of the in-scope triples. Hypothetical facts and scenario reasoning write here. Explorer never reads this table directly; it uses the overlay view below.',
             },
             explorer_inferred: {
-                label: 'Explorer inferred overlay',
-                hint: () => 'Live graph with inferred triples, UNION the sandbox. Sandbox (subject, predicate) pairs replace live ones; other live facts stay visible. Explorer uses this when Inferred is on. Scenario-run inferences appear because they were written into the sandbox.',
-            },
-            explorer_asserted: {
-                label: 'Explorer asserted overlay',
-                hint: () => 'Live asserted graph only, UNION the sandbox. Production inferences are hidden; scenario-run inferences still appear because they live in the sandbox. Explorer uses this when Inferred is off.',
+                label: 'Explorer overlay',
+                hint: () => 'Live inferred graph UNION the sandbox. Sandbox (subject, predicate) pairs replace live ones; other live facts stay visible. API, MCP and Explorer always read this view. Scenario-run inferences appear because they were written into the sandbox.',
             },
         };
         const rows = objects.map((obj) => {

@@ -57,8 +57,8 @@ class TestTwinGraphAccess:
 
         seen = {}
 
-        def fake_explorer(self, sid, *, include_inferred, store):
-            seen.update(sid=sid, inf=include_inferred, store=store)
+        def fake_explorer(self, sid, *, store):
+            seen.update(sid=sid, store=store)
             return f"g__smu_{sid}"
 
         monkeypatch.setattr(Simulation, "explorer_relation", fake_explorer)
@@ -66,7 +66,7 @@ class TestTwinGraphAccess:
             "d", "s", "st", include_inferred=False, simulation_id="abc"
         )
         assert out == "g__smu_abc"
-        assert seen == {"sid": "abc", "inf": False, "store": "st"}
+        assert seen == {"sid": "abc", "store": "st"}
 
     def test_dataquality_table_requires_view(self):
         with pytest.raises(ValidationError, match="VIEW is not available"):

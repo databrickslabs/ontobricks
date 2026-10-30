@@ -216,3 +216,164 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9837 passed, 326 skipped, 8 deselected, 39 warnings in 53.37s
 
+================================================================================
+## Drop unused simulation asserted overlay view
+================================================================================
+
+Context: Each simulation created a Lakebase/Delta table plus two Explorer
+union views (`__smu_` inferred, `__sms_` asserted). API, MCP and Explorer
+always read the inferred overlay. The asserted view was created and catalogued
+but never selected.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Name only the `__smu_` overlay; remove the `__sms_` marker.
+2. src/back/core/graphdb/lakebase/LakebaseSimulationUnion.py
+   Create and drop a single overlay view.
+3. src/back/objects/simulation/Sandbox.py
+   Lakebase and Delta sandboxes materialise one Explorer view.
+4. src/back/objects/simulation/Simulation.py
+   explorer_relation always unions the live inferred graph with the sandbox.
+5. src/back/objects/digitaltwin/TwinGraphAccess.py
+   Ignore include_inferred when a simulation_id is set.
+6. src/back/objects/simulation/Artifacts.py
+   Catalog sandbox table + explorer_inferred view only.
+7. src/back/objects/simulation/Runner.py
+   Refresh one overlay after a run.
+8. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+   Refresh one overlay after sandbox SWRL.
+9. src/mcp-server/server/simulation_tools.py
+   Selecting a sandbox forces the inferred overlay.
+10. src/front/static/simulation/js/simulation-workbench.js
+    Drop the asserted-overlay artefact hint.
+11. src/front/templates/partials/simulation/_sim_workbench.html
+    Singular overlay-view copy.
+12. src/back/fastapi/graphql_routes.py
+    Document that include_inferred applies to the live graph only.
+13. docs/architecture.md, docs/user-guide.md, docs/api.md
+    Document the single overlay.
+14. tests/units/simulation/*, tests/units/front/test_simulation_page_contract.py,
+    tests/units/graphdb/test_v090_graph_access_twin_helpers.py,
+    tests/units/dtwin/test_entity_business_rules.py
+    Match the single-view contract.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseSimulationUnion.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/objects/simulation/Artifacts.py
+- src/back/objects/simulation/Runner.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/mcp-server/server/simulation_tools.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/back/fastapi/graphql_routes.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/api.md
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_artifacts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/dtwin/test_entity_business_rules.py
+- changelogs/v0.10.0/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9838 passed, 326 skipped, 8 deselected, 39 warnings in 49.06s
+
+================================================================================
+## Group simulation Lakebase objects under the domain card
+================================================================================
+
+Context: Settings → Lakebase → Objects treated `__sim_<id>` tables and
+`__smu_<id>` overlay views as their own domain cards. They belong to the
+parent graph and should nest inside that domain.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Strip `__sim_` / `__smu_` / leftover `__sms_` suffixes in objectBase;
+   render a Simulations subsection grouped by scenario id.
+2. src/front/static/global/css/config.css
+   Style the Simulations subsection with existing `--db-*` tokens.
+3. tests/units/front/test_lakebase_object_grouping.py
+   Contract for simulation suffix folding and the subsection markup.
+4. docs/user-guide.md
+   Document the nested Simulations group on the Objects tab.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- src/front/static/global/css/config.css
+- tests/units/front/test_lakebase_object_grouping.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9838 passed, 326 skipped, 8 deselected, 39 warnings in 49.06s
+
+================================================================================
+## Delete simulation Lakebase objects as a block
+================================================================================
+
+Context: Settings → Lakebase → Objects listed each simulation table/view
+with its own Drop. Operators want one action that removes the whole
+sandbox block (overlay view(s) then `__sim_` table).
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Per-scenario Delete on the Simulations group row; confirm then drop
+   the bundle (views first).
+2. src/front/static/global/css/config.css
+   Align the group-row Delete control with the domain card action.
+3. tests/units/front/test_lakebase_object_grouping.py
+   Contract for lk-drop-sim-btn and dropSimulationObjects.
+4. docs/user-guide.md
+   Document the per-scenario block delete.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- src/front/static/global/css/config.css
+- tests/units/front/test_lakebase_object_grouping.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9838 passed, 326 skipped, 8 deselected, 39 warnings in 54.84s
+
+================================================================================
+## Match simulation run progress to Knowledge Graph Build
+================================================================================
+
+Context: The workbench run used a custom card progress bar with a View
+results button at the end. Operators wanted the same striped Build bar
+and no results CTA when the run finishes.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Replace the card with the Build progress markup (striped bar + step
+   text); drop View results.
+2. src/front/static/simulation/js/simulation.js
+   Drive percent-in-bar like Build; hide the bar on success.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Remove the View results click handler.
+4. src/front/static/simulation/css/simulation.css
+   Size the bar with ob-progress-md (20px).
+5. tests/units/front/test_simulation_page_contract.py
+   Contract for the Build-style bar and no results CTA.
+6. docs/user-guide.md
+   Document the Build-style bar and Results tab / list clipboard.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9840 passed, 326 skipped, 8 deselected, 39 warnings in 50.45s
+

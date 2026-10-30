@@ -295,8 +295,8 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
         def seed_focus_for_swrl(self, uri, hops=2):
             seeded.append((uri, hops))
 
-        def ensure_explorer_views(self, live_union, live_asserted):
-            views.append((live_union, live_asserted))
+        def ensure_explorer_views(self, live_union):
+            views.append(live_union)
 
     class FakeSim:
         def __init__(self, *a, **k):

@@ -10,7 +10,7 @@ from back.core.helpers import validate_table_name
 
 
 class LakebaseSimulationUnion:
-    """Create and drop the read-only live∪sandbox views Explorer queries."""
+    """Create and drop the read-only live∪sandbox view Explorer queries."""
 
     def __init__(self, store: Any) -> None:
         self._store = store
@@ -28,8 +28,5 @@ class LakebaseSimulationUnion:
 
     def drop_all(self, graph_name: str, sim_id: str) -> None:
         with self._store._cursor() as cur:
-            for include_inferred in (True, False):
-                view = _companion_ddl.sim_union_phy(
-                    graph_name, sim_id, include_inferred=include_inferred
-                )
-                _companion_ddl.drop_view(cur, view)
+            view = _companion_ddl.sim_union_phy(graph_name, sim_id)
+            _companion_ddl.drop_view(cur, view)

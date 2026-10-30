@@ -75,7 +75,6 @@ def view_phy(name: str) -> str:
 
 SIM_TABLE_MARKER = "__sim_"
 SIM_UNION_INFERRED_MARKER = "__smu_"
-SIM_UNION_ASSERTED_MARKER = "__sms_"
 _PG_IDENTIFIER_MAX_BYTES = 63
 
 
@@ -102,10 +101,9 @@ def sim_phy(name: str, sim_id: str) -> str:
     return _sim_named(name, sim_id, SIM_TABLE_MARKER)
 
 
-def sim_union_phy(name: str, sim_id: str, *, include_inferred: bool) -> str:
-    """Read-only view: live graph with sandbox after-picture per patched predicate."""
-    marker = SIM_UNION_INFERRED_MARKER if include_inferred else SIM_UNION_ASSERTED_MARKER
-    return _sim_named(name, sim_id, marker)
+def sim_union_phy(name: str, sim_id: str) -> str:
+    """Read-only view: live inferred graph with sandbox after-picture per patched predicate."""
+    return _sim_named(name, sim_id, SIM_UNION_INFERRED_MARKER)
 
 
 def is_sim_phy(table: str) -> bool:

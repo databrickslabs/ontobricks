@@ -925,20 +925,20 @@ select seed entities and returns after you choose **Explore selected**.
 - **Fit to View**: Click the fullscreen button to fit all entities in view
 
 **Graph source.** The **Graph** dropdown in the Explorer header switches
-the targeted view. A **ready** simulation is the live knowledge graph
-**UNION** the sandbox after-picture: simulated predicates overlay live
-ones, and the rest of each entity (existing properties and relations)
-stays visible. Explorer behaviour is unchanged (search, expand, hops,
-inferred, max entities). Entity **Inference rules (SWRL)** run against
-the sandbox (not the live graph) and write inferred triples there, so a
-rule such as attach-meter can see extra contracts asserted by the
-scenario. Opening Explorer from a scenario Results URI (or the Results
-**Explorer** button) lands on that sandbox via ``?simulation=``. Use
-**Live graph** to query the built knowledge graph only. The same
-dropdown is on Query (SPARQL / GraphQL) and Chat. Programmatic callers
-use ``GET /api/v1/simulations`` then pass ``simulation_id`` on
-``/api/v1/digitaltwin/triples``, ``/triples/find``, ``/stats``, GraphQL,
-or SPARQL.
+the targeted view. A **ready** simulation is the live inferred knowledge
+graph **UNION** the sandbox after-picture: simulated predicates overlay
+live ones, and the rest of each entity (existing properties and relations)
+stays visible. API, MCP and Explorer always read that overlay. Explorer
+behaviour is otherwise unchanged (search, expand, hops, max entities).
+Entity **Inference rules (SWRL)** run against the sandbox (not the live
+graph) and write inferred triples there, so a rule such as attach-meter
+can see extra contracts asserted by the scenario. Opening Explorer from a
+scenario Results URI (or the Results **Explorer** button) lands on that
+sandbox via ``?simulation=``. Use **Live graph** to query the built
+knowledge graph only. The same dropdown is on Query (SPARQL / GraphQL)
+and Chat. Programmatic callers use ``GET /api/v1/simulations`` then pass
+``simulation_id`` on ``/api/v1/digitaltwin/triples``, ``/triples/find``,
+``/stats``, GraphQL, or SPARQL.
 
 **Find & Filter:**
 - **Find**: Search for entities by label or URI — matching entities and their neighbors are highlighted and the camera zooms to focus on results
@@ -1310,12 +1310,11 @@ rules, or results, shows the brand spinner over that pane.
    graph slice, then the sandbox objects the run creates, each with its
    purpose. The **sandbox** is the private copy of in-scope triples
    (Lakebase/Delta table or Neo4j graph) that hypothetical facts and
-   scenario reasoning write to. The **Explorer inferred overlay** is the
-   live graph *with* production inferences **UNION** that sandbox; the
-   **Explorer asserted overlay** is the live asserted graph only **UNION**
-   the same sandbox. In both overlays, sandbox `(subject, predicate)`
+   scenario reasoning write to. The **Explorer overlay** is the live
+   inferred graph **UNION** that sandbox. Sandbox `(subject, predicate)`
    pairs replace live ones; other live facts stay visible. Scenario-run
-   inferences show in both because they were written into the sandbox.
+   inferences show because they were written into the sandbox. API, MCP
+   and Explorer always read this overlay.
    After a run the item counts appear under the table. Scope is a slice
    of the graph:
    - *Entity neighbourhood*: an entity URI and a number of hops (default 2).
@@ -1377,15 +1376,15 @@ re-run; the previous diff stays until the next successful run.
 
 **Run** saves the scenario and starts it as a background task. Follow it in
 the navbar **Background Tasks** hourglass (click the row to return to the
-editor) and on the workbench progress bar, which follows the phases (scope,
-seed, facts, reasoning, diff). Hypothetical entities you **Add** (for
-example extra contracts) are copied from the live graph with one hop of
-neighbours so SWRL can chain to meters, invoices, and the rest. When it
-finishes, the editor opens the **Results** tab with the before/after diff.
-You can also click **View results** on the progress bar, or the clipboard
-icon on the Scenarios list. If a previous run is still marked running
-(stuck worker or app restart), **Save** aborts it and writes the scenario
-so you can run again.
+editor) and on the workbench progress bar (same striped bar as Knowledge
+Graph **Build**), which follows the phases (scope, seed, facts, reasoning,
+diff). Hypothetical entities you **Add** (for example extra contracts) are
+copied from the live graph with one hop of neighbours so SWRL can chain to
+meters, invoices, and the rest. When it finishes the bar disappears; open
+the **Results** tab or the clipboard icon on the Scenarios list for the
+before/after diff. If a previous run is still marked running (stuck worker
+or app restart), **Save** aborts it and writes the scenario so you can run
+again.
 
 Tip: in the Knowledge Graph Explorer, the entity details panel has a
 **Simulate from here** button that opens the editor pre-filled with that
@@ -2040,11 +2039,16 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 ### Lakebase domain objects
 
 **Settings → Lakebase → Objects** groups each domain/version's reader view,
-`_sync` bulk table, `__app` writable companion, `_adj_in`, `_adj_out`, and
-`_entity_search`, and `_props` tables into one collapsible card. Its count includes every
-listed storage and index object. Individual **Drop** actions remain available;
-**Delete all objects for this domain** removes the whole group, including the
-four rebuildable graph-index tables.
+`_sync` bulk table, `__app` writable companion, `_adj_in`, `_adj_out`,
+`_entity_search`, and `_props` tables into one collapsible card. Simulation
+sandbox tables (`__sim_<id>`) and Explorer overlay views (`__smu_<id>`)
+fold into that same card under a **Simulations** subsection, keyed by
+scenario id — they are not listed as extra domain cards. Each scenario row
+has **Delete**, which drops that sandbox and its overlay views together
+(views first). Its count includes every listed storage, index, and
+simulation object. Individual **Drop** actions remain available; **Delete
+all objects for this domain** removes the whole group, including the four
+rebuildable graph-index tables and any simulation sandboxes.
 
 ### Lakehouse SQL warehouses and CloudFetch
 

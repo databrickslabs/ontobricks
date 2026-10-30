@@ -29,21 +29,12 @@
         </div>
     </div>
 
-    <div id="simWbProgress" class="card mb-3 d-none">
-        <div class="card-body py-3">
-            <div class="d-flex justify-content-between small mb-1">
-                <strong id="simWbProgressMsg">Starting simulation…</strong>
-                <span id="simWbProgressPct">0%</span>
-            </div>
-            <div class="progress sim-progress-track">
-                <div class="progress-bar" id="simWbProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
-            </div>
-            <div id="simWbProgressDone" class="d-none mt-3">
-                <button type="button" class="btn btn-sm btn-primary" id="simWbViewResultsBtn">
-                    <i class="bi bi-clipboard-data me-1"></i>View results
-                </button>
-            </div>
+    <div id="simWbProgress" class="mt-2 mb-3 d-none">
+        <div class="progress mb-2 ob-progress-md">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" id="simWbProgressBar"
+                 role="progressbar">0%</div>
         </div>
+        <small class="text-muted" id="simWbProgressMsg"></small>
     </div>
 
     <div class="card h-100">
@@ -150,7 +141,7 @@
                                 <span class="badge bg-secondary" id="simWbArtifactStatus">none</span>
                             </h6>
                             <div id="simWbArtifacts">
-                                <p class="text-muted small mb-0">Save and run the scenario to create the sandbox table and Explorer overlay views.</p>
+                                <p class="text-muted small mb-0">Save and run the scenario to create the sandbox table and Explorer overlay view.</p>
                             </div>
                         </section>
                     </div>

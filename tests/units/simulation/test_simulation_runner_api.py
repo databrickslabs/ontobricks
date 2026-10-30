@@ -301,8 +301,8 @@ class TestSimulationFacade:
                 yield Cur()
 
         store = Store()
-        view = sim.explorer_relation(row["id"], include_inferred=True, store=store)
-        expect = _companion_ddl.sim_union_phy("G_HR_v1", row["id"], include_inferred=True)
+        view = sim.explorer_relation(row["id"], store=store)
+        expect = _companion_ddl.sim_union_phy("G_HR_v1", row["id"])
         sandbox = LakebaseSimulationStore.sandbox_table_name("G_HR_v1", row["id"])
         assert view == expect
         assert seen and "UNION ALL" in seen[0]

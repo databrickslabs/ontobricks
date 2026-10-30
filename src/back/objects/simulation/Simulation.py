@@ -135,13 +135,13 @@ class Simulation:
         self,
         sim_id: str,
         *,
-        include_inferred: bool = True,
         store: Any = None,
     ) -> str:
-        """Live graph UNION sandbox after-picture for Explorer reads.
+        """Live inferred graph UNION sandbox after-picture for Explorer reads.
 
         Sandbox predicates overlay live ones; other live facts of the same
-        entity stay visible. The view is created lazily.
+        entity stay visible. The view is created lazily. API, MCP and
+        Explorer always use this overlay (never an asserted-only variant).
         """
         graph_name = effective_graph_name(self._domain)
         graph_store = store
@@ -154,20 +154,19 @@ class Simulation:
         backend = normalize_graph_backend(
             (getattr(self._domain, "info", None) or {}).get("graph_backend")
         )
+        live_union = effective_graph_query_table(
+            self._domain,
+            self._settings,
+            include_inferred=True,
+            store=graph_store,
+        )
         if backend == "lakebase":
             from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
 
-            view = _companion_ddl.sim_union_phy(
-                graph_name, sim_id, include_inferred=include_inferred
-            )
+            view = _companion_ddl.sim_union_phy(graph_name, sim_id)
             LakebaseSimulationUnion(graph_store).ensure(
                 view,
-                effective_graph_query_table(
-                    self._domain,
-                    self._settings,
-                    include_inferred=include_inferred,
-                    store=graph_store,
-                ),
+                live_union,
                 self.sandbox_relation(sim_id, store=graph_store),
             )
             return view
@@ -175,20 +174,14 @@ class Simulation:
         from back.objects.simulation.Sandbox import Sandbox
 
         simulation_sandbox = Sandbox(graph_store, graph_name, sim_id)
-        simulation_sandbox.ensure_explorer_views(
-            effective_graph_query_table(
-                self._domain, self._settings, include_inferred=True, store=graph_store
-            ),
-            effective_graph_query_table(
-                self._domain, self._settings, include_inferred=False, store=graph_store
-            ),
-        )
+        simulation_sandbox.ensure_explorer_views(live_union)
         # Neo4j does not have SQL views. Its Explorer overlay is performed by
         # GraphFilter from the sandbox marker graph.
         if backend == "neo4j":
             return sandbox
-        if hasattr(simulation_sandbox, "_view_name"):
-            return simulation_sandbox._view_name(include_inferred)
+        view_name = getattr(simulation_sandbox, "_view_name", None)
+        if callable(view_name):
+            return view_name()
         return sandbox
 
     def create(self, body: Dict[str, Any], owner: str = "") -> Dict[str, Any]:

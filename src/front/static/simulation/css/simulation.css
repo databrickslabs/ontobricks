@@ -1,11 +1,13 @@
 /* Simulation page (what-if sandboxes) */
 
-/* Progress is a sibling card of the workbench tabs; keep it out of the
-   shared `.content-section > .card { flex: 1 }` stretch so the tabs still
-   fill the remaining viewport like Ontology → Business Rules. */
-.sidebar-section > .content-section > #simWbProgress.card {
+/* Progress sits above the workbench tabs; keep it out of the shared
+   `.content-section > .card { flex: 1 }` stretch. */
+.sidebar-section > .content-section > #simWbProgress {
     flex: 0 0 auto;
-    overflow: visible;
+}
+
+#simWbProgress .progress.ob-progress-md {
+    height: 20px;
 }
 
 .sim-table td,
@@ -35,10 +37,6 @@ a.sim-uri-link {
 a.sim-uri-link:hover,
 a.sim-uri-link:focus-visible {
     text-decoration: underline;
-}
-
-.sim-progress-track {
-    height: 0.5rem;
 }
 
 .sim-results-search {

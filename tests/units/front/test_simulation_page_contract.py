@@ -100,12 +100,16 @@ def test_run_registers_with_background_tasks():
     assert "switchTo('workbench')" not in js
 
 
-def test_completed_run_keeps_view_results_cta():
+def test_run_progress_matches_build_bar_without_results_cta():
     js = _read(FRONT / "static/simulation/js/simulation.js")
     html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
-    assert 'id="simWbViewResultsBtn"' in html
-    assert "keepProgress: true" in js
-    assert "this.showResults(simId)" in js
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert 'id="simWbViewResultsBtn"' not in html
+    assert "ob-progress-md" in html
+    assert "progress-bar-striped" in html
+    assert 'id="simWbProgressMsg"' in html
+    assert "#simWbProgress .progress.ob-progress-md" in css
+    assert "this.showResults(simId)" not in js
     assert "tick()" in js
 
 
@@ -228,9 +232,9 @@ def test_scenario_panes_use_direct_content_section_stretch():
     assert 'class="card h-100"' in wb
     assert "ob-tabs-wrap" in wb
     css = _read(FRONT / "static/simulation/css/simulation.css")
-    assert ".sidebar-section > .content-section > #simWbProgress.card" in css
+    assert ".sidebar-section > .content-section > #simWbProgress" in css
     assert "flex: 0 0 auto" in css.split(
-        ".sidebar-section > .content-section > #simWbProgress.card", 1
+        ".sidebar-section > .content-section > #simWbProgress {", 1
     )[1].split("}", 1)[0]
 
 
@@ -298,8 +302,8 @@ def test_workbench_general_tab_stacks_sections():
     assert "SimulationWorkbench.refreshArtifacts" in page
     assert "sim-artifact-hint" in js
     assert "sim-col-role" in js
-    assert "Live graph with inferred triples" in js
-    assert "Live asserted graph only" in js
+    assert "Live inferred graph UNION the sandbox" in js
+    assert "explorer_asserted" not in js
     assert "Private copy of the in-scope triples" in js
     assert "Private Neo4j graph of the in-scope triples" in js
     css = _read(FRONT / "static/simulation/css/simulation.css")

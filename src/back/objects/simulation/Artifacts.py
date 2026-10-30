@@ -10,11 +10,10 @@ from back.core.helpers import effective_graph_name
 
 _ROLE_SANDBOX = "sandbox"
 _ROLE_INFERRED = "explorer_inferred"
-_ROLE_ASSERTED = "explorer_asserted"
 
 
 class Artifacts:
-    """Name and count the sandbox table/views (or Neo4j graph) of one scenario."""
+    """Name and count the sandbox table/view (or Neo4j graph) of one scenario."""
 
     @classmethod
     def describe(cls, domain: Any, row: Dict[str, Any]) -> Dict[str, Any]:
@@ -37,7 +36,7 @@ class Artifacts:
 
     @classmethod
     def from_sandbox(cls, sandbox: Any, backend: str) -> List[Dict[str, str]]:
-        """Exact names after a run, including Explorer overlay views."""
+        """Exact names after a run, including the Explorer overlay view."""
         kind = "graph" if backend == "neo4j" else "table"
         objects = [cls._object(kind, _ROLE_SANDBOX, getattr(sandbox, "table", ""))]
         if backend == "neo4j":
@@ -46,8 +45,7 @@ class Artifacts:
         sim_id = getattr(sandbox, "_sim_id", "") or ""
         view_name = getattr(sandbox, "_view_name", None)
         if callable(view_name):
-            objects.append(cls._object("view", _ROLE_INFERRED, view_name(True)))
-            objects.append(cls._object("view", _ROLE_ASSERTED, view_name(False)))
+            objects.append(cls._object("view", _ROLE_INFERRED, view_name()))
             return objects
         if graph_name and sim_id:
             objects.extend(cls._lakebase_views(graph_name, sim_id))
@@ -73,7 +71,6 @@ class Artifacts:
             return [
                 cls._object("table", _ROLE_SANDBOX, name),
                 cls._object("view", _ROLE_INFERRED, name.replace("__sim_", "__smu_")),
-                cls._object("view", _ROLE_ASSERTED, name.replace("__sim_", "__sms_")),
             ]
         from back.core.graphdb.lakebase import _companion_ddl
 
@@ -105,12 +102,7 @@ class Artifacts:
             Artifacts._object(
                 "view",
                 _ROLE_INFERRED,
-                _companion_ddl.sim_union_phy(graph_name, sim_id, include_inferred=True),
-            ),
-            Artifacts._object(
-                "view",
-                _ROLE_ASSERTED,
-                _companion_ddl.sim_union_phy(graph_name, sim_id, include_inferred=False),
+                _companion_ddl.sim_union_phy(graph_name, sim_id),
             ),
         ]
 

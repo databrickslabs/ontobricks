@@ -52,13 +52,14 @@ def _register_read_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     @_http.http_errors_as_text("select a simulation sandbox")
     async def select_simulation(
         simulation_id: str = "",
-        include_inferred: bool = True,
         domain_name: Optional[str] = None,
     ) -> str:
         """Select a ready scenario sandbox for subsequent graph tools.
 
-        Pass an empty simulation_id to return to the live graph.
-        Pass ``domain_name`` when the client does not reuse an MCP session.
+        Pass an empty simulation_id to return to the live inferred graph.
+        Pass ``live`` for the live asserted graph. A sandbox always reads
+        the inferred overlay. Pass ``domain_name`` when the client does
+        not reuse an MCP session.
         """
         blocked = await session.require_domain("select_simulation", domain_name)
         if blocked:
@@ -83,7 +84,7 @@ def _register_read_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                 "Run it before selecting the sandbox."
             )
         session.simulation_id = sid
-        session.include_inferred = include_inferred
+        session.include_inferred = True
         return f"Graph source is sandbox {row.get('label') or sid}."
 
 
