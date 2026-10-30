@@ -1823,7 +1823,7 @@ scripts/deploy.sh --dry-run
 
 | Requirement | Why | How to verify |
 |-------------|-----|---------------|
-| **Python ≥ 3.11** | App + tooling | `python3 --version` |
+| **Python ≥ 3.11** | App + tooling | `python3 --version` (Apple `/usr/bin/python3` 3.9 is fine when `uv` is on PATH — it provisions a matching CPython) |
 | **uv** | Dependency install (`make install`, `make setup`) | `uv --version` (setup.sh installs it if missing) |
 | **Databricks CLI ≥ 0.250.0** | Bundle deploy, bootstrap scripts | `databricks version` |
 | **python3** | JSON parsing, app.yaml render | `python3 --version` |

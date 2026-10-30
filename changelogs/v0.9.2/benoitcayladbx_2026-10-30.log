@@ -1,4 +1,38 @@
 ================================================================================
+## Let local setup create the venv when PATH python3 is Apple 3.9
+================================================================================
+
+Context: `./scripts/start.sh` reported "Virtual environment not found" and ran
+setup, which then aborted because `/usr/bin/python3` is macOS 3.9. The venv
+was never created. uv was already on PATH and can provision CPython >= 3.11
+(`requires-python` in pyproject.toml). Local preflight now treats uv as the
+runtime interpreter source; setup installs uv before that check.
+
+Changes:
+
+1. scripts/_internal/_deploy-preflight.sh
+   Pass local-dev Python when uv is present even if PATH python3 is 3.9;
+   require PATH python3 >= 3.11 only when uv is missing.
+2. scripts/setup.sh
+   Install uv before the --local preflight, then `uv venv`.
+3. tests/units/scripts/test_local_dev_python_preflight.py
+   Cover old PATH python3 with/without uv, and PATH 3.11 without uv.
+4. docs/deployment.md
+   Note that Apple python3 3.9 is acceptable when uv is on PATH.
+5. docs/getting-started.md
+   Document uv-provisioned CPython and the setup order.
+
+Modified files:
+- scripts/_internal/_deploy-preflight.sh
+- scripts/setup.sh
+- tests/units/scripts/test_local_dev_python_preflight.py
+- docs/deployment.md
+- docs/getting-started.md
+- changelogs/v0.9.2/benoitcayladbx_2026-10-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9629 passed, 326 skipped, 8 deselected, 40 warnings in 105.42s
+
+================================================================================
 ## Raise Dependabot security floors and regenerate locks
 ================================================================================
 

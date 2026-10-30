@@ -6,28 +6,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
-# Preflight before touching the venv or downloading packages.
-chmod +x scripts/_internal/check-deploy-prerequisites.sh
-scripts/_internal/check-deploy-prerequisites.sh --local
-
 echo "====================================="
 echo "  OntoBricks Setup"
 echo "====================================="
 echo ""
 
-# Check Python version
-echo "Checking Python version..."
-python_version=$(python3 --version 2>&1 | awk '{print $2}')
-echo "Python version: $python_version"
-echo ""
-
-# Install uv if not present
+# Install uv before the local preflight so Apple python3 3.9 is not a blocker:
+# uv provisions a CPython matching requires-python (>=3.11).
 if ! command -v uv &> /dev/null; then
     echo "Installing uv package manager..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
     echo ""
 fi
+
+chmod +x scripts/_internal/check-deploy-prerequisites.sh
+scripts/_internal/check-deploy-prerequisites.sh --local
 
 # Create virtual environment
 echo "Creating virtual environment..."

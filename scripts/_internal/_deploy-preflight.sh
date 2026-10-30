@@ -69,20 +69,35 @@ _preflight_check_databricks_auth() {
     _preflight_ok "Databricks CLI authenticated as ${user}"
 }
 
+_preflight_python_minor() {
+    python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "?"
+}
+
+_preflight_python_meets_min() {
+    python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null
+}
+
 _preflight_check_local_dev() {
     _preflight_begin "Local development prerequisites"
-    _preflight_require_cmd python3 "Python 3.10+ required"
+    # Helper scripts parse CLI JSON with PATH python3; Apple's 3.9 is enough for that.
+    _preflight_require_cmd python3 "needed for JSON parsing in helper scripts"
     local py_minor
-    py_minor="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-    if python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-        _preflight_ok "Python ${py_minor} (>= 3.10)"
-    else
-        _preflight_fail "Python ${py_minor} is too old — need >= 3.10"
-    fi
+    py_minor="$(_preflight_python_minor)"
     if command -v uv >/dev/null 2>&1; then
         _preflight_ok "uv present ($(uv --version 2>/dev/null || echo installed))"
+        if _preflight_python_meets_min; then
+            _preflight_ok "Python ${py_minor} (>= 3.11)"
+        else
+            # macOS PATH python3 is often Apple 3.9; uv venv provisions CPython >= 3.11.
+            _preflight_ok "PATH python3 is ${py_minor}; uv will provision CPython >= 3.11"
+        fi
     else
         _preflight_warn "uv not on PATH — setup.sh will install it"
+        if _preflight_python_meets_min; then
+            _preflight_ok "Python ${py_minor} (>= 3.11)"
+        else
+            _preflight_fail "Python ${py_minor} is too old — need >= 3.11 (install uv to provision a compatible interpreter)"
+        fi
     fi
 }
 
