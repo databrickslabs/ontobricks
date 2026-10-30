@@ -58,8 +58,10 @@ def test_forwarded_user_headers_attached_on_get(monkeypatch):
 
     h = captured["headers"]
     assert h["Authorization"] == "Bearer M2M"
-    assert h["x-forwarded-email"] == "u@x"
-    assert h["x-forwarded-access-token"] == "UT"
+    assert h["x-ontobricks-acting-email"] == "u@x"
+    assert h["x-ontobricks-acting-token"] == "UT"
+    assert "x-forwarded-email" not in h
+    assert "x-forwarded-access-token" not in h
 
 
 def test_forwarded_user_headers_attached_on_post(monkeypatch):
@@ -78,7 +80,7 @@ def test_forwarded_user_headers_attached_on_post(monkeypatch):
 
     h = captured["headers"]
     assert h["Authorization"] == "Bearer M2M"
-    assert h["x-forwarded-access-token"] == "UT"
+    assert h["x-ontobricks-acting-token"] == "UT"
 
 
 def test_no_forwarded_identity_still_sends_m2m(monkeypatch):
@@ -98,3 +100,5 @@ def test_no_forwarded_identity_still_sends_m2m(monkeypatch):
     assert h["Authorization"] == "Bearer M2M"
     assert "x-forwarded-access-token" not in h
     assert "x-forwarded-email" not in h
+    assert "x-ontobricks-acting-token" not in h
+    assert "x-ontobricks-acting-email" not in h

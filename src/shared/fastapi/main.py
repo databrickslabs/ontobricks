@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
 from back.objects.session import FileSessionMiddleware, reap_expired_sessions
+from back.core.databricks.ActingIdentity import ActingIdentity
 from back.core.databricks.request_identity import (
     RequestIdentity,
     set_request_identity,
@@ -411,6 +412,8 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             finally:
                 reset_request_identity(_tok)
 
+        email, user_token = self._apply_acting_identity(request, email)
+
         # Raw routed path, not request.url.path: the latter is reconstructed
         # from the Host header and could be poisoned (BadHost / CVE-2026-48710).
         path = request.scope["path"]
@@ -422,12 +425,10 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             # end-user identity so Lakehouse / Unity Catalog reads run
             # on-behalf-of the caller (OBO) when a Databricks Apps user token
             # is attached — e.g. the MCP companion forwarding the signed-in
-            # user's x-forwarded-access-token. This mirrors Explorer / Graph
-            # Chat on the internal routes. No token → SP fallback, unchanged.
-            user_token = request.headers.get("x-forwarded-access-token", "") or ""
+            # user's acting token. This mirrors Explorer / Graph Chat on the
+            # internal routes. No token → SP fallback, unchanged.
             request.state.user_role = ""
             request.state.user_domain_role = ""
-            request.state.user_token = user_token
             _tok = set_request_identity(
                 RequestIdentity(email=email, user_token=user_token)
             )
@@ -546,7 +547,6 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                     "read-only access. Take over editing to make changes.",
                 )
 
-        user_token = request.headers.get("x-forwarded-access-token", "") or ""
         request.state.user_token = user_token
         _tok = set_request_identity(
             RequestIdentity(
@@ -560,6 +560,32 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         finally:
             reset_request_identity(_tok)
+
+    @staticmethod
+    def _apply_acting_identity(request: Request, email: str) -> tuple[str, str]:
+        """Swap MCP-forwarded acting headers when the proxy identity is the MCP SP.
+
+        Databricks Apps overwrites ``x-forwarded-*`` from the M2M bearer on
+        the MCP → UI hop. Acting headers restore the end user only for that
+        principal (issue #208).
+        """
+        identity = ActingIdentity.resolve(
+            proxy_email=email,
+            proxy_token=request.headers.get("x-forwarded-access-token", "") or "",
+            acting_email=request.headers.get(ActingIdentity.HEADER_EMAIL, "") or "",
+            acting_token=request.headers.get(ActingIdentity.HEADER_TOKEN, "") or "",
+            mcp_sp_client_id=get_settings().mcp_sp_client_id,
+        )
+        request.state.user_email = identity.email
+        request.state.user_token = identity.user_token
+        if identity.swapped:
+            logger.info(
+                "MCP hop: proxy_sp=%s acting_user=%s token=%s",
+                request.headers.get("x-forwarded-email", ""),
+                identity.email,
+                "yes" if identity.user_token else "no",
+            )
+        return identity.email, identity.user_token
 
     @staticmethod
     def _session_edit_lock_holder(request: Request) -> str:
@@ -636,7 +662,7 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         session_mgr = SessionManager(request)
         domain = get_domain(session_mgr)
         host, token = get_databricks_host_and_token(domain, settings)
-        user_token = request.headers.get("x-forwarded-access-token", "")
+        user_token = getattr(request.state, "user_token", "") or ""
 
         from back.objects.registry import RegistryCfg
 

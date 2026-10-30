@@ -3078,12 +3078,14 @@ surface (`/api/v1/...` and `/graphql/...`). It runs as its own Databricks
 App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 **never speaks SPARQL or Cypher directly.**
 
-Since v0.9.0 the MCP server also **forwards the end-user identity**: it captures
-the inbound `x-forwarded-email` / `x-forwarded-access-token` per tool call and
-attaches them alongside the M2M `Authorization` on every outbound request, so
-the main app applies **OBO** (Unity Catalog reads run as the user) and the
-**Team gate** (Viewer+ membership for Lakebase/Neo4j reads) to MCP-driven
-traffic. Data-plane routes are fail-closed when no user token is forwarded.
+Since v0.9.0 the MCP server also **forwards the end-user identity**. It
+captures inbound Apps `x-forwarded-email` / `x-forwarded-access-token` per
+tool call and sends them as `X-OntoBricks-Acting-Email` /
+`X-OntoBricks-Acting-Token` next to the M2M `Authorization`. The UI Apps
+proxy overwrites `x-forwarded-*` from the M2M bearer (issue #208); the UI
+trusts acting headers only when that proxy identity is the MCP app SP.
+The main app then applies **OBO** and the **Team gate** to MCP-driven
+traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 
 | MCP Tool | Endpoint hit | Wrapper | Engine |
 |---|---|---|---|

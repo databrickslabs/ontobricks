@@ -312,8 +312,14 @@ Implications for Layer 2:
   membership**: the caller must hold at least the **Viewer** role on the loaded
   domain (`assert_domain_graph_read`); App admins bypass the Team check.
 - The **MCP server** authenticates to the main app with its own M2M principal
-  **and forwards** the end-user `x-forwarded-email` / `x-forwarded-access-token`
-  so the same OBO + Team rules apply to MCP-driven reads.
+  and forwards the end-user identity on `X-OntoBricks-Acting-Email` /
+  `X-OntoBricks-Acting-Token`. Databricks Apps overwrites `x-forwarded-*` on
+  the UI hop from the M2M bearer, so those names cannot carry the user. The
+  UI applies the acting headers **only** when the proxy identity is the MCP
+  app service principal (`MCP_SP_CLIENT_ID`). Both apps declare `user_api_scopes`
+  (`sql`, `iam.current-user:read`, `iam.access-control:read`) so the inbound
+  MCP request has a user token to forward. Granting the MCP SP a domain role
+  in Teams is an emergency workaround only — it collapses per-user gating.
 - **Local dev is unchanged** — OBO and the Team gate are no-ops outside App mode
   (`is_databricks_app()` guards), so a single developer token keeps working.
 

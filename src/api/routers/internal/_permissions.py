@@ -56,7 +56,11 @@ def filter_visible_domains(
 
     domain = get_domain(session_mgr)
     host, token = get_databricks_host_and_token(domain, settings)
-    user_token = request.headers.get("x-forwarded-access-token", "") or ""
+    user_token = (
+        getattr(request.state, "user_token", "")
+        or request.headers.get("x-forwarded-access-token", "")
+        or ""
+    )
     registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
 
     return permission_service.filter_accessible_domains(
