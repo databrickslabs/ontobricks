@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from back.core.errors import NotFoundError, ValidationError
+from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.objects.ontology.generate import GenerateWorkflow as wf
 from back.objects.ontology.generate.DraftRevisionConflict import DraftRevisionConflict
 from back.objects.ontology.generate.DraftStaleError import DraftStaleError
@@ -505,6 +505,57 @@ class TestRunCompletion:
             resumed.completion_checkpoints["relations"]["status"] == CHECKPOINT_FAILED
         )
         assert domain_session.get_classes() == []
+
+    def test_paging_failure_reason_reaches_user_visible_message(
+        self, domain_session, monkeypatch
+    ):
+        # Review on #173: the task UI shows only ``exc.message`` (``detail``
+        # is stripped in production), so the orchestrator-authored paging
+        # reason + discarded-work note must be in the message itself.
+        self._seed_reviewed_draft(domain_session, monkeypatch)
+        reason = (
+            "attributes stalled: 2 consecutive pages contributed no new items "
+            "(1 attributes gathered over 3 accepted page(s) are not checkpointed "
+            "— the whole substage must be re-run.)"
+        )
+        monkeypatch.setattr(
+            wf.owl_staged,
+            "infer_relations",
+            lambda **kw: _completion_ok("relations", {"relations": []}),
+        )
+        monkeypatch.setattr(
+            wf.owl_staged,
+            "infer_attributes",
+            lambda **kw: CompletionResult(
+                success=False, substage="attributes",
+                error=reason, user_message=reason,
+            ),
+        )
+        with pytest.raises(InfrastructureError) as exc_info:
+            wf.run_completion(
+                domain_session, _settings(), host="h", token="t", endpoint_name="e"
+            )
+        assert "stalled" in exc_info.value.message
+        assert "not checkpointed" in exc_info.value.message
+
+    def test_raw_infrastructure_error_stays_out_of_user_message(
+        self, domain_session, monkeypatch
+    ):
+        self._seed_reviewed_draft(domain_session, monkeypatch)
+        monkeypatch.setattr(
+            wf.owl_staged,
+            "infer_relations",
+            lambda **kw: CompletionResult(
+                success=False, substage="relations",
+                error="HTTPError 502 <raw gateway body>",
+            ),
+        )
+        with pytest.raises(InfrastructureError) as exc_info:
+            wf.run_completion(
+                domain_session, _settings(), host="h", token="t", endpoint_name="e"
+            )
+        assert exc_info.value.message == "Ontology relations inference failed"
+        assert "raw gateway body" in exc_info.value.detail
 
     def test_partial_failure_then_resume_does_not_rerun_done_substages(
         self, domain_session, monkeypatch

@@ -225,18 +225,26 @@ on the last page (or when nothing remains). Do not re-emit items you already
 returned on an earlier page."""
 
 
-def _emitted_keys_block(emitted_keys: Sequence[str]) -> str:
-    """Compact already-emitted key list for continuation/turn prompts.
+_MAX_EMITTED_KEYS = 1000
 
-    The raw page JSON is deliberately NOT re-injected into the conversation
-    (review of issue #173: 16 pages × ~8k tokens of history would die on the
-    input cap the same way the single-shot answer died on the output cap).
-    A bounded key list gives the model exactly what it needs to avoid —
-    ~40x smaller than the pages themselves."""
+
+def _emitted_keys_block(emitted_keys: Sequence[str]) -> str:
+    """Compact already-emitted key list for continuation/retry prompts.
+
+    The raw page JSON is deliberately NOT re-injected (review of issue #173:
+    16 pages x ~8k tokens of history would die on the input cap the same
+    way the single-shot answer died on the output cap). One short key per
+    item gives the model exactly what it must not repeat.
+
+    ~1000 keys is roughly 7k input tokens, so a 40-entity draft (~600
+    attributes) fits whole; past the cap the most recent keys are kept and
+    the cross-page dedupe is the backstop."""
     keys = list(emitted_keys)
-    if len(keys) > 400:  # pathological only; dedupe is the backstop
-        keys = keys[:400] + [f"… and {len(emitted_keys) - 400} earlier items"]
-    return "\n".join(f"  - {k}" for k in keys)
+    lines = []
+    if len(keys) > _MAX_EMITTED_KEYS:
+        lines.append(f"  - … {len(keys) - _MAX_EMITTED_KEYS} earlier items")
+        keys = keys[-_MAX_EMITTED_KEYS:]
+    return "\n".join(lines + [f"  - {k}" for k in keys])
 
 
 def build_continuation_user_prompt(
@@ -247,7 +255,8 @@ def build_continuation_user_prompt(
     Carries the compact emitted-key list (never the raw prior pages) so the
     model knows what NOT to re-emit without dying on the input cap."""
     return (
-        f"Continue. Emit the NEXT page of {substage} — only NEW items. "
+        f"Earlier pages of {substage} were already received. Emit the NEXT "
+        "page — only NEW items. "
         "Items already emitted (do NOT re-emit any of them):\n"
         f"{_emitted_keys_block(emitted_keys)}\n"
         'Same JSON shape; set "has_more": true only if more items remain '
@@ -255,15 +264,24 @@ def build_continuation_user_prompt(
     )
 
 
-def build_truncated_page_retry_prompt(substage: str) -> str:
-    """Re-ask for the SAME page with fewer items after a length truncation.
+def build_truncated_page_retry_prompt(
+    substage: str, emitted_keys: Sequence[str] = ()
+) -> str:
+    """Re-ask for the current page with fewer items after a length truncation.
 
-    The truncated assistant blob is not re-injected either (same input-cap
-    rationale as the continuation path)."""
+    The truncated output is discarded and NOT shown to the model (same
+    input-cap rationale as the continuation path), so the prompt says so
+    instead of referring to a page the model cannot see."""
+    done = (
+        "Items already emitted (do NOT re-emit any of them):\n"
+        f"{_emitted_keys_block(emitted_keys)}\n"
+        if emitted_keys
+        else ""
+    )
     return (
-        "Your previous page was cut off by the output limit. Re-emit THAT "
-        f"page of {substage} with FEWER items — a smaller page is fine, set "
-        '"has_more": true and continue on the next turn. JSON only.'
+        f"Your last page of {substage} exceeded the output limit and was "
+        "discarded. Emit that page again with FEWER items — a smaller page "
+        f'is fine; set "has_more": true if items remain.\n{done}JSON only.'
     )
 
 

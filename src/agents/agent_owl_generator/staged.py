@@ -131,6 +131,11 @@ class CompletionResult:
     error: str = ""
     rejected: bool = False
     rejection_reason: str = ""
+    # Orchestrator-authored, user-safe failure reason (paging truncation,
+    # stall, page budget — never raw model/HTTP text). ``error`` is only
+    # kept as stripped-in-production detail, so without this the user saw
+    # a bare "inference failed" (review on #173).
+    user_message: str = ""
 
 
 # =====================================================
@@ -626,13 +631,13 @@ def _run_completion(
             # asking for a smaller page — then the substage fails clearly.
             if page_trunc_retries < _MAX_COMPLETION_ATTEMPTS - 1:
                 page_trunc_retries += 1
-                _queue_truncation_retry(messages, substage)
+                _request_page(messages, user_prompt, substage, items, label_fn, retry=True)
                 continue
             return _completion_failure(
                 substage, steps, usage,
                 f"{substage} output page was truncated and could not be "
                 "completed; reduce the entity set or retry."
-                + _gathered_note(items, items_key, page),
+                + _gathered_note(items, items_key, page), safe=True,
             )
         page_trunc_retries = 0
         count_before = len(items)
@@ -663,10 +668,10 @@ def _run_completion(
         if cont_err:
             return _completion_failure(
                 substage, steps, usage,
-                cont_err + _gathered_note(items, items_key, page),
+                cont_err + _gathered_note(items, items_key, page), safe=True,
             )
         _notify(on_step, f"Inferring {substage}… ({len(items)} items so far)")
-        _queue_next_page(messages, substage, [label_fn(it) for it in items])
+        _request_page(messages, user_prompt, substage, items, label_fn)
 
     merged = finalize_fn(items) if finalize_fn else items
     return CompletionResult(
@@ -685,11 +690,15 @@ def _completion_failure(
     error: str,
     *,
     rejected: bool = False,
+    safe: bool = False,
 ) -> CompletionResult:
+    """``safe`` marks orchestrator-authored text that may be shown to the
+    user verbatim (``user_message``); raw HTTP/model errors never are."""
     return CompletionResult(
         success=False, substage=substage, steps=steps, usage=usage,
         error=error, rejected=rejected,
         rejection_reason=error if rejected else "",
+        user_message=error if safe else "",
     )
 
 
@@ -757,32 +766,39 @@ def _continuation_error(
     return ""
 
 
-def _queue_truncation_retry(messages: List[dict], substage: str) -> None:
-    """Re-ask for the SAME page with fewer items after a length truncation.
-
-    The truncated assistant blob is not re-injected — same input-cap
-    rationale as the continuation path (a page can be ~8k tokens).
-    """
-    messages.append(
-        {
-            "role": "user",
-            "content": prompts.build_truncated_page_retry_prompt(substage),
-        }
-    )
-
-
-def _queue_next_page(
-    messages: List[dict], substage: str, emitted_keys: List[str]
+def _request_page(
+    messages: List[dict],
+    user_prompt: str,
+    substage: str,
+    items: List[Dict[str, Any]],
+    label_fn: Callable[[Dict[str, Any]], str],
+    *,
+    retry: bool = False,
 ) -> None:
-    """Ask for the next page, listing emitted keys — never raw page JSON."""
-    messages.append(
-        {
-            "role": "user",
-            "content": prompts.build_continuation_user_prompt(
-                substage, emitted_keys
-            ),
-        }
+    """Queue the next page request — a smaller-page retry after truncation
+    (``retry=True``) or the next-page continuation — listing the keys
+    emitted so far."""
+    build = (
+        prompts.build_truncated_page_retry_prompt
+        if retry
+        else prompts.build_continuation_user_prompt
     )
+    keys = [label_fn(it) for it in items]
+    _set_page_request(messages, user_prompt, build(substage, keys))
+
+
+def _set_page_request(messages: List[dict], user_prompt: str, tail: str) -> None:
+    """Make the next request ``[system, user_prompt + tail]``.
+
+    Every page is a stateless single-turn request: the continuation /
+    smaller-page instruction (with the emitted-key list) REPLACES the
+    previous one instead of being appended. History therefore stays at one
+    key list — never raw page JSON, never one key list per page — and roles
+    stay strictly system/user (no consecutive user turns, which some
+    gateway-served models reject). Review on #173.
+    """
+    del messages[1:]
+    messages.append({"role": "user", "content": f"{user_prompt}\n\n{tail}"})
 
 
 @trace_agent(name="owl_generator.relations", stage="relations")

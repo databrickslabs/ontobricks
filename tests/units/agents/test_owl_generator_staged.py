@@ -792,6 +792,103 @@ class TestCompletionPagination:
         assert all(
             m["role"] != "assistant" for m in messages
         ), "raw page JSON must never be re-injected as an assistant turn"
+        assert '"datatype"' not in messages[-1]["content"]
+
+    def test_history_stays_constant_size_across_many_pages(self):
+        # Each page request is stateless [system, user]: the continuation
+        # REPLACES the previous one, so history holds ONE key list — not one
+        # per page (quadratic growth) — and no consecutive user turns.
+        def page(i, more):
+            attrs = [
+                {"label": f"col{i}_{j}", "domain": "cand-6", "datatype": "xsd:string"}
+                for j in range(25)
+            ]
+            return _answer(json.dumps({"attributes": attrs, "has_more": more}))
+
+        responses = iter([page(i, i < 11) for i in range(12)])
+        sent = []  # snapshot per call — the loop reuses one list object
+
+        def _llm(_host, _token, _ep, messages, **_kw):
+            sent.append([dict(m) for m in messages])
+            return next(responses)
+
+        with patch.object(staged, "call_serving_endpoint", side_effect=_llm):
+            result = staged.infer_attributes(
+                host="h", token="t", endpoint_name="e",
+                draft=_draft(relations_done=True),
+            )
+        assert result.success is True
+        assert len(result.result["attributes"]) == 300
+        assert len(sent) == 12
+        first_user = sent[0][1]["content"]
+        assert "Items already emitted" not in first_user
+        for messages in sent:
+            assert [m["role"] for m in messages] == ["system", "user"]
+            assert messages[1]["content"].startswith(first_user)
+            assert messages[1]["content"].count("Items already emitted") <= 1
+        # Size grows only by the current key list: the request for page 12
+        # carries 275 keys once, not 11 accumulated continuations.
+        last = sent[-1][1]["content"]
+        assert last.count("cand-6.col0_0") == 1
+        assert "cand-6.col10_24" in last and "cand-6.col11_0" not in last
+        tail_sizes = [len(m[1]["content"]) - len(first_user) for m in sent[1:]]
+        assert tail_sizes == sorted(tail_sizes)
+        assert tail_sizes[-1] < 12 * tail_sizes[0]
+
+    def test_truncation_retry_lists_emitted_keys_and_says_discarded(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        truncated = _answer('{"attributes": [{"label": "cu', "length")
+        page3 = '{"attributes": [], "has_more": false}'
+        responses = iter([_answer(page1), truncated, _answer(page3)])
+        sent = []
+
+        def _llm(_host, _token, _ep, messages, **_kw):
+            sent.append([dict(m) for m in messages])
+            return next(responses)
+
+        with patch.object(staged, "call_serving_endpoint", side_effect=_llm):
+            result = staged.infer_attributes(
+                host="h", token="t", endpoint_name="e",
+                draft=_draft(relations_done=True),
+            )
+        assert result.success is True
+        messages = sent[2]
+        assert [m["role"] for m in messages] == ["system", "user"]
+        retry = messages[1]["content"]
+        assert "discarded" in retry
+        assert "cand-6.orderDate" in retry
+        assert '{"label": "cu' not in retry  # truncated blob never re-sent
+
+    def test_emitted_key_list_is_bounded(self):
+        from agents.agent_owl_generator import prompts
+
+        keys = [f"cand-6.a{i}" for i in range(prompts._MAX_EMITTED_KEYS + 50)]
+        text = prompts.build_continuation_user_prompt("attributes", keys)
+        assert "50 earlier items" in text
+        assert "cand-6.a49\n" not in text and "cand-6.a50\n" in text
+        assert keys[-1] in text
+
+    def test_paging_failures_carry_a_user_safe_message(self):
+        repeats = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        result, _ = self._run_attributes([_answer(repeats)] * 5)
+        assert "stalled" in result.user_message
+        assert "not checkpointed" in result.user_message
+
+    def test_request_errors_are_not_marked_user_safe(self):
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = requests.exceptions.ConnectionError("raw http")
+            result = staged.infer_attributes(
+                host="h", token="t", endpoint_name="e",
+                draft=_draft(relations_done=True),
+            )
+        assert result.success is False
+        assert result.user_message == ""
 
     def test_single_duplicate_page_is_tolerated_then_paging_continues(self):
         # One page that only restates emitted keys is tolerated — the next
