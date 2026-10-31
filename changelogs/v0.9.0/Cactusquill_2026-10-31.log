@@ -150,3 +150,52 @@ Still open for #173 (not addressed by this PR): early `has_more=false`
 returns an incomplete success (no completeness check vs source columns);
 Stage-1 detection limits (40-candidate cap, summarized schema context);
 no live Generate run against a Foundation Model endpoint yet.
+
+================================================================================
+## Large-schema stress harness for the staged Generate flow (issue #173)
+================================================================================
+
+Context: PR #206 review asked for a live Generate on a wide table before
+#173 can close, and the author has no Foundation Model access. Re-reading
+the flow also showed the PR's wide-table claim was too broad: Stage-3
+completion only receives the closed entity catalog (ids, labels,
+descriptions, prior relations) — never table columns — so paging fixes
+"too many entities x items for one answer", while the wide-table and
+100-table reports most plausibly fail in Stage-1 detection, the only stage
+that reads metadata. A one-command live harness lets a maintainer with FM
+access locate the failing stage instead of guessing.
+
+Changes:
+
+1. `tests/eval/large_schema_stress.py` (new)
+   Runs the real `detect_entities` -> `infer_relations` ->
+   `infer_attributes` -> `infer_axioms` chain (checkpointed like
+   `GenerateWorkflow.run_completion`) on synthetic schemas shaped like the
+   #173 reports: `wide_table_164`, `wide_table_360`, `many_tables_100x18`.
+   The LLM call is only observed (wrapped, never altered): per stage it
+   reports items, LLM calls, truncated calls, largest request size, message
+   count and token usage, plus the failing stage, raw error and the
+   user-visible message. `detection_visibility` measures, with the real
+   `get_metadata` tool, how much of the schema the Stage-1 overview shows.
+   `--mlflow-experiment` logs metrics + the JSON report to one MLflow run
+   and prints its URI; exit code is non-zero on any failed scenario. Host
+   and token are never logged.
+2. `tests/eval/test_large_schema_stress.py` (new)
+   Offline coverage with a scripted LLM: schema shapes, the visibility
+   caps, a full chain observing 3 attribute pages in single
+   `[system, user]` requests, and failure-stage / user-message reporting.
+3. `tests/eval/README.md`
+   "Large-schema stress run" section with the live command.
+
+Measured offline (real `get_metadata` tool, no LLM): the Stage-1 overview
+shows 80/164 and 80/360 columns of a single wide table, and 50/100 tables
+(900/1800 columns, an ~87k-char tool result) for the 100-table schema; the
+rest is only reachable if the model calls `get_table_detail`.
+
+Files modified:
+- tests/eval/large_schema_stress.py (new)
+- tests/eval/test_large_schema_stress.py (new)
+- tests/eval/README.md
+
+Tests (frozen env):
+- pytest tests/eval -q -> 45 passed (5 new).

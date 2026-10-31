@@ -55,6 +55,27 @@ Per-agent the `expected` shape may use different keys — see each agent's SPEC.
 6. Run the baseline locally — paste the MLflow URI into your PR.
 7. When G2 (`eval-gate.yml`) flips out of calibration mode, the gate becomes hard.
 
+## Large-schema stress run (owl_generator, issue #173)
+
+`large_schema_stress.py` runs the real staged Generate chain
+(`detect_entities` → `infer_relations` → `infer_attributes` → `infer_axioms`)
+on synthetic schemas shaped like the #173 reports (one 164- or 360-column
+table, 100 tables × 18 columns) and reports, per stage, items produced, LLM
+calls, truncated calls, largest request size and token usage — plus how many
+tables/columns the Stage-1 metadata overview actually shows the model.
+
+```bash
+uv run --frozen python tests/eval/large_schema_stress.py \
+  --host "$DATABRICKS_HOST" --token "$DATABRICKS_TOKEN" \
+  --endpoint <foundation-model-endpoint> \
+  --mlflow-experiment /Shared/ontobricks/agents/owl_generator
+```
+
+Exit code is non-zero if any scenario fails; with `--mlflow-experiment` the
+metrics and the JSON report are logged to one MLflow run whose URI is printed
+(paste it into the PR). Offline coverage of the harness itself:
+`tests/eval/test_large_schema_stress.py`.
+
 ## CI integration
 
 - `.github/workflows/eval-gate.yml` — G2 gate (currently in 2-week calibration: reports without blocking).
