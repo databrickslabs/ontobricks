@@ -77,9 +77,10 @@ _TEMPERATURE = 0.0  # deterministic for eval (SPEC §2)
 # follows is always exactly one additional call — never part of this budget.
 _MAX_GATHERING_ITERATIONS = 8
 # Stage-3 completion is a paged structured exchange. A truncated PAGE gets at
-# most one "smaller page" retry (a truncated page's partial JSON is unusable);
-# this is never a validation rewrite loop.
-_MAX_COMPLETION_ATTEMPTS = 2
+# most this many "smaller page" retries (a truncated page's partial JSON is
+# unusable); the counter resets on every accepted page. This is never a
+# validation rewrite loop.
+_MAX_PAGE_TRUNCATION_RETRIES = 1
 # Paged completion (issue #173): each page is a bounded slice of the substage
 # answer flagged with ``has_more``. The page budget bounds total completion
 # output (~16 × the per-call output cap) so a model that never stops paging
@@ -629,7 +630,7 @@ def _run_completion(
         if finish_reason == "length":
             # A page that ignored the bounded-page contract gets ONE retry
             # asking for a smaller page — then the substage fails clearly.
-            if page_trunc_retries < _MAX_COMPLETION_ATTEMPTS - 1:
+            if page_trunc_retries < _MAX_PAGE_TRUNCATION_RETRIES:
                 page_trunc_retries += 1
                 _request_page(messages, user_prompt, substage, items, label_fn, retry=True)
                 continue

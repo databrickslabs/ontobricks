@@ -199,3 +199,27 @@ Files modified:
 
 Tests (frozen env):
 - pytest tests/eval -q -> 45 passed (5 new).
+
+================================================================================
+## Rename the per-page truncation retry budget (PR #206 review nit)
+================================================================================
+
+Context: review nit on PR #206 — `_MAX_COMPLETION_ATTEMPTS = 2` really
+meant "one smaller-page retry per truncated page", which read as a total
+attempt budget.
+
+Changes:
+
+1. `src/agents/agent_owl_generator/staged.py`
+   `_MAX_COMPLETION_ATTEMPTS = 2` -> `_MAX_PAGE_TRUNCATION_RETRIES = 1`;
+   the check is now `page_trunc_retries < _MAX_PAGE_TRUNCATION_RETRIES`
+   (same behaviour). The comment states the counter resets on every
+   accepted page.
+
+Files modified:
+- src/agents/agent_owl_generator/staged.py
+
+Tests (frozen env):
+- pytest tests/units/agents/ tests/units/ontology/
+  tests/units/api/test_generate_routes.py tests/eval tests/units/architecture
+  -> 1495 passed, 11 skipped.
