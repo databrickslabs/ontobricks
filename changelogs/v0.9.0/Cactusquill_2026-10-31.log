@@ -1,0 +1,83 @@
+================================================================================
+## Paged completion review fixes — emitted-key continuations, duplicate-page
+## stall, discarded-work errors (PR #206 review, issue #173)
+================================================================================
+
+Context: maintainer review of PR #206 (the paged Stage-3 completion fix for
+issue #173). Three orchestrator defects had to be addressed before merge:
+(1) `_queue_next_page` re-injected each page's raw JSON into the message
+history — worst case 16 x ~8k completion tokens on top of the schema
+prompt, dying on the INPUT cap the same way the single-shot answer died on
+the output cap; (2) a `has_more` page contributing zero new items ended the
+substage as success, silently dropping items the model still claimed to
+have; (3) a ghost-ref/malformed page deep in the run discarded up to 16 LLM
+calls of paid work with no indication in the error.
+
+Changes:
+
+1. `src/agents/agent_owl_generator/prompts.py`
+   `build_continuation_user_prompt` now takes `emitted_keys` (sequence of
+   compact per-item key strings) and embeds them via the new
+   `_emitted_keys_block` helper (capped at 400 keys, beyond which dedupe is
+   the backstop) so the model knows exactly what NOT to re-emit — instead
+   of the previous "none of the N already emitted" with no list.
+   `build_truncated_page_retry_prompt` docstring notes the truncated blob
+   is no longer re-injected either.
+2. `src/agents/agent_owl_generator/staged.py`
+   - `_queue_next_page` / `_queue_truncation_retry` no longer append the
+     assistant page payload — the continuation is a single user message
+     carrying the emitted-key list; history stays O(keys) not O(pages).
+   - `_run_completion` takes a `label_fn` per substage formatting emitted
+     keys (`domain --label--> range` for relations, `domain.label` for
+     attributes, `subject --kind--> object` for axioms).
+   - Duplicate-page handling: a `has_more` page adding zero NEW items is
+     tolerated once; `_MAX_DUPLICATE_PAGES` (2) consecutive duplicates fail
+     the substage with a "stalled" error instead of a silent early success.
+   - `_gathered_note` appends "(<N> <items> gathered over <P> accepted
+     page(s) are not checkpointed — the whole substage must be re-run)" to
+     every mid-substage failure (truncation, rejection, stall, budget), so
+     discarded paid work is visible in the user-facing error while pages
+     intentionally stay un-checkpointed.
+   - Extracted `_completion_call` (LLM call + usage/step bookkeeping) and
+     `_continuation_error` (dup-stall vs page-budget reason) to keep
+     `_run_completion` at 119 LOC = the shrink-only baseline.
+3. `tests/units/agents/test_owl_generator_staged.py`
+   `test_continuation_lists_emitted_keys_not_raw_pages` (key list present,
+   no assistant turn echoes raw page JSON),
+   `test_single_duplicate_page_is_tolerated_then_paging_continues`,
+   `test_duplicate_page_streak_fails_instead_of_silent_data_loss`,
+   `test_rejection_error_reports_discarded_pages`; the old
+   zero-new-items-stops-paging test was replaced by the stall semantics.
+4. `tests/eval/datasets/agent_owl_generator/baseline.jsonl`
+   `staged-paged-attributes-repeat-stops-003` replaced by
+   `staged-paged-attributes-repeat-stalled-003` (3 duplicate `has_more`
+   pages -> failure) + new `staged-paged-attributes-repeat-tolerated-011`
+   (one dup page tolerated, next page still delivers); 42 staged rows >=
+   the 41 floor.
+5. Local SPEC.md (gitignored `.planning/` since upstream 6cf90c3e)
+   §3a paged-completion paragraph updated (emitted-key continuations,
+   dup-streak, `_gathered_note` discarded-work reporting); §5 contract row
+   and §6 failure-mode row updated for 11 `paged_completion` rows and the
+   new stall semantics.
+
+Files modified:
+- src/agents/agent_owl_generator/prompts.py
+- src/agents/agent_owl_generator/staged.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- changelogs/v0.9.0/Cactusquill_2026-10-31.log (this file)
+
+Tests (frozen env):
+- pytest tests/units/agents/test_owl_generator_staged.py
+  tests/units/architecture/test_size_budget.py
+  tests/eval/test_staged_contract.py
+  tests/eval/test_staged_dataset_metadata_shape.py
+  tests/units/agents/test_owl_generator_schemas.py
+  tests/units/ontology/test_generate_workflow.py -q
+  -> 212 passed (includes _run_completion == 119-LOC baseline).
+
+Not run: full `not scenario` suite and live MLflow eval — same env limits
+as the 2026-10-24 entry (no Foundation Model access; the full suite's 21
+known Windows-only failures in untouched deploy/template/script tests are
+pre-existing). Live Generate on a >100-column table remains the follow-up
+required before closing issue #173.

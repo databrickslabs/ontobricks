@@ -211,6 +211,62 @@ _CLOSURE_RULE = (
 )
 
 
+# Paged-output contract (issue #173): a substage's full answer can exceed the
+# endpoint's ~8k-token output budget (a wide table's attributes, a large
+# draft's relations). The model emits one bounded page and sets ``has_more``
+# when items remain; the orchestrator asks for the next page until it is
+# false. Shared by the three completion system prompts.
+_PAGINATION_RULE = """\
+# PAGED OUTPUT (BOUNDED — CRITICAL)
+The COMPLETE answer may not fit in one response. Emit a bounded page of
+COMPLETE items and set "has_more": true when more items remain — you will be
+asked for the next page. Never cut an item mid-record. Set "has_more": false
+on the last page (or when nothing remains). Do not re-emit items you already
+returned on an earlier page."""
+
+
+def _emitted_keys_block(emitted_keys: Sequence[str]) -> str:
+    """Compact already-emitted key list for continuation/turn prompts.
+
+    The raw page JSON is deliberately NOT re-injected into the conversation
+    (review of issue #173: 16 pages × ~8k tokens of history would die on the
+    input cap the same way the single-shot answer died on the output cap).
+    A bounded key list gives the model exactly what it needs to avoid —
+    ~40x smaller than the pages themselves."""
+    keys = list(emitted_keys)
+    if len(keys) > 400:  # pathological only; dedupe is the backstop
+        keys = keys[:400] + [f"… and {len(emitted_keys) - 400} earlier items"]
+    return "\n".join(f"  - {k}" for k in keys)
+
+
+def build_continuation_user_prompt(
+    substage: str, emitted_keys: Sequence[str]
+) -> str:
+    """Continuation turn asking for the next page of a completion substage.
+
+    Carries the compact emitted-key list (never the raw prior pages) so the
+    model knows what NOT to re-emit without dying on the input cap."""
+    return (
+        f"Continue. Emit the NEXT page of {substage} — only NEW items. "
+        "Items already emitted (do NOT re-emit any of them):\n"
+        f"{_emitted_keys_block(emitted_keys)}\n"
+        'Same JSON shape; set "has_more": true only if more items remain '
+        "after this page."
+    )
+
+
+def build_truncated_page_retry_prompt(substage: str) -> str:
+    """Re-ask for the SAME page with fewer items after a length truncation.
+
+    The truncated assistant blob is not re-injected either (same input-cap
+    rationale as the continuation path)."""
+    return (
+        "Your previous page was cut off by the output limit. Re-emit THAT "
+        f"page of {substage} with FEWER items — a smaller page is fine, set "
+        '"has_more": true and continue on the next turn. JSON only.'
+    )
+
+
 def build_relations_system_prompt() -> str:
     return f"""\
 You are an ontology engineer inferring OBJECT-PROPERTY RELATIONS between a
@@ -229,11 +285,13 @@ fixed, closed set of entities.
 • Never restate a relation listed under EXISTING OBJECT PROPERTIES, in
   either direction or as a paraphrase — only add genuinely new facts.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"relations": [
   {{"label": "placesOrder", "domain": "<entity_id>", "range": "<entity_id>",
     "evidence": "short justification"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def build_attributes_system_prompt() -> str:
@@ -248,11 +306,13 @@ set of entities.
 • Exclude surrogate keys, audit columns, and foreign keys already carried by
   relations.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"attributes": [
   {{"label": "orderDate", "domain": "<entity_id>", "datatype": "xsd:date",
     "evidence": "short justification"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def build_axioms_system_prompt() -> str:
@@ -273,10 +333,12 @@ closed set of entities.
   cannot represent multiple inheritance.
 • Never emit two subClassOf axioms with the same subject.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"axioms": [
   {{"kind": "subClassOf", "subject": "<entity_id>", "object": "<entity_id>"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def _prior_results_block(draft: GenerateDraft, substages: Sequence[str]) -> str:
