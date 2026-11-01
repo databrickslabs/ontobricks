@@ -9,6 +9,10 @@
   run's version (deletes first), unless there is no base, the change feed is
   unreadable, the changes exceed 10 % of the graph or the store cannot drop
   its inferences: then it streams the whole graph as before, with the reason.
+* **MERGE fallback.** An ``incremental`` domain that cannot run serverless
+  pipelines keeps ``…_data`` as a MERGE-maintained table (effective mode
+  ``incremental``, strategy ``merge``) and skips the build entirely when the
+  sources and the mapping are unchanged since the base run.
 """
 
 from __future__ import annotations
@@ -20,7 +24,11 @@ import pytest
 
 from back.core.errors import InfrastructureError
 from back.core.graphdb import ModeDecision
-from back.objects.digitaltwin.build import TwinBuildPostMaterialize, TwinNetChangeApply
+from back.objects.digitaltwin.build import (
+    TwinBuildPostMaterialize,
+    TwinMergeFallback,
+    TwinNetChangeApply,
+)
 from back.objects.registry.RegistryService import RegistryService
 from tests.units.objects import test_build_pipeline_modes as _modes
 from tests.units.objects.test_build_pipeline_materialize import _DATA, _VIEW, _bare_pipeline
@@ -304,13 +312,19 @@ class _CDFWarehouse(_modes._Warehouse):
     *cdf_error* is raised by any change-feed read.
     """
 
-    def __init__(self, log, *, version=9, changes=(), cdf_error=None, count=100, **kw):
+    def __init__(
+        self, log, *, version=9, changes=(), cdf_error=None, count=100, data_exists=False, **kw
+    ):
         super().__init__(log, count=count, **kw)
         self._version = version
         self._changes = list(changes)
         self._cdf_error = cdf_error
+        self._data_exists = data_exists
 
     def execute_query(self, sql: str):
+        if sql.startswith("SHOW TABLES") and "_data'" in sql:
+            self._record(sql)
+            return [{"tableName": "triplestore_dom_v3_data"}] if self._data_exists else []
         if sql.startswith("DESCRIBE HISTORY"):
             self._record(sql)
             return [{"version": self._version}]
@@ -596,3 +610,270 @@ class TestNetApplyIsPersisted:
             "mv",
         )
         assert entry["materialization_mode_effective"] == "incremental"
+
+
+# ----------------------------------------------------------------------
+# MERGE fallback
+# ----------------------------------------------------------------------
+
+_SKIPPED = "no source changes (skipped)"
+
+
+def _merge_pipeline(backend="databricks", mode="incremental", **kw):
+    pipe = _modes._pipeline(mode, backend=backend, **kw)
+    pipe.settings.serverless_pipelines_enabled = False
+    # The defaults ``_BuildPipeline.__init__`` sets (the bare pipeline skips it).
+    pipe.data_table_version, pipe.fingerprint, pipe.strategy = None, "", ""
+    pipe.apply_mode, pipe.apply_fallback_reason, pipe.mode_fallback_detail = "", "", ""
+    pipe.store.supports_materialized_inference_purge = False
+    return pipe
+
+
+def _merged(warehouse) -> bool:
+    return any(s.startswith(f"MERGE INTO {_DATA}") for s in warehouse.calls)
+
+
+def _ctas(warehouse) -> bool:
+    return any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA} ") for s in warehouse.calls)
+
+
+class TestMergeAppliesTo:
+    @staticmethod
+    def _pipe(decision, detail=""):
+        return SimpleNamespace(mode_decision=decision, mode_fallback_detail=detail)
+
+    def test_an_incremental_domain_without_serverless_pipelines(self):
+        decision = ModeDecision("incremental", "full", "serverless_unavailable")
+
+        assert TwinMergeFallback.applies(self._pipe(decision)) is True
+
+    @pytest.mark.parametrize(
+        "detail",
+        ["Serverless compute is not enabled", "Lakeflow pipelines API call failed (create)"],
+    )
+    def test_a_slot_pipeline_infrastructure_failure(self, detail):
+        decision = ModeDecision("incremental", "full", "incremental_failed:InfrastructureError")
+
+        assert TwinMergeFallback.applies(self._pipe(decision, detail)) is True
+
+    @pytest.mark.parametrize(
+        ("decision", "detail"),
+        [
+            (ModeDecision("incremental", "full", "incremental_failed:InfrastructureError"), "quota"),
+            (ModeDecision("incremental", "full", "incremental_failed:ValidationError"), "pipeline"),
+            (ModeDecision("incremental", "full", "row_tracking_missing"), ""),
+            (ModeDecision("microbatch", "full", "serverless_unavailable"), ""),
+            (ModeDecision("full", "full", ""), ""),
+            (ModeDecision("incremental", "incremental", ""), ""),
+            (None, ""),
+        ],
+        ids=[
+            "other-infra-failure",
+            "validation-failure",
+            "untracked-sources",
+            "microbatch",
+            "full",
+            "running-incrementally",
+            "no-decision",
+        ],
+    )
+    def test_not_for(self, decision, detail):
+        assert TwinMergeFallback.applies(self._pipe(decision, detail)) is False
+
+
+class TestMergeInsteadOfCtas:
+    def test_without_serverless_the_data_table_is_merged_not_replaced(self):
+        pipe = _merge_pipeline()
+
+        log, _, warehouse = _modes._run(pipe)
+
+        ensure = next(i for i, s in enumerate(warehouse.calls) if s.startswith(
+            f"CREATE TABLE IF NOT EXISTS {_DATA} "
+        ))
+        merge = next(i for i, s in enumerate(warehouse.calls) if s.startswith(f"MERGE INTO {_DATA}"))
+        assert ensure < merge
+        assert not _ctas(warehouse)
+        assert ("apply_full_rebuild",) in log
+        assert pipe.tm.failed is False
+
+    def test_the_build_reports_incremental_by_merge(self):
+        pipe = _merge_pipeline()
+
+        _modes._run(pipe)
+
+        assert pipe.mode_decision == ModeDecision(
+            "incremental", "incremental", "serverless_unavailable"
+        )
+        assert (pipe.strategy, pipe.data_table, pipe.data_relation_mode) == (
+            "merge",
+            _DATA,
+            "table",
+        )
+
+    def test_a_slot_pipeline_failure_mentioning_serverless_also_merges(self):
+        pipe = _merge_pipeline()
+        pipe.settings.serverless_pipelines_enabled = True
+        error = InfrastructureError("Serverless compute is not enabled in this workspace")
+
+        _, _, warehouse = _modes._run(pipe, fail_on="ensure", error=error)
+
+        assert _merged(warehouse) and not _ctas(warehouse)
+        assert pipe.mode_decision == ModeDecision(
+            "incremental", "incremental", "incremental_failed:InfrastructureError"
+        )
+
+    def test_another_infrastructure_failure_keeps_the_ctas(self):
+        pipe = _merge_pipeline()
+        pipe.settings.serverless_pipelines_enabled = True
+
+        _, _, warehouse = _modes._run(pipe, fail_on="ensure", error=InfrastructureError("quota"))
+
+        assert _ctas(warehouse) and not _merged(warehouse)
+        assert pipe.mode_decision.effective == "full"
+
+    def test_microbatch_keeps_the_ctas(self):
+        pipe = _merge_pipeline(mode="microbatch")
+
+        _, _, warehouse = _modes._run(pipe)
+
+        assert _ctas(warehouse) and not _merged(warehouse)
+
+    def test_a_lakeflow_synced_domain_merges_the_object_hash_too(self):
+        pipe = _merge_pipeline(backend="lakebase")
+        pipe._is_lakebase_synced = True
+
+        _, _, warehouse = _modes._run(pipe)
+
+        merge = next(s for s in warehouse.calls if s.startswith(f"MERGE INTO {_DATA}"))
+        assert "object_hash" in merge
+
+    def test_a_failed_merge_falls_back_to_the_ctas(self):
+        pipe = _merge_pipeline()
+
+        with patch("back.objects.digitaltwin.build.TwinMergeFallback.logger") as logger:
+            _, _, warehouse = _modes._run(pipe, warehouse=_modes._Warehouse([], fail_on="MERGE INTO"))
+
+        assert _ctas(warehouse)
+        assert pipe.mode_decision == ModeDecision("incremental", "full", "serverless_unavailable")
+        assert pipe.strategy == ""
+        assert pipe.tm.failed is False
+        logger.warning.assert_called_once()
+
+
+class TestMergeFingerprint:
+    """Only an all-row-local domain can be fingerprinted: batch SQL sources are not versioned."""
+
+    @staticmethod
+    def _row_local_pipeline():
+        return _merge_pipeline(backend="lakebase", entities={_modes._CUSTOMER: _modes._row_local()})
+
+    def test_the_fingerprint_covers_the_row_local_source_versions(self, registry):
+        first, second = self._row_local_pipeline(), self._row_local_pipeline()
+
+        _modes._run(first, warehouse=_CDFWarehouse([], version=4))
+        _modes._run(second, warehouse=_CDFWarehouse([], version=5))
+
+        assert len(first.fingerprint) == 64
+        assert first.fingerprint != second.fingerprint
+
+    def test_batch_mappings_are_never_fingerprinted(self, registry):
+        pipe = _merge_pipeline()
+
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([]))
+
+        assert pipe.fingerprint == ""
+        assert _merged(warehouse)
+        registry.load_build_runs.assert_not_called()
+
+
+class TestMergeSkipsAnUnchangedBuild:
+    @staticmethod
+    def _pipeline():
+        return _merge_pipeline(backend="lakebase", entities={_modes._CUSTOMER: _modes._row_local()})
+
+    def _base(self, registry, *, fingerprint=None, strategy="merge", apply_mode="full_stream"):
+        """Build once to learn the fingerprint; record it as the base run."""
+        if fingerprint is None:
+            first = self._pipeline()
+            _modes._run(first, warehouse=_CDFWarehouse([], version=4))
+            fingerprint = first.fingerprint
+        run = _run_record(version=7)
+        run["stats"]["materialization"].update(
+            fingerprint=fingerprint, strategy=strategy, apply_mode=apply_mode
+        )
+        registry.load_build_runs.return_value = [run]
+        return fingerprint
+
+    def test_unchanged_sources_and_mapping_complete_the_build_as_skipped(self, registry):
+        self._base(registry)
+        pipe = self._pipeline()
+
+        log, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True, count=42)
+        )
+
+        assert not _merged(warehouse) and not _ctas(warehouse)
+        assert ("apply_full_rebuild",) not in log
+        assert pipe.tm.failed is False
+        assert pipe.tm.messages == [_SKIPPED]
+        assert pipe.tm.results[0]["triple_count"] == 42
+        assert pipe._record_build_run.call_args_list[0] == (("success",), {"message": _SKIPPED})
+
+    def test_a_skipped_build_records_merge_and_no_apply(self, registry):
+        fingerprint = self._base(registry)
+        pipe = self._pipeline()
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+
+        assert (pipe.strategy, pipe.apply_mode, pipe.fingerprint) == ("merge", "none", fingerprint)
+        assert pipe.mode_decision.effective == "incremental"
+        assert pipe.triple_count == 100
+
+    def test_the_skip_is_persisted_once_as_a_success(self, registry):
+        self._base(registry)
+        pipe = self._pipeline()
+        del pipe._record_build_run
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+
+        assert registry.record_build_run.call_count == 1
+        entry = registry.record_build_run.call_args[0][1]
+        assert (entry["status"], entry["message"]) == ("success", _SKIPPED)
+        assert entry["stats"]["materialization"]["apply_mode"] == "none"
+
+    def test_a_changed_source_version_merges(self, registry):
+        self._base(registry)
+        pipe = self._pipeline()
+
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=5, data_exists=True))
+
+        assert _merged(warehouse)
+
+    def test_a_missing_data_table_merges(self, registry):
+        self._base(registry)
+        pipe = self._pipeline()
+
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=False))
+
+        assert _merged(warehouse)
+
+    def test_a_base_that_was_not_merged_merges(self, registry):
+        self._base(registry, strategy="mv")
+        pipe = self._pipeline()
+
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+
+        assert _merged(warehouse)
+
+
+class TestMergeIsPersisted:
+    def test_the_entry_reports_incremental_by_merge(self, registry):
+        pipe = _merge_pipeline()
+        del pipe._record_build_run
+
+        _modes._run(pipe)
+
+        entry = registry.record_build_run.call_args_list[0][0][1]
+        assert entry["materialization_mode_effective"] == "incremental"
+        assert entry["mode_fallback_reason"] == "serverless_unavailable"
+        assert entry["stats"]["materialization"]["strategy"] == "merge"

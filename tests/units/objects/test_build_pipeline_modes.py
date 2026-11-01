@@ -452,14 +452,32 @@ class TestSlotPipelineUpdates:
 class TestFallback:
     @pytest.mark.parametrize("step", ["ensure", "start", "wait"])
     def test_a_runner_failure_falls_back_to_full(self, step):
+        """``microbatch`` needs a running pipeline: its fallback is the full CTAS."""
+        pipe = _pipeline("microbatch")
+
+        log, _, warehouse = _run(pipe, fail_on=step)
+
+        assert pipe.mode_decision == ModeDecision(
+            "microbatch", "full", "incremental_failed:InfrastructureError"
+        )
+        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA} ") for s in warehouse.calls)
+        assert _events(log, "apply_full_rebuild")
+        assert pipe.tm.failed is False
+        assert pipe.slots_table is None
+        assert pipe.data_relation_mode == "table"
+
+    @pytest.mark.parametrize("step", ["ensure", "start", "wait"])
+    def test_an_incremental_runner_failure_falls_back_to_merge(self, step):
+        """The runner's errors name the pipeline: ``incremental`` keeps running by MERGE."""
         pipe = _pipeline("incremental")
 
         log, _, warehouse = _run(pipe, fail_on=step)
 
         assert pipe.mode_decision == ModeDecision(
-            "incremental", "full", "incremental_failed:InfrastructureError"
+            "incremental", "incremental", "incremental_failed:InfrastructureError"
         )
-        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA} ") for s in warehouse.calls)
+        assert any(s.startswith(f"MERGE INTO {_DATA}") for s in warehouse.calls)
+        assert not any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA} ") for s in warehouse.calls)
         assert _events(log, "apply_full_rebuild")
         assert pipe.tm.failed is False
         assert pipe.slots_table is None
@@ -499,7 +517,7 @@ class TestFallback:
         pipe._record_build_run.assert_any_call("cancelled", message="Build cancelled by user")
 
     def test_the_build_fails_only_when_full_fails_too(self):
-        pipe = _pipeline("incremental")
+        pipe = _pipeline("microbatch")
         warehouse = _Warehouse([], fail_on=f"CREATE OR REPLACE TABLE {_DATA}")
 
         _run(pipe, warehouse=warehouse, fail_on="ensure")
@@ -572,7 +590,10 @@ class TestReadiness:
 
         log, _, warehouse = _run(pipe)
 
-        assert pipe.mode_decision == ModeDecision("incremental", "full", "serverless_unavailable")
+        # No slot pipeline: the MERGE fallback keeps the build incremental.
+        assert pipe.mode_decision == ModeDecision(
+            "incremental", "incremental", "serverless_unavailable"
+        )
         assert not any(
             s.startswith("SHOW TBLPROPERTIES main.sales") for s in warehouse.calls
         )
@@ -645,7 +666,7 @@ class TestLeftoverPipelinesAreStopped:
             )
 
         assert pipe.tm.failed is False
-        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA} ") for s in warehouse.calls)
+        assert any(s.startswith(f"MERGE INTO {_DATA}") for s in warehouse.calls)
         assert any("could not stop" in call.args[0] for call in logger.warning.call_args_list)
 
 

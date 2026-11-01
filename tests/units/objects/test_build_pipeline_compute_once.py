@@ -566,8 +566,9 @@ class TestBuildRunTrace:
         entry = self._entry(pipe)
 
         assert entry["materialization_mode_requested"] == "incremental"
-        assert entry["materialization_mode_effective"] == "full"
+        assert entry["materialization_mode_effective"] == "incremental"
         assert entry["mode_fallback_reason"] == "serverless_unavailable"
+        assert entry["stats"]["materialization"]["strategy"] == "merge"
 
     def test_realtime_is_traced_as_unavailable(self):
         pipe = _bare_pipeline(info={**_LAKEBASE, "materialization_mode": "realtime"})

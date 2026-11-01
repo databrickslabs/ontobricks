@@ -7,6 +7,7 @@ from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalB
 from back.objects.digitaltwin.build.TwinInferredMaterialize import TwinInferredMaterialize
 from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
 from back.objects.digitaltwin.build.TwinLakehouseBuild import TwinLakehouseBuild
+from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
 from back.objects.digitaltwin.build.TwinNetChangeApply import TwinNetChangeApply
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "TwinInferredMaterialize",
     "TwinLakebaseSync",
     "TwinLakehouseBuild",
+    "TwinMergeFallback",
     "TwinNetChangeApply",
 ]

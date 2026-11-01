@@ -46,6 +46,7 @@ from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
 )
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
+from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
 from back.objects.digitaltwin.build.TwinNetChangeApply import TwinNetChangeApply
 from back.objects.digitaltwin.models import DomainSnapshot
 
@@ -765,10 +766,18 @@ class _BuildPipeline:
         instead of a materialized copy; Lakebase and Neo4j always get the copy,
         since the view would resolve against a graph the analytics job cannot
         read (see ``GraphDBFactory.resolve_lakehouse_materialization``).
+
+        An ``incremental`` domain without serverless pipelines merges into a
+        table instead (:class:`TwinMergeFallback`); ``False`` then also means a
+        build skipped for unchanged sources, already completed and recorded.
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.delta import _table_naming, materialize
 
+        if TwinMergeFallback.applies(self):
+            merged = TwinMergeFallback.apply(self)
+            if merged is not None:  # None: the MERGE failed; build the table by CTAS
+                return merged
         data_table = _table_naming.data_table_fqn(self.domain, self.settings)
         if not data_table:
             self.tm.fail_task(
