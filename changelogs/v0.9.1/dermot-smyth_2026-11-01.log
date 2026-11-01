@@ -282,3 +282,40 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9275 passed, 12 skipped, 1 deselected, 18 warnings in 50.50s (the deselected readiness test probes live services and hangs without network access); uv run --frozen pytest -q tests/units/streaming tests/units/architecture -> 71 passed
+
+================================================================================
+## Slot events: drop NULL-key rows; keep classify and emitters consistent
+================================================================================
+
+Context: Review fix round 1 of the SlotProjectionCompiler. A source row with a
+NULL key column cannot form a subject URI and would create orphan slots that
+the AUTO CDC `KEYS` equality can never match or delete. Separately, `classify`
+could call a mapping row-local that the emitters then rejected (an entity
+without `class_uri`, a relationship without `predicate`), aborting `compile`.
+
+Changes:
+
+1. src/back/core/streaming/SlotProjectionCompiler.py
+   `slot_event_view_sql` appends `WHERE <key> IS NOT NULL` after the
+   `LATERAL VIEW ... s AS predicate, object` line, one term per source-key column
+   (every column of a composite subject template, ANDed; the subject column of a
+   relationship); the docstring states that such rows are dropped on purpose.
+   A new `_key_columns` helper feeds both `source_key_expr` and the guard so they
+   cannot drift. `classify` now delegates to `_batch_reason` and returns `batch`
+   (logging the reason at debug level) for an entity without `class_uri` or a
+   relationship without `predicate`, so every row-local mapping compiles.
+2. tests/units/streaming/test_slot_projection_compiler.py
+   New `TestNullKeyGuard` (single key, composite key, relationship, guard matches
+   `source_key`) and `TestClassifyAgreesWithEmitters` (the two new batch cases,
+   debug log reason, `compile` routing, an agreement matrix over 22 mapping
+   shapes asserting that row-local implies the emitters and `compile` succeed).
+3. docs/architecture.md
+   One sentence on the NULL-key guard in the slot projection subsection.
+
+Modified files:
+- src/back/core/streaming/SlotProjectionCompiler.py
+- tests/units/streaming/test_slot_projection_compiler.py
+- docs/architecture.md
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/streaming tests/units/architecture -> 103 passed

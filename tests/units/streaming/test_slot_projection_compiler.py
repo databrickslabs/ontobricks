@@ -537,3 +537,131 @@ class TestSlotPipelineSpec:
         spec = SlotPipelineSpec(slots_fqn="c.s.t")
         assert spec.to_sql() == ""
         assert spec.statements == [] and spec.batch_mappings == []
+
+
+class TestNullKeyGuard:
+    """The view drops rows whose key is NULL: they cannot form a subject URI."""
+
+    LATERAL_TAIL = ") s AS predicate, object\n"
+
+    def test_single_key_adds_one_not_null_predicate_after_the_lateral_view(self):
+        sql = _view_sql()
+        assert sql.endswith(self.LATERAL_TAIL + "WHERE id IS NOT NULL")
+        assert sql.count("IS NOT NULL") == 1
+        assert sql.index("LATERAL VIEW") < sql.index("WHERE id IS NOT NULL")
+
+    def test_composite_key_ands_every_template_column(self):
+        mapping = _entity(
+            uri_template="http://ex.org/Line/{order_id}/{line_no}", id_column="order_id"
+        )
+        sql = _view_sql(mapping)
+        assert sql.endswith(
+            self.LATERAL_TAIL + "WHERE order_id IS NOT NULL AND line_no IS NOT NULL"
+        )
+
+    def test_relationship_guards_the_subject_column(self):
+        sql = _view_sql(_relationship(), source_fqn="main.sales.orders")
+        assert sql.endswith(self.LATERAL_TAIL + "WHERE order_id IS NOT NULL")
+        assert "customer_id IS NOT NULL" not in sql
+
+    def test_guard_follows_the_same_columns_as_source_key(self):
+        mapping = _entity(
+            uri_template="http://ex.org/Line/{order_id}/{line_no}", id_column="order_id"
+        )
+        sql = _view_sql(mapping)
+        assert (
+            "concat_ws('|', CAST(order_id AS STRING), CAST(line_no AS STRING))" in sql
+        )
+        assert sql.count("IS NOT NULL") == 2
+
+
+class TestClassifyAgreesWithEmitters:
+    def test_entity_without_class_uri_is_batch(self):
+        assert SlotProjectionCompiler.classify(_entity(class_uri=None)) == "batch"
+        assert SlotProjectionCompiler.classify(_entity(class_uri="")) == "batch"
+
+    def test_relationship_without_predicate_is_batch(self):
+        assert SlotProjectionCompiler.classify(_relationship(predicate="")) == "batch"
+        assert SlotProjectionCompiler.classify(_relationship(predicate=None)) == "batch"
+
+    def test_batch_reason_is_logged_at_debug_level(self, caplog):
+        with caplog.at_level("DEBUG"):
+            SlotProjectionCompiler.classify(_entity(class_uri=""))
+            SlotProjectionCompiler.classify(_relationship(predicate=""))
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("entity without class_uri" in m for m in messages)
+        assert any("relationship without predicate" in m for m in messages)
+
+    def test_compile_routes_a_predicateless_relationship_to_batch(self):
+        rel = _relationship(predicate="")
+        spec = SlotProjectionCompiler.compile(
+            {}, [rel], base_uri="http://ex.org/", slots_fqn="main.ob.t_slots"
+        )
+        assert spec.batch_mappings == [rel]
+        assert spec.row_local_map_ids == []
+
+    def test_compile_still_injects_class_uri_into_entities_without_one(self):
+        shared = _entity()
+        shared.pop("class_uri")
+        spec = SlotProjectionCompiler.compile(
+            {CUSTOMER: shared},
+            [],
+            base_uri="http://ex.org/",
+            slots_fqn="main.ob.t_slots",
+        )
+        assert len(spec.row_local_map_ids) == 1
+
+    @pytest.mark.parametrize(
+        "mapping",
+        [
+            _entity(),
+            _entity(class_uri=""),
+            _entity(id_column=None),
+            _entity(id_column=""),
+            _entity(label_column="bad label"),
+            _entity(label_column=""),
+            _entity(predicates={}),
+            _entity(predicates={EMAIL: {"type": "column"}}),
+            _entity(predicates={EMAIL: {"type": "column", "column": None}}),
+            _entity(uri_template=None),
+            _entity(uri_template="http://ex.org/Line/{a}/{b}", id_column="a"),
+            _entity(uri_template="http://ex.org/Line/{a}/{b-1}", id_column="a"),
+            _entity(uri_template="http://ex.org/Line/{a}", id_column="other"),
+            _entity(table="main.sales.t", sql_query="  "),
+            _entity(table=" "),
+            _relationship(),
+            _relationship(predicate=""),
+            _relationship(subject_column=None),
+            _relationship(object_column="bad col"),
+            _relationship(subject_template="http://ex.org/Order/fixed"),
+            _relationship(object_template=None),
+            _relationship(table="main.sales.o rders"),
+        ],
+    )
+    def test_every_row_local_mapping_compiles_without_raising(self, mapping):
+        kind = SlotProjectionCompiler.classify(mapping)
+        if kind != "row_local":
+            return
+        SlotProjectionCompiler.slot_event_view_sql(
+            mapping,
+            base_uri="http://ex.org/",
+            view_name="v",
+            source_fqn=mapping["table"],
+        )
+        spec = SlotProjectionCompiler.compile(
+            {mapping["class_uri"]: mapping} if "class_uri" in mapping else {},
+            [] if "class_uri" in mapping else [mapping],
+            base_uri="http://ex.org/",
+            slots_fqn="main.ob.t_slots",
+        )
+        assert spec.batch_mappings == []
+        assert len(spec.row_local_map_ids) == 1
+
+    def test_the_agreement_matrix_is_not_vacuous(self):
+        row_local = [
+            _entity(),
+            _entity(label_column=""),
+            _entity(uri_template="http://ex.org/Line/{a}/{b}", id_column="a"),
+            _relationship(),
+        ]
+        assert all(SlotProjectionCompiler.classify(m) == "row_local" for m in row_local)

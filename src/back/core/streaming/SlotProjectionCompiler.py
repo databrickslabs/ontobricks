@@ -48,34 +48,29 @@ class SlotProjectionCompiler:
     def classify(mapping: dict, relationship_mappings: list | None = None) -> str:
         """Return ``"row_local"`` when *mapping* can be projected per source row.
 
-        An entity mapping is row-local when it reads a ``table`` (no
-        ``sql_query``), its subject template has at least one column, every
-        predicate is a plain column (a ``reference`` predicate is a join) and
-        all identifiers are safe to interpolate. A relationship mapping is
-        row-local only when it has a ``table`` (no ``sql_query``) and plain
-        subject and object columns. Everything else is ``"batch"``.
+        An entity mapping is row-local when it has a ``class_uri``, reads a
+        ``table`` (no ``sql_query``), its subject template has at least one
+        column, every predicate is a plain column (a ``reference`` predicate
+        is a join) and all identifiers are safe to interpolate. A relationship
+        mapping is row-local only when it has a ``predicate``, a ``table`` (no
+        ``sql_query``) and plain subject and object columns. Everything else
+        is ``"batch"``; the reason is logged at debug level. A row-local
+        mapping never makes the emitters raise.
 
         *relationship_mappings* is accepted for signature stability and unused.
         """
         compiler = SlotProjectionCompiler
-        if not (mapping.get("table") or "").strip():
+        reason = compiler._batch_reason(mapping)
+        if reason:
+            logger.debug(
+                "Mapping %s is batch: %s",
+                mapping.get("class_uri")
+                or mapping.get("predicate")
+                or compiler._source(mapping),
+                reason,
+            )
             return compiler.BATCH
-        if (mapping.get("sql_query") or "").strip():
-            return compiler.BATCH
-        if not compiler._is_safe_fqn(mapping["table"]):
-            return compiler.BATCH
-        if compiler._is_relationship(mapping):
-            columns = compiler._relationship_columns(mapping)
-        else:
-            predicates = mapping.get("predicates") or {}
-            if any(info.get("type") != "column" for info in predicates.values()):
-                return compiler.BATCH
-            if not compiler._template_columns(mapping.get("uri_template")):
-                return compiler.BATCH
-            columns = compiler._entity_columns(mapping)
-        if all(compiler._is_safe_col(column) for column in columns):
-            return compiler.ROW_LOCAL
-        return compiler.BATCH
+        return compiler.ROW_LOCAL
 
     @staticmethod
     def map_id(mapping: dict) -> str:
@@ -118,10 +113,7 @@ class SlotProjectionCompiler:
         template order.
         """
         compiler = SlotProjectionCompiler
-        template, id_column = compiler._subject_parts(mapping)
-        columns = compiler._template_columns(template)
-        if len(columns) <= 1:
-            columns = [id_column or (columns[0] if columns else None)]
+        columns = compiler._key_columns(mapping)
         for column in columns:
             compiler._require_col(column)
         casts = [f"CAST({column} AS STRING)" for column in columns]
@@ -140,6 +132,11 @@ class SlotProjectionCompiler:
         """Return the temporary view projecting *mapping*'s change feed to slot events.
 
         An entity *mapping* must carry its ``class_uri`` (``rdf:type`` row).
+        The view intentionally drops source rows whose key column(s) are NULL
+        (``WHERE <key> IS NOT NULL``, every column of a composite key): a NULL
+        key cannot form a subject URI and would leave orphan slots that the
+        AUTO CDC ``KEYS`` equality can never match or delete, whereas the full
+        build would emit NULL subjects for them.
         *base_uri* is accepted for signature stability and unused: subject
         templates carry their own prefix, exactly as in the full build.
         """
@@ -149,6 +146,10 @@ class SlotProjectionCompiler:
         pairs = compiler._stack_pairs(mapping)
         template, id_column = compiler._subject_parts(mapping)
         compiler._require_col(id_column)
+        source_key = compiler.source_key_expr(mapping)  # validates the key columns
+        not_null = " AND ".join(
+            f"{column} IS NOT NULL" for column in compiler._key_columns(mapping)
+        )
         subject_expr = SparqlTranslator._subject_expr_from_template(
             sql_escape(template or ""), id_column, dialect=DIALECT_SPARK
         )
@@ -158,7 +159,7 @@ class SlotProjectionCompiler:
         return (
             f"CREATE TEMPORARY VIEW {view_name} AS\n"
             f"SELECT '{compiler.map_id(mapping)}' AS map_id, "
-            f"{compiler.source_key_expr(mapping)} AS source_key,\n"
+            f"{source_key} AS source_key,\n"
             f"       s.predicate, s.object, {subject_expr} AS subject,\n"
             "       CASE WHEN _change_type IN ('delete','update_preimage') "
             "OR s.object IS NULL\n"
@@ -167,7 +168,8 @@ class SlotProjectionCompiler:
             "       CASE WHEN _change_type = 'update_preimage' THEN 0 ELSE 1 END "
             "AS seq_rank\n"
             f"FROM STREAM {source_fqn} WITH (readChangeFeed = true)\n"
-            f"LATERAL VIEW stack({len(pairs)}, {stack_args}) s AS predicate, object"
+            f"LATERAL VIEW stack({len(pairs)}, {stack_args}) s AS predicate, object\n"
+            f"WHERE {not_null}"
         )
 
     @staticmethod
@@ -274,6 +276,34 @@ class SlotProjectionCompiler:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _batch_reason(mapping: dict) -> str | None:
+        """Return why *mapping* is not row-local, or ``None`` when it is."""
+        compiler = SlotProjectionCompiler
+        table = mapping.get("table")
+        if not (table or "").strip():
+            return "no table"
+        if (mapping.get("sql_query") or "").strip():
+            return "sql_query source"
+        if not compiler._is_safe_fqn(table):
+            return "unsafe table name"
+        if compiler._is_relationship(mapping):
+            if not mapping.get("predicate"):
+                return "relationship without predicate"
+            columns = compiler._relationship_columns(mapping)
+        else:
+            if not mapping.get("class_uri"):
+                return "entity without class_uri"
+            predicates = mapping.get("predicates") or {}
+            if any(info.get("type") != "column" for info in predicates.values()):
+                return "reference predicate (join)"
+            if not compiler._template_columns(mapping.get("uri_template")):
+                return "subject template has no column"
+            columns = compiler._entity_columns(mapping)
+        if not all(compiler._is_safe_col(column) for column in columns):
+            return "unsafe or missing column name"
+        return None
+
+    @staticmethod
     def _is_relationship(mapping: dict) -> bool:
         return "subject_template" in mapping
 
@@ -291,6 +321,19 @@ class SlotProjectionCompiler:
         if SlotProjectionCompiler._is_relationship(mapping):
             return mapping.get("subject_template"), mapping.get("subject_column")
         return mapping.get("uri_template"), mapping.get("id_column")
+
+    @staticmethod
+    def _key_columns(mapping: dict) -> list:
+        """Return the columns forming the source key (``None`` if one is missing).
+
+        Every column of a composite subject template, else the subject id column.
+        """
+        compiler = SlotProjectionCompiler
+        template, id_column = compiler._subject_parts(mapping)
+        columns = compiler._template_columns(template)
+        if len(columns) <= 1:
+            return [id_column or (columns[0] if columns else None)]
+        return columns
 
     @staticmethod
     def _entity_columns(mapping: dict) -> list:
