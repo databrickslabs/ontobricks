@@ -4,6 +4,11 @@
   flat trace keys plus ``data_table_version``, ``fingerprint``, ``strategy``,
   ``apply_mode`` and ``apply_fallback_reason``; a later build finds its base
   run through ``TwinBuildPostMaterialize.previous_materialization_stats``.
+* **Net change apply.** An incremental Neo4j / app-managed Lakebase build
+  applies only the net changes of the ``…_data`` change feed since the base
+  run's version (deletes first), unless there is no base, the change feed is
+  unreadable, the changes exceed 10 % of the graph or the store cannot drop
+  its inferences: then it streams the whole graph as before, with the reason.
 """
 
 from __future__ import annotations
@@ -13,7 +18,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.objects.digitaltwin.build import TwinBuildPostMaterialize
+from back.core.errors import InfrastructureError
+from back.core.graphdb import ModeDecision
+from back.objects.digitaltwin.build import TwinBuildPostMaterialize, TwinNetChangeApply
 from back.objects.registry.RegistryService import RegistryService
 from tests.units.objects import test_build_pipeline_modes as _modes
 from tests.units.objects.test_build_pipeline_materialize import _DATA, _VIEW, _bare_pipeline
@@ -283,3 +290,309 @@ class TestPreviousMaterializationStats:
 
         assert TwinBuildPostMaterialize.previous_materialization_stats(pipe) == {}
         registry.load_build_runs.assert_not_called()
+
+
+# ----------------------------------------------------------------------
+# Net change apply
+# ----------------------------------------------------------------------
+
+
+class _CDFWarehouse(_modes._Warehouse):
+    """The modes warehouse, plus ``DESCRIBE HISTORY`` (*version*) and the change feed.
+
+    The change-feed COUNT answers ``len(changes)`` and the stream yields *changes*;
+    *cdf_error* is raised by any change-feed read.
+    """
+
+    def __init__(self, log, *, version=9, changes=(), cdf_error=None, count=100, **kw):
+        super().__init__(log, count=count, **kw)
+        self._version = version
+        self._changes = list(changes)
+        self._cdf_error = cdf_error
+
+    def execute_query(self, sql: str):
+        if sql.startswith("DESCRIBE HISTORY"):
+            self._record(sql)
+            return [{"version": self._version}]
+        if "table_changes(" in sql:
+            self._record(sql)
+            if self._cdf_error is not None:
+                raise self._cdf_error
+            return [{"cnt": len(self._changes)}]
+        return super().execute_query(sql)
+
+    def iter_rows(self, sql: str, batch_size: int = 5000):
+        if "table_changes(" not in sql:
+            return super().iter_rows(sql, batch_size)
+        self._record(sql)
+        return iter(self._changes)
+
+
+def _change(subject: str, op: str) -> dict:
+    return {"subject": subject, "predicate": "http://ex.org/p", "object": "o", "op": op}
+
+
+_TWO_CHANGES = [_change("http://ex.org/old", "delete"), _change("http://ex.org/new", "insert")]
+
+
+def _store_writes(store, *names) -> list:
+    """Make each store write method consume its triples into a shared, ordered record."""
+    writes: list = []
+
+    def _writer(name):
+        def _write(graph, triples, **kwargs):
+            rows = list(triples)
+            writes.append((name, graph, rows, kwargs.get("batch_size")))
+            return len(rows)
+
+        return _write
+
+    for name in names:
+        getattr(store, name).side_effect = _writer(name)
+    return writes
+
+
+def _net_pipeline(registry, backend="lakebase", *, base_version=5, purge=True):
+    """An incremental build whose previous run left the store at *base_version*."""
+    pipe = _modes._pipeline("incremental", backend=backend)
+    # The defaults ``_BuildPipeline.__init__`` sets (the bare pipeline skips it).
+    pipe.data_table_version, pipe.apply_mode, pipe.apply_fallback_reason = None, "", ""
+    pipe._graph_engine = "neo4j" if backend == "neo4j" else "lakebase"
+    pipe.store.supports_materialized_inference_purge = purge
+    if base_version is not None:
+        registry.load_build_runs.return_value = [
+            _run_record(version=base_version, graph_engine=pipe._graph_engine)
+        ]
+    return pipe
+
+
+def _streamed(log) -> bool:
+    return ("apply_full_rebuild",) in log
+
+
+class TestNetChangeAppliesTo:
+    @staticmethod
+    def _pipe(**attrs):
+        pipe = _bare_pipeline(info={"graph_backend": attrs.pop("backend", "lakebase")})
+        pipe.mode_decision = attrs.pop(
+            "decision", ModeDecision("incremental", "incremental", "")
+        )
+        pipe.data_table = attrs.pop("data_table", _DATA)
+        pipe.data_relation_mode = attrs.pop("data_relation_mode", "materialized_view")
+        for key, value in attrs.items():
+            setattr(pipe, key, value)
+        return pipe
+
+    @pytest.mark.parametrize("backend", ["lakebase", "neo4j"])
+    def test_an_incremental_build_on_an_app_written_store(self, backend):
+        assert TwinNetChangeApply.applies(self._pipe(backend=backend)) is True
+
+    def test_a_merge_maintained_table_also_has_a_change_feed(self):
+        assert TwinNetChangeApply.applies(self._pipe(data_relation_mode="table")) is True
+
+    @pytest.mark.parametrize(
+        "attrs",
+        [
+            {"decision": ModeDecision("incremental", "full", "serverless_unavailable")},
+            {"decision": None},
+            {"data_table": ""},
+            {"backend": "databricks"},
+            {"_is_lakebase_synced": True},
+        ],
+        ids=["full", "no-decision", "no-data-table", "delta-engine", "managed-synced"],
+    )
+    def test_not_for(self, attrs):
+        assert TwinNetChangeApply.applies(self._pipe(**attrs)) is False
+
+
+class TestLakebaseNetApply:
+    def test_deletes_then_inserts_reach_the_sync_table_only(self, registry):
+        pipe = _net_pipeline(registry)
+        writes = _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert [(name, graph) for name, graph, *_ in writes] == [
+            ("delete_from_sync_iter", "G_V3"),
+            ("bulk_load_into_sync", "G_V3"),
+        ]
+        assert writes[0][2] == [
+            {"subject": "http://ex.org/old", "predicate": "http://ex.org/p", "object": "o"}
+        ]
+        assert not _streamed(log)
+        for companion_write in ("delete_triples", "bulk_delete_iter", "bulk_insert_iter"):
+            getattr(pipe.store, companion_write).assert_not_called()
+        pipe.store.drop_table.assert_not_called()
+
+    def test_the_feed_is_read_after_the_base_version(self, registry):
+        pipe = _net_pipeline(registry, base_version=5)
+
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        feed_reads = [s for s in warehouse.calls if "table_changes(" in s]
+        assert feed_reads and all(f"table_changes('{_DATA}', 6)" in s for s in feed_reads)
+
+    def test_the_facts_are_recorded(self, registry):
+        pipe = _net_pipeline(registry)
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=9, changes=_TWO_CHANGES))
+
+        assert (pipe.apply_mode, pipe.apply_fallback_reason, pipe.data_table_version) == (
+            "net_changes",
+            "",
+            9,
+        )
+        assert pipe.triple_count == 100
+        assert pipe.mode_decision == ModeDecision("incremental", "incremental", "")
+
+    def test_inferences_are_purged_after_the_writes(self, registry):
+        pipe = _net_pipeline(registry)
+        _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        names = [call[0] for call in pipe.store.mock_calls]
+        assert names.index("bulk_load_into_sync") < names.index("purge_materialized_triples")
+        pipe.store.purge_materialized_triples.assert_called_once_with("G_V3")
+        pipe.store.optimize_table.assert_called_once_with("G_V3")
+
+    def test_no_new_version_reads_no_feed_and_writes_nothing(self, registry):
+        pipe = _net_pipeline(registry, base_version=9)
+
+        log, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=9))
+
+        assert not any("table_changes(" in s for s in warehouse.calls)
+        pipe.store.delete_from_sync_iter.assert_not_called()
+        pipe.store.bulk_load_into_sync.assert_not_called()
+        assert not _streamed(log)
+        assert pipe.apply_mode == "net_changes"
+
+    def test_the_progress_names_the_net_changes(self, registry):
+        pipe = _net_pipeline(registry)
+        _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert any("net change" in step.lower() for step in pipe.tm.steps)
+
+    def test_a_store_without_an_existence_probe_skips_that_guard(self, registry):
+        pipe = _net_pipeline(registry)
+        del pipe.store.table_exists
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert not _streamed(log)
+
+
+class TestNeo4jNetApply:
+    def test_without_separable_inferences_the_graph_is_streamed(self, registry):
+        pipe = _net_pipeline(registry, backend="neo4j", purge=False)
+
+        log, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert _streamed(log)
+        assert pipe.apply_fallback_reason == "inferred_not_separable"
+        assert not any("table_changes(" in s for s in warehouse.calls)
+        pipe.store.delete_triples.assert_not_called()
+
+    def test_a_store_that_purges_inferences_gets_deletes_then_inserts_in_lists(self, registry):
+        pipe = _net_pipeline(registry, backend="neo4j", purge=True)
+        writes = _store_writes(pipe.store, "delete_triples", "insert_triples")
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert [(name, size) for name, _, _, size in writes] == [
+            ("delete_triples", 500),
+            ("insert_triples", 500),
+        ]
+        assert not _streamed(log)
+        pipe.store.purge_materialized_triples.assert_called_once_with("G_V3")
+
+
+class TestNetApplyFallsBackToTheFullStream:
+    def _fallback(self, registry, warehouse, **pipe_kw):
+        pipe = _net_pipeline(registry, **pipe_kw)
+        log, _, _ = _modes._run(pipe, warehouse=warehouse)
+        assert _streamed(log)
+        pipe.store.delete_from_sync_iter.assert_not_called()
+        pipe.store.bulk_load_into_sync.assert_not_called()
+        assert pipe.apply_mode == "full_stream"
+        assert pipe.mode_decision.reason == ""  # the mode decision is not the apply's
+        return pipe
+
+    def test_a_changeset_above_ten_percent(self, registry):
+        changes = [_change(f"http://ex.org/{i}", "insert") for i in range(11)]
+
+        pipe = self._fallback(registry, _CDFWarehouse([], changes=changes, count=100))
+
+        assert pipe.apply_fallback_reason == "changeset_too_large"
+        assert pipe.data_table_version == 9  # the full stream reads that version
+
+    def test_ten_percent_still_applies_net_changes(self, registry):
+        pipe = _net_pipeline(registry)
+        changes = [_change(f"http://ex.org/{i}", "insert") for i in range(10)]
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=changes, count=100))
+
+        assert not _streamed(log)
+
+    def test_no_base_run(self, registry):
+        pipe = self._fallback(registry, _CDFWarehouse([]), base_version=None)
+
+        assert pipe.apply_fallback_reason == "no_previous_version"
+
+    def test_a_store_that_lost_its_graph(self, registry):
+        pipe = _net_pipeline(registry)
+        pipe.store.table_exists.return_value = False
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert _streamed(log)
+        assert pipe.apply_fallback_reason == "no_previous_version"
+
+    def test_an_unreadable_change_feed(self, registry):
+        warehouse = _CDFWarehouse([], cdf_error=RuntimeError("change data feed not enabled"))
+
+        pipe = self._fallback(registry, warehouse)
+
+        assert pipe.apply_fallback_reason == "cdf_unavailable"
+
+    def test_an_unreadable_history(self, registry):
+        pipe = self._fallback(registry, _CDFWarehouse([], fail_on="DESCRIBE HISTORY"))
+
+        assert pipe.apply_fallback_reason == "cdf_unavailable"
+        assert pipe.data_table_version is None
+
+    def test_a_base_newer_than_the_relation(self, registry):
+        pipe = self._fallback(registry, _CDFWarehouse([], version=3), base_version=5)
+
+        assert pipe.apply_fallback_reason == "cdf_unavailable"
+
+
+class TestNetApplyFailures:
+    def test_a_failed_write_fails_the_build(self, registry):
+        pipe = _net_pipeline(registry)
+        pipe.store.delete_from_sync_iter.side_effect = InfrastructureError("Lakebase down")
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert pipe.tm.failed is True
+        assert not _streamed(log)
+        assert pipe.apply_mode == "net_changes"  # so the next build streams the whole graph
+
+
+class TestNetApplyIsPersisted:
+    def test_the_entry_records_the_net_change_apply(self, registry):
+        pipe = _net_pipeline(registry)
+        del pipe._record_build_run
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=9, changes=_TWO_CHANGES))
+
+        entry = registry.record_build_run.call_args_list[0][0][1]
+        facts = entry["stats"]["materialization"]
+        assert (facts["apply_mode"], facts["data_table_version"], facts["strategy"]) == (
+            "net_changes",
+            9,
+            "mv",
+        )
+        assert entry["materialization_mode_effective"] == "incremental"

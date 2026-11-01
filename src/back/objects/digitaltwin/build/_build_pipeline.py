@@ -46,6 +46,7 @@ from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
 )
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
+from back.objects.digitaltwin.build.TwinNetChangeApply import TwinNetChangeApply
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
@@ -471,7 +472,8 @@ class _BuildPipeline:
             t_phase = time.time()
             self._announce_apply_step()
 
-            if not self._apply_full_rebuild():
+            applied = TwinNetChangeApply.applies(self) and TwinNetChangeApply.apply(self)
+            if not applied and not self._apply_full_rebuild():
                 return
 
             self._log_phase("apply_graph", t_phase)
