@@ -3,7 +3,7 @@
 * **Persisted trace.** ``build_runs.stats["materialization"]`` carries the ten
   flat trace keys plus ``data_table_version``, ``fingerprint``, ``strategy``,
   ``apply_mode`` and ``apply_fallback_reason``; a later build finds its base
-  run through ``TwinBuildPostMaterialize.previous_materialization_stats``.
+  run through ``TwinBuildRunHistory.previous_materialization_stats``.
 * **Net change apply.** An incremental Neo4j / app-managed Lakebase build
   applies only the net changes of the ``…_data`` change feed since the base
   run's version (deletes first), unless there is no base, the change feed is
@@ -25,7 +25,7 @@ import pytest
 from back.core.errors import InfrastructureError
 from back.core.graphdb import ModeDecision
 from back.objects.digitaltwin.build import (
-    TwinBuildPostMaterialize,
+    TwinBuildRunHistory,
     TwinMergeFallback,
     TwinNetChangeApply,
 )
@@ -124,7 +124,7 @@ def _previous(registry, runs) -> dict:
     registry.load_build_runs.return_value = runs
     pipe = _bare_pipeline()
     pipe.domain_snap = _snap()
-    return TwinBuildPostMaterialize.previous_materialization_stats(pipe)
+    return TwinBuildRunHistory.previous_materialization_stats(pipe)
 
 
 class TestBuildRunStats:
@@ -135,13 +135,13 @@ class TestBuildRunStats:
             domain_snap=SimpleNamespace(ontology={"classes": [{}, {}]}, assignment={}),
         )
 
-        stats = TwinBuildPostMaterialize.build_run_stats(pipe)
+        stats = TwinBuildRunHistory.build_run_stats(pipe)
 
         assert stats["ontology"]["classes"] == 2
         assert set(stats["materialization"]) == _TRACE_KEYS | _FACT_KEYS
 
     def test_a_pipeline_that_did_nothing_reports_empty_facts(self):
-        facts = TwinBuildPostMaterialize.build_run_stats(SimpleNamespace(view_table=_VIEW))[
+        facts = TwinBuildRunHistory.build_run_stats(SimpleNamespace(view_table=_VIEW))[
             "materialization"
         ]
 
@@ -167,7 +167,7 @@ class TestBuildRunStats:
     def test_the_strategy_says_how_the_data_relation_was_built(self, attrs, strategy):
         pipe = SimpleNamespace(view_table=_VIEW, **attrs)
 
-        facts = TwinBuildPostMaterialize.build_run_stats(pipe)["materialization"]
+        facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
 
         assert facts["strategy"] == strategy
 
@@ -175,7 +175,7 @@ class TestBuildRunStats:
     def test_a_version_that_is_not_an_integer_is_dropped(self, value):
         pipe = SimpleNamespace(view_table=_VIEW, data_table_version=value)
 
-        facts = TwinBuildPostMaterialize.build_run_stats(pipe)["materialization"]
+        facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
 
         assert facts["data_table_version"] is None
 
@@ -214,7 +214,7 @@ class TestBuildRunKey:
         pipe = _bare_pipeline()
         pipe.domain_snap = _snap()
 
-        assert TwinBuildPostMaterialize.build_run_key(pipe) == ("dom", "3")
+        assert TwinBuildRunHistory.build_run_key(pipe) == ("dom", "3")
 
     def test_without_a_uc_folder_the_sanitised_name(self):
         pipe = _bare_pipeline()
@@ -223,7 +223,7 @@ class TestBuildRunKey:
         pipe.domain_snap = SimpleNamespace(current_version=None)
         pipe.domain.current_version = None
 
-        folder, version = TwinBuildPostMaterialize.build_run_key(pipe)
+        folder, version = TwinBuildRunHistory.build_run_key(pipe)
 
         assert folder and folder != "My Domain"
         assert version == ""
@@ -284,8 +284,8 @@ class TestPreviousMaterializationStats:
         pipe = _bare_pipeline()
         pipe.domain_snap = _snap()
 
-        with patch("back.objects.digitaltwin.build.TwinBuildPostMaterialize.logger") as logger:
-            assert TwinBuildPostMaterialize.previous_materialization_stats(pipe) == {}
+        with patch("back.objects.digitaltwin.build.TwinBuildRunHistory.logger") as logger:
+            assert TwinBuildRunHistory.previous_materialization_stats(pipe) == {}
         logger.debug.assert_called_once()
 
     def test_an_unexpected_answer_reads_as_no_base(self, registry):
@@ -296,7 +296,7 @@ class TestPreviousMaterializationStats:
         pipe.domain_snap = SimpleNamespace(current_version=None)
         pipe.domain.current_version = None
 
-        assert TwinBuildPostMaterialize.previous_materialization_stats(pipe) == {}
+        assert TwinBuildRunHistory.previous_materialization_stats(pipe) == {}
         registry.load_build_runs.assert_not_called()
 
 

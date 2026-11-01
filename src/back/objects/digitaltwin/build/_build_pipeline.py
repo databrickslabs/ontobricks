@@ -44,6 +44,7 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
+from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
 from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
@@ -1505,7 +1506,7 @@ class _BuildPipeline:
         try:
             from back.objects.registry.RegistryService import RegistryService
 
-            folder, version = TwinBuildPostMaterialize.build_run_key(self)
+            folder, version = TwinBuildRunHistory.build_run_key(self)
             now = datetime.now(timezone.utc)
             started = datetime.fromtimestamp(self.start_time, tz=timezone.utc)
             entry = {
@@ -1521,7 +1522,7 @@ class _BuildPipeline:
                 "entity_count": len(self.entity_mappings or []),
                 "relationship_count": len(self.relationship_mappings or []),
                 "sql_chars": len(self.spark_sql or ""),
-                **TwinBuildPostMaterialize.store_identity(self),
+                **TwinBuildRunHistory.store_identity(self),
                 "view_table": self.view_table,
                 **TwinBuildPostMaterialize.trace_fields(self),
                 "task_id": self.task_id,
@@ -1532,7 +1533,7 @@ class _BuildPipeline:
                     or dict(self.phase_times)
                 ),
                 # Cockpit ontology + mapping counts and the materialization facts.
-                "stats": TwinBuildPostMaterialize.build_run_stats(self),
+                "stats": TwinBuildRunHistory.build_run_stats(self),
             }
             svc = RegistryService.from_context(self.domain, self.settings)
             svc.record_build_run(folder, entry)

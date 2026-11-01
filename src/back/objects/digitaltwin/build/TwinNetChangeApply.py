@@ -9,7 +9,7 @@ An incremental build leaves ``…_data`` as a materialized view (or, without
 serverless pipelines, a MERGE-maintained table) whose change feed holds exactly
 what changed. Instead of dropping the store and streaming every triple, this
 reads the feed since the version the store was last brought to (recorded by the
-base build run, :meth:`TwinBuildPostMaterialize.previous_materialization_stats`)
+base build run, :meth:`TwinBuildRunHistory.previous_materialization_stats`)
 and writes only the net deletes, then the net inserts:
 
 * app-managed Lakebase: ``delete_from_sync_iter`` / ``bulk_load_into_sync`` on
@@ -32,9 +32,7 @@ from typing import Any
 from back.core.errors import InfrastructureError
 from back.core.graphdb.ModeDecision import ModeDecision
 from back.core.logging import get_logger
-from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
-    TwinBuildPostMaterialize,
-)
+from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 
 logger = get_logger(__name__)
 
@@ -129,7 +127,7 @@ class TwinNetChangeApply:
         ``None`` too when the store reports its graph missing (dropped outside
         a build); a store without that probe is trusted.
         """
-        facts = TwinBuildPostMaterialize.previous_materialization_stats(pipe)
+        facts = TwinBuildRunHistory.previous_materialization_stats(pipe)
         version = facts.get("data_table_version")
         if isinstance(version, bool) or not isinstance(version, int):
             return None

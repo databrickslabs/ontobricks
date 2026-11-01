@@ -28,9 +28,7 @@ from back.core.errors import OntoBricksError, OperationCancelledError
 from back.core.graphdb.MaterializationModeResolver import MaterializationModeResolver
 from back.core.graphdb.ModeDecision import ModeDecision
 from back.core.logging import get_logger
-from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
-    TwinBuildPostMaterialize,
-)
+from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 
 logger = get_logger(__name__)
@@ -143,7 +141,7 @@ class TwinMergeFallback:
         """The base run merged the same fingerprint and ``…_data`` is still there."""
         from back.core.graphdb.delta import materialize
 
-        base = TwinBuildPostMaterialize.previous_materialization_stats(pipe)
+        base = TwinBuildRunHistory.previous_materialization_stats(pipe)
         if base.get("fingerprint") != fingerprint or base.get("strategy") != "merge":
             return False
         return materialize.relation_exists(pipe.source_client, data)
