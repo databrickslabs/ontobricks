@@ -16,15 +16,15 @@ net change apply. The build therefore still runs as ``incremental`` (strategy
 
 When every mapping is row-local, the fingerprint of the source table versions,
 the mapping and the generated SQL tells an unchanged domain: if it equals the
-base run's and ``…_data`` exists, the build completes at once as skipped.
+base run's, ``…_data`` is still the table that run left and the store still
+holds the graph, the build completes at once as skipped.
 """
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
-from back.core.errors import OntoBricksError, OperationCancelledError
+from back.core.errors import InfrastructureError, OntoBricksError, OperationCancelledError
 from back.core.graphdb.MaterializationModeResolver import MaterializationModeResolver
 from back.core.graphdb.ModeDecision import ModeDecision
 from back.core.logging import get_logger
@@ -138,13 +138,49 @@ class TwinMergeFallback:
 
     @staticmethod
     def _unchanged(pipe: Any, fingerprint: str, data: str) -> bool:
-        """The base run merged the same fingerprint and ``…_data`` is still there."""
+        """The base run merged the same fingerprint, into the ``…_data`` still there.
+
+        ``…_data`` must exist and, when the base recorded its version, still be
+        at that version; the store must still hold the graph when it can say so.
+        """
         from back.core.graphdb.delta import materialize
 
         base = TwinBuildRunHistory.previous_materialization_stats(pipe)
         if base.get("fingerprint") != fingerprint or base.get("strategy") != "merge":
             return False
-        return materialize.relation_exists(pipe.source_client, data)
+        if not materialize.relation_exists(pipe.source_client, data):
+            return False
+        return TwinMergeFallback._data_unchanged_since(
+            pipe, data, base.get("data_table_version")
+        ) and TwinMergeFallback._store_holds_graph(pipe)
+
+    @staticmethod
+    def _data_unchanged_since(pipe: Any, data: str, version: Any) -> bool:
+        """``…_data`` is still at the base's *version* (no recorded version: nothing to check)."""
+        from back.core.graphdb.delta import ChangeFeedReader
+
+        if isinstance(version, bool) or not isinstance(version, int):
+            return True
+        try:
+            return ChangeFeedReader.latest_version(pipe.source_client, data) == version
+        except InfrastructureError as exc:
+            logger.debug("[DT-BUILD %s] no version of %s: %s", pipe.task_id, data, exc)
+            return False
+
+    @staticmethod
+    def _store_holds_graph(pipe: Any) -> bool:
+        """The store still has the graph (a store dropped outside a build never skips).
+
+        Not asked on the Delta engine, whose graph is ``…_data``, nor of a store
+        without the probe.
+        """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        if GraphDBFactory._resolve_graph_backend(pipe.domain) == "databricks":
+            return True
+        if not hasattr(pipe.store, "table_exists"):
+            return True
+        return bool(pipe.store.table_exists(pipe.graph_name))
 
     @staticmethod
     def _record(pipe: Any, data: str, fingerprint: str) -> None:
@@ -155,7 +191,7 @@ class TwinMergeFallback:
 
     @staticmethod
     def _complete_skipped(pipe: Any, data: str, fingerprint: str) -> None:
-        """Complete and record the build as a success, as ``_complete_task`` would."""
+        """Complete and record the build as a success through the pipeline's completion."""
         TwinMergeFallback._record(pipe, data, fingerprint)
         pipe.apply_mode = "none"
         pipe.triple_count = pipe._count_source_triples()
@@ -166,13 +202,4 @@ class TwinMergeFallback:
         )
         if not pipe.is_api:
             pipe._populate_session_cache()
-        result = {
-            "triple_count": pipe.triple_count,
-            "view_table": pipe.view_table,
-            "graph_name": pipe.graph_name,
-            "build_mode": "incremental",
-            "duration_seconds": time.time() - pipe.start_time,
-        }
-        pipe.tm.complete_task(pipe.task_id, result=result, message=SKIPPED_MESSAGE)
-        pipe._record_build_run("success", message=SKIPPED_MESSAGE)
-        pipe._persist_last_build_to_registry()
+        pipe._complete_task(message=SKIPPED_MESSAGE, build_mode="incremental")

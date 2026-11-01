@@ -49,6 +49,7 @@ _TRACE_KEYS = {
 }
 _FACT_KEYS = {
     "data_table_version",
+    "data_table_id",
     "fingerprint",
     "strategy",
     "apply_mode",
@@ -147,6 +148,7 @@ class TestBuildRunStats:
 
         assert {key: facts[key] for key in _FACT_KEYS} == {
             "data_table_version": None,
+            "data_table_id": "",
             "fingerprint": "",
             "strategy": "",
             "apply_mode": "",
@@ -234,7 +236,7 @@ class TestPreviousMaterializationStats:
         facts = _previous(registry, [_run_record(version=9), _run_record(version=4)])
 
         assert facts["data_table_version"] == 9
-        registry.load_build_runs.assert_called_once_with("dom", version="3", limit=10)
+        registry.load_build_runs.assert_called_once_with("dom", version="3", limit=50)
 
     @pytest.mark.parametrize("apply_mode", ["net_changes", "full_stream", "lakeflow_sync"])
     def test_every_apply_that_synced_the_store_is_a_base(self, registry, apply_mode):
@@ -242,13 +244,29 @@ class TestPreviousMaterializationStats:
 
     @pytest.mark.parametrize(
         "identity",
-        [{"graph_engine": "neo4j"}, {"sync_mode": "managed_synced"}, {"graph_name": "G_V2"}],
-        ids=["engine", "sync-mode", "graph"],
+        [{"graph_engine": "neo4j"}, {"graph_name": "G_V2"}],
+        ids=["engine", "graph"],
     )
     def test_a_success_on_another_store_is_passed_over(self, registry, identity):
         facts = _previous(registry, [_run_record(version=9, **identity), _run_record(version=4)])
 
         assert facts["data_table_version"] == 4
+
+    def test_the_same_graph_synced_another_way_leaves_no_base(self, registry):
+        """A managed-synced build of this graph rewrote ``<graph>_sync``."""
+        runs = [_run_record(version=9, sync_mode="managed_synced"), _run_record(version=4)]
+
+        assert _previous(registry, runs) == {}
+
+    def test_a_skipped_delta_engine_build_is_a_base_there(self, registry):
+        """On the Delta engine ``…_data`` is the graph: a build that skipped the store is a base."""
+        registry.load_build_runs.return_value = [_run_record(version=9, apply_mode="none")]
+        pipe = _bare_pipeline(info={"graph_backend": "databricks"})
+        pipe.domain_snap = _snap()
+
+        facts = TwinBuildRunHistory.previous_materialization_stats(pipe)
+
+        assert facts["apply_mode"] == "none"
 
     @pytest.mark.parametrize("apply_mode", ["none", ""], ids=["skipped", "empty"])
     def test_a_success_that_left_the_store_alone_is_passed_over(self, registry, apply_mode):
@@ -313,21 +331,38 @@ class _CDFWarehouse(_modes._Warehouse):
     """
 
     def __init__(
-        self, log, *, version=9, changes=(), cdf_error=None, count=100, data_exists=False, **kw
+        self,
+        log,
+        *,
+        version=9,
+        data_version=None,
+        table_id="",
+        changes=(),
+        cdf_error=None,
+        stream_error=None,
+        count=100,
+        data_exists=False,
+        **kw,
     ):
         super().__init__(log, count=count, **kw)
         self._version = version
+        self._data_version = version if data_version is None else data_version
+        self._table_id = table_id
         self._changes = list(changes)
         self._cdf_error = cdf_error
+        self._stream_error = stream_error
         self._data_exists = data_exists
 
     def execute_query(self, sql: str):
         if sql.startswith("SHOW TABLES") and "_data'" in sql:
             self._record(sql)
             return [{"tableName": "triplestore_dom_v3_data"}] if self._data_exists else []
+        if sql.startswith("DESCRIBE DETAIL"):
+            self._record(sql)
+            return [{"id": self._table_id}] if self._table_id else []
         if sql.startswith("DESCRIBE HISTORY"):
             self._record(sql)
-            return [{"version": self._version}]
+            return [{"version": self._data_version if _DATA in sql else self._version}]
         if "table_changes(" in sql:
             self._record(sql)
             if self._cdf_error is not None:
@@ -339,7 +374,13 @@ class _CDFWarehouse(_modes._Warehouse):
         if "table_changes(" not in sql:
             return super().iter_rows(sql, batch_size)
         self._record(sql)
-        return iter(self._changes)
+        return self._stream()
+
+    def _stream(self):
+        """The changes, then *stream_error* (a feed lost half-way through)."""
+        yield from self._changes[:1] if self._stream_error else self._changes
+        if self._stream_error is not None:
+            raise self._stream_error
 
 
 def _change(subject: str, op: str) -> dict:
@@ -371,6 +412,8 @@ def _net_pipeline(registry, backend="lakebase", *, base_version=5, purge=True):
     pipe = _modes._pipeline("incremental", backend=backend)
     # The defaults ``_BuildPipeline.__init__`` sets (the bare pipeline skips it).
     pipe.data_table_version, pipe.apply_mode, pipe.apply_fallback_reason = None, "", ""
+    pipe.data_table_id = ""
+    del pipe._complete_task  # the real completion message and build mode
     pipe._graph_engine = "neo4j" if backend == "neo4j" else "lakebase"
     pipe.store.supports_materialized_inference_purge = purge
     if base_version is not None:
@@ -402,7 +445,14 @@ class TestNetChangeAppliesTo:
         assert TwinNetChangeApply.applies(self._pipe(backend=backend)) is True
 
     def test_a_merge_maintained_table_also_has_a_change_feed(self):
-        assert TwinNetChangeApply.applies(self._pipe(data_relation_mode="table")) is True
+        pipe = self._pipe(data_relation_mode="table", strategy="merge")
+
+        assert TwinNetChangeApply.applies(pipe) is True
+
+    @pytest.mark.parametrize("relation_mode", ["table", "view"], ids=["ctas", "pass-through"])
+    def test_not_for_a_relation_without_an_incremental_change_feed(self, relation_mode):
+        """A CTAS table is replaced wholesale; a pass-through view has no feed at all."""
+        assert TwinNetChangeApply.applies(self._pipe(data_relation_mode=relation_mode)) is False
 
     @pytest.mark.parametrize(
         "attrs",
@@ -472,6 +522,26 @@ class TestLakebaseNetApply:
         assert names.index("bulk_load_into_sync") < names.index("purge_materialized_triples")
         pipe.store.purge_materialized_triples.assert_called_once_with("G_V3")
         pipe.store.optimize_table.assert_called_once_with("G_V3")
+
+    def test_the_purge_is_the_only_graph_cache_rebuild(self, registry):
+        """``purge_materialized_triples`` rebuilds the cache; the build does not do it again."""
+        pipe = _net_pipeline(registry)
+        _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
+        pipe.store.sql_flavor.return_value = "postgres"
+
+        with patch("back.core.graphdb.search_cache.rebuild_graph_cache_if_enabled") as rebuild:
+            _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        rebuild.assert_not_called()
+
+    def test_the_task_reports_a_net_change_apply(self, registry):
+        pipe = _net_pipeline(registry)
+        _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+
+        assert pipe.tm.messages[0].startswith("Net change apply: 100 triples in ")
+        assert pipe.tm.results[0]["build_mode"] == "incremental"
 
     def test_no_new_version_reads_no_feed_and_writes_nothing(self, registry):
         pipe = _net_pipeline(registry, base_version=9)
@@ -585,6 +655,56 @@ class TestNetApplyFallsBackToTheFullStream:
 
         assert pipe.apply_fallback_reason == "cdf_unavailable"
 
+    def test_a_base_from_another_relation_kind(self, registry):
+        """MV -> MERGE table (or back) restarts the history: equal versions mean nothing."""
+        pipe = _net_pipeline(registry)
+        registry.load_build_runs.return_value[0]["stats"]["materialization"]["strategy"] = "merge"
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], version=5))
+
+        assert _streamed(log)
+        assert pipe.apply_fallback_reason == "no_previous_version"
+
+    def test_a_base_on_another_table_id(self, registry):
+        pipe = _net_pipeline(registry)
+        registry.load_build_runs.return_value[0]["stats"]["materialization"]["data_table_id"] = "a"
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], table_id="b"))
+
+        assert _streamed(log)
+        assert pipe.apply_fallback_reason == "no_previous_version"
+
+    def test_the_same_table_id_applies_and_is_recorded(self, registry):
+        pipe = _net_pipeline(registry)
+        registry.load_build_runs.return_value[0]["stats"]["materialization"]["data_table_id"] = "a"
+        _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], table_id="a", changes=_TWO_CHANGES))
+
+        assert not _streamed(log)
+        assert pipe.data_table_id == "a"
+
+    def test_a_change_feed_lost_half_way_streams_the_whole_graph(self, registry):
+        pipe = _net_pipeline(registry)
+        writes = _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
+        warehouse = _CDFWarehouse(
+            [], changes=_TWO_CHANGES, stream_error=RuntimeError("connection reset")
+        )
+
+        log, _, _ = _modes._run(pipe, warehouse=warehouse)
+
+        assert _streamed(log)
+        assert pipe.apply_fallback_reason == "cdf_unavailable"
+        assert pipe.apply_mode == "full_stream"
+        assert pipe.tm.failed is False
+        assert [name for name, *_ in writes] == []  # the half-read batch was never written
+
+    def test_the_fallback_reports_a_full_rebuild(self, registry):
+        pipe = self._fallback(registry, _CDFWarehouse([]), base_version=None)
+
+        assert pipe.tm.results[0]["build_mode"] == "full"
+        assert pipe.tm.messages[0].startswith("Full rebuild: ")
+
 
 class TestNetApplyFailures:
     def test_a_failed_write_fails_the_build(self, registry):
@@ -628,6 +748,8 @@ def _merge_pipeline(backend="databricks", mode="incremental", **kw):
     # The defaults ``_BuildPipeline.__init__`` sets (the bare pipeline skips it).
     pipe.data_table_version, pipe.fingerprint, pipe.strategy = None, "", ""
     pipe.apply_mode, pipe.apply_fallback_reason, pipe.mode_fallback_detail = "", "", ""
+    pipe.data_table_id = ""
+    del pipe._complete_task  # the real completion message and build mode
     pipe.store.supports_materialized_inference_purge = False
     return pipe
 
@@ -794,13 +916,15 @@ class TestMergeSkipsAnUnchangedBuild:
     def _pipeline():
         return _merge_pipeline(backend="lakebase", entities={_modes._CUSTOMER: _modes._row_local()})
 
-    def _base(self, registry, *, fingerprint=None, strategy="merge", apply_mode="full_stream"):
-        """Build once to learn the fingerprint; record it as the base run."""
+    def _base(
+        self, registry, *, fingerprint=None, strategy="merge", apply_mode="full_stream", version=7
+    ):
+        """Build once to learn the fingerprint; record it as the base run (``…_data`` at *version*)."""
         if fingerprint is None:
             first = self._pipeline()
             _modes._run(first, warehouse=_CDFWarehouse([], version=4))
             fingerprint = first.fingerprint
-        run = _run_record(version=7)
+        run = _run_record(version=version)
         run["stats"]["materialization"].update(
             fingerprint=fingerprint, strategy=strategy, apply_mode=apply_mode
         )
@@ -812,7 +936,7 @@ class TestMergeSkipsAnUnchangedBuild:
         pipe = self._pipeline()
 
         log, _, warehouse = _modes._run(
-            pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True, count=42)
+            pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True, count=42)
         )
 
         assert not _merged(warehouse) and not _ctas(warehouse)
@@ -820,13 +944,14 @@ class TestMergeSkipsAnUnchangedBuild:
         assert pipe.tm.failed is False
         assert pipe.tm.messages == [_SKIPPED]
         assert pipe.tm.results[0]["triple_count"] == 42
+        assert pipe.tm.results[0]["build_mode"] == "incremental"
         assert pipe._record_build_run.call_args_list[0] == (("success",), {"message": _SKIPPED})
 
     def test_a_skipped_build_records_merge_and_no_apply(self, registry):
         fingerprint = self._base(registry)
         pipe = self._pipeline()
 
-        _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True))
 
         assert (pipe.strategy, pipe.apply_mode, pipe.fingerprint) == ("merge", "none", fingerprint)
         assert pipe.mode_decision.effective == "incremental"
@@ -837,7 +962,7 @@ class TestMergeSkipsAnUnchangedBuild:
         pipe = self._pipeline()
         del pipe._record_build_run
 
-        _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True))
 
         assert registry.record_build_run.call_count == 1
         entry = registry.record_build_run.call_args[0][1]
@@ -848,7 +973,7 @@ class TestMergeSkipsAnUnchangedBuild:
         self._base(registry)
         pipe = self._pipeline()
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=5, data_exists=True))
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=5, data_version=7, data_exists=True))
 
         assert _merged(warehouse)
 
@@ -856,15 +981,50 @@ class TestMergeSkipsAnUnchangedBuild:
         self._base(registry)
         pipe = self._pipeline()
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=False))
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=False))
 
         assert _merged(warehouse)
+
+    def test_a_data_table_written_since_the_base_merges(self, registry):
+        self._base(registry, version=7)
+        pipe = self._pipeline()
+
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_version=8, data_exists=True)
+        )
+
+        assert _merged(warehouse)
+
+    def test_a_store_that_lost_its_graph_merges(self, registry):
+        """A store dropped outside a build must never read as "no source changes"."""
+        self._base(registry)
+        pipe = self._pipeline()
+        pipe.store.table_exists.return_value = False
+
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True)
+        )
+
+        assert _merged(warehouse)
+        assert pipe.tm.messages != [_SKIPPED]
+
+    def test_the_delta_engine_skips_after_a_build_that_left_the_store_alone(self, registry):
+        """On the Delta engine the store is ``…_data``: apply_mode none is a base and the
+        store probe is irrelevant."""
+        self._base(registry, apply_mode="none", version=None)
+        pipe = _merge_pipeline(entities={_modes._CUSTOMER: _modes._row_local()})
+        pipe.store.table_exists.return_value = False
+
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+
+        assert not _merged(warehouse)
+        assert pipe.tm.messages == [_SKIPPED]
 
     def test_a_base_that_was_not_merged_merges(self, registry):
         self._base(registry, strategy="mv")
         pipe = self._pipeline()
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True))
 
         assert _merged(warehouse)
 

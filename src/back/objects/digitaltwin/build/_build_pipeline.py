@@ -293,6 +293,7 @@ class _BuildPipeline:
         self.mode_fallback_detail: str = ""  # message of the incremental fallback, if any
         # Persisted under build_runs.stats["materialization"] (build_run_stats).
         self.data_table_version: Optional[int] = None
+        self.data_table_id: str = ""
         self.fingerprint: str = ""
         self.strategy: str = ""  # "merge" when TwinMergeFallback built …_data
         self.apply_mode: str = ""
@@ -1567,7 +1568,8 @@ class _BuildPipeline:
         """Stamp ``last_build`` on the registry row (see the collaborator)."""
         TwinBuildPostMaterialize.persist_last_build_to_registry(self)
 
-    def _complete_task(self) -> None:
+    def _complete_task(self, *, message: str = "", build_mode: str = "") -> None:
+        """Complete the task and record the run; the defaults come from the run's facts."""
         duration = time.time() - self.start_time
         logger.info(
             "[DT-BUILD %s] DONE kind=%s domain=%s triples=%d "
@@ -1581,17 +1583,18 @@ class _BuildPipeline:
             or "n/a",
         )
 
+        label, derived_mode = TwinBuildRunHistory.completion_summary(self)
         result_data: Dict[str, Any] = {
             "triple_count": self.triple_count,
             "view_table": self.view_table,
             "graph_name": self.graph_name,
-            "build_mode": "full",
+            "build_mode": build_mode or derived_mode,
             "duration_seconds": duration,
         }
         if not self.is_api:
             result_data["phase_times"] = self.phase_times
 
-        msg = f"Full rebuild: {self.triple_count} triples in {duration:.1f}s"
+        msg = message or f"{label}: {self.triple_count} triples in {duration:.1f}s"
         self.tm.complete_task(self.task_id, result=result_data, message=msg)
         self._record_build_run("success", message=msg)
         self._persist_last_build_to_registry()
