@@ -67,21 +67,18 @@ class TwinLakebaseSync:
         configured_sync_table_mode: Any,
         source_is_view: bool = False,
     ) -> SyncPlan:
-        """Decide the source, primary key, schedule and source kind of the synced table.
+        """Decide the source, primary key and schedule of the synced table.
 
         *source_is_view* means *data_table* is not a copy of the triples (a
         pass-through VIEW without ``object_hash``): Lakeflow then syncs the
         gateway VIEW, as a snapshot.
         """
-        from back.core.graphdb.lakebase._companion_ddl import (
-            LAKEFLOW_SYNC_PRIMARY_KEY,
-            SOURCE_KIND_TRIPLES,
-        )
+        from back.core.graphdb.lakebase._companion_ddl import LAKEFLOW_SYNC_PRIMARY_KEY
 
         if data_table and not source_is_view:
             schedule = TwinLakebaseSync._schedule(mode_effective, configured_sync_table_mode)
-            return SyncPlan(data_table, LAKEFLOW_SYNC_PRIMARY_KEY, schedule, SOURCE_KIND_TRIPLES)
-        return SyncPlan(view_table, LAKEFLOW_SYNC_PRIMARY_KEY, "snapshot", SOURCE_KIND_TRIPLES)
+            return SyncPlan(data_table, LAKEFLOW_SYNC_PRIMARY_KEY, schedule)
+        return SyncPlan(view_table, LAKEFLOW_SYNC_PRIMARY_KEY, "snapshot")
 
     @staticmethod
     def register(pipe: Any, mgr: Any, synced_uc: str, plan: SyncPlan) -> Any:

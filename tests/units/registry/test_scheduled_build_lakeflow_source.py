@@ -121,14 +121,14 @@ class TestScheduledLakeflowSource:
             "sync_mode": "snapshot",
         }
 
-    def test_the_union_view_is_built_for_a_triples_source(self):
+    def test_the_union_view_is_built_in_the_triples_shape(self):
         log: list = []
         store, _ = _store(log)
 
         _apply(store, _warehouse(log), domain=_domain())
 
         [view] = [e for e in log if e[0] == "union_view"]
-        assert view[2] == {"source_kind": "triples"}
+        assert view[2] == {}
 
     def test_ensure_drops_the_union_view_only_through_its_delete_hook(self):
         log: list = []

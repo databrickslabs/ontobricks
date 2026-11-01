@@ -863,7 +863,7 @@ class TestLakebaseSyncPlan:
     def test_the_data_relation_is_the_source(self):
         plan = _plan(mode_effective="incremental", configured_sync_table_mode="continuous")
 
-        assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "triggered", "triples")
+        assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "triggered")
 
     def test_a_view_source_is_always_a_snapshot_of_the_gateway_view(self):
         plan = _plan(
@@ -872,17 +872,17 @@ class TestLakebaseSyncPlan:
             configured_sync_table_mode="continuous",
         )
 
-        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot", "triples")
+        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot")
 
     def test_without_a_data_relation_the_gateway_view_is_synced_as_a_snapshot(self):
         plan = _plan(
             data_table="", mode_effective="incremental", configured_sync_table_mode="triggered"
         )
 
-        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot", "triples")
+        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot")
 
     def test_the_plan_unpacks_into_the_ensure_arguments(self):
-        plan = SyncPlan(_DATA, _TRIPLE_KEY, "continuous", "triples")
+        plan = SyncPlan(_DATA, _TRIPLE_KEY, "continuous")
 
         assert plan.ensure_kwargs() == {
             "source_table_full_name": _DATA,
@@ -901,7 +901,7 @@ class TestLakebaseSyncPlanFromThePipeline:
     def test_a_pipeline_that_built_nothing_syncs_the_gateway_view(self):
         plan = TwinLakebaseSync.sync_plan(self._pipe())
 
-        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot", "triples")
+        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot")
 
     @pytest.mark.parametrize("relation_mode", ["table", "materialized_view"])
     def test_a_computed_data_relation_is_synced(self, relation_mode):
@@ -930,9 +930,7 @@ class TestLakebaseSyncPlanFromThePipeline:
             mode_decision=ModeDecision("microbatch", "microbatch", ""),
         )
 
-        assert TwinLakebaseSync.sync_plan(pipe) == SyncPlan(
-            _DATA, _TRIPLE_KEY, "continuous", "triples"
-        )
+        assert TwinLakebaseSync.sync_plan(pipe) == SyncPlan(_DATA, _TRIPLE_KEY, "continuous")
 
 
 class TestSyncedApplyUsesThePlan:
@@ -958,7 +956,7 @@ class TestSyncedApplyUsesThePlan:
         assert kwargs["source_table_full_name"] == "cat.sch.v_g_data"
         assert kwargs["primary_key_columns"] == list(_TRIPLE_KEY)
         assert kwargs["sync_mode"] == "continuous"
-        assert pipe.store.ensure_synced_union_view.call_args.kwargs["source_kind"] == "triples"
+        assert "source_kind" not in pipe.store.ensure_synced_union_view.call_args.kwargs
 
     def test_the_sync_source_and_schedule_are_recorded_for_the_trace(self):
         pipe = self._microbatch_pipe()

@@ -1325,7 +1325,6 @@ class _BuildPipeline:
             self.store.ensure_synced_union_view(
                 self.graph_name,
                 synced_phy_override=_actual_synced_phy,
-                source_kind=plan.source_kind,
             )
             logger.info(
                 "[DT-BUILD %s] step 6/7 done: union view created/refreshed "

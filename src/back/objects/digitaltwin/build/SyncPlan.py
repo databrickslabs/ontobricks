@@ -9,15 +9,13 @@ from dataclasses import dataclass
 class SyncPlan:
     """One ``SyncedTableManager.ensure`` registration, decided by :class:`TwinLakebaseSync`.
 
-    ``source_kind`` is ``"slots"`` for a ``…_slots`` source (the Postgres union
-    view must project three columns and de-duplicate) and ``"triples"`` for
-    ``…_data`` or the R2RML VIEW.
+    The source is ``…_data`` (table or materialized view) or the R2RML gateway
+    VIEW, so the Postgres union view always has the triples shape.
     """
 
     source_fqn: str
     primary_key: tuple[str, ...]
     sync_mode: str
-    source_kind: str
 
     def ensure_kwargs(self) -> dict:
         """Keyword arguments of ``SyncedTableManager.ensure`` for this plan."""

@@ -193,7 +193,7 @@ def _apply_synced_pipeline(
         synced_uc,
         state,
     )
-    store.ensure_synced_union_view(graph_name, source_kind=plan.source_kind)
+    store.ensure_synced_union_view(graph_name)
     if full:
         try:
             store.truncate_companion(graph_name)
