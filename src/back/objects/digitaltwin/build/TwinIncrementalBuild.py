@@ -191,10 +191,12 @@ class TwinIncrementalBuild:
 
         Streaming into its store would route every triple into ``…_inferred``
         (``DeltaFlatStore.insert_triples``) right after the build reset it.
+        Records the trace's ``apply_mode``: ``none`` here, ``full_stream`` otherwise.
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         backend = GraphDBFactory._resolve_triple_store_backend(pipe.domain, pipe.settings)
+        pipe.apply_mode = "none" if backend == "databricks" else "full_stream"
         if backend != "databricks":
             return False
         logger.info(
@@ -448,6 +450,8 @@ class TwinIncrementalBuild:
             exc,
         )
         pipe.mode_decision = ModeDecision(requested, "full", reason)
+        # Message and driver detail, read by TwinMergeFallback.applies.
+        pipe.mode_fallback_detail = f"{exc} {exc.detail or ''}".strip()
         pipe.slots_table = None
         pipe.refresh_technique = ""
         TwinIncrementalBuild._leave(pipe)

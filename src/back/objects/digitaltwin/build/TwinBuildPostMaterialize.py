@@ -26,6 +26,13 @@ logger = get_logger(__name__)
 # What the trace reports when no decision was made (the pipeline never started).
 _NO_DECISION = ModeDecision(requested="full", effective="full", reason="")
 
+#: ``apply_mode`` values after which the store matches ``…_data``: a run that
+#: ended with one of them is a base a later build can continue from.
+_BASE_APPLY_MODES = ("net_changes", "full_stream", "lakeflow_sync")
+
+#: How many recent runs are searched for that base.
+_PREVIOUS_RUNS_LIMIT = 10
+
 
 class TwinBuildPostMaterialize:
     """Source selection, inferred reset and tracing around the ``…_data`` relation."""
@@ -211,23 +218,156 @@ class TwinBuildPostMaterialize:
         decision = getattr(pipe, "mode_decision", None)
         if not isinstance(decision, ModeDecision):
             decision = _NO_DECISION
-
-        def _text(name: str) -> str:
-            value = getattr(pipe, name, "")
-            return value if isinstance(value, str) else ""
-
+        text = TwinBuildPostMaterialize._text
         return {
             "triples_source": TwinBuildPostMaterialize.triples_source_relation(pipe),
             "inferred_reset": bool(getattr(pipe, "inferred_reset", False)),
             "materialization_mode_requested": decision.requested,
             "materialization_mode_effective": decision.effective,
             "mode_fallback_reason": decision.reason,
-            "refresh_technique": _text("refresh_technique"),
-            "slot_pipeline_id": _text("slot_pipeline_id"),
-            "slots_table": _text("slots_table"),
-            "sync_source": _text("sync_source"),
-            "sync_mode_effective": _text("sync_mode_effective"),
+            "refresh_technique": text(pipe, "refresh_technique"),
+            "slot_pipeline_id": text(pipe, "slot_pipeline_id"),
+            "slots_table": text(pipe, "slots_table"),
+            "sync_source": text(pipe, "sync_source"),
+            "sync_mode_effective": text(pipe, "sync_mode_effective"),
         }
+
+    @staticmethod
+    def build_run_stats(pipe: Any) -> dict:
+        """``build_runs.stats``: the Cockpit's ontology / mapping counts and ``materialization``.
+
+        ``materialization`` persists the :meth:`trace_fields` and the facts a
+        later build continues from (:meth:`previous_materialization_stats`):
+        ``data_table_version`` (the ``…_data`` version the store matches, or
+        ``None``), ``fingerprint`` (MERGE sources + mapping), ``strategy``
+        (``mv`` / ``merge`` / ``ctas`` / ``""``), ``apply_mode``
+        (``net_changes`` / ``full_stream`` / ``lakeflow_sync`` / ``none``;
+        ``""`` when the apply phase was never reached) and
+        ``apply_fallback_reason``.
+        """
+        from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
+
+        snap = getattr(pipe, "domain_snap", None)
+        stats = collect_domain_stats(
+            getattr(snap, "ontology", {}),
+            getattr(snap, "assignment", {}),
+            constraints=getattr(snap, "constraints", None),
+            swrl_rules=getattr(snap, "swrl_rules", None),
+            axioms=getattr(snap, "axioms", None),
+            shacl_shapes=getattr(snap, "shacl_shapes", None),
+        )
+        version = getattr(pipe, "data_table_version", None)
+        text = TwinBuildPostMaterialize._text
+        materialization = {
+            **TwinBuildPostMaterialize.trace_fields(pipe),
+            "data_table_version": TwinBuildPostMaterialize._version_or_none(version),
+            "fingerprint": text(pipe, "fingerprint"),
+            "strategy": TwinBuildPostMaterialize._strategy(pipe),
+            "apply_mode": text(pipe, "apply_mode"),
+            "apply_fallback_reason": text(pipe, "apply_fallback_reason"),
+        }
+        return {**stats, "materialization": materialization}
+
+    @staticmethod
+    def build_run_key(pipe: Any) -> tuple[str, str]:
+        """``(folder, version)`` of the build-run trace.
+
+        The folder is the UC domain folder, else the sanitised domain name; the
+        version is the build's ``current_version`` (``""`` when unknown).
+        """
+        from back.objects.session import sanitize_domain_folder
+
+        folder = getattr(pipe.domain, "uc_domain_folder", "") or (
+            sanitize_domain_folder(pipe.domain_name)
+        )
+        version = (
+            getattr(pipe.domain_snap, "current_version", None)
+            or getattr(pipe.domain, "current_version", None)
+            or ""
+        )
+        return folder, str(version)
+
+    @staticmethod
+    def store_identity(pipe: Any) -> dict:
+        """``graph_engine`` / ``sync_mode`` / ``graph_name`` of the store the build writes."""
+        synced = getattr(pipe, "_is_lakebase_synced", False) is True
+        return {
+            "graph_engine": getattr(pipe, "_graph_engine", ""),
+            "sync_mode": "managed_synced" if synced else "app_managed",
+            "graph_name": pipe.graph_name,
+        }
+
+    @staticmethod
+    def previous_materialization_stats(pipe: Any) -> dict:
+        """``stats["materialization"]`` of the run this build continues from, or ``{}``.
+
+        Over the newest runs of this folder + version: a success on the same
+        store (:meth:`store_identity`) whose apply left it matching ``…_data``
+        (``net_changes`` / ``full_stream`` / ``lakeflow_sync``) is the base.
+        Other successes (another store; empty, skipped or Delta-engine builds)
+        and failures before the apply phase (``apply_mode == ""``) are passed
+        over. Anything else ends the search with ``{}``: a failure that may have
+        half-written the store, or a run without materialization facts (a
+        scheduled tick, an older build) that may have rewritten it.
+        Best-effort: any error reads as ``{}`` (debug log), i.e. "no base".
+        """
+        try:
+            from back.objects.registry.RegistryService import RegistryService
+
+            folder, version = TwinBuildPostMaterialize.build_run_key(pipe)
+            if not (folder and version):
+                return {}
+            runs = RegistryService.from_context(pipe.domain, pipe.settings).load_build_runs(
+                folder, version=version, limit=_PREVIOUS_RUNS_LIMIT
+            )
+            return TwinBuildPostMaterialize._base_materialization(pipe, runs)
+        except Exception as exc:  # noqa: BLE001 — best-effort read; no base means a full apply
+            logger.debug(
+                "[DT-BUILD %s] could not read the previous build runs: %s", pipe.task_id, exc
+            )
+            return {}
+
+    @staticmethod
+    def _base_materialization(pipe: Any, runs: Any) -> dict:
+        """The base run's materialization facts in *runs* (newest first); see above."""
+        if not isinstance(runs, list):
+            return {}
+        identity = TwinBuildPostMaterialize.store_identity(pipe)
+        for run in runs:
+            stats = run.get("stats") if isinstance(run, dict) else None
+            facts = stats.get("materialization") if isinstance(stats, dict) else None
+            if not isinstance(facts, dict):
+                return {}
+            if run.get("status") != "success":
+                if facts.get("apply_mode") == "":
+                    continue
+                return {}
+            same_store = all(run.get(key) == value for key, value in identity.items())
+            if same_store and facts.get("apply_mode") in _BASE_APPLY_MODES:
+                return dict(facts)
+        return {}
+
+    @staticmethod
+    def _strategy(pipe: Any) -> str:
+        """How ``…_data`` was built: ``merge`` (recorded), else ``ctas`` / ``mv`` / ``""``."""
+        if TwinBuildPostMaterialize._text(pipe, "strategy") == "merge":
+            return "merge"
+        if not TwinBuildPostMaterialize._text(pipe, "data_table"):
+            return ""
+        mode = getattr(pipe, "data_relation_mode", None)
+        if mode == "table":
+            return "ctas"
+        return "mv" if mode == TwinBuildPostMaterialize.MATERIALIZED_VIEW else ""
+
+    @staticmethod
+    def _version_or_none(value: Any) -> int | None:
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    @staticmethod
+    def _text(pipe: Any, name: str) -> str:
+        """``pipe.<name>`` when it is a string, else ``""`` (e.g. a test double's auto-attribute)."""
+        value = getattr(pipe, name, "")
+        return value if isinstance(value, str) else ""
 
     @staticmethod
     def persist_last_build_to_registry(pipe: Any) -> None:
@@ -248,16 +388,8 @@ class TwinBuildPostMaterialize:
         """
         try:
             from back.objects.registry.RegistryService import RegistryService
-            from back.objects.session import sanitize_domain_folder
 
-            folder = getattr(pipe.domain, "uc_domain_folder", "") or (
-                sanitize_domain_folder(pipe.domain_name)
-            )
-            version = (
-                getattr(pipe.domain_snap, "current_version", None)
-                or getattr(pipe.domain, "current_version", None)
-                or ""
-            )
+            folder, version = TwinBuildPostMaterialize.build_run_key(pipe)
             if not folder or not version:
                 logger.warning(
                     "[DT-BUILD %s] _persist_last_build_to_registry: "

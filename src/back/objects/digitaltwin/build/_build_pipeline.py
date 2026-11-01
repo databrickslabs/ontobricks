@@ -287,6 +287,13 @@ class _BuildPipeline:
         self.sync_mode_effective: str = ""
         self.slot_pipeline_id: str = ""
         self.refresh_technique: str = ""
+        self.mode_fallback_detail: str = ""  # message of the incremental fallback, if any
+        # Persisted under build_runs.stats["materialization"] (build_run_stats).
+        self.data_table_version: Optional[int] = None
+        self.fingerprint: str = ""
+        self.strategy: str = ""  # "merge" when TwinMergeFallback built …_data
+        self.apply_mode: str = ""
+        self.apply_fallback_reason: str = ""
         # Lakebase managed-synced mode flag, resolved once before _open_store.
         self._lakebase_engine_config: Dict[str, Any] = {}
         self._graph_engine: str = ""
@@ -1073,6 +1080,7 @@ class _BuildPipeline:
         )
 
         t0 = time.time()
+        self.apply_mode = "lakeflow_sync"
         plan = TwinLakebaseSync.sync_plan(self)
         try:
             mgr = self.store.synced_manager()
@@ -1485,20 +1493,12 @@ class _BuildPipeline:
         self._build_recorded = True
         try:
             from back.objects.registry.RegistryService import RegistryService
-            from back.objects.session import sanitize_domain_folder
 
-            folder = getattr(self.domain, "uc_domain_folder", "") or (
-                sanitize_domain_folder(self.domain_name)
-            )
-            version = (
-                getattr(self.domain_snap, "current_version", None)
-                or getattr(self.domain, "current_version", None)
-                or ""
-            )
+            folder, version = TwinBuildPostMaterialize.build_run_key(self)
             now = datetime.now(timezone.utc)
             started = datetime.fromtimestamp(self.start_time, tz=timezone.utc)
             entry = {
-                "version": str(version),
+                "version": version,
                 "build_kind": self.build_kind,
                 "status": status,
                 "message": message,
@@ -1510,13 +1510,9 @@ class _BuildPipeline:
                 "entity_count": len(self.entity_mappings or []),
                 "relationship_count": len(self.relationship_mappings or []),
                 "sql_chars": len(self.spark_sql or ""),
-                "graph_engine": self._graph_engine,
-                "sync_mode": (
-                    "managed_synced" if self._is_lakebase_synced else "app_managed"
-                ),
+                **TwinBuildPostMaterialize.store_identity(self),
                 "view_table": self.view_table,
                 **TwinBuildPostMaterialize.trace_fields(self),
-                "graph_name": self.graph_name,
                 "task_id": self.task_id,
                 # Mirror the per-step durations the build UI renders from the
                 # TaskManager step list; fall back to internal phase timings.
@@ -1524,15 +1520,8 @@ class _BuildPipeline:
                     step_times_from_task(self.tm.get_task(self.task_id))
                     or dict(self.phase_times)
                 ),
-                # Ontology + mapping picture live at build time (Cockpit stats).
-                "stats": collect_domain_stats(
-                    getattr(self.domain_snap, "ontology", {}),
-                    getattr(self.domain_snap, "assignment", {}),
-                    constraints=getattr(self.domain_snap, "constraints", None),
-                    swrl_rules=getattr(self.domain_snap, "swrl_rules", None),
-                    axioms=getattr(self.domain_snap, "axioms", None),
-                    shacl_shapes=getattr(self.domain_snap, "shacl_shapes", None),
-                ),
+                # Cockpit ontology + mapping counts and the materialization facts.
+                "stats": TwinBuildPostMaterialize.build_run_stats(self),
             }
             svc = RegistryService.from_context(self.domain, self.settings)
             svc.record_build_run(folder, entry)
