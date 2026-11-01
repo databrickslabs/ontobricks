@@ -1,5 +1,6 @@
 """Databricks (Unity Catalog Delta) graph engine for OntoBricks."""
 
+from back.core.graphdb.delta.ChangeFeedReader import ChangeFeedReader  # noqa: F401
 from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore  # noqa: F401
 from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (  # noqa: F401
     DeltaTripleStoreBuildPipeline,
@@ -11,6 +12,7 @@ from back.core.graphdb.delta.MaterializedViewBuilder import (  # noqa: F401
 DELTA_AVAILABLE = True
 
 __all__ = [
+    "ChangeFeedReader",
     "DELTA_AVAILABLE",
     "DeltaFlatStore",
     "DeltaTripleStoreBuildPipeline",
