@@ -675,3 +675,70 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" tests/units tests/back --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9895 passed, 12 skipped
        uv run --frozen pytest -q tests/units/architecture -> 9 passed
+
+================================================================================
+## Fix: incremental build review round 1 (microbatch bootstrap, fingerprints, leaked pipelines, MV reuse)
+================================================================================
+
+Context: Review fix round 1 of Task 4 (five Important findings).
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py (Imp#1, Imp#2)
+   A full refresh of the slot pipeline (new pipeline or changed SQL
+   fingerprint) always runs as a TRIGGERED update to COMPLETED, so `_data` is
+   never built over an empty `_slots`; a microbatch domain is then switched to
+   continuous and waited for until RUNNING. While the refresh is pending the
+   pipeline keeps its previous `ontobricks.slot_sql_sha256` (or ""); the new
+   one is stamped (an `ensure` with the new fingerprint) only after the update
+   completed, so a failed refresh is retried as a full refresh by the next
+   build. Without a full refresh the previous path is unchanged.
+2. src/back/core/streaming/SlotPipelineRunner.py (Imp#2)
+   `ensure(..., fingerprint=None)` stores an explicit fingerprint (default: the
+   SQL hash).
+3. src/back/core/graphdb/delta/materialize.py (Imp#3)
+   `apply_data_relation` drops a leftover `_data` MATERIALIZED VIEW (best-effort)
+   in both branches before the existing cross-drops, so `/dtwin/databricks-build`
+   and every full build can replace it. TwinIncrementalBuild now only drops a
+   `_graph` MV itself. New best-effort `relation_exists` (SHOW TABLES).
+4. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py (Imp#4)
+   The gate exit (decision resolves to full), the fallback, and a requested
+   `full` build whose `_slots` table exists stop this version's slot pipeline
+   when it is active (looked up by name; failures logged and swallowed).
+   Domains that never ran incrementally make no pipelines API call.
+5. src/back/core/graphdb/delta/MaterializedViewBuilder.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalBuild.py (Imp#5)
+   The data MV records `'ontobricks.mv_sql_sha256'` (sha256 of the refresh
+   policy and the AS SELECT body) in its TBLPROPERTIES; `data_mv_sha` and
+   `existing_mv_sha` ("" on any error). An unchanged definition skips
+   `CREATE OR REPLACE` and only runs `REFRESH MATERIALIZED VIEW`; the trace's
+   `refresh_technique` is read after that REFRESH.
+6. Tests: tests/units/objects/test_build_pipeline_modes.py (stateful fake
+   runner; bootstrap, fingerprint stamping and retry, the three stop sites,
+   stop failure, MV reuse both paths), tests/units/graphdb/delta/
+   test_delta_package.py (MV drop in both branches, relation_exists),
+   tests/units/graphdb/delta/test_materialized_view_builder.py (sha property,
+   data_mv_sha, existing_mv_sha), tests/units/streaming/test_slot_pipeline_runner.py
+   (explicit fingerprint).
+
+Known limitations:
+- On the Delta backend, microbatch gives no `_data` freshness between builds:
+  the `_data` MV has no SCHEDULE/TRIGGER, so it only refreshes when a build runs.
+- Slot pipelines of earlier versions keep running after a version bump; only the
+  current version's pipeline is stopped (TODO(task-8)).
+- `augment_mappings_from_config` adds `sql_query` to every configured entity, so
+  most mappings classify as batch and the slot pipeline only runs for legacy
+  table-based mappings; incremental is then the `_data` MV over the batch branch.
+
+Modified files:
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/core/streaming/SlotPipelineRunner.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/streaming/test_slot_pipeline_runner.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/streaming tests/units/objects tests/units/dtwin tests/units/graphdb tests/units/architecture tests/back/core -> 2166 passed

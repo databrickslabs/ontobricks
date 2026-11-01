@@ -310,6 +310,36 @@ class TestDropRelation:
         materialize.drop_relation(client, "c.s.v_data", kind="materialized_view")
 
 
+class TestRelationExists:
+    """Catalog listing, no row scan; best-effort (an error reads as absent)."""
+
+    def test_a_listed_relation_exists(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"database": "s", "tableName": "v_slots"}]
+
+        assert materialize.relation_exists(client, "c.s.v_slots") is True
+        client.execute_query.assert_called_once_with("SHOW TABLES IN c.s LIKE 'v_slots'")
+
+    def test_only_an_exact_name_counts(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"tableName": "v_slots_old"}]
+
+        assert materialize.relation_exists(client, "c.s.v_slots") is False
+
+    def test_an_error_reads_as_absent(self):
+        client = MagicMock()
+        client.execute_query.side_effect = RuntimeError("SCHEMA_NOT_FOUND")
+
+        assert materialize.relation_exists(client, "c.s.v_slots") is False
+
+    @pytest.mark.parametrize("fqn", ["c.s", "c.s.v'x", "c.s.v; DROP TABLE t"])
+    def test_an_unusable_name_reads_as_absent_without_a_query(self, fqn):
+        client = MagicMock()
+
+        assert materialize.relation_exists(client, fqn) is False
+        client.execute_query.assert_not_called()
+
+
 class TestApplyDataRelation:
     """Both modes must clear the relation of the *other* kinds first.
 

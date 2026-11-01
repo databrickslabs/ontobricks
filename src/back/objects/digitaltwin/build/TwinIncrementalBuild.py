@@ -13,15 +13,19 @@ a. compile the row-local mappings into a slot pipeline spec, and the batch
    mappings into the translator's ``incremental=True`` SQL;
 b. create/update the per-version Lakeflow slot pipeline (continuous for
    ``microbatch``) — skipped when no mapping is row-local;
-c. run an update (full refresh when the SQL changed) and wait for it — only
-   for the first ``RUNNING`` state in ``microbatch``;
+c. run an update and wait for it. A full refresh (new pipeline or changed
+   SQL) always completes as a *triggered* update first, so ``…_data`` is never
+   built over an empty ``…_slots``; a ``microbatch`` pipeline then switches to
+   continuous and is waited for until ``RUNNING``;
 d. create ``…_data`` as a materialized view over ``…_slots`` and the batch
-   branch (``…_graph`` stays the union VIEW) and refresh it.
+   branch (``…_graph`` stays the union VIEW) — or keep it when its definition
+   fingerprint is unchanged — and refresh it.
 
 Any :class:`OntoBricksError` in a–d records ``incremental_failed:<Error>`` on
-the mode decision and hands the build back to the ``full`` path, which then
-drops whatever materialized view was left behind. A cooperative cancel is
-never swallowed.
+the mode decision and hands the build back to the ``full`` path, which drops
+whatever materialized view was left behind. Whenever the build does not use
+this version's slot pipeline it stops it if it is running. A cooperative
+cancel is never swallowed.
 """
 
 from __future__ import annotations
@@ -107,7 +111,7 @@ class TwinIncrementalBuild:
             GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings)
         )
         if requested == "full":
-            TwinIncrementalBuild.clear_materialized_views(pipe)
+            TwinIncrementalBuild._leave(pipe, only_if_slots_exist=True)
             return False
         try:
             spec = TwinIncrementalBuild._compile(pipe)
@@ -115,7 +119,7 @@ class TwinIncrementalBuild:
                 pipe, source_tables=spec.source_tables
             )
             if pipe.mode_decision.effective == "full":
-                TwinIncrementalBuild.clear_materialized_views(pipe)
+                TwinIncrementalBuild._leave(pipe)
                 return False
             TwinIncrementalBuild._build(pipe, spec)
         except OperationCancelledError:
@@ -126,22 +130,59 @@ class TwinIncrementalBuild:
         return True
 
     @staticmethod
-    def clear_materialized_views(pipe: Any) -> None:
-        """Best-effort ``DROP MATERIALIZED VIEW`` of ``…_data`` / ``…_graph``.
+    def _leave(pipe: Any, *, only_if_slots_exist: bool = False) -> None:
+        """Hand the build to the full path: clear ``…_graph``, stop the slot pipeline.
 
-        The full path re-creates ``…_data`` as a TABLE (or VIEW) and ``…_graph``
-        as a VIEW, neither of which can replace a materialized view left by an
-        earlier incremental build (or a failed one). On a relation of another
-        kind, or none, the drop fails harmlessly.
+        A ``…_graph`` MATERIALIZED VIEW (``with_graph_mv``) would block the
+        union VIEW the full path creates, so it is dropped (best-effort; a VIEW
+        or nothing makes the drop fail harmlessly). A ``…_data`` MV is dropped
+        by ``materialize.apply_data_relation`` itself.
+
+        This version's slot pipeline is stopped if it is running. A requested
+        ``full`` build only looks it up (*only_if_slots_exist*) when the
+        ``…_slots`` table exists, so domains that never ran incrementally make
+        no pipelines API call.
         """
         from back.core.graphdb.delta import _table_naming, materialize
 
-        for fqn in (
-            _table_naming.data_table_fqn(pipe.domain, pipe.settings),
-            _table_naming.graph_view_fqn(pipe.domain, pipe.settings),
+        graph = _table_naming.graph_view_fqn(pipe.domain, pipe.settings)
+        if graph:
+            materialize.drop_relation(pipe.source_client, graph, kind="materialized_view")
+        if only_if_slots_exist and not materialize.relation_exists(
+            pipe.source_client, _table_naming.slots_table_fqn(pipe.domain, pipe.settings)
         ):
-            if fqn:
-                materialize.drop_relation(pipe.source_client, fqn, kind="materialized_view")
+            return
+        TwinIncrementalBuild._stop_slot_pipeline(pipe)
+
+    @staticmethod
+    def _stop_slot_pipeline(pipe: Any) -> None:
+        """Best-effort stop of this version's slot pipeline when it is active.
+
+        Failures are logged and swallowed: a pipeline left running costs
+        compute, not correctness, and must not fail the full build.
+        """
+        # TODO(task-8): pipelines of earlier versions keep running after a
+        # version bump; only the current version's pipeline is stopped here.
+        from back.core.streaming import SlotPipelineRunner
+
+        name = SlotPipelineRunner.pipeline_name(
+            pipe.domain_name, TwinIncrementalBuild._version(pipe)
+        )
+        try:
+            runner = SlotPipelineRunner()
+            pipeline_id = runner.find_pipeline_id(name)
+            if pipeline_id and runner.get_state(pipeline_id) in _ACTIVE_PIPELINE_STATES:
+                runner.stop(pipeline_id)
+                logger.info("[DT-BUILD %s] stopped slot pipeline %s", pipe.task_id, name)
+        except OperationCancelledError:
+            raise
+        except OntoBricksError as exc:
+            logger.warning(
+                "[DT-BUILD %s] could not stop slot pipeline %s (non-fatal): %s",
+                pipe.task_id,
+                name,
+                exc,
+            )
 
     @staticmethod
     def skips_graph_stream(pipe: Any) -> bool:
@@ -234,8 +275,16 @@ class TwinIncrementalBuild:
 
         A full refresh runs when the pipeline is new or its stored SQL
         fingerprint differs (flows were added or removed, so stale slots must
-        go). A ``microbatch`` pipeline already running the current SQL is left
-        running; any other active pipeline is stopped before the update.
+        go). It always runs as a *triggered* update to ``COMPLETED`` — a
+        continuous one would let ``…_data`` be built over a still-empty
+        ``…_slots`` — and the pipeline keeps its previous fingerprint until
+        then, so a failed refresh is retried by the next build. Afterwards the
+        new fingerprint is stamped and a ``microbatch`` pipeline is switched
+        to continuous (waited for until ``RUNNING``).
+
+        Without a full refresh a ``microbatch`` pipeline already running the
+        current SQL is left running; any other active pipeline is stopped
+        before the update.
         """
         from back.core.streaming import SlotPipelineRunner
 
@@ -244,14 +293,20 @@ class TwinIncrementalBuild:
             pipe.domain_name, TwinIncrementalBuild._version(pipe)
         )
         catalog, schema, _ = spec.slots_fqn.split(".", 2)
-        sql_text = spec.to_sql()
+        definition = {
+            "name": name,
+            "catalog": catalog,
+            "schema": schema,
+            "sql_text": spec.to_sql(),
+            "serverless": True,
+            "channel": TwinIncrementalBuild.slot_pipeline_channel(pipe.settings),
+        }
+        current = SlotPipelineRunner.fingerprint(definition["sql_text"])
         continuous = pipe.mode_decision.effective == "microbatch"
 
         existing = runner.find_pipeline_id(name)
-        full_refresh = (
-            not existing
-            or runner.stored_fingerprint(existing) != SlotPipelineRunner.fingerprint(sql_text)
-        )
+        stored = runner.stored_fingerprint(existing) if existing else ""
+        full_refresh = stored != current
         if existing and continuous and not full_refresh and runner.get_state(existing) == "RUNNING":
             pipe.slot_pipeline_id = existing
             logger.info(
@@ -263,17 +318,40 @@ class TwinIncrementalBuild:
 
         pipe.tm.update_progress(pipe.task_id, 27, f"Preparing slot pipeline {name}...")
         pipeline_id = runner.ensure(
-            name=name,
-            catalog=catalog,
-            schema=schema,
-            sql_text=sql_text,
-            continuous=continuous,
-            serverless=True,
-            channel=TwinIncrementalBuild.slot_pipeline_channel(pipe.settings),
+            **definition,
+            continuous=continuous and not full_refresh,
+            fingerprint=stored if full_refresh else current,
         )
         pipe.slot_pipeline_id = pipeline_id
         if runner.get_state(pipeline_id) in _ACTIVE_PIPELINE_STATES:
             runner.stop(pipeline_id)
+        TwinIncrementalBuild._update(
+            pipe,
+            runner,
+            pipeline_id,
+            name,
+            full_refresh=full_refresh,
+            until_running=continuous and not full_refresh,
+        )
+        if not full_refresh:
+            return
+        runner.ensure(**definition, continuous=continuous, fingerprint=current)
+        if continuous:
+            TwinIncrementalBuild._update(
+                pipe, runner, pipeline_id, name, full_refresh=False, until_running=True
+            )
+
+    @staticmethod
+    def _update(
+        pipe: Any,
+        runner: Any,
+        pipeline_id: str,
+        name: str,
+        *,
+        full_refresh: bool,
+        until_running: bool,
+    ) -> None:
+        """Start one update and wait for it (``COMPLETED``, or ``RUNNING``)."""
         update_id = runner.start_update(pipeline_id, full_refresh=full_refresh)
         runner.wait_for_update(
             pipeline_id,
@@ -283,14 +361,20 @@ class TwinIncrementalBuild:
             on_state=lambda state: pipe.tm.update_progress(
                 pipe.task_id, 28, f"Slot pipeline {name}: {state.lower()}"
             ),
-            until_running=continuous,
+            until_running=until_running,
         )
 
     @staticmethod
     def _apply_views(pipe: Any, slots: str | None, batch_sql: str | None) -> None:
         """Step d: the ``…_data`` materialized view, a synchronous refresh, its technique.
 
-        ``drop_existing_table`` is ``True`` on every incremental build: no
+        ``CREATE OR REPLACE`` would recompute the view from scratch, so it only
+        runs when the stored definition fingerprint (``ontobricks.mv_sql_sha256``)
+        differs from the current one; otherwise the existing view is refreshed
+        in place. ``refresh_technique`` is read after the REFRESH, so it
+        describes the refresh that actually ran.
+
+        ``drop_existing_table`` is ``True`` whenever the view is created: no
         earlier incremental build is recorded yet (the build-run trace is
         in-memory until it is persisted), and the drop is best-effort — a
         no-op when ``…_data`` is absent, the needed drop when a full build left
@@ -306,6 +390,31 @@ class TwinIncrementalBuild:
         if not (data and graph and inferred):
             raise ValidationError("Could not resolve the incremental table names")
         client = pipe.source_client
+        current = MaterializedViewBuilder.data_mv_sha(slots_fqn=slots, batch_branch_sql=batch_sql)
+        if MaterializedViewBuilder.existing_mv_sha(client, data) == current:
+            logger.info(
+                "[DT-BUILD %s] %s definition unchanged; refreshing it in place",
+                pipe.task_id,
+                data,
+            )
+        else:
+            TwinIncrementalBuild._create_views(pipe, data, graph, inferred, slots, batch_sql)
+        pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
+        TwinIncrementalBuild._warehouse(
+            f"refresh {data}",
+            lambda: materialize.run_sql(client, MaterializedViewBuilder.refresh_sql(data)),
+        )
+        pipe.refresh_technique = SlotPipelineRunner.read_event_log_technique(client, data)
+        pipe.data_table = data
+        pipe.data_relation_mode = TwinBuildPostMaterialize.MATERIALIZED_VIEW
+
+    @staticmethod
+    def _create_views(
+        pipe: Any, data: str, graph: str, inferred: str, slots: str | None, batch_sql: str | None
+    ) -> None:
+        from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
+
+        client = pipe.source_client
         pipe.tm.update_progress(pipe.task_id, 30, f"Creating materialized view {data}...")
         TwinIncrementalBuild._warehouse(
             f"create the materialized view {data}",
@@ -320,13 +429,6 @@ class TwinIncrementalBuild:
                 with_graph_mv=False,
             ),
         )
-        TwinIncrementalBuild._warehouse(
-            f"refresh {data}",
-            lambda: materialize.run_sql(client, MaterializedViewBuilder.refresh_sql(data)),
-        )
-        pipe.refresh_technique = SlotPipelineRunner.read_event_log_technique(client, data)
-        pipe.data_table = data
-        pipe.data_relation_mode = TwinBuildPostMaterialize.MATERIALIZED_VIEW
 
     # ------------------------------------------------------------------
     # Helpers
@@ -345,7 +447,7 @@ class TwinIncrementalBuild:
         pipe.mode_decision = ModeDecision(requested, "full", reason)
         pipe.slots_table = None
         pipe.refresh_technique = ""
-        TwinIncrementalBuild.clear_materialized_views(pipe)
+        TwinIncrementalBuild._leave(pipe)
         pipe.tm.update_progress(
             pipe.task_id, 30, "Incremental build unavailable; running a full rebuild..."
         )

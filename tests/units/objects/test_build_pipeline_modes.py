@@ -61,14 +61,28 @@ def _batch() -> dict:
 
 
 class _Warehouse:
-    """Records SQL into a shared *log*; answers counts, row tracking and the event log."""
+    """Records SQL into a shared *log*; answers counts, row tracking, the event log,
+    the data MV fingerprint (*mv_sha*) and whether ``_slots`` exists (*slots_exist*)."""
 
-    def __init__(self, log, *, tracked: bool = True, fail_on: str | None = None, count=5):
+    def __init__(
+        self,
+        log,
+        *,
+        tracked: bool = True,
+        fail_on: str | None = None,
+        count=5,
+        mv_sha: str = "",
+        slots_exist: bool = False,
+        technique: str = "ROW_BASED",
+    ):
         self.log = log
         self.calls: list[str] = []
         self._tracked = tracked
         self._fail_on = fail_on
         self._count = count
+        self._mv_sha = mv_sha
+        self._slots_exist = slots_exist
+        self._technique = technique
 
     def _record(self, sql: str) -> None:
         self.calls.append(sql)
@@ -78,10 +92,16 @@ class _Warehouse:
 
     def execute_query(self, sql: str):
         self._record(sql)
+        if sql.startswith("SHOW TBLPROPERTIES") and "ontobricks.mv_sql_sha256" in sql:
+            return [{"key": "ontobricks.mv_sql_sha256", "value": self._mv_sha}]
         if sql.startswith("SHOW TBLPROPERTIES"):
             return [{"key": "delta.enableRowTracking", "value": str(self._tracked).lower()}]
+        if sql.startswith("SHOW TABLES"):
+            return [{"tableName": "triplestore_dom_V3_slots"}] if self._slots_exist else []
         if "event_log(" in sql:
-            return [{"message": "Flow 'x' has been planned to be executed as ROW_BASED."}]
+            return [
+                {"message": f"Flow 'x' has been planned to be executed as {self._technique}."}
+            ]
         if sql.strip().upper().startswith("SELECT COUNT"):
             return [{"cnt": self._count}]
         return []
@@ -96,14 +116,18 @@ class _Warehouse:
 
 
 class _Script:
-    """What the fake runner answers, and the shared event log it writes to."""
+    """What the fake runner answers, and the shared event log it writes to.
 
-    def __init__(self, log, *, existing=None, stored="", state="IDLE", fail_on=None, error=None):
+    Stateful like the pipelines API: ``ensure`` creates the pipeline (``pipe-1``)
+    and stores the fingerprint it was given, so a second build sees the first's.
+    """
+
+    def __init__(self, log, *, existing=None, stored="", state="IDLE", fail_on=(), error=None):
         self.log = log
         self.existing = existing
         self.stored = stored
         self.state = state
-        self.fail_on = fail_on
+        self.fail_on = (fail_on,) if isinstance(fail_on, str) else tuple(fail_on or ())
         self.error = error or InfrastructureError("pipeline update FAILED")
         self.instances = 0
 
@@ -121,7 +145,7 @@ class _FakeRunner(SlotPipelineRunner):
 
     def _step(self, *event):
         self.script.log.append(event)
-        if self.script.fail_on == event[0]:
+        if event[0] in self.script.fail_on:
             raise self.script.error
 
     def find_pipeline_id(self, name):
@@ -136,7 +160,10 @@ class _FakeRunner(SlotPipelineRunner):
 
     def ensure(self, **kwargs):
         self._step("ensure", kwargs)
-        return "pipe-1"
+        self.script.existing = self.script.existing or "pipe-1"
+        fingerprint = kwargs.get("fingerprint")
+        self.script.stored = self.fingerprint("") if fingerprint is None else fingerprint
+        return self.script.existing
 
     def stop(self, pipeline_id):
         self._step("stop", pipeline_id)
@@ -164,12 +191,20 @@ def _pipeline(mode="incremental", *, backend="databricks", entities=None, relati
     return pipe
 
 
-def _run(pipe, *, warehouse=None, **script_kw):
-    """Run *pipe* with a fake runner; return ``(log, script, warehouse)``."""
+def _run(pipe, *, warehouse=None, script=None, **script_kw):
+    """Run *pipe* with a fake runner; return ``(log, script, warehouse)``.
+
+    Pass a previous run's *script* to build again against the same pipeline state.
+    """
     log: list = []
     warehouse = warehouse or _Warehouse(log)
     warehouse.log = log
-    script = _Script(log, **script_kw)
+    if script is None:
+        script = _Script(log, **script_kw)
+    else:
+        script.log = log
+        for key, value in script_kw.items():
+            setattr(script, key, value)
     runner_cls = type("_BoundRunner", (_FakeRunner,), {"script": script})
     pipe.source_client = warehouse
     pipe._apply_full_rebuild.side_effect = lambda: log.append(("apply_full_rebuild",)) or True
@@ -294,15 +329,56 @@ class TestIncremental:
         assert pipe.mode_decision == ModeDecision("incremental", "incremental", "")
 
 
+def _ensures(log) -> list[tuple]:
+    return [(e[1]["continuous"], e[1]["fingerprint"]) for e in _events(log, "ensure")]
+
+
+def _updates(log) -> list[tuple]:
+    """``(step, value)`` for every start (full_refresh) and wait (until_running), in order."""
+    return [
+        ("start", e[2]) if e[0] == "start" else ("wait", e[2]["until_running"])
+        for e in log
+        if e[0] in ("start", "wait")
+    ]
+
+
 class TestMicrobatch:
-    def test_the_pipeline_runs_continuously_and_is_waited_until_running(self):
+    def test_an_unchanged_pipeline_runs_continuously_and_is_waited_until_running(self):
         pipe = _pipeline("microbatch")
 
-        log, _, _ = _run(pipe)
+        log, _, _ = _run(pipe, existing="pipe-1", stored="fp-current")
 
-        assert _events(log, "ensure")[0][1]["continuous"] is True
-        assert _events(log, "wait")[0][2]["until_running"] is True
+        assert _ensures(log) == [(True, "fp-current")]
+        assert _updates(log) == [("start", False), ("wait", True)]
         assert pipe.mode_decision.effective == "microbatch"
+
+    def test_a_full_refresh_bootstraps_through_a_triggered_update(self):
+        """``_data`` must never be built over an empty ``_slots``: complete a
+        triggered full refresh first, then switch the pipeline to continuous."""
+        pipe = _pipeline("microbatch")
+
+        log, script, _ = _run(pipe)
+
+        assert _ensures(log) == [(False, ""), (True, "fp-current")]
+        assert _updates(log) == [
+            ("start", True),
+            ("wait", False),
+            ("start", False),
+            ("wait", True),
+        ]
+        assert _index(log, lambda e: e[0] == "wait") < _sql_index(
+            log, f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}"
+        )
+        assert script.stored == "fp-current"
+
+    def test_a_changed_definition_on_a_running_pipeline_also_bootstraps(self):
+        pipe = _pipeline("microbatch")
+
+        log, _, _ = _run(pipe, existing="pipe-1", stored="fp-old", state="RUNNING")
+
+        assert _ensures(log) == [(False, "fp-old"), (True, "fp-current")]
+        assert _index(log, lambda e: e[0] == "stop") < _index(log, lambda e: e[0] == "start")
+        assert _updates(log)[0] == ("start", True)
 
     def test_a_pipeline_already_running_the_current_sql_is_left_alone(self):
         pipe = _pipeline("microbatch")
@@ -317,6 +393,31 @@ class TestMicrobatch:
 class TestSlotPipelineUpdates:
     def test_a_new_pipeline_gets_a_full_refresh(self):
         log, _, _ = _run(_pipeline("incremental"))
+
+        assert _events(log, "start") == [("start", "pipe-1", True)]
+
+    def test_the_new_fingerprint_is_stamped_only_after_the_refresh_completed(self):
+        log, script, _ = _run(_pipeline("incremental"), existing="pipe-1", stored="fp-old")
+
+        assert _ensures(log) == [(False, "fp-old"), (False, "fp-current")]
+        stamp = [i for i, e in enumerate(log) if e[0] == "ensure"][1]
+        assert _index(log, lambda e: e[0] == "wait") < stamp
+        assert script.stored == "fp-current"
+
+    def test_an_unchanged_definition_is_not_stamped_again(self):
+        log, _, _ = _run(_pipeline("incremental"), existing="pipe-1", stored="fp-current")
+
+        assert _ensures(log) == [(False, "fp-current")]
+
+    @pytest.mark.parametrize("step", ["start", "wait"])
+    def test_a_failed_full_refresh_is_retried_as_a_full_refresh(self, step):
+        """The fingerprint stays the old one, so the next build refreshes fully again."""
+        _, script, _ = _run(
+            _pipeline("incremental"), existing="pipe-1", stored="fp-old", fail_on=step
+        )
+        assert script.stored == "fp-old"
+
+        log, _, _ = _run(_pipeline("incremental"), script=script, fail_on=())
 
         assert _events(log, "start") == [("start", "pipe-1", True)]
 
@@ -452,21 +553,23 @@ class TestReadiness:
     def test_untracked_sources_run_full_with_row_tracking_missing(self):
         pipe = _pipeline("incremental")
 
-        _, script, warehouse = _run(pipe, warehouse=_Warehouse([], tracked=False))
+        log, _, warehouse = _run(pipe, warehouse=_Warehouse([], tracked=False))
 
         assert pipe.mode_decision == ModeDecision("incremental", "full", "row_tracking_missing")
-        assert script.instances == 0
+        assert _events(log, "ensure") == [] and _events(log, "start") == []
         assert any(s.startswith("SHOW TBLPROPERTIES main.sales.customers") for s in warehouse.calls)
 
     def test_disabled_serverless_pipelines_skip_the_probe(self):
         pipe = _pipeline("incremental")
         pipe.settings.serverless_pipelines_enabled = False
 
-        _, script, warehouse = _run(pipe)
+        log, _, warehouse = _run(pipe)
 
         assert pipe.mode_decision == ModeDecision("incremental", "full", "serverless_unavailable")
-        assert not any(s.startswith("SHOW TBLPROPERTIES") for s in warehouse.calls)
-        assert script.instances == 0
+        assert not any(
+            s.startswith("SHOW TBLPROPERTIES main.sales") for s in warehouse.calls
+        )
+        assert _events(log, "ensure") == []
 
     def test_a_failed_probe_falls_back_like_any_incremental_failure(self):
         pipe = _pipeline("incremental")
@@ -474,6 +577,106 @@ class TestReadiness:
         _run(pipe, warehouse=_Warehouse([], fail_on="SHOW TBLPROPERTIES"))
 
         assert pipe.mode_decision.reason == "incremental_failed:InfrastructureError"
+
+
+class TestLeftoverPipelinesAreStopped:
+    """A build that will not use this version's slot pipeline stops it if it runs."""
+
+    def test_the_gate_exit_stops_an_active_pipeline(self):
+        pipe = _pipeline("microbatch")
+        pipe.settings.serverless_pipelines_enabled = False
+
+        log, _, _ = _run(pipe, existing="pipe-1", stored="fp-current", state="RUNNING")
+
+        assert _events(log, "stop") == [("stop", "pipe-1")]
+        assert _events(log, "ensure") == []
+
+    def test_a_fallback_stops_an_active_pipeline(self):
+        pipe = _pipeline("incremental")
+
+        log, _, _ = _run(
+            pipe, existing="pipe-1", stored="fp-current", state="RUNNING", fail_on="ensure"
+        )
+
+        assert pipe.mode_decision.reason == "incremental_failed:InfrastructureError"
+        assert _events(log, "stop") == [("stop", "pipe-1")]
+
+    def test_a_full_build_stops_the_pipeline_of_this_version(self):
+        pipe = _pipeline(mode=None)
+
+        log, _, _ = _run(
+            pipe, warehouse=_Warehouse([], slots_exist=True), existing="pipe-1", state="RUNNING"
+        )
+
+        assert _events(log, "find") == [("find", "ontobricks-slots-dom-v3")]
+        assert _events(log, "stop") == [("stop", "pipe-1")]
+
+    def test_a_full_build_without_slots_never_calls_the_pipelines_api(self):
+        _, script, warehouse = _run(_pipeline(mode=None), existing="pipe-1", state="RUNNING")
+
+        assert script.instances == 0
+        assert "SHOW TABLES IN cat.sch LIKE 'triplestore_dom_V3_slots'" in warehouse.calls
+
+    def test_an_idle_pipeline_is_left_alone(self):
+        pipe = _pipeline("incremental")
+        pipe.settings.serverless_pipelines_enabled = False
+
+        log, _, _ = _run(pipe, existing="pipe-1", state="IDLE")
+
+        assert _events(log, "stop") == []
+
+    def test_a_failed_stop_does_not_fail_the_build(self):
+        pipe = _pipeline("incremental")
+
+        with patch("back.objects.digitaltwin.build.TwinIncrementalBuild.logger") as logger:
+            log, _, warehouse = _run(
+                pipe,
+                existing="pipe-1",
+                stored="fp-current",
+                state="RUNNING",
+                fail_on=("ensure", "stop"),
+            )
+
+        assert pipe.tm.failed is False
+        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA} ") for s in warehouse.calls)
+        assert any("could not stop" in call.args[0] for call in logger.warning.call_args_list)
+
+
+class TestUnchangedDataView:
+    """An unchanged ``_data`` definition is refreshed, never replaced."""
+
+    @staticmethod
+    def _sha(warehouse) -> str:
+        import re
+
+        create = next(
+            s for s in warehouse.calls
+            if s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}")
+        )
+        return re.search(r"'ontobricks.mv_sql_sha256' = '([0-9a-f]{64})'", create).group(1)
+
+    def test_a_matching_fingerprint_skips_the_replace_and_only_refreshes(self):
+        _, _, first = _run(_pipeline("incremental"))
+        pipe = _pipeline("incremental")
+        warehouse = _Warehouse([], mv_sha=self._sha(first), technique="NO_OP")
+
+        log, _, warehouse = _run(pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current")
+
+        assert not any(s.startswith("CREATE OR REPLACE MATERIALIZED VIEW") for s in warehouse.calls)
+        refresh = _sql_index(log, f"REFRESH MATERIALIZED VIEW {_DATA}")
+        assert refresh < _sql_index(log, "event_log(")
+        assert pipe.refresh_technique == "NO_OP"
+        assert pipe.data_relation_mode == "materialized_view"
+
+    def test_a_different_fingerprint_replaces_the_view_then_refreshes(self):
+        pipe = _pipeline("incremental")
+
+        log, _, _ = _run(pipe, warehouse=_Warehouse([], mv_sha="b" * 64))
+
+        create = _sql_index(log, f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}")
+        refresh = _sql_index(log, f"REFRESH MATERIALIZED VIEW {_DATA}")
+        assert create < refresh < _sql_index(log, "event_log(")
+        assert pipe.refresh_technique == "ROW_BASED"
 
 
 class TestDatabricksFullPathDoesNotStream:

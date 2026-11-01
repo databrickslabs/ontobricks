@@ -21,7 +21,7 @@ from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.graphdb.adjacency import typed_in_select, typed_out_select
 from back.core.graphdb.entity_search import entity_search_select
 from back.core.graphdb.props import props_select
-from back.core.helpers import validate_table_name
+from back.core.helpers import SAFE_SQL_IDENT, validate_table_name
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -229,6 +229,29 @@ def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
         run_sql(client, f"DROP {statement} IF EXISTS {fqn}")
     except Exception as exc:  # noqa: BLE001
         logger.debug("DROP %s %s failed (may not exist): %s", statement, fqn, exc)
+
+
+def relation_exists(client: Any, fqn: str) -> bool:
+    """True when ``SHOW TABLES`` lists *fqn* (catalog metadata, no row scan).
+
+    Best-effort: an unusable name or any error reads as absent. Used to decide
+    whether a cleanup is worth an API call, never to decide correctness.
+    """
+    if (
+        not fqn
+        or SAFE_SQL_IDENT.fullmatch(fqn) is None
+        or fqn.count(".") != 2
+    ):
+        return False
+    catalog, schema, leaf = fqn.split(".")
+    try:
+        rows = client.execute_query(f"SHOW TABLES IN {catalog}.{schema} LIKE '{leaf}'")
+    except Exception as exc:  # noqa: BLE001 — contract: absent on error
+        logger.debug("SHOW TABLES for %s failed (treated as absent): %s", fqn, exc)
+        return False
+    return any(
+        isinstance(row, dict) and str(row.get("tableName", "")) == leaf for row in rows or []
+    )
 
 
 def apply_data_relation(
