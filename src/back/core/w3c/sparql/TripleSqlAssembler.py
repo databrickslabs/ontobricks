@@ -48,8 +48,24 @@ class TripleSqlAssembler:
         where_clause: str = "",
         dialect: str = DIALECT_SPARK,
         alias: str = "",
+        *,
+        incremental: bool = False,
     ) -> str:
-        """Build a SELECT that unpivots predicate/object pairs using Spark ``stack()``."""
+        """Build a SELECT that unpivots predicate/object pairs.
+
+        By default the pairs are unpivoted with Spark ``stack()``. With
+        *incremental* the same rows come out of a parenthesised ``UNION ALL``
+        of one single-predicate SELECT per pair (``where_clause`` repeated on
+        each): ``stack()`` is a generator Enzyme cannot refresh incrementally,
+        while a ``UNION ALL`` of plain projections is row-based.
+        """
+        if incremental:
+            branches = [
+                f"SELECT {subject_expr} AS subject, '{p[0]}' AS predicate, "
+                f"{p[1]} AS object\n                FROM {from_clause}{where_clause}"
+                for p in predicates
+            ]
+            return "(" + "\n                UNION ALL\n                ".join(branches) + ")"
         stack_args = ", ".join([f"'{p[0]}', {p[1]}" for p in predicates])
         return (
             f"SELECT {subject_expr} AS subject, "
@@ -71,17 +87,32 @@ class TripleSqlAssembler:
         return "WITH\n" + ",\n".join(parts) + "\n"
 
     @staticmethod
-    def finalize_generic_triples(table_queries, is_distinct, limit, cte_defs) -> dict:
-        """Wrap the per-mapping branches into the final triples query payload."""
+    def finalize_generic_triples(
+        table_queries, is_distinct, limit, cte_defs, *, incremental: bool = False
+    ) -> dict:
+        """Wrap the per-mapping branches into the final triples query payload.
+
+        With *incremental*, a distinct query is deduplicated by a ``GROUP BY
+        subject, predicate, object`` on the outer query instead of
+        ``SELECT DISTINCT`` (Enzyme refreshes a group aggregate incrementally,
+        not a bare DISTINCT). The ``object IS NOT NULL`` filter still runs
+        first, ahead of the grouping, and ``LIMIT`` stays last. A non-distinct
+        query is returned unchanged.
+        """
         if not table_queries:
             raise ValidationError("No tables found in R2RML mapping.")
-        distinct_str = "DISTINCT " if is_distinct else ""
+        distinct_str = "DISTINCT " if is_distinct and not incremental else ""
+        group_by = (
+            "\n        GROUP BY subject, predicate, object"
+            if is_distinct and incremental
+            else ""
+        )
         limit_clause = f"\n    LIMIT {limit}" if limit else ""
         with_clause = TripleSqlAssembler.build_with_clause(cte_defs)
         sql = f"""{with_clause}SELECT {distinct_str}subject, predicate, object FROM (
             {' UNION ALL '.join(table_queries)}
         ) AS triples
-        WHERE object IS NOT NULL AND TRIM(object) != ''{limit_clause}"""
+        WHERE object IS NOT NULL AND TRIM(object) != ''{group_by}{limit_clause}"""
         logger.debug(
             "Generated SQL with %d CTEs (length: %s chars):", len(cte_defs), len(sql)
         )

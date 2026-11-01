@@ -263,3 +263,403 @@ class TestTripleSqlAssemblerExtraction:
     def test_parse_select_clause_rejects_a_missing_projection(self):
         with pytest.raises(ValidationError, match="Could not parse SELECT clause"):
             TripleSqlAssembler.parse_select_clause("SELECT WHERE {}")
+
+
+@pytest.fixture
+def two_entity_mappings(entity_mappings) -> dict:
+    return {
+        **entity_mappings,
+        "http://ex/Company": {
+            "table": "companies",
+            "sql_query": "SELECT * FROM companies",
+            "id_column": "company_id",
+            "label_column": "title",
+            "uri_template": "http://ex/company/{company_id}",
+            "predicates": {},
+        },
+    }
+
+
+@pytest.fixture
+def two_relationship_mappings(relationship_mappings) -> list[dict]:
+    return [
+        *relationship_mappings,
+        {
+            "predicate": "http://ex/employedBy",
+            "sql_query": "SELECT person_id, company_id FROM employment",
+            "subject_template": "http://ex/person/{person_id}",
+            "object_template": "http://ex/company/{company_id}",
+            "subject_column": "person_id",
+            "object_column": "company_id",
+        },
+    ]
+
+
+SNAPSHOT_INCREMENTAL_DISTINCT = _lines(
+    "WITH",
+    "  src_0 AS (",
+    "    SELECT * FROM people",
+    "  ),",
+    "  src_1 AS (",
+    "    SELECT person_id, peer_id FROM pww",
+    "  )",
+    "SELECT subject, predicate, object FROM (",
+    "            ",
+    "                    (SELECT CONCAT('http://ex/person/', TRY_CAST(person_id AS STRING)) "
+    "AS subject, '" + RDF_TYPE + "' AS predicate, 'http://ex/Person' AS object",
+    "                FROM src_0",
+    "                UNION ALL",
+    "                SELECT CONCAT('http://ex/person/', TRY_CAST(person_id AS STRING)) "
+    "AS subject, '" + RDFS_LABEL + "' AS predicate, "
+    "COALESCE(TRY_CAST(name AS STRING), '') AS object",
+    "                FROM src_0",
+    "                UNION ALL",
+    "                SELECT CONCAT('http://ex/person/', TRY_CAST(person_id AS STRING)) "
+    "AS subject, 'http://ex/age' AS predicate, "
+    "COALESCE(TRY_CAST(age AS STRING), '') AS object",
+    "                FROM src_0)",
+    "                 UNION ALL ",
+    "                SELECT ",
+    "                    CONCAT('http://ex/person/', TRY_CAST(person_id AS STRING)) AS subject,",
+    "                    'http://ex/worksWith' AS predicate,",
+    "                    CONCAT('http://ex/person/', TRY_CAST(peer_id AS STRING)) AS object",
+    "                FROM src_1 AS rel_subquery",
+    "            ",
+    "        ) AS triples",
+    "        WHERE object IS NOT NULL AND TRIM(object) != ''",
+    "        GROUP BY subject, predicate, object",
+)
+
+
+class TestOmittedKwargsEqualExplicitDefaults:
+    def test_explicit_defaults_equal_omitted_kwargs(
+        self, entity_mappings, relationship_mappings
+    ):
+        omitted = _translate(entity_mappings, relationship_mappings)
+        explicit = _translate(
+            entity_mappings,
+            relationship_mappings,
+            incremental=False,
+            mappings_filter=None,
+        )
+        assert explicit == omitted == SNAPSHOT_DISTINCT
+
+
+class TestIncrementalAllTriples:
+    def test_matches_the_enzyme_safe_golden_sql(
+        self, entity_mappings, relationship_mappings
+    ):
+        sql = _translate(entity_mappings, relationship_mappings, incremental=True)
+        assert sql == SNAPSHOT_INCREMENTAL_DISTINCT
+
+    def test_has_no_stack_and_no_distinct(self, entity_mappings, relationship_mappings):
+        sql = _translate(entity_mappings, relationship_mappings, incremental=True)
+        assert "stack(" not in sql
+        assert "DISTINCT" not in sql.upper()
+
+    def test_groups_the_outer_query_once_after_the_null_filter(
+        self, entity_mappings, relationship_mappings
+    ):
+        sql = _translate(entity_mappings, relationship_mappings, incremental=True)
+        where = "WHERE object IS NOT NULL AND TRIM(object) != ''"
+        group = "GROUP BY subject, predicate, object"
+        assert sql.count(group) == 1
+        assert sql.index(where) < sql.index(group)
+        assert sql.rstrip().endswith(group)
+
+    def test_emits_one_select_per_predicate_and_relationship(
+        self, entity_mappings, relationship_mappings
+    ):
+        sql = _translate(entity_mappings, relationship_mappings, incremental=True)
+        # type + label + age for Person, plus the worksWith relationship.
+        assert sql.count(" AS predicate") == 4
+
+    def test_keeps_the_source_ctes(self, entity_mappings, relationship_mappings):
+        sql = _translate(entity_mappings, relationship_mappings, incremental=True)
+        assert sql.startswith("WITH\n  src_0 AS (")
+
+    def test_limit_follows_the_group_by(self, entity_mappings, relationship_mappings):
+        sql = _translate(
+            entity_mappings, relationship_mappings, limit=7, incremental=True
+        )
+        assert sql.rstrip().endswith("GROUP BY subject, predicate, object\n    LIMIT 7")
+
+    def test_non_distinct_query_is_not_grouped(
+        self, entity_mappings, relationship_mappings
+    ):
+        sql = _translate(
+            entity_mappings,
+            relationship_mappings,
+            sparql=ALL_TRIPLES_NON_DISTINCT,
+            incremental=True,
+        )
+        assert "GROUP BY" not in sql
+        assert "DISTINCT" not in sql.upper()
+        assert "stack(" not in sql
+
+    def test_non_distinct_query_only_differs_by_the_unpivot(
+        self, entity_mappings, relationship_mappings
+    ):
+        sql = _translate(
+            entity_mappings,
+            relationship_mappings,
+            sparql=ALL_TRIPLES_NON_DISTINCT,
+            incremental=True,
+        )
+        expected = SNAPSHOT_INCREMENTAL_DISTINCT.replace(
+            "\n        GROUP BY subject, predicate, object", ""
+        )
+        assert sql == expected
+
+
+class TestIncrementalFilteredCtePath:
+    @pytest.fixture
+    def filtered(self, entity_mappings, relationship_mappings):
+        def build(incremental):
+            return SparqlTranslator._build_filtered_with_relationships_query(
+                entity_mappings,
+                None,
+                False,
+                None,
+                relationship_mappings,
+                None,
+                None,
+                [{"predicate_uri": "http://ex/age", "operator": "gt", "value": "30"}],
+                ["http://ex/worksWith"],
+                incremental=incremental,
+            )["sql"]
+
+        return build
+
+    def test_incremental_replaces_stack_with_union_all(self, filtered):
+        sql = filtered(True)
+        assert "stack(" not in sql
+        assert sql.count(" AS predicate") == 4
+
+    def test_incremental_repeats_the_seed_filter_on_every_branch(self, filtered):
+        sql = filtered(True)
+        seed = "IN (SELECT entity_uri FROM seed_entities)"
+        # three entity branches + the relationship branch's two conditions
+        assert sql.count(seed) == 5
+
+    def test_default_still_uses_stack(self, filtered):
+        assert filtered(False) == SNAPSHOT_FILTERED
+
+
+class TestUnpivotSelectIncremental:
+    def test_one_select_per_predicate_wrapped_in_parentheses(self):
+        sql = TripleSqlAssembler.unpivot_select(
+            "s_expr",
+            [("p1", "'a'"), ("p2", "col2")],
+            "src_0",
+            incremental=True,
+        )
+        assert sql == (
+            "(SELECT s_expr AS subject, 'p1' AS predicate, 'a' AS object\n"
+            "                FROM src_0\n"
+            "                UNION ALL\n"
+            "                SELECT s_expr AS subject, 'p2' AS predicate, col2 AS object\n"
+            "                FROM src_0)"
+        )
+
+    def test_single_predicate_is_still_parenthesised(self):
+        sql = TripleSqlAssembler.unpivot_select(
+            "s", [("p1", "x")], "t", incremental=True
+        )
+        assert sql.startswith("(SELECT ") and sql.endswith(")")
+        assert "UNION ALL" not in sql
+
+    def test_where_clause_is_repeated_on_each_branch(self):
+        sql = TripleSqlAssembler.unpivot_select(
+            "s",
+            [("p1", "a"), ("p2", "b")],
+            "t",
+            "\n WHERE s IN (SELECT 1)",
+            incremental=True,
+        )
+        assert sql.count("WHERE s IN (SELECT 1)") == 2
+
+    def test_default_flag_keeps_the_stack_form(self):
+        assert "stack(1," in TripleSqlAssembler.unpivot_select("s", [("p", "x")], "t")
+
+
+class TestFinalizeIncremental:
+    BRANCHES = ["SELECT 1 AS subject"]
+
+    def test_distinct_becomes_group_by(self):
+        sql = TripleSqlAssembler.finalize_generic_triples(
+            self.BRANCHES, True, None, [], incremental=True
+        )["sql"]
+        assert "DISTINCT" not in sql
+        assert sql.endswith(
+            "WHERE object IS NOT NULL AND TRIM(object) != ''\n"
+            "        GROUP BY subject, predicate, object"
+        )
+
+    def test_non_distinct_is_left_alone(self):
+        sql = TripleSqlAssembler.finalize_generic_triples(
+            self.BRANCHES, False, None, [], incremental=True
+        )["sql"]
+        assert "GROUP BY" not in sql and "DISTINCT" not in sql
+
+    def test_limit_is_kept_after_group_by(self):
+        sql = TripleSqlAssembler.finalize_generic_triples(
+            self.BRANCHES, True, 3, [], incremental=True
+        )["sql"]
+        assert sql.endswith("GROUP BY subject, predicate, object\n    LIMIT 3")
+
+    def test_default_flag_keeps_distinct(self):
+        sql = TripleSqlAssembler.finalize_generic_triples(
+            self.BRANCHES, True, None, []
+        )["sql"]
+        assert "SELECT DISTINCT subject" in sql and "GROUP BY" not in sql
+
+
+class TestMappingsFilter:
+    def test_entity_filter_drops_the_excluded_branch_and_its_cte(
+        self, two_entity_mappings
+    ):
+        keep_person = lambda m: m.get("table") == "people"  # noqa: E731
+        sql = _translate(two_entity_mappings, [], mappings_filter=keep_person)
+        assert "people" in sql
+        assert "companies" not in sql
+
+    def test_relationship_filter_drops_the_excluded_branch(
+        self, entity_mappings, two_relationship_mappings
+    ):
+        sql = _translate(
+            entity_mappings,
+            two_relationship_mappings,
+            mappings_filter=lambda m: m.get("predicate") != "http://ex/employedBy",
+        )
+        assert "http://ex/worksWith" in sql
+        assert "employedBy" not in sql and "employment" not in sql
+
+    def test_the_filter_sees_every_entity_and_relationship_dict(
+        self, two_entity_mappings, two_relationship_mappings
+    ):
+        seen = []
+
+        def record(mapping):
+            seen.append(mapping)
+            return True
+
+        _translate(two_entity_mappings, two_relationship_mappings, mappings_filter=record)
+        expected = [*two_entity_mappings.values(), *two_relationship_mappings]
+        assert len(seen) == len(expected)
+        assert all(any(s is e for e in expected) for s in seen)
+
+    def test_accept_all_filter_equals_the_unfiltered_output(
+        self, two_entity_mappings, two_relationship_mappings
+    ):
+        unfiltered = _translate(two_entity_mappings, two_relationship_mappings)
+        filtered = _translate(
+            two_entity_mappings, two_relationship_mappings, mappings_filter=lambda m: True
+        )
+        assert filtered == unfiltered
+
+    def test_reject_all_filter_raises_validation_error(
+        self, entity_mappings, relationship_mappings
+    ):
+        with pytest.raises(ValidationError):
+            _translate(
+                entity_mappings, relationship_mappings, mappings_filter=lambda m: False
+            )
+
+    def test_filter_composes_with_incremental(self, two_entity_mappings):
+        sql = _translate(
+            two_entity_mappings,
+            [],
+            incremental=True,
+            mappings_filter=lambda m: m.get("table") == "companies",
+        )
+        assert "companies" in sql and "people" not in sql
+        assert "stack(" not in sql
+
+    def test_filter_does_not_mutate_the_callers_mappings(
+        self, two_entity_mappings, two_relationship_mappings
+    ):
+        entities_before = dict(two_entity_mappings)
+        rels_before = list(two_relationship_mappings)
+        _translate(
+            two_entity_mappings,
+            two_relationship_mappings,
+            mappings_filter=lambda m: m.get("table") != "companies",
+        )
+        assert two_entity_mappings == entities_before
+        assert two_relationship_mappings == rels_before
+
+
+class TestPackageWrapperForwards:
+    def test_forwards_incremental_and_mappings_filter_as_keywords(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from back.core.w3c import sparql
+
+        fake = MagicMock(return_value={"sql": "x"})
+        monkeypatch.setattr(SparqlTranslator, "translate_sparql_to_spark", fake)
+        chooser = lambda m: True  # noqa: E731
+
+        sparql.translate_sparql_to_spark(
+            "Q", {"c": {}}, 5, [], incremental=True, mappings_filter=chooser
+        )
+
+        args, kwargs = fake.call_args
+        assert args == ("Q", {"c": {}}, 5, [])
+        assert kwargs["incremental"] is True
+        assert kwargs["mappings_filter"] is chooser
+
+    def test_defaults_are_off_and_unfiltered(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from back.core.w3c import sparql
+
+        fake = MagicMock(return_value={"sql": "x"})
+        monkeypatch.setattr(SparqlTranslator, "translate_sparql_to_spark", fake)
+
+        sparql.translate_sparql_to_spark("Q", {}, None)
+
+        assert fake.call_args.kwargs["incremental"] is False
+        assert fake.call_args.kwargs["mappings_filter"] is None
+
+    def test_wrapper_output_matches_the_translator(
+        self, entity_mappings, relationship_mappings
+    ):
+        from back.core.w3c import sparql
+
+        result = sparql.translate_sparql_to_spark(
+            ALL_TRIPLES, entity_mappings, None, relationship_mappings, incremental=True
+        )
+        assert result["sql"] == SNAPSHOT_INCREMENTAL_DISTINCT
+
+    def test_keyword_only_signature(self):
+        import inspect
+
+        from back.core.w3c import sparql
+
+        for fn in (
+            sparql.translate_sparql_to_spark,
+            SparqlTranslator.translate_sparql_to_spark,
+        ):
+            params = inspect.signature(fn).parameters
+            assert params["incremental"].kind is inspect.Parameter.KEYWORD_ONLY
+            assert params["mappings_filter"].kind is inspect.Parameter.KEYWORD_ONLY
+            assert params["incremental"].default is False
+            assert params["mappings_filter"].default is None
+
+
+class TestIncrementalScope:
+    def test_type_constrained_triple_pattern_is_reshaped(self, entity_mappings):
+        sparql = (
+            "SELECT DISTINCT ?s ?p ?o WHERE { ?s a <http://ex/Person> . ?s ?p ?o }"
+        )
+        sql = _translate(entity_mappings, [], sparql=sparql, incremental=True)
+        assert "stack(" not in sql
+        assert "DISTINCT" not in sql.upper()
+        assert sql.rstrip().endswith("GROUP BY subject, predicate, object")
+
+    def test_join_based_query_is_unaffected(self, entity_mappings):
+        sparql = "SELECT ?s ?age WHERE { ?s a <http://ex/Person> . ?s <http://ex/age> ?age }"
+        assert _translate(
+            entity_mappings, [], sparql=sparql, incremental=True
+        ) == _translate(entity_mappings, [], sparql=sparql)

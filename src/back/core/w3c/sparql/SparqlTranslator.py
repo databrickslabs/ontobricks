@@ -1,6 +1,7 @@
 """SPARQL query translation to Spark SQL (via R2RML mappings)."""
 
 import re
+from collections.abc import Callable
 from typing import Optional
 
 from back.core.errors import ValidationError
@@ -135,6 +136,9 @@ class SparqlTranslator:
         limit,
         relationship_mappings=None,
         dialect=DIALECT_SPARK,
+        *,
+        incremental: bool = False,
+        mappings_filter: Optional[Callable[[dict], bool]] = None,
     ):
         """Translate SPARQL query to SQL (Spark or PostgreSQL) using R2RML mappings.
 
@@ -144,11 +148,21 @@ class SparqlTranslator:
             limit: Maximum results
             relationship_mappings: Relationship mappings from R2RML
             dialect: SQL dialect — 'spark' (default) or 'postgres'
+            incremental: Emit Enzyme-refreshable SQL for the triple-set queries
+                (``?s ?p ?o``): a ``UNION ALL`` of single-predicate SELECTs
+                instead of ``stack()`` and ``GROUP BY`` instead of ``DISTINCT``.
+                Join-based queries are unaffected. Default keeps today's SQL.
+            mappings_filter: Keep only the entity / relationship mappings for
+                which it returns True (default: all). Rejecting every mapping
+                raises ``ValidationError`` as an empty mapping set does.
 
         Returns:
             dict: Translation result with SQL and variables
         """
         SparqlCapabilityValidator.validate(sparql_query)
+        entity_mappings, relationship_mappings = SparqlTranslator._restrict_mappings(
+            entity_mappings, relationship_mappings, mappings_filter
+        )
 
         # Normalize query
         query = " ".join(sparql_query.split())
@@ -240,6 +254,7 @@ class SparqlTranslator:
                 None,
                 relationship_filter,
                 dialect=dialect,
+                incremental=incremental,
             )
 
         # Build SQL from patterns
@@ -256,6 +271,17 @@ class SparqlTranslator:
             value_filters,
             relationship_filter,
             dialect=dialect,
+            incremental=incremental,
+        )
+
+    @staticmethod
+    def _restrict_mappings(entity_mappings, relationship_mappings, mappings_filter):
+        """Apply *mappings_filter* to both mapping sets (a no-op when it is ``None``)."""
+        if mappings_filter is None:
+            return entity_mappings, relationship_mappings
+        return (
+            {k: m for k, m in (entity_mappings or {}).items() if mappings_filter(m)},
+            [r for r in relationship_mappings or [] if mappings_filter(r)],
         )
 
     @staticmethod
@@ -832,6 +858,7 @@ class SparqlTranslator:
         filtered_entity_types,
         source_alias,
         dialect,
+        incremental=False,
     ) -> list[str]:
         entity_queries = []
         for class_uri, mapping in (mappings or {}).items():
@@ -881,7 +908,7 @@ class SparqlTranslator:
                 else:
                     where_cl = ""
                 entity_queries.append(
-                    f"\n                    {SparqlTranslator._unpivot_select(subject_expr, predicates, f'{from_clause} AS e', where_cl, dialect)}"
+                    f"\n                    {SparqlTranslator._unpivot_select(subject_expr, predicates, f'{from_clause} AS e', where_cl, dialect, incremental=incremental)}"
                 )
         return entity_queries
 
@@ -955,6 +982,7 @@ class SparqlTranslator:
         value_filters,
         relationship_filter,
         dialect=DIALECT_SPARK,
+        incremental=False,
     ):
         """Build a CTE-based query for value filters with relationships.
 
@@ -999,6 +1027,7 @@ class SparqlTranslator:
             filtered_entity_types,
             source_alias,
             dialect,
+            incremental,
         )
         rel_queries = SparqlTranslator._filtered_query_build_relationship_unions(
             relationship_mappings,
@@ -1227,6 +1256,7 @@ class SparqlTranslator:
         relationship_filter,
         dialect,
         table_queries: list,
+        incremental=False,
     ) -> None:
         for class_uri, mapping in (mappings or {}).items():
             if not SparqlTranslator._generic_triples_emit_entity_mapping(
@@ -1268,7 +1298,7 @@ class SparqlTranslator:
             if len(predicates) > 0:
                 table_queries.append(
                     f"""
-                    {SparqlTranslator._unpivot_select(subject_expr, predicates, from_clause, where_clause, dialect)}
+                    {SparqlTranslator._unpivot_select(subject_expr, predicates, from_clause, where_clause, dialect, incremental=incremental)}
                 """
                 )
 
@@ -1370,6 +1400,7 @@ class SparqlTranslator:
         value_filters=None,
         relationship_filter=None,
         dialect=DIALECT_SPARK,
+        incremental=False,
     ):
         """Build a query that returns all triples from mapped tables.
 
@@ -1383,6 +1414,7 @@ class SparqlTranslator:
             predicate_filter: Optional list of predicate URIs to filter by (only include these predicates)
             value_filters: Optional list of value filter dicts (predicate_uri, operator, value)
             relationship_filter: Optional list of relationship URIs to include (even when filter_class_uris is set)
+            incremental: Emit the Enzyme-refreshable shape (see ``translate_sparql_to_spark``)
         """
         if not mappings and not relationship_mappings:
             raise ValidationError(
@@ -1430,6 +1462,7 @@ class SparqlTranslator:
             relationship_filter,
             dialect,
             table_queries,
+            incremental,
         )
 
         SparqlTranslator._generic_triples_log_relationship_inclusion_scope(
@@ -1447,7 +1480,7 @@ class SparqlTranslator:
 
         logger.debug("Total table_queries: %s", len(table_queries))
         return SparqlTranslator._generic_triples_finalize_sql_payload(
-            table_queries, is_distinct, limit, cte_defs
+            table_queries, is_distinct, limit, cte_defs, incremental=incremental
         )
 
     @staticmethod
@@ -2011,6 +2044,7 @@ class SparqlTranslator:
         value_filters,
         relationship_filter,
         dialect,
+        incremental=False,
     ):
         """If the query is generic or type-constrained ``?s ?p ?o``, return its translation; else ``None``."""
         if SparqlTranslator._is_generic_triple_pattern(patterns, select_vars):
@@ -2028,6 +2062,7 @@ class SparqlTranslator:
                     value_filters,
                     relationship_filter,
                     dialect=dialect,
+                    incremental=incremental,
                 )
             return SparqlTranslator._build_generic_triples_query(
                 mappings,
@@ -2040,6 +2075,7 @@ class SparqlTranslator:
                 value_filters,
                 relationship_filter,
                 dialect=dialect,
+                incremental=incremental,
             )
         logger.debug("Checking for type-constrained pattern...")
         filter_class_uris = SparqlTranslator._is_type_constrained_triple_pattern(
@@ -2066,6 +2102,7 @@ class SparqlTranslator:
                 value_filters,
                 relationship_filter,
                 dialect=dialect,
+                incremental=incremental,
             )
         return SparqlTranslator._build_generic_triples_query(
             mappings,
@@ -2078,6 +2115,7 @@ class SparqlTranslator:
             value_filters,
             relationship_filter,
             dialect=dialect,
+            incremental=incremental,
         )
 
     @staticmethod
@@ -2297,6 +2335,7 @@ class SparqlTranslator:
         value_filters=None,
         relationship_filter=None,
         dialect=DIALECT_SPARK,
+        incremental=False,
     ):
         """Build SQL from parsed patterns using R2RML mappings."""
 
@@ -2323,6 +2362,7 @@ class SparqlTranslator:
             value_filters,
             relationship_filter,
             dialect,
+            incremental=incremental,
         )
         if triple_result is not None:
             return triple_result

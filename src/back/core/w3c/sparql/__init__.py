@@ -1,5 +1,7 @@
 """SPARQL utilities for query translation and execution."""
 
+from collections.abc import Callable
+
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 from back.core.w3c.sparql.DomainQueryService import DomainQueryService
 from back.core.w3c.sparql.QuerySafety import require_read_only_sparql
@@ -24,6 +26,9 @@ def translate_sparql_to_spark(
     limit,
     relationship_mappings=None,
     dialect=DIALECT_SPARK,
+    *,
+    incremental: bool = False,
+    mappings_filter: Callable[[dict], bool] | None = None,
 ):
     """Backward-compatible wrapper for :meth:`SparqlTranslator.translate_sparql_to_spark`."""
     return SparqlTranslator.translate_sparql_to_spark(
@@ -32,6 +37,8 @@ def translate_sparql_to_spark(
         limit,
         relationship_mappings,
         dialect=dialect,
+        incremental=incremental,
+        mappings_filter=mappings_filter,
     )
 
 
