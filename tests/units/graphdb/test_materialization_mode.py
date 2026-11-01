@@ -212,13 +212,22 @@ class TestInputHandling:
         )
 
 
-def _pipe(info):
+def _pipe(info, *, tracked=True, **settings):
+    """A pipeline stand-in whose warehouse answers the row-tracking probe."""
+    client = MagicMock()
+    client.execute_query.return_value = [
+        {"key": "delta.enableRowTracking", "value": str(tracked).lower()}
+    ]
     return SimpleNamespace(
         domain=SimpleNamespace(info=info),
-        settings=SimpleNamespace(),
+        settings=SimpleNamespace(**settings),
         task_id="t-1",
         view_table="cat.sch.v",
+        source_client=client,
     )
+
+
+_SOURCES = ["main.sales.customers"]
 
 
 class TestDecideMode:
@@ -227,11 +236,64 @@ class TestDecideMode:
         assert decision == ModeDecision("full", "full", "")
 
     @pytest.mark.parametrize("mode", ["incremental", "microbatch"])
-    def test_a_requested_mode_falls_back_until_a_probe_exists(self, mode):
-        decision = TwinBuildPostMaterialize.decide_mode(
-            _pipe({"graph_backend": "databricks", "materialization_mode": mode})
+    def test_disabled_serverless_pipelines_fall_back_to_full(self, mode):
+        pipe = _pipe(
+            {"graph_backend": "databricks", "materialization_mode": mode},
+            serverless_pipelines_enabled=False,
         )
+
+        decision = TwinBuildPostMaterialize.decide_mode(pipe, source_tables=_SOURCES)
+
         assert decision == ModeDecision(mode, "full", "serverless_unavailable")
+        pipe.source_client.execute_query.assert_not_called()
+
+    @pytest.mark.parametrize("mode", ["incremental", "microbatch"])
+    def test_tracked_sources_keep_the_requested_mode(self, mode):
+        pipe = _pipe({"graph_backend": "databricks", "materialization_mode": mode})
+
+        decision = TwinBuildPostMaterialize.decide_mode(pipe, source_tables=_SOURCES)
+
+        assert decision == ModeDecision(mode, mode, "")
+        pipe.source_client.execute_query.assert_called_once_with(
+            "SHOW TBLPROPERTIES main.sales.customers ('delta.enableRowTracking')"
+        )
+
+    def test_microbatch_without_row_tracking_cascades_to_full(self):
+        """Ladder steps 3 and 4 read the same input: microbatch never stops at incremental."""
+        pipe = _pipe(
+            {"graph_backend": "databricks", "materialization_mode": "microbatch"},
+            tracked=False,
+        )
+
+        decision = TwinBuildPostMaterialize.decide_mode(pipe, source_tables=_SOURCES)
+
+        assert decision == ModeDecision("microbatch", "full", "row_tracking_missing")
+
+    def test_no_row_local_source_counts_as_tracked(self):
+        pipe = _pipe({"graph_backend": "databricks", "materialization_mode": "incremental"})
+
+        decision = TwinBuildPostMaterialize.decide_mode(pipe, source_tables=[])
+
+        assert decision.effective == "incremental"
+        pipe.source_client.execute_query.assert_not_called()
+
+    def test_the_sources_are_not_probed_before_they_are_known(self):
+        """The call at the start of run() has no compiled mappings yet."""
+        pipe = _pipe({"graph_backend": "databricks", "materialization_mode": "incremental"})
+
+        decision = TwinBuildPostMaterialize.decide_mode(pipe)
+
+        assert decision == ModeDecision("incremental", "full", "row_tracking_missing")
+        pipe.source_client.execute_query.assert_not_called()
+
+    def test_serverless_defaults_to_available(self):
+        assert TwinBuildPostMaterialize.serverless_available(SimpleNamespace()) is True
+        assert (
+            TwinBuildPostMaterialize.serverless_available(
+                SimpleNamespace(serverless_pipelines_enabled=False)
+            )
+            is False
+        )
 
     def test_realtime_reports_its_own_reason(self):
         decision = TwinBuildPostMaterialize.decide_mode(
@@ -257,6 +319,6 @@ class TestDecideMode:
                 _pipe({"graph_backend": "none", "materialization_mode": "incremental"})
             )
         assert spy.call_args.kwargs["backend"] == "none"
-        assert spy.call_args.kwargs["serverless_available"] is False
+        assert spy.call_args.kwargs["serverless_available"] is True
         assert spy.call_args.kwargs["sources_row_tracked"] is False
         assert spy.call_args.kwargs["previews"] == {}

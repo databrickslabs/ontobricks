@@ -9,10 +9,12 @@ This module is **private** to the ``digitaltwin`` package; it is not
 re-exported from ``__init__.py`` and external callers must keep using
 ``DigitalTwin.run_build_task`` (which is now a thin delegator).
 
-Incremental diff / Delta-snapshot management was removed in v0.4.1.
-All builds are full rebuilds; when the graph engine is ``lakebase``
-in ``managed_synced`` mode the data-plane Lakeflow pipeline handles
-the refresh automatically.
+The ``…_data`` relation is built by the ``full`` path (CTAS) or, for a
+domain whose ``materialization_mode`` resolves to ``incremental`` /
+``microbatch``, by :class:`TwinIncrementalBuild` (Lakeflow slot pipeline +
+materialized view), which falls back to ``full`` on any failure. The graph
+store is then fully re-applied; when the graph engine is ``lakebase`` in
+``managed_synced`` mode the data-plane Lakeflow pipeline handles that.
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
+from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
@@ -271,6 +274,10 @@ class _BuildPipeline:
         self.inferred_reset: bool = False
         # Requested vs effective materialization mode, set at the start of run().
         self.mode_decision: Optional[Any] = None
+        # Incremental facts (TwinIncrementalBuild); None / "" on the full path.
+        self.slots_table: Optional[str] = None
+        self.slot_pipeline_id: str = ""
+        self.refresh_technique: str = ""
         # Lakebase managed-synced mode flag, resolved once before _open_store.
         self._lakebase_engine_config: Dict[str, Any] = {}
         self._graph_engine: str = ""
@@ -438,7 +445,8 @@ class _BuildPipeline:
             self._log_phase("create_view", t_phase)
             self._post_create_view_progress()
 
-            if not self._materialize_data_table():
+            built = self._apply_incremental_build()
+            if not built and not self._materialize_data_table():
                 return
 
             if not self._reset_inferred_companion():
@@ -789,6 +797,10 @@ class _BuildPipeline:
         )
         return True
 
+    def _apply_incremental_build(self) -> bool:
+        """Incremental/microbatch ``…_data``; ``False`` means take the full path."""
+        return TwinIncrementalBuild.apply(self)
+
     def _reset_inferred_companion(self) -> bool:
         """Clear stale inferred triples (Databricks backend); ``False`` fails the build."""
         return TwinBuildPostMaterialize.reset_inferred_companion(self)
@@ -838,6 +850,7 @@ class _BuildPipeline:
         In ``managed_synced`` mode the entire branch is replaced by
         :meth:`_apply_via_synced_pipeline` — the Lakeflow snapshot pipeline
         rewrites the synced PG table and the app does not iterate triples.
+        The Delta engine only counts: its ``…_data`` / ``…_graph`` are the graph.
         """
         if self._uses_synced_pipeline():
             return self._apply_via_synced_pipeline()
@@ -891,6 +904,8 @@ class _BuildPipeline:
             self._record_build_run("success", message=empty_msg)
             return False
 
+        if TwinIncrementalBuild.skips_graph_stream(self):
+            return True
         t_insert = time.time()
         if not self.is_api:
             self.tm.update_progress(
@@ -958,11 +973,7 @@ class _BuildPipeline:
                 insert_batch_size=5000,
                 on_progress=_on_progress_full,
             )
-        logger.info(
-            "[DT-BUILD %s] optimizing graph table %s",
-            self.task_id,
-            self.graph_name,
-        )
+        logger.info("[DT-BUILD %s] optimizing graph table %s", self.task_id, self.graph_name)
         self.store.optimize_table(self.graph_name)
         self._rebuild_adjacency_if_supported()
         self._log_phase("graph_insert", t_insert)

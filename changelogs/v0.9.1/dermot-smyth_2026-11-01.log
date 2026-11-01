@@ -583,3 +583,95 @@ Modified files:
 
 Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/units/architecture -> 252 passed
        uv run --frozen pytest -q tests/units/graphdb tests/units/core tests/back/core tests/units/api/test_explorer_access.py -> 2138 passed
+
+================================================================================
+## Incremental / microbatch build path: SlotPipelineRunner + TwinIncrementalBuild
+================================================================================
+
+Context: Task 4 of incremental triple materialization. A domain whose
+`materialization_mode` resolves to `incremental` or `microbatch` now builds
+`_data` through a per-version Lakeflow slot pipeline and a materialized view,
+and falls back to `full` (reason `incremental_failed:<Error>`) on any
+OntoBricksError. A cancel is never swallowed; the build fails only if `full`
+fails too. `full` is unchanged except for ruling 2 (Delta engine skips the
+stream). Rulings applied: R2 (microbatch without row tracking cascades to
+full), R3 (compile lists original batch dicts; identity filter), R4 option B
+(`_graph` stays the union VIEW), R5 (SQL sha256 in pipeline configuration
+decides full_refresh), R6 (row tracking is the only probe).
+
+Changes:
+
+1. src/back/core/streaming/SlotPipelineRunner.py (new)
+   `SlotPipelineRunner`: `pipeline_name` (`ontobricks-slots-<domain>-v<n>`),
+   `ensure` (uploads `/Workspace/Users/<me>/.ontobricks/pipelines/<name>.sql`
+   with ImportFormat.AUTO, creates/updates the pipeline with one FileLibrary,
+   catalog/schema, serverless, continuous, channel, development=False and
+   `configuration[ontobricks.slot_sql_sha256]`), `find_pipeline_id`,
+   `stored_fingerprint`, `fingerprint`, `start_update`, `wait_for_update`
+   (COMPLETED, or first RUNNING with `until_running`; FAILED/CANCELED/timeout ->
+   InfrastructureError; cancel -> OperationCancelledError), `stop`, `get_state`,
+   `read_event_log_technique`. Lazy WorkspaceClient factory, per-call timeout
+   guard, every SDK failure -> InfrastructureError.
+2. src/back/core/streaming/SourceReadiness.py (new)
+   `row_tracking_enabled` (SHOW TBLPROPERTIES), `check`, `enable_sql`,
+   `source_overwritten_since` (DESCRIBE HISTORY; overwrite/replace/truncate/
+   restore after a version). FQNs validated; query failures -> InfrastructureError.
+3. src/back/core/streaming/SlotProjectionCompiler.py, SlotPipelineSpec.py, __init__.py
+   `batch_mappings` holds the original mapping dicts, each once (R3).
+   Package re-exports the two new classes.
+4. src/back/core/graphdb/delta/MaterializedViewBuilder.py, materialize.py
+   `apply(..., with_graph_mv=False)`: `_graph` stays the union VIEW
+   (`ensure_graph_view`) after a best-effort DROP MATERIALIZED VIEW; `True`
+   keeps the graph-MV behaviour. `drop_relation` accepts `materialized_view`.
+5. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py (new), build/__init__.py
+   `TwinIncrementalBuild.apply(pipe)`: compile -> decide again with probes ->
+   batch-branch SQL (translator skipped without batch mappings) -> slot pipeline
+   (skipped without row-local mappings; full refresh when new or SQL changed;
+   microbatch already running the current SQL is left alone; active pipelines
+   are stopped first) -> `_data` MV (`drop_existing_table=True`,
+   `with_graph_mv=False`) -> REFRESH -> refresh technique. Raw warehouse errors
+   become InfrastructureError. The full path drops leftover `_data`/`_graph`
+   MVs. `skips_graph_stream` for the Delta engine.
+6. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   `decide_mode(pipe, *, source_tables=None)`: serverless from
+   `settings.serverless_pipelines_enabled` (default True), backend from the
+   domain, row tracking probed only with source tables and when the gate still
+   allows a faster mode. `triples_source_relation` reads a `materialized_view`
+   `_data`. `trace_fields` adds `refresh_technique`, `slot_pipeline_id`,
+   `slots_table`.
+7. src/back/objects/digitaltwin/build/_build_pipeline.py
+   One-line hooks: `_apply_incremental_build()` before `_materialize_data_table`
+   in `run()`; `slots_table` / `slot_pipeline_id` / `refresh_technique` in
+   `__init__`; Delta-engine guard in `_apply_full_rebuild` after the zero-count
+   exit (net 0 lines in the method). Class 1421 LOC (baseline 1452 untouched).
+8. Tests: tests/units/streaming/test_slot_pipeline_runner.py,
+   tests/units/streaming/test_source_readiness.py,
+   tests/units/objects/test_build_pipeline_modes.py (new); compiler identity
+   tests; MV builder tests for both `with_graph_mv` values; `drop_relation`
+   kinds; decide_mode tests on real inputs (Task 1 stub tests replaced);
+   compute-once tests updated for the Delta-engine stream skip and eight trace keys.
+
+Modified files:
+- src/back/core/streaming/SlotPipelineRunner.py (new)
+- src/back/core/streaming/SourceReadiness.py (new)
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/streaming/SlotPipelineSpec.py
+- src/back/core/streaming/__init__.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py (new)
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/digitaltwin/build/__init__.py
+- tests/units/streaming/test_slot_pipeline_runner.py (new)
+- tests/units/streaming/test_source_readiness.py (new)
+- tests/units/streaming/test_slot_projection_compiler.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/test_materialization_mode.py
+- tests/units/objects/test_build_pipeline_modes.py (new)
+- tests/units/objects/test_build_pipeline_compute_once.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units tests/back --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9895 passed, 12 skipped
+       uv run --frozen pytest -q tests/units/architecture -> 9 passed

@@ -13,6 +13,9 @@
   companion is emptied on every main build; failing to do so fails the build.
 * **Traceable.** The build-run entry names the relation read and whether the
   reset ran.
+* **Delta is the graph.** On the Databricks backend ``…_data`` / ``…_graph``
+  already are the graph, so the full rebuild counts but never streams into
+  the store (``DeltaFlatStore.insert_triples`` would refill ``…_inferred``).
 """
 
 from __future__ import annotations
@@ -86,14 +89,25 @@ def _first(calls: list[str], needle: str) -> int:
 
 
 class TestComputeOnce:
-    @pytest.mark.parametrize("info", [_LAKEBASE, _DATABRICKS], ids=["lakebase", "databricks"])
-    def test_a_materialized_build_reads_the_data_table_after_building_it(self, info):
-        calls = _build(_bare_pipeline(info=info))
+    def test_a_materialized_build_reads_the_data_table_after_building_it(self):
+        calls = _build(_bare_pipeline(info=_LAKEBASE))
 
         counts = [sql for sql in calls if "COUNT(*)" in sql]
         streams = [sql for sql in calls if sql.startswith("SELECT subject, predicate")]
         assert len(counts) == 1 and _reads(counts[0], _DATA)
         assert len(streams) == 1 and _reads(streams[0], _DATA)
+
+    @pytest.mark.parametrize("info", [_DATABRICKS, _DATABRICKS_VIEW], ids=["table", "view"])
+    def test_a_databricks_build_counts_and_never_streams_into_the_store(self, info):
+        pipe = _bare_pipeline(info=info)
+
+        calls = _build(pipe)
+
+        assert len([sql for sql in calls if "COUNT(*)" in sql]) == 1
+        assert not any(sql.startswith("SELECT subject, predicate") for sql in calls)
+        pipe.store.drop_table.assert_not_called()
+        pipe.store.bulk_load_into_sync.assert_not_called()
+        assert pipe.triple_count == 5
 
     @pytest.mark.parametrize("info", [_LAKEBASE, _DATABRICKS], ids=["lakebase", "databricks"])
     def test_a_materialized_build_evaluates_the_gateway_view_exactly_once(self, info):
@@ -109,9 +123,7 @@ class TestComputeOnce:
         calls = _build(pipe)
 
         count = next(sql for sql in calls if "COUNT(*)" in sql)
-        stream = next(sql for sql in calls if sql.startswith("SELECT subject, predicate"))
         assert _reads(count, _VIEW) and not _reads(count, _DATA)
-        assert _reads(stream, _VIEW) and not _reads(stream, _DATA)
         assert pipe._triples_source_relation() == _VIEW
 
     def test_the_materialized_source_is_the_data_table(self):
@@ -421,7 +433,7 @@ class TestBuildRunTrace:
         assert entry["triples_source"] == _VIEW
         assert entry["inferred_reset"] is False
 
-    def test_trace_fields_has_exactly_the_five_keys(self):
+    def test_trace_fields_has_exactly_the_eight_keys(self):
         fields = TwinBuildPostMaterialize.trace_fields(
             SimpleNamespace(view_table=_VIEW)
         )
@@ -432,7 +444,35 @@ class TestBuildRunTrace:
             "materialization_mode_requested": "full",
             "materialization_mode_effective": "full",
             "mode_fallback_reason": "",
+            "refresh_technique": "",
+            "slot_pipeline_id": "",
+            "slots_table": "",
         }
+
+    def test_trace_fields_reports_the_incremental_facts(self):
+        fields = TwinBuildPostMaterialize.trace_fields(
+            SimpleNamespace(
+                view_table=_VIEW,
+                refresh_technique="ROW_BASED",
+                slot_pipeline_id="pipe-1",
+                slots_table="cat.sch.triplestore_dom_V3_slots",
+            )
+        )
+
+        assert fields["refresh_technique"] == "ROW_BASED"
+        assert fields["slot_pipeline_id"] == "pipe-1"
+        assert fields["slots_table"] == "cat.sch.triplestore_dom_V3_slots"
+
+    def test_trace_fields_drops_incremental_facts_that_are_not_text(self):
+        fields = TwinBuildPostMaterialize.trace_fields(
+            MagicMock(view_table=_VIEW, data_table="", data_relation_mode=None, slots_table=None)
+        )
+
+        assert (fields["refresh_technique"], fields["slot_pipeline_id"], fields["slots_table"]) == (
+            "",
+            "",
+            "",
+        )
 
     def test_trace_fields_reports_the_mode_decision(self):
         fields = TwinBuildPostMaterialize.trace_fields(
@@ -466,18 +506,20 @@ class TestBuildRunTrace:
         assert entry["mode_fallback_reason"] == ""
 
     def test_a_requested_mode_is_traced_with_its_fallback(self):
-        entry = self._entry(
-            _bare_pipeline(info={**_DATABRICKS, "materialization_mode": "incremental"})
-        )
+        pipe = _bare_pipeline(info={**_DATABRICKS, "materialization_mode": "incremental"})
+        pipe.settings.serverless_pipelines_enabled = False
+
+        entry = self._entry(pipe)
 
         assert entry["materialization_mode_requested"] == "incremental"
         assert entry["materialization_mode_effective"] == "full"
         assert entry["mode_fallback_reason"] == "serverless_unavailable"
 
     def test_realtime_is_traced_as_unavailable(self):
-        entry = self._entry(
-            _bare_pipeline(info={**_LAKEBASE, "materialization_mode": "realtime"})
-        )
+        pipe = _bare_pipeline(info={**_LAKEBASE, "materialization_mode": "realtime"})
+        pipe.settings.serverless_pipelines_enabled = False
+
+        entry = self._entry(pipe)
 
         assert entry["materialization_mode_requested"] == "realtime"
         assert entry["materialization_mode_effective"] == "full"

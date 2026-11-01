@@ -6,9 +6,11 @@ running pipeline (*pipe*) and reads its state by attribute; the pipeline keeps
 one-line hooks that delegate here.
 
 State is read with ``getattr`` defaults because the relation attributes
-(``data_table``, ``data_relation_mode``, ``inferred_reset``) only exist once
-the phase that sets them has run. ``mode_decision`` is set at the start of
-``run()``.
+(``data_table``, ``data_relation_mode``, ``inferred_reset``, and the
+incremental facts ``slots_table`` / ``slot_pipeline_id`` /
+``refresh_technique``) only exist once the phase that sets them has run.
+``mode_decision`` is set at the start of ``run()`` and refined by
+:class:`TwinIncrementalBuild` once the mappings are compiled.
 """
 
 from __future__ import annotations
@@ -28,19 +30,23 @@ _NO_DECISION = ModeDecision(requested="full", effective="full", reason="")
 class TwinBuildPostMaterialize:
     """Source selection, inferred reset and tracing around the ``…_data`` relation."""
 
+    #: ``data_relation_mode`` of an incremental build's ``…_data`` relation.
+    MATERIALIZED_VIEW = "materialized_view"
+
     @staticmethod
     def triples_source_relation(pipe: Any) -> str:
         """Return the relation the count and the stream into the store should read.
 
-        The ``…_data`` table once it has been materialized: it is the cheap,
-        already-computed copy of the mapped triples. A pass-through ``view``
-        ``…_data`` re-runs the R2RML SQL on every read exactly like the
-        gateway VIEW does, so reading it buys nothing and the VIEW stays the
-        source. (The Lakeflow sync source is chosen separately and is still the
-        VIEW.)
+        The ``…_data`` relation once it holds a computed copy of the mapped
+        triples: a ``table`` (full build) or a ``materialized_view``
+        (incremental build). A pass-through ``view`` ``…_data`` re-runs the
+        R2RML SQL on every read exactly like the gateway VIEW does, so reading
+        it buys nothing and the VIEW stays the source. (The Lakeflow sync
+        source is chosen separately and is still the VIEW.)
         """
         data_table = getattr(pipe, "data_table", "") or ""
-        if data_table and getattr(pipe, "data_relation_mode", None) == "table":
+        mode = getattr(pipe, "data_relation_mode", None)
+        if data_table and mode in ("table", TwinBuildPostMaterialize.MATERIALIZED_VIEW):
             return data_table
         return pipe.view_table
 
@@ -102,27 +108,57 @@ class TwinBuildPostMaterialize:
         return True
 
     @staticmethod
-    def decide_mode(pipe: Any) -> ModeDecision:
+    def serverless_available(settings: Any) -> bool:
+        """``settings.serverless_pipelines_enabled``, ``True`` when absent (no probe yet)."""
+        return bool(getattr(settings, "serverless_pipelines_enabled", True))
+
+    @staticmethod
+    def decide_mode(pipe: Any, *, source_tables: list | None = None) -> ModeDecision:
         """Resolve the domain's requested materialization mode to the one that runs.
 
-        There is no serverless or row-tracking probe yet, so both readiness
-        inputs are ``False``: every non-``full`` request falls back to
-        ``full`` and the trace records why. Later tasks replace the inputs.
+        Inputs: ``serverless_available`` from the settings flag, the domain's
+        graph backend, and ``sources_row_tracked``, which needs the source
+        tables of the compiled slot pipeline (*source_tables*):
+
+        * without them (the call at the start of ``run()``, before the mappings
+          are parsed) the sources count as not tracked and the decision is
+          only logged at debug level — :class:`TwinIncrementalBuild` decides
+          again once it has compiled the mappings;
+        * with them, ``SHOW TBLPROPERTIES`` probes each table, but only when
+          serverless and the backend would still allow a faster mode. No
+          sources (every mapping is batch) counts as tracked.
+
+        A failed probe raises :class:`InfrastructureError` (the incremental
+        phase turns it into a fallback).
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.MaterializationModeResolver import (
             MaterializationModeResolver,
         )
+        from back.core.streaming import SourceReadiness
 
+        requested = GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings)
+        inputs = {
+            "serverless_available": TwinBuildPostMaterialize.serverless_available(
+                pipe.settings
+            ),
+            "backend": GraphDBFactory._resolve_graph_backend(pipe.domain),
+            "previews": {},
+        }
+        tracked = False
+        if source_tables is not None:
+            gate = MaterializationModeResolver.resolve(
+                requested, sources_row_tracked=True, **inputs
+            )
+            if gate.effective != "full":
+                readiness = SourceReadiness.check(pipe.source_client, source_tables)
+                tracked = all(readiness.values())
         decision = MaterializationModeResolver.resolve(
-            GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings),
-            serverless_available=False,
-            sources_row_tracked=False,
-            backend=GraphDBFactory._resolve_graph_backend(pipe.domain),
-            previews={},
+            requested, sources_row_tracked=tracked, **inputs
         )
         if decision.effective != decision.requested:
-            logger.info(
+            log = logger.info if source_tables is not None else logger.debug
+            log(
                 "[DT-BUILD %s] materialization mode %s -> %s (%s)",
                 pipe.task_id,
                 decision.requested,
@@ -133,16 +169,28 @@ class TwinBuildPostMaterialize:
 
     @staticmethod
     def trace_fields(pipe: Any) -> dict:
-        """Keys the build-run trace records: relation read, reset and mode decision."""
+        """Keys the build-run trace records: relation read, reset, mode and incremental facts.
+
+        The incremental facts are ``""`` on the full path (and for any value
+        that is not a string, e.g. a test double's auto-attribute).
+        """
         decision = getattr(pipe, "mode_decision", None)
         if not isinstance(decision, ModeDecision):
             decision = _NO_DECISION
+
+        def _text(name: str) -> str:
+            value = getattr(pipe, name, "")
+            return value if isinstance(value, str) else ""
+
         return {
             "triples_source": TwinBuildPostMaterialize.triples_source_relation(pipe),
             "inferred_reset": bool(getattr(pipe, "inferred_reset", False)),
             "materialization_mode_requested": decision.requested,
             "materialization_mode_effective": decision.effective,
             "mode_fallback_reason": decision.reason,
+            "refresh_technique": _text("refresh_technique"),
+            "slot_pipeline_id": _text("slot_pipeline_id"),
+            "slots_table": _text("slots_table"),
         }
 
     @staticmethod
