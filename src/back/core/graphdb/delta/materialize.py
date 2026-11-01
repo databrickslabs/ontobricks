@@ -28,9 +28,12 @@ logger = get_logger(__name__)
 
 # Enzyme refreshes a materialized view incrementally only from sources that
 # track row identity; deletion vectors make the row-level deletes cheap.
-_ROW_TRACKING_PROPERTIES = (
-    "(delta.enableRowTracking = true, delta.enableDeletionVectors = true)"
-)
+_ROW_TRACKING = "delta.enableRowTracking = true, delta.enableDeletionVectors = true"
+_ROW_TRACKING_PROPERTIES = f"({_ROW_TRACKING})"
+
+#: Row tracking plus the change data feed ``table_changes`` reads: the table
+#: properties of a MERGE-maintained ``_data`` (``DeltaMergeMaterializer``).
+CHANGE_FEED_PROPERTIES = f"({_ROW_TRACKING}, delta.enableChangeDataFeed = true)"
 
 
 def run_sql(client: Any, sql: str) -> Any:

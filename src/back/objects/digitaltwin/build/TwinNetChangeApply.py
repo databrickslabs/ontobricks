@@ -92,7 +92,9 @@ class TwinNetChangeApply:
         pipe.triple_count = pipe._count_source_triples()
         if since < latest:
             try:
-                ratio = ChangeFeedReader.changeset_ratio(client, data, since, pipe.triple_count)
+                ratio = ChangeFeedReader.changeset_ratio(
+                    client, data, since, latest, pipe.triple_count
+                )
             except InfrastructureError as exc:
                 return TwinNetChangeApply._fall_back(pipe, "cdf_unavailable", exc)
             if ratio > MAX_CHANGESET_RATIO:
@@ -102,7 +104,8 @@ class TwinNetChangeApply:
             pipe.tm.update_progress(
                 pipe.task_id, 50, f"Applying the net changes of {data} since v{since}..."
             )
-            TwinNetChangeApply._write(pipe, ChangeFeedReader.iter_net_changes(client, data, since))
+            changes = ChangeFeedReader.iter_net_changes(client, data, since, latest)
+            TwinNetChangeApply._write(pipe, changes)
         TwinNetChangeApply._finish(pipe)
         pipe._log_phase("net_apply", t0)
         logger.info(

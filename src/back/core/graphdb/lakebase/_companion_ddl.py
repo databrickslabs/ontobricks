@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from back.core.errors import InfrastructureError
-from back.core.helpers import safe_identifier, sql_cast
+from back.core.helpers import SQLHelpers, safe_identifier, sql_cast
 
 # Lakeflow synced-table PK (object_hash comes from the Delta warehouse view).
 LAKEFLOW_SYNC_PRIMARY_KEY: tuple[str, ...] = (
@@ -164,7 +164,7 @@ def wrap_triple_view_sql_for_lakeflow(spark_sql: str) -> str:
     inner = spark_sql.strip().rstrip(";")
     return (
         "SELECT subject, predicate, object, "
-        f"sha2({sql_cast('object', 'STRING')}, 256) AS object_hash "
+        f"{SQLHelpers.object_hash_sql(sql_cast('object', 'STRING'))} AS object_hash "
         f"FROM ({inner}) AS _ob_triples"
     )
 

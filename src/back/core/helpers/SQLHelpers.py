@@ -115,6 +115,11 @@ class SQLHelpers:
         return quote_uc_fqn(catalog, schema, table)
 
     @staticmethod
+    def object_hash_sql(expr: str) -> str:
+        """``object_hash`` of *expr*: its SHA-256, part of the Lakeflow sync key of a triple."""
+        return f"sha2({expr}, 256)"
+
+    @staticmethod
     def validate_table_name(table_name: str) -> None:
         """Raise :class:`~back.core.errors.ValidationError` if *table_name* is empty.
 

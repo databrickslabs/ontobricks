@@ -173,6 +173,18 @@ def test_copy_delete_batch_phy_joins_the_given_table(auth):
     assert recorder.rows == [("http://ex/s", "http://ex/p", "o")]
 
 
+@pytest.mark.parametrize("batch_size", [0, -1])
+def test_a_batch_size_below_one_is_refused(auth, batch_size):
+    """``islice(rows, 0)`` would silently write nothing."""
+    from back.core.errors import ValidationError
+
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "_copy_delete_batch_phy") as delete_phy:
+        with pytest.raises(ValidationError):
+            store.delete_from_sync_iter("G_V1", iter([{"subject": "s"}]), batch_size=batch_size)
+    delete_phy.assert_not_called()
+
+
 def test_an_empty_iterator_writes_nothing_and_reports_no_progress(auth):
     store = LakebaseFlatStore(auth, schema="ontobricks_graph")
     progress: list = []

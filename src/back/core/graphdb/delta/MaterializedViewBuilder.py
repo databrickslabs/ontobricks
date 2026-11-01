@@ -9,7 +9,7 @@ from typing import Any
 
 from back.core.errors import ValidationError
 from back.core.graphdb.delta import materialize
-from back.core.helpers import SAFE_SQL_IDENT, validate_table_name
+from back.core.helpers import SAFE_SQL_IDENT, SQLHelpers, validate_table_name
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -311,7 +311,8 @@ class MaterializedViewBuilder:
         if batch:
             branches.append(f"  ({batch})" if slots_fqn is not None else f"  {batch}")
         return (
-            "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+            f"AS SELECT subject, predicate, object, {SQLHelpers.object_hash_sql('object')}"
+            " AS object_hash\n"
             "FROM (\n" + "\n  UNION ALL\n".join(branches) + "\n) t\n"
             "GROUP BY subject, predicate, object"
         )

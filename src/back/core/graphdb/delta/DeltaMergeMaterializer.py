@@ -8,17 +8,14 @@ from typing import Any
 
 from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.graphdb.delta import materialize
-from back.core.helpers import validate_table_name
+from back.core.helpers import SQLHelpers, validate_table_name
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 # Row tracking + deletion vectors keep a MERGE cheap and let Lakeflow sync the
 # table incrementally; the change data feed is what ``table_changes`` reads.
-_TABLE_PROPERTIES = (
-    "(delta.enableRowTracking = true, delta.enableDeletionVectors = true, "
-    "delta.enableChangeDataFeed = true)"
-)
+_TABLE_PROPERTIES = materialize.CHANGE_FEED_PROPERTIES
 
 
 class DeltaMergeMaterializer:
@@ -58,7 +55,7 @@ class DeltaMergeMaterializer:
         columns, values = "subject, predicate, object", "s.subject, s.predicate, s.object"
         if with_object_hash:
             columns += ", object_hash"
-            values += ", sha2(s.object, 256)"
+            values += f", {SQLHelpers.object_hash_sql('s.object')}"
         return (
             f"MERGE INTO {data_fqn} t\n"
             f"USING (SELECT subject, predicate, object FROM {view_fqn} "

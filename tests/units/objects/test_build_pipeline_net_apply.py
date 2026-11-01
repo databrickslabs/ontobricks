@@ -438,13 +438,16 @@ class TestLakebaseNetApply:
             getattr(pipe.store, companion_write).assert_not_called()
         pipe.store.drop_table.assert_not_called()
 
-    def test_the_feed_is_read_after_the_base_version(self, registry):
+    def test_the_feed_is_read_after_the_base_version_up_to_the_recorded_one(self, registry):
         pipe = _net_pipeline(registry, base_version=5)
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=9, changes=_TWO_CHANGES)
+        )
 
         feed_reads = [s for s in warehouse.calls if "table_changes(" in s]
-        assert feed_reads and all(f"table_changes('{_DATA}', 6)" in s for s in feed_reads)
+        assert len(feed_reads) == 2  # the count and the stream read the same window
+        assert all(f"table_changes('{_DATA}', 6, 9)" in s for s in feed_reads)
 
     def test_the_facts_are_recorded(self, registry):
         pipe = _net_pipeline(registry)

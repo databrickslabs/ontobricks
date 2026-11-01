@@ -21,7 +21,7 @@ NET_SELECT = (
     "  SELECT subject, predicate, object,\n"
     "    SUM(CASE WHEN _change_type IN ('insert', 'update_postimage') THEN 1 ELSE -1 END)"
     " AS net_change\n"
-    f"  FROM table_changes('{DATA}', 6)\n"
+    f"  FROM table_changes('{DATA}', 6, 9)\n"
     "  WHERE _change_type IN ('insert', 'update_postimage', 'delete', 'update_preimage')\n"
     "  GROUP BY subject, predicate, object\n"
     ") c\n"
@@ -60,20 +60,26 @@ class TestPackageExport:
 
 class TestNetChangesSql:
     def test_exact_statement_orders_the_deletes_first(self):
-        assert ChangeFeedReader.net_changes_sql(DATA, 5) == NET_SELECT + "\nORDER BY op"
+        assert ChangeFeedReader.net_changes_sql(DATA, 5, 9) == NET_SELECT + "\nORDER BY op"
 
-    def test_reads_the_feed_from_the_version_after_the_last_applied_one(self):
-        assert f"table_changes('{DATA}', 1)" in ChangeFeedReader.net_changes_sql(DATA, 0)
+    def test_reads_the_feed_after_the_last_applied_version_up_to_the_recorded_one(self):
+        """The window is closed: commits after *until* are left for the next build."""
+        assert f"table_changes('{DATA}', 1, 3)" in ChangeFeedReader.net_changes_sql(DATA, 0, 3)
 
     @pytest.mark.parametrize("fqn", ["", "main.ob.x'); DROP TABLE y; --", "main.ob.x y"])
     def test_an_unsafe_name_is_refused(self, fqn):
         with pytest.raises(ValidationError):
-            ChangeFeedReader.net_changes_sql(fqn, 5)
+            ChangeFeedReader.net_changes_sql(fqn, 5, 9)
 
     @pytest.mark.parametrize("since", [-1, True, "5", 1.5, None])
     def test_the_version_must_be_a_non_negative_integer(self, since):
         with pytest.raises(ValidationError):
-            ChangeFeedReader.net_changes_sql(DATA, since)
+            ChangeFeedReader.net_changes_sql(DATA, since, 9)
+
+    @pytest.mark.parametrize("until", [5, 4, True, "9", None])
+    def test_the_window_must_hold_at_least_one_version(self, until):
+        with pytest.raises(ValidationError):
+            ChangeFeedReader.net_changes_sql(DATA, 5, until)
 
 
 class TestNetReduction:
@@ -81,8 +87,8 @@ class TestNetReduction:
 
     @staticmethod
     def _run(changes):
-        sql = ChangeFeedReader.net_changes_sql(DATA, 5).replace(
-            f"table_changes('{DATA}', 6)", "changes"
+        sql = ChangeFeedReader.net_changes_sql(DATA, 5, 9).replace(
+            f"table_changes('{DATA}', 6, 9)", "changes"
         )
         con = sqlite3.connect(":memory:")
         con.execute(
@@ -148,12 +154,12 @@ class TestIterNetChanges:
         rows = [{"subject": "s", "predicate": "p", "object": "o", "op": "delete"}]
         client = _Client(stream=rows)
 
-        assert list(ChangeFeedReader.iter_net_changes(client, DATA, 5, batch_size=100)) == rows
+        assert list(ChangeFeedReader.iter_net_changes(client, DATA, 5, 9, batch_size=100)) == rows
         assert client.streams == [(NET_SELECT + "\nORDER BY op", 100)]
 
     def test_a_driver_error_while_streaming_becomes_an_infrastructure_error(self):
         client = _Client(stream=[{"op": "delete"}], stream_error=RuntimeError("feed gone"))
-        changes = ChangeFeedReader.iter_net_changes(client, DATA, 5)
+        changes = ChangeFeedReader.iter_net_changes(client, DATA, 5, 9)
 
         assert next(changes) == {"op": "delete"}
         with pytest.raises(InfrastructureError):
@@ -164,19 +170,41 @@ class TestChangesetRatio:
     def test_counts_the_net_changes_against_the_total(self):
         client = _Client(rows=[{"cnt": 3}])
 
-        assert ChangeFeedReader.changeset_ratio(client, DATA, 5, 30) == pytest.approx(0.1)
+        assert ChangeFeedReader.changeset_ratio(client, DATA, 5, 9, 30) == pytest.approx(0.1)
         assert client.queries == [f"SELECT COUNT(*) AS cnt FROM (\n{NET_SELECT}\n) n"]
 
     def test_no_changes_is_zero_even_for_an_empty_total(self):
-        assert ChangeFeedReader.changeset_ratio(_Client(rows=[{"cnt": 0}]), DATA, 5, 0) == 0.0
+        assert ChangeFeedReader.changeset_ratio(_Client(rows=[{"cnt": 0}]), DATA, 5, 9, 0) == 0.0
 
     def test_changes_against_an_empty_total_are_infinitely_large(self):
-        ratio = ChangeFeedReader.changeset_ratio(_Client(rows=[{"cnt": 2}]), DATA, 5, 0)
+        ratio = ChangeFeedReader.changeset_ratio(_Client(rows=[{"cnt": 2}]), DATA, 5, 9, 0)
 
         assert ratio == float("inf")
 
     def test_a_driver_error_becomes_an_infrastructure_error(self):
         with pytest.raises(InfrastructureError):
             ChangeFeedReader.changeset_ratio(
-                _Client(error=RuntimeError("CDF is not enabled")), DATA, 5, 30
+                _Client(error=RuntimeError("CDF is not enabled")), DATA, 5, 9, 30
             )
+
+
+class TestTableId:
+    """The table id tells a relation from a re-created one whose history restarted."""
+
+    def test_reads_the_id_from_the_table_detail(self):
+        client = _Client(rows=[{"id": "5f1c-…", "format": "delta"}])
+
+        assert ChangeFeedReader.table_id(client, DATA) == "5f1c-…"
+        assert client.queries == [f"DESCRIBE DETAIL {DATA}"]
+
+    @pytest.mark.parametrize(
+        "client",
+        [_Client(rows=[]), _Client(rows=[{"format": "delta"}]), _Client(error=RuntimeError("x"))],
+        ids=["no-row", "no-id", "error"],
+    )
+    def test_an_unknown_id_is_empty(self, client):
+        assert ChangeFeedReader.table_id(client, DATA) == ""
+
+    def test_an_unsafe_name_is_refused(self):
+        with pytest.raises(ValidationError):
+            ChangeFeedReader.table_id(_Client(), "main.ob.x'")

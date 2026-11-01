@@ -6,8 +6,7 @@ import json
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
-from back.core.helpers import SAFE_SQL_IDENT, validate_table_name
+from back.core.helpers import WarehouseStatements
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -45,7 +44,7 @@ class SourceReadiness:
         a "does not have property" message, which reads as not tracked.
         """
         SourceReadiness._require_fqn(table_fqn)
-        rows = SourceReadiness._query(
+        rows = WarehouseStatements.query(
             client,
             f"SHOW TBLPROPERTIES {table_fqn} ('{_ROW_TRACKING}')",
             f"read row tracking on {table_fqn}",
@@ -84,7 +83,7 @@ class SourceReadiness:
         is ``Overwrite``.
         """
         SourceReadiness._require_fqn(table_fqn)
-        rows = SourceReadiness._query(
+        rows = WarehouseStatements.query(
             client, f"DESCRIBE HISTORY {table_fqn}", f"read the history of {table_fqn}"
         )
         for row in rows:
@@ -106,18 +105,7 @@ class SourceReadiness:
 
     @staticmethod
     def _require_fqn(table_fqn: str) -> None:
-        validate_table_name(table_fqn)
-        if SAFE_SQL_IDENT.fullmatch(table_fqn) is None:
-            raise ValidationError(f"Invalid source table name: {table_fqn!r}")
-
-    @staticmethod
-    def _query(client: Any, sql: str, what: str) -> list:
-        try:
-            return list(client.execute_query(sql) or [])
-        except OntoBricksError:
-            raise
-        except Exception as exc:  # noqa: BLE001 — translated, not swallowed
-            raise InfrastructureError(f"Could not {what}", detail=str(exc)) from exc
+        WarehouseStatements.require_fqn(table_fqn, what="source table name")
 
     @staticmethod
     def _params(value: Any) -> dict:

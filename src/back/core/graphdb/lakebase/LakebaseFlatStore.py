@@ -24,7 +24,7 @@ from itertools import islice
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from back.core.graphdb.adjacency import expand_and_fetch_sql
-from back.core.errors import InfrastructureError
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graphdb.lakebase import _adjacency_ddl
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
@@ -998,9 +998,10 @@ class LakebaseFlatStore(LakebaseBase):
     ) -> int:
         """Feed *iterator* to *apply_batch* ``batch_size`` rows at a time; sum the counts.
 
-        Only one window is held in memory; *on_progress* gets ``(total, total)``
-        after each one.
+        One window in memory; *on_progress* gets ``(total, total)`` after each.
         """
+        if batch_size <= 0:
+            raise ValidationError("batch_size must be positive")
         total = 0
         rows = iter(iterator)
         while batch := list(islice(rows, batch_size)):
