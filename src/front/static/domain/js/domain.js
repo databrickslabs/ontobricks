@@ -277,6 +277,7 @@ async function saveDomainInfo() {
     const graphBackendEl = document.getElementById('domainGraphBackend');
     const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
     const materializationEl = document.getElementById('domainLakehouseMaterialization');
+    const materializationModeEl = document.getElementById('domainMaterializationMode');
 
     if (!nameEl || !descEl || !authorEl) {
         showNotification('Form fields not found', 'error');
@@ -316,6 +317,7 @@ async function saveDomainInfo() {
                 ? neo4jDbEl.value : '',
             lakehouse_materialization: (graphBackendEl && graphBackendEl.value === 'databricks' && materializationEl)
                 ? materializationEl.value : 'view',
+            materialization_mode: materializationModeEl ? materializationModeEl.value : undefined,
             graph_cache_enabled: (graphBackendEl && (graphBackendEl.value === 'databricks' || graphBackendEl.value === 'lakebase'))
                 ? ((document.getElementById('domainGraphCacheEnabled') || {}).checked !== false)
                 : undefined,
@@ -345,6 +347,9 @@ async function saveDomainInfo() {
             }
             if (materializationEl) {
                 materializationEl.dataset.savedValue = domainInfoPayload.lakehouse_materialization;
+            }
+            if (materializationModeEl) {
+                materializationModeEl.dataset.savedValue = domainInfoPayload.materialization_mode;
             }
             // ``refreshNavbarIndicators`` invalidates ``/navbar/state``
             // and ``/domain/info`` then re-fetches — no separate

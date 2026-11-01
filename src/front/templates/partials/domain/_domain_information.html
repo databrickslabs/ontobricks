@@ -315,6 +315,27 @@
                             </div>
                         </div>
 
+                        <!-- Materialization mode (all backends) -->
+                        <div class="mb-4" id="materializationModeSection">
+                            <label for="domainMaterializationMode" class="form-label fw-semibold">
+                                <i class="bi bi-arrow-repeat me-1"></i> Materialization mode
+                            </label>
+                            <select class="form-select domain-editable" id="domainMaterializationMode"
+                                    data-saved-value="{{ domain.materialization_mode or 'full' }}">
+                                <option value="full" {% if (domain.materialization_mode or 'full') == 'full' %}selected{% endif %}>Full rebuild</option>
+                                <option value="incremental" {% if domain.materialization_mode == 'incremental' %}selected{% endif %}>Incremental</option>
+                                <option value="microbatch" {% if domain.materialization_mode == 'microbatch' %}selected{% endif %}>Micro-batch</option>
+                                <option value="realtime" disabled {% if domain.materialization_mode == 'realtime' %}selected{% endif %}>Real-time (later release)</option>
+                            </select>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>How a build refreshes the mapped triples.
+                                <strong>Full rebuild</strong> recomputes everything every time.
+                                <strong>Incremental</strong> and <strong>Micro-batch</strong> apply only the source
+                                changes; when the workspace or the sources do not support the mode yet, the build
+                                falls back to a full rebuild and records the reason.
+                            </small>
+                        </div>
+
                         <!-- Search cache (Lakehouse + Lakebase companions) -->
                         <div class="mb-4 {% if (domain.graph_backend or 'lakebase') not in ['databricks', 'lakebase'] %}d-none{% endif %}"
                              id="searchCacheSection">

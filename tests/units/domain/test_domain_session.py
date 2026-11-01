@@ -25,6 +25,10 @@ class TestGetEmptyDomain:
         data = get_empty_domain()
         assert data["domain"]["info"]["lakehouse_materialization"] == "view"
 
+    def test_default_materialization_mode_is_full(self):
+        data = get_empty_domain()
+        assert data["domain"]["info"]["materialization_mode"] == "full"
+
     def test_default_llm_endpoint_kind_is_empty(self):
         data = get_empty_domain()
         assert data["domain"]["info"]["llm_endpoint_kind"] == ""
@@ -569,6 +573,43 @@ class TestExportImport:
         domain_session.reset()
         domain_session.import_from_file(export)
         assert domain_session.info["lakehouse_materialization"] == "view"
+
+    def test_materialization_mode_round_trip(self, domain_session):
+        """A requested incremental mode must survive save and reload."""
+        domain_session.info["name"] = "RoundTrip"
+        domain_session.info["materialization_mode"] = "incremental"
+        export = domain_session.export_for_save()
+        assert export["info"]["materialization_mode"] == "incremental"
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["materialization_mode"] == "incremental"
+
+    def test_materialization_mode_is_normalized_on_export(self, domain_session):
+        domain_session.info["materialization_mode"] = " Microbatch "
+        export = domain_session.export_for_save()
+        assert export["info"]["materialization_mode"] == "microbatch"
+
+    def test_new_session_defaults_materialization_mode_to_full(self, domain_session):
+        assert domain_session.info["materialization_mode"] == "full"
+
+    def test_materialization_mode_defaults_to_full_on_import(self, domain_session):
+        """A domain exported before the setting existed keeps the full rebuild."""
+        domain_data = {
+            "info": {"name": "Legacy", "graph_backend": "databricks"},
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "O", "base_uri": "http://x#", "classes": [],
+                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "axioms": [], "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                }
+            },
+        }
+        domain_session.import_from_file(domain_data)
+        assert domain_session.info["materialization_mode"] == "full"
 
     def test_new_session_defaults_lakehouse_materialization_to_view(self, domain_session):
         """The Information picker defaults to Views only for a brand-new domain."""

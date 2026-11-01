@@ -259,6 +259,45 @@ class TestSaveDomainInfo:
         result = Domain(domain).get_domain_info()
         assert result["info"]["lakehouse_materialization"] == "table"
 
+    def test_save_materialization_mode(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"materialization_mode": "incremental"})
+        assert domain.info["materialization_mode"] == "incremental"
+        assert result["materialization_mode"] == "incremental"
+
+    def test_save_materialization_mode_is_normalized(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"materialization_mode": " MICROBATCH "})
+        assert domain.info["materialization_mode"] == "microbatch"
+
+    def test_unknown_materialization_mode_falls_back_to_full(self):
+        """An unrecognised mode must not silently pick a faster path."""
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"materialization_mode": "nope"})
+        assert domain.info["materialization_mode"] == "full"
+
+    def test_saving_without_the_key_keeps_the_stored_materialization_mode(self):
+        domain = _mock_domain()
+        domain.info["materialization_mode"] = "incremental"
+        result = Domain(domain).save_domain_info({"description": "changed"})
+        assert domain.info["materialization_mode"] == "incremental"
+        assert result["materialization_mode"] == "incremental"
+
+    def test_materialization_mode_defaults_to_full(self):
+        domain = _mock_domain()
+        result = Domain(domain).get_domain_info()
+        assert result["info"]["materialization_mode"] == "full"
+
+    def test_materialization_mode_is_exposed_to_the_template(self):
+        domain = _mock_domain()
+        domain.info["materialization_mode"] = "microbatch"
+        data = Domain(domain).get_domain_template_data()
+        assert data["materialization_mode"] == "microbatch"
+
+    def test_template_data_materialization_mode_defaults_to_full(self):
+        data = Domain(_mock_domain()).get_domain_template_data()
+        assert data["materialization_mode"] == "full"
+
     def test_review_quorum_clamped_to_minimum_one(self):
         domain = _mock_domain()
         Domain(domain).save_domain_info({"review_quorum": 0})

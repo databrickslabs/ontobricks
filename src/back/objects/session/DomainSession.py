@@ -96,6 +96,10 @@ def get_empty_domain() -> Dict[str, Any]:
                 # New domains default to view; missing values on import still
                 # normalise to table so legacy Lakehouse domains keep a copy.
                 "lakehouse_materialization": "view",
+                # Requested rebuild mode: full | incremental | microbatch |
+                # realtime. The build resolves what actually runs (fallback
+                # ladder), so ``full`` is always safe.
+                "materialization_mode": "full",
                 # Search companions (adj / entity-search / props). On until
                 # the operator turns the Backend switch off. New domains stay
                 # pending_refresh until the first successful rebuild.
@@ -1248,6 +1252,7 @@ class DomainSession:
         from back.core.graphdb.GraphDBFactory import (
             normalize_graph_backend,
             normalize_lakehouse_materialization,
+            normalize_materialization_mode,
         )
         from back.core.graphdb.search_cache import (
             GRAPH_CACHE_STATE_READY,
@@ -1255,38 +1260,32 @@ class DomainSession:
             normalize_graph_cache_state,
         )
 
+        stored = self._data["domain"]["info"]
         info_export = {
-            "name": self._data["domain"]["info"].get("name", "NewDomain"),
-            "description": self._data["domain"]["info"].get("description", ""),
-            "author": self._data["domain"]["info"].get("author", ""),
-            "llm_endpoint": self._data["domain"]["info"].get("llm_endpoint", ""),
-            "llm_endpoint_kind": self._data["domain"]["info"].get(
-                "llm_endpoint_kind", ""
-            ),
-            "mcp_enabled": self._data["domain"]["info"].get("mcp_enabled", False),
-            "status": self._data["domain"]["info"].get("status", "DRAFT"),
-            "review_quorum": max(
-                1, int(self._data["domain"]["info"].get("review_quorum") or 1)
-            ),
-            "mcp_policy": coerce_mcp_policy(
-                self._data["domain"]["info"].get("mcp_policy")
-            ),
-            "graph_backend": normalize_graph_backend(
-                self._data["domain"]["info"].get("graph_backend")
-            ),
-            "neo4j_connection": str(
-                self._data["domain"]["info"].get("neo4j_connection", "") or ""
-            ).strip(),
+            "name": stored.get("name", "NewDomain"),
+            "description": stored.get("description", ""),
+            "author": stored.get("author", ""),
+            "llm_endpoint": stored.get("llm_endpoint", ""),
+            "llm_endpoint_kind": stored.get("llm_endpoint_kind", ""),
+            "mcp_enabled": stored.get("mcp_enabled", False),
+            "status": stored.get("status", "DRAFT"),
+            "review_quorum": max(1, int(stored.get("review_quorum") or 1)),
+            "mcp_policy": coerce_mcp_policy(stored.get("mcp_policy")),
+            "graph_backend": normalize_graph_backend(stored.get("graph_backend")),
+            "neo4j_connection": str(stored.get("neo4j_connection", "") or "").strip(),
             "lakehouse_materialization": normalize_lakehouse_materialization(
-                self._data["domain"]["info"].get("lakehouse_materialization")
+                stored.get("lakehouse_materialization")
+            ),
+            "materialization_mode": normalize_materialization_mode(
+                stored.get("materialization_mode")
             ),
             "graph_cache_enabled": normalize_graph_cache_enabled(
-                self._data["domain"]["info"].get("graph_cache_enabled")
+                stored.get("graph_cache_enabled")
             ),
             "graph_cache_state": normalize_graph_cache_state(
-                self._data["domain"]["info"].get("graph_cache_state"),
+                stored.get("graph_cache_state"),
                 enabled=normalize_graph_cache_enabled(
-                    self._data["domain"]["info"].get("graph_cache_enabled")
+                    stored.get("graph_cache_enabled")
                 ),
                 default_when_missing=GRAPH_CACHE_STATE_READY,
             ),
@@ -1391,6 +1390,7 @@ class DomainSession:
             from back.core.graphdb.GraphDBFactory import (
                 normalize_graph_backend,
                 normalize_lakehouse_materialization,
+                normalize_materialization_mode,
             )
             from back.core.graphdb.search_cache import (
                 GRAPH_CACHE_STATE_READY,
@@ -1399,47 +1399,34 @@ class DomainSession:
             )
 
             info = data["info"]
-            self._data["domain"]["info"]["name"] = info.get("name", "NewDomain")
-            self._data["domain"]["info"]["description"] = info.get("description", "")
-            self._data["domain"]["info"]["author"] = info.get("author", "")
-            self._data["domain"]["info"]["llm_endpoint"] = info.get("llm_endpoint", "")
-            self._data["domain"]["info"]["llm_endpoint_kind"] = info.get(
-                "llm_endpoint_kind", ""
+            dest = self._data["domain"]["info"]
+            dest["name"] = info.get("name", "NewDomain")
+            dest["description"] = info.get("description", "")
+            dest["author"] = info.get("author", "")
+            dest["llm_endpoint"] = info.get("llm_endpoint", "")
+            dest["llm_endpoint_kind"] = info.get("llm_endpoint_kind", "")
+            dest["mcp_enabled"] = info.get("mcp_enabled", False)
+            dest["status"] = info.get("status", "DRAFT")
+            dest["review_quorum"] = max(1, int(info.get("review_quorum") or 1))
+            dest["mcp_policy"] = coerce_mcp_policy(info.get("mcp_policy"))
+            dest["graph_backend"] = normalize_graph_backend(info.get("graph_backend"))
+            dest["neo4j_connection"] = str(info.get("neo4j_connection", "") or "").strip()
+            dest["lakehouse_materialization"] = normalize_lakehouse_materialization(
+                info.get("lakehouse_materialization")
             )
-            self._data["domain"]["info"]["mcp_enabled"] = info.get("mcp_enabled", False)
-            self._data["domain"]["info"]["status"] = info.get("status", "DRAFT")
-            self._data["domain"]["info"]["review_quorum"] = max(
-                1, int(info.get("review_quorum") or 1)
+            dest["materialization_mode"] = normalize_materialization_mode(
+                info.get("materialization_mode")
             )
-            self._data["domain"]["info"]["mcp_policy"] = coerce_mcp_policy(
-                info.get("mcp_policy")
+            dest["graph_cache_enabled"] = normalize_graph_cache_enabled(
+                info.get("graph_cache_enabled"), default=True
             )
-            self._data["domain"]["info"]["graph_backend"] = normalize_graph_backend(
-                info.get("graph_backend")
-            )
-            self._data["domain"]["info"]["neo4j_connection"] = str(
-                info.get("neo4j_connection", "") or ""
-            ).strip()
-            self._data["domain"]["info"]["lakehouse_materialization"] = (
-                normalize_lakehouse_materialization(
-                    info.get("lakehouse_materialization")
-                )
-            )
-            self._data["domain"]["info"]["graph_cache_enabled"] = (
-                normalize_graph_cache_enabled(
-                    info.get("graph_cache_enabled"),
-                    default=True,
-                )
-            )
-            self._data["domain"]["info"]["graph_cache_state"] = (
-                normalize_graph_cache_state(
-                    info.get("graph_cache_state"),
-                    enabled=self._data["domain"]["info"]["graph_cache_enabled"],
-                    default_when_missing=GRAPH_CACHE_STATE_READY,
-                )
+            dest["graph_cache_state"] = normalize_graph_cache_state(
+                info.get("graph_cache_state"),
+                enabled=dest["graph_cache_enabled"],
+                default_when_missing=GRAPH_CACHE_STATE_READY,
             )
             # Drop legacy domain DB override if present on import.
-            self._data["domain"]["info"].pop("neo4j_database", None)
+            dest.pop("neo4j_database", None)
             self._data["domain"]["last_update"] = info.get("last_update", "")
             self._data["domain"]["last_build"] = info.get("last_build", "")
             ts = self._data["domain"].setdefault(

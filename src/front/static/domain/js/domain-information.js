@@ -360,6 +360,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                 materializationElInit.dataset.userEdited = '1';
             });
         }
+        const materializationModeElInit = document.getElementById('domainMaterializationMode');
+        if (materializationModeElInit) {
+            materializationModeElInit.addEventListener('change', () => {
+                materializationModeElInit.dataset.userEdited = '1';
+            });
+        }
         const cacheElInit = document.getElementById('domainGraphCacheEnabled');
         if (cacheElInit) {
             cacheElInit.addEventListener('change', () => {
@@ -437,6 +443,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                     && infoData.info && infoData.info.lakehouse_materialization) {
                 materializationEl.value = infoData.info.lakehouse_materialization;
                 materializationEl.dataset.savedValue = infoData.info.lakehouse_materialization;
+            }
+            const materializationModeEl = document.getElementById('domainMaterializationMode');
+            if (materializationModeEl && !materializationModeEl.dataset.userEdited
+                    && infoData.info && infoData.info.materialization_mode) {
+                materializationModeEl.value = infoData.info.materialization_mode;
+                materializationModeEl.dataset.savedValue = infoData.info.materialization_mode;
             }
             // Runs after the saved value is known, so the freshly fetched
             // option list keeps it selected. Safe even when the user already

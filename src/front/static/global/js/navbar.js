@@ -780,6 +780,7 @@ function buildDomainInfoPayload() {
     const graphBackendEl = document.getElementById('domainGraphBackend');
     const neo4jConnEl = document.getElementById('domainNeo4jDatabase');
     const materializationEl = document.getElementById('domainLakehouseMaterialization');
+    const materializationModeEl = document.getElementById('domainMaterializationMode');
     const versionEl = document.getElementById('domainVersionSelect');
 
     const payload = {
@@ -804,6 +805,8 @@ function buildDomainInfoPayload() {
             ? (graphBackendEl.value === 'databricks' && materializationEl
                 ? materializationEl.value : 'view')
             : undefined,
+        // Applies to every backend; the build resolves what actually runs.
+        materialization_mode: materializationModeEl ? materializationModeEl.value : undefined,
         graph_cache_enabled: (function () {
             const backend = graphBackendEl ? graphBackendEl.value : '';
             const cacheEl = document.getElementById('domainGraphCacheEnabled');

@@ -106,3 +106,115 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q tests/units/objects/test_build_pipeline_compute_once.py tests/units/objects/test_build_pipeline_materialize.py tests/units/dtwin/test_build_pipeline_streaming.py tests/units/architecture -> 93 passed; uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9106 passed, 12 skipped, 1 deselected, 18 warnings in 53.58s (the deselected readiness test probes live services and hangs without network access)
+
+================================================================================
+## Per-domain `materialization_mode` setting and the readiness fallback ladder
+================================================================================
+
+Context: Task 1 of incremental triple materialization. A domain now carries a
+requested materialization mode (`full`, `incremental`, `microbatch`,
+`realtime`) that is persisted and editable under Domain -> General, and a
+resolver turns the request into the mode that actually runs, recording why they
+differ. No serverless or row-tracking probe exists yet, so the build calls the
+resolver with both readiness inputs `False`: every non-`full` request resolves
+to `full` and the build-run trace says why. Later tasks feed real probe inputs.
+`realtime` validates but always resolves to `microbatch` first
+(`realtime_not_available`) in this release.
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBFactory.py
+   `MATERIALIZATION_MODES`, `DEFAULT_MATERIALIZATION_MODE` ("full"),
+   `normalize_materialization_mode` (invalid / None / non-str -> "full") next to
+   `normalize_lakehouse_materialization`, and
+   `GraphDBFactory.resolve_materialization_mode(domain, settings)` returning the
+   requested mode, normalized and not gated by backend.
+2. src/back/core/graphdb/ModeDecision.py (new)
+   Frozen dataclass `ModeDecision(requested, effective, reason)`; `reason` is ""
+   when `effective == requested`. Its own file: the architecture guard allows one
+   public class per file.
+3. src/back/core/graphdb/MaterializationModeResolver.py (new)
+   `MaterializationModeResolver.resolve(...)` applies the ladder one step at a
+   time: realtime -> microbatch (`realtime_not_available`, the
+   `realtime_topic_available` kwarg is accepted and ignored); incremental /
+   microbatch -> full when serverless is unavailable (`serverless_unavailable`)
+   or the backend is not databricks / lakebase / neo4j (`backend_not_eligible`);
+   microbatch -> incremental and incremental -> full without row tracking
+   (`row_tracking_missing`). The final reason is the first downgrade's.
+   `previews` is accepted for a stable signature and not consulted yet.
+4. src/back/core/graphdb/__init__.py
+   Re-export `MaterializationModeResolver` and `ModeDecision`.
+5. src/back/objects/domain/Domain.py
+   `materialization_mode` is read, saved and returned like
+   `lakehouse_materialization` (`get_domain_info`, `save_domain_info`, its
+   response and `get_domain_template_data`), coerced by
+   `_coerce_materialization_mode`; an absent key keeps the stored value and an
+   unknown value falls back to "full". The five graph keys that three response
+   dicts repeated move into `_graph_info()` (Extract Method), which keeps
+   `Domain` and `save_domain_info` under their frozen size budgets.
+6. src/back/objects/session/DomainSession.py
+   `materialization_mode` ("full") in the new-domain defaults, `export_for_save`
+   and `import_from_file`, so the choice survives save and reload (a legacy
+   export without it imports as "full"). Both methods read the info dict through
+   a local alias, which keeps them and `DomainSession` under their frozen budgets.
+7. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   `decide_mode(pipe)` calls the resolver with `serverless_available=False`,
+   `sources_row_tracked=False`, `previews={}` and the domain's real graph backend
+   (`_resolve_graph_backend`, which can say `none` / `neo4j`, unlike the
+   triple-store backend), and logs a fallback. `trace_fields` adds
+   `materialization_mode_requested`, `materialization_mode_effective` and
+   `mode_fallback_reason` (full / full / "" when no decision exists).
+8. src/back/objects/digitaltwin/build/_build_pipeline.py
+   One-line hooks: `mode_decision` attribute and
+   `self.mode_decision = TwinBuildPostMaterialize.decide_mode(self)` as the first
+   line of `run()`'s `try`, so a build that fails during translation still
+   traces its mode (`_BuildPipeline` 1410 -> 1413 LOC, baseline 1452 unchanged).
+   The three trace keys are not `build_runs` columns, so they live in the
+   in-memory entry only and are dropped when the row is persisted.
+9. src/front/templates/partials/domain/_domain_information.html
+   `#domainMaterializationMode` select (Full rebuild / Incremental / Micro-batch /
+   Real-time, disabled "later release") in its own `#materializationModeSection`
+   after the Lakehouse access-type block, visible for every backend.
+10. src/front/static/global/js/navbar.js, src/front/static/domain/js/domain.js,
+    src/front/static/domain/js/domain-information.js
+    Both save paths (`buildDomainInfoPayload` and the `saveDomainInfo` fallback)
+    send `materialization_mode`; `saveDomainInfo` resets `dataset.savedValue`
+    after a save; the info page marks the select user-edited on change and
+    rehydrates it from `/domain/info` without overwriting an unsaved choice.
+11. tests/units/graphdb/test_materialization_mode.py (new)
+    Normalization table, requested-mode lookup, every ladder transition and
+    reason, realtime always resolves to microbatch first (topic kwarg ignored),
+    first-reason-wins, and `decide_mode` inputs.
+12. tests/units/domain/test_domain_service.py, tests/units/domain/test_domain_session.py
+    Round trip through `Domain` and `DomainSession` (save, normalize, unknown ->
+    full, absent key keeps the stored value, defaults, template data, legacy import).
+13. tests/units/objects/test_build_pipeline_compute_once.py
+    `test_trace_fields_has_exactly_the_two_keys` is now
+    `..._the_five_keys`; new cases trace the default build, a requested mode with
+    its fallback, realtime, and a build that fails before translation.
+14. tests/units/front/test_materialization_mode_ui.py (new)
+    Static UI contract: options and order, realtime disabled, default and stored
+    selection, visible for all backends and outside the Lakehouse block, both
+    save paths send the field, saved-value reset and rehydration guard.
+
+Modified files:
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/ModeDecision.py (new)
+- src/back/core/graphdb/MaterializationModeResolver.py (new)
+- src/back/core/graphdb/__init__.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain.js
+- src/front/static/domain/js/domain-information.js
+- tests/units/graphdb/test_materialization_mode.py (new)
+- tests/units/domain/test_domain_service.py
+- tests/units/domain/test_domain_session.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/front/test_materialization_mode_ui.py (new)
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9213 passed, 12 skipped, 1 deselected, 18 warnings in 57.88s (the deselected readiness test probes live services and hangs without network access); uv run --frozen pytest -q tests/units/architecture -> 9 passed

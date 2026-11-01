@@ -265,22 +265,7 @@ class Domain:
             "status": self._s.info.get("status", "DRAFT"),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            "graph_backend": self._coerce_graph_backend(
-                self._s.info.get("graph_backend")
-            ),
-            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
-            "lakehouse_materialization": self._coerce_lakehouse_materialization(
-                self._s.info.get("lakehouse_materialization")
-            ),
-            "graph_cache_enabled": self._coerce_graph_cache_enabled(
-                self._s.info.get("graph_cache_enabled")
-            ),
-            "graph_cache_state": self._coerce_graph_cache_state(
-                self._s.info.get("graph_cache_state"),
-                enabled=self._coerce_graph_cache_enabled(
-                    self._s.info.get("graph_cache_enabled")
-                ),
-            ),
+            **self._graph_info(),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -450,6 +435,12 @@ class Domain:
                         self._s.info.get("lakehouse_materialization"),
                     )
                 ),
+                "materialization_mode": self._coerce_materialization_mode(
+                    data.get(
+                        "materialization_mode",
+                        self._s.info.get("materialization_mode"),
+                    )
+                ),
             }
         )
         self._apply_graph_cache_save(data)
@@ -505,21 +496,25 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            "graph_backend": self._coerce_graph_backend(
-                self._s.info.get("graph_backend")
-            ),
-            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
+            **self._graph_info(),
+        }
+
+    def _graph_info(self) -> Dict[str, Any]:
+        """The graph-related ``info`` keys, coerced, as the UI and API expose them."""
+        info = self._s.info
+        cache_enabled = self._coerce_graph_cache_enabled(info.get("graph_cache_enabled"))
+        return {
+            "graph_backend": self._coerce_graph_backend(info.get("graph_backend")),
+            "neo4j_connection": str(info.get("neo4j_connection", "") or "").strip(),
             "lakehouse_materialization": self._coerce_lakehouse_materialization(
-                self._s.info.get("lakehouse_materialization")
+                info.get("lakehouse_materialization")
             ),
-            "graph_cache_enabled": self._coerce_graph_cache_enabled(
-                self._s.info.get("graph_cache_enabled")
+            "materialization_mode": self._coerce_materialization_mode(
+                info.get("materialization_mode")
             ),
+            "graph_cache_enabled": cache_enabled,
             "graph_cache_state": self._coerce_graph_cache_state(
-                self._s.info.get("graph_cache_state"),
-                enabled=self._coerce_graph_cache_enabled(
-                    self._s.info.get("graph_cache_enabled")
-                ),
+                info.get("graph_cache_state"), enabled=cache_enabled
             ),
         }
 
@@ -548,6 +543,13 @@ class Domain:
         return normalize_lakehouse_materialization(
             raw if isinstance(raw, str) else None
         )
+
+    @staticmethod
+    def _coerce_materialization_mode(raw: Any) -> str:
+        """Normalise the requested materialization mode (default ``full``)."""
+        from back.core.graphdb.GraphDBFactory import normalize_materialization_mode
+
+        return normalize_materialization_mode(raw if isinstance(raw, str) else None)
 
     @staticmethod
     def _coerce_graph_cache_enabled(raw: Any) -> bool:
@@ -669,22 +671,7 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            "graph_backend": self._coerce_graph_backend(
-                self._s.info.get("graph_backend")
-            ),
-            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
-            "lakehouse_materialization": self._coerce_lakehouse_materialization(
-                self._s.info.get("lakehouse_materialization")
-            ),
-            "graph_cache_enabled": self._coerce_graph_cache_enabled(
-                self._s.info.get("graph_cache_enabled")
-            ),
-            "graph_cache_state": self._coerce_graph_cache_state(
-                self._s.info.get("graph_cache_state"),
-                enabled=self._coerce_graph_cache_enabled(
-                    self._s.info.get("graph_cache_enabled")
-                ),
-            ),
+            **self._graph_info(),
             # Catalog for the MCP tab, so the template never restates the
             # tool / context lists that live in back.core.mcp_tools.
             "mcp_domain_tools": list(MCP_DOMAIN_TOOLS),
