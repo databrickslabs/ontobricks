@@ -4,7 +4,9 @@ Regenerates the Triple-Store VIEW from the domain's R2RML mappings and
 repopulates the graph store. Scheduled builds are always full rebuilds:
 the persisted ``drop_existing`` option is kept for backward
 compatibility with older schedule configs but no longer changes
-behaviour.
+behaviour. In Lakebase ``managed_synced`` mode the build materializes
+``…_data`` and registers the Lakeflow synced table on it, exactly as the
+main full build does (``TwinLakebaseSync``).
 """
 
 from __future__ import annotations
@@ -119,7 +121,12 @@ def _apply_synced_pipeline(
     """Trigger the Lakeflow synced-table refresh for *graph_name*.
 
     Mirrors :meth:`_BuildPipeline._apply_via_synced_pipeline` so scheduled
-    builds also keep bulk data movement on the data plane.
+    builds also keep bulk data movement on the data plane: ``…_data`` is
+    materialized (with ``object_hash`` and row tracking) and the synced table
+    is registered on the source :meth:`TwinLakebaseSync.sync_plan_for` picks
+    for a ``full`` build, so the main build's registration is reused, not
+    recreated. Without a *domain* the ``…_data`` name cannot be resolved and
+    the gateway VIEW stays the source.
     """
     from back.core.graphdb.lakebase.LakebaseFlatStore import (
         resolve_sync_uc_fallback_catalog,
@@ -148,14 +155,24 @@ def _apply_synced_pipeline(
         synced_uc,
         task_log_prefix=f"Scheduled build [{domain_name}]",
     )
-    from back.core.graphdb.lakebase._companion_ddl import LAKEFLOW_SYNC_PRIMARY_KEY
+    from back.core.graphdb.delta import _table_naming, materialize
+    from back.objects.digitaltwin.build import TwinLakebaseSync
 
-    mgr.ensure(
-        synced_uc,
-        source_table_full_name=view_table,
-        primary_key_columns=list(LAKEFLOW_SYNC_PRIMARY_KEY),
-        sync_mode=store.sync_table_mode,
+    data_table = _table_naming.data_table_fqn(domain, settings) if domain is not None else ""
+    if data_table:
+        materialize.apply_data_relation(
+            src, view_table, data_table, mode="table", with_object_hash=True
+        )
+    plan = TwinLakebaseSync.sync_plan_for(
+        view_table=view_table,
+        data_table=data_table,
+        slots_table=None,
+        slots_complete=False,
+        mode_effective="full",
+        configured_sync_table_mode=store.sync_table_mode,
     )
+    TwinLakebaseSync.drop_union_view_if_drifted(store, mgr, synced_uc, graph_name, plan)
+    mgr.ensure(synced_uc, **plan.ensure_kwargs())
     store.ensure_synced_companion(graph_name)
     state = mgr.trigger_and_wait(synced_uc, timeout_s=store.sync_timeout_s)
     logger.info(
@@ -164,7 +181,7 @@ def _apply_synced_pipeline(
         synced_uc,
         state,
     )
-    store.ensure_synced_union_view(graph_name)
+    store.ensure_synced_union_view(graph_name, source_kind=plan.source_kind)
     if full:
         try:
             store.truncate_companion(graph_name)
