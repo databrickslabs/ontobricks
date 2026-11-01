@@ -222,6 +222,10 @@ class SlotProjectionCompiler:
         (``slot_events_<map_id>``) and flow (``slot_flow_<map_id>``).
         Statements are ordered: the slots table, then a view and a flow per
         mapping.
+
+        ``batch_mappings`` holds the *original* dicts (each once, even when
+        several classes share it), never the class-tagged copies, so callers
+        can select them by identity in the translator's ``mappings_filter``.
         """
         compiler = SlotProjectionCompiler
         statements = [compiler.slots_table_sql(slots_fqn)]
@@ -229,12 +233,13 @@ class SlotProjectionCompiler:
         batch_mappings: list[dict] = []
         source_tables: set[str] = set()
         candidates = [
-            {**mapping, "class_uri": class_uri}
+            ({**mapping, "class_uri": class_uri}, mapping)
             for class_uri, mapping in (entity_mappings or {}).items()
-        ] + list(relationship_mappings or [])
-        for mapping in candidates:
+        ] + [(mapping, mapping) for mapping in relationship_mappings or []]
+        for mapping, original in candidates:
             if compiler.classify(mapping) != compiler.ROW_LOCAL:
-                batch_mappings.append(mapping)
+                if not any(original is seen for seen in batch_mappings):
+                    batch_mappings.append(original)
                 continue
             mapping_id = compiler.map_id(mapping)
             if mapping_id in row_local_ids:

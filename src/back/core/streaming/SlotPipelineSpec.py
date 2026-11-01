@@ -9,8 +9,8 @@ class SlotPipelineSpec:
 
     ``statements`` is the ordered SQL (slots table, then a view and an AUTO CDC
     flow per row-local mapping). ``batch_mappings`` holds the mappings that are
-    not row-local (joins, ``sql_query`` sources); entity entries are copies
-    carrying their ``class_uri``, relationship entries are passed through.
+    not row-local (joins, ``sql_query`` sources): the original mapping dicts,
+    each listed once, so they can be matched by identity.
     """
 
     slots_fqn: str

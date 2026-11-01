@@ -443,20 +443,38 @@ class TestCompile:
             }
         )
         sqlq = _entity(table=None, sql_query="SELECT 1 AS id")
+        relationship = _extractor_relationship()
         spec = self._compile(
             {
                 CUSTOMER: _entity(),
                 "http://ex.org/Joined": join,
                 "http://ex.org/Query": sqlq,
             },
-            [_extractor_relationship()],
+            [relationship],
         )
         assert len(spec.row_local_map_ids) == 1
         assert len(spec.statements) == 3
         assert len(spec.batch_mappings) == 3
-        batch_classes = {m.get("class_uri") for m in spec.batch_mappings}
-        assert {"http://ex.org/Joined", "http://ex.org/Query"} <= batch_classes
-        assert _extractor_relationship() in spec.batch_mappings
+        for got, original in zip(spec.batch_mappings, [join, sqlq, relationship], strict=True):
+            assert got is original
+
+    def test_batch_entity_mappings_are_the_original_dicts(self):
+        """The translator's ``mappings_filter`` sees the originals; a copy never matches."""
+        join = _entity(table=None, sql_query="SELECT 1 AS id")
+        entities = {"http://ex.org/Query": join}
+
+        spec = self._compile(entities)
+
+        assert spec.batch_mappings[0] is entities["http://ex.org/Query"]
+        assert "class_uri" in join and join["class_uri"] == CUSTOMER  # untouched
+
+    def test_a_batch_mapping_shared_by_two_classes_is_listed_once(self):
+        shared = _entity(table=None, sql_query="SELECT 1 AS id")
+
+        spec = self._compile({CUSTOMER: shared, "http://ex.org/Person": shared})
+
+        assert len(spec.batch_mappings) == 1
+        assert spec.batch_mappings[0] is shared
 
     def test_classes_sharing_one_mapping_get_distinct_ids_views_and_flows(self):
         shared = _entity()
