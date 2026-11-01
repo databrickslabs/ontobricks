@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import contextmanager
+from functools import partial
+from itertools import islice
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from back.core.graphdb.adjacency import expand_and_fetch_sql
@@ -889,20 +891,18 @@ class LakebaseFlatStore(LakebaseBase):
         validate_table_name(table_name)
         return self._copy_insert_batch_phy(self._writable_table_id(table_name), batch)
 
-    def _copy_delete_batch(
-        self, table_name: str, batch: List[Dict[str, str]]
-    ) -> int:
-        """COPY *batch* into a temp staging table then ``DELETE … USING`` join.
+    def _copy_delete_batch(self, table_name: str, batch: List[Dict[str, str]]) -> int:
+        """Route a delete batch to the writable companion table for *table_name*."""
+        validate_table_name(table_name)
+        return self._copy_delete_batch_phy(self._writable_table_id(table_name), batch)
 
-        Replaces the per-row ``DELETE`` loop on the incremental remove path:
-        the join executes server-side in Postgres so the app does not pay a
-        round-trip per triple to be removed. In ``managed_synced`` mode the
-        target is the writable companion (the synced side is immutable).
+    def _copy_delete_batch_phy(self, phy: str, batch: List[Dict[str, str]]) -> int:
+        """COPY *batch* into a temp staging table then ``DELETE … USING`` join on *phy*.
+
+        The join runs server-side, so removing a batch costs one round-trip.
         """
         if not batch:
             return 0
-        validate_table_name(table_name)
-        phy = self._writable_table_id(table_name)
         with self._txn_cursor() as (_, cur):
             cur.execute(
                 f"CREATE TEMP TABLE {_COPY_DELETE_TEMP} ("
@@ -989,6 +989,26 @@ class LakebaseFlatStore(LakebaseBase):
             table_name, triples, batch_size=batch_size, on_progress=on_progress
         )
 
+    @staticmethod
+    def _drain_batches(
+        iterator: Iterable[Dict[str, str]],
+        batch_size: int,
+        apply_batch: Callable[[List[Dict[str, str]]], int],
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> int:
+        """Feed *iterator* to *apply_batch* ``batch_size`` rows at a time; sum the counts.
+
+        Only one window is held in memory; *on_progress* gets ``(total, total)``
+        after each one.
+        """
+        total = 0
+        rows = iter(iterator)
+        while batch := list(islice(rows, batch_size)):
+            total += apply_batch(batch)
+            if on_progress:
+                on_progress(total, total)
+        return total
+
     def bulk_insert_iter(
         self,
         table_name: str,
@@ -998,25 +1018,12 @@ class LakebaseFlatStore(LakebaseBase):
     ) -> int:
         """Insert triples from an iterator in fixed-size batches via ``COPY FROM STDIN``.
 
-        Bounded memory: only one ``batch_size`` window is held in RAM at any
-        time. Each batch is its own transaction (COPY into ``_ob_copy_stage``
-        then ``INSERT … ON CONFLICT DO NOTHING``) so progress callbacks fire
-        per-batch and a single bad batch does not abort the entire load.
+        Each batch is its own transaction (COPY into ``_ob_copy_stage`` then
+        ``INSERT … ON CONFLICT DO NOTHING``): one bad batch does not abort the load.
         """
         validate_table_name(table_name)
-        batch: List[Dict[str, str]] = []
-        total = 0
-        for t in triple_iterator:
-            batch.append(t)
-            if len(batch) >= batch_size:
-                total += self._copy_insert_batch(table_name, batch)
-                if on_progress:
-                    on_progress(total, total)
-                batch = []
-        if batch:
-            total += self._copy_insert_batch(table_name, batch)
-            if on_progress:
-                on_progress(total, total)
+        apply = partial(self._copy_insert_batch, table_name)
+        total = self._drain_batches(triple_iterator, batch_size, apply, on_progress)
         if total:
             logger.info(
                 "COPY-inserted %d triple rows into %s.%s",
@@ -1035,30 +1042,13 @@ class LakebaseFlatStore(LakebaseBase):
     ) -> int:
         """Bulk-load warehouse data into the ``*_sync`` table for *table_name*.
 
-        Used by the ``app_managed`` full-rebuild path where the app streams
-        triples from the Delta warehouse view directly into the sync table,
-        mirroring what Lakeflow does automatically in ``managed_synced`` mode.
-
-        Writes target ``synced_phy(table_name)`` (``*_sync``) so that
-        post-build app writes (reasoning / materialise) continue to use the
-        companion (``*__app``) via :meth:`_writable_table_id` and are not
-        mixed with the warehouse snapshot.
+        The ``app_managed`` mirror of a Lakeflow sync: warehouse triples go to
+        ``*_sync``; app writes (reasoning / materialise) keep using ``*__app``.
         """
         validate_table_name(table_name)
         sync_phy = _companion_ddl.synced_phy(table_name)
-        batch: List[Dict[str, str]] = []
-        total = 0
-        for t in triple_iterator:
-            batch.append(t)
-            if len(batch) >= batch_size:
-                total += self._copy_insert_batch_phy(sync_phy, batch)
-                if on_progress:
-                    on_progress(total, total)
-                batch = []
-        if batch:
-            total += self._copy_insert_batch_phy(sync_phy, batch)
-            if on_progress:
-                on_progress(total, total)
+        apply = partial(self._copy_insert_batch_phy, sync_phy)
+        total = self._drain_batches(triple_iterator, batch_size, apply, on_progress)
         if total:
             logger.info(
                 "COPY-loaded %d triple rows into %s.%s (sync table)",
@@ -1067,6 +1057,28 @@ class LakebaseFlatStore(LakebaseBase):
                 sync_phy,
             )
         return total
+
+    def delete_from_sync_iter(
+        self,
+        table_name: str,
+        triple_iterator: Iterable[Dict[str, str]],
+        batch_size: int = 2000,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> int:
+        """Delete triples from the ``*_sync`` table for *table_name* in fixed-size batches.
+
+        Mirror of :meth:`bulk_load_into_sync` for the net-change apply
+        (``app_managed``): the warehouse triples live in ``*_sync``.
+        """
+        validate_table_name(table_name)
+        sync_phy = _companion_ddl.synced_phy(table_name)
+        apply = partial(self._copy_delete_batch_phy, sync_phy)
+        deleted = self._drain_batches(triple_iterator, batch_size, apply, on_progress)
+        if deleted:
+            logger.info(
+                "Deleted %d triple rows from %s.%s (sync table)", deleted, self._schema, sync_phy
+            )
+        return deleted
 
     def bulk_delete_iter(
         self,
@@ -1080,19 +1092,8 @@ class LakebaseFlatStore(LakebaseBase):
         Mirror of :meth:`bulk_insert_iter` for the incremental remove path.
         """
         validate_table_name(table_name)
-        batch: List[Dict[str, str]] = []
-        deleted = 0
-        for t in triple_iterator:
-            batch.append(t)
-            if len(batch) >= batch_size:
-                deleted += self._copy_delete_batch(table_name, batch)
-                if on_progress:
-                    on_progress(deleted, deleted)
-                batch = []
-        if batch:
-            deleted += self._copy_delete_batch(table_name, batch)
-            if on_progress:
-                on_progress(deleted, deleted)
+        apply = partial(self._copy_delete_batch, table_name)
+        deleted = self._drain_batches(triple_iterator, batch_size, apply, on_progress)
         if deleted:
             logger.info(
                 "Bulk-deleted %d triple rows from %s.%s",

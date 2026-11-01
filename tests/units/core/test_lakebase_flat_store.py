@@ -134,6 +134,55 @@ def test_bulk_load_into_sync_writes_to_sync_table(auth):
     assert written_to == ["g_v1_sync", "g_v1_sync"]  # 20 + 5
 
 
+def test_delete_from_sync_iter_deletes_from_the_sync_table_in_batches(auth):
+    """The net-change remove path targets *_sync (never the companion), batch by batch."""
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    deleted_from: list = []
+
+    def _fake_delete_batch_phy(phy: str, batch: list) -> int:
+        deleted_from.append((phy, len(batch)))
+        return len(batch)
+
+    triples = [
+        {"subject": f"http://ex/{i}", "predicate": "http://ex/p", "object": "http://ex/o"}
+        for i in range(25)
+    ]
+    progress: list = []
+    with patch.object(store, "_copy_delete_batch_phy", side_effect=_fake_delete_batch_phy):
+        n = store.delete_from_sync_iter(
+            "G_V1", iter(triples), batch_size=20, on_progress=lambda a, b: progress.append((a, b))
+        )
+    assert n == 25
+    assert deleted_from == [("g_v1_sync", 20), ("g_v1_sync", 5)]
+    assert progress == [(20, 20), (25, 25)]
+
+
+def test_copy_delete_batch_phy_joins_the_given_table(auth):
+    cur = MagicMock()
+    cur.rowcount = 2
+    recorder = _CopyRecorder()
+    cur.copy = recorder
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    batch = [{"subject": "http://ex/s", "predicate": "http://ex/p", "object": "o"}]
+    with patch.object(store, "_txn_cursor", _txn_cursor_ctx(cur)):
+        assert store._copy_delete_batch_phy("g_v1_sync", batch) == 2
+    executed = [str(c[0][0]) for c in cur.execute.call_args_list]
+    assert any(
+        "DELETE FROM g_v1_sync USING _ob_del_stage d" in s for s in executed
+    )
+    assert recorder.rows == [("http://ex/s", "http://ex/p", "o")]
+
+
+def test_an_empty_iterator_writes_nothing_and_reports_no_progress(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    progress: list = []
+    with patch.object(store, "_copy_delete_batch_phy") as delete_phy:
+        n = store.delete_from_sync_iter("G_V1", iter([]), on_progress=progress.append)
+    assert n == 0
+    delete_phy.assert_not_called()
+    assert progress == []
+
+
 def test_insert_triples_executemany(auth):
     cur = MagicMock()
     store = LakebaseFlatStore(auth, schema="ontobricks_graph")
