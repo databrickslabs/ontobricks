@@ -1,0 +1,434 @@
+"""Unit tests for ``MaterializedViewBuilder`` (Layer 2: ``_data`` / ``_graph`` MVs)."""
+
+from __future__ import annotations
+
+import sqlite3
+
+import pytest
+
+from back.core.errors import ValidationError
+from back.core.graphdb.delta import MaterializedViewBuilder as ExportedBuilder
+from back.core.graphdb.delta import materialize
+from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
+
+pytestmark = pytest.mark.unit
+
+DATA = "main.ob.triplestore_d_V1_data"
+GRAPH = "main.ob.triplestore_d_V1_graph"
+INFERRED = "main.ob.triplestore_d_V1_inferred"
+SLOTS = "main.ob.triplestore_d_V1_slots"
+BATCH = "SELECT subject, predicate, object FROM batch_src"
+BATCH_WITH_CTE = (
+    "WITH src_0 AS (\n    SELECT * FROM people\n  )\n"
+    "SELECT subject, predicate, object FROM src_0"
+)
+
+ROW_TRACKING = "(delta.enableRowTracking = true, delta.enableDeletionVectors = true)"
+
+
+def _header(fqn: str, policy: str = "INCREMENTAL") -> str:
+    return (
+        f"CREATE OR REPLACE MATERIALIZED VIEW {fqn}\n"
+        "  CLUSTER BY (predicate, subject)\n"
+        f"  REFRESH POLICY {policy}\n"
+        "  TBLPROPERTIES ('pipelines.channel' = 'preview', "
+        "'delta.enableRowTracking' = 'true')\n"
+    )
+
+
+class RecordingClient:
+    """Warehouse double: records DDL, serves canned query rows."""
+
+    def __init__(self, rows=None, fail_when=(), query_error=None):
+        self.statements: list[str] = []
+        self.queries: list[str] = []
+        self._rows = rows if rows is not None else []
+        self._fail_when = fail_when
+        self._query_error = query_error
+
+    def execute_statement(self, sql):
+        self.statements.append(sql)
+        if any(marker in sql for marker in self._fail_when):
+            raise RuntimeError("boom")
+        return True
+
+    def execute_query(self, sql):
+        self.queries.append(sql)
+        if self._query_error is not None:
+            raise self._query_error
+        return self._rows
+
+
+class TestPackageExport:
+    def test_is_reexported_from_the_delta_package(self):
+        assert ExportedBuilder is MaterializedViewBuilder
+
+
+class TestDataMvSql:
+    def test_slots_and_batch_exact_statement(self):
+        sql = MaterializedViewBuilder.data_mv_sql(
+            DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
+        )
+        assert sql == (
+            _header(DATA)
+            + "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+            "FROM (\n"
+            f"  SELECT subject, predicate, object FROM {SLOTS}\n"
+            "  WHERE object IS NOT NULL AND TRIM(object) != ''\n"
+            "  UNION ALL\n"
+            f"  ({BATCH})\n"
+            ") t\n"
+            "GROUP BY subject, predicate, object"
+        )
+
+    def test_slots_only(self):
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS)
+        assert sql == (
+            _header(DATA)
+            + "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+            "FROM (\n"
+            f"  SELECT subject, predicate, object FROM {SLOTS}\n"
+            "  WHERE object IS NOT NULL AND TRIM(object) != ''\n"
+            ") t\n"
+            "GROUP BY subject, predicate, object"
+        )
+
+    def test_batch_only(self):
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, batch_branch_sql=BATCH)
+        assert sql == (
+            _header(DATA)
+            + "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+            "FROM (\n"
+            f"  {BATCH}\n"
+            ") t\n"
+            "GROUP BY subject, predicate, object"
+        )
+
+    def test_both_sides_missing_is_a_validation_error(self):
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.data_mv_sql(DATA)
+
+    def test_blank_batch_counts_as_missing(self):
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.data_mv_sql(DATA, batch_branch_sql="   ")
+
+    def test_batch_with_a_cte_is_parenthesised_after_union_all(self):
+        sql = MaterializedViewBuilder.data_mv_sql(
+            DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH_WITH_CTE
+        )
+        assert f"UNION ALL\n  ({BATCH_WITH_CTE})\n" in sql
+        assert "UNION ALL WITH" not in sql
+
+    def test_policy_is_rendered_and_normalised(self):
+        sql = MaterializedViewBuilder.data_mv_sql(
+            DATA, slots_fqn=SLOTS, refresh_policy="incremental strict"
+        )
+        assert "  REFRESH POLICY INCREMENTAL STRICT\n" in sql
+
+    @pytest.mark.parametrize("policy", ["AUTO", "INCREMENTAL", "INCREMENTAL STRICT", "FULL"])
+    def test_every_documented_policy_is_accepted(self, policy):
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, refresh_policy=policy)
+        assert f"  REFRESH POLICY {policy}\n" in sql
+
+    @pytest.mark.parametrize("policy", ["", "FAST", "INCREMENTAL; DROP TABLE x"])
+    def test_unknown_policy_is_rejected(self, policy):
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, refresh_policy=policy)
+
+    @pytest.mark.parametrize("kwargs", [{"data_fqn": ""}, {"slots_fqn": " "}])
+    def test_empty_fqn_is_rejected(self, kwargs):
+        args = {"data_fqn": DATA, "slots_fqn": SLOTS}
+        args.update(kwargs)
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.data_mv_sql(**args)
+
+
+class TestDataMvAbsorbsTheSlotShape:
+    """Two facts about the slots table that the ``_data`` MV must absorb."""
+
+    SLOT_ROWS = [
+        ("s1", "p", "x"),
+        ("s1", "p", "x"),  # same attribute slot emitted by a second class on one TriplesMap
+        ("s1", "q", ""),  # attribute helper wraps NULL in COALESCE(..., '')
+        ("s2", "p", "   "),  # blank object
+        ("s2", "p", None),
+        ("s3", "p", "y"),
+    ]
+
+    def _run(self, rows):
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn="slots")
+        body = sql.split("\nAS ", 1)[1].replace("sha2(object, 256)", "object")
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE slots (subject TEXT, predicate TEXT, object TEXT)")
+        con.executemany("INSERT INTO slots VALUES (?, ?, ?)", rows)
+        return sorted(con.execute(body).fetchall())
+
+    def test_group_by_dedups_the_copies_of_a_shared_triples_map(self):
+        result = self._run(self.SLOT_ROWS)
+        assert result.count(("s1", "p", "x", "x")) == 1
+
+    def test_blank_and_null_objects_are_dropped(self):
+        result = self._run(self.SLOT_ROWS)
+        assert result == [("s1", "p", "x", "x"), ("s3", "p", "y", "y")]
+
+    def test_group_by_is_outermost_and_the_filter_is_in_the_slots_select(self):
+        sql = MaterializedViewBuilder.data_mv_sql(
+            DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
+        )
+        slots_select = sql.index(f"FROM {SLOTS}")
+        blank_filter = sql.index("TRIM(object) != ''")
+        union = sql.index("UNION ALL")
+        group_by = sql.rindex("GROUP BY subject, predicate, object")
+        assert slots_select < blank_filter < union < group_by
+        assert sql.endswith("GROUP BY subject, predicate, object")
+
+
+class TestGraphMvSql:
+    def test_exact_statement(self):
+        assert MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED) == (
+            _header(GRAPH)
+            + f"AS SELECT subject, predicate, object FROM {DATA}\n"
+            "UNION ALL\n"
+            f"SELECT subject, predicate, object FROM {INFERRED}"
+        )
+
+    def test_policy_keyword(self):
+        sql = MaterializedViewBuilder.graph_mv_sql(
+            GRAPH, DATA, INFERRED, refresh_policy="AUTO"
+        )
+        assert "  REFRESH POLICY AUTO\n" in sql
+
+    def test_unknown_policy_is_rejected(self):
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.graph_mv_sql(
+                GRAPH, DATA, INFERRED, refresh_policy="NOPE"
+            )
+
+    @pytest.mark.parametrize("position", [0, 1, 2])
+    def test_empty_fqn_is_rejected(self, position):
+        args = [GRAPH, DATA, INFERRED]
+        args[position] = ""
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.graph_mv_sql(*args)
+
+
+class TestSmallStatements:
+    def test_explain_prefixes_the_statement(self):
+        assert MaterializedViewBuilder.explain_sql("CREATE X") == "EXPLAIN CREATE X"
+
+    def test_refresh(self):
+        assert MaterializedViewBuilder.refresh_sql(DATA) == (
+            f"REFRESH MATERIALIZED VIEW {DATA}"
+        )
+
+    def test_full_refresh(self):
+        assert MaterializedViewBuilder.refresh_sql(DATA, full=True) == (
+            f"REFRESH MATERIALIZED VIEW {DATA} FULL"
+        )
+
+    def test_refresh_requires_a_name(self):
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.refresh_sql("")
+
+    def test_refresh_technique_query(self):
+        assert MaterializedViewBuilder.refresh_technique_sql(DATA) == (
+            "SELECT timestamp, message "
+            f"FROM event_log(TABLE({DATA})) "
+            "WHERE event_type = 'planning_information' "
+            "ORDER BY timestamp DESC LIMIT 1"
+        )
+
+    def test_refresh_technique_requires_a_name(self):
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.refresh_technique_sql("")
+
+
+class TestPlanIsIncremental:
+    @pytest.mark.parametrize(
+        "technique",
+        [
+            "ROW_BASED",
+            "GROUP_AGGREGATE",
+            "APPEND_ONLY",
+            "PARTITION_OVERWRITE",
+            "WINDOW_FUNCTION",
+            "GENERIC_AGGREGATE",
+            "NO_OP",
+        ],
+    )
+    def test_each_incremental_technique_is_true(self, technique):
+        rows = [{"plan": f"... planned to be executed as {technique} ..."}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is True
+
+    def test_full_recompute_is_false(self):
+        rows = [{"plan": "executed as FULL_RECOMPUTE"}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
+
+    def test_full_recompute_wins_over_an_incremental_technique(self):
+        rows = [{"plan": "ROW_BASED"}, {"plan": "FULL_RECOMPUTE"}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
+
+    @pytest.mark.parametrize("rows", [None, [], [{}], [{"plan": ""}], [{"plan": "nothing known"}]])
+    def test_unknown_is_false(self, rows):
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
+
+    def test_row_shapes_dict_tuple_list_and_string(self):
+        for rows in (
+            [{"a": "x", "b": "ROW_BASED"}],
+            [("x", "ROW_BASED")],
+            [["x", "ROW_BASED"]],
+            ["ROW_BASED"],
+        ):
+            assert MaterializedViewBuilder.plan_is_incremental(rows) is True
+
+    def test_matching_is_case_insensitive(self):
+        assert MaterializedViewBuilder.plan_is_incremental([{"p": "row_based"}]) is True
+        assert MaterializedViewBuilder.plan_is_incremental([{"p": "full_recompute"}]) is False
+
+    def test_tokens_inside_longer_words_do_not_match(self):
+        assert MaterializedViewBuilder.plan_is_incremental([{"p": "NOT_ROW_BASED_AT_ALL"}]) is False
+
+    def test_non_text_values_are_ignored(self):
+        assert MaterializedViewBuilder.plan_is_incremental([{"n": 3, "x": None}]) is False
+
+
+class TestApply:
+    KWARGS = dict(
+        data_fqn=DATA,
+        graph_fqn=GRAPH,
+        inferred_fqn=INFERRED,
+        slots_fqn=SLOTS,
+        batch_branch_sql=BATCH,
+    )
+
+    def _expected(self, drop_table: bool) -> list[str]:
+        statements = []
+        if drop_table:
+            statements.append(f"DROP TABLE IF EXISTS {DATA}")
+        statements += [
+            f"DROP VIEW IF EXISTS {GRAPH}",
+            MaterializedViewBuilder.data_mv_sql(
+                DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
+            ),
+            materialize.build_ensure_inferred_sql(INFERRED),
+            f"ALTER TABLE {INFERRED} SET TBLPROPERTIES {ROW_TRACKING}",
+            MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED),
+        ]
+        return statements
+
+    def test_statement_order_with_the_table_drop(self):
+        client = RecordingClient()
+        MaterializedViewBuilder.apply(client, drop_existing_table=True, **self.KWARGS)
+        assert client.statements == self._expected(drop_table=True)
+
+    def test_statement_order_without_the_table_drop(self):
+        client = RecordingClient()
+        MaterializedViewBuilder.apply(client, drop_existing_table=False, **self.KWARGS)
+        assert client.statements == self._expected(drop_table=False)
+
+    def test_returns_the_two_relation_names(self):
+        result = MaterializedViewBuilder.apply(
+            RecordingClient(), drop_existing_table=False, **self.KWARGS
+        )
+        assert result == {"data_mv": DATA, "graph_mv": GRAPH}
+
+    def test_inferred_companion_is_made_incrementalizable_before_the_graph_mv(self):
+        client = RecordingClient()
+        MaterializedViewBuilder.apply(client, drop_existing_table=False, **self.KWARGS)
+        alter = f"ALTER TABLE {INFERRED} SET TBLPROPERTIES {ROW_TRACKING}"
+        graph = next(
+            i for i, s in enumerate(client.statements) if GRAPH in s and "MATERIALIZED" in s
+        )
+        ensure = next(
+            i for i, s in enumerate(client.statements) if s.startswith("CREATE TABLE IF NOT EXISTS")
+        )
+        assert ensure < client.statements.index(alter) < graph
+
+    def test_failing_drops_do_not_abort_the_apply(self):
+        client = RecordingClient(fail_when=("DROP TABLE", "DROP VIEW"))
+        MaterializedViewBuilder.apply(client, drop_existing_table=True, **self.KWARGS)
+        assert client.statements[2:] == self._expected(drop_table=True)[2:]
+
+    def test_a_failing_mv_statement_propagates(self):
+        client = RecordingClient(fail_when=("CREATE OR REPLACE MATERIALIZED VIEW",))
+        with pytest.raises(RuntimeError):
+            MaterializedViewBuilder.apply(client, drop_existing_table=False, **self.KWARGS)
+
+    def test_invalid_input_raises_before_any_statement_runs(self):
+        client = RecordingClient()
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.apply(
+                client,
+                data_fqn=DATA,
+                graph_fqn=GRAPH,
+                inferred_fqn=INFERRED,
+                slots_fqn=None,
+                batch_branch_sql=None,
+                drop_existing_table=True,
+            )
+        assert client.statements == []
+
+    def test_blank_graph_name_raises_before_any_statement_runs(self):
+        client = RecordingClient()
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.apply(
+                client, **{**self.KWARGS, "graph_fqn": ""}, drop_existing_table=True
+            )
+        assert client.statements == []
+
+    def test_refresh_policy_is_forwarded_to_both_views(self):
+        client = RecordingClient()
+        MaterializedViewBuilder.apply(
+            client, drop_existing_table=False, refresh_policy="AUTO", **self.KWARGS
+        )
+        mvs = [s for s in client.statements if "MATERIALIZED VIEW" in s]
+        assert len(mvs) == 2 and all("REFRESH POLICY AUTO" in s for s in mvs)
+
+
+class TestLastRefreshTechnique:
+    def _message(self, technique: str) -> dict:
+        return {
+            "timestamp": "2026-11-01T10:00:00",
+            "message": f"Flow 'x' has been planned to be executed as {technique}. Another 2 "
+            "techniques were considered but not selected.",
+        }
+
+    def test_parses_the_planned_technique(self):
+        client = RecordingClient(rows=[self._message("ROW_BASED")])
+        assert MaterializedViewBuilder.last_refresh_technique(client, DATA) == "ROW_BASED"
+
+    def test_parses_full_recompute(self):
+        client = RecordingClient(rows=[self._message("FULL_RECOMPUTE")])
+        assert (
+            MaterializedViewBuilder.last_refresh_technique(client, DATA) == "FULL_RECOMPUTE"
+        )
+
+    def test_issues_the_event_log_query(self):
+        client = RecordingClient(rows=[self._message("NO_OP")])
+        MaterializedViewBuilder.last_refresh_technique(client, DATA)
+        assert client.queries == [MaterializedViewBuilder.refresh_technique_sql(DATA)]
+
+    @pytest.mark.parametrize(
+        "rows",
+        [
+            [],
+            None,
+            [{"message": "no technique mentioned"}],
+            [{"message": "executed as lowercase"}],
+            [{"message": None}],
+            [{}],
+            ["not a mapping"],
+        ],
+    )
+    def test_unknown_when_nothing_parses(self, rows):
+        client = RecordingClient(rows=rows)
+        assert MaterializedViewBuilder.last_refresh_technique(client, DATA) == "UNKNOWN"
+
+    def test_unknown_and_silent_when_the_query_fails(self):
+        client = RecordingClient(query_error=RuntimeError("warehouse down"))
+        assert MaterializedViewBuilder.last_refresh_technique(client, DATA) == "UNKNOWN"
+
+    def test_unknown_for_an_invalid_name_instead_of_raising(self):
+        client = RecordingClient(rows=[self._message("ROW_BASED")])
+        assert MaterializedViewBuilder.last_refresh_technique(client, "") == "UNKNOWN"
+        assert client.queries == []

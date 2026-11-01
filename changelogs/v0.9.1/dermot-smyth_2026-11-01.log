@@ -319,3 +319,89 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q tests/units/streaming tests/units/architecture -> 103 passed
+
+================================================================================
+## Translator incremental mode and MaterializedViewBuilder (Layer 2)
+================================================================================
+
+Context: Task 3 of incremental triple materialization. `_data` and `_graph`
+become materialized views that Enzyme can refresh incrementally. Enzyme cannot
+refresh a `stack()` generator or a bare `SELECT DISTINCT`, so the translator
+learns an Enzyme-safe shape for the triple-set queries, and a new builder
+produces the standalone-MV DDL (`CREATE OR REPLACE MATERIALIZED VIEW`, created
+from a SQL warehouse; `CREATE OR REFRESH` is pipeline-only). The default output
+of the translator is byte-for-byte unchanged. SparqlTranslator sat exactly on
+its size-ratchet baseline, so the SQL assembly moved into a new class first.
+
+Changes:
+
+1. src/back/core/w3c/sparql/TripleSqlAssembler.py (new)
+   `unpivot_select`, `build_with_clause`, `finalize_generic_triples` and
+   `parse_select_clause`, moved out of SparqlTranslator verbatim; SparqlTranslator
+   keeps one-line delegating wrappers under the old private names, so no caller
+   or test changed. Re-exported from `back.core.w3c.sparql`.
+2. src/back/core/w3c/sparql/SparqlTranslator.py, src/back/core/w3c/sparql/__init__.py
+   `translate_sparql_to_spark` (class method and package wrapper) gain
+   keyword-only `incremental: bool = False` and `mappings_filter:
+   Optional[Callable[[dict], bool]] = None`. `incremental` is threaded down to
+   the unpivot (a parenthesised `UNION ALL` of single-predicate SELECTs instead
+   of `stack()`, `WHERE` repeated per branch) and to the final projection
+   (`GROUP BY subject, predicate, object` on the outer query instead of
+   `SELECT DISTINCT`, after the `object IS NOT NULL AND TRIM(object) != ''`
+   filter and before `LIMIT`; non-distinct queries are left alone). It covers
+   the generic and type-constrained paths and the filtered CTE path; the
+   join-based builder is unaffected. `mappings_filter` restricts the entity and
+   relationship mappings before any branch or CTE is emitted.
+3. src/back/core/graphdb/delta/MaterializedViewBuilder.py (new), delta/__init__.py
+   `data_mv_sql` (slots side with the blank-object filter, UNION ALL the
+   parenthesised batch branch, outer GROUP BY, `sha2(object, 256) AS
+   object_hash`, `CLUSTER BY`, `REFRESH POLICY`, preview TBLPROPERTIES; either
+   side optional, `ValidationError` when both are absent), `graph_mv_sql`,
+   `explain_sql`, `refresh_sql`, `refresh_technique_sql`, `plan_is_incremental`,
+   `apply` and `last_refresh_technique` (parses `executed as <TECHNIQUE>`,
+   `UNKNOWN` on anything else, never raises). The refresh policy is checked
+   against AUTO / INCREMENTAL / INCREMENTAL STRICT / FULL because it is inlined.
+   The slots table is an AUTO CDC SCD TYPE 1 target (physical deletes, no
+   `deleted` column), so the slots side has no tombstone filter; the outer
+   GROUP BY collapses the attribute copies that classes sharing a TriplesMap
+   each emit; the TRIM filter stays in the slots select because attribute
+   objects are COALESCEd to '' rather than NULL.
+4. src/back/core/graphdb/delta/materialize.py
+   `build_ensure_inferred_sql` now creates `_inferred` with row tracking and
+   deletion vectors (the graph MV unions it, and Enzyme needs row tracking to read
+   it incrementally); new `build_enable_row_tracking_sql` is the `ALTER TABLE ...
+   SET TBLPROPERTIES` for companions that already exist. `apply` runs it after
+   `ensure_inferred_table`. Statement order: optional DROP TABLE `_data`, DROP VIEW
+   `_graph`, data MV, ensure `_inferred`, ALTER `_inferred`, graph MV.
+5. src/back/core/graphdb/delta/_table_naming.py
+   `slots_table_fqn` and the `_slots` suffix, included in `graph_leaf_suffixes()`
+   so `strip_graph_leaf_suffix` handles it.
+6. tests/back/core/w3c/sparql/test_sparql_translator_incremental.py (new)
+   Default-output snapshots captured before the refactor (all-triples, LIMIT,
+   non-distinct, filtered CTE path), omitted kwargs equal explicit defaults, the
+   incremental golden SQL, no `stack(` and no `DISTINCT`, GROUP BY placement,
+   LIMIT, non-distinct untouched, filtered path, `mappings_filter` cases, wrapper
+   forwarding and keyword-only signatures, TripleSqlAssembler direct tests.
+7. tests/units/graphdb/delta/test_materialized_view_builder.py (new),
+   tests/units/graphdb/delta/test_delta_package.py
+   Exact DDL for every builder, policy allowlist, `plan_is_incremental` truth
+   table, `apply` statement order with a recording client (drops best-effort,
+   MV failures propagate, validation before any statement), `last_refresh_technique`
+   parsing and UNKNOWN cases, an sqlite run of the slots-side SQL proving the
+   dedup and the blank-object filter, `_slots` naming, the ensure-inferred DDL
+   and the row-tracking ALTER.
+
+Modified files:
+- src/back/core/w3c/sparql/TripleSqlAssembler.py (new)
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/w3c/sparql/__init__.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py (new)
+- src/back/core/graphdb/delta/__init__.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/_table_naming.py
+- tests/back/core/w3c/sparql/test_sparql_translator_incremental.py (new)
+- tests/units/graphdb/delta/test_materialized_view_builder.py (new)
+- tests/units/graphdb/delta/test_delta_package.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units tests/back --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks --deselect tests/units/streaming/test_slot_projection_compiler.py::TestClassifyAgreesWithEmitters::test_batch_reason_is_logged_at_debug_level -> 9725 passed, 12 skipped, 2 deselected (the second deselected test is Task 2's debug-log test, which passes alone but fails once tests/units/core has run; see the task report); uv run --frozen pytest -q tests/units/architecture -> 9 passed

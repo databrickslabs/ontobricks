@@ -26,6 +26,12 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Enzyme refreshes a materialized view incrementally only from sources that
+# track row identity; deletion vectors make the row-level deletes cheap.
+_ROW_TRACKING_PROPERTIES = (
+    "(delta.enableRowTracking = true, delta.enableDeletionVectors = true)"
+)
+
 
 def run_sql(client: Any, sql: str) -> Any:
     """Execute DDL/DML on a warehouse client.
@@ -144,13 +150,29 @@ def build_props_ctas_sql(spo_fqn: str, props_fqn: str) -> str:
 
 
 def build_ensure_inferred_sql(table_fqn: str) -> str:
-    """Empty companion TABLE for reasoning / cohort writes (same shape as ``_data``)."""
+    """Empty companion TABLE for reasoning / cohort writes (same shape as ``_data``).
+
+    Row tracking and deletion vectors are on from the start so the ``_graph``
+    materialized view, which unions this table, can be refreshed incrementally.
+    """
     validate_table_name(table_fqn)
     return (
         f"CREATE TABLE IF NOT EXISTS {table_fqn} "
         "(subject STRING, predicate STRING, object STRING) USING DELTA "
-        "CLUSTER BY (predicate, subject)"
+        "CLUSTER BY (predicate, subject) "
+        f"TBLPROPERTIES {_ROW_TRACKING_PROPERTIES}"
     )
+
+
+def build_enable_row_tracking_sql(table_fqn: str) -> str:
+    """Turn row tracking on for an existing table.
+
+    ``CREATE TABLE IF NOT EXISTS`` leaves a pre-existing ``_inferred`` as it
+    was, so a domain built before incremental mode needs this ``ALTER`` before
+    the graph MV that unions it can refresh incrementally.
+    """
+    validate_table_name(table_fqn)
+    return f"ALTER TABLE {table_fqn} SET TBLPROPERTIES {_ROW_TRACKING_PROPERTIES}"
 
 
 def build_union_view_sql(graph_fqn: str, data_fqn: str, inferred_fqn: str) -> str:

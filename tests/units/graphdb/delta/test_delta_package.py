@@ -39,6 +39,25 @@ class TestTableNaming:
         graph = _table_naming.graph_view_fqn(domain)
         assert graph == view + "_graph"
 
+    def test_slots_table_suffix(self):
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+        assert _table_naming.slots_table_fqn(domain) == view + "_slots"
+
+    def test_slots_table_needs_a_qualified_view(self, monkeypatch):
+        monkeypatch.setattr(_table_naming, "view_fqn", lambda *a, **k: "unqualified")
+        assert _table_naming.slots_table_fqn(_domain()) == ""
+
+    def test_slots_suffix_is_stripped_to_the_stem(self):
+        assert "_slots" in _table_naming.graph_leaf_suffixes()
+        assert _table_naming.strip_graph_leaf_suffix("triplestore_d_V1_slots") == (
+            "triplestore_d_V1"
+        )
+
+    def test_every_leaf_suffix_strips_to_the_same_stem(self):
+        for suffix in _table_naming.graph_leaf_suffixes():
+            assert _table_naming.strip_graph_leaf_suffix(f"stem_V1{suffix}") == "stem_V1"
+
     def test_adj_fqns(self):
         domain = _domain()
         assert _table_naming.adj_out_fqn(domain) == (
@@ -217,6 +236,28 @@ class TestMaterializeSql:
         client.execute_statement.assert_called_once()
         sql = client.execute_statement.call_args[0][0]
         assert "CREATE TABLE IF NOT EXISTS c.s.v_inferred" in sql
+
+    def test_ensure_inferred_sql_enables_row_tracking_for_enzyme(self):
+        """The graph MV unions ``_inferred``; Enzyme needs row tracking on it."""
+        assert materialize.build_ensure_inferred_sql("c.s.v_inferred") == (
+            "CREATE TABLE IF NOT EXISTS c.s.v_inferred "
+            "(subject STRING, predicate STRING, object STRING) USING DELTA "
+            "CLUSTER BY (predicate, subject) "
+            "TBLPROPERTIES (delta.enableRowTracking = true, "
+            "delta.enableDeletionVectors = true)"
+        )
+
+    def test_enable_row_tracking_sql_alters_an_existing_table(self):
+        assert materialize.build_enable_row_tracking_sql("c.s.v_inferred") == (
+            "ALTER TABLE c.s.v_inferred SET TBLPROPERTIES "
+            "(delta.enableRowTracking = true, delta.enableDeletionVectors = true)"
+        )
+
+    def test_enable_row_tracking_sql_requires_a_name(self):
+        from back.core.errors import ValidationError
+
+        with pytest.raises(ValidationError):
+            materialize.build_enable_row_tracking_sql("")
 
     def test_run_sql_falls_back_to_execute_query(self):
         client = MagicMock(spec=["execute_query"])

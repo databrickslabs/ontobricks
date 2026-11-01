@@ -17,6 +17,7 @@ _SUFFIX_ADJ_IN = "_adj_in"
 _SUFFIX_ENTITY_SEARCH = "_entity_search"
 _SUFFIX_ENTITY_SEARCH_ASSERTED = "_entity_search_asserted"
 _SUFFIX_PROPS = "_props"
+_SUFFIX_SLOTS = "_slots"
 
 
 def graph_leaf_suffixes() -> tuple[str, ...]:
@@ -27,6 +28,7 @@ def graph_leaf_suffixes() -> tuple[str, ...]:
         _SUFFIX_ADJ_OUT,
         _SUFFIX_ADJ_IN,
         _SUFFIX_PROPS,
+        _SUFFIX_SLOTS,
         _SUFFIX_ANALYTICS,
         _SUFFIX_INFERRED,
         _SUFFIX_GRAPH,
@@ -53,6 +55,15 @@ def data_table_fqn(domain: Any, settings: Any = None) -> str:
         return ""
     cat, sch, base = view.split(".", 2)
     return f"{cat}.{sch}.{base}{_SUFFIX_DATA}"
+
+
+def slots_table_fqn(domain: Any, settings: Any = None) -> str:
+    """Streaming slots table (``…_slots``) the incremental ``_data`` MV reads."""
+    view = view_fqn(domain, settings)
+    if not view or view.count(".") != 2:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_SLOTS}"
 
 
 def inferred_table_fqn(domain: Any, settings: Any = None) -> str:
