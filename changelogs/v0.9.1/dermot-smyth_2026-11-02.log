@@ -134,3 +134,109 @@ tests/units/core/test_lakebase_flat_store.py tests/units/dtwin tests/units/archi
 -> 1914 passed in 5.92s (slowest test 0.83s, test_class_per_file); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10432 passed, 338 skipped, 9 deselected in 55.56s (slowest test 1.02s).
+
+================================================================================
+## Fix: Task 6 review round 1 (matching base runs, bounded change feed, shared helpers)
+================================================================================
+
+Context: Review round 1 of Task 6 found three Important and twelve Minor
+items. The net change apply and the MERGE skip could continue from a base run
+whose `_data` history had restarted (MV <-> MERGE table), the MERGE skip could
+fire on a store dropped outside a build or never on the Delta engine, a change
+feed lost half-way failed the build, and the window read by the count and the
+stream was open-ended. The run-history methods left TwinBuildPostMaterialize
+for their own class, and several copies were consolidated.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinBuildRunHistory.py (new, re-exported)
+   Extract Class from TwinBuildPostMaterialize: `build_run_stats`,
+   `build_run_key`, `store_identity`, `previous_materialization_stats`, the
+   base-run search and `strategy` (now public); every caller updated, no shim.
+   Base search over 50 runs (was 10); `apply_mode == "none"` is a base when the
+   current backend is the Delta engine; a success of the same graph in another
+   sync mode ends the search. New `data_table_id` fact and
+   `completion_summary(pipe)` (label and build_mode from apply_mode and the
+   effective mode).
+2. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   Back to 269 lines; `text_attr` is the shared string-attribute reader.
+3. src/back/objects/digitaltwin/build/TwinNetChangeApply.py
+   `applies` also needs an `mv` / `merge` `_data`. The base must have the same
+   strategy and, when both runs know it, the same table id (`DESCRIBE
+   DETAIL`); otherwise `no_previous_version`. The window `(since, latest]` is
+   passed to the count and the stream. A change-feed error raised while the
+   net changes are written (tagged apart from store write errors) falls back to
+   the full stream with `cdf_unavailable`. The extra adjacency rebuild after
+   the purge is gone (the purge rebuilds the graph cache).
+4. src/back/objects/digitaltwin/build/TwinMergeFallback.py
+   The fingerprint skip also needs `_data` at the base's recorded version and,
+   off the Delta engine, `store.table_exists(graph)` when the store has it.
+   The skipped build completes through `_BuildPipeline._complete_task`.
+5. src/back/objects/digitaltwin/build/_build_pipeline.py
+   `_complete_task(*, message="", build_mode="")`: defaults from
+   `completion_summary` ("Net change apply" / "Incremental build" / "Full
+   rebuild"; build_mode incremental unless the mode is full or the store was
+   fully streamed). New `data_table_id` attribute.
+6. src/back/core/graphdb/delta/ChangeFeedReader.py
+   `net_changes_sql` / `iter_net_changes` / `changeset_ratio` take
+   `until_version` and read `table_changes('<fqn>', since + 1, until)`; new
+   `table_id` (best-effort `DESCRIBE DETAIL` id).
+7. src/back/core/helpers/WarehouseStatements.py (new, re-exported from
+   back.core.helpers), src/back/core/streaming/SourceReadiness.py
+   One name guard and one driver-error translation for ChangeFeedReader and
+   SourceReadiness (the copies are removed).
+8. src/back/core/graphdb/delta/materialize.py,
+   src/back/core/graphdb/delta/DeltaMergeMaterializer.py,
+   src/back/core/helpers/SQLHelpers.py,
+   src/back/core/graphdb/delta/MaterializedViewBuilder.py,
+   src/back/core/graphdb/lakebase/_companion_ddl.py
+   `materialize.CHANGE_FEED_PROPERTIES` extends the row-tracking properties for
+   the MERGE table; `SQLHelpers.object_hash_sql` is the one `sha2(…, 256)`
+   expression of the MV, the wrapped VIEW and the MERGE (SQL output unchanged).
+9. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   `_drain_batches` raises ValidationError for a batch size below 1 (class at
+   1153 lines, a docstring line trimmed).
+10. Tests: tests/units/graphdb/delta/test_change_feed_reader.py (bounded
+    window, table id), tests/units/core/test_warehouse_statements.py (new),
+    tests/units/core/test_lakebase_flat_store.py (batch size),
+    tests/units/objects/test_build_pipeline_net_apply.py (Delta-engine skip,
+    strategy and table-id mismatch, dropped store, base version moved,
+    half-read feed, completion messages, sync-mode switch, CTAS / view not
+    applicable, single cache rebuild, 50-run window).
+
+Known limitations (deferred by review):
+- An existing MERGE table without `object_hash` (a domain that became
+  Lakeflow-synced) fails its first hashed MERGE, which falls back to the CTAS.
+- Every MERGE build re-applies the table properties (one metadata commit).
+- With no new `_data` version the net apply still purges, optimizes and
+  rebuilds the graph cache.
+- Neo4j always streams in full (`inferred_not_separable`).
+
+Modified files:
+- src/back/core/graphdb/delta/ChangeFeedReader.py
+- src/back/core/graphdb/delta/DeltaMergeMaterializer.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/core/helpers/WarehouseStatements.py
+- src/back/core/helpers/__init__.py
+- src/back/core/streaming/SourceReadiness.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinMergeFallback.py
+- src/back/objects/digitaltwin/build/TwinNetChangeApply.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- tests/units/core/test_lakebase_flat_store.py
+- tests/units/core/test_warehouse_statements.py
+- tests/units/graphdb/delta/test_change_feed_reader.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/graphdb tests/units/objects
+tests/units/core/test_lakebase_flat_store.py tests/units/dtwin tests/units/streaming tests/units/architecture
+-> 2089 passed in 6.55s (slowest test 0.88s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10469 passed, 338 skipped, 9 deselected in 53.44s (slowest test 1.04s).
