@@ -742,3 +742,36 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q tests/units/streaming tests/units/objects tests/units/dtwin tests/units/graphdb tests/units/architecture tests/back/core -> 2166 passed
+
+================================================================================
+## Fix: case-insensitive relation lookup; MV header in the definition fingerprint
+================================================================================
+
+Context: Review fix round 2 of Task 4.
+
+Changes:
+
+1. src/back/core/graphdb/delta/materialize.py
+   `relation_exists` lower-cases the leaf in the `SHOW TABLES ... LIKE` pattern
+   and compares `tableName` case-insensitively. Unity Catalog lists names
+   lower-cased while our leaves carry `_V<n>`, so a requested `full` build never
+   found `..._slots` and never stopped a running microbatch pipeline.
+2. src/back/core/graphdb/delta/MaterializedViewBuilder.py
+   `ontobricks.mv_sql_sha256` now hashes the `_MV_HEADER` template (CLUSTER BY,
+   table properties) together with the refresh policy and the AS SELECT body,
+   so a header change replaces existing views on their next build.
+3. Tests: tests/units/graphdb/delta/test_delta_package.py (lower-cased listing
+   matches a mixed-case leaf), tests/units/objects/test_build_pipeline_modes.py
+   (fake warehouse lists lower-cased names), tests/units/graphdb/delta/
+   test_materialized_view_builder.py (sha includes the header; header change
+   changes the sha).
+
+Modified files:
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/objects/test_build_pipeline_modes.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/units/objects/test_build_pipeline_modes.py tests/units/architecture -> 337 passed

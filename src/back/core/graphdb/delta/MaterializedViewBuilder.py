@@ -104,10 +104,11 @@ class MaterializedViewBuilder:
         batch_branch_sql: str | None = None,
         refresh_policy: str = "INCREMENTAL",
     ) -> str:
-        """SHA-256 of the data MV definition: refresh policy + the ``AS SELECT`` body.
+        """SHA-256 of the data MV definition: header template, policy and ``AS SELECT`` body.
 
-        The target name is not part of it; the policy is, because a changed
-        policy must replace the view as well.
+        The target name is not part of it. The header template (CLUSTER BY,
+        table properties) and the refresh policy are, so changing either
+        replaces existing views on their next build.
         """
         policy = MaterializedViewBuilder._policy(refresh_policy)
         body = MaterializedViewBuilder._data_mv_body(slots_fqn, batch_branch_sql)
@@ -317,7 +318,7 @@ class MaterializedViewBuilder:
 
     @staticmethod
     def _sha(policy: str, body: str) -> str:
-        return hashlib.sha256(f"{policy}\n{body}".encode()).hexdigest()
+        return hashlib.sha256(f"{_MV_HEADER}\n{policy}\n{body}".encode()).hexdigest()
 
     @staticmethod
     def _policy(refresh_policy: str) -> str:

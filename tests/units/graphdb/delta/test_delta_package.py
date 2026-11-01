@@ -320,6 +320,16 @@ class TestRelationExists:
         assert materialize.relation_exists(client, "c.s.v_slots") is True
         client.execute_query.assert_called_once_with("SHOW TABLES IN c.s LIKE 'v_slots'")
 
+    def test_a_mixed_case_name_matches_the_lower_cased_listing(self):
+        """Unity Catalog lists names lower-cased; our leaves carry ``_V<n>``."""
+        client = MagicMock()
+        client.execute_query.return_value = [{"tableName": "triplestore_dom_v3_slots"}]
+
+        assert materialize.relation_exists(client, "c.s.triplestore_dom_V3_slots") is True
+        client.execute_query.assert_called_once_with(
+            "SHOW TABLES IN c.s LIKE 'triplestore_dom_v3_slots'"
+        )
+
     def test_only_an_exact_name_counts(self):
         client = MagicMock()
         client.execute_query.return_value = [{"tableName": "v_slots_old"}]

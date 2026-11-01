@@ -97,7 +97,8 @@ class _Warehouse:
         if sql.startswith("SHOW TBLPROPERTIES"):
             return [{"key": "delta.enableRowTracking", "value": str(self._tracked).lower()}]
         if sql.startswith("SHOW TABLES"):
-            return [{"tableName": "triplestore_dom_V3_slots"}] if self._slots_exist else []
+            # Unity Catalog lists table names lower-cased.
+            return [{"tableName": "triplestore_dom_v3_slots"}] if self._slots_exist else []
         if "event_log(" in sql:
             return [
                 {"message": f"Flow 'x' has been planned to be executed as {self._technique}."}
@@ -615,7 +616,7 @@ class TestLeftoverPipelinesAreStopped:
         _, script, warehouse = _run(_pipeline(mode=None), existing="pipe-1", state="RUNNING")
 
         assert script.instances == 0
-        assert "SHOW TABLES IN cat.sch LIKE 'triplestore_dom_V3_slots'" in warehouse.calls
+        assert "SHOW TABLES IN cat.sch LIKE 'triplestore_dom_v3_slots'" in warehouse.calls
 
     def test_an_idle_pipeline_is_left_alone(self):
         pipe = _pipeline("incremental")

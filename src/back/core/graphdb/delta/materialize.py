@@ -234,8 +234,10 @@ def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
 def relation_exists(client: Any, fqn: str) -> bool:
     """True when ``SHOW TABLES`` lists *fqn* (catalog metadata, no row scan).
 
-    Best-effort: an unusable name or any error reads as absent. Used to decide
-    whether a cleanup is worth an API call, never to decide correctness.
+    Names compare case-insensitively: Unity Catalog lists table names
+    lower-cased, while our leaves carry ``_V<n>``. Best-effort: an unusable
+    name or any error reads as absent. Used to decide whether a cleanup is
+    worth an API call, never to decide correctness.
     """
     if (
         not fqn
@@ -244,13 +246,15 @@ def relation_exists(client: Any, fqn: str) -> bool:
     ):
         return False
     catalog, schema, leaf = fqn.split(".")
+    leaf = leaf.lower()
     try:
         rows = client.execute_query(f"SHOW TABLES IN {catalog}.{schema} LIKE '{leaf}'")
     except Exception as exc:  # noqa: BLE001 — contract: absent on error
         logger.debug("SHOW TABLES for %s failed (treated as absent): %s", fqn, exc)
         return False
     return any(
-        isinstance(row, dict) and str(row.get("tableName", "")) == leaf for row in rows or []
+        isinstance(row, dict) and str(row.get("tableName", "")).lower() == leaf
+        for row in rows or []
     )
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import sys
 
 import pytest
 
@@ -13,6 +14,9 @@ from back.core.graphdb.delta import materialize
 from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
 
 pytestmark = pytest.mark.unit
+
+# The module itself: the package re-exports the class under the module's name.
+_BUILDER_MODULE = sys.modules[MaterializedViewBuilder.__module__]
 
 DATA = "main.ob.triplestore_d_V1_data"
 GRAPH = "main.ob.triplestore_d_V1_graph"
@@ -39,8 +43,9 @@ def _header(fqn: str, policy: str = "INCREMENTAL", sha: str | None = None) -> st
 
 
 def _sha(body: str, policy: str = "INCREMENTAL") -> str:
-    """The definition fingerprint: refresh policy + the ``AS SELECT`` body."""
-    return hashlib.sha256(f"{policy}\n{body}".encode()).hexdigest()
+    """The definition fingerprint: header template, refresh policy and ``AS SELECT`` body."""
+    header = _BUILDER_MODULE._MV_HEADER
+    return hashlib.sha256(f"{header}\n{policy}\n{body}".encode()).hexdigest()
 
 
 def _data_mv(body: str, policy: str = "INCREMENTAL") -> str:
@@ -131,6 +136,13 @@ class TestDataMvSql:
         assert base == MaterializedViewBuilder.data_mv_sha(
             slots_fqn=SLOTS, batch_branch_sql=BATCH, refresh_policy=" incremental "
         )
+
+    def test_the_sha_changes_with_the_view_header(self, monkeypatch):
+        """A new CLUSTER BY or table property must replace existing views too."""
+        before = MaterializedViewBuilder.data_mv_sha(slots_fqn=SLOTS)
+        header = _BUILDER_MODULE._MV_HEADER.replace("(predicate, subject)", "(subject)")
+        monkeypatch.setattr(_BUILDER_MODULE, "_MV_HEADER", header)
+        assert MaterializedViewBuilder.data_mv_sha(slots_fqn=SLOTS) != before
 
     def test_both_sides_missing_is_a_validation_error(self):
         with pytest.raises(ValidationError):
