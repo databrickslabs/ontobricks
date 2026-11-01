@@ -102,7 +102,7 @@ class TestFullRebuildProgressMessage:
         pipe = _bare_pipeline(is_api=False)
         pipe.start_time = 0.0
         # Mock the server-side count.
-        pipe._count_view_triples = MagicMock(return_value=view_total)
+        pipe._count_source_triples = MagicMock(return_value=view_total)
         pipe._captured: list = []
         pipe.tm.update_progress = MagicMock(
             side_effect=lambda tid, pct, msg: pipe._captured.append((pct, msg))
@@ -192,7 +192,7 @@ class TestApplyViaSyncedPipeline:
         pipe.store.ensure_synced_companion = MagicMock()
         pipe.store.ensure_synced_union_view = MagicMock()
         pipe.store.truncate_companion = MagicMock()
-        pipe._count_view_triples = MagicMock(return_value=1234)
+        pipe._count_source_triples = MagicMock(return_value=1234)
         pipe.spark_sql = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
         pipe.source_client.create_or_replace_view.return_value = (True, "ok")
         pipe._mgr = mgr
@@ -204,7 +204,7 @@ class TestApplyViaSyncedPipeline:
     def test_a_failed_post_sync_count_does_not_fail_the_sync(self):
         """The count after a successful sync only feeds the progress message."""
         pipe = self._synced_pipe()
-        pipe._count_view_triples = MagicMock(
+        pipe._count_source_triples = MagicMock(
             side_effect=InfrastructureError(
                 "Could not count the triples in cat.sch.v_g: "
                 "Error during request to server"

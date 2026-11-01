@@ -4,8 +4,9 @@
 ``TwinBuildPostMaterialize``. Three guarantees are pinned here:
 
 * **Compute once.** The R2RML gateway VIEW is expensive to evaluate. Once it
-  has been copied into a ``…_data`` table, the count, the stream into the graph
-  store and the Lakeflow sync read that table instead of re-running the VIEW.
+  has been copied into a ``…_data`` table, the count and the stream into the graph
+  store read that table instead of re-running the VIEW. (Lakeflow keeps syncing
+  the VIEW for now; see ``TestLakeflowSource``.)
   A pass-through ``view`` ``…_data`` costs the same as the VIEW, so there the
   VIEW stays the source.
 * **No stale inferences.** On the Databricks backend the ``…_inferred``
@@ -155,7 +156,14 @@ class TestTriplesSourceRelation:
 
 
 class TestLakeflowSource:
-    """Managed-synced Lakebase hands Lakeflow the same relation the build reads."""
+    """Lakeflow keeps syncing the gateway VIEW, whatever ``…_data`` is.
+
+    The scheduled build (``registry/schedule/build.py``) never materializes
+    ``…_data`` and registers the VIEW, and ``SyncedTableManager.ensure`` reuses
+    an existing registration by name without comparing its source. A synced
+    table registered on ``…_data`` here would be refreshed from a stale copy by
+    every scheduled build, so the switch waits for a task that fixes both paths.
+    """
 
     @staticmethod
     def _synced(mode: str):
@@ -164,25 +172,27 @@ class TestLakeflowSource:
         pipe.data_relation_mode = mode
         return pipe
 
-    def test_table_mode_syncs_the_data_table(self):
-        pipe = self._synced("table")
-
-        assert pipe._apply_via_synced_pipeline() is True
-
-        source = pipe._mgr.ensure.call_args.kwargs["source_table_full_name"]
-        assert source == "cat.sch.v_g_data"
-
-    def test_view_mode_syncs_the_gateway_view(self):
-        pipe = self._synced("view")
+    @pytest.mark.parametrize("mode", ["table", "view"])
+    def test_the_sync_source_is_the_gateway_view_in_both_modes(self, mode):
+        pipe = self._synced(mode)
 
         assert pipe._apply_via_synced_pipeline() is True
 
         source = pipe._mgr.ensure.call_args.kwargs["source_table_full_name"]
         assert source == "cat.sch.v_g"
 
+    def test_the_post_sync_count_reads_the_chosen_source_not_the_alias(self):
+        pipe = self._synced("table")
+        pipe._count_view_triples = MagicMock(side_effect=AssertionError("alias used"))
+
+        assert pipe._apply_via_synced_pipeline() is True
+
+        assert pipe.triple_count == 1234
+        pipe._count_source_triples.assert_called_once_with()
+
     def test_an_empty_post_sync_count_warns_about_the_relation_that_was_synced(self):
         pipe = self._synced("table")
-        pipe._count_view_triples.return_value = 0
+        pipe._count_source_triples.return_value = 0
 
         with patch(
             "back.objects.digitaltwin.build._build_pipeline.logger"
@@ -224,6 +234,65 @@ class TestLakeflowSource:
 
         data_view = next(sql for sql in calls if sql.startswith("CREATE OR REPLACE VIEW"))
         assert "object_hash" not in data_view
+
+
+def _logged(logger_mock, level: str) -> list[str]:
+    """The fully formatted messages a patched module logger received at *level*."""
+    return [
+        call.args[0] % call.args[1:]
+        for call in getattr(logger_mock, level).call_args_list
+    ]
+
+
+class TestBuildMessagesNameTheRealSource:
+    """The messages said "VIEW" while a materialized build reads ``…_data``."""
+
+    @pytest.mark.parametrize(
+        ("info", "source"),
+        [(_DATABRICKS, _DATA), (_DATABRICKS_VIEW, _VIEW)],
+        ids=["table", "view"],
+    )
+    def test_progress_and_logs_name_the_relation_being_read(self, info, source):
+        pipe = _bare_pipeline(info=info)
+
+        with patch(
+            "back.objects.digitaltwin.build._build_pipeline.logger"
+        ) as logger:
+            _build(pipe)
+
+        assert f"Reading all triples from {source}..." in pipe.tm.steps
+        assert not any("from VIEW..." in step for step in pipe.tm.steps)
+        info_lines = _logged(logger, "info")
+        assert any(
+            f"reading all triples from {source}" in line for line in info_lines
+        )
+        assert any(f"{source} reports 5 triples to ingest" in line for line in info_lines)
+
+    @pytest.mark.parametrize(
+        ("info", "source"),
+        [(_DATABRICKS, _DATA), (_DATABRICKS_VIEW, _VIEW)],
+        ids=["table", "view"],
+    )
+    def test_the_empty_warning_names_the_relation_that_was_empty(self, info, source):
+        pipe = _bare_pipeline(info=info)
+
+        with patch(
+            "back.objects.digitaltwin.build._build_pipeline.logger"
+        ) as logger:
+            _build(pipe, _Warehouse(count=0))
+
+        warnings = _logged(logger, "warning")
+        assert len(warnings) == 1
+        assert warnings[0].startswith(f"[DT-BUILD t-test] {source} returned 0 triples")
+
+    def test_the_full_rebuild_counts_through_the_real_method_not_the_alias(self):
+        pipe = _bare_pipeline(info=_DATABRICKS)
+        pipe._count_view_triples = MagicMock(side_effect=AssertionError("alias used"))
+        pipe._count_source_triples = MagicMock(return_value=5)
+
+        _build(pipe)
+
+        pipe._count_source_triples.assert_called_once_with()
 
 
 class TestInferredReset:

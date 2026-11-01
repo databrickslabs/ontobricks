@@ -170,7 +170,7 @@ def _report_post_sync_triple_count(pipe: Any) -> None:
     """
     counted = False
     try:
-        pipe.triple_count = pipe._count_view_triples()
+        pipe.triple_count = pipe._count_source_triples()
         counted = True
     except InfrastructureError as exc:
         logger.warning(
@@ -386,7 +386,7 @@ class _BuildPipeline:
         return self._lakebase_managed_synced()
 
     def _triples_source_relation(self) -> str:
-        """Relation the count, stream and Lakeflow sync read (``…_data`` or the VIEW)."""
+        """Relation the count and the stream read (``…_data`` table or the VIEW)."""
         return TwinBuildPostMaterialize.triples_source_relation(self)
 
     def _count_source_triples(self) -> int:
@@ -759,8 +759,8 @@ class _BuildPipeline:
                 else f"Materializing mapped triples into {data_table}..."
             ),
         )
-        # Lakeflow syncs this table when it is the source, and its primary key
-        # needs the ``object_hash`` the wrapped VIEW exposes.
+        # Lakeflow still syncs the VIEW; once it moves to this table, its primary
+        # key needs the ``object_hash`` the wrapped VIEW exposes.
         with_hash = mode == "table" and self._wrap_view_sql_for_lakeflow()
         try:
             materialize.apply_data_relation(
@@ -840,32 +840,34 @@ class _BuildPipeline:
             return self._apply_via_synced_pipeline()
 
         t_fetch = time.time()
+        source = self._triples_source_relation()
         logger.info(
             "[DT-BUILD %s] full rebuild: reading all triples from %s",
             self.task_id,
-            self._triples_source_relation(),
+            source,
         )
         if not self.is_api:
-            self.tm.update_progress(self.task_id, 40, "Reading all triples from VIEW...")
+            self.tm.update_progress(self.task_id, 40, f"Reading all triples from {source}...")
 
-        triple_count = self._count_view_triples()
+        triple_count = self._count_source_triples()
         self._log_phase("fetch_triples", t_fetch)
 
         self.triple_count = triple_count
         logger.info(
-            "[DT-BUILD %s] VIEW reports %d triples to ingest",
+            "[DT-BUILD %s] %s reports %d triples to ingest",
             self.task_id,
+            source,
             triple_count,
         )
         if triple_count == 0:
             logger.warning(
-                "[DT-BUILD %s] VIEW %s returned 0 triples — "
+                "[DT-BUILD %s] %s returned 0 triples — "
                 "possible causes: (1) R2RML mappings do not match source table "
                 "columns, (2) source tables are empty, (3) SQL query filters "
                 "out all rows. The VIEW was created successfully but the graph "
                 "will be empty until mappings are corrected.",
                 self.task_id,
-                self.view_table,
+                source,
             )
             empty_msg = (
                 "VIEW created but no triples generated (check your mappings)"
@@ -926,9 +928,7 @@ class _BuildPipeline:
             triple_count,
             self.graph_name,
         )
-        select_sql = (
-            f"SELECT subject, predicate, object FROM {self._triples_source_relation()}"
-        )
+        select_sql = f"SELECT subject, predicate, object FROM {source}"
         if hasattr(self.store, "bulk_load_into_sync"):
             # Lakebase app_managed: warehouse data goes into *_sync; app writes
             # (reasoning / materialise) target the companion (*__app) via
@@ -1122,25 +1122,24 @@ class _BuildPipeline:
                 "(source=%s sync_mode=%s)",
                 self.task_id,
                 synced_uc,
-                self._triples_source_relation(),
+                self.view_table,
                 self.store.sync_table_mode,
             )
             from back.core.graphdb.lakebase._companion_ddl import (
                 LAKEFLOW_SYNC_PRIMARY_KEY,
             )
 
+            # VIEW, not _data: scheduled builds reuse this registration by name.
             _synced_obj = mgr.ensure(
                 synced_uc,
-                source_table_full_name=self._triples_source_relation(),
+                source_table_full_name=self.view_table,
                 primary_key_columns=list(LAKEFLOW_SYNC_PRIMARY_KEY),
                 sync_mode=self.store.sync_table_mode,
             )
             # ensure() may have used a fallback name (ghost control-plane state);
             # extract the actual UC FQN from the returned object so downstream
             # steps (trigger_and_wait, ensure_synced_union_view) use the right name.
-            actual_synced_uc = (
-                getattr(_synced_obj, "name", None) or synced_uc
-            )
+            actual_synced_uc = getattr(_synced_obj, "name", None) or synced_uc
             if actual_synced_uc != synced_uc:
                 logger.warning(
                     "[DT-BUILD %s] synced table registered under fallback UC name %s "

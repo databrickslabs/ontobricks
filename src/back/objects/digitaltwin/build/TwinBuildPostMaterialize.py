@@ -25,13 +25,14 @@ class TwinBuildPostMaterialize:
 
     @staticmethod
     def triples_source_relation(pipe: Any) -> str:
-        """Return the relation the count, stream and Lakeflow sync should read.
+        """Return the relation the count and the stream into the store should read.
 
         The ``…_data`` table once it has been materialized: it is the cheap,
         already-computed copy of the mapped triples. A pass-through ``view``
         ``…_data`` re-runs the R2RML SQL on every read exactly like the
         gateway VIEW does, so reading it buys nothing and the VIEW stays the
-        source.
+        source. (The Lakeflow sync source is chosen separately and is still the
+        VIEW.)
         """
         data_table = getattr(pipe, "data_table", "") or ""
         if data_table and getattr(pipe, "data_relation_mode", None) == "table":

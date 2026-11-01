@@ -4,13 +4,12 @@
 
 Context: Task 0 of incremental triple materialization. A build evaluated the
 R2RML gateway VIEW three times: once for the `…_data` CTAS, once for the
-COUNT(*) and once for the stream into the graph store (and Lakeflow registered
-the VIEW again as its sync source). The Databricks backend also never reset
+COUNT(*) and once for the stream into the graph store. The Databricks backend also never reset
 `…_inferred` in the main build, so reasoning or cohort triples written for the
 previous data were served next to the rebuilt data; only the standalone
 Databricks build pipeline truncated it. Once `…_data` is a materialized table
-the count, the stream and the Lakeflow sync now read it instead of the VIEW,
-and the main build empties `…_inferred` (a failure fails the build). A
+the count and the stream now read it instead of the VIEW (Lakeflow keeps syncing
+the VIEW, see the fix section below), and the main build empties `…_inferred` (a failure fails the build). A
 pass-through `view` `…_data` costs the same as the VIEW, so the VIEW stays the
 source in that mode. The new logic lives in a collaborator class so
 `_BuildPipeline` stays inside its architecture-ratchet size budget.
@@ -30,10 +29,9 @@ Changes:
    Thin hooks: `_triples_source_relation`, `_count_source_triples` (with
    `_count_view_triples` kept as an alias), `_reset_inferred_companion` called in
    `run()` after `_materialize_data_table` and before the apply step. The full
-   rebuild stream and the Lakeflow `source_table_full_name` read
-   `_triples_source_relation()`. `_materialize_data_table` records
+   rebuild count and stream read `_triples_source_relation()`. `_materialize_data_table` records
    `data_relation_mode` and asks for `object_hash` only for a table that Lakeflow
-   will sync. `_record_build_run` merges `triples_source` and `inferred_reset`
+   will sync once the sync source moves off the VIEW. `_record_build_run` merges `triples_source` and `inferred_reset`
    into the build-run entry. `_persist_last_build_to_registry` is a one-line
    delegate (Extract Class, `_BuildPipeline` 1452 -> 1411 LOC).
 4. src/back/core/graphdb/delta/materialize.py
@@ -43,8 +41,7 @@ Changes:
    primary key needs and which `_data` did not have before.
 5. tests/units/objects/test_build_pipeline_compute_once.py (new)
    Table mode reads `…_data` for count and stream and evaluates the VIEW exactly
-   once; view mode keeps the VIEW; Lakeflow source is `…_data` (table) or the VIEW
-   (view); synced CTAS carries `object_hash`; Databricks reset order and failure
+   once; view mode keeps the VIEW; synced CTAS carries `object_hash`; Databricks reset order and failure
    handling; other backends untouched; trace keys.
 6. tests/units/graphdb/delta/test_delta_package.py
    Both shapes of the CTAS SQL and `apply_data_relation` forwarding.
@@ -62,3 +59,50 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9100 passed, 12 skipped, 1 deselected, 18 warnings in 89.29s (the deselected readiness test probes live services and hangs without network access); uv run --frozen pytest -q tests/units/architecture -> 9 passed
+
+================================================================================
+## Keep the Lakeflow sync source on the VIEW; name the real triples source in build messages
+================================================================================
+
+Context: Review of the compute-once change found that pointing the Lakeflow
+synced table at `…_data` is unsafe today. The scheduled build
+(`src/back/objects/registry/schedule/build.py`) never materializes `…_data` and
+registers the VIEW, and `SyncedTableManager.ensure` reuses an existing
+registration by name without comparing its source. A synced table registered on
+`…_data` by the main build would therefore be refreshed from a stale `…_data`
+by every scheduled build. The table-source switch is deferred to a later task
+that also fixes the scheduled path. The build messages still said "VIEW" while
+a materialized build reads `…_data`, and two callers went through the compat
+alias instead of the real count method.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/_build_pipeline.py
+   `_apply_via_synced_pipeline` passes `source_table_full_name=self.view_table`
+   again (and logs it), with a one-line comment at the hook. The count and the
+   full-rebuild stream keep reading `_triples_source_relation()`. `with_object_hash`
+   on the `…_data` CTAS is unchanged (needed when the sync source moves).
+2. src/back/objects/digitaltwin/build/_build_pipeline.py
+   `_apply_full_rebuild` names the actual source relation in the progress
+   message ("Reading all triples from <relation>..."), in the "reports N triples
+   to ingest" log and in the zero-triples warning. `_apply_full_rebuild` and
+   `_report_post_sync_triple_count` call `_count_source_triples()` directly;
+   `_count_view_triples` stays only as the compat alias. Net line count of the
+   size-frozen methods is unchanged.
+3. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   Docstring no longer claims the Lakeflow sync reads the relation.
+4. tests/units/objects/test_build_pipeline_compute_once.py
+   The Lakeflow source is the VIEW in both table and view mode; messages name
+   the real relation (table and view mode, and the empty-source warning); the
+   full rebuild and the post-sync count use `_count_source_triples`, not the alias.
+5. tests/units/dtwin/test_build_pipeline_streaming.py
+   Count mocks target `_count_source_triples`.
+
+Modified files:
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/objects/test_build_pipeline_compute_once.py tests/units/objects/test_build_pipeline_materialize.py tests/units/dtwin/test_build_pipeline_streaming.py tests/units/architecture -> 93 passed; uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9106 passed, 12 skipped, 1 deselected, 18 warnings in 53.58s (the deselected readiness test probes live services and hangs without network access)
