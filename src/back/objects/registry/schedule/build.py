@@ -166,13 +166,14 @@ def _apply_synced_pipeline(
     plan = TwinLakebaseSync.sync_plan_for(
         view_table=view_table,
         data_table=data_table,
-        slots_table=None,
-        slots_complete=False,
         mode_effective="full",
         configured_sync_table_mode=store.sync_table_mode,
     )
-    TwinLakebaseSync.drop_union_view_if_drifted(store, mgr, synced_uc, graph_name, plan)
-    mgr.ensure(synced_uc, **plan.ensure_kwargs())
+    mgr.ensure(
+        synced_uc,
+        before_delete=TwinLakebaseSync.union_view_dropper(store, graph_name),
+        **plan.ensure_kwargs(),
+    )
     store.ensure_synced_companion(graph_name)
     state = mgr.trigger_and_wait(synced_uc, timeout_s=store.sync_timeout_s)
     logger.info(

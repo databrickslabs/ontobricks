@@ -169,10 +169,13 @@ class TwinBuildPostMaterialize:
 
     @staticmethod
     def trace_fields(pipe: Any) -> dict:
-        """Keys the build-run trace records: relation read, reset, mode and incremental facts.
+        """Keys the build-run trace records: relation read, reset, mode, incremental and sync facts.
 
-        The incremental facts are ``""`` on the full path (and for any value
-        that is not a string, e.g. a test double's auto-attribute).
+        ``triples_source`` is the relation the count and the stream read;
+        ``sync_source`` / ``sync_mode_effective`` are what the Lakebase synced
+        table was registered on (``TwinLakebaseSync.register``). The incremental
+        and sync facts are ``""`` when they do not apply (and for any value that
+        is not a string, e.g. a test double's auto-attribute).
         """
         decision = getattr(pipe, "mode_decision", None)
         if not isinstance(decision, ModeDecision):
@@ -191,6 +194,8 @@ class TwinBuildPostMaterialize:
             "refresh_technique": _text("refresh_technique"),
             "slot_pipeline_id": _text("slot_pipeline_id"),
             "slots_table": _text("slots_table"),
+            "sync_source": _text("sync_source"),
+            "sync_mode_effective": _text("sync_mode_effective"),
         }
 
     @staticmethod

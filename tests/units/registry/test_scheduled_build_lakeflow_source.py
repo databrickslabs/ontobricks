@@ -106,6 +106,7 @@ class TestScheduledLakeflowSource:
 
         [(_, name, kwargs)] = _ensures(log)
         assert name == _SYNCED_UC
+        kwargs.pop("before_delete")
         assert kwargs == {
             "source_table_full_name": _DATA,
             "primary_key_columns": ["subject", "predicate", "object_hash"],
@@ -121,17 +122,16 @@ class TestScheduledLakeflowSource:
         [view] = [e for e in log if e[0] == "union_view"]
         assert view[2] == {"source_kind": "triples"}
 
-    def test_a_drifted_registration_drops_the_union_view_before_ensure(self):
+    def test_ensure_drops_the_union_view_only_through_its_delete_hook(self):
         log: list = []
         store, mgr = _store(log)
-        mgr.get.return_value = SimpleNamespace(
-            spec=SimpleNamespace(source_table_full_name=_VIEW, scheduling_policy="SNAPSHOT")
-        )
 
         _apply(store, _warehouse(log), domain=_domain())
 
-        kinds = [e[0] for e in log if e[0] in ("drop_view", "ensure", "union_view")]
-        assert kinds == ["drop_view", "ensure", "union_view"]
+        assert not any(e[0] == "drop_view" for e in log)
+        [(_, _, kwargs)] = _ensures(log)
+        kwargs["before_delete"](_SYNCED_UC)
+        assert log[-1] == ("drop_view", "triplestore_dom_V3")
 
     def test_without_a_domain_the_gateway_view_is_synced_and_nothing_is_copied(self):
         log: list = []

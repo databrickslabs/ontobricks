@@ -7,15 +7,14 @@ reads the running pipeline's facts; the scheduled-build mirror
 (``registry/schedule/build.py``) calls the pure :meth:`TwinLakebaseSync.sync_plan_for`
 with what it knows.
 
-Source:
-
-* ``…_slots`` (on the slot key ``map_id, source_key, predicate``) for an
-  ``incremental`` / ``microbatch`` build whose slots table holds every mapped
-  triple — no mapping on the batch branch (``slots_complete``);
-* otherwise ``…_data`` (table or materialized view: the complete graph), keyed
-  on ``LAKEFLOW_SYNC_PRIMARY_KEY``;
-* the R2RML gateway VIEW when ``…_data`` is not a copy (a pass-through VIEW or
-  nothing built yet).
+Source: ``…_data`` (table or materialized view — the complete graph, slots and
+batch branch) keyed on ``LAKEFLOW_SYNC_PRIMARY_KEY``; the R2RML gateway VIEW
+when ``…_data`` is not a copy (a pass-through VIEW, or nothing built yet).
+``…_slots`` is never a source in this release, even when it holds every triple
+(``slots_complete``): asserted-only readers (entity-search rebuild,
+``include_inferred=False`` reads, BFS expansion) query the ``_sync`` table
+directly and would see one row per slot and the blank attribute objects
+``…_data`` filters out.
 
 Schedule: the mode's schedule (``full`` → snapshot, ``incremental`` →
 triggered, ``microbatch`` → continuous) capped by the configured
@@ -27,7 +26,7 @@ snapshot.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.SyncPlan import SyncPlan
@@ -47,22 +46,16 @@ _COPIED_RELATIONS = ("table", TwinBuildPostMaterialize.MATERIALIZED_VIEW)
 class TwinLakebaseSync:
     """Lakeflow synced-table source, key and schedule for a build."""
 
-    #: AUTO CDC ``KEYS`` of the ``…_slots`` streaming table (one row per slot).
-    SLOTS_PRIMARY_KEY: tuple[str, ...] = ("map_id", "source_key", "predicate")
-
     @staticmethod
     def sync_plan(pipe: Any) -> SyncPlan:
         """:meth:`sync_plan_for` from the running pipeline's relation and mode facts."""
         decision = getattr(pipe, "mode_decision", None)
-        relation_mode = getattr(pipe, "data_relation_mode", None)
         return TwinLakebaseSync.sync_plan_for(
             view_table=pipe.view_table,
             data_table=getattr(pipe, "data_table", "") or "",
-            slots_table=getattr(pipe, "slots_table", None),
-            slots_complete=bool(getattr(pipe, "slots_complete", False)),
             mode_effective=getattr(decision, "effective", "full"),
             configured_sync_table_mode=getattr(pipe.store, "sync_table_mode", "snapshot"),
-            source_is_view=relation_mode not in _COPIED_RELATIONS,
+            source_is_view=getattr(pipe, "data_relation_mode", None) not in _COPIED_RELATIONS,
         )
 
     @staticmethod
@@ -70,8 +63,6 @@ class TwinLakebaseSync:
         *,
         view_table: str,
         data_table: str,
-        slots_table: str | None,
-        slots_complete: bool,
         mode_effective: str,
         configured_sync_table_mode: Any,
         source_is_view: bool = False,
@@ -84,54 +75,58 @@ class TwinLakebaseSync:
         """
         from back.core.graphdb.lakebase._companion_ddl import (
             LAKEFLOW_SYNC_PRIMARY_KEY,
-            SOURCE_KIND_SLOTS,
             SOURCE_KIND_TRIPLES,
         )
 
-        schedule = TwinLakebaseSync._schedule(mode_effective, configured_sync_table_mode)
-        if mode_effective != "full" and slots_table and slots_complete:
-            return SyncPlan(
-                slots_table, TwinLakebaseSync.SLOTS_PRIMARY_KEY, schedule, SOURCE_KIND_SLOTS
-            )
         if data_table and not source_is_view:
+            schedule = TwinLakebaseSync._schedule(mode_effective, configured_sync_table_mode)
             return SyncPlan(data_table, LAKEFLOW_SYNC_PRIMARY_KEY, schedule, SOURCE_KIND_TRIPLES)
         return SyncPlan(view_table, LAKEFLOW_SYNC_PRIMARY_KEY, "snapshot", SOURCE_KIND_TRIPLES)
 
     @staticmethod
-    def drop_union_view_if_drifted(
-        store: Any, mgr: Any, synced_uc: str, graph_name: str, plan: SyncPlan
-    ) -> bool:
-        """Drop the Postgres union view when ``mgr.ensure`` is about to recreate *synced_uc*.
+    def register(pipe: Any, mgr: Any, synced_uc: str, plan: SyncPlan) -> Any:
+        """Register *synced_uc* as *plan* says; record the sync facts the trace reports.
 
-        Recreating a synced table purges its Postgres ``_sync`` table, which the
-        union view depends on; the build's ``ensure_synced_union_view`` step
-        re-creates the view afterwards. Best-effort: a failure is logged and
-        ``ensure`` runs regardless. Returns ``True`` when the view was dropped.
+        ``sync_source`` / ``sync_mode_effective`` are set on *pipe* only once
+        ``ensure`` succeeded, so a failed registration traces no sync.
         """
-        from back.core.graphdb.lakebase import SyncedTableRegistration
+        synced = mgr.ensure(
+            synced_uc,
+            before_delete=TwinLakebaseSync.union_view_dropper(pipe.store, pipe.graph_name),
+            **plan.ensure_kwargs(),
+        )
+        pipe.sync_source, pipe.sync_mode_effective = plan.source_fqn, plan.sync_mode
+        return synced
 
-        try:
-            drift = SyncedTableRegistration.drift(
-                mgr.get(synced_uc), plan.source_fqn, plan.sync_mode
-            )
-            if drift:
+    @staticmethod
+    def union_view_dropper(store: Any, graph_name: str) -> Callable[[str], None]:
+        """``before_delete`` hook: drop the Postgres union view of *graph_name*.
+
+        ``SyncedTableManager.ensure`` calls it right before it deletes a drifted
+        registration (whose purge drops the ``_sync`` table the view depends
+        on), so a failed ``ensure`` never leaves readers without a view; the
+        build's ``ensure_synced_union_view`` step re-creates it. Best-effort: a
+        failure is logged and the delete goes ahead.
+        """
+
+        def _drop(synced_uc: str) -> None:
+            try:
                 store.drop_union_view(graph_name)
-        except Exception as exc:  # noqa: BLE001 — best-effort; ensure() still runs
-            logger.warning(
-                "Could not drop the union view of %s before recreating %s: %s",
-                graph_name,
-                synced_uc,
-                exc,
-            )
-            return False
-        if drift:
+            except Exception as exc:  # noqa: BLE001 — best-effort; the delete still runs
+                logger.warning(
+                    "Could not drop the union view of %s before recreating %s: %s",
+                    graph_name,
+                    synced_uc,
+                    exc,
+                )
+                return
             logger.info(
-                "Dropped the union view of %s: synced table %s will be recreated (%s)",
+                "Dropped the union view of %s: synced table %s is being recreated",
                 graph_name,
                 synced_uc,
-                drift,
             )
-        return bool(drift)
+
+        return _drop
 
     @staticmethod
     def _schedule(mode_effective: str, configured: Any) -> str:

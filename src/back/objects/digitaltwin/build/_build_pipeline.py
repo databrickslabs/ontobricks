@@ -282,6 +282,9 @@ class _BuildPipeline:
         # Incremental facts (TwinIncrementalBuild); None / "" / False on the full path.
         self.slots_table: Optional[str] = None
         self.slots_complete: bool = False  # …_slots holds every triple (no batch branch)
+        # What the Lakebase synced table was registered on (TwinLakebaseSync.register).
+        self.sync_source: str = ""
+        self.sync_mode_effective: str = ""
         self.slot_pipeline_id: str = ""
         self.refresh_technique: str = ""
         # Lakebase managed-synced mode flag, resolved once before _open_store.
@@ -1147,10 +1150,7 @@ class _BuildPipeline:
                 plan.source_fqn,
                 plan.sync_mode,
             )
-            TwinLakebaseSync.drop_union_view_if_drifted(
-                self.store, mgr, synced_uc, self.graph_name, plan
-            )
-            _synced_obj = mgr.ensure(synced_uc, **plan.ensure_kwargs())
+            _synced_obj = TwinLakebaseSync.register(self, mgr, synced_uc, plan)
             # ensure() may have used a fallback name (ghost control-plane state);
             # extract the actual UC FQN from the returned object so downstream
             # steps (trigger_and_wait, ensure_synced_union_view) use the right name.

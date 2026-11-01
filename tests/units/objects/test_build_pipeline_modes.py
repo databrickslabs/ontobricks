@@ -20,7 +20,12 @@ from back.core.errors import InfrastructureError, OperationCancelledError
 from back.core.graphdb import ModeDecision
 from back.core.streaming import SlotPipelineRunner
 from back.core.w3c import sparql
-from back.objects.digitaltwin.build import SyncPlan, TwinIncrementalBuild, TwinLakebaseSync
+from back.objects.digitaltwin.build import (
+    SyncPlan,
+    TwinBuildPostMaterialize,
+    TwinIncrementalBuild,
+    TwinLakebaseSync,
+)
 from tests.units.dtwin import test_build_pipeline_streaming as _streaming
 from tests.units.objects.test_build_pipeline_materialize import _DATA, _VIEW, _bare_pipeline
 
@@ -814,7 +819,6 @@ class TestSlotsComplete:
         assert pipe.slots_complete is False
 
 
-_SLOT_KEY = ("map_id", "source_key", "predicate")
 _TRIPLE_KEY = ("subject", "predicate", "object_hash")
 _ORDER_OF_SCHEDULES = ("snapshot", "triggered", "continuous")
 _MODE_SCHEDULE = {"full": "snapshot", "incremental": "triggered", "microbatch": "continuous"}
@@ -824,8 +828,6 @@ def _plan(**overrides) -> SyncPlan:
     kwargs = {
         "view_table": _VIEW,
         "data_table": _DATA,
-        "slots_table": None,
-        "slots_complete": False,
         "mode_effective": "full",
         "configured_sync_table_mode": "snapshot",
         "source_is_view": False,
@@ -858,38 +860,10 @@ class TestLakebaseSyncPlan:
         expected = "continuous" if configured == " CONTINUOUS " else "snapshot"
         assert plan.sync_mode == expected
 
-    def test_the_data_relation_is_the_default_source(self):
+    def test_the_data_relation_is_the_source(self):
         plan = _plan(mode_effective="incremental", configured_sync_table_mode="continuous")
 
         assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "triggered", "triples")
-
-    def test_complete_slots_are_synced_on_the_slot_key(self):
-        plan = _plan(
-            slots_table=_SLOTS,
-            slots_complete=True,
-            mode_effective="microbatch",
-            configured_sync_table_mode="continuous",
-        )
-
-        assert plan == SyncPlan(_SLOTS, _SLOT_KEY, "continuous", "slots")
-
-    def test_incomplete_slots_are_never_synced(self):
-        """A batch branch lives only in ``…_data``: syncing ``…_slots`` would lose it."""
-        plan = _plan(
-            slots_table=_SLOTS,
-            slots_complete=False,
-            mode_effective="incremental",
-            configured_sync_table_mode="triggered",
-        )
-
-        assert (plan.source_fqn, plan.source_kind) == (_DATA, "triples")
-
-    def test_a_full_build_never_syncs_slots(self):
-        plan = _plan(
-            slots_table=_SLOTS, slots_complete=True, configured_sync_table_mode="continuous"
-        )
-
-        assert (plan.source_fqn, plan.sync_mode) == (_DATA, "snapshot")
 
     def test_a_view_source_is_always_a_snapshot_of_the_gateway_view(self):
         plan = _plan(
@@ -908,11 +882,11 @@ class TestLakebaseSyncPlan:
         assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot", "triples")
 
     def test_the_plan_unpacks_into_the_ensure_arguments(self):
-        plan = SyncPlan(_SLOTS, _SLOT_KEY, "continuous", "slots")
+        plan = SyncPlan(_DATA, _TRIPLE_KEY, "continuous", "triples")
 
         assert plan.ensure_kwargs() == {
-            "source_table_full_name": _SLOTS,
-            "primary_key_columns": list(_SLOT_KEY),
+            "source_table_full_name": _DATA,
+            "primary_key_columns": list(_TRIPLE_KEY),
             "sync_mode": "continuous",
         }
 
@@ -946,7 +920,8 @@ class TestLakebaseSyncPlanFromThePipeline:
 
         assert TwinLakebaseSync.sync_plan(pipe).source_fqn == _VIEW
 
-    def test_complete_slots_come_from_the_incremental_facts(self):
+    def test_complete_slots_are_never_the_source(self):
+        """Asserted-only readers query ``_sync`` directly: slot rows would leak into them."""
         pipe = self._pipe(
             data_table=_DATA,
             data_relation_mode="materialized_view",
@@ -956,12 +931,12 @@ class TestLakebaseSyncPlanFromThePipeline:
         )
 
         assert TwinLakebaseSync.sync_plan(pipe) == SyncPlan(
-            _SLOTS, _SLOT_KEY, "continuous", "slots"
+            _DATA, _TRIPLE_KEY, "continuous", "triples"
         )
 
 
 class TestSyncedApplyUsesThePlan:
-    """``_apply_via_synced_pipeline`` registers, refreshes and reads what the plan says."""
+    """``_apply_via_synced_pipeline`` registers, refreshes, reads and traces what the plan says."""
 
     @staticmethod
     def _microbatch_pipe():
@@ -974,21 +949,8 @@ class TestSyncedApplyUsesThePlan:
         pipe.store.sync_table_mode = "continuous"
         return pipe
 
-    def test_complete_slots_register_a_continuous_synced_table_on_the_slot_key(self):
+    def test_the_data_relation_is_registered_as_a_continuous_synced_table(self):
         pipe = self._microbatch_pipe()
-
-        assert pipe._apply_via_synced_pipeline() is True
-
-        assert pipe._mgr.ensure.call_args.kwargs == {
-            "source_table_full_name": "cat.sch.v_g_slots",
-            "primary_key_columns": list(_SLOT_KEY),
-            "sync_mode": "continuous",
-        }
-        assert pipe.store.ensure_synced_union_view.call_args.kwargs["source_kind"] == "slots"
-
-    def test_incomplete_slots_register_the_data_relation(self):
-        pipe = self._microbatch_pipe()
-        pipe.slots_complete = False
 
         assert pipe._apply_via_synced_pipeline() is True
 
@@ -998,42 +960,57 @@ class TestSyncedApplyUsesThePlan:
         assert kwargs["sync_mode"] == "continuous"
         assert pipe.store.ensure_synced_union_view.call_args.kwargs["source_kind"] == "triples"
 
-    def test_a_drifted_registration_drops_the_union_view_before_ensure(self):
+    def test_the_sync_source_and_schedule_are_recorded_for_the_trace(self):
         pipe = self._microbatch_pipe()
-        calls = []
-        pipe._mgr.get.return_value = SimpleNamespace(
-            spec=SimpleNamespace(source_table_full_name="cat.sch.v_g", scheduling_policy="SNAPSHOT")
-        )
-        pipe.store.drop_union_view = MagicMock(side_effect=lambda g: calls.append(("drop", g)))
-        ensured = MagicMock()
-        ensured.name = _streaming.TestApplyViaSyncedPipeline._SYNCED_UC
-        pipe._mgr.ensure.side_effect = lambda *a, **k: calls.append(("ensure",)) or ensured
 
         assert pipe._apply_via_synced_pipeline() is True
 
-        assert calls == [("drop", pipe.graph_name), ("ensure",)]
-        pipe.store.ensure_synced_union_view.assert_called_once()
-
-    def test_an_unchanged_registration_keeps_the_union_view(self):
-        pipe = self._microbatch_pipe()
-        pipe._mgr.get.return_value = SimpleNamespace(
-            spec=SimpleNamespace(
-                source_table_full_name="cat.sch.v_g_slots", scheduling_policy="CONTINUOUS"
-            )
+        fields = TwinBuildPostMaterialize.trace_fields(pipe)
+        assert (fields["sync_source"], fields["sync_mode_effective"]) == (
+            "cat.sch.v_g_data",
+            "continuous",
         )
+        assert fields["triples_source"] == "cat.sch.v_g_data"
+
+    def test_a_failed_registration_records_no_sync(self):
+        pipe = self._microbatch_pipe()
+        pipe._mgr.ensure.side_effect = InfrastructureError("control plane down")
+
+        assert pipe._apply_via_synced_pipeline() is False
+
+        fields = TwinBuildPostMaterialize.trace_fields(pipe)
+        assert (fields["sync_source"], fields["sync_mode_effective"]) == ("", "")
+
+    def test_the_union_view_is_dropped_only_when_ensure_deletes_the_registration(self):
+        pipe = self._microbatch_pipe()
         pipe.store.drop_union_view = MagicMock()
 
         assert pipe._apply_via_synced_pipeline() is True
 
-        pipe.store.drop_union_view.assert_not_called()
+        pipe.store.drop_union_view.assert_not_called()  # the mocked ensure deleted nothing
+        before_delete = pipe._mgr.ensure.call_args.kwargs["before_delete"]
+        before_delete("cat.ontobricks_graph.g_v1_sync")
+        pipe.store.drop_union_view.assert_called_once_with(pipe.graph_name)
 
-    def test_a_failed_view_drop_does_not_fail_the_build(self):
+    def test_a_failed_view_drop_does_not_stop_the_delete(self):
         pipe = self._microbatch_pipe()
-        pipe._mgr.get.return_value = SimpleNamespace(
-            spec=SimpleNamespace(source_table_full_name="cat.sch.v_g", scheduling_policy="SNAPSHOT")
-        )
         pipe.store.drop_union_view = MagicMock(side_effect=RuntimeError("pg down"))
 
         assert pipe._apply_via_synced_pipeline() is True
 
-        pipe._mgr.ensure.assert_called_once()
+        before_delete = pipe._mgr.ensure.call_args.kwargs["before_delete"]
+        before_delete("cat.ontobricks_graph.g_v1_sync")  # logged, never raised
+
+
+class TestTraceSyncFields:
+    def test_no_sync_records_empty_sync_fields(self):
+        fields = TwinBuildPostMaterialize.trace_fields(SimpleNamespace(view_table=_VIEW))
+
+        assert (fields["sync_source"], fields["sync_mode_effective"]) == ("", "")
+
+    def test_non_text_sync_fields_are_dropped(self):
+        fields = TwinBuildPostMaterialize.trace_fields(
+            MagicMock(view_table=_VIEW, data_table="", data_relation_mode=None)
+        )
+
+        assert (fields["sync_source"], fields["sync_mode_effective"]) == ("", "")
