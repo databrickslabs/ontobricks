@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 
 import pytest
@@ -26,14 +27,24 @@ BATCH_WITH_CTE = (
 ROW_TRACKING = "(delta.enableRowTracking = true, delta.enableDeletionVectors = true)"
 
 
-def _header(fqn: str, policy: str = "INCREMENTAL") -> str:
+def _header(fqn: str, policy: str = "INCREMENTAL", sha: str | None = None) -> str:
+    extra = f", 'ontobricks.mv_sql_sha256' = '{sha}'" if sha else ""
     return (
         f"CREATE OR REPLACE MATERIALIZED VIEW {fqn}\n"
         "  CLUSTER BY (predicate, subject)\n"
         f"  REFRESH POLICY {policy}\n"
         "  TBLPROPERTIES ('pipelines.channel' = 'preview', "
-        "'delta.enableRowTracking' = 'true')\n"
+        f"'delta.enableRowTracking' = 'true'{extra})\n"
     )
+
+
+def _sha(body: str, policy: str = "INCREMENTAL") -> str:
+    """The definition fingerprint: refresh policy + the ``AS SELECT`` body."""
+    return hashlib.sha256(f"{policy}\n{body}".encode()).hexdigest()
+
+
+def _data_mv(body: str, policy: str = "INCREMENTAL") -> str:
+    return _header(DATA, policy, sha=_sha(body, policy)) + body
 
 
 class RecordingClient:
@@ -69,9 +80,8 @@ class TestDataMvSql:
         sql = MaterializedViewBuilder.data_mv_sql(
             DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
         )
-        assert sql == (
-            _header(DATA)
-            + "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+        assert sql == _data_mv(
+            "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
             "FROM (\n"
             f"  SELECT subject, predicate, object FROM {SLOTS}\n"
             "  WHERE object IS NOT NULL AND TRIM(object) != ''\n"
@@ -83,9 +93,8 @@ class TestDataMvSql:
 
     def test_slots_only(self):
         sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS)
-        assert sql == (
-            _header(DATA)
-            + "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+        assert sql == _data_mv(
+            "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
             "FROM (\n"
             f"  SELECT subject, predicate, object FROM {SLOTS}\n"
             "  WHERE object IS NOT NULL AND TRIM(object) != ''\n"
@@ -95,13 +104,32 @@ class TestDataMvSql:
 
     def test_batch_only(self):
         sql = MaterializedViewBuilder.data_mv_sql(DATA, batch_branch_sql=BATCH)
-        assert sql == (
-            _header(DATA)
-            + "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+        assert sql == _data_mv(
+            "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
             "FROM (\n"
             f"  {BATCH}\n"
             ") t\n"
             "GROUP BY subject, predicate, object"
+        )
+
+    def test_the_definition_sha_matches_the_statement(self):
+        kwargs = dict(slots_fqn=SLOTS, batch_branch_sql=BATCH, refresh_policy="AUTO")
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, **kwargs)
+        sha = MaterializedViewBuilder.data_mv_sha(**kwargs)
+        assert f"'ontobricks.mv_sql_sha256' = '{sha}'" in sql
+        assert len(sha) == 64
+
+    def test_the_sha_changes_with_the_branches_and_the_policy(self):
+        base = MaterializedViewBuilder.data_mv_sha(slots_fqn=SLOTS, batch_branch_sql=BATCH)
+        assert base != MaterializedViewBuilder.data_mv_sha(slots_fqn=SLOTS)
+        assert base != MaterializedViewBuilder.data_mv_sha(
+            slots_fqn=SLOTS, batch_branch_sql=BATCH + " WHERE 1 = 1"
+        )
+        assert base != MaterializedViewBuilder.data_mv_sha(
+            slots_fqn=SLOTS, batch_branch_sql=BATCH, refresh_policy="AUTO"
+        )
+        assert base == MaterializedViewBuilder.data_mv_sha(
+            slots_fqn=SLOTS, batch_branch_sql=BATCH, refresh_policy=" incremental "
         )
 
     def test_both_sides_missing_is_a_validation_error(self):
@@ -527,4 +555,40 @@ class TestLastRefreshTechnique:
     def test_unknown_for_an_invalid_name_instead_of_raising(self):
         client = RecordingClient(rows=[self._message("ROW_BASED")])
         assert MaterializedViewBuilder.last_refresh_technique(client, "") == "UNKNOWN"
+        assert client.queries == []
+
+
+class TestExistingMvSha:
+    """The stored definition fingerprint lets a build skip an unchanged ``CREATE OR REPLACE``."""
+
+    SHA = "a" * 64
+
+    def test_reads_the_one_property(self):
+        client = RecordingClient(rows=[{"key": "ontobricks.mv_sql_sha256", "value": self.SHA}])
+
+        assert MaterializedViewBuilder.existing_mv_sha(client, DATA) == self.SHA
+        assert client.queries == [f"SHOW TBLPROPERTIES {DATA} ('ontobricks.mv_sql_sha256')"]
+
+    def test_a_relation_without_the_property_has_no_sha(self):
+        client = RecordingClient(
+            rows=[
+                {
+                    "key": "ontobricks.mv_sql_sha256",
+                    "value": f"Table {DATA} does not have property: ontobricks.mv_sql_sha256",
+                }
+            ]
+        )
+
+        assert MaterializedViewBuilder.existing_mv_sha(client, DATA) == ""
+
+    def test_any_error_reads_as_no_sha(self):
+        client = RecordingClient(query_error=RuntimeError("TABLE_OR_VIEW_NOT_FOUND"))
+
+        assert MaterializedViewBuilder.existing_mv_sha(client, DATA) == ""
+
+    @pytest.mark.parametrize("fqn", ["", "a.b.c; DROP TABLE x"])
+    def test_an_invalid_name_reads_as_no_sha_without_a_query(self, fqn):
+        client = RecordingClient()
+
+        assert MaterializedViewBuilder.existing_mv_sha(client, fqn) == ""
         assert client.queries == []

@@ -243,12 +243,15 @@ def apply_data_relation(
 
     Databricks will not let ``CREATE OR REPLACE TABLE`` overwrite a VIEW, nor
     the reverse, so switching a domain between the two modes needs the stale
-    relation of the other kind dropped first. Doing it unconditionally keeps
-    the two branches symmetric and costs one no-op statement.
+    relation of the other kind dropped first. Neither can replace the
+    MATERIALIZED VIEW an incremental build leaves either, so both branches
+    first drop that too. Doing it unconditionally keeps the two branches
+    symmetric and costs two no-op statements.
 
     *with_object_hash* applies to ``table`` mode only: a pass-through view is
     never a Lakeflow source (the gateway VIEW is), so it keeps three columns.
     """
+    drop_relation(client, data_fqn, kind="materialized_view")
     if mode == "view":
         drop_relation(client, data_fqn, kind="table")
         create_data_view(client, view_fqn, data_fqn)

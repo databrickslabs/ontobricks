@@ -311,12 +311,15 @@ class TestDropRelation:
 
 
 class TestApplyDataRelation:
-    """Both modes must clear the relation of the *other* kind first.
+    """Both modes must clear the relation of the *other* kinds first.
 
     Databricks refuses to replace a TABLE with a VIEW and vice versa, so
     without the cross-drop a domain could be built once and then never switch
-    materialization without a manual DROP in the workspace.
+    materialization without a manual DROP in the workspace. An incremental
+    build leaves ``_data`` as a MATERIALIZED VIEW, which neither can replace.
     """
+
+    _DROP_MV = "DROP MATERIALIZED VIEW IF EXISTS c.s.v_data"
 
     @staticmethod
     def _statements(client):
@@ -328,6 +331,7 @@ class TestApplyDataRelation:
             client, "c.s.v", "c.s.v_data", mode="view"
         )
         assert self._statements(client) == [
+            self._DROP_MV,
             "DROP TABLE IF EXISTS c.s.v_data",
             "CREATE OR REPLACE VIEW c.s.v_data AS "
             "SELECT subject, predicate, object FROM c.s.v",
@@ -339,16 +343,29 @@ class TestApplyDataRelation:
             client, "c.s.v", "c.s.v_data", mode="table"
         )
         statements = self._statements(client)
-        assert statements[0] == "DROP VIEW IF EXISTS c.s.v_data"
-        assert "CREATE OR REPLACE TABLE c.s.v_data" in statements[1]
-        assert len(statements) == 2
+        assert statements[0] == self._DROP_MV
+        assert statements[1] == "DROP VIEW IF EXISTS c.s.v_data"
+        assert "CREATE OR REPLACE TABLE c.s.v_data" in statements[2]
+        assert len(statements) == 3
+
+    @pytest.mark.parametrize("mode", ["table", "view"])
+    def test_a_refused_materialized_view_drop_does_not_stop_the_build(self, mode):
+        def _execute(sql):
+            if sql.startswith("DROP MATERIALIZED VIEW"):
+                raise RuntimeError("WRONG_COMMAND_FOR_OBJECT_TYPE")
+            return True
+
+        client = MagicMock()
+        client.execute_statement.side_effect = _execute
+        materialize.apply_data_relation(client, "c.s.v", "c.s.v_data", mode=mode)
+        assert self._statements(client)[-1].startswith("CREATE OR REPLACE")
 
     def test_table_mode_forwards_object_hash_to_the_ctas(self):
         client = MagicMock()
         materialize.apply_data_relation(
             client, "c.s.v", "c.s.v_data", mode="table", with_object_hash=True
         )
-        ctas = self._statements(client)[1]
+        ctas = self._statements(client)[2]
         assert ctas.endswith(
             "AS SELECT subject, predicate, object, object_hash FROM c.s.v"
         )
@@ -358,7 +375,7 @@ class TestApplyDataRelation:
         materialize.apply_data_relation(
             client, "c.s.v", "c.s.v_data", mode="table"
         )
-        assert self._statements(client)[1].endswith(
+        assert self._statements(client)[2].endswith(
             "AS SELECT subject, predicate, object FROM c.s.v"
         )
 
@@ -368,7 +385,7 @@ class TestApplyDataRelation:
         materialize.apply_data_relation(
             client, "c.s.v", "c.s.v_data", mode="view", with_object_hash=True
         )
-        assert self._statements(client)[1] == (
+        assert self._statements(client)[2] == (
             "CREATE OR REPLACE VIEW c.s.v_data AS "
             "SELECT subject, predicate, object FROM c.s.v"
         )
@@ -379,24 +396,25 @@ class TestApplyDataRelation:
         materialize.apply_data_relation(
             client, "c.s.v", "c.s.v_data", mode="nonsense"
         )
-        assert "CREATE OR REPLACE TABLE" in self._statements(client)[1]
+        assert "CREATE OR REPLACE TABLE" in self._statements(client)[2]
 
     def test_a_failed_cross_drop_does_not_abort_the_build(self):
         """The dropped relation usually does not exist at all."""
         client = MagicMock()
         client.execute_statement.side_effect = [
+            RuntimeError("not a materialized view"),
             RuntimeError("no such view"),
             None,
         ]
         materialize.apply_data_relation(
             client, "c.s.v", "c.s.v_data", mode="table"
         )
-        assert "CREATE OR REPLACE TABLE" in self._statements(client)[1]
+        assert "CREATE OR REPLACE TABLE" in self._statements(client)[2]
 
     def test_a_failed_create_is_raised(self):
         """A build that could not produce ..._data must not report success."""
         client = MagicMock()
-        client.execute_statement.side_effect = [None, RuntimeError("no permission")]
+        client.execute_statement.side_effect = [None, None, RuntimeError("no permission")]
         with pytest.raises(RuntimeError, match="no permission"):
             materialize.apply_data_relation(
                 client, "c.s.v", "c.s.v_data", mode="view"

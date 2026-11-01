@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Iterator, Mapping
 from typing import Any
 
 from back.core.errors import ValidationError
 from back.core.graphdb.delta import materialize
-from back.core.helpers import validate_table_name
+from back.core.helpers import SAFE_SQL_IDENT, validate_table_name
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -20,8 +21,12 @@ _MV_HEADER = (
     "  CLUSTER BY (predicate, subject)\n"
     "  REFRESH POLICY {policy}\n"
     "  TBLPROPERTIES ('pipelines.channel' = 'preview', "
-    "'delta.enableRowTracking' = 'true')\n"
+    "'delta.enableRowTracking' = 'true'{extra})\n"
 )
+
+#: Table property holding the fingerprint of the data MV definition.
+MV_SHA_PROPERTY = "ontobricks.mv_sql_sha256"
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 
 _NON_BLANK_OBJECT = "WHERE object IS NOT NULL AND TRIM(object) != ''"
 
@@ -81,30 +86,53 @@ class MaterializedViewBuilder:
           gateway VIEW does the same). The batch SQL carries its own filter.
 
         ``object_hash`` (``sha2(object, 256)``) is the Lakeflow sync key.
+
+        The ``ontobricks.mv_sql_sha256`` table property records
+        :meth:`data_mv_sha` so a later build can tell an unchanged definition
+        (see :meth:`existing_mv_sha`) and refresh instead of replacing.
         """
         validate_table_name(data_fqn)
         policy = MaterializedViewBuilder._policy(refresh_policy)
-        batch = (batch_branch_sql or "").strip()
-        if slots_fqn is None and not batch:
-            raise ValidationError(
-                "A data materialized view needs a slots table, a batch branch, "
-                "or both"
-            )
-        branches = []
-        if slots_fqn is not None:
-            validate_table_name(slots_fqn)
-            branches.append(
-                f"  SELECT subject, predicate, object FROM {slots_fqn}\n"
-                f"  {_NON_BLANK_OBJECT}"
-            )
-        if batch:
-            branches.append(f"  ({batch})" if slots_fqn is not None else f"  {batch}")
-        return (
-            _MV_HEADER.format(fqn=data_fqn, policy=policy)
-            + "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
-            "FROM (\n" + "\n  UNION ALL\n".join(branches) + "\n) t\n"
-            "GROUP BY subject, predicate, object"
-        )
+        body = MaterializedViewBuilder._data_mv_body(slots_fqn, batch_branch_sql)
+        extra = f", '{MV_SHA_PROPERTY}' = '{MaterializedViewBuilder._sha(policy, body)}'"
+        return _MV_HEADER.format(fqn=data_fqn, policy=policy, extra=extra) + body
+
+    @staticmethod
+    def data_mv_sha(
+        *,
+        slots_fqn: str | None = None,
+        batch_branch_sql: str | None = None,
+        refresh_policy: str = "INCREMENTAL",
+    ) -> str:
+        """SHA-256 of the data MV definition: refresh policy + the ``AS SELECT`` body.
+
+        The target name is not part of it; the policy is, because a changed
+        policy must replace the view as well.
+        """
+        policy = MaterializedViewBuilder._policy(refresh_policy)
+        body = MaterializedViewBuilder._data_mv_body(slots_fqn, batch_branch_sql)
+        return MaterializedViewBuilder._sha(policy, body)
+
+    @staticmethod
+    def existing_mv_sha(client: Any, fqn: str) -> str:
+        """The ``ontobricks.mv_sql_sha256`` of *fqn*, or ``""``.
+
+        ``""`` when the relation is absent, has no such property (a TABLE or
+        VIEW left by a full build), the name is invalid, or anything else goes
+        wrong: the caller then simply re-creates the view. Never raises.
+        """
+        try:
+            validate_table_name(fqn)
+            if SAFE_SQL_IDENT.fullmatch(fqn) is None:
+                return ""
+            rows = client.execute_query(f"SHOW TBLPROPERTIES {fqn} ('{MV_SHA_PROPERTY}')")
+            for row in rows or []:
+                if isinstance(row, Mapping) and row.get("key") == MV_SHA_PROPERTY:
+                    value = str(row.get("value") or "").strip()
+                    return value if _SHA256_HEX.fullmatch(value) else ""
+        except Exception as exc:  # noqa: BLE001 — contract: never raises
+            logger.debug("No materialized view fingerprint for %s: %s", fqn, exc)
+        return ""
 
     @staticmethod
     def graph_mv_sql(
@@ -125,7 +153,7 @@ class MaterializedViewBuilder:
         validate_table_name(inferred_fqn)
         policy = MaterializedViewBuilder._policy(refresh_policy)
         return (
-            _MV_HEADER.format(fqn=graph_fqn, policy=policy)
+            _MV_HEADER.format(fqn=graph_fqn, policy=policy, extra="")
             + f"AS SELECT subject, predicate, object FROM {data_fqn}\n"
             "UNION ALL\n"
             f"SELECT subject, predicate, object FROM {inferred_fqn}"
@@ -262,6 +290,34 @@ class MaterializedViewBuilder:
         except Exception as exc:  # noqa: BLE001 — contract: never raises
             logger.debug("No refresh technique for %s: %s", fqn, exc)
             return UNKNOWN_TECHNIQUE
+
+    @staticmethod
+    def _data_mv_body(slots_fqn: str | None, batch_branch_sql: str | None) -> str:
+        """The ``AS SELECT … GROUP BY`` part of the data MV (see :meth:`data_mv_sql`)."""
+        batch = (batch_branch_sql or "").strip()
+        if slots_fqn is None and not batch:
+            raise ValidationError(
+                "A data materialized view needs a slots table, a batch branch, "
+                "or both"
+            )
+        branches = []
+        if slots_fqn is not None:
+            validate_table_name(slots_fqn)
+            branches.append(
+                f"  SELECT subject, predicate, object FROM {slots_fqn}\n"
+                f"  {_NON_BLANK_OBJECT}"
+            )
+        if batch:
+            branches.append(f"  ({batch})" if slots_fqn is not None else f"  {batch}")
+        return (
+            "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+            "FROM (\n" + "\n  UNION ALL\n".join(branches) + "\n) t\n"
+            "GROUP BY subject, predicate, object"
+        )
+
+    @staticmethod
+    def _sha(policy: str, body: str) -> str:
+        return hashlib.sha256(f"{policy}\n{body}".encode()).hexdigest()
 
     @staticmethod
     def _policy(refresh_policy: str) -> str:
