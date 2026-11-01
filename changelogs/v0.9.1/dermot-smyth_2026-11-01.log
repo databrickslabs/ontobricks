@@ -1020,13 +1020,9 @@ Changes:
    cap, serverless off; unprobed_mode_decision).
 
 Known limitations:
-- The scheduled path counts the sources as row-tracked: for a domain whose
-  sources are not tracked, the main build runs `full` (snapshot) while a
-  scheduled tick registers the requested faster schedule, so those domains
-  still recreate the synced table on each alternation.
-- tests/units/objects/test_build_pipeline_compute_once.py still pins the old
-  eight trace keys and the removed `_slots` sync warning (two failing tests);
-  that file was reserved for a concurrent change in this round.
+- Superseded in fix round 2: the scheduled tick now probes row tracking on the
+  domain's source tables exactly like the main build, so both land on the same
+  effective mode.
 
 Modified files:
 - docs/backend.md
@@ -1046,3 +1042,68 @@ Modified files:
 
 Tests: uv run --frozen pytest -q tests/units/core tests/units/objects/test_build_pipeline_modes.py tests/units/dtwin tests/units/registry tests/units/graphdb tests/units/architecture --durations=5
 -> 3406 passed in 11.93s (slowest test 1.00s)
+
+================================================================================
+## Fix: Task 5 review round 2 (scheduled ticks probe row tracking; SyncPlan.source_kind removed)
+================================================================================
+
+Context: Review fix round 2 of Task 5. The round-1 shortcut of counting the
+sources as row-tracked on a scheduled tick is replaced by the main build's real
+`SourceReadiness` probe, so a tick and the main build always resolve to the same
+effective mode (never alternating TRIGGERED / SNAPSHOT for a domain whose
+sources are not tracked). Two review minors are fixed as well.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   New `decide_mode_for(domain, settings, client, *, source_tables, task_id="")`,
+   the probe-and-resolve core extracted from `decide_mode` (now a wrapper that
+   passes `pipe.domain`, `pipe.settings`, `pipe.source_client` and
+   `pipe.task_id`): gate with the sources tracked, probe `SourceReadiness.check`
+   only when the gate allows a faster mode, an empty list counts as tracked,
+   `None` counts as untracked without a probe. A downgrade is logged at info
+   (`[DT-BUILD <task>]`) for a build with known sources, otherwise at debug.
+   `unprobed_mode_decision` is deleted.
+2. src/back/objects/registry/schedule/build.py
+   `run()` compiles the row-local mappings with `SlotProjectionCompiler`
+   (new `_slot_source_tables`; `None` without a domain or settings, for a
+   `full` domain, or when the mappings do not compile, with a warning) and
+   passes `source_tables` through `_write_graph_triples` to
+   `_apply_synced_pipeline`, which decides the mode with `decide_mode_for`. A
+   failed probe fails the sync step, like an `ensure` failure.
+3. src/back/objects/digitaltwin/build/SyncPlan.py,
+   src/back/objects/digitaltwin/build/TwinLakebaseSync.py,
+   src/back/objects/digitaltwin/build/_build_pipeline.py,
+   src/back/objects/registry/schedule/build.py
+   `SyncPlan.source_kind` was always "triples" (no `_slots` source): the field
+   and its two readers are removed; both union-view calls use the default
+   triples shape. The SyncPlan docstring no longer describes a slots source.
+4. changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+   The round-1 known limitations (sources counted as tracked; two failing
+   compute-once tests, fixed by a2503f91) are replaced by one sentence.
+5. Tests: tests/units/registry/test_scheduled_build_lakeflow_source.py
+   (TestScheduledSyncFollowsTheDomainMode: tracked incremental -> triggered,
+   one untracked source -> snapshot, microbatch tracked -> continuous,
+   realtime -> continuous, full -> snapshot without a probe, unknown sources
+   -> snapshot without a probe, empty list -> triggered, cap, serverless off,
+   failed probe propagates; TestDecideModeFor; TestSlotSourceTables, including
+   the warning path and the `_write_graph_triples` forwarding),
+   tests/units/objects/test_build_pipeline_modes.py and
+   tests/units/dtwin/test_build_pipeline_streaming.py (SyncPlan without
+   source_kind). `SourceReadiness.check` is faked; no WorkspaceClient.
+
+Modified files:
+- src/back/objects/digitaltwin/build/SyncPlan.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinLakebaseSync.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/registry tests/units/objects tests/units/streaming/test_source_readiness.py tests/units/architecture
+-> 954 passed in 4.52s (slowest test 1.10s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" tests/units tests/back --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10034 passed, 12 skipped, 1 deselected
