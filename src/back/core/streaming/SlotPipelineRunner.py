@@ -173,6 +173,7 @@ class SlotPipelineRunner:
         continuous: bool,
         serverless: bool = True,
         channel: str = "PREVIEW",
+        fingerprint: str | None = None,
     ) -> str:
         """Upload *sql_text* and create or update the pipeline; return its id.
 
@@ -180,6 +181,11 @@ class SlotPipelineRunner:
         (overwritten every time). The pipeline publishes into *catalog* /
         *schema*, is never in development mode, and runs *continuous* or
         triggered on the given *channel*.
+
+        *fingerprint* is what goes under :attr:`FINGERPRINT_KEY`; default the
+        hash of *sql_text*. A caller with a full refresh still pending passes
+        the previous one (or ``""``) and stamps the new one once it completed,
+        so a failed refresh is retried by the next build.
         """
         self._require_name(name)
         path = self._upload(name, sql_text)
@@ -192,7 +198,11 @@ class SlotPipelineRunner:
             "channel": channel,
             "development": False,
             "libraries": [self._file_library(path)],
-            "configuration": {self.FINGERPRINT_KEY: self.fingerprint(sql_text)},
+            "configuration": {
+                self.FINGERPRINT_KEY: (
+                    self.fingerprint(sql_text) if fingerprint is None else fingerprint
+                )
+            },
         }
         existing = self.find_pipeline_id(name)
         if existing:

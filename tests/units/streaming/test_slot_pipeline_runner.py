@@ -201,6 +201,14 @@ class TestEnsure:
         assert client.pipelines.created[0]["configuration"] == {_FP_KEY: expected}
         assert SlotPipelineRunner.fingerprint(_SQL) == expected
 
+    def test_an_explicit_fingerprint_is_stored_instead_of_the_sql_hash(self):
+        """While a full refresh is pending the caller keeps the previous fingerprint."""
+        runner, client = _runner()
+
+        _ensure(runner, fingerprint="")
+
+        assert client.pipelines.created[0]["configuration"] == {_FP_KEY: ""}
+
     def test_a_second_call_updates_the_same_pipeline(self):
         runner, client = _runner()
         first = _ensure(runner)
