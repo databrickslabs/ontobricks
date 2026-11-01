@@ -39,6 +39,9 @@ def _raise_if_cancelled(cancel_check) -> None:
     except Exception:  # noqa: BLE001
         pass
 from back.core.logging import get_logger
+from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
+    TwinBuildPostMaterialize,
+)
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
@@ -1521,74 +1524,8 @@ class _BuildPipeline:
             )
 
     def _persist_last_build_to_registry(self) -> None:
-        """Stamp ``last_build`` on the registry row without rewriting JSONB.
-
-        The session/UI build path stamps domain.last_build before the build
-        thread starts; the API path does not. The timestamp must reach the
-        ``domain_versions.last_build`` column so ReviewService.submit() can
-        unblock the Submit-for-Review gate.
-
-        A full ``write_version`` here is unsafe: the worker's live session
-        can have empty ``ontology.classes`` (request-scoped DomainSession
-        after Generate/complete, or a snapshot that only carried mappings).
-        Rewriting the document would wipe a previously saved ontology while
-        keeping mappings — SHACL suggest then returns nothing.
-
-        Best-effort: a failure is logged but never propagates.
-        """
-        try:
-            from back.objects.registry.RegistryService import RegistryService
-            from back.objects.session import sanitize_domain_folder
-
-            folder = getattr(self.domain, "uc_domain_folder", "") or (
-                sanitize_domain_folder(self.domain_name)
-            )
-            version = (
-                getattr(self.domain_snap, "current_version", None)
-                or getattr(self.domain, "current_version", None)
-                or ""
-            )
-            if not folder or not version:
-                logger.warning(
-                    "[DT-BUILD %s] _persist_last_build_to_registry: "
-                    "cannot resolve folder=%r version=%r — skipping",
-                    self.task_id,
-                    folder,
-                    version,
-                )
-                return
-
-            # API build path never stamps last_build before starting; do it now.
-            if not getattr(self.domain, "last_build", None):
-                self.domain.last_build = datetime.now(timezone.utc).isoformat()
-
-            svc = RegistryService.from_context(self.domain, self.settings)
-            ok, msg = svc._store.stamp_last_build(
-                folder, str(version), self.domain.last_build
-            )
-            if ok:
-                logger.info(
-                    "[DT-BUILD %s] stamped last_build=%s in registry "
-                    "(folder=%s version=%s)",
-                    self.task_id,
-                    self.domain.last_build,
-                    folder,
-                    version,
-                )
-            else:
-                logger.error(
-                    "[DT-BUILD %s] stamp_last_build failed when persisting "
-                    "last_build: %s",
-                    self.task_id,
-                    msg,
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "[DT-BUILD %s] could not persist last_build to registry "
-                "(non-fatal — Submit for Review gate may remain blocked): %s",
-                self.task_id,
-                exc,
-            )
+        """Stamp ``last_build`` on the registry row (see the collaborator)."""
+        TwinBuildPostMaterialize.persist_last_build_to_registry(self)
 
     def _complete_task(self) -> None:
         duration = time.time() - self.start_time
