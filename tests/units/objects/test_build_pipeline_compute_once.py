@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from back.core.graphdb import ModeDecision
 from back.core.graphdb.delta import materialize
 from back.objects.digitaltwin.build import TwinBuildPostMaterialize
 from tests.units.dtwin import test_build_pipeline_streaming as _streaming
@@ -420,12 +421,76 @@ class TestBuildRunTrace:
         assert entry["triples_source"] == _VIEW
         assert entry["inferred_reset"] is False
 
-    def test_trace_fields_has_exactly_the_two_keys(self):
+    def test_trace_fields_has_exactly_the_five_keys(self):
         fields = TwinBuildPostMaterialize.trace_fields(
             SimpleNamespace(view_table=_VIEW)
         )
 
-        assert fields == {"triples_source": _VIEW, "inferred_reset": False}
+        assert fields == {
+            "triples_source": _VIEW,
+            "inferred_reset": False,
+            "materialization_mode_requested": "full",
+            "materialization_mode_effective": "full",
+            "mode_fallback_reason": "",
+        }
+
+    def test_trace_fields_reports_the_mode_decision(self):
+        fields = TwinBuildPostMaterialize.trace_fields(
+            SimpleNamespace(
+                view_table=_VIEW,
+                mode_decision=ModeDecision(
+                    "incremental", "full", "serverless_unavailable"
+                ),
+            )
+        )
+
+        assert fields["materialization_mode_requested"] == "incremental"
+        assert fields["materialization_mode_effective"] == "full"
+        assert fields["mode_fallback_reason"] == "serverless_unavailable"
+
+    def test_trace_fields_ignores_a_mode_decision_that_is_not_one(self):
+        """A test double's auto-attribute must not leak into the persisted entry."""
+        fields = TwinBuildPostMaterialize.trace_fields(
+            MagicMock(view_table=_VIEW, data_table="", data_relation_mode=None)
+        )
+
+        assert fields["materialization_mode_requested"] == "full"
+        assert fields["materialization_mode_effective"] == "full"
+        assert fields["mode_fallback_reason"] == ""
+
+    def test_a_default_build_traces_full_with_no_fallback(self):
+        entry = self._entry(_bare_pipeline(info=_DATABRICKS))
+
+        assert entry["materialization_mode_requested"] == "full"
+        assert entry["materialization_mode_effective"] == "full"
+        assert entry["mode_fallback_reason"] == ""
+
+    def test_a_requested_mode_is_traced_with_its_fallback(self):
+        entry = self._entry(
+            _bare_pipeline(info={**_DATABRICKS, "materialization_mode": "incremental"})
+        )
+
+        assert entry["materialization_mode_requested"] == "incremental"
+        assert entry["materialization_mode_effective"] == "full"
+        assert entry["mode_fallback_reason"] == "serverless_unavailable"
+
+    def test_realtime_is_traced_as_unavailable(self):
+        entry = self._entry(
+            _bare_pipeline(info={**_LAKEBASE, "materialization_mode": "realtime"})
+        )
+
+        assert entry["materialization_mode_requested"] == "realtime"
+        assert entry["materialization_mode_effective"] == "full"
+        assert entry["mode_fallback_reason"] == "realtime_not_available"
+
+    def test_the_mode_is_traced_when_the_build_fails_before_translation(self):
+        pipe = _bare_pipeline(info={**_DATABRICKS, "materialization_mode": "microbatch"})
+        pipe._prepare_translation = MagicMock(return_value=False)
+
+        entry = self._entry(pipe)
+
+        assert entry["materialization_mode_requested"] == "microbatch"
+        assert entry["materialization_mode_effective"] == "full"
 
 
 class TestPersistLastBuildHook:

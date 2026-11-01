@@ -45,6 +45,16 @@ DEFAULT_GRAPH_BACKEND = "lakebase"
 LAKEHOUSE_MATERIALIZATIONS: Tuple[str, ...] = ("table", "view")
 DEFAULT_LAKEHOUSE_MATERIALIZATION = "table"
 
+# How a rebuild treats the mapped triples, stored per domain in
+# ``DomainSession.info['materialization_mode']`` (the *requested* mode; what
+# actually runs is decided by ``MaterializationModeResolver``):
+#   ``full``        -> rebuild every triple from the sources (the default)
+#   ``incremental`` -> apply only the source rows that changed since last build
+#   ``microbatch``  -> incremental, on a short schedule
+#   ``realtime``    -> reserved: validates, but resolves to ``microbatch``
+MATERIALIZATION_MODES: Tuple[str, ...] = ("full", "incremental", "microbatch", "realtime")
+DEFAULT_MATERIALIZATION_MODE = "full"
+
 
 def normalize_graph_backend(value: Optional[str]) -> str:
     """Return a valid per-domain graph backend, defaulting to ``lakebase``."""
@@ -61,6 +71,12 @@ def normalize_lakehouse_materialization(value: Optional[str]) -> str:
     """Return a valid Lakehouse materialization mode, defaulting to ``table``."""
     v = (value or "").strip().lower()
     return v if v in LAKEHOUSE_MATERIALIZATIONS else DEFAULT_LAKEHOUSE_MATERIALIZATION
+
+
+def normalize_materialization_mode(value: Optional[str]) -> str:
+    """Return a valid materialization mode, defaulting to ``full``."""
+    v = value.strip().lower() if isinstance(value, str) else ""
+    return v if v in MATERIALIZATION_MODES else DEFAULT_MATERIALIZATION_MODE
 
 
 class GraphDBFactory:
@@ -321,6 +337,21 @@ class GraphDBFactory:
         except Exception as exc:  # noqa: BLE001
             logger.debug("Could not read lakehouse_materialization: %s", exc)
         return DEFAULT_LAKEHOUSE_MATERIALIZATION
+
+    @staticmethod
+    def resolve_materialization_mode(
+        domain: Any, settings: Optional[Any] = None
+    ) -> str:
+        """Return the materialization mode this domain *requested*.
+
+        Not gated by backend or readiness: ``MaterializationModeResolver``
+        decides what actually runs and why it fell back. ``settings`` is
+        accepted for call-site symmetry with the other resolvers.
+        """
+        info = getattr(domain, "info", None)
+        if isinstance(info, dict):
+            return normalize_materialization_mode(info.get("materialization_mode"))
+        return DEFAULT_MATERIALIZATION_MODE
 
     @staticmethod
     def _resolve_graph_engine_config(

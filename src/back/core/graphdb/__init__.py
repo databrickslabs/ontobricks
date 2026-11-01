@@ -10,6 +10,10 @@ view store (``view``).  See ``_starter_kit/`` for a copy-paste template.
 
 from back.core.graphdb.GraphDBBackend import GraphDBBackend  # noqa: F401
 from back.core.graphdb.GraphDBFactory import GraphDBFactory  # noqa: F401
+from back.core.graphdb.MaterializationModeResolver import (  # noqa: F401
+    MaterializationModeResolver,
+)
+from back.core.graphdb.ModeDecision import ModeDecision  # noqa: F401
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL  # noqa: F401
 
 get_graphdb = GraphDBFactory.get_graphdb
@@ -18,6 +22,8 @@ GRAPHDB_AVAILABLE = GraphDBFactory.LAKEBASE_AVAILABLE
 __all__ = [
     "GraphDBBackend",
     "GraphDBFactory",
+    "MaterializationModeResolver",
+    "ModeDecision",
     "GRAPHDB_AVAILABLE",
     "get_graphdb",
     "RDF_TYPE",

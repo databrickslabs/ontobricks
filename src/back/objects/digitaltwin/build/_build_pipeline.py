@@ -269,6 +269,8 @@ class _BuildPipeline:
         self.data_table: str = ""
         self.data_relation_mode: Optional[str] = None
         self.inferred_reset: bool = False
+        # Requested vs effective materialization mode, set at the start of run().
+        self.mode_decision: Optional[Any] = None
         # Lakebase managed-synced mode flag, resolved once before _open_store.
         self._lakebase_engine_config: Dict[str, Any] = {}
         self._graph_engine: str = ""
@@ -417,6 +419,7 @@ class _BuildPipeline:
         """Drive the build through every phase, reporting progress to ``tm``."""
         self._log_start()
         try:
+            self.mode_decision = TwinBuildPostMaterialize.decide_mode(self)
             t_phase = time.time()
             if not self._prepare_translation():
                 return

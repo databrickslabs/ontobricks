@@ -7,7 +7,8 @@ one-line hooks that delegate here.
 
 State is read with ``getattr`` defaults because the relation attributes
 (``data_table``, ``data_relation_mode``, ``inferred_reset``) only exist once
-the phase that sets them has run.
+the phase that sets them has run. ``mode_decision`` is set at the start of
+``run()``.
 """
 
 from __future__ import annotations
@@ -15,9 +16,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from back.core.graphdb.ModeDecision import ModeDecision
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# What the trace reports when no decision was made (the pipeline never started).
+_NO_DECISION = ModeDecision(requested="full", effective="full", reason="")
 
 
 class TwinBuildPostMaterialize:
@@ -97,11 +102,47 @@ class TwinBuildPostMaterialize:
         return True
 
     @staticmethod
+    def decide_mode(pipe: Any) -> ModeDecision:
+        """Resolve the domain's requested materialization mode to the one that runs.
+
+        There is no serverless or row-tracking probe yet, so both readiness
+        inputs are ``False``: every non-``full`` request falls back to
+        ``full`` and the trace records why. Later tasks replace the inputs.
+        """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.MaterializationModeResolver import (
+            MaterializationModeResolver,
+        )
+
+        decision = MaterializationModeResolver.resolve(
+            GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings),
+            serverless_available=False,
+            sources_row_tracked=False,
+            backend=GraphDBFactory._resolve_graph_backend(pipe.domain),
+            previews={},
+        )
+        if decision.effective != decision.requested:
+            logger.info(
+                "[DT-BUILD %s] materialization mode %s -> %s (%s)",
+                pipe.task_id,
+                decision.requested,
+                decision.effective,
+                decision.reason,
+            )
+        return decision
+
+    @staticmethod
     def trace_fields(pipe: Any) -> dict:
-        """Keys the build-run trace records about the relation read and the reset."""
+        """Keys the build-run trace records: relation read, reset and mode decision."""
+        decision = getattr(pipe, "mode_decision", None)
+        if not isinstance(decision, ModeDecision):
+            decision = _NO_DECISION
         return {
             "triples_source": TwinBuildPostMaterialize.triples_source_relation(pipe),
             "inferred_reset": bool(getattr(pipe, "inferred_reset", False)),
+            "materialization_mode_requested": decision.requested,
+            "materialization_mode_effective": decision.effective,
+            "mode_fallback_reason": decision.reason,
         }
 
     @staticmethod
