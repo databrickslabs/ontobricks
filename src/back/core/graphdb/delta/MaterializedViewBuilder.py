@@ -186,16 +186,20 @@ class MaterializedViewBuilder:
 
         1. ``DROP TABLE IF EXISTS <data>`` when *drop_existing_table*: an
            existing ``_data`` TABLE blocks ``CREATE MATERIALIZED VIEW``.
-        2. ``DROP VIEW IF EXISTS <graph>``: a plain VIEW blocks it as well.
-           Both drops are best-effort (``materialize.drop_relation``): when
-           the relation is already a materialized view the drop is refused
-           and ``CREATE OR REPLACE`` takes over.
-        3. the ``_data`` view;
-        4. the ``_inferred`` companion (``CREATE TABLE IF NOT EXISTS``);
-        5. ``ALTER TABLE <inferred> SET TBLPROPERTIES`` for row tracking and
+        2. ``DROP VIEW IF EXISTS <data>``, always: view-mode Lakehouse domains
+           (``materialize.apply_data_relation``) keep ``_data`` as a plain
+           VIEW, which ``CREATE OR REPLACE MATERIALIZED VIEW`` cannot replace.
+           Without it such a domain could never enter incremental mode.
+        3. ``DROP VIEW IF EXISTS <graph>``: a plain VIEW blocks it as well.
+           All the drops are best-effort (``materialize.drop_relation``): a
+           relation that is absent, or already a materialized view, makes the
+           drop fail harmlessly and ``CREATE OR REPLACE`` takes over.
+        4. the ``_data`` view;
+        5. the ``_inferred`` companion (``CREATE TABLE IF NOT EXISTS``);
+        6. ``ALTER TABLE <inferred> SET TBLPROPERTIES`` for row tracking and
            deletion vectors, so a companion created before incremental mode
            becomes readable incrementally too;
-        6. the ``_graph`` view.
+        7. the ``_graph`` view.
 
         Returns ``{"data_mv": data_fqn, "graph_mv": graph_fqn}``.
         """
@@ -212,6 +216,7 @@ class MaterializedViewBuilder:
 
         if drop_existing_table:
             materialize.drop_relation(client, data_fqn, kind="table")
+        materialize.drop_relation(client, data_fqn, kind="view")
         materialize.drop_relation(client, graph_fqn, kind="view")
         logger.info("Creating the data materialized view %s", data_fqn)
         materialize.run_sql(client, data_sql)

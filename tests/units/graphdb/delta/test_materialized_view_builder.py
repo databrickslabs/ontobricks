@@ -306,6 +306,7 @@ class TestApply:
         if drop_table:
             statements.append(f"DROP TABLE IF EXISTS {DATA}")
         statements += [
+            f"DROP VIEW IF EXISTS {DATA}",
             f"DROP VIEW IF EXISTS {GRAPH}",
             MaterializedViewBuilder.data_mv_sql(
                 DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
@@ -347,7 +348,32 @@ class TestApply:
     def test_failing_drops_do_not_abort_the_apply(self):
         client = RecordingClient(fail_when=("DROP TABLE", "DROP VIEW"))
         MaterializedViewBuilder.apply(client, drop_existing_table=True, **self.KWARGS)
-        assert client.statements[2:] == self._expected(drop_table=True)[2:]
+        # the three best-effort drops fail; everything after them still runs
+        assert client.statements[3:] == self._expected(drop_table=True)[3:]
+
+    def test_a_preexisting_data_view_is_dropped_whatever_the_table_flag(self):
+        """A view-mode domain has ``_data`` as a VIEW, which an MV cannot replace."""
+        for drop_table in (True, False):
+            client = RecordingClient()
+            MaterializedViewBuilder.apply(
+                client, drop_existing_table=drop_table, **self.KWARGS
+            )
+            data_mv = next(
+                i
+                for i, s in enumerate(client.statements)
+                if s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {DATA}")
+            )
+            assert f"DROP VIEW IF EXISTS {DATA}" in client.statements[:data_mv]
+
+    def test_the_table_drop_is_still_conditional(self):
+        with_drop = RecordingClient()
+        without_drop = RecordingClient()
+        MaterializedViewBuilder.apply(with_drop, drop_existing_table=True, **self.KWARGS)
+        MaterializedViewBuilder.apply(
+            without_drop, drop_existing_table=False, **self.KWARGS
+        )
+        assert f"DROP TABLE IF EXISTS {DATA}" in with_drop.statements
+        assert f"DROP TABLE IF EXISTS {DATA}" not in without_drop.statements
 
     def test_a_failing_mv_statement_propagates(self):
         client = RecordingClient(fail_when=("CREATE OR REPLACE MATERIALIZED VIEW",))

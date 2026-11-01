@@ -372,7 +372,8 @@ Changes:
    it incrementally); new `build_enable_row_tracking_sql` is the `ALTER TABLE ...
    SET TBLPROPERTIES` for companions that already exist. `apply` runs it after
    `ensure_inferred_table`. Statement order: optional DROP TABLE `_data`, DROP VIEW
-   `_graph`, data MV, ensure `_inferred`, ALTER `_inferred`, graph MV.
+   `_data`, DROP VIEW `_graph`, data MV, ensure `_inferred`, ALTER `_inferred`,
+   graph MV (the DROP VIEW `_data` is the review fix recorded at the end).
 5. src/back/core/graphdb/delta/_table_naming.py
    `slots_table_fqn` and the `_slots` suffix, included in `graph_leaf_suffixes()`
    so `strip_graph_leaf_suffix` handles it.
@@ -427,3 +428,31 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q tests/units/core tests/units/streaming -p no:cacheprovider -> 1074 passed; uv run --frozen pytest -q tests/units/streaming -p no:cacheprovider -> 94 passed; uv run --frozen pytest -q tests/units/architecture -> 9 passed
+
+================================================================================
+## Fix: MaterializedViewBuilder.apply drops a pre-existing `_data` VIEW
+================================================================================
+
+Context: Review fix round 1 of Task 3. `materialize.apply_data_relation` creates
+`_data` as a plain VIEW for view-mode Lakehouse domains, and `CREATE OR REPLACE
+MATERIALIZED VIEW` cannot replace a VIEW, so such a domain could never enter
+incremental mode (every fallback to full re-creates the view).
+
+Changes:
+
+1. src/back/core/graphdb/delta/MaterializedViewBuilder.py
+   `apply` always runs a best-effort `materialize.drop_relation(..., kind="view")`
+   on `_data` before creating the data MV, next to the optional DROP TABLE kept
+   behind `drop_existing_table`. Sequence: [DROP TABLE `_data`] -> DROP VIEW
+   `_data` -> DROP VIEW `_graph` -> data MV -> ensure `_inferred` -> ALTER
+   `_inferred` -> graph MV. Documented in the docstring.
+2. tests/units/graphdb/delta/test_materialized_view_builder.py
+   Statement-order tests updated; new tests for the unconditional view drop and
+   the still-conditional table drop.
+
+Modified files:
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/delta -> 194 passed
