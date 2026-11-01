@@ -16,7 +16,7 @@ from back.core.w3c.sparql.constants import DIALECT_SPARK
 logger = get_logger(__name__)
 
 
-class TripleSqlAssembler:
+class TripleSQLAssembler:
     """Static builders for the unpivot, ``WITH`` and outer-projection SQL."""
 
     @staticmethod
@@ -108,7 +108,7 @@ class TripleSqlAssembler:
             else ""
         )
         limit_clause = f"\n    LIMIT {limit}" if limit else ""
-        with_clause = TripleSqlAssembler.build_with_clause(cte_defs)
+        with_clause = TripleSQLAssembler.build_with_clause(cte_defs)
         sql = f"""{with_clause}SELECT {distinct_str}subject, predicate, object FROM (
             {' UNION ALL '.join(table_queries)}
         ) AS triples

@@ -12,7 +12,7 @@ from back.core.helpers import (
     sql_cast as _sql_cast,
 )
 from back.core.w3c.sparql.SparqlCapabilityValidator import SparqlCapabilityValidator
-from back.core.w3c.sparql.TripleSqlAssembler import TripleSqlAssembler
+from back.core.w3c.sparql.TripleSQLAssembler import TripleSQLAssembler
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 
 logger = get_logger(__name__)
@@ -50,8 +50,8 @@ class SparqlTranslator:
 
     @staticmethod
     def _unpivot_select(*args, **kwargs) -> str:
-        """Delegates to :meth:`TripleSqlAssembler.unpivot_select`."""
-        return TripleSqlAssembler.unpivot_select(*args, **kwargs)
+        """Delegates to :meth:`TripleSQLAssembler.unpivot_select`."""
+        return TripleSQLAssembler.unpivot_select(*args, **kwargs)
 
     @staticmethod
     def _subject_expr_from_template(
@@ -126,8 +126,8 @@ class SparqlTranslator:
 
     @staticmethod
     def _build_with_clause(cte_defs):
-        """Delegates to :meth:`TripleSqlAssembler.build_with_clause`."""
-        return TripleSqlAssembler.build_with_clause(cte_defs)
+        """Delegates to :meth:`TripleSQLAssembler.build_with_clause`."""
+        return TripleSQLAssembler.build_with_clause(cte_defs)
 
     @staticmethod
     def translate_sparql_to_spark(
@@ -180,7 +180,7 @@ class SparqlTranslator:
                 "Only SELECT queries are supported for Spark SQL engine."
             )
 
-        is_distinct, select_vars = TripleSqlAssembler.parse_select_clause(query_body)
+        is_distinct, select_vars = TripleSQLAssembler.parse_select_clause(query_body)
 
         # Extract WHERE clause
         where_match = re.search(
@@ -1321,8 +1321,8 @@ class SparqlTranslator:
 
     @staticmethod
     def _generic_triples_finalize_sql_payload(*args, **kwargs) -> dict:
-        """Delegates to :meth:`TripleSqlAssembler.finalize_generic_triples`."""
-        return TripleSqlAssembler.finalize_generic_triples(*args, **kwargs)
+        """Delegates to :meth:`TripleSQLAssembler.finalize_generic_triples`."""
+        return TripleSQLAssembler.finalize_generic_triples(*args, **kwargs)
 
     @staticmethod
     def _generic_triples_append_relationship_unions(

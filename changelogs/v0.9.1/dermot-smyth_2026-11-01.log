@@ -335,7 +335,7 @@ its size-ratchet baseline, so the SQL assembly moved into a new class first.
 
 Changes:
 
-1. src/back/core/w3c/sparql/TripleSqlAssembler.py (new)
+1. src/back/core/w3c/sparql/TripleSQLAssembler.py (new)
    `unpivot_select`, `build_with_clause`, `finalize_generic_triples` and
    `parse_select_clause`, moved out of SparqlTranslator verbatim; SparqlTranslator
    keeps one-line delegating wrappers under the old private names, so no caller
@@ -382,7 +382,7 @@ Changes:
    non-distinct, filtered CTE path), omitted kwargs equal explicit defaults, the
    incremental golden SQL, no `stack(` and no `DISTINCT`, GROUP BY placement,
    LIMIT, non-distinct untouched, filtered path, `mappings_filter` cases, wrapper
-   forwarding and keyword-only signatures, TripleSqlAssembler direct tests.
+   forwarding and keyword-only signatures, TripleSQLAssembler direct tests.
 7. tests/units/graphdb/delta/test_materialized_view_builder.py (new),
    tests/units/graphdb/delta/test_delta_package.py
    Exact DDL for every builder, policy allowlist, `plan_is_incremental` truth
@@ -393,7 +393,7 @@ Changes:
    and the row-tracking ALTER.
 
 Modified files:
-- src/back/core/w3c/sparql/TripleSqlAssembler.py (new)
+- src/back/core/w3c/sparql/TripleSQLAssembler.py (new)
 - src/back/core/w3c/sparql/SparqlTranslator.py
 - src/back/core/w3c/sparql/__init__.py
 - src/back/core/graphdb/delta/MaterializedViewBuilder.py (new)
@@ -456,3 +456,31 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q tests/units/graphdb/delta -> 194 passed
+
+================================================================================
+## Rename: TripleSqlAssembler -> TripleSQLAssembler
+================================================================================
+
+Context: Review fix round 1 of Task 3. `.coding_rules.md` section 3 keeps the
+`SQL` acronym upper-case inside identifiers, so the class extracted from
+SparqlTranslator is renamed (the sections above already use the new name).
+
+Changes:
+
+1. src/back/core/w3c/sparql/TripleSQLAssembler.py (git mv from TripleSqlAssembler.py)
+   Class and file renamed together; `test_class_per_file` still holds
+   (filename equals the class name).
+2. src/back/core/w3c/sparql/SparqlTranslator.py, src/back/core/w3c/sparql/__init__.py
+   Import, the three delegating wrappers, the SELECT-clause parse call and the
+   package re-export follow the new name.
+3. tests/back/core/w3c/sparql/test_sparql_translator_incremental.py
+   Imports and test class names follow the new name.
+
+Modified files:
+- src/back/core/w3c/sparql/TripleSQLAssembler.py (renamed)
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/w3c/sparql/__init__.py
+- tests/back/core/w3c/sparql/test_sparql_translator_incremental.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/back/core/w3c/sparql tests/units/architecture tests/units/objects/test_build_pipeline_materialize.py tests/units/dtwin -> 1060 passed

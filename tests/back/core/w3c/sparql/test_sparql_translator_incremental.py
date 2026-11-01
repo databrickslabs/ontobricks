@@ -1,7 +1,7 @@
 """Translator tests for the Enzyme-safe ``incremental`` mode and ``mappings_filter``.
 
 The SNAPSHOT_* constants below were captured from the translator BEFORE the
-``TripleSqlAssembler`` extraction and the ``incremental`` work, so they pin the
+``TripleSQLAssembler`` extraction and the ``incremental`` work, so they pin the
 default output byte for byte independently of the code under test.
 """
 
@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 
 from back.core.errors import ValidationError
-from back.core.w3c.sparql import TripleSqlAssembler as ReExportedAssembler
+from back.core.w3c.sparql import TripleSQLAssembler as ReExportedAssembler
 from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
-from back.core.w3c.sparql.TripleSqlAssembler import TripleSqlAssembler
+from back.core.w3c.sparql.TripleSQLAssembler import TripleSQLAssembler
 
 pytestmark = pytest.mark.unit
 
@@ -202,12 +202,12 @@ class TestDefaultOutputUnchanged:
         assert "SELECT DISTINCT" in sql
 
 
-class TestTripleSqlAssemblerExtraction:
+class TestTripleSQLAssemblerExtraction:
     def test_is_reexported_from_the_sparql_package(self):
-        assert ReExportedAssembler is TripleSqlAssembler
+        assert ReExportedAssembler is TripleSQLAssembler
 
     def test_unpivot_select_builds_the_stack_form(self):
-        sql = TripleSqlAssembler.unpivot_select(
+        sql = TripleSQLAssembler.unpivot_select(
             "s_expr", [("p1", "'a'"), ("p2", "col2")], "src_0", "\n WHERE x = 1"
         )
         assert sql == (
@@ -218,14 +218,14 @@ class TestTripleSqlAssemblerExtraction:
     def test_unpivot_select_wrapper_delegates(self):
         args = ("s_expr", [("p1", "'a'")], "src_0")
         assert SparqlTranslator._unpivot_select(*args) == (
-            TripleSqlAssembler.unpivot_select(*args)
+            TripleSQLAssembler.unpivot_select(*args)
         )
 
     def test_build_with_clause_is_empty_without_ctes(self):
-        assert TripleSqlAssembler.build_with_clause([]) == ""
+        assert TripleSQLAssembler.build_with_clause([]) == ""
 
     def test_build_with_clause_wraps_select_and_bare_tables(self):
-        sql = TripleSqlAssembler.build_with_clause(
+        sql = TripleSQLAssembler.build_with_clause(
             [("src_0", "SELECT 1"), ("src_1", "cat.sch.tbl")]
         )
         assert sql == (
@@ -236,17 +236,17 @@ class TestTripleSqlAssemblerExtraction:
     def test_build_with_clause_wrapper_delegates(self):
         ctes = [("src_0", "SELECT 1")]
         assert SparqlTranslator._build_with_clause(ctes) == (
-            TripleSqlAssembler.build_with_clause(ctes)
+            TripleSQLAssembler.build_with_clause(ctes)
         )
 
     def test_finalize_raises_when_there_are_no_branches(self):
         with pytest.raises(ValidationError):
-            TripleSqlAssembler.finalize_generic_triples([], True, None, [])
+            TripleSQLAssembler.finalize_generic_triples([], True, None, [])
 
     def test_finalize_wrapper_delegates(self):
         args = (["SELECT 1 AS subject"], True, 5, [])
         assert SparqlTranslator._generic_triples_finalize_sql_payload(*args) == (
-            TripleSqlAssembler.finalize_generic_triples(*args)
+            TripleSQLAssembler.finalize_generic_triples(*args)
         )
 
     @pytest.mark.parametrize(
@@ -258,11 +258,11 @@ class TestTripleSqlAssemblerExtraction:
         ],
     )
     def test_parse_select_clause(self, query, expected):
-        assert TripleSqlAssembler.parse_select_clause(query) == expected
+        assert TripleSQLAssembler.parse_select_clause(query) == expected
 
     def test_parse_select_clause_rejects_a_missing_projection(self):
         with pytest.raises(ValidationError, match="Could not parse SELECT clause"):
-            TripleSqlAssembler.parse_select_clause("SELECT WHERE {}")
+            TripleSQLAssembler.parse_select_clause("SELECT WHERE {}")
 
 
 @pytest.fixture
@@ -448,7 +448,7 @@ class TestIncrementalFilteredCtePath:
 
 class TestUnpivotSelectIncremental:
     def test_one_select_per_predicate_wrapped_in_parentheses(self):
-        sql = TripleSqlAssembler.unpivot_select(
+        sql = TripleSQLAssembler.unpivot_select(
             "s_expr",
             [("p1", "'a'"), ("p2", "col2")],
             "src_0",
@@ -463,14 +463,14 @@ class TestUnpivotSelectIncremental:
         )
 
     def test_single_predicate_is_still_parenthesised(self):
-        sql = TripleSqlAssembler.unpivot_select(
+        sql = TripleSQLAssembler.unpivot_select(
             "s", [("p1", "x")], "t", incremental=True
         )
         assert sql.startswith("(SELECT ") and sql.endswith(")")
         assert "UNION ALL" not in sql
 
     def test_where_clause_is_repeated_on_each_branch(self):
-        sql = TripleSqlAssembler.unpivot_select(
+        sql = TripleSQLAssembler.unpivot_select(
             "s",
             [("p1", "a"), ("p2", "b")],
             "t",
@@ -480,14 +480,14 @@ class TestUnpivotSelectIncremental:
         assert sql.count("WHERE s IN (SELECT 1)") == 2
 
     def test_default_flag_keeps_the_stack_form(self):
-        assert "stack(1," in TripleSqlAssembler.unpivot_select("s", [("p", "x")], "t")
+        assert "stack(1," in TripleSQLAssembler.unpivot_select("s", [("p", "x")], "t")
 
 
 class TestFinalizeIncremental:
     BRANCHES = ["SELECT 1 AS subject"]
 
     def test_distinct_becomes_group_by(self):
-        sql = TripleSqlAssembler.finalize_generic_triples(
+        sql = TripleSQLAssembler.finalize_generic_triples(
             self.BRANCHES, True, None, [], incremental=True
         )["sql"]
         assert "DISTINCT" not in sql
@@ -497,19 +497,19 @@ class TestFinalizeIncremental:
         )
 
     def test_non_distinct_is_left_alone(self):
-        sql = TripleSqlAssembler.finalize_generic_triples(
+        sql = TripleSQLAssembler.finalize_generic_triples(
             self.BRANCHES, False, None, [], incremental=True
         )["sql"]
         assert "GROUP BY" not in sql and "DISTINCT" not in sql
 
     def test_limit_is_kept_after_group_by(self):
-        sql = TripleSqlAssembler.finalize_generic_triples(
+        sql = TripleSQLAssembler.finalize_generic_triples(
             self.BRANCHES, True, 3, [], incremental=True
         )["sql"]
         assert sql.endswith("GROUP BY subject, predicate, object\n    LIMIT 3")
 
     def test_default_flag_keeps_distinct(self):
-        sql = TripleSqlAssembler.finalize_generic_triples(
+        sql = TripleSQLAssembler.finalize_generic_triples(
             self.BRANCHES, True, None, []
         )["sql"]
         assert "SELECT DISTINCT subject" in sql and "GROUP BY" not in sql
