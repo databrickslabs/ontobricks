@@ -932,3 +932,30 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" tests/units tests/back --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 10007 passed, 12 skipped, 1 deselected
+
+================================================================================
+## Keep the full-path trace tests off the Databricks SDK
+================================================================================
+
+Context: two `TestBuildRunTrace` tests in
+`tests/units/objects/test_build_pipeline_compute_once.py` requested a
+non-`full` mode with serverless off, fell back through
+`TwinIncrementalBuild._leave` -> `_stop_slot_pipeline`, and built a real
+`WorkspaceClient` against the fake test host. Each waited out the 90 s API
+timeout; the swallowed `InfrastructureError` let them pass 90 s late.
+
+Changes:
+
+1. tests/units/objects/test_build_pipeline_compute_once.py
+   Autouse fixture on `TestBuildRunTrace` patches
+   `back.core.streaming.SlotPipelineRunner` with the scripted fake from the
+   modes tests and guards `databricks.sdk.WorkspaceClient`, asserting at
+   teardown that no client was built (a raising guard would be swallowed by
+   `SlotPipelineRunner._w`).
+
+Modified files:
+- tests/units/objects/test_build_pipeline_compute_once.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/objects tests/units/architecture`
+-> see commit; the two tests drop from 90.0 s each to well under 1 s.

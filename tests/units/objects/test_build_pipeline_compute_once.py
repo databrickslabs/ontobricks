@@ -408,6 +408,36 @@ class TestInferredReset:
 
 
 class TestBuildRunTrace:
+    @pytest.fixture(autouse=True)
+    def _no_databricks_sdk(self, monkeypatch):
+        """Keep the full-path trace tests off the Databricks SDK.
+
+        A requested ``incremental``/``realtime`` build with serverless off
+        falls back through ``TwinIncrementalBuild._leave`` →
+        ``_stop_slot_pipeline``, which lazily imports
+        ``back.core.streaming.SlotPipelineRunner`` and would otherwise build a
+        real ``WorkspaceClient`` against the fake test host and wait out the
+        90 s API timeout (the resulting ``InfrastructureError`` is swallowed,
+        so the test still passed — just 90 s late). Patch the runner with the
+        scripted fake from the modes tests, and guard the SDK constructor:
+        ``SlotPipelineRunner._w`` wraps any exception into a swallowed
+        ``InfrastructureError``, so a raising guard would be invisible — the
+        guard records the attempt and the fixture asserts at teardown.
+        """
+        from tests.units.objects import test_build_pipeline_modes as _modes
+
+        _modes._FakeRunner.script = _modes._Script([])
+        monkeypatch.setattr(
+            "back.core.streaming.SlotPipelineRunner", _modes._FakeRunner
+        )
+        attempts: list = []
+        monkeypatch.setattr(
+            "databricks.sdk.WorkspaceClient",
+            lambda *a, **kw: attempts.append((a, kw)) or MagicMock(),
+        )
+        yield
+        assert attempts == [], "unit tests must not build a WorkspaceClient"
+
     @staticmethod
     def _entry(pipe) -> dict:
         """Run *pipe* with the real trace writer and return the persisted entry."""
