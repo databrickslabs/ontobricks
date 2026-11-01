@@ -2,11 +2,13 @@
 
 import hashlib
 import json
+import logging
 import re
 
 import pytest
 
 from back.core.errors import ValidationError
+from back.core.logging import get_logger
 from back.core.streaming import SlotPipelineSpec, SlotProjectionCompiler
 
 pytestmark = pytest.mark.unit
@@ -584,11 +586,28 @@ class TestClassifyAgreesWithEmitters:
         assert SlotProjectionCompiler.classify(_relationship(predicate="")) == "batch"
         assert SlotProjectionCompiler.classify(_relationship(predicate=None)) == "batch"
 
-    def test_batch_reason_is_logged_at_debug_level(self, caplog):
-        with caplog.at_level("DEBUG"):
-            SlotProjectionCompiler.classify(_entity(class_uri=""))
-            SlotProjectionCompiler.classify(_relationship(predicate=""))
-        messages = [record.getMessage() for record in caplog.records]
+    @pytest.fixture
+    def compiler_logs(self, caplog):
+        """Capture the compiler's own logger, whatever other tests configured.
+
+        ``LogManager.setup()`` (run by other tests in the suite) sets
+        ``propagate=False`` on the app logger, so caplog's root-level capture
+        would miss these records; attach its handler to the module logger.
+        """
+        target = get_logger("back.core.streaming.SlotProjectionCompiler")
+        previous_level = target.level
+        target.addHandler(caplog.handler)
+        target.setLevel(logging.DEBUG)
+        try:
+            yield caplog
+        finally:
+            target.removeHandler(caplog.handler)
+            target.setLevel(previous_level)
+
+    def test_batch_reason_is_logged_at_debug_level(self, compiler_logs):
+        SlotProjectionCompiler.classify(_entity(class_uri=""))
+        SlotProjectionCompiler.classify(_relationship(predicate=""))
+        messages = [record.getMessage() for record in compiler_logs.records]
         assert any("entity without class_uri" in m for m in messages)
         assert any("relationship without predicate" in m for m in messages)
 

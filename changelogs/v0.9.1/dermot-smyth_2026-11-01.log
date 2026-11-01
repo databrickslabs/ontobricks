@@ -405,3 +405,25 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" tests/units tests/back --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks --deselect tests/units/streaming/test_slot_projection_compiler.py::TestClassifyAgreesWithEmitters::test_batch_reason_is_logged_at_debug_level -> 9725 passed, 12 skipped, 2 deselected (the second deselected test is Task 2's debug-log test, which passes alone but fails once tests/units/core has run; see the task report); uv run --frozen pytest -q tests/units/architecture -> 9 passed
+
+================================================================================
+## Test fix: classify debug-log test independent of prior logger configuration
+================================================================================
+
+Context: `TestClassifyAgreesWithEmitters::test_batch_reason_is_logged_at_debug_level`
+passed alone but failed after `tests/units/core`: `LogManager.setup()` sets
+`propagate=False` on the app logger, so caplog's root-level capture missed the
+compiler's DEBUG records.
+
+Changes:
+
+1. tests/units/streaming/test_slot_projection_compiler.py
+   The test now uses a `compiler_logs` fixture that attaches `caplog.handler` to
+   the module logger (`get_logger("back.core.streaming.SlotProjectionCompiler")`),
+   sets it to DEBUG and restores handler and level in a `finally`. No production code changed.
+
+Modified files:
+- tests/units/streaming/test_slot_projection_compiler.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/core tests/units/streaming -p no:cacheprovider -> 1074 passed; uv run --frozen pytest -q tests/units/streaming -p no:cacheprovider -> 94 passed; uv run --frozen pytest -q tests/units/architecture -> 9 passed
