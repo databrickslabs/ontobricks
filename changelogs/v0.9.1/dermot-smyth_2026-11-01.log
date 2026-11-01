@@ -218,3 +218,67 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9213 passed, 12 skipped, 1 deselected, 18 warnings in 57.88s (the deselected readiness test probes live services and hangs without network access); uv run --frozen pytest -q tests/units/architecture -> 9 passed
+
+================================================================================
+## SlotProjectionCompiler: row-local mappings to Lakeflow slot-event SQL
+================================================================================
+
+Context: Task 2 of incremental triple materialization. The incremental modes keep
+a `_slots` streaming table (key = `(map_id, source_key, predicate)`) in sync with
+the source tables' change feed. Mappings that read one table with plain column
+predicates ("row-local") can be projected per source row; joins, `sql_query`
+sources and reference predicates stay on the batch path. This adds the compiler
+for the row-local side as a new `back/core/streaming/` subpackage; nothing calls
+it yet (the pipeline runner and the build dispatch are later tasks).
+
+Changes:
+
+1. src/back/core/streaming/SlotProjectionCompiler.py (new)
+   Static-method compiler. `classify` returns `row_local` / `batch` (table without
+   `sql_query`, a column in the subject template, only `column` predicates, safe
+   identifiers; a table-based relationship with plain subject and object columns).
+   `map_id` = `map_` + SHA-1 of the canonical mapping JSON (source, subject
+   template, class, label column, predicates) truncated to 12 hex chars.
+   `source_key_expr` gives `CAST(pk AS STRING)` or `concat_ws('|', ...)` for a
+   composite template. `slot_event_view_sql` emits the temporary view over
+   `STREAM <table> WITH (readChangeFeed = true)` with a `LATERAL VIEW stack(...)`
+   whose pairs come from `SparqlTranslator._generic_triples_stack_predicates_for_mapping`
+   and whose subject comes from `_subject_expr_from_template`; `update_preimage`
+   and NULL objects become `DELETE`. `auto_cdc_flow_sql` emits the AUTO CDC flow
+   in the binding clause order (KEYS, APPLY AS DELETE WHEN, SEQUENCE BY
+   STRUCT(_commit_version, seq_rank), COLUMNS * EXCEPT, STORED AS SCD TYPE 1).
+   `slots_table_sql` emits the clustered streaming table. `compile` walks the
+   `{class_uri: mapping}` dict (a shared TriplesMap dict is compiled once per
+   class as `{**mapping, "class_uri": class_uri}`, so each class has its own
+   `map_id`, `slot_events_<map_id>` view and `slot_flow_<map_id>` flow) plus the
+   relationship list. FQNs pass `validate_table_name` and `SAFE_SQL_IDENT`,
+   columns `SAFE_COL_IDENT` (`ValidationError` otherwise; `classify` falls back to
+   `batch`); class URIs, predicates and template prefixes go through `sql_escape`.
+   `base_uri` is accepted and unused (templates carry their own prefix).
+2. src/back/core/streaming/SlotPipelineSpec.py (new)
+   Dataclass: `slots_fqn`, ordered `statements`, `row_local_map_ids`,
+   `batch_mappings` (entity copies carry their `class_uri`), sorted unique
+   `source_tables`, and `to_sql()` joining the statements with `;\n\n`.
+3. src/back/core/streaming/__init__.py (new)
+   Re-exports `SlotProjectionCompiler` and `SlotPipelineSpec` with `__all__`.
+4. tests/units/streaming/__init__.py, tests/units/streaming/test_slot_projection_compiler.py (new)
+   62 cases: classification (row-local, join, `sql_query`, no table, unsafe
+   identifiers, relationship with and without table, extractor-shaped
+   relationship is batch), `map_id` golden value / key-order independence /
+   change on added predicate, source key (single, composite), view SQL content
+   and escaping, AUTO CDC exact text and clause order, slots table SQL,
+   `compile` partitioning, shared-dict classes getting distinct ids, views and
+   flows, determinism and `to_sql()` round trip.
+5. docs/architecture.md
+   New "Incremental slot projection" subsection before "Reasoning Engine".
+
+Modified files:
+- src/back/core/streaming/SlotProjectionCompiler.py (new)
+- src/back/core/streaming/SlotPipelineSpec.py (new)
+- src/back/core/streaming/__init__.py (new)
+- tests/units/streaming/__init__.py (new)
+- tests/units/streaming/test_slot_projection_compiler.py (new)
+- docs/architecture.md
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9275 passed, 12 skipped, 1 deselected, 18 warnings in 50.50s (the deselected readiness test probes live services and hangs without network access); uv run --frozen pytest -q tests/units/streaming tests/units/architecture -> 71 passed

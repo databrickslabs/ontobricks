@@ -1173,6 +1173,16 @@ Connection settings are configured under **Settings → Back end → Neo4j**. Th
 
 **Adding a new engine** — copy `src/back/core/graphdb/_starter_kit/ExampleStore.py`, implement the `GraphDBBackend` contract, register the engine key in `GraphDBFactory`, and add it to `ALLOWED_GRAPH_ENGINES`. Pure-SQL engines inherit the named-query defaults from `GraphDBBackend`; non-SQL engines (Cypher / Gremlin / SPARQL stores) override the relevant methods and may flip `supports_cypher` to re-enable the corresponding reasoning paths.
 
+### Incremental slot projection (`back/core/streaming/`)
+
+Incremental materialization keeps a `_slots` streaming table in sync with the source tables' change feed instead of rebuilding every triple. A *slot* is one row keyed by `(map_id, source_key, predicate)`.
+
+- `SlotProjectionCompiler` classifies each R2RML mapping: **row-local** (one `table`, no `sql_query`, only column predicates) or **batch** (joins, `sql_query` sources, reference predicates).
+- For each row-local mapping it emits a temporary view that reads the table's change feed (`readChangeFeed = true`) and unpivots the row into slot events with `stack()`, reusing the `SparqlTranslator` predicate and subject builders. An `update_preimage` or a NULL object becomes a `DELETE`; everything else an `UPSERT`.
+- A `CREATE FLOW … AS AUTO CDC INTO <slots>` statement applies the events as SCD type 1, ordered by `STRUCT(_commit_version, seq_rank)`.
+- `map_id` is a SHA-1 of the canonical mapping (source, subject template, class, predicates), stable across runs. Classes that share one TriplesMap get one `map_id` each.
+- `SlotPipelineSpec` carries the ordered statements (`to_sql()`), the row-local ids, the source tables and the batch mappings left for the batch branches.
+
 ---
 
 ## Reasoning Engine
