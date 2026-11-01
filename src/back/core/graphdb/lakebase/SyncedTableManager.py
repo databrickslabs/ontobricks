@@ -1,4 +1,4 @@
-"""Manage Lakebase synced tables (Lakeflow snapshot pipelines).
+"""Manage Lakebase synced tables (Lakeflow snapshot, triggered and continuous pipelines).
 
 Wraps the ``WorkspaceClient.database`` SDK behind a narrow surface so the
 build pipeline can drive bulk R2RML data movement entirely on the data

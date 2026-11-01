@@ -775,3 +775,160 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/units/objects/test_build_pipeline_modes.py tests/units/architecture -> 337 passed
+
+================================================================================
+## Lakebase triggered/continuous sync from _data / complete _slots
+================================================================================
+
+Context: Task 5 of the incremental triple materialization plan. The Lakeflow
+synced table moves off the R2RML gateway VIEW onto the `_data` copy (or a
+`_slots` table that holds every triple) and syncs on a schedule derived from
+the domain's materialization mode, capped by the workspace
+`graph_engine_config.lakebase.sync_table_mode`. The scheduled-build mirror
+syncs the same source, and a registration whose source or schedule changed is
+deleted and recreated (a synced table's definition cannot change in place).
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/LakebaseBase.py
+   `normalize_sync_table_mode` accepts `snapshot`, `triggered`, `continuous`
+   (new public `SYNC_TABLE_MODES`, least to most frequent); unknown strings
+   still raise `ValueError`. Docstrings describe the value as a cap. New
+   `LakebaseBase.drop_union_view(name)` (DROP VIEW IF EXISTS on the graph's
+   union view).
+2. src/back/core/graphdb/lakebase/SyncedTableRegistration.py (new),
+   src/back/core/graphdb/lakebase/__init__.py
+   Reads `spec.source_table_full_name` / `spec.scheduling_policy` from the SDK
+   object or the REST `_DictNamespace` (an unreadable spec never counts as
+   drift), describes drift (case- and backtick-insensitive source compare) and
+   `discard_if_drifted` deletes a drifted registration with `purge_data=True`
+   (logged at INFO). Re-exported from the lakebase package.
+3. src/back/core/graphdb/lakebase/SyncedTableManager.py
+   `ensure` discards a drifted primary registration and a drifted ghost
+   fallback (`_b`…) before the existing create/recovery paths, so they are
+   recreated with the requested source and schedule. `trigger_and_wait` is a
+   no-op for a CONTINUOUS table (logs and returns its current state). The
+   `ensure` docstring was condensed (the recovery paths are documented on
+   `_STALE_OWNERSHIP_PROBE_S` / `_GHOST_FALLBACK_SUFFIXES`) so the class and
+   method stay inside their size baseline.
+4. src/back/core/graphdb/lakebase/_companion_ddl.py,
+   src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   `SOURCE_KIND_TRIPLES` / `SOURCE_KIND_SLOTS`; `build_union_view_sql` (the
+   existing shape) and `build_union_view_sql_for_slots` (`SELECT DISTINCT
+   subject, predicate, object` with `object IS NOT NULL AND TRIM(object) <> ''`,
+   NULL datatype/lang, UNION ALL the companion). `ensure_union_view` and
+   `ensure_graph_indexes` take `source_kind`; a slots-sourced `_sync` table gets
+   the `(subject, predicate)` index only. `ensure_synced_union_view` forwards
+   `source_kind`.
+5. src/back/objects/digitaltwin/build/SyncPlan.py (new),
+   src/back/objects/digitaltwin/build/TwinLakebaseSync.py (new),
+   src/back/objects/digitaltwin/build/__init__.py
+   `SyncPlan(source_fqn, primary_key, sync_mode, source_kind)` with
+   `ensure_kwargs()`. `TwinLakebaseSync.sync_plan_for(...)` (pure; also used
+   by the scheduled mirror) and `sync_plan(pipe)`:
+   - source: `_slots` on `(map_id, source_key, predicate)` for an
+     incremental/microbatch build whose slots are complete; else `_data`
+     (table or MV, the complete graph) on `(subject, predicate, object_hash)`;
+     else the gateway VIEW (pass-through `_data` or nothing built), always a
+     snapshot;
+   - schedule: min(mode schedule, configured cap) over snapshot < triggered <
+     continuous, where full -> snapshot, incremental -> triggered,
+     microbatch -> continuous; an unreadable configured value counts as
+     snapshot (the Settings default, which therefore caps every domain).
+   `drop_union_view_if_drifted` drops the Postgres union view (best-effort)
+   when `ensure` is about to recreate the registration.
+6. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   New incremental fact `slots_complete` (True when `_slots` exists and no
+   mapping is on the batch branch; reset at the start of every build).
+7. src/back/objects/digitaltwin/build/_build_pipeline.py
+   `_apply_via_synced_pipeline` registers from one `SyncPlan`
+   (`mgr.ensure(synced_uc, **plan.ensure_kwargs())`), drops the union view
+   first on drift, builds the union view for `plan.source_kind`, and logs the
+   plan's source/schedule. The post-sync empty warning names the counted
+   relation and the synced one ("post-sync X contains 0 triples (Lakeflow
+   synced Y)"). New `slots_complete` attribute.
+8. src/back/core/graphdb/delta/materialize.py
+   `build_ctas_sql(..., with_object_hash=True)` also sets
+   `TBLPROPERTIES (delta.enableRowTracking = true, delta.enableDeletionVectors
+   = true)`: row tracking gives a triggered/continuous synced table its
+   automatic change data feed.
+9. src/back/objects/registry/schedule/build.py
+   The scheduled mirror materializes `_data` (`apply_data_relation(...,
+   mode="table", with_object_hash=True)`) before `mgr.ensure`, takes source,
+   key and schedule from `TwinLakebaseSync.sync_plan_for` (full mode, no
+   slots), drops the union view on drift and rebuilds it for the plan's
+   source kind. Without a domain the gateway VIEW stays the source.
+10. src/front/templates/settings.html, src/front/static/config/js/settings.js
+    The Lakeflow schedule select offers Snapshot / Triggered / Continuous with
+    help text on the cap; the JS saves and restores the selected value instead
+    of forcing `snapshot`.
+11. docs/backend.md
+    `sync_table_mode` rows describe the cap instead of "snapshot only".
+12. Tests: tests/units/core/test_synced_table_manager.py (drift on source,
+    schedule, fallback; reuse when unchanged; INFO log; continuous skips the
+    trigger; SyncedTableRegistration shapes), tests/units/core/
+    test_companion_ddl_slots.py (new: slots view SQL, indexes, store
+    passthrough, drop_union_view), tests/units/objects/
+    test_build_pipeline_modes.py (all 9 mode x cap combinations, sources and
+    keys, slots_complete, VIEW cap, the plan in `_apply_via_synced_pipeline`,
+    union-view drop on drift and its failure), tests/units/objects/
+    test_build_pipeline_compute_once.py (sync source is `_data` or the VIEW;
+    the empty warning names both relations; row tracking on the CTAS),
+    tests/units/dtwin/test_build_pipeline_streaming.py, tests/units/graphdb/
+    delta/test_delta_package.py, tests/units/graphdb/
+    test_graph_engine_config_keys.py, tests/units/settings/
+    test_graph_engine_config.py, tests/units/registry/
+    test_scheduled_build_lakeflow_source.py (new), tests/units/front/
+    test_settings_lakebase_sync_defaults.py.
+
+Known limitations:
+- The first build after this change re-registers every managed-synced table
+  on `_data` instead of the VIEW: the synced table is deleted (`purge_data`)
+  and fully resynced once.
+- Lakeflow streaming tables (`_slots`) as Triggered/Continuous synced-table
+  sources, and the `_data` materialized view as a Triggered/Continuous source
+  (MV change data feed is in preview), are unverified on a live workspace.
+- `SyncedTableManager.trigger_refresh` still starts updates with
+  `full_refresh=True`, so a Triggered table re-copies everything on each
+  build (out of scope).
+- Scheduled builds are always full: for an incremental/microbatch domain each
+  scheduled run replaces the `_data` MV with a table and moves the synced
+  table back to a snapshot (delete + recreate); the next main build moves it
+  forward again.
+- On the first build of a Continuous table `trigger_and_wait` returns while
+  the initial snapshot is still provisioning; the union view waits for the
+  Postgres table, but the companion truncate and adjacency rebuild may run
+  against a partially loaded table.
+
+Modified files:
+- docs/backend.md
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/core/graphdb/lakebase/SyncedTableManager.py
+- src/back/core/graphdb/lakebase/SyncedTableRegistration.py (new)
+- src/back/core/graphdb/lakebase/__init__.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/objects/digitaltwin/build/SyncPlan.py (new)
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinLakebaseSync.py (new)
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- src/front/static/config/js/settings.js
+- src/front/templates/settings.html
+- tests/units/core/test_companion_ddl_slots.py (new)
+- tests/units/core/test_synced_table_manager.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py (new)
+- tests/units/settings/test_graph_engine_config.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units tests/back --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 10007 passed, 12 skipped, 1 deselected

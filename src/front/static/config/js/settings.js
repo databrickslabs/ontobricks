@@ -1882,7 +1882,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const stEl   = document.getElementById('lakebaseSyncTableMode');
             const toutEl = document.getElementById('lakebaseSyncTimeout');
             const ucCat  = document.getElementById('lakebaseUcCatalog');
-            if (stEl) o.sync_table_mode = 'snapshot';
+            if (stEl) o.sync_table_mode = stEl.value || 'snapshot';
             if (toutEl) {
                 const n = parseInt(toutEl.value, 10);
                 o.sync_timeout_s = (!isNaN(n) && n > 0) ? n : 600;
@@ -2010,7 +2010,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (syncModeEl) syncModeEl.value = (o.sync_mode === 'app_managed') ? 'app_managed' : 'managed_synced';
 
         const stEl   = document.getElementById('lakebaseSyncTableMode');
-        if (stEl) stEl.value = 'snapshot';
+        if (stEl) stEl.value = ['triggered', 'continuous'].includes(o.sync_table_mode) ? o.sync_table_mode : 'snapshot';
 
         const toutEl = document.getElementById('lakebaseSyncTimeout');
         if (toutEl && o.sync_timeout_s != null) toutEl.value = String(parseInt(o.sync_timeout_s, 10) || 600);

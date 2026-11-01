@@ -1,6 +1,10 @@
-"""Settings → Lakebase Bulk loading: Managed sync default, Snapshot-only schedule."""
+"""Settings → Lakebase Bulk loading: Managed sync default; Snapshot / Triggered / Continuous cap."""
 
 from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.unit
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -36,14 +40,30 @@ def test_bulk_loading_copy_recommends_managed_sync() -> None:
     assert "(default)" not in pane
 
 
-def test_schedule_is_snapshot_only() -> None:
+def test_schedule_offers_snapshot_triggered_and_continuous_in_that_order() -> None:
     block = _schedule_select_html()
-    assert 'value="snapshot"' in block
-    assert 'value="triggered"' not in block
-    assert 'value="continuous"' not in block
+    snapshot = block.index('value="snapshot"')
+    triggered = block.index('value="triggered"')
+    continuous = block.index('value="continuous"')
+    assert snapshot < triggered < continuous
+    assert "selected" in block[snapshot:triggered]
+
+
+def test_schedule_help_explains_the_cap_and_the_change_feed() -> None:
     html = SETTINGS_TEMPLATE.read_text(encoding="utf-8")
-    assert "Change Data Feed" in html
-    assert "R2RML view" in html
+    start = html.index('id="lakebaseSyncTableModeHelp"')
+    help_text = html[start : html.index("</div>", start)]
+    assert "Change Data Feed" in help_text
+    assert "<code>_data</code>" in help_text
+    assert "snapshot" in help_text.lower()
+    assert "R2RML view" not in help_text
+
+
+def test_schedule_select_points_at_its_help() -> None:
+    html = SETTINGS_TEMPLATE.read_text(encoding="utf-8")
+    start = html.index('<select class="form-select form-select-sm" id="lakebaseSyncTableMode"')
+    tag = html[start : html.index(">", start)]
+    assert 'aria-describedby="lakebaseSyncTableModeHelp"' in tag
 
 
 def test_apply_from_config_proposes_managed_sync_when_unset() -> None:
@@ -56,5 +76,9 @@ def test_apply_from_config_proposes_managed_sync_when_unset() -> None:
         "(o.sync_mode === 'managed_synced') ? 'managed_synced' : 'app_managed'"
         not in js
     )
-    assert "if (stEl) stEl.value = 'snapshot';" in js
-    assert "o.sync_table_mode = 'snapshot';" in js
+    assert (
+        "if (stEl) stEl.value = ['triggered', 'continuous'].includes(o.sync_table_mode) "
+        "? o.sync_table_mode : 'snapshot';"
+    ) in js
+    assert "if (stEl) o.sync_table_mode = stEl.value || 'snapshot';" in js
+    assert "o.sync_table_mode = 'snapshot';" not in js
