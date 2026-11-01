@@ -533,3 +533,53 @@ Modified files:
 
 Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/units/architecture -> 225 passed
        uv run --frozen pytest -q tests/units/graphdb tests/units/core tests/back/core -> 2107 passed
+
+================================================================================
+## Fix: keep caller identity on the Lakehouse//RT fallback and retry reads only
+================================================================================
+
+Context: Review fix round 1 of Task 7. The fallback built its client with
+`for_write=True`, which switches to the service-principal build credentials and
+drops the caller's OBO token, so Unity Catalog governance did not apply to the
+retried read. It also retried any statement carrying a marker error, including
+writes.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaBase.py
+   `create_databricks_client` takes a keyword-only `warehouse_id`. On the read
+   branch it replaces `resolve_delta_warehouse_id(...)` and forces
+   `use_sea=False` (the build warehouse is classic Thrift); host/token
+   resolution including the OBO override and cloud-fetch handling are unchanged.
+   Ignored when `for_write=True`.
+2. src/back/core/graphdb/delta/DeltaFlatStore.py
+   The fallback client is now `create_databricks_client(domain, settings,
+   for_write=False, warehouse_id=resolve_build_warehouse_id(...))`. No retry
+   (the original error is re-raised) when the build warehouse id is empty or
+   equals the primary client's `warehouse_id`. Only statements starting with
+   SELECT or WITH (after whitespace and `--` / `/* */` comments) are retried;
+   INSERT/MERGE/DELETE/DDL propagate unchanged and create no client.
+   `last_read_route` is reset to `"query"` at the start of every
+   `execute_query`, so a failed read never reports a stale route.
+3. documentation/incremental-materialization.md
+   `_data` (not `_graph`) becomes the materialized view RT reads; `_graph` stays
+   a union view for now. Subsection trimmed to 14 lines, with a TODO comment to
+   cite the Lakehouse//RT guardrail values.
+4. tests/units/graphdb/delta/test_delta_base.py,
+   tests/units/graphdb/delta/test_read_warehouse_routing.py
+   Override tests (warehouse swapped, OBO token kept, `use_sea` False,
+   cloud-fetch kept, ignored for writes) and routing tests (factory called with
+   `for_write=False` and the build warehouse id, same-warehouse and empty-id
+   cases do not retry, write statements propagate, comment/whitespace noise,
+   stale route reset). 43 routing tests.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaBase.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_delta_base.py
+- tests/units/graphdb/delta/test_read_warehouse_routing.py
+- documentation/incremental-materialization.md
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/units/architecture -> 252 passed
+       uv run --frozen pytest -q tests/units/graphdb tests/units/core tests/back/core tests/units/api/test_explorer_access.py -> 2138 passed

@@ -23,8 +23,17 @@ def create_databricks_client(
     settings: Optional[Any] = None,
     *,
     for_write: bool = False,
+    warehouse_id: Optional[str] = None,
 ) -> Optional[Any]:
-    """Return a Delta client using the query or build warehouse as requested."""
+    """Return a Delta client using the query or build warehouse as requested.
+
+    *warehouse_id* (read branch only) replaces the resolved Lakehouse query
+    warehouse while keeping the caller's identity (host, token including the
+    OBO override) and cloud-fetch handling.  It forces the classic transport
+    (``use_sea=False``): the override targets the build warehouse, which is
+    Thrift, never Lakehouse//RT.
+    """
+    warehouse_override = None if for_write else (warehouse_id or None)
     try:
         from back.core.databricks import DatabricksClient
 
@@ -34,8 +43,12 @@ def create_databricks_client(
                 use_sea = resolve_build_use_sea(domain, settings)
             else:
                 host, token = get_databricks_host_and_token(domain, settings)
-                warehouse_id = resolve_delta_warehouse_id(domain, settings)
-                use_sea = resolve_lakehouse_use_sea(domain, settings)
+                if warehouse_override:
+                    warehouse_id = warehouse_override
+                    use_sea = False
+                else:
+                    warehouse_id = resolve_delta_warehouse_id(domain, settings)
+                    use_sea = resolve_lakehouse_use_sea(domain, settings)
                 # OBO: a Delta *read* driven by a user request runs on the
                 # caller's forwarded token so Unity Catalog governs the data.
                 # Build / health-probe / background reads carry no request
@@ -55,6 +68,9 @@ def create_databricks_client(
             token = db.get("token", "")
             warehouse_id = db.get("warehouse_id", "") or db.get("sql_warehouse_id", "")
             use_sea = bool(db.get("use_sea", False))
+            if warehouse_override:
+                warehouse_id = warehouse_override
+                use_sea = False
             use_cloud_fetch = db.get("use_cloud_fetch")
             use_cloud_fetch = (
                 True if use_cloud_fetch is None else bool(use_cloud_fetch)

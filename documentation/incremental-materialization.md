@@ -4,17 +4,15 @@
 
 ## Lakehouse//RT
 
-In the incremental and microbatch modes `_graph` is a materialized view, so
-Lakehouse//RT can read it (RT reads managed tables, materialized views and
-streaming tables, not plain views).
+In the incremental and microbatch modes `_data` becomes a materialized view that
+Lakehouse//RT can read directly (RT reads managed tables, materialized views and
+streaming tables, not plain views). `_graph` remains a union view for now.
 
-Graph reads go to the query warehouse: set `graph_engine_config.lakehouse.warehouse_id`
-and turn on "Use Lakehouse//RT for queries" in Settings > Back end > Lakehouse.
-A heavy traversal can trip an RT guardrail (2-minute runtime, 300 GB shuffle,
-statement timeout). `DeltaFlatStore.execute_query` then retries the statement
-once on the build warehouse, still bounded by the graph statement timeout, and
-logs a warning with the SQL length and its first 120 characters. Any other
-error propagates unchanged.
-
-`DeltaFlatStore.last_read_route` reports which path answered the last read:
-`"query"` or `"build-fallback"`.
+Graph reads go to the query warehouse (`graph_engine_config.lakehouse.warehouse_id`
+plus "Use Lakehouse//RT for queries"). A heavy traversal can trip an RT guardrail
+(2-minute runtime, 300 GB shuffle, statement timeout)
+<!-- TODO cite: Lakehouse//RT docs for the guardrail values -->
+and `DeltaFlatStore.execute_query` retries that SELECT/WITH once on the build
+warehouse, as the same caller (same OBO token), under the graph statement timeout.
+Writes, other errors and a build warehouse equal to the query warehouse are not
+retried. `last_read_route` (`"query"` or `"build-fallback"`) tells which path answered.

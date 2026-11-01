@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -20,7 +21,11 @@ from back.core.graphdb.props import (
     execute_expand_with_props_fallback,
     forget_missing_props,
 )
-from back.core.helpers import sql_escape as _escape_sql_string, validate_table_name
+from back.core.helpers import (
+    resolve_build_warehouse_id,
+    sql_escape as _escape_sql_string,
+    validate_table_name,
+)
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -29,6 +34,7 @@ logger = get_logger(__name__)
 # warehouse refused or aborted the statement (guardrails: 2-minute runtime,
 # 300 GB shuffle, statement timeout, unsupported feature).  Such a read is
 # retried once on the build warehouse; any other error propagates unchanged.
+# Only SELECT / WITH statements are retried (see ``_is_read_statement``).
 RT_FALLBACK_MARKERS = (
     "guardrail",
     "exceeds",
@@ -38,6 +44,8 @@ RT_FALLBACK_MARKERS = (
     "lakehouse//rt",
     "not supported on this warehouse",
 )
+
+_READ_STATEMENT = re.compile(r"(?:SELECT|WITH)\b", re.IGNORECASE)
 
 
 class DeltaFlatStore(GraphDBBackend):
@@ -583,10 +591,11 @@ class DeltaFlatStore(GraphDBBackend):
         :data:`RT_FALLBACK_MARKERS`) is retried once on the build warehouse;
         :attr:`last_read_route` records which path answered.
         """
+        self._last_read_route = "query"
         try:
             rows = self._run_read(self._client, query)
         except Exception as exc:
-            fallback = self._rt_fallback_client(exc)
+            fallback = self._rt_fallback_client(exc, query)
             if fallback is None:
                 raise
             logger.warning(
@@ -599,7 +608,6 @@ class DeltaFlatStore(GraphDBBackend):
             rows = self._run_read(fallback, query)
             self._last_read_route = "build-fallback"
             return rows
-        self._last_read_route = "query"
         return rows
 
     @staticmethod
@@ -613,21 +621,47 @@ class DeltaFlatStore(GraphDBBackend):
             return sql_service.execute_query(query, statement_timeout_s=timeout_s)
         return client.execute_query(query)
 
-    def _rt_fallback_client(self, exc: Exception) -> Optional[Any]:
-        """Build-warehouse client for *exc*, or ``None`` when no retry applies.
+    @staticmethod
+    def _is_read_statement(query: str) -> bool:
+        """True when *query* starts with SELECT or WITH after whitespace/comments."""
+        rest = query
+        while True:
+            rest = rest.lstrip()
+            if rest.startswith("--"):
+                end = rest.find("\n")
+                if end < 0:
+                    return False
+                rest = rest[end + 1 :]
+            elif rest.startswith("/*"):
+                end = rest.find("*/")
+                if end < 0:
+                    return False
+                rest = rest[end + 2 :]
+            else:
+                return _READ_STATEMENT.match(rest) is not None
 
-        Only guardrail-marked errors on a domain-bound store qualify.  The
-        client is created lazily (``for_write=True`` selects the build
-        warehouse) and cached for later reads.
+    def _rt_fallback_client(self, exc: Exception, query: str) -> Optional[Any]:
+        """Build-warehouse client for a refused *query*, or ``None`` for no retry.
+
+        Only guardrail-marked errors on a domain-bound store, for a read
+        statement, qualify.  The retry keeps the caller's identity (the read
+        branch of ``create_databricks_client``, OBO token included) and only
+        swaps the warehouse; it is skipped when the build warehouse is unset
+        or already the one that refused the statement.  The client is created
+        lazily and cached for later reads.
         """
         message = str(exc).lower()
         if not any(marker in message for marker in RT_FALLBACK_MARKERS):
             return None
-        if self._domain is None:
+        if self._domain is None or not self._is_read_statement(query):
             return None
         if self._fallback_client is None:
+            build_wh = resolve_build_warehouse_id(self._domain, self._settings)
+            primary_wh = getattr(self._client, "warehouse_id", None)
+            if not build_wh or build_wh == primary_wh:
+                return None
             self._fallback_client = create_databricks_client(
-                self._domain, self._settings, for_write=True
+                self._domain, self._settings, for_write=False, warehouse_id=build_wh
             )
         return self._fallback_client
 

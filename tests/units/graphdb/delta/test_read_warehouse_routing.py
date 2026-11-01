@@ -48,16 +48,24 @@ class _FallbackFactory:
         self.client = client
         self.calls = []
 
-    def __call__(self, domain, settings=None, *, for_write=False):
+    def __call__(self, domain, settings=None, *, for_write=False, warehouse_id=None):
         self.calls.append(
-            {"domain": domain, "settings": settings, "for_write": for_write}
+            {
+                "domain": domain,
+                "settings": settings,
+                "for_write": for_write,
+                "warehouse_id": warehouse_id,
+            }
         )
         return self.client
 
 
-def _install_factory(monkeypatch, client):
+def _install_factory(monkeypatch, client, *, build_warehouse_id="wh-build"):
     factory = _FallbackFactory(client)
     monkeypatch.setattr(_STORE_MODULE, "create_databricks_client", factory)
+    monkeypatch.setattr(
+        _STORE_MODULE, "resolve_build_warehouse_id", lambda d, s: build_warehouse_id
+    )
     return factory
 
 
@@ -82,14 +90,17 @@ class TestGuardrailFallback:
         assert build_client.queries == [_SQL]
         assert query_client.queries == [_SQL]
 
-    def test_fallback_client_is_created_for_write(self, monkeypatch):
+    def test_fallback_keeps_caller_identity_and_swaps_the_warehouse(self, monkeypatch):
+        # for_write=False keeps the read branch (OBO token); only the warehouse changes.
         query_client = _FakeClient(exc=InfrastructureError("guardrail"))
         factory = _install_factory(monkeypatch, _FakeClient())
         store = _store(query_client)
 
         store.execute_query(_SQL)
 
-        assert [c["for_write"] for c in factory.calls] == [True]
+        assert [(c["for_write"], c["warehouse_id"]) for c in factory.calls] == [
+            (False, "wh-build")
+        ]
 
     def test_route_is_build_fallback_after_fallback(self, monkeypatch):
         query_client = _FakeClient(exc=InfrastructureError("guardrail"))
@@ -189,6 +200,99 @@ class TestNoFallback:
         assert excinfo.value is error
 
 
+class TestReadStatementsOnly:
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            "INSERT INTO cat.sch.t_inferred SELECT * FROM cat.sch.t_graph",
+            "MERGE INTO cat.sch.t USING s ON t.k = s.k WHEN MATCHED THEN DELETE",
+            "DELETE FROM cat.sch.t WHERE subject = 'x'",
+            "CREATE OR REPLACE VIEW cat.sch.v AS SELECT 1",
+            "OPTIMIZE cat.sch.t",
+            "-- SELECT in a comment\nINSERT INTO cat.sch.t VALUES (1)",
+            "/* a */ INSERT INTO t SELECT 1 /* b */ SELECT 2",
+            "",
+        ],
+    )
+    def test_write_statement_error_propagates_without_fallback(
+        self, monkeypatch, statement
+    ):
+        error = InfrastructureError("exceeds the RT guardrail")
+        factory = _install_factory(monkeypatch, _FakeClient())
+        store = _store(_FakeClient(exc=error))
+
+        with pytest.raises(InfrastructureError) as excinfo:
+            store.execute_query(statement)
+
+        assert excinfo.value is error
+        assert factory.calls == []
+
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            "select 1",
+            "  \n\tSELECT 1",
+            "WITH level_0 AS (SELECT 1) SELECT * FROM level_0",
+            "with x as (select 1) select * from x",
+            "-- explain\nSELECT 1",
+            "/* hint */ SELECT 1",
+            "-- a\n  /* b */ -- c\n  WITH x AS (SELECT 1) SELECT * FROM x",
+        ],
+    )
+    def test_read_statement_with_noise_still_falls_back(self, monkeypatch, statement):
+        build_client = _FakeClient(result=[{"ok": 1}])
+        _install_factory(monkeypatch, build_client)
+        store = _store(_FakeClient(exc=InfrastructureError("guardrail")))
+
+        assert store.execute_query(statement) == [{"ok": 1}]
+
+
+class TestSameWarehouseSkipsRetry:
+    def test_same_warehouse_as_primary_reraises_original(self, monkeypatch):
+        error = InfrastructureError("guardrail")
+        query_client = _FakeClient(exc=error)
+        query_client.warehouse_id = "wh-build"
+        factory = _install_factory(monkeypatch, _FakeClient())
+        store = _store(query_client)
+
+        with pytest.raises(InfrastructureError) as excinfo:
+            store.execute_query(_SQL)
+
+        assert excinfo.value is error
+        assert factory.calls == []
+        assert query_client.queries == [_SQL]
+
+    def test_different_primary_warehouse_retries(self, monkeypatch):
+        query_client = _FakeClient(exc=InfrastructureError("guardrail"))
+        query_client.warehouse_id = "wh-rt"
+        build_client = _FakeClient(result=[{"ok": 1}])
+        _install_factory(monkeypatch, build_client)
+        store = _store(query_client)
+
+        assert store.execute_query(_SQL) == [{"ok": 1}]
+
+    @pytest.mark.parametrize("build_id", ["", None])
+    def test_empty_build_warehouse_reraises_original(self, monkeypatch, build_id):
+        error = InfrastructureError("guardrail")
+        factory = _install_factory(
+            monkeypatch, _FakeClient(), build_warehouse_id=build_id
+        )
+        store = _store(_FakeClient(exc=error))
+
+        with pytest.raises(InfrastructureError) as excinfo:
+            store.execute_query(_SQL)
+
+        assert excinfo.value is error
+        assert factory.calls == []
+
+    def test_client_without_warehouse_id_skips_the_comparison(self, monkeypatch):
+        build_client = _FakeClient(result=[{"ok": 1}])
+        _install_factory(monkeypatch, build_client)
+        store = _store(_FakeClient(exc=InfrastructureError("guardrail")))
+
+        assert store.execute_query(_SQL) == [{"ok": 1}]
+
+
 class TestLastReadRoute:
     def test_defaults_to_query(self):
         assert _store(_FakeClient()).last_read_route == "query"
@@ -208,6 +312,19 @@ class TestLastReadRoute:
 
         query_client._exc = None
         store.execute_query(_SQL)
+
+        assert store.last_read_route == "query"
+
+    def test_failed_read_does_not_report_a_stale_route(self, monkeypatch):
+        query_client = _FakeClient(exc=InfrastructureError("guardrail"))
+        _install_factory(monkeypatch, _FakeClient())
+        store = _store(query_client)
+        store.execute_query(_SQL)
+        assert store.last_read_route == "build-fallback"
+
+        query_client._exc = RuntimeError("boom")
+        with pytest.raises(RuntimeError):
+            store.execute_query(_SQL)
 
         assert store.last_read_route == "query"
 
