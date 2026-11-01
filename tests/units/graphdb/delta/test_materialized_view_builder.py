@@ -293,12 +293,15 @@ class TestPlanIsIncremental:
 
 
 class TestApply:
+    """``with_graph_mv=True``: ``_graph`` is replaced by a materialized view too."""
+
     KWARGS = dict(
         data_fqn=DATA,
         graph_fqn=GRAPH,
         inferred_fqn=INFERRED,
         slots_fqn=SLOTS,
         batch_branch_sql=BATCH,
+        with_graph_mv=True,
     )
 
     def _expected(self, drop_table: bool) -> list[str]:
@@ -409,6 +412,73 @@ class TestApply:
         )
         mvs = [s for s in client.statements if "MATERIALIZED VIEW" in s]
         assert len(mvs) == 2 and all("REFRESH POLICY AUTO" in s for s in mvs)
+
+
+class TestApplyKeepsTheGraphView:
+    """Default (``with_graph_mv=False``): ``_graph`` stays the union VIEW.
+
+    The build path relies on it: the inferred reset and the Delta store's app
+    writes both ``CREATE OR REPLACE VIEW`` the ``_graph`` relation.
+    """
+
+    KWARGS = dict(
+        data_fqn=DATA,
+        graph_fqn=GRAPH,
+        inferred_fqn=INFERRED,
+        slots_fqn=SLOTS,
+        batch_branch_sql=BATCH,
+    )
+
+    def _expected(self, drop_table: bool) -> list[str]:
+        statements = [f"DROP TABLE IF EXISTS {DATA}"] if drop_table else []
+        return statements + [
+            f"DROP VIEW IF EXISTS {DATA}",
+            f"DROP MATERIALIZED VIEW IF EXISTS {GRAPH}",
+            MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH),
+            materialize.build_ensure_inferred_sql(INFERRED),
+            materialize.build_union_view_sql(GRAPH, DATA, INFERRED),
+        ]
+
+    @pytest.mark.parametrize("drop_table", [True, False])
+    def test_statement_order(self, drop_table):
+        client = RecordingClient()
+        MaterializedViewBuilder.apply(client, drop_existing_table=drop_table, **self.KWARGS)
+        assert client.statements == self._expected(drop_table)
+
+    def test_the_graph_is_never_a_materialized_view(self):
+        client = RecordingClient()
+        MaterializedViewBuilder.apply(client, drop_existing_table=True, **self.KWARGS)
+        assert not any(
+            s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {GRAPH}")
+            for s in client.statements
+        )
+
+    def test_the_graph_view_goes_through_ensure_graph_view(self):
+        from unittest.mock import patch
+
+        client = RecordingClient()
+        with patch.object(materialize, "ensure_graph_view") as ensure:
+            MaterializedViewBuilder.apply(client, drop_existing_table=False, **self.KWARGS)
+        ensure.assert_called_once_with(client, GRAPH, DATA, INFERRED)
+
+    def test_returns_the_data_mv_and_the_graph_view(self):
+        result = MaterializedViewBuilder.apply(
+            RecordingClient(), drop_existing_table=False, **self.KWARGS
+        )
+        assert result == {"data_mv": DATA, "graph_view": GRAPH}
+
+    def test_a_leftover_graph_mv_drop_failing_does_not_abort(self):
+        client = RecordingClient(fail_when=("DROP ",))
+        MaterializedViewBuilder.apply(client, drop_existing_table=True, **self.KWARGS)
+        assert client.statements[3:] == self._expected(drop_table=True)[3:]
+
+    def test_blank_graph_name_raises_before_any_statement_runs(self):
+        client = RecordingClient()
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.apply(
+                client, **{**self.KWARGS, "graph_fqn": ""}, drop_existing_table=True
+            )
+        assert client.statements == []
 
 
 class TestLastRefreshTechnique:

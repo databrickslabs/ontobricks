@@ -178,11 +178,18 @@ class MaterializedViewBuilder:
         batch_branch_sql: str | None,
         drop_existing_table: bool,
         refresh_policy: str = "INCREMENTAL",
+        with_graph_mv: bool = False,
     ) -> dict:
-        """Create or replace the ``_data`` and ``_graph`` materialized views.
+        """Create or replace the ``_data`` materialized view and the ``_graph`` relation.
 
-        Both statements are built (and validated) before anything runs.
-        Then, in order:
+        ``_graph`` is the union of ``_data`` and ``_inferred``. By default
+        (*with_graph_mv* false) it stays the plain union VIEW
+        (``materialize.ensure_graph_view``), which the inferred reset and the
+        Delta store's app writes keep replacing; with *with_graph_mv* it
+        becomes a materialized view too (not used by the build yet).
+
+        Every statement is built (and validated) before anything runs. Then,
+        in order:
 
         1. ``DROP TABLE IF EXISTS <data>`` when *drop_existing_table*: an
            existing ``_data`` TABLE blocks ``CREATE MATERIALIZED VIEW``.
@@ -190,18 +197,20 @@ class MaterializedViewBuilder:
            (``materialize.apply_data_relation``) keep ``_data`` as a plain
            VIEW, which ``CREATE OR REPLACE MATERIALIZED VIEW`` cannot replace.
            Without it such a domain could never enter incremental mode.
-        3. ``DROP VIEW IF EXISTS <graph>``: a plain VIEW blocks it as well.
+        3. The ``_graph`` relation of the other kind: ``DROP VIEW`` before a
+           graph MV, ``DROP MATERIALIZED VIEW`` before the union VIEW.
            All the drops are best-effort (``materialize.drop_relation``): a
-           relation that is absent, or already a materialized view, makes the
-           drop fail harmlessly and ``CREATE OR REPLACE`` takes over.
+           relation that is absent, or of another kind, makes the drop fail
+           harmlessly and ``CREATE OR REPLACE`` takes over.
         4. the ``_data`` view;
         5. the ``_inferred`` companion (``CREATE TABLE IF NOT EXISTS``);
-        6. ``ALTER TABLE <inferred> SET TBLPROPERTIES`` for row tracking and
-           deletion vectors, so a companion created before incremental mode
-           becomes readable incrementally too;
-        7. the ``_graph`` view.
+        6. graph MV only: ``ALTER TABLE <inferred> SET TBLPROPERTIES`` for row
+           tracking and deletion vectors, so a companion created before
+           incremental mode becomes readable incrementally too;
+        7. the ``_graph`` materialized view, or the union VIEW.
 
-        Returns ``{"data_mv": data_fqn, "graph_mv": graph_fqn}``.
+        Returns ``{"data_mv": data_fqn, "graph_mv": graph_fqn}`` with a graph
+        MV, ``{"data_mv": data_fqn, "graph_view": graph_fqn}`` otherwise.
         """
         data_sql = MaterializedViewBuilder.data_mv_sql(
             data_fqn,
@@ -209,18 +218,27 @@ class MaterializedViewBuilder:
             batch_branch_sql=batch_branch_sql,
             refresh_policy=refresh_policy,
         )
-        graph_sql = MaterializedViewBuilder.graph_mv_sql(
-            graph_fqn, data_fqn, inferred_fqn, refresh_policy=refresh_policy
-        )
-        enable_tracking_sql = materialize.build_enable_row_tracking_sql(inferred_fqn)
+        if with_graph_mv:
+            graph_sql = MaterializedViewBuilder.graph_mv_sql(
+                graph_fqn, data_fqn, inferred_fqn, refresh_policy=refresh_policy
+            )
+            enable_tracking_sql = materialize.build_enable_row_tracking_sql(inferred_fqn)
+        else:
+            # Validates the three names; ensure_graph_view runs the same statement.
+            materialize.build_union_view_sql(graph_fqn, data_fqn, inferred_fqn)
 
         if drop_existing_table:
             materialize.drop_relation(client, data_fqn, kind="table")
         materialize.drop_relation(client, data_fqn, kind="view")
-        materialize.drop_relation(client, graph_fqn, kind="view")
+        materialize.drop_relation(
+            client, graph_fqn, kind="view" if with_graph_mv else "materialized_view"
+        )
         logger.info("Creating the data materialized view %s", data_fqn)
         materialize.run_sql(client, data_sql)
         materialize.ensure_inferred_table(client, inferred_fqn)
+        if not with_graph_mv:
+            materialize.ensure_graph_view(client, graph_fqn, data_fqn, inferred_fqn)
+            return {"data_mv": data_fqn, "graph_view": graph_fqn}
         materialize.run_sql(client, enable_tracking_sql)
         logger.info("Creating the graph materialized view %s", graph_fqn)
         materialize.run_sql(client, graph_sql)

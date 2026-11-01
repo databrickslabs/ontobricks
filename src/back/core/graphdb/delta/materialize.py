@@ -209,15 +209,22 @@ def create_data_view(client: Any, view_fqn: str, data_fqn: str) -> None:
     run_sql(client, sql)
 
 
-def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
-    """Best-effort ``DROP {TABLE,VIEW} IF EXISTS`` on *fqn*.
+_DROP_KINDS = {
+    "table": "TABLE",
+    "view": "VIEW",
+    "materialized_view": "MATERIALIZED VIEW",
+}
 
-    Failure is logged and swallowed: the only caller is
-    :func:`apply_data_relation`, clearing a relation of the *other* kind whose
-    usual state is "not there at all".
+
+def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
+    """Best-effort ``DROP {TABLE,VIEW,MATERIALIZED VIEW} IF EXISTS`` on *fqn*.
+
+    Failure is logged and swallowed: callers clear a relation of the *other*
+    kind whose usual state is "not there at all" (Databricks refuses to drop a
+    relation through the wrong kind's ``DROP``, which is the no-op case).
     """
     validate_table_name(fqn)
-    statement = "TABLE" if kind == "table" else "VIEW"
+    statement = _DROP_KINDS.get(kind, "VIEW")
     try:
         run_sql(client, f"DROP {statement} IF EXISTS {fqn}")
     except Exception as exc:  # noqa: BLE001

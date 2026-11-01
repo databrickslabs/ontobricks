@@ -288,6 +288,28 @@ class TestMaterializeSql:
         assert "USING DELTA" not in sql
 
 
+class TestDropRelation:
+    """Best-effort ``DROP <kind> IF EXISTS`` for each relation kind the build leaves."""
+
+    @pytest.mark.parametrize(
+        ("kind", "statement"),
+        [
+            ("table", "DROP TABLE IF EXISTS c.s.v_data"),
+            ("view", "DROP VIEW IF EXISTS c.s.v_data"),
+            ("materialized_view", "DROP MATERIALIZED VIEW IF EXISTS c.s.v_data"),
+        ],
+    )
+    def test_each_kind_has_its_own_statement(self, kind, statement):
+        client = MagicMock()
+        materialize.drop_relation(client, "c.s.v_data", kind=kind)
+        client.execute_statement.assert_called_once_with(statement)
+
+    def test_a_refused_drop_is_swallowed(self):
+        client = MagicMock()
+        client.execute_statement.side_effect = RuntimeError("WRONG_COMMAND_FOR_OBJECT_TYPE")
+        materialize.drop_relation(client, "c.s.v_data", kind="materialized_view")
+
+
 class TestApplyDataRelation:
     """Both modes must clear the relation of the *other* kind first.
 
