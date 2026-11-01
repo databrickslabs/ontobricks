@@ -69,8 +69,8 @@ def normalize_sync_table_mode(value: Any = None) -> str:
     ``incremental`` → triggered, ``microbatch`` → continuous), never above this
     one. Triggered and Continuous apply row-level changes, so they need a source
     with a change data feed — a Delta table or materialized view, never a plain
-    VIEW. The build pipeline guarantees that by syncing ``…_data`` (or a complete
-    ``…_slots``) and keeps a VIEW source on snapshots.
+    VIEW. The build pipeline guarantees that by syncing ``…_data`` and keeps a
+    VIEW source on snapshots.
     """
     if value is None:
         return "snapshot"

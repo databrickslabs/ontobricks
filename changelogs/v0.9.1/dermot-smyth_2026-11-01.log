@@ -959,3 +959,90 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q tests/units/objects tests/units/architecture`
 -> see commit; the two tests drop from 90.0 s each to well under 1 s.
+
+================================================================================
+## Fix: Task 5 review round 1 (no _slots source, scheduled mode, continuous wait, view drop, sync trace)
+================================================================================
+
+Context: Review fix round 1 of Task 5 (Imp#2, Imp#3, Imp#4, Minor#1, trace
+ruling).
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinLakebaseSync.py (Imp#2)
+   `_slots` is never a Lakebase sync source in this release: `sync_plan_for`
+   (no slots inputs any more) returns `_data` (table or MV) when it is a copy,
+   else the gateway VIEW as a snapshot. Asserted-only readers (entity-search
+   rebuild, `include_inferred=False` reads, BFS expansion) query `_sync`
+   directly and would see one row per slot and blank objects.
+   `slots_complete` stays computed; the slots union view / index DDL stays for
+   a follow-up.
+2. src/back/objects/registry/schedule/build.py,
+   src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py (Imp#3)
+   Scheduled builds follow the domain's materialization mode: the new
+   `TwinBuildPostMaterialize.unprobed_mode_decision(domain, settings)` runs the
+   resolver ladder with `decide_mode`'s inputs (shared `_resolver_inputs`:
+   serverless flag, backend, previews={}; realtime -> microbatch), counting
+   the sources as row-tracked because the scheduled path cannot probe them. A
+   scheduled tick of an incremental domain keeps TRIGGERED, a full domain
+   SNAPSHOT, instead of flipping the registration to SNAPSHOT each run.
+3. src/back/core/graphdb/lakebase/ContinuousSyncWait.py (new),
+   src/back/core/graphdb/lakebase/SyncedTableManager.py (Imp#4)
+   `trigger_and_wait` on a CONTINUOUS table polls until the state leaves
+   PROVISIONING* (ONLINE_CONTINUOUS_UPDATE or terminal OK), raises
+   `InfrastructureError` on a terminal failure or after `timeout_s`, honours
+   `cancel_check` and `on_state_change`; still never triggers an update.
+4. src/back/core/graphdb/lakebase/SyncedTableManager.py,
+   src/back/core/graphdb/lakebase/SyncedTableRegistration.py,
+   src/back/objects/digitaltwin/build/TwinLakebaseSync.py (Minor#1)
+   `ensure(..., before_delete=)` calls the hook right before a drifted
+   registration is deleted; `TwinLakebaseSync.union_view_dropper` (best-effort)
+   drops the Postgres union view there instead of before `ensure`, so a failed
+   `ensure` never leaves readers without a view. Step 6 re-creates it.
+5. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py,
+   src/back/objects/digitaltwin/build/_build_pipeline.py (trace ruling)
+   New trace keys `sync_source` (the relation the synced table was registered
+   on) and `sync_mode_effective` ("" when no sync ran), recorded by
+   `TwinLakebaseSync.register` once `ensure` succeeded; `triples_source` keeps
+   meaning the counted relation.
+6. docs/backend.md, src/front/templates/settings.html,
+   src/back/core/graphdb/lakebase/LakebaseBase.py
+   Stored `triggered` / `continuous` values now act as caps on the
+   mode-derived schedule (they were coerced to snapshot before); no text
+   mentions `_slots` as a source any more; scheduled builds follow the
+   domain's mode.
+7. Tests: tests/units/core/test_synced_table_manager.py (continuous wait:
+   streams, already online, failure, timeout, cancel; before_delete hook),
+   tests/units/objects/test_build_pipeline_modes.py (plan never picks
+   `_slots`; sync trace keys; view dropped only through the hook),
+   tests/units/registry/test_scheduled_build_lakeflow_source.py (incremental
+   tick -> triggered, microbatch/realtime -> continuous, full -> snapshot,
+   cap, serverless off; unprobed_mode_decision).
+
+Known limitations:
+- The scheduled path counts the sources as row-tracked: for a domain whose
+  sources are not tracked, the main build runs `full` (snapshot) while a
+  scheduled tick registers the requested faster schedule, so those domains
+  still recreate the synced table on each alternation.
+- tests/units/objects/test_build_pipeline_compute_once.py still pins the old
+  eight trace keys and the removed `_slots` sync warning (two failing tests);
+  that file was reserved for a concurrent change in this round.
+
+Modified files:
+- docs/backend.md
+- src/back/core/graphdb/lakebase/ContinuousSyncWait.py (new)
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- src/back/core/graphdb/lakebase/SyncedTableManager.py
+- src/back/core/graphdb/lakebase/SyncedTableRegistration.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinLakebaseSync.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- src/front/templates/settings.html
+- tests/units/core/test_synced_table_manager.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/core tests/units/objects/test_build_pipeline_modes.py tests/units/dtwin tests/units/registry tests/units/graphdb tests/units/architecture --durations=5
+-> 3406 passed in 11.93s (slowest test 1.00s)
