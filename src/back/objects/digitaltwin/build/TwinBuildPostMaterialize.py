@@ -7,8 +7,8 @@ one-line hooks that delegate here.
 
 State is read with ``getattr`` defaults because the relation attributes
 (``data_table``, ``data_relation_mode``, ``inferred_reset``, and the
-incremental facts ``slots_table`` / ``slot_pipeline_id`` /
-``refresh_technique``) only exist once the phase that sets them has run.
+incremental facts ``slots_table`` / ``slots_complete`` / ``slot_pipeline_id``
+/ ``refresh_technique``) only exist once the phase that sets them has run.
 ``mode_decision`` is set at the start of ``run()`` and refined by
 :class:`TwinIncrementalBuild` once the mappings are compiled.
 """
@@ -42,7 +42,7 @@ class TwinBuildPostMaterialize:
         (incremental build). A pass-through ``view`` ``…_data`` re-runs the
         R2RML SQL on every read exactly like the gateway VIEW does, so reading
         it buys nothing and the VIEW stays the source. (The Lakeflow sync
-        source is chosen separately and is still the VIEW.)
+        source is chosen by :class:`TwinLakebaseSync`.)
         """
         data_table = getattr(pipe, "data_table", "") or ""
         mode = getattr(pipe, "data_relation_mode", None)

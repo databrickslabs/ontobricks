@@ -129,6 +129,7 @@ class TestMaterializeSql:
         sql = materialize.build_ctas_sql("cat.sch.view1", "cat.sch.view1_data")
         assert sql.endswith("AS SELECT subject, predicate, object FROM cat.sch.view1")
         assert "object_hash" not in sql
+        assert "TBLPROPERTIES" not in sql
 
     def test_ctas_carries_object_hash_when_asked(self):
         """Lakeflow's primary key needs ``object_hash`` in the table it syncs."""
@@ -139,6 +140,17 @@ class TestMaterializeSql:
             "AS SELECT subject, predicate, object, object_hash FROM cat.sch.view1"
         )
         assert "CLUSTER BY (predicate, subject)" in sql
+
+    def test_a_lakeflow_source_ctas_tracks_rows(self):
+        """Row tracking gives a triggered/continuous synced table its automatic change feed."""
+        sql = materialize.build_ctas_sql(
+            "cat.sch.view1", "cat.sch.view1_data", with_object_hash=True
+        )
+        assert (
+            "CLUSTER BY (predicate, subject) "
+            "TBLPROPERTIES (delta.enableRowTracking = true, delta.enableDeletionVectors = true) "
+            "AS SELECT"
+        ) in sql
 
     def test_adj_ctas_clusters_src_for_out(self):
         sql = materialize.build_adj_ctas_sql(

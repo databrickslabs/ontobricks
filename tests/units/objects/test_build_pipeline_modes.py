@@ -20,8 +20,9 @@ from back.core.errors import InfrastructureError, OperationCancelledError
 from back.core.graphdb import ModeDecision
 from back.core.streaming import SlotPipelineRunner
 from back.core.w3c import sparql
-from back.objects.digitaltwin.build import TwinIncrementalBuild
-from tests.units.objects.test_build_pipeline_materialize import _DATA, _bare_pipeline
+from back.objects.digitaltwin.build import SyncPlan, TwinIncrementalBuild, TwinLakebaseSync
+from tests.units.dtwin import test_build_pipeline_streaming as _streaming
+from tests.units.objects.test_build_pipeline_materialize import _DATA, _VIEW, _bare_pipeline
 
 pytestmark = pytest.mark.unit
 
@@ -775,3 +776,264 @@ class TestSettings:
             )
             == "CURRENT"
         )
+
+
+class TestSlotsComplete:
+    """``…_slots`` holds the whole graph only when no mapping is on the batch branch."""
+
+    def test_row_local_mappings_only_make_the_slots_complete(self):
+        pipe = _pipeline("incremental", entities={_CUSTOMER: _row_local()})
+
+        _run(pipe)
+
+        assert pipe.slots_table == _SLOTS
+        assert pipe.slots_complete is True
+
+    def test_a_batch_mapping_leaves_the_slots_incomplete(self):
+        pipe = _pipeline("incremental")
+
+        _run(pipe)
+
+        assert pipe.slots_table == _SLOTS
+        assert pipe.slots_complete is False
+
+    def test_batch_mappings_only_have_no_slots(self):
+        pipe = _pipeline("incremental", entities={_ORDER: _batch()})
+
+        _run(pipe)
+
+        assert pipe.slots_table is None
+        assert pipe.slots_complete is False
+
+    def test_a_full_build_resets_the_fact(self):
+        pipe = _pipeline(mode=None)
+        pipe.slots_complete = True
+
+        _run(pipe)
+
+        assert pipe.slots_complete is False
+
+
+_SLOT_KEY = ("map_id", "source_key", "predicate")
+_TRIPLE_KEY = ("subject", "predicate", "object_hash")
+_ORDER_OF_SCHEDULES = ("snapshot", "triggered", "continuous")
+_MODE_SCHEDULE = {"full": "snapshot", "incremental": "triggered", "microbatch": "continuous"}
+
+
+def _plan(**overrides) -> SyncPlan:
+    kwargs = {
+        "view_table": _VIEW,
+        "data_table": _DATA,
+        "slots_table": None,
+        "slots_complete": False,
+        "mode_effective": "full",
+        "configured_sync_table_mode": "snapshot",
+        "source_is_view": False,
+    }
+    kwargs.update(overrides)
+    return TwinLakebaseSync.sync_plan_for(**kwargs)
+
+
+class TestLakebaseSyncPlan:
+    """Which relation Lakeflow syncs, on which key, and how often."""
+
+    @pytest.mark.parametrize("configured", _ORDER_OF_SCHEDULES)
+    @pytest.mark.parametrize("mode", list(_MODE_SCHEDULE))
+    def test_the_schedule_is_the_mode_schedule_capped_by_the_configured_one(
+        self, mode, configured
+    ):
+        plan = _plan(mode_effective=mode, configured_sync_table_mode=configured)
+
+        expected = min(_MODE_SCHEDULE[mode], configured, key=_ORDER_OF_SCHEDULES.index)
+        assert plan.sync_mode == expected
+
+    def test_the_default_snapshot_caps_every_mode(self):
+        for mode in _MODE_SCHEDULE:
+            assert _plan(mode_effective=mode).sync_mode == "snapshot"
+
+    @pytest.mark.parametrize("configured", [None, "", "bogus", MagicMock(), " CONTINUOUS "])
+    def test_an_unreadable_configured_schedule_counts_as_snapshot(self, configured):
+        plan = _plan(mode_effective="microbatch", configured_sync_table_mode=configured)
+
+        expected = "continuous" if configured == " CONTINUOUS " else "snapshot"
+        assert plan.sync_mode == expected
+
+    def test_the_data_relation_is_the_default_source(self):
+        plan = _plan(mode_effective="incremental", configured_sync_table_mode="continuous")
+
+        assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "triggered", "triples")
+
+    def test_complete_slots_are_synced_on_the_slot_key(self):
+        plan = _plan(
+            slots_table=_SLOTS,
+            slots_complete=True,
+            mode_effective="microbatch",
+            configured_sync_table_mode="continuous",
+        )
+
+        assert plan == SyncPlan(_SLOTS, _SLOT_KEY, "continuous", "slots")
+
+    def test_incomplete_slots_are_never_synced(self):
+        """A batch branch lives only in ``…_data``: syncing ``…_slots`` would lose it."""
+        plan = _plan(
+            slots_table=_SLOTS,
+            slots_complete=False,
+            mode_effective="incremental",
+            configured_sync_table_mode="triggered",
+        )
+
+        assert (plan.source_fqn, plan.source_kind) == (_DATA, "triples")
+
+    def test_a_full_build_never_syncs_slots(self):
+        plan = _plan(
+            slots_table=_SLOTS, slots_complete=True, configured_sync_table_mode="continuous"
+        )
+
+        assert (plan.source_fqn, plan.sync_mode) == (_DATA, "snapshot")
+
+    def test_a_view_source_is_always_a_snapshot_of_the_gateway_view(self):
+        plan = _plan(
+            source_is_view=True,
+            mode_effective="microbatch",
+            configured_sync_table_mode="continuous",
+        )
+
+        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot", "triples")
+
+    def test_without_a_data_relation_the_gateway_view_is_synced_as_a_snapshot(self):
+        plan = _plan(
+            data_table="", mode_effective="incremental", configured_sync_table_mode="triggered"
+        )
+
+        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot", "triples")
+
+    def test_the_plan_unpacks_into_the_ensure_arguments(self):
+        plan = SyncPlan(_SLOTS, _SLOT_KEY, "continuous", "slots")
+
+        assert plan.ensure_kwargs() == {
+            "source_table_full_name": _SLOTS,
+            "primary_key_columns": list(_SLOT_KEY),
+            "sync_mode": "continuous",
+        }
+
+
+class TestLakebaseSyncPlanFromThePipeline:
+    @staticmethod
+    def _pipe(**attrs):
+        base = {"view_table": _VIEW, "store": SimpleNamespace(sync_table_mode="continuous")}
+        base.update(attrs)
+        return SimpleNamespace(**base)
+
+    def test_a_pipeline_that_built_nothing_syncs_the_gateway_view(self):
+        plan = TwinLakebaseSync.sync_plan(self._pipe())
+
+        assert plan == SyncPlan(_VIEW, _TRIPLE_KEY, "snapshot", "triples")
+
+    @pytest.mark.parametrize("relation_mode", ["table", "materialized_view"])
+    def test_a_computed_data_relation_is_synced(self, relation_mode):
+        pipe = self._pipe(
+            data_table=_DATA,
+            data_relation_mode=relation_mode,
+            mode_decision=ModeDecision("incremental", "incremental", ""),
+        )
+
+        plan = TwinLakebaseSync.sync_plan(pipe)
+
+        assert (plan.source_fqn, plan.sync_mode) == (_DATA, "triggered")
+
+    def test_a_pass_through_data_view_syncs_the_gateway_view(self):
+        pipe = self._pipe(data_table=_DATA, data_relation_mode="view")
+
+        assert TwinLakebaseSync.sync_plan(pipe).source_fqn == _VIEW
+
+    def test_complete_slots_come_from_the_incremental_facts(self):
+        pipe = self._pipe(
+            data_table=_DATA,
+            data_relation_mode="materialized_view",
+            slots_table=_SLOTS,
+            slots_complete=True,
+            mode_decision=ModeDecision("microbatch", "microbatch", ""),
+        )
+
+        assert TwinLakebaseSync.sync_plan(pipe) == SyncPlan(
+            _SLOTS, _SLOT_KEY, "continuous", "slots"
+        )
+
+
+class TestSyncedApplyUsesThePlan:
+    """``_apply_via_synced_pipeline`` registers, refreshes and reads what the plan says."""
+
+    @staticmethod
+    def _microbatch_pipe():
+        pipe = _streaming.TestApplyViaSyncedPipeline()._synced_pipe()
+        pipe.mode_decision = ModeDecision("microbatch", "microbatch", "")
+        pipe.data_table = f"{pipe.view_table}_data"
+        pipe.data_relation_mode = "materialized_view"
+        pipe.slots_table = f"{pipe.view_table}_slots"
+        pipe.slots_complete = True
+        pipe.store.sync_table_mode = "continuous"
+        return pipe
+
+    def test_complete_slots_register_a_continuous_synced_table_on_the_slot_key(self):
+        pipe = self._microbatch_pipe()
+
+        assert pipe._apply_via_synced_pipeline() is True
+
+        assert pipe._mgr.ensure.call_args.kwargs == {
+            "source_table_full_name": "cat.sch.v_g_slots",
+            "primary_key_columns": list(_SLOT_KEY),
+            "sync_mode": "continuous",
+        }
+        assert pipe.store.ensure_synced_union_view.call_args.kwargs["source_kind"] == "slots"
+
+    def test_incomplete_slots_register_the_data_relation(self):
+        pipe = self._microbatch_pipe()
+        pipe.slots_complete = False
+
+        assert pipe._apply_via_synced_pipeline() is True
+
+        kwargs = pipe._mgr.ensure.call_args.kwargs
+        assert kwargs["source_table_full_name"] == "cat.sch.v_g_data"
+        assert kwargs["primary_key_columns"] == list(_TRIPLE_KEY)
+        assert kwargs["sync_mode"] == "continuous"
+        assert pipe.store.ensure_synced_union_view.call_args.kwargs["source_kind"] == "triples"
+
+    def test_a_drifted_registration_drops_the_union_view_before_ensure(self):
+        pipe = self._microbatch_pipe()
+        calls = []
+        pipe._mgr.get.return_value = SimpleNamespace(
+            spec=SimpleNamespace(source_table_full_name="cat.sch.v_g", scheduling_policy="SNAPSHOT")
+        )
+        pipe.store.drop_union_view = MagicMock(side_effect=lambda g: calls.append(("drop", g)))
+        ensured = MagicMock()
+        ensured.name = _streaming.TestApplyViaSyncedPipeline._SYNCED_UC
+        pipe._mgr.ensure.side_effect = lambda *a, **k: calls.append(("ensure",)) or ensured
+
+        assert pipe._apply_via_synced_pipeline() is True
+
+        assert calls == [("drop", pipe.graph_name), ("ensure",)]
+        pipe.store.ensure_synced_union_view.assert_called_once()
+
+    def test_an_unchanged_registration_keeps_the_union_view(self):
+        pipe = self._microbatch_pipe()
+        pipe._mgr.get.return_value = SimpleNamespace(
+            spec=SimpleNamespace(
+                source_table_full_name="cat.sch.v_g_slots", scheduling_policy="CONTINUOUS"
+            )
+        )
+        pipe.store.drop_union_view = MagicMock()
+
+        assert pipe._apply_via_synced_pipeline() is True
+
+        pipe.store.drop_union_view.assert_not_called()
+
+    def test_a_failed_view_drop_does_not_fail_the_build(self):
+        pipe = self._microbatch_pipe()
+        pipe._mgr.get.return_value = SimpleNamespace(
+            spec=SimpleNamespace(source_table_full_name="cat.sch.v_g", scheduling_policy="SNAPSHOT")
+        )
+        pipe.store.drop_union_view = MagicMock(side_effect=RuntimeError("pg down"))
+
+        assert pipe._apply_via_synced_pipeline() is True
+
+        pipe._mgr.ensure.assert_called_once()

@@ -45,6 +45,7 @@ from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
+from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
 from back.objects.digitaltwin.models import DomainSnapshot
 
 logger = get_logger(__name__)
@@ -164,8 +165,11 @@ def step_times_from_task(task) -> Dict[str, float]:
     return out
 
 
-def _report_post_sync_triple_count(pipe: Any) -> None:
+def _report_post_sync_triple_count(pipe: Any, synced_source: str) -> None:
     """Count the source relation's triples after a successful Lakeflow sync.
+
+    *synced_source* is the relation the synced table was registered on (the
+    count reads ``_triples_source_relation()``, which can differ: ``…_slots``).
 
     The count is reporting only: a lost warehouse connection must not
     turn a successful sync into a failed build, and must not publish
@@ -185,11 +189,12 @@ def _report_post_sync_triple_count(pipe: Any) -> None:
     else:
         if pipe.triple_count == 0:
             logger.warning(
-                "[DT-BUILD %s] post-sync %s contains 0 triples — "
-                "the Lakeflow pipeline may have synced an empty source or "
+                "[DT-BUILD %s] post-sync %s contains 0 triples (Lakeflow synced %s) — "
+                "the pipeline may have synced an empty source or "
                 "the VIEW SQL produces no rows; check mappings and source data",
                 pipe.task_id,
                 pipe._triples_source_relation(),
+                synced_source,
             )
     if pipe.is_api:
         return
@@ -274,8 +279,9 @@ class _BuildPipeline:
         self.inferred_reset: bool = False
         # Requested vs effective materialization mode, set at the start of run().
         self.mode_decision: Optional[Any] = None
-        # Incremental facts (TwinIncrementalBuild); None / "" on the full path.
+        # Incremental facts (TwinIncrementalBuild); None / "" / False on the full path.
         self.slots_table: Optional[str] = None
+        self.slots_complete: bool = False  # …_slots holds every triple (no batch branch)
         self.slot_pipeline_id: str = ""
         self.refresh_technique: str = ""
         # Lakebase managed-synced mode flag, resolved once before _open_store.
@@ -770,8 +776,8 @@ class _BuildPipeline:
                 else f"Materializing mapped triples into {data_table}..."
             ),
         )
-        # Lakeflow still syncs the VIEW; once it moves to this table, its primary
-        # key needs the ``object_hash`` the wrapped VIEW exposes.
+        # Lakeflow syncs this table (TwinLakebaseSync): its primary key needs the
+        # ``object_hash`` the wrapped VIEW exposes.
         with_hash = mode == "table" and self._wrap_view_sql_for_lakeflow()
         try:
             materialize.apply_data_relation(
@@ -1051,7 +1057,8 @@ class _BuildPipeline:
 
         1. Build the synced UC FQN from ``engine_config.sync_uc_catalog``.
         2. ``CREATE SCHEMA IF NOT EXISTS`` in Unity Catalog.
-        3. ``SyncedTableManager.ensure`` — registers the synced table.
+        3. ``SyncedTableManager.ensure`` — registers the synced table on the
+           relation, key and schedule :class:`TwinLakebaseSync` picks.
         4. ``ensure_synced_companion`` — Postgres companion table.
         5. ``trigger_and_wait`` — wait until sync reaches an online state.
         6. ``ensure_synced_union_view`` — union view over ``_sync`` ∪ companion.
@@ -1063,6 +1070,7 @@ class _BuildPipeline:
         )
 
         t0 = time.time()
+        plan = TwinLakebaseSync.sync_plan(self)
         try:
             mgr = self.store.synced_manager()
             fallback_cat = resolve_sync_uc_fallback_catalog(
@@ -1136,20 +1144,13 @@ class _BuildPipeline:
                 "(source=%s sync_mode=%s)",
                 self.task_id,
                 synced_uc,
-                self.view_table,
-                self.store.sync_table_mode,
+                plan.source_fqn,
+                plan.sync_mode,
             )
-            from back.core.graphdb.lakebase._companion_ddl import (
-                LAKEFLOW_SYNC_PRIMARY_KEY,
+            TwinLakebaseSync.drop_union_view_if_drifted(
+                self.store, mgr, synced_uc, self.graph_name, plan
             )
-
-            # VIEW, not _data: scheduled builds reuse this registration by name.
-            _synced_obj = mgr.ensure(
-                synced_uc,
-                source_table_full_name=self.view_table,
-                primary_key_columns=list(LAKEFLOW_SYNC_PRIMARY_KEY),
-                sync_mode=self.store.sync_table_mode,
-            )
+            _synced_obj = mgr.ensure(synced_uc, **plan.ensure_kwargs())
             # ensure() may have used a fallback name (ghost control-plane state);
             # extract the actual UC FQN from the returned object so downstream
             # steps (trigger_and_wait, ensure_synced_union_view) use the right name.
@@ -1172,13 +1173,13 @@ class _BuildPipeline:
         except Exception as exc:  # noqa: BLE001
             logger.exception(
                 "[DT-BUILD %s] failed to register synced table %s: %s "
-                "(source_view=%s pg_schema=%s sync_table_mode=%s)",
+                "(source=%s pg_schema=%s sync_mode=%s)",
                 self.task_id,
                 synced_uc,
                 exc,
-                self.view_table,
+                plan.source_fqn,
                 getattr(self.store, "graph_schema", "?"),
-                getattr(self.store, "sync_table_mode", "?"),
+                plan.sync_mode,
             )
             self.tm.fail_task(
                 self.task_id,
@@ -1324,6 +1325,7 @@ class _BuildPipeline:
             self.store.ensure_synced_union_view(
                 self.graph_name,
                 synced_phy_override=_actual_synced_phy,
+                source_kind=plan.source_kind,
             )
             logger.info(
                 "[DT-BUILD %s] step 6/7 done: union view created/refreshed "
@@ -1389,7 +1391,7 @@ class _BuildPipeline:
             )
             return False
 
-        _report_post_sync_triple_count(self)
+        _report_post_sync_triple_count(self, plan.source_fqn)
         logger.info(
             "[DT-BUILD %s] _apply_via_synced_pipeline complete: "
             "triples=%d total_elapsed=%.1fs",

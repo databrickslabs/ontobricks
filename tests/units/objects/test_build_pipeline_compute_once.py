@@ -4,9 +4,9 @@
 ``TwinBuildPostMaterialize``. Three guarantees are pinned here:
 
 * **Compute once.** The R2RML gateway VIEW is expensive to evaluate. Once it
-  has been copied into a ``…_data`` table, the count and the stream into the graph
-  store read that table instead of re-running the VIEW. (Lakeflow keeps syncing
-  the VIEW for now; see ``TestLakeflowSource``.)
+  has been copied into a ``…_data`` table, the count, the stream into the graph
+  store and the Lakeflow synced table read that table instead of re-running the
+  VIEW (see ``TestLakeflowSource``).
   A pass-through ``view`` ``…_data`` costs the same as the VIEW, so there the
   VIEW stays the source.
 * **No stale inferences.** On the Databricks backend the ``…_inferred``
@@ -169,13 +169,11 @@ class TestTriplesSourceRelation:
 
 
 class TestLakeflowSource:
-    """Lakeflow keeps syncing the gateway VIEW, whatever ``…_data`` is.
+    """Lakeflow syncs the ``…_data`` copy; a pass-through ``…_data`` leaves it on the VIEW.
 
-    The scheduled build (``registry/schedule/build.py``) never materializes
-    ``…_data`` and registers the VIEW, and ``SyncedTableManager.ensure`` reuses
-    an existing registration by name without comparing its source. A synced
-    table registered on ``…_data`` here would be refreshed from a stale copy by
-    every scheduled build, so the switch waits for a task that fixes both paths.
+    The scheduled build (``registry/schedule/build.py``) materializes ``…_data``
+    and registers the same source, and ``SyncedTableManager.ensure`` recreates
+    a registration whose source changed (``TwinLakebaseSync``).
     """
 
     @staticmethod
@@ -185,14 +183,17 @@ class TestLakeflowSource:
         pipe.data_relation_mode = mode
         return pipe
 
-    @pytest.mark.parametrize("mode", ["table", "view"])
-    def test_the_sync_source_is_the_gateway_view_in_both_modes(self, mode):
+    @pytest.mark.parametrize(
+        ("mode", "source"),
+        [("table", "cat.sch.v_g_data"), ("view", "cat.sch.v_g")],
+        ids=["table", "view"],
+    )
+    def test_the_sync_source_is_the_data_table_or_the_gateway_view(self, mode, source):
         pipe = self._synced(mode)
 
         assert pipe._apply_via_synced_pipeline() is True
 
-        source = pipe._mgr.ensure.call_args.kwargs["source_table_full_name"]
-        assert source == "cat.sch.v_g"
+        assert pipe._mgr.ensure.call_args.kwargs["source_table_full_name"] == source
 
     def test_the_post_sync_count_reads_the_chosen_source_not_the_alias(self):
         pipe = self._synced("table")
@@ -203,22 +204,37 @@ class TestLakeflowSource:
         assert pipe.triple_count == 1234
         pipe._count_source_triples.assert_called_once_with()
 
-    def test_an_empty_post_sync_count_warns_about_the_relation_that_was_synced(self):
-        pipe = self._synced("table")
+    @staticmethod
+    def _empty_sync_warnings(pipe) -> list[str]:
         pipe._count_source_triples.return_value = 0
-
         with patch(
             "back.objects.digitaltwin.build._build_pipeline.logger"
         ) as logger:
             assert pipe._apply_via_synced_pipeline() is True
-
-        warnings = [
+        return [
             call.args[0] % call.args[1:]
             for call in logger.warning.call_args_list
             if "contains 0 triples" in call.args[0]
         ]
+
+    def test_an_empty_post_sync_count_names_the_counted_and_the_synced_relation(self):
+        warnings = self._empty_sync_warnings(self._synced("table"))
+
         assert len(warnings) == 1
-        assert "post-sync cat.sch.v_g_data contains 0 triples" in warnings[0]
+        assert (
+            "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_data)"
+        ) in warnings[0]
+
+    def test_a_slots_sync_names_the_slots_table_it_synced(self):
+        pipe = self._synced("materialized_view")
+        pipe.mode_decision = ModeDecision("incremental", "incremental", "")
+        pipe.slots_table, pipe.slots_complete = "cat.sch.v_g_slots", True
+
+        warnings = self._empty_sync_warnings(pipe)
+
+        assert (
+            "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_slots)"
+        ) in warnings[0]
 
     def test_a_synced_data_table_carries_object_hash(self):
         """Lakeflow's primary key includes ``object_hash``; ``_data`` must have it."""
@@ -229,6 +245,7 @@ class TestLakeflowSource:
 
         ctas = next(sql for sql in calls if sql.startswith("CREATE OR REPLACE TABLE"))
         assert ctas.endswith("SELECT subject, predicate, object, object_hash FROM " + _VIEW)
+        assert "delta.enableRowTracking = true" in ctas
 
     def test_an_unsynced_data_table_keeps_three_columns(self):
         pipe = _bare_pipeline(info=_LAKEBASE)

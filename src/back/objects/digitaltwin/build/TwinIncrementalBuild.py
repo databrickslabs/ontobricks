@@ -107,6 +107,7 @@ class TwinIncrementalBuild:
         )
 
         pipe.slots_table, pipe.slot_pipeline_id, pipe.refresh_technique = None, "", ""
+        pipe.slots_complete = False
         requested = normalize_materialization_mode(
             GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings)
         )
@@ -232,6 +233,8 @@ class TwinIncrementalBuild:
             TwinIncrementalBuild._run_slot_pipeline(pipe, spec)
         TwinIncrementalBuild._apply_views(pipe, slots, batch_sql)
         pipe.slots_table = slots
+        # Without a batch branch ``…_slots`` holds every triple: Lakebase may sync it.
+        pipe.slots_complete = slots is not None and not spec.batch_mappings
         logger.info(
             "[DT-BUILD %s] %s build of %s done: %d row-local, %d batch mapping(s), "
             "refresh technique %s",

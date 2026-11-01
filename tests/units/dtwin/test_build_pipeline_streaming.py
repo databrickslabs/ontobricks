@@ -237,7 +237,7 @@ class TestApplyViaSyncedPipeline:
         pipe.store.ensure_synced_companion.assert_called_once_with(pipe.graph_name)
         # synced_phy_override=None because actual name == requested name (no fallback).
         pipe.store.ensure_synced_union_view.assert_called_once_with(
-            pipe.graph_name, synced_phy_override=None
+            pipe.graph_name, synced_phy_override=None, source_kind="triples"
         )
         pipe._mgr.trigger_and_wait.assert_called_once()
         pipe.store.truncate_companion.assert_called_once_with(pipe.graph_name)

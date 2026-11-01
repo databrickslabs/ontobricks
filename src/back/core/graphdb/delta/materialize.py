@@ -60,19 +60,23 @@ def build_ctas_sql(
     Databricks RTAS does not allow an explicit column schema alongside ``AS SELECT``;
     types are inferred from the source VIEW.
 
-    *with_object_hash* also copies the ``object_hash`` column. Only a VIEW
-    wrapped by ``wrap_triple_view_sql_for_lakeflow`` has it, and only a
-    Lakeflow synced table needs it (it is part of the sync primary key).
+    *with_object_hash* marks the table as a Lakeflow synced-table source. It
+    copies the ``object_hash`` column (part of the sync primary key; only a
+    VIEW wrapped by ``wrap_triple_view_sql_for_lakeflow`` has it) and turns on
+    row tracking and deletion vectors: row tracking is what gives a triggered
+    or continuous synced table its automatic change data feed.
     """
     validate_table_name(view_fqn)
     validate_table_name(table_fqn)
     columns = "subject, predicate, object"
+    properties = ""
     if with_object_hash:
         columns += ", object_hash"
+        properties = f"TBLPROPERTIES {_ROW_TRACKING_PROPERTIES} "
     return (
         f"CREATE OR REPLACE TABLE {table_fqn} USING DELTA "
         "CLUSTER BY (predicate, subject) "
-        f"AS SELECT {columns} FROM {view_fqn}"
+        f"{properties}AS SELECT {columns} FROM {view_fqn}"
     )
 
 
