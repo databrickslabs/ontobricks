@@ -138,13 +138,7 @@ class TwinBuildPostMaterialize:
         from back.core.streaming import SourceReadiness
 
         requested = GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings)
-        inputs = {
-            "serverless_available": TwinBuildPostMaterialize.serverless_available(
-                pipe.settings
-            ),
-            "backend": GraphDBFactory._resolve_graph_backend(pipe.domain),
-            "previews": {},
-        }
+        inputs = TwinBuildPostMaterialize._resolver_inputs(pipe.domain, pipe.settings)
         tracked = False
         if source_tables is not None:
             gate = MaterializationModeResolver.resolve(
@@ -166,6 +160,39 @@ class TwinBuildPostMaterialize:
                 decision.reason,
             )
         return decision
+
+    @staticmethod
+    def unprobed_mode_decision(domain: Any, settings: Any) -> ModeDecision:
+        """The mode decision of a caller that cannot probe the sources (the scheduled build).
+
+        Same ladder and inputs as :meth:`decide_mode` — ``realtime`` →
+        ``microbatch``, the serverless and backend gates — with the sources
+        counted as row-tracked: the scheduled build does not compile the slot
+        pipeline, and the main build that registered the synced table already
+        probed them. A domain whose sources are *not* tracked therefore gets a
+        faster mode here than its main build ran with.
+        """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.MaterializationModeResolver import (
+            MaterializationModeResolver,
+        )
+
+        return MaterializationModeResolver.resolve(
+            GraphDBFactory.resolve_materialization_mode(domain, settings),
+            sources_row_tracked=True,
+            **TwinBuildPostMaterialize._resolver_inputs(domain, settings),
+        )
+
+    @staticmethod
+    def _resolver_inputs(domain: Any, settings: Any) -> dict:
+        """``MaterializationModeResolver.resolve`` inputs read from the domain and settings."""
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        return {
+            "serverless_available": TwinBuildPostMaterialize.serverless_available(settings),
+            "backend": GraphDBFactory._resolve_graph_backend(domain),
+            "previews": {},
+        }
 
     @staticmethod
     def trace_fields(pipe: Any) -> dict:

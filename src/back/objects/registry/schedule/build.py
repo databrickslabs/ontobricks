@@ -5,8 +5,9 @@ repopulates the graph store. Scheduled builds are always full rebuilds:
 the persisted ``drop_existing`` option is kept for backward
 compatibility with older schedule configs but no longer changes
 behaviour. In Lakebase ``managed_synced`` mode the build materializes
-``…_data`` and registers the Lakeflow synced table on it, exactly as the
-main full build does (``TwinLakebaseSync``).
+``…_data`` and registers the Lakeflow synced table on it with the schedule
+the domain's materialization mode asks for, as the main build does
+(``TwinLakebaseSync``).
 """
 
 from __future__ import annotations
@@ -123,10 +124,11 @@ def _apply_synced_pipeline(
     Mirrors :meth:`_BuildPipeline._apply_via_synced_pipeline` so scheduled
     builds also keep bulk data movement on the data plane: ``…_data`` is
     materialized (with ``object_hash`` and row tracking) and the synced table
-    is registered on the source :meth:`TwinLakebaseSync.sync_plan_for` picks
-    for a ``full`` build, so the main build's registration is reused, not
-    recreated. Without a *domain* the ``…_data`` name cannot be resolved and
-    the gateway VIEW stays the source.
+    is registered on the source and schedule :meth:`TwinLakebaseSync.sync_plan_for`
+    picks for the domain's effective materialization mode
+    (:meth:`TwinBuildPostMaterialize.unprobed_mode_decision`), so the main
+    build's registration is reused, not recreated. Without a *domain* the
+    ``…_data`` name cannot be resolved and the gateway VIEW stays the source.
     """
     from back.core.graphdb.lakebase.LakebaseFlatStore import (
         resolve_sync_uc_fallback_catalog,
@@ -156,17 +158,20 @@ def _apply_synced_pipeline(
         task_log_prefix=f"Scheduled build [{domain_name}]",
     )
     from back.core.graphdb.delta import _table_naming, materialize
-    from back.objects.digitaltwin.build import TwinLakebaseSync
+    from back.objects.digitaltwin.build import TwinBuildPostMaterialize, TwinLakebaseSync
 
     data_table = _table_naming.data_table_fqn(domain, settings) if domain is not None else ""
     if data_table:
         materialize.apply_data_relation(
             src, view_table, data_table, mode="table", with_object_hash=True
         )
+    # The domain's mode, not "full": a tick on another schedule than the main
+    # build's would recreate the synced table (drift) on every run.
+    mode = TwinBuildPostMaterialize.unprobed_mode_decision(domain, settings)
     plan = TwinLakebaseSync.sync_plan_for(
         view_table=view_table,
         data_table=data_table,
-        mode_effective="full",
+        mode_effective=mode.effective,
         configured_sync_table_mode=store.sync_table_mode,
     )
     mgr.ensure(

@@ -23,10 +23,13 @@ _DATA = "cat.sch.triplestore_dom_V3_data"
 _SYNCED_UC = "cat.ontobricks_graph.triplestore_dom_v3_sync"
 
 
-def _domain():
+def _domain(mode: str | None = None):
+    info = {"name": "dom"}
+    if mode:
+        info["materialization_mode"] = mode
     return SimpleNamespace(
         delta={"catalog": "cat", "schema": "sch"},
-        info={"name": "dom"},
+        info=info,
         current_version="3",
     )
 
@@ -56,7 +59,7 @@ def _warehouse(log: list):
     return src
 
 
-def _apply(store, src, *, domain=None):
+def _apply(store, src, *, domain=None, settings=None):
     with patch(
         "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_sync_uc_fallback_catalog",
         return_value="cat",
@@ -72,7 +75,7 @@ def _apply(store, src, *, domain=None):
             full=True,
             domain_name="dom",
             domain=domain,
-            settings=None,
+            settings=settings,
         )
 
 
@@ -143,3 +146,58 @@ class TestScheduledLakeflowSource:
         [(_, _, kwargs)] = _ensures(log)
         assert kwargs["source_table_full_name"] == _VIEW
         assert kwargs["sync_mode"] == "snapshot"
+
+
+class TestScheduledSyncFollowsTheDomainMode:
+    """A scheduled tick keeps the main build's schedule instead of flipping to snapshot.
+
+    Each flip would be a drift: union-view drop, purge and a full resync.
+    """
+
+    @staticmethod
+    def _sync_mode(mode, *, cap="continuous", settings=None) -> str:
+        log: list = []
+        store, _ = _store(log, sync_table_mode=cap)
+        _apply(store, _warehouse(log), domain=_domain(mode), settings=settings)
+        [(_, _, kwargs)] = _ensures(log)
+        return kwargs["sync_mode"]
+
+    def test_an_incremental_domain_syncs_triggered(self):
+        assert self._sync_mode("incremental") == "triggered"
+
+    def test_a_microbatch_domain_syncs_continuously(self):
+        assert self._sync_mode("microbatch") == "continuous"
+
+    def test_a_realtime_domain_runs_as_microbatch(self):
+        assert self._sync_mode("realtime") == "continuous"
+
+    def test_a_full_domain_syncs_a_snapshot(self):
+        assert self._sync_mode(None) == "snapshot"
+
+    def test_the_configured_cap_still_applies(self):
+        assert self._sync_mode("microbatch", cap="triggered") == "triggered"
+
+    def test_without_serverless_pipelines_an_incremental_domain_is_full(self):
+        settings = SimpleNamespace(serverless_pipelines_enabled=False)
+
+        assert self._sync_mode("incremental", settings=settings) == "snapshot"
+
+
+class TestUnprobedModeDecision:
+    def test_it_uses_the_build_ladder_with_the_sources_counted_as_tracked(self):
+        from back.core.graphdb import ModeDecision
+        from back.objects.digitaltwin.build import TwinBuildPostMaterialize
+
+        decision = TwinBuildPostMaterialize.unprobed_mode_decision(_domain("realtime"), None)
+
+        assert decision == ModeDecision("realtime", "microbatch", "realtime_not_available")
+
+    def test_an_ineligible_backend_is_full(self):
+        from back.objects.digitaltwin.build import TwinBuildPostMaterialize
+
+        domain = _domain("incremental")
+        domain.info["graph_backend"] = "none"  # graphless
+
+        decision = TwinBuildPostMaterialize.unprobed_mode_decision(domain, None)
+
+        assert decision.effective == "full"
