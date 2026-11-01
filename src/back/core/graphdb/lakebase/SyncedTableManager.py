@@ -36,6 +36,7 @@ from back.core.errors import (
     OperationCancelledError,
     ValidationError,
 )
+from back.core.graphdb.lakebase.ContinuousSyncWait import ContinuousSyncWait
 from back.core.graphdb.lakebase.SyncedTableRegistration import SyncedTableRegistration
 from back.core.logging import get_logger
 from shared.config.constants import HTTP_USER_AGENT
@@ -412,6 +413,7 @@ class SyncedTableManager:
         primary_key_columns: List[str],
         sync_mode: str = "snapshot",
         create_database_objects_if_missing: bool = True,
+        before_delete: Optional[Callable[[str], None]] = None,
     ) -> Any:
         """Create the synced table if missing; otherwise return the existing one.
 
@@ -425,10 +427,12 @@ class SyncedTableManager:
 
         A registration whose source table or scheduling policy differs from the request is
         deleted (``purge_data=True``) and created again — a synced table's definition cannot
-        change in place (:class:`SyncedTableRegistration`).
+        change in place (:class:`SyncedTableRegistration`). *before_delete* is called with the
+        registration's name right before that delete (e.g. to drop a dependent Postgres view).
         """
+        requested = (source_table_full_name, sync_mode, before_delete)
         existing = SyncedTableRegistration.discard_if_drifted(
-            self, name, self.get(name), source_table_full_name, sync_mode
+            self, name, self.get(name), *requested
         )
         if existing is not None:
             existing_state = self._extract_state(existing)
@@ -484,7 +488,7 @@ class SyncedTableManager:
             # Check if this fallback candidate already exists.
             if candidate != name:
                 existing_fallback = SyncedTableRegistration.discard_if_drifted(
-                    self, candidate, self.get(candidate), source_table_full_name, sync_mode
+                    self, candidate, self.get(candidate), *requested
                 )
                 if existing_fallback is not None:
                     fallback_state = self._extract_state(existing_fallback)
@@ -892,21 +896,17 @@ class SyncedTableManager:
     ) -> str:
         """Convenience: ``trigger_refresh`` then ``wait_for_completion``.
 
-        ``cancel_check`` is forwarded to :meth:`wait_for_completion` so
-        long-running pipeline waits bail out promptly when the surrounding
-        task is cancelled.
+        ``cancel_check`` and ``on_state_change`` are forwarded to the wait: it bails out
+        promptly when the surrounding task is cancelled, and reports every pipeline state
+        transition so callers can surface live progress without polling.
 
-        ``on_state_change`` is forwarded to :meth:`wait_for_completion` and
-        called on every pipeline state transition so callers can surface
-        live progress without polling.
-
-        A ``CONTINUOUS`` table is self-managing: nothing is triggered or waited
-        for, and its current state is returned.
+        A ``CONTINUOUS`` table is never triggered: :class:`ContinuousSyncWait` waits until it
+        leaves provisioning and streams.
         """
-        current = self.get(name)
-        if SyncedTableRegistration.scheduling_policy(current) == "CONTINUOUS":
-            logger.info("Synced table %s syncs continuously; no refresh to trigger", name)
-            return self._extract_state(current)
+        if SyncedTableRegistration.scheduling_policy(self.get(name)) == "CONTINUOUS":
+            return ContinuousSyncWait.until_streaming(
+                self, name, timeout_s, cancel_check, on_state_change
+            )
         update_id = ""
         if not skip_initial_trigger:
             try:

@@ -15,7 +15,7 @@ anything.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from back.core.logging import get_logger
 
@@ -55,18 +55,27 @@ class SyncedTableRegistration:
 
     @staticmethod
     def discard_if_drifted(
-        mgr: Any, name: str, synced: Any, source_table_full_name: str, sync_mode: str
+        mgr: Any,
+        name: str,
+        synced: Any,
+        source_table_full_name: str,
+        sync_mode: str,
+        before_delete: Optional[Callable[[str], None]] = None,
     ) -> Optional[Any]:
         """Return *synced*, or ``None`` once a drifted registration has been deleted.
 
         The delete purges the Postgres table (``purge_data=True``); a failure
         other than "not found" raises :class:`InfrastructureError` from
         ``mgr.delete`` rather than reuse a registration with the wrong source.
+        *before_delete* (called with *name*) runs only on that path, right
+        before the delete.
         """
         drift = SyncedTableRegistration.drift(synced, source_table_full_name, sync_mode)
         if not drift:
             return synced
         logger.info("Synced table %s changed (%s) — deleting it to recreate it", name, drift)
+        if before_delete is not None:
+            before_delete(name)
         mgr.delete(name, purge_data=True)
         return None
 

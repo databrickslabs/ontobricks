@@ -554,6 +554,44 @@ class TestEnsureSpecDrift:
         created = client.database.create_synced_database_table.call_args.kwargs["synced_table"]
         assert created["name"] == "cat.sch.tab_b"
 
+    def test_the_hook_runs_right_before_a_drifted_registration_is_deleted(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.side_effect = [
+            _synced(source="cat.sch.view", policy="SNAPSHOT"),
+            _synced(source="cat.sch.view_data", policy="SNAPSHOT"),
+        ]
+        events: list = []
+        client.database.delete_synced_database_table.side_effect = (
+            lambda **kw: events.append(("delete", kw["name"]))
+        )
+        mgr = _make_manager(client)
+
+        mgr.ensure(
+            "cat.sch.tab",
+            source_table_full_name="cat.sch.view_data",
+            primary_key_columns=_PK,
+            before_delete=lambda name: events.append(("hook", name)),
+        )
+
+        assert events == [("hook", "cat.sch.tab"), ("delete", "cat.sch.tab")]
+
+    def test_the_hook_is_not_called_for_an_unchanged_registration(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.return_value = _synced(
+            source="cat.sch.view_data", policy="SNAPSHOT"
+        )
+        hook = MagicMock()
+        mgr = _make_manager(client)
+
+        mgr.ensure(
+            "cat.sch.tab",
+            source_table_full_name="cat.sch.view_data",
+            primary_key_columns=_PK,
+            before_delete=hook,
+        )
+
+        hook.assert_not_called()
+
     def test_the_drift_is_logged_at_info(self):
         client = MagicMock()
         client.database.get_synced_database_table.side_effect = [
@@ -581,19 +619,104 @@ class TestEnsureSpecDrift:
 # ---------------------------------------------------------------
 
 
-class TestTriggerAndWaitSchedules:
-    def test_a_continuous_table_is_neither_triggered_nor_waited_for(self):
-        client = MagicMock()
-        client.database.get_synced_database_table.return_value = _synced(
-            state="ONLINE_CONTINUOUS_UPDATE", source="cat.sch.slots", policy="CONTINUOUS"
-        )
-        mgr = _make_manager(client)
+class _Clock:
+    """Fake ``time.time`` that only advances when the manager sleeps."""
 
-        state = mgr.trigger_and_wait("cat.sch.tab", timeout_s=60)
+    def __init__(self) -> None:
+        self.now = 1_000.0
+        self.sleeps: list = []
+
+    def time(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def _continuous(state: str) -> Any:
+    return _synced(state=state, source="cat.sch.data", policy="CONTINUOUS")
+
+
+def _continuous_manager(client: MagicMock, clock: _Clock) -> SyncedTableManager:
+    return SyncedTableManager(
+        project_name="proj-123",
+        branch_name="demo",
+        client_factory=lambda: client,
+        sleep=clock.sleep,
+    )
+
+
+class TestTriggerAndWaitSchedules:
+    def test_a_continuous_table_is_waited_for_until_it_streams(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.side_effect = [
+            _continuous("PROVISIONING"),  # policy lookup
+            _continuous("PROVISIONING"),
+            _continuous("PROVISIONING_INITIAL_SNAPSHOT"),
+            _continuous("ONLINE_CONTINUOUS_UPDATE"),
+        ]
+        clock = _Clock()
+        mgr = _continuous_manager(client, clock)
+        seen: list = []
+
+        with patch("back.core.graphdb.lakebase.ContinuousSyncWait.time", clock):
+            state = mgr.trigger_and_wait("cat.sch.tab", timeout_s=60, on_state_change=seen.append)
 
         assert state == "ONLINE_CONTINUOUS_UPDATE"
+        assert seen == ["PROVISIONING", "PROVISIONING_INITIAL_SNAPSHOT", "ONLINE_CONTINUOUS_UPDATE"]
+        assert len(clock.sleeps) == 2
         client.pipelines.start_update.assert_not_called()
         client.pipelines.wait_get_pipeline_idle.assert_not_called()
+
+    def test_an_online_continuous_table_returns_without_sleeping(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.return_value = _continuous("ONLINE")
+        clock = _Clock()
+        mgr = _continuous_manager(client, clock)
+
+        with patch("back.core.graphdb.lakebase.ContinuousSyncWait.time", clock):
+            assert mgr.trigger_and_wait("cat.sch.tab", timeout_s=60) == "ONLINE"
+
+        assert clock.sleeps == []
+
+    def test_a_failed_continuous_table_raises(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.side_effect = [
+            _continuous("PROVISIONING"),
+            _continuous("PROVISIONING_INITIAL_SNAPSHOT"),
+            _continuous("OFFLINE_FAILED"),
+        ]
+        clock = _Clock()
+        mgr = _continuous_manager(client, clock)
+
+        with patch("back.core.graphdb.lakebase.ContinuousSyncWait.time", clock):
+            with pytest.raises(InfrastructureError, match="OFFLINE_FAILED"):
+                mgr.trigger_and_wait("cat.sch.tab", timeout_s=60)
+
+        client.pipelines.start_update.assert_not_called()
+
+    def test_a_continuous_table_that_never_streams_times_out(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.return_value = _continuous("PROVISIONING")
+        clock = _Clock()
+        mgr = _continuous_manager(client, clock)
+
+        with patch("back.core.graphdb.lakebase.ContinuousSyncWait.time", clock):
+            with pytest.raises(InfrastructureError, match="PROVISIONING"):
+                mgr.trigger_and_wait("cat.sch.tab", timeout_s=12)
+
+        assert sum(clock.sleeps) <= 12
+
+    def test_a_cancelled_continuous_wait_stops(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.return_value = _continuous("PROVISIONING")
+        clock = _Clock()
+        mgr = _continuous_manager(client, clock)
+
+        with patch("back.core.graphdb.lakebase.ContinuousSyncWait.time", clock):
+            with pytest.raises(OperationCancelledError):
+                mgr.trigger_and_wait("cat.sch.tab", timeout_s=60, cancel_check=lambda: True)
 
     def test_a_snapshot_table_is_still_triggered(self):
         client = MagicMock()
