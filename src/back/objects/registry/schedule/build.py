@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.logging import get_logger
@@ -118,6 +118,7 @@ def _apply_synced_pipeline(
     domain_name: str,
     domain: Any = None,
     settings: Any = None,
+    source_tables: Optional[List[str]] = None,
 ) -> None:
     """Trigger the Lakeflow synced-table refresh for *graph_name*.
 
@@ -126,9 +127,12 @@ def _apply_synced_pipeline(
     materialized (with ``object_hash`` and row tracking) and the synced table
     is registered on the source and schedule :meth:`TwinLakebaseSync.sync_plan_for`
     picks for the domain's effective materialization mode
-    (:meth:`TwinBuildPostMaterialize.unprobed_mode_decision`), so the main
-    build's registration is reused, not recreated. Without a *domain* the
-    ``…_data`` name cannot be resolved and the gateway VIEW stays the source.
+    (:meth:`TwinBuildPostMaterialize.decide_mode_for`, probing row tracking on
+    *source_tables* exactly like the main build), so the main build's
+    registration is reused, not recreated. *source_tables* ``None`` means the
+    sources are unknown: nothing is probed and they count as untracked.
+    Without a *domain* the ``…_data`` name cannot be resolved and the gateway
+    VIEW stays the source.
     """
     from back.core.graphdb.lakebase.LakebaseFlatStore import (
         resolve_sync_uc_fallback_catalog,
@@ -165,9 +169,11 @@ def _apply_synced_pipeline(
         materialize.apply_data_relation(
             src, view_table, data_table, mode="table", with_object_hash=True
         )
-    # The domain's mode, not "full": a tick on another schedule than the main
-    # build's would recreate the synced table (drift) on every run.
-    mode = TwinBuildPostMaterialize.unprobed_mode_decision(domain, settings)
+    # The domain's mode, decided with the same row-tracking probe the main build
+    # runs: a tick on another schedule would recreate the synced table (drift).
+    mode = TwinBuildPostMaterialize.decide_mode_for(
+        domain, settings, src, source_tables=source_tables
+    )
     plan = TwinLakebaseSync.sync_plan_for(
         view_table=view_table,
         data_table=data_table,
@@ -199,6 +205,43 @@ def _apply_synced_pipeline(
             )
 
 
+def _slot_source_tables(
+    domain: Any, settings: Any, ent: Any, rels: Any, base_uri: str, domain_name: str
+) -> Optional[List[str]]:
+    """Source tables of the row-local mappings: what the row-tracking probe reads.
+
+    The same list the main build probes (``SlotProjectionCompiler.compile``).
+    ``None`` — sources unknown, counted as untracked — without a domain or
+    settings, for a ``full`` domain (nothing to probe), and when the mappings
+    do not compile: a scheduled tick never fails on the probe.
+    """
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    if domain is None or settings is None:
+        return None
+    if GraphDBFactory.resolve_materialization_mode(domain, settings) == "full":
+        return None
+    from back.core.graphdb.delta import _table_naming
+    from back.core.streaming import SlotProjectionCompiler
+
+    try:
+        spec = SlotProjectionCompiler.compile(
+            ent or {},
+            rels or [],
+            base_uri=base_uri,
+            slots_fqn=_table_naming.slots_table_fqn(domain, settings),
+        )
+    except ValidationError as exc:
+        logger.warning(
+            "Scheduled build [%s]: the mappings do not compile into a slot pipeline; "
+            "the row-tracking probe is skipped (sources count as untracked): %s",
+            domain_name,
+            exc,
+        )
+        return None
+    return list(spec.source_tables)
+
+
 def _count_view_triples(src, view_table: str) -> int:
     """Return the server-side triple count for *view_table*.
 
@@ -219,12 +262,14 @@ def _write_graph_triples(
     delta_cfg: Optional[Dict[str, Any]] = None,
     domain: Any = None,
     settings: Any = None,
+    source_tables: Optional[List[str]] = None,
 ) -> int:
     """Write triples to the graph store. Returns the triple count.
 
     When the store is in Lakebase ``managed_synced`` mode the entire branch is
-    replaced by a Lakeflow snapshot refresh — triples never enter this process.
-    Otherwise a full drop-and-rebuild is performed.
+    replaced by a Lakeflow synced-table refresh (*source_tables* feeds its
+    row-tracking probe) — triples never enter this process. Otherwise a full
+    drop-and-rebuild is performed.
     """
     if _is_managed_synced(store):
         _apply_synced_pipeline(
@@ -237,6 +282,7 @@ def _write_graph_triples(
             domain_name=domain_name,
             domain=domain,
             settings=settings,
+            source_tables=source_tables,
         )
         try:
             return _count_view_triples(src, view_table)
@@ -311,7 +357,7 @@ def run(ctx: TaskContext) -> RunOutcome:
     version = ctx.loaded_version
 
     ctx.progress(10, "Generating SQL from R2RML mappings...")
-    sql_text, view_table, graph_name, _base_uri, ent_mappings, rel_mappings = (
+    sql_text, view_table, graph_name, base_uri, ent_mappings, rel_mappings = (
         _generate_sql_from_r2rml(domain, domain_name)
     )
 
@@ -370,6 +416,9 @@ def run(ctx: TaskContext) -> RunOutcome:
         delta_cfg=getattr(domain, "delta", None) or {},
         domain=domain,
         settings=ctx.settings,
+        source_tables=_slot_source_tables(
+            domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name
+        ),
     )
 
     ctx.progress(95, "Saving domain metadata...")

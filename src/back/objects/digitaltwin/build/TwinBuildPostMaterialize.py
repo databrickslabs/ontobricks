@@ -114,22 +114,42 @@ class TwinBuildPostMaterialize:
 
     @staticmethod
     def decide_mode(pipe: Any, *, source_tables: list | None = None) -> ModeDecision:
+        """:meth:`decide_mode_for` the running pipeline's domain, settings and warehouse."""
+        return TwinBuildPostMaterialize.decide_mode_for(
+            pipe.domain,
+            pipe.settings,
+            pipe.source_client,
+            source_tables=source_tables,
+            task_id=pipe.task_id,
+        )
+
+    @staticmethod
+    def decide_mode_for(
+        domain: Any,
+        settings: Any,
+        client: Any,
+        *,
+        source_tables: list | None,
+        task_id: str = "",
+    ) -> ModeDecision:
         """Resolve the domain's requested materialization mode to the one that runs.
 
         Inputs: ``serverless_available`` from the settings flag, the domain's
         graph backend, and ``sources_row_tracked``, which needs the source
         tables of the compiled slot pipeline (*source_tables*):
 
-        * without them (the call at the start of ``run()``, before the mappings
-          are parsed) the sources count as not tracked and the decision is
-          only logged at debug level — :class:`TwinIncrementalBuild` decides
-          again once it has compiled the mappings;
-        * with them, ``SHOW TBLPROPERTIES`` probes each table, but only when
-          serverless and the backend would still allow a faster mode. No
-          sources (every mapping is batch) counts as tracked.
+        * ``None`` (the call at the start of ``run()``, before the mappings are
+          parsed; a scheduled tick whose mappings did not compile) — the
+          sources count as not tracked and nothing is probed;
+        * a list — ``SHOW TBLPROPERTIES`` probes each table on *client*, but
+          only when serverless and the backend would still allow a faster
+          mode. No sources (every mapping is batch) counts as tracked.
 
-        A failed probe raises :class:`InfrastructureError` (the incremental
-        phase turns it into a fallback).
+        The main build and the scheduled mirror both call this, so a scheduled
+        tick lands on the main build's mode. A downgrade is logged at info
+        (``[DT-BUILD <task_id>]``) when *task_id* is given and the sources were
+        known, else at debug. A failed probe raises :class:`InfrastructureError`
+        (the incremental phase turns it into a fallback).
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.MaterializationModeResolver import (
@@ -137,51 +157,35 @@ class TwinBuildPostMaterialize:
         )
         from back.core.streaming import SourceReadiness
 
-        requested = GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings)
-        inputs = TwinBuildPostMaterialize._resolver_inputs(pipe.domain, pipe.settings)
+        requested = GraphDBFactory.resolve_materialization_mode(domain, settings)
+        inputs = TwinBuildPostMaterialize._resolver_inputs(domain, settings)
         tracked = False
         if source_tables is not None:
             gate = MaterializationModeResolver.resolve(
                 requested, sources_row_tracked=True, **inputs
             )
             if gate.effective != "full":
-                readiness = SourceReadiness.check(pipe.source_client, source_tables)
+                readiness = SourceReadiness.check(client, source_tables)
                 tracked = all(readiness.values())
         decision = MaterializationModeResolver.resolve(
             requested, sources_row_tracked=tracked, **inputs
         )
         if decision.effective != decision.requested:
-            log = logger.info if source_tables is not None else logger.debug
-            log(
-                "[DT-BUILD %s] materialization mode %s -> %s (%s)",
-                pipe.task_id,
-                decision.requested,
-                decision.effective,
-                decision.reason,
+            TwinBuildPostMaterialize._log_downgrade(
+                decision, task_id, informative=source_tables is not None
             )
         return decision
 
     @staticmethod
-    def unprobed_mode_decision(domain: Any, settings: Any) -> ModeDecision:
-        """The mode decision of a caller that cannot probe the sources (the scheduled build).
-
-        Same ladder and inputs as :meth:`decide_mode` — ``realtime`` →
-        ``microbatch``, the serverless and backend gates — with the sources
-        counted as row-tracked: the scheduled build does not compile the slot
-        pipeline, and the main build that registered the synced table already
-        probed them. A domain whose sources are *not* tracked therefore gets a
-        faster mode here than its main build ran with.
-        """
-        from back.core.graphdb.GraphDBFactory import GraphDBFactory
-        from back.core.graphdb.MaterializationModeResolver import (
-            MaterializationModeResolver,
-        )
-
-        return MaterializationModeResolver.resolve(
-            GraphDBFactory.resolve_materialization_mode(domain, settings),
-            sources_row_tracked=True,
-            **TwinBuildPostMaterialize._resolver_inputs(domain, settings),
-        )
+    def _log_downgrade(decision: ModeDecision, task_id: str, *, informative: bool) -> None:
+        """Log a mode downgrade: info for a build with known sources, debug otherwise."""
+        reason = (decision.requested, decision.effective, decision.reason)
+        if task_id and informative:
+            logger.info("[DT-BUILD %s] materialization mode %s -> %s (%s)", task_id, *reason)
+        elif task_id:
+            logger.debug("[DT-BUILD %s] materialization mode %s -> %s (%s)", task_id, *reason)
+        else:
+            logger.debug("materialization mode %s -> %s (%s)", *reason)
 
     @staticmethod
     def _resolver_inputs(domain: Any, settings: Any) -> dict:

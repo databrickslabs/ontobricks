@@ -14,6 +14,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from back.core.errors import InfrastructureError, ValidationError
+from back.core.graphdb import ModeDecision
+from back.core.streaming import SlotProjectionCompiler, SourceReadiness
+from back.objects.digitaltwin.build import TwinBuildPostMaterialize
 from back.objects.registry.schedule import build as scheduled_build
 
 pytestmark = pytest.mark.unit
@@ -59,7 +63,7 @@ def _warehouse(log: list):
     return src
 
 
-def _apply(store, src, *, domain=None, settings=None):
+def _apply(store, src, *, domain=None, settings=None, source_tables=None):
     with patch(
         "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_sync_uc_fallback_catalog",
         return_value="cat",
@@ -76,6 +80,7 @@ def _apply(store, src, *, domain=None, settings=None):
             domain_name="dom",
             domain=domain,
             settings=settings,
+            source_tables=source_tables,
         )
 
 
@@ -148,31 +153,64 @@ class TestScheduledLakeflowSource:
         assert kwargs["sync_mode"] == "snapshot"
 
 
-class TestScheduledSyncFollowsTheDomainMode:
-    """A scheduled tick keeps the main build's schedule instead of flipping to snapshot.
+_SOURCES = ["main.sales.customers", "main.sales.orders"]
 
-    Each flip would be a drift: union-view drop, purge and a full resync.
+
+def _readiness(*untracked: str):
+    """``SourceReadiness.check`` stand-in: every source tracked except *untracked*."""
+    return MagicMock(side_effect=lambda client, tables: {t: t not in untracked for t in tables})
+
+
+class TestScheduledSyncFollowsTheDomainMode:
+    """A scheduled tick probes row tracking like the main build and lands on the same mode.
+
+    A tick on another schedule than the main build would be a drift: union-view
+    drop, purge and a full resync on every alternation.
     """
 
     @staticmethod
-    def _sync_mode(mode, *, cap="continuous", settings=None) -> str:
+    def _sync_mode(mode, *, cap="continuous", settings=None, source_tables=_SOURCES, check=None):
         log: list = []
         store, _ = _store(log, sync_table_mode=cap)
-        _apply(store, _warehouse(log), domain=_domain(mode), settings=settings)
+        with patch.object(SourceReadiness, "check", check or _readiness()):
+            _apply(
+                store,
+                _warehouse(log),
+                domain=_domain(mode),
+                settings=settings,
+                source_tables=source_tables,
+            )
         [(_, _, kwargs)] = _ensures(log)
         return kwargs["sync_mode"]
 
-    def test_an_incremental_domain_syncs_triggered(self):
+    def test_an_incremental_domain_with_tracked_sources_syncs_triggered(self):
         assert self._sync_mode("incremental") == "triggered"
 
-    def test_a_microbatch_domain_syncs_continuously(self):
+    def test_an_incremental_domain_with_an_untracked_source_syncs_a_snapshot(self):
+        assert self._sync_mode("incremental", check=_readiness("main.sales.orders")) == "snapshot"
+
+    def test_a_microbatch_domain_with_tracked_sources_syncs_continuously(self):
         assert self._sync_mode("microbatch") == "continuous"
 
     def test_a_realtime_domain_runs_as_microbatch(self):
         assert self._sync_mode("realtime") == "continuous"
 
-    def test_a_full_domain_syncs_a_snapshot(self):
-        assert self._sync_mode(None) == "snapshot"
+    def test_a_full_domain_syncs_a_snapshot_without_probing(self):
+        check = _readiness()
+
+        assert self._sync_mode(None, check=check) == "snapshot"
+        check.assert_not_called()
+
+    def test_unknown_sources_are_not_probed_and_sync_a_snapshot(self):
+        check = _readiness()
+
+        assert self._sync_mode("incremental", source_tables=None, check=check) == "snapshot"
+        check.assert_not_called()
+
+    def test_no_row_local_source_counts_as_tracked(self):
+        check = MagicMock(return_value={})
+
+        assert self._sync_mode("incremental", source_tables=[], check=check) == "triggered"
 
     def test_the_configured_cap_still_applies(self):
         assert self._sync_mode("microbatch", cap="triggered") == "triggered"
@@ -182,22 +220,141 @@ class TestScheduledSyncFollowsTheDomainMode:
 
         assert self._sync_mode("incremental", settings=settings) == "snapshot"
 
+    def test_a_failed_probe_fails_the_sync_step(self):
+        log: list = []
+        store, mgr = _store(log)
+        failing = MagicMock(side_effect=InfrastructureError("SHOW TBLPROPERTIES failed"))
 
-class TestUnprobedModeDecision:
-    def test_it_uses_the_build_ladder_with_the_sources_counted_as_tracked(self):
-        from back.core.graphdb import ModeDecision
-        from back.objects.digitaltwin.build import TwinBuildPostMaterialize
+        with patch.object(SourceReadiness, "check", failing):
+            with pytest.raises(InfrastructureError, match="SHOW TBLPROPERTIES"):
+                _apply(
+                    store, _warehouse(log), domain=_domain("incremental"), source_tables=_SOURCES
+                )
 
-        decision = TwinBuildPostMaterialize.unprobed_mode_decision(_domain("realtime"), None)
+        mgr.ensure.assert_not_called()
+
+
+class TestDecideModeFor:
+    """The probe-and-resolve core shared by the main build and the scheduled mirror."""
+
+    @staticmethod
+    def _decide(mode, *, source_tables=_SOURCES, check=None, **domain_info):
+        domain = _domain(mode)
+        domain.info.update(domain_info)
+        with patch.object(SourceReadiness, "check", check or _readiness()) as probe:
+            decision = TwinBuildPostMaterialize.decide_mode_for(
+                domain, None, MagicMock(), source_tables=source_tables
+            )
+        return decision, probe
+
+    def test_tracked_sources_keep_the_requested_mode(self):
+        decision, probe = self._decide("incremental")
+
+        assert decision == ModeDecision("incremental", "incremental", "")
+        assert probe.call_args.args[1] == _SOURCES
+
+    def test_an_untracked_source_falls_back_to_full(self):
+        decision, _ = self._decide("incremental", check=_readiness("main.sales.customers"))
+
+        assert decision == ModeDecision("incremental", "full", "row_tracking_missing")
+
+    def test_unknown_sources_count_as_untracked_without_a_probe(self):
+        decision, probe = self._decide("incremental", source_tables=None)
+
+        assert decision == ModeDecision("incremental", "full", "row_tracking_missing")
+        probe.assert_not_called()
+
+    def test_no_source_tables_count_as_tracked_without_a_probe(self):
+        decision, _ = self._decide(
+            "microbatch", source_tables=[], check=MagicMock(return_value={})
+        )
+
+        assert decision.effective == "microbatch"
+
+    def test_a_gated_mode_is_not_probed(self):
+        decision, probe = self._decide("incremental", graph_backend="none")
+
+        assert decision.effective == "full"
+        probe.assert_not_called()
+
+    def test_realtime_resolves_to_microbatch(self):
+        decision, _ = self._decide("realtime")
 
         assert decision == ModeDecision("realtime", "microbatch", "realtime_not_available")
 
-    def test_an_ineligible_backend_is_full(self):
-        from back.objects.digitaltwin.build import TwinBuildPostMaterialize
+    def test_a_downgrade_without_a_task_is_logged_at_debug(self):
+        with patch("back.objects.digitaltwin.build.TwinBuildPostMaterialize.logger") as logger:
+            self._decide("incremental", check=_readiness("main.sales.orders"))
 
-        domain = _domain("incremental")
-        domain.info["graph_backend"] = "none"  # graphless
+        logger.info.assert_not_called()
+        call = logger.debug.call_args
+        assert "row_tracking_missing" in call.args[0] % call.args[1:]
 
-        decision = TwinBuildPostMaterialize.unprobed_mode_decision(domain, None)
 
-        assert decision.effective == "full"
+class TestSlotSourceTables:
+    """What the scheduled tick probes: the source tables of the row-local mappings."""
+
+    _ROW_LOCAL = {
+        "table": "main.sales.customers",
+        "sql_query": None,
+        "uri_template": "http://ex.org/Customer/{id}",
+        "id_column": "id",
+        "label_column": "name",
+        "class_uri": "http://ex.org/Customer",
+        "predicates": {
+            "http://www.w3.org/2000/01/rdf-schema#label": {"type": "column", "column": "name"}
+        },
+    }
+
+    def test_the_row_local_source_tables_are_compiled_from_the_mappings(self):
+        tables = scheduled_build._slot_source_tables(
+            _domain("incremental"),
+            SimpleNamespace(databricks_triplestore_table=""),
+            {"http://ex.org/Customer": self._ROW_LOCAL},
+            [],
+            "http://ex.org/",
+            "dom",
+        )
+
+        assert tables == ["main.sales.customers"]
+
+    def test_a_full_domain_is_not_compiled(self):
+        with patch.object(SlotProjectionCompiler, "compile") as compile_:
+            tables = scheduled_build._slot_source_tables(
+                _domain(None), SimpleNamespace(), {}, [], "http://ex.org/", "dom"
+            )
+
+        assert tables is None
+        compile_.assert_not_called()
+
+    def test_without_settings_the_sources_are_unknown(self):
+        assert (
+            scheduled_build._slot_source_tables(
+                _domain("incremental"), None, {}, [], "http://ex.org/", "dom"
+            )
+            is None
+        )
+
+    def test_an_unsupported_mapping_never_fails_the_tick(self):
+        with patch.object(
+            SlotProjectionCompiler, "compile", side_effect=ValidationError("unsupported mapping")
+        ), patch.object(scheduled_build, "logger") as logger:
+            tables = scheduled_build._slot_source_tables(
+                _domain("incremental"), SimpleNamespace(), {}, [], "http://ex.org/", "dom"
+            )
+
+        assert tables is None
+        call = logger.warning.call_args
+        assert "unsupported mapping" in call.args[0] % call.args[1:]
+
+    def test_write_graph_triples_forwards_the_source_tables(self):
+        store = MagicMock()
+        store.is_synced = True
+        with patch.object(scheduled_build, "_apply_synced_pipeline") as apply_, patch.object(
+            scheduled_build, "_count_view_triples", return_value=3
+        ):
+            scheduled_build._write_graph_triples(
+                store, MagicMock(), "g", _VIEW, "dom", source_tables=["main.sales.customers"]
+            )
+
+        assert apply_.call_args.kwargs["source_tables"] == ["main.sales.customers"]
