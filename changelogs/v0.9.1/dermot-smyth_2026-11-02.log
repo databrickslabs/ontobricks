@@ -1,0 +1,136 @@
+================================================================================
+## Task 6: net change-feed apply for Neo4j / app-managed Lakebase, MERGE fallback, persisted trace
+================================================================================
+
+Context: Task 6 of incremental triple materialization. An incremental build
+already refreshed `…_data` incrementally, but the downstream apply into Neo4j
+and app-managed Lakebase still dropped the graph and streamed every triple, and
+a workspace without serverless pipelines dropped every incremental domain back
+to a full CTAS. This task reads the `…_data` change feed and applies only the
+net changes since the version the store was last brought to, keeps
+serverless-less incremental domains incremental with a MERGE-maintained
+`…_data`, and persists the materialization facts in the build-run trace so a
+build can read back what the previous one left.
+
+Changes:
+
+1. src/back/core/graphdb/delta/ChangeFeedReader.py (new, re-exported from
+   src/back/core/graphdb/delta/__init__.py)
+   `ChangeFeedReader`: `latest_version` (`DESCRIBE HISTORY … LIMIT 1`),
+   `net_changes_sql` (`table_changes('<fqn>', since + 1)` reduced to one row
+   per triple: inserts and post-images +1, deletes and pre-images -1, net zero
+   dropped, `op` = insert / delete, deletes ordered first), `iter_net_changes`
+   (streamed through `client.iter_rows`) and `changeset_ratio` (COUNT of the
+   net changes over a total; an empty total makes any change infinite).
+   Names pass `validate_table_name` and the safe-identifier pattern; driver
+   errors become `InfrastructureError`.
+2. src/back/core/graphdb/delta/DeltaMergeMaterializer.py (new, re-exported)
+   `DeltaMergeMaterializer`: `ensure_table_sql` (CLUSTER BY (predicate,
+   subject); row tracking, deletion vectors and the change data feed on),
+   `merge_sql` (the planned MERGE: insert what is new, delete what left the
+   VIEW, null-safe object match), an optional `with_object_hash` for
+   Lakeflow-synced domains, `fingerprint(source_versions, r2rml, base_uri, *,
+   view_sql="")` (SHA-256, order-independent) and `apply` (drop a stale `_data`
+   MV / VIEW, ensure, set the table properties, MERGE).
+3. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Extract Method `_drain_batches` (the batching loop `bulk_insert_iter`,
+   `bulk_load_into_sync` and `bulk_delete_iter` each repeated);
+   `_copy_delete_batch` becomes a router over the new `_copy_delete_batch_phy`;
+   new `delete_from_sync_iter` deletes net-change rows from `<graph>_sync`
+   (never the `__app` companion). Docstrings of the touched methods trimmed;
+   the class stays at 1152 lines (budget 1153).
+4. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   `build_run_stats` nests the ten trace keys plus `data_table_version`,
+   `fingerprint`, `strategy` (mv / merge / ctas / ""), `apply_mode`
+   (net_changes / full_stream / lakeflow_sync / none; "" when the apply phase
+   was not reached) and `apply_fallback_reason` under
+   `stats["materialization"]` (no DDL). `previous_materialization_stats` reads
+   the last ten runs of the folder + version: the newest success on the same
+   store (`store_identity`: graph_engine, sync_mode, graph_name) whose
+   apply_mode synced it is the base; other successes and failures before the
+   apply are passed over; a failure during the apply or a run without
+   materialization facts ends the search with `{}`. New `build_run_key` and
+   `store_identity` replace three copies of the folder/version and store fields.
+5. src/back/objects/digitaltwin/build/TwinNetChangeApply.py (new, re-exported)
+   `TwinNetChangeApply.applies`: effective mode not full, `…_data` built,
+   not managed-synced, backend lakebase or neo4j (MV or MERGE table).
+   `apply` records `data_table_version` after the refresh, reads the base
+   version, counts `…_data` (the new `triple_count` and the ratio
+   denominator), and writes the net deletes then inserts: Lakebase
+   `delete_from_sync_iter` / `bulk_load_into_sync`, Neo4j `delete_triples` /
+   `insert_triples` (lists, batch 500). It then purges the inferences, optimizes
+   and refreshes the adjacency caches. Fallbacks to the full stream, with
+   `apply_fallback_reason`: `inferred_not_separable` (store cannot purge its
+   inferences alone: Neo4j today), `no_previous_version` (no base run, or the
+   store reports its graph missing), `cdf_unavailable` (history or change feed
+   unreadable, or a base newer than `…_data`), `changeset_too_large` (> 10 %).
+6. src/back/objects/digitaltwin/build/TwinMergeFallback.py (new, re-exported)
+   `TwinMergeFallback.applies`: requested incremental fell back to full with
+   `serverless_unavailable`, or `incremental_failed:InfrastructureError` whose
+   message/detail names serverless or pipelines. `apply` merges `…_data`
+   (effective mode incremental, strategy merge, reason kept); returns False
+   after completing a build whose fingerprint (row-local source versions,
+   R2RML, base URI, view SQL) equals the base run's while `…_data` exists
+   ("no source changes (skipped)", recorded as success, apply_mode none), and
+   None when the MERGE fails (the CTAS runs). Domains with batch mappings are
+   never fingerprinted (their SQL sources are not versioned).
+7. src/back/objects/digitaltwin/build/_build_pipeline.py
+   One-line hooks: `run()` tries `TwinNetChangeApply` before
+   `_apply_full_rebuild`; `_materialize_data_table` tries `TwinMergeFallback`
+   before the CTAS; `_apply_via_synced_pipeline` records apply_mode
+   lakeflow_sync; `_record_build_run` uses `build_run_key`, `store_identity`
+   and `build_run_stats` (72 lines, was 91). New attributes for the facts.
+8. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+   `skips_graph_stream` records apply_mode (none / full_stream); `_fall_back`
+   stores the failure message and detail for `TwinMergeFallback.applies`.
+9. Tests: tests/units/graphdb/delta/test_change_feed_reader.py (SQL shape,
+   net-change reduction run on SQLite, version / stream / ratio errors),
+   tests/units/graphdb/delta/test_delta_merge_materializer.py (MERGE and
+   ensure SQL, fingerprint stability, apply order and errors),
+   tests/units/core/test_lakebase_flat_store.py (`delete_from_sync_iter`,
+   `_copy_delete_batch_phy`), tests/units/objects/test_build_pipeline_net_apply.py
+   (persisted trace, base-run selection, net apply on Lakebase and Neo4j, every
+   fallback reason, MERGE instead of CTAS, fingerprint skip, MERGE failure ->
+   CTAS). Updated to the ruled MERGE outcome:
+   tests/units/objects/test_build_pipeline_modes.py (serverless-off and
+   runner-failure incremental builds now merge; the CTAS fallback is covered
+   with microbatch) and one test in
+   tests/units/objects/test_build_pipeline_compute_once.py
+   (`test_a_requested_mode_is_traced_with_its_fallback`). Every pipeline test
+   patches the slot pipeline runner, guards `databricks.sdk.WorkspaceClient`
+   and patches `RegistryService.from_context`.
+
+Known limitations:
+- `DESCRIBE HISTORY` and `table_changes()` on a standalone materialized view
+  are not verified on a live workspace (MV change feed is preview); any failure
+  falls back to the full stream (`cdf_unavailable`).
+- Neo4j always streams in full (`inferred_not_separable`) until its store can
+  purge generated triples on their own.
+- A MERGE build on the Databricks backend records apply_mode none, which is not
+  a base run, so the fingerprint skip never fires there.
+- Each MERGE build re-applies the table properties (one metadata commit).
+
+Modified files:
+- src/back/core/graphdb/delta/ChangeFeedReader.py
+- src/back/core/graphdb/delta/DeltaMergeMaterializer.py
+- src/back/core/graphdb/delta/__init__.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinMergeFallback.py
+- src/back/objects/digitaltwin/build/TwinNetChangeApply.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- tests/units/core/test_lakebase_flat_store.py
+- tests/units/graphdb/delta/test_change_feed_reader.py
+- tests/units/graphdb/delta/test_delta_merge_materializer.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/graphdb tests/units/objects
+tests/units/core/test_lakebase_flat_store.py tests/units/dtwin tests/units/architecture
+-> 1914 passed in 5.92s (slowest test 0.83s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10432 passed, 338 skipped, 9 deselected in 55.56s (slowest test 1.02s).
