@@ -195,7 +195,7 @@ def test_every_engine_materialises_the_mapped_snapshot(lakebase_pipeline):
     calls = []
     with patch(
         "back.core.graphdb.delta.materialize.materialize_from_view",
-        side_effect=lambda client, view, table: calls.append((view, table)),
+        side_effect=lambda client, view, table, **_: calls.append((view, table)),
     ):
         lakebase_pipeline.run()
 
@@ -240,7 +240,7 @@ def test_the_delta_pipeline_materialises_once(delta_pipeline):
     calls = []
     with patch(
         "back.core.graphdb.delta.materialize.materialize_from_view",
-        side_effect=lambda client, view, table: calls.append(table),
+        side_effect=lambda client, view, table, **_: calls.append(table),
     ):
         delta_pipeline.run()
 
@@ -252,7 +252,9 @@ def _relation_modes(pipeline):
     modes = []
     with patch(
         "back.core.graphdb.delta.materialize.apply_data_relation",
-        side_effect=lambda client, view, table, *, mode: modes.append((table, mode)),
+        side_effect=lambda client, view, table, *, mode, **_: modes.append(
+            (table, mode)
+        ),
     ):
         pipeline.run()
     return modes
@@ -296,7 +298,7 @@ def test_the_databricks_build_endpoint_also_materialises():
     calls = []
     with patch(
         "back.core.graphdb.delta.materialize.materialize_from_view",
-        side_effect=lambda client, view, table: calls.append((view, table)),
+        side_effect=lambda client, view, table, **_: calls.append((view, table)),
     ), patch("back.core.graphdb.delta.materialize.optimize_table"):
         pipe.run()
 

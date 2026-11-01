@@ -46,18 +46,27 @@ def run_sql(client: Any, sql: str) -> Any:
     )
 
 
-def build_ctas_sql(view_fqn: str, table_fqn: str) -> str:
+def build_ctas_sql(
+    view_fqn: str, table_fqn: str, *, with_object_hash: bool = False
+) -> str:
     """Spark SQL to materialize triples from a VIEW into a clustered Delta TABLE.
 
     Databricks RTAS does not allow an explicit column schema alongside ``AS SELECT``;
     types are inferred from the source VIEW.
+
+    *with_object_hash* also copies the ``object_hash`` column. Only a VIEW
+    wrapped by ``wrap_triple_view_sql_for_lakeflow`` has it, and only a
+    Lakeflow synced table needs it (it is part of the sync primary key).
     """
     validate_table_name(view_fqn)
     validate_table_name(table_fqn)
+    columns = "subject, predicate, object"
+    if with_object_hash:
+        columns += ", object_hash"
     return (
         f"CREATE OR REPLACE TABLE {table_fqn} USING DELTA "
         "CLUSTER BY (predicate, subject) "
-        f"AS SELECT subject, predicate, object FROM {view_fqn}"
+        f"AS SELECT {columns} FROM {view_fqn}"
     )
 
 
@@ -162,9 +171,11 @@ def build_truncate_sql(table_fqn: str) -> str:
     return f"TRUNCATE TABLE {table_fqn}"
 
 
-def materialize_from_view(client: Any, view_fqn: str, table_fqn: str) -> None:
+def materialize_from_view(
+    client: Any, view_fqn: str, table_fqn: str, *, with_object_hash: bool = False
+) -> None:
     """Replace *table_fqn* with rows from *view_fqn*."""
-    sql = build_ctas_sql(view_fqn, table_fqn)
+    sql = build_ctas_sql(view_fqn, table_fqn, with_object_hash=with_object_hash)
     logger.info("Materializing Delta triple store: %s from %s", table_fqn, view_fqn)
     run_sql(client, sql)
 
@@ -192,7 +203,12 @@ def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
 
 
 def apply_data_relation(
-    client: Any, view_fqn: str, data_fqn: str, *, mode: str
+    client: Any,
+    view_fqn: str,
+    data_fqn: str,
+    *,
+    mode: str,
+    with_object_hash: bool = False,
 ) -> None:
     """Build the ``…_data`` relation for *mode* (``"table"`` or ``"view"``).
 
@@ -200,13 +216,18 @@ def apply_data_relation(
     the reverse, so switching a domain between the two modes needs the stale
     relation of the other kind dropped first. Doing it unconditionally keeps
     the two branches symmetric and costs one no-op statement.
+
+    *with_object_hash* applies to ``table`` mode only: a pass-through view is
+    never a Lakeflow source (the gateway VIEW is), so it keeps three columns.
     """
     if mode == "view":
         drop_relation(client, data_fqn, kind="table")
         create_data_view(client, view_fqn, data_fqn)
         return
     drop_relation(client, data_fqn, kind="view")
-    materialize_from_view(client, view_fqn, data_fqn)
+    materialize_from_view(
+        client, view_fqn, data_fqn, with_object_hash=with_object_hash
+    )
 
 
 def ensure_inferred_table(client: Any, table_fqn: str) -> None:

@@ -1,0 +1,64 @@
+================================================================================
+## Compute the mapped triples once and reset `_inferred` in the main build
+================================================================================
+
+Context: Task 0 of incremental triple materialization. A build evaluated the
+R2RML gateway VIEW three times: once for the `…_data` CTAS, once for the
+COUNT(*) and once for the stream into the graph store (and Lakeflow registered
+the VIEW again as its sync source). The Databricks backend also never reset
+`…_inferred` in the main build, so reasoning or cohort triples written for the
+previous data were served next to the rebuilt data; only the standalone
+Databricks build pipeline truncated it. Once `…_data` is a materialized table
+the count, the stream and the Lakeflow sync now read it instead of the VIEW,
+and the main build empties `…_inferred` (a failure fails the build). A
+pass-through `view` `…_data` costs the same as the VIEW, so the VIEW stays the
+source in that mode. The new logic lives in a collaborator class so
+`_BuildPipeline` stays inside its architecture-ratchet size budget.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py (new)
+   Collaborator with static methods: `triples_source_relation` (the `…_data`
+   table when materialized as a table, else the VIEW), `reset_inferred_companion`
+   (Databricks backend only: ensure `…_inferred`, strict TRUNCATE, refresh the
+   `…_graph` union view; `tm.fail_task` and `False` on error, debug log and skip
+   for Lakebase/Neo4j), `trace_fields` (`triples_source`, `inferred_reset`) and
+   `persist_last_build_to_registry` (moved out of the pipeline, unchanged).
+2. src/back/objects/digitaltwin/build/__init__.py
+   Re-export `TwinBuildPostMaterialize`.
+3. src/back/objects/digitaltwin/build/_build_pipeline.py
+   Thin hooks: `_triples_source_relation`, `_count_source_triples` (with
+   `_count_view_triples` kept as an alias), `_reset_inferred_companion` called in
+   `run()` after `_materialize_data_table` and before the apply step. The full
+   rebuild stream and the Lakeflow `source_table_full_name` read
+   `_triples_source_relation()`. `_materialize_data_table` records
+   `data_relation_mode` and asks for `object_hash` only for a table that Lakeflow
+   will sync. `_record_build_run` merges `triples_source` and `inferred_reset`
+   into the build-run entry. `_persist_last_build_to_registry` is a one-line
+   delegate (Extract Class, `_BuildPipeline` 1452 -> 1411 LOC).
+4. src/back/core/graphdb/delta/materialize.py
+   `build_ctas_sql`, `materialize_from_view` and `apply_data_relation` take
+   `with_object_hash` (default False, so every other caller is unchanged). When
+   True the CTAS also copies `object_hash`, which the Lakeflow synced-table
+   primary key needs and which `_data` did not have before.
+5. tests/units/objects/test_build_pipeline_compute_once.py (new)
+   Table mode reads `…_data` for count and stream and evaluates the VIEW exactly
+   once; view mode keeps the VIEW; Lakeflow source is `…_data` (table) or the VIEW
+   (view); synced CTAS carries `object_hash`; Databricks reset order and failure
+   handling; other backends untouched; trace keys.
+6. tests/units/graphdb/delta/test_delta_package.py
+   Both shapes of the CTAS SQL and `apply_data_relation` forwarding.
+7. tests/units/objects/test_build_pipeline_materialize.py
+   Four existing test doubles accept the new keyword (`**_`).
+
+Modified files:
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py (new)
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/core/graphdb/delta/materialize.py
+- tests/units/objects/test_build_pipeline_compute_once.py (new)
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/objects/test_build_pipeline_materialize.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks -> 9100 passed, 12 skipped, 1 deselected, 18 warnings in 89.29s (the deselected readiness test probes live services and hangs without network access); uv run --frozen pytest -q tests/units/architecture -> 9 passed

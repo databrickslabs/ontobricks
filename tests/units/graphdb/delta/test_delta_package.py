@@ -105,6 +105,22 @@ class TestMaterializeSql:
         assert "FROM cat.sch.view1" in sql
         assert "(subject STRING" not in sql
 
+    def test_ctas_copies_three_columns_by_default(self):
+        """Every caller but the Lakeflow-synced build keeps the original shape."""
+        sql = materialize.build_ctas_sql("cat.sch.view1", "cat.sch.view1_data")
+        assert sql.endswith("AS SELECT subject, predicate, object FROM cat.sch.view1")
+        assert "object_hash" not in sql
+
+    def test_ctas_carries_object_hash_when_asked(self):
+        """Lakeflow's primary key needs ``object_hash`` in the table it syncs."""
+        sql = materialize.build_ctas_sql(
+            "cat.sch.view1", "cat.sch.view1_data", with_object_hash=True
+        )
+        assert sql.endswith(
+            "AS SELECT subject, predicate, object, object_hash FROM cat.sch.view1"
+        )
+        assert "CLUSTER BY (predicate, subject)" in sql
+
     def test_adj_ctas_clusters_src_for_out(self):
         sql = materialize.build_adj_ctas_sql(
             "cat.sch.g_graph", "cat.sch.g_adj_out", "out"
@@ -263,6 +279,36 @@ class TestApplyDataRelation:
         assert statements[0] == "DROP VIEW IF EXISTS c.s.v_data"
         assert "CREATE OR REPLACE TABLE c.s.v_data" in statements[1]
         assert len(statements) == 2
+
+    def test_table_mode_forwards_object_hash_to_the_ctas(self):
+        client = MagicMock()
+        materialize.apply_data_relation(
+            client, "c.s.v", "c.s.v_data", mode="table", with_object_hash=True
+        )
+        ctas = self._statements(client)[1]
+        assert ctas.endswith(
+            "AS SELECT subject, predicate, object, object_hash FROM c.s.v"
+        )
+
+    def test_table_mode_keeps_three_columns_without_the_flag(self):
+        client = MagicMock()
+        materialize.apply_data_relation(
+            client, "c.s.v", "c.s.v_data", mode="table"
+        )
+        assert self._statements(client)[1].endswith(
+            "AS SELECT subject, predicate, object FROM c.s.v"
+        )
+
+    def test_view_mode_ignores_object_hash(self):
+        """The pass-through view is never a Lakeflow source; the gateway VIEW is."""
+        client = MagicMock()
+        materialize.apply_data_relation(
+            client, "c.s.v", "c.s.v_data", mode="view", with_object_hash=True
+        )
+        assert self._statements(client)[1] == (
+            "CREATE OR REPLACE VIEW c.s.v_data AS "
+            "SELECT subject, predicate, object FROM c.s.v"
+        )
 
     def test_an_unknown_mode_materializes(self):
         """Anything but ``view`` is the safe default: a real table."""

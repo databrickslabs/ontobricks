@@ -4,6 +4,10 @@ Extracted from :class:`~back.objects.digitaltwin.build._build_pipeline._BuildPip
 so the pipeline class stays inside its size budget. Every method takes the
 running pipeline (*pipe*) and reads its state by attribute; the pipeline keeps
 one-line hooks that delegate here.
+
+State is read with ``getattr`` defaults because the relation attributes
+(``data_table``, ``data_relation_mode``, ``inferred_reset``) only exist once
+the phase that sets them has run.
 """
 
 from __future__ import annotations
@@ -17,7 +21,87 @@ logger = get_logger(__name__)
 
 
 class TwinBuildPostMaterialize:
-    """Registry stamping of a finished build (more steps follow in later commits)."""
+    """Source selection, inferred reset and tracing around the ``…_data`` relation."""
+
+    @staticmethod
+    def triples_source_relation(pipe: Any) -> str:
+        """Return the relation the count, stream and Lakeflow sync should read.
+
+        The ``…_data`` table once it has been materialized: it is the cheap,
+        already-computed copy of the mapped triples. A pass-through ``view``
+        ``…_data`` re-runs the R2RML SQL on every read exactly like the
+        gateway VIEW does, so reading it buys nothing and the VIEW stays the
+        source.
+        """
+        data_table = getattr(pipe, "data_table", "") or ""
+        if data_table and getattr(pipe, "data_relation_mode", None) == "table":
+            return data_table
+        return pipe.view_table
+
+    @staticmethod
+    def reset_inferred_companion(pipe: Any) -> bool:
+        """Empty ``…_inferred`` and refresh the ``…_graph`` union view.
+
+        Applies to the ``databricks`` backend only. Lakebase and Neo4j drop and
+        recreate their graph table in the full rebuild, which discards
+        inferences already. Here the companion is a separate Delta table that
+        survives a rebuild, so reasoning and cohort triples written for the
+        previous data would otherwise be served next to the new data.
+
+        A failure fails the build: stale inferences are a correctness bug, not
+        something to warn about. Returns ``False`` after calling
+        ``tm.fail_task``.
+        """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.delta import _table_naming, materialize
+
+        backend = GraphDBFactory._resolve_triple_store_backend(
+            pipe.domain, pipe.settings
+        )
+        if backend != "databricks":
+            logger.debug(
+                "[DT-BUILD %s] backend %s rebuilds its graph table; no inferred "
+                "companion to reset",
+                pipe.task_id,
+                backend,
+            )
+            return True
+
+        inferred = _table_naming.inferred_table_fqn(pipe.domain, pipe.settings)
+        graph = _table_naming.graph_view_fqn(pipe.domain, pipe.settings)
+        data = getattr(pipe, "data_table", "")
+        if not (inferred and graph and data):
+            pipe.tm.fail_task(
+                pipe.task_id, "Could not resolve the inferred-triples table name"
+            )
+            return False
+
+        try:
+            materialize.ensure_inferred_table(pipe.source_client, inferred)
+            # Strict on purpose: ``materialize.truncate_table`` swallows errors.
+            materialize.run_sql(
+                pipe.source_client, materialize.build_truncate_sql(inferred)
+            )
+            materialize.ensure_graph_view(pipe.source_client, graph, data, inferred)
+        except Exception as exc:  # noqa: BLE001
+            msg = f"Could not reset the inferred triples table {inferred}: {exc}"
+            logger.error("[DT-BUILD %s] %s", pipe.task_id, msg)
+            pipe.tm.fail_task(pipe.task_id, msg)
+            return False
+
+        pipe.inferred_reset = True
+        logger.info(
+            "[DT-BUILD %s] reset %s and refreshed %s", pipe.task_id, inferred, graph
+        )
+        return True
+
+    @staticmethod
+    def trace_fields(pipe: Any) -> dict:
+        """Keys the build-run trace records about the relation read and the reset."""
+        return {
+            "triples_source": TwinBuildPostMaterialize.triples_source_relation(pipe),
+            "inferred_reset": bool(getattr(pipe, "inferred_reset", False)),
+        }
 
     @staticmethod
     def persist_last_build_to_registry(pipe: Any) -> None:

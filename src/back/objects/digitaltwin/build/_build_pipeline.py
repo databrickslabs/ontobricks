@@ -162,7 +162,7 @@ def step_times_from_task(task) -> Dict[str, float]:
 
 
 def _report_post_sync_triple_count(pipe: Any) -> None:
-    """Count VIEW triples after a successful Lakeflow sync.
+    """Count the source relation's triples after a successful Lakeflow sync.
 
     The count is reporting only: a lost warehouse connection must not
     turn a successful sync into a failed build, and must not publish
@@ -182,11 +182,11 @@ def _report_post_sync_triple_count(pipe: Any) -> None:
     else:
         if pipe.triple_count == 0:
             logger.warning(
-                "[DT-BUILD %s] post-sync VIEW %s contains 0 triples — "
+                "[DT-BUILD %s] post-sync %s contains 0 triples — "
                 "the Lakeflow pipeline may have synced an empty source or "
                 "the VIEW SQL produces no rows; check mappings and source data",
                 pipe.task_id,
-                pipe.view_table,
+                pipe._triples_source_relation(),
             )
     if pipe.is_api:
         return
@@ -264,6 +264,11 @@ class _BuildPipeline:
         self.relationship_mappings: list = []
         self.spark_sql: str = ""
         self.triple_count: int = 0
+        # Relation facts: set by _materialize_data_table and the inferred reset,
+        # read through TwinBuildPostMaterialize.
+        self.data_table: str = ""
+        self.data_relation_mode: Optional[str] = None
+        self.inferred_reset: bool = False
         # Lakebase managed-synced mode flag, resolved once before _open_store.
         self._lakebase_engine_config: Dict[str, Any] = {}
         self._graph_engine: str = ""
@@ -380,25 +385,29 @@ class _BuildPipeline:
             return True
         return self._lakebase_managed_synced()
 
-    def _count_view_triples(self) -> int:
-        """Return the number of triples in the VIEW (server-side COUNT).
+    def _triples_source_relation(self) -> str:
+        """Relation the count, stream and Lakeflow sync read (``…_data`` or the VIEW)."""
+        return TwinBuildPostMaterialize.triples_source_relation(self)
+
+    def _count_source_triples(self) -> int:
+        """Return the number of triples in the source relation (server-side COUNT).
 
         Raises :class:`InfrastructureError` when the count cannot run, so a
         lost connection fails the build instead of reading as 0 triples.
         """
         from back.core.graphdb.delta import materialize
 
+        source = self._triples_source_relation()
+        logger.debug("[DT-BUILD %s] counting triples in %s", self.task_id, source)
+        count = materialize.count_triples(self.source_client, source)
         logger.debug(
-            "[DT-BUILD %s] counting triples in VIEW %s", self.task_id, self.view_table
-        )
-        count = materialize.count_triples(self.source_client, self.view_table)
-        logger.debug(
-            "[DT-BUILD %s] VIEW %s contains %d triple(s)",
-            self.task_id,
-            self.view_table,
-            count,
+            "[DT-BUILD %s] %s contains %d triple(s)", self.task_id, source, count
         )
         return count
+
+    def _count_view_triples(self) -> int:
+        """Alias of :meth:`_count_source_triples` kept for existing callers."""
+        return self._count_source_triples()
 
     # ------------------------------------------------------------------
     # Orchestrator
@@ -427,6 +436,9 @@ class _BuildPipeline:
             self._post_create_view_progress()
 
             if not self._materialize_data_table():
+                return
+
+            if not self._reset_inferred_companion():
                 return
 
             t_phase = time.time()
@@ -747,9 +759,16 @@ class _BuildPipeline:
                 else f"Materializing mapped triples into {data_table}..."
             ),
         )
+        # Lakeflow syncs this table when it is the source, and its primary key
+        # needs the ``object_hash`` the wrapped VIEW exposes.
+        with_hash = mode == "table" and self._wrap_view_sql_for_lakeflow()
         try:
             materialize.apply_data_relation(
-                self.source_client, self.view_table, data_table, mode=mode
+                self.source_client,
+                self.view_table,
+                data_table,
+                mode=mode,
+                with_object_hash=with_hash,
             )
         except Exception as exc:  # noqa: BLE001
             msg = f"Could not build {data_table}: {exc}"
@@ -758,6 +777,7 @@ class _BuildPipeline:
             return False
 
         self.data_table = data_table
+        self.data_relation_mode = mode
         logger.info(
             "[DT-BUILD %s] built %s (materialization=%s)",
             self.task_id,
@@ -765,6 +785,10 @@ class _BuildPipeline:
             mode,
         )
         return True
+
+    def _reset_inferred_companion(self) -> bool:
+        """Clear stale inferred triples (Databricks backend); ``False`` fails the build."""
+        return TwinBuildPostMaterialize.reset_inferred_companion(self)
 
     def _announce_apply_step(self) -> None:
         apply_msg = (
@@ -817,9 +841,9 @@ class _BuildPipeline:
 
         t_fetch = time.time()
         logger.info(
-            "[DT-BUILD %s] full rebuild: reading all triples from VIEW %s",
+            "[DT-BUILD %s] full rebuild: reading all triples from %s",
             self.task_id,
-            self.view_table,
+            self._triples_source_relation(),
         )
         if not self.is_api:
             self.tm.update_progress(self.task_id, 40, "Reading all triples from VIEW...")
@@ -903,7 +927,7 @@ class _BuildPipeline:
             self.graph_name,
         )
         select_sql = (
-            f"SELECT subject, predicate, object FROM {self.view_table}"
+            f"SELECT subject, predicate, object FROM {self._triples_source_relation()}"
         )
         if hasattr(self.store, "bulk_load_into_sync"):
             # Lakebase app_managed: warehouse data goes into *_sync; app writes
@@ -1098,7 +1122,7 @@ class _BuildPipeline:
                 "(source=%s sync_mode=%s)",
                 self.task_id,
                 synced_uc,
-                self.view_table,
+                self._triples_source_relation(),
                 self.store.sync_table_mode,
             )
             from back.core.graphdb.lakebase._companion_ddl import (
@@ -1107,7 +1131,7 @@ class _BuildPipeline:
 
             _synced_obj = mgr.ensure(
                 synced_uc,
-                source_table_full_name=self.view_table,
+                source_table_full_name=self._triples_source_relation(),
                 primary_key_columns=list(LAKEFLOW_SYNC_PRIMARY_KEY),
                 sync_mode=self.store.sync_table_mode,
             )
@@ -1477,6 +1501,7 @@ class _BuildPipeline:
                     "managed_synced" if self._is_lakebase_synced else "app_managed"
                 ),
                 "view_table": self.view_table,
+                **TwinBuildPostMaterialize.trace_fields(self),
                 "graph_name": self.graph_name,
                 "task_id": self.task_id,
                 # Mirror the per-step durations the build UI renders from the
