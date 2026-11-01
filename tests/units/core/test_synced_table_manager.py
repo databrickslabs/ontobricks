@@ -18,8 +18,12 @@ from back.core.errors import (
     OperationCancelledError,
     ValidationError,
 )
+from back.core.graphdb.lakebase import SyncedTableRegistration
 from back.core.graphdb.lakebase.SyncedTableManager import SyncedTableManager
+from databricks.sdk.service.database import SyncedTableSchedulingPolicy
 from databricks.sdk.service.pipelines import StartUpdateCause
+
+pytestmark = pytest.mark.unit
 
 
 def mock_method(obj: Any, name: str, **kw):
@@ -39,13 +43,23 @@ def _make_manager(client: MagicMock, sleeps: list | None = None) -> SyncedTableM
     )
 
 
-def _synced(state: str = "ONLINE_NO_PENDING_UPDATE", pipeline_id: str = "pid-1") -> Any:
-    return SimpleNamespace(
+def _synced(
+    state: str = "ONLINE_NO_PENDING_UPDATE",
+    pipeline_id: str = "pid-1",
+    *,
+    source: Any = None,
+    policy: Any = None,
+) -> Any:
+    """A synced-table GET response; ``spec`` is attached only when asked for."""
+    synced = SimpleNamespace(
         data_synchronization_status=SimpleNamespace(
             detailed_state=state,
             pipeline_id=pipeline_id,
         )
     )
+    if source is not None or policy is not None:
+        synced.spec = SimpleNamespace(source_table_full_name=source, scheduling_policy=policy)
+    return synced
 
 
 # ---------------------------------------------------------------
@@ -443,3 +457,222 @@ class TestDelete:
         mgr = _make_manager(client)
         with pytest.raises(InfrastructureError):
             mgr.delete("cat.sch.tab")
+
+
+# ---------------------------------------------------------------
+# ensure -- a changed definition is deleted and recreated
+# ---------------------------------------------------------------
+
+_PK = ["subject", "predicate", "object_hash"]
+
+
+def _created_spec(client: MagicMock) -> dict:
+    return client.database.create_synced_database_table.call_args.kwargs["synced_table"]["spec"]
+
+
+class TestEnsureSpecDrift:
+    """A synced table's definition cannot change in place: drift means delete + create."""
+
+    def test_a_changed_source_deletes_and_recreates_the_registration(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.side_effect = [
+            _synced(source="cat.sch.view", policy="SNAPSHOT"),
+            _synced(source="cat.sch.view_data", policy="SNAPSHOT"),
+        ]
+        mgr = _make_manager(client)
+
+        mgr.ensure(
+            "cat.sch.tab",
+            source_table_full_name="cat.sch.view_data",
+            primary_key_columns=_PK,
+        )
+
+        client.database.delete_synced_database_table.assert_called_once_with(
+            name="cat.sch.tab", purge_data=True
+        )
+        assert _created_spec(client)["source_table_full_name"] == "cat.sch.view_data"
+
+    def test_a_changed_schedule_deletes_and_recreates_the_registration(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.side_effect = [
+            _synced(source="cat.sch.slots", policy=SyncedTableSchedulingPolicy.SNAPSHOT),
+            _synced(source="cat.sch.slots", policy=SyncedTableSchedulingPolicy.TRIGGERED),
+        ]
+        mgr = _make_manager(client)
+
+        mgr.ensure(
+            "cat.sch.tab",
+            source_table_full_name="cat.sch.slots",
+            primary_key_columns=["map_id", "source_key", "predicate"],
+            sync_mode="triggered",
+        )
+
+        client.database.delete_synced_database_table.assert_called_once()
+        assert _created_spec(client)["scheduling_policy"] == "TRIGGERED"
+
+    def test_an_unchanged_definition_is_reused(self):
+        """Source names compare case-insensitively; the SDK enum matches its string."""
+        client = MagicMock()
+        client.database.get_synced_database_table.return_value = _synced(
+            source="cat.sch.triplestore_dom_v3_data",
+            policy=SyncedTableSchedulingPolicy.CONTINUOUS,
+        )
+        mgr = _make_manager(client)
+
+        mgr.ensure(
+            "cat.sch.tab",
+            source_table_full_name="cat.sch.triplestore_dom_V3_data",
+            primary_key_columns=_PK,
+            sync_mode="continuous",
+        )
+
+        client.database.delete_synced_database_table.assert_not_called()
+        client.database.create_synced_database_table.assert_not_called()
+
+    def test_a_drifted_fallback_registration_is_recreated_under_its_name(self):
+        ghost = RuntimeError("Destination table g_sync already exists in schema ontobricks")
+        client = MagicMock()
+        client.database.get_synced_database_table.side_effect = [
+            None,  # primary: ghost reservation, no UC registration
+            _synced(source="cat.sch.view", policy="SNAPSHOT"),  # fallback _b, old source
+            _synced(source="cat.sch.view_data", policy="SNAPSHOT"),  # _b after recreate
+        ]
+        client.database.create_synced_database_table.side_effect = [ghost, ghost, None]
+        mgr = _make_manager(client)
+
+        out = mgr.ensure(
+            "cat.sch.tab",
+            source_table_full_name="cat.sch.view_data",
+            primary_key_columns=_PK,
+        )
+
+        assert out.spec.source_table_full_name == "cat.sch.view_data"
+        deleted = [
+            c.kwargs["name"] for c in client.database.delete_synced_database_table.call_args_list
+        ]
+        assert deleted == ["cat.sch.tab", "cat.sch.tab_b"]
+        created = client.database.create_synced_database_table.call_args.kwargs["synced_table"]
+        assert created["name"] == "cat.sch.tab_b"
+
+    def test_the_drift_is_logged_at_info(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.side_effect = [
+            _synced(source="cat.sch.view", policy="SNAPSHOT"),
+            _synced(source="cat.sch.view_data", policy="SNAPSHOT"),
+        ]
+        mgr = _make_manager(client)
+
+        with patch("back.core.graphdb.lakebase.SyncedTableRegistration.logger") as logger:
+            mgr.ensure(
+                "cat.sch.tab",
+                source_table_full_name="cat.sch.view_data",
+                primary_key_columns=_PK,
+            )
+
+        messages = [c.args[0] % c.args[1:] for c in logger.info.call_args_list]
+        assert any(
+            "cat.sch.tab" in m and "cat.sch.view -> cat.sch.view_data" in m for m in messages
+        )
+        logger.warning.assert_not_called()
+
+
+# ---------------------------------------------------------------
+# trigger_and_wait -- continuous tables are self-managing
+# ---------------------------------------------------------------
+
+
+class TestTriggerAndWaitSchedules:
+    def test_a_continuous_table_is_neither_triggered_nor_waited_for(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.return_value = _synced(
+            state="ONLINE_CONTINUOUS_UPDATE", source="cat.sch.slots", policy="CONTINUOUS"
+        )
+        mgr = _make_manager(client)
+
+        state = mgr.trigger_and_wait("cat.sch.tab", timeout_s=60)
+
+        assert state == "ONLINE_CONTINUOUS_UPDATE"
+        client.pipelines.start_update.assert_not_called()
+        client.pipelines.wait_get_pipeline_idle.assert_not_called()
+
+    def test_a_snapshot_table_is_still_triggered(self):
+        client = MagicMock()
+        client.database.get_synced_database_table.return_value = _synced(
+            state="ONLINE", source="cat.sch.view_data", policy="SNAPSHOT"
+        )
+        client.pipelines.start_update.return_value = SimpleNamespace(update_id="")
+        mgr = _make_manager(client)
+
+        assert mgr.trigger_and_wait("cat.sch.tab", timeout_s=60) == "ONLINE"
+        client.pipelines.start_update.assert_called_once()
+
+
+# ---------------------------------------------------------------
+# SyncedTableRegistration -- reading the registered spec
+# ---------------------------------------------------------------
+
+
+class TestSyncedTableRegistration:
+    @pytest.mark.parametrize(
+        "policy",
+        [SyncedTableSchedulingPolicy.TRIGGERED, "TRIGGERED", "triggered"],
+        ids=["sdk-enum", "rest-string", "lower-case"],
+    )
+    def test_the_scheduling_policy_is_read_from_every_response_shape(self, policy):
+        synced = _synced(source="cat.sch.t", policy=policy)
+        assert SyncedTableRegistration.scheduling_policy(synced) == "TRIGGERED"
+
+    def test_the_rest_namespace_shape_is_read(self):
+        from back.core.graphdb.lakebase.SyncedTableManager import _DictNamespace
+
+        synced = _DictNamespace(
+            {"spec": {"source_table_full_name": "cat.sch.t", "scheduling_policy": "CONTINUOUS"}}
+        )
+        assert SyncedTableRegistration.source_table(synced) == "cat.sch.t"
+        assert SyncedTableRegistration.scheduling_policy(synced) == "CONTINUOUS"
+
+    @pytest.mark.parametrize(
+        "synced",
+        [None, SimpleNamespace(), MagicMock()],
+        ids=["missing", "no-spec", "mock"],
+    )
+    def test_an_unreadable_spec_never_counts_as_drift(self, synced):
+        assert SyncedTableRegistration.source_table(synced) == ""
+        assert SyncedTableRegistration.scheduling_policy(synced) == ""
+        assert SyncedTableRegistration.drift(synced, "cat.sch.other", "continuous") == ""
+
+    def test_drift_describes_every_change(self):
+        synced = _synced(source="cat.sch.view", policy="SNAPSHOT")
+
+        drift = SyncedTableRegistration.drift(synced, "`cat`.`sch`.`slots`", "continuous")
+
+        assert drift == (
+            "source cat.sch.view -> `cat`.`sch`.`slots`, scheduling policy SNAPSHOT -> CONTINUOUS"
+        )
+
+    def test_backticks_and_case_do_not_count_as_drift(self):
+        synced = _synced(source="cat.sch.view_data", policy="SNAPSHOT")
+
+        assert SyncedTableRegistration.drift(synced, "`CAT`.`sch`.`View_Data`", "") == ""
+
+    def test_discard_keeps_an_unchanged_registration(self):
+        mgr = MagicMock()
+        synced = _synced(source="cat.sch.t", policy="SNAPSHOT")
+
+        kept = SyncedTableRegistration.discard_if_drifted(
+            mgr, "cat.sch.tab", synced, "cat.sch.t", "snapshot"
+        )
+
+        assert kept is synced
+        mgr.delete.assert_not_called()
+
+    def test_discard_deletes_a_drifted_registration_with_its_data(self):
+        mgr = MagicMock()
+        synced = _synced(source="cat.sch.t", policy="SNAPSHOT")
+
+        kept = SyncedTableRegistration.discard_if_drifted(
+            mgr, "cat.sch.tab", synced, "cat.sch.t", "triggered"
+        )
+
+        assert kept is None
+        mgr.delete.assert_called_once_with("cat.sch.tab", purge_data=True)

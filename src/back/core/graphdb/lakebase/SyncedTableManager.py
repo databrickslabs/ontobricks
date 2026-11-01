@@ -36,6 +36,7 @@ from back.core.errors import (
     OperationCancelledError,
     ValidationError,
 )
+from back.core.graphdb.lakebase.SyncedTableRegistration import SyncedTableRegistration
 from back.core.logging import get_logger
 from shared.config.constants import HTTP_USER_AGENT
 
@@ -414,31 +415,21 @@ class SyncedTableManager:
     ) -> Any:
         """Create the synced table if missing; otherwise return the existing one.
 
-        Returns the synced-table object.  When the primary name has a ghost
-        control-plane reservation (see ``_GHOST_FALLBACK_SUFFIXES``), the
-        returned object's ``.name`` attribute may differ from *name* — callers
-        must use it downstream (union-view DDL, trigger, wait).
+        Returns the synced-table object. Its ``.name`` differs from *name* when the primary
+        name has a ghost control-plane reservation — callers must use it downstream
+        (union-view DDL, trigger, wait). After a CREATE, polls GET until the table is visible
+        (UC propagation) and raises ``InfrastructureError`` after
+        ``_POST_CREATE_VISIBILITY_S`` seconds. Recovery paths: stale ownership
+        (``_STALE_OWNERSHIP_PROBE_S``: delete, then re-create under the app principal) and
+        ghost reservations (``_GHOST_FALLBACK_SUFFIXES``: retry under ``_b`` / ``_c`` / ``_d``).
 
-        After a successful CREATE, polls until the table is visible via GET to
-        handle the UC registration propagation delay (~seconds).  Raises
-        ``InfrastructureError`` if visibility is not confirmed within
-        ``_POST_CREATE_VISIBILITY_S`` seconds.
-
-        **Stale-ownership recovery**: when POST returns 409 "already exists"
-        but GET keeps returning 404 for ``_STALE_OWNERSHIP_PROBE_S`` seconds,
-        the table was almost certainly created by a different principal (the
-        deploying user running the app locally).  In that case we delete the
-        stale table and re-create it so the app service principal becomes the
-        owner and the subsequent GET succeeds.
-
-        **Ghost control-plane recovery**: when POST returns the Lakebase
-        "Destination table already exists in schema" error but GET returns 404,
-        the Lakebase control-plane has a stale reservation from a previous build
-        that was cleaned up at the UC level without going through the
-        synced-tables DELETE API.  The reservation cannot be cleared externally;
-        instead, ``ensure`` retries with ``_b``, ``_c``, ``_d`` name suffixes.
+        A registration whose source table or scheduling policy differs from the request is
+        deleted (``purge_data=True``) and created again — a synced table's definition cannot
+        change in place (:class:`SyncedTableRegistration`).
         """
-        existing = self.get(name)
+        existing = SyncedTableRegistration.discard_if_drifted(
+            self, name, self.get(name), source_table_full_name, sync_mode
+        )
         if existing is not None:
             existing_state = self._extract_state(existing)
             if existing_state not in _TERMINAL_FAIL:
@@ -492,7 +483,9 @@ class SyncedTableManager:
 
             # Check if this fallback candidate already exists.
             if candidate != name:
-                existing_fallback = self.get(candidate)
+                existing_fallback = SyncedTableRegistration.discard_if_drifted(
+                    self, candidate, self.get(candidate), source_table_full_name, sync_mode
+                )
                 if existing_fallback is not None:
                     fallback_state = self._extract_state(existing_fallback)
                     if fallback_state in _TERMINAL_FAIL:
@@ -906,7 +899,14 @@ class SyncedTableManager:
         ``on_state_change`` is forwarded to :meth:`wait_for_completion` and
         called on every pipeline state transition so callers can surface
         live progress without polling.
+
+        A ``CONTINUOUS`` table is self-managing: nothing is triggered or waited
+        for, and its current state is returned.
         """
+        current = self.get(name)
+        if SyncedTableRegistration.scheduling_policy(current) == "CONTINUOUS":
+            logger.info("Synced table %s syncs continuously; no refresh to trigger", name)
+            return self._extract_state(current)
         update_id = ""
         if not skip_initial_trigger:
             try:

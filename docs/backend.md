@@ -278,7 +278,7 @@ global warehouse).
 | `schema` | string | `ontobricks_graph` | Postgres schema for graph triple tables. Overridden by the Registry Volume schema when Settings → Registry resolves a non-empty triplet. |
 | `database` | string | injected `PGDATABASE` | Postgres database name — overrides the Apps-injected value. |
 | `sync_mode` | string | omitted → `app_managed` at runtime; Settings proposes `managed_synced` | Write mode: `managed_synced` (Lakeflow, Settings default) or `app_managed` (direct COPY). Workspaces that never save the key keep `app_managed`. |
-| `sync_table_mode` | string | `snapshot` | Lakeflow schedule. Only `snapshot` is valid: the source is an R2RML view (no CDF). Legacy `triggered` / `continuous` values are coerced to `snapshot`. |
+| `sync_table_mode` | string | `snapshot` | Most frequent Lakeflow schedule a build may use (`snapshot` < `triggered` < `continuous`). A build syncs at the schedule its materialization mode asks for (`full` → snapshot, `incremental` → triggered, `microbatch` → continuous), capped by this value. The synced table reads `…_data` (or a complete `…_slots`); a plain VIEW source always syncs a snapshot. A changed source or schedule deletes and recreates the synced table. |
 | `sync_timeout_s` | int | `600` | Max seconds to wait for a Lakeflow sync run to complete. |
 | `sync_uc_catalog` | string | *(auto-detected)* | UC catalog for synced table registration. Auto-detected from Registry settings / `ONTOBRICKS_SYNC_UC_CATALOG` / `domain.delta.catalog`. |
 
@@ -1549,7 +1549,7 @@ uniform 5-column shape.
   "schema": "ontobricks_graph",         // fallback PG schema only when Registry has no Volume schema
   "database": "appdb",                   // PG database (overrides PGDATABASE)
   "sync_mode": "managed_synced",         // Settings proposes this; omitted still means app_managed at runtime
-  "sync_table_mode": "snapshot",         // snapshot only (views have no CDF; triggered/continuous are coerced)
+  "sync_table_mode": "snapshot",         // cap: snapshot | triggered | continuous (mode-derived, capped here)
   "sync_timeout_s": 600,                  // wait deadline for a sync run
   "sync_uc_catalog": "main"              // UC catalog for synced table registration (optional override)
 }

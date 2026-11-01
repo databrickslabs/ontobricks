@@ -20,12 +20,16 @@ except ImportError:  # pragma: no cover
     LakebaseFlatStore = None  # type: ignore[misc, assignment]
 
 from back.core.graphdb.lakebase.SyncedTableManager import SyncedTableManager  # noqa: E402
+from back.core.graphdb.lakebase.SyncedTableRegistration import (  # noqa: E402
+    SyncedTableRegistration,
+)
 
 __all__ = [
     "DEFAULT_GRAPH_SCHEMA",
     "LAKEBASE_AVAILABLE",
     "LakebaseFlatStore",
     "SyncedTableManager",
+    "SyncedTableRegistration",
     "default_schema",
     "normalize_sync_table_mode",
     "validate_engine_config_keys",

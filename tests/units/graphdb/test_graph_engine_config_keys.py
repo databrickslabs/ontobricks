@@ -16,6 +16,7 @@ from back.core.graphdb.engine_config import (
     resolve_neo4j_connection,
 )
 from back.core.graphdb.lakebase.LakebaseBase import (
+    SYNC_TABLE_MODES,
     normalize_sync_table_mode,
     resolve_postgres_database_override,
     validate_engine_config_keys,
@@ -225,19 +226,31 @@ class TestNormalizeSyncTableMode:
         assert normalize_sync_table_mode("snapshot") == "snapshot"
         assert normalize_sync_table_mode(" SNAPSHOT ") == "snapshot"
 
-    def test_legacy_triggered_and_continuous_coerce(self):
-        assert normalize_sync_table_mode("triggered") == "snapshot"
-        assert normalize_sync_table_mode("continuous") == "snapshot"
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [("triggered", "triggered"), (" Continuous ", "continuous"), ("", "snapshot")],
+    )
+    def test_triggered_and_continuous_are_kept(self, raw, expected):
+        assert normalize_sync_table_mode(raw) == expected
+
+    def test_validation_keeps_a_triggered_schedule(self):
         cfg = {"sync_table_mode": "triggered"}
         ok, msg = validate_engine_config_keys(cfg)
         assert ok
         assert msg == ""
-        assert cfg["sync_table_mode"] == "snapshot"
+        assert cfg["sync_table_mode"] == "triggered"
+
+    def test_the_modes_are_ordered_from_least_to_most_frequent(self):
+        assert SYNC_TABLE_MODES == ("snapshot", "triggered", "continuous")
 
     def test_unknown_rejected(self):
-        with pytest.raises(ValueError, match="snapshot"):
+        with pytest.raises(ValueError, match="snapshot, triggered, continuous"):
             normalize_sync_table_mode("yearly")
         ok, msg = validate_engine_config_keys({"sync_table_mode": "yearly"})
         assert not ok
         assert "sync_table_mode" in msg
         assert "snapshot" in msg
+
+    def test_a_non_string_is_rejected(self):
+        with pytest.raises(ValueError, match="string"):
+            normalize_sync_table_mode(3)

@@ -56,32 +56,31 @@ def validate_graph_schema(name: str) -> str:
 
 
 _ALLOWED_SYNC_MODES = ("app_managed", "managed_synced")
-_LEGACY_UNSUPPORTED_SYNC_TABLE_MODES = frozenset({"triggered", "continuous"})
+
+#: Lakeflow synced-table schedules, from the least to the most frequent.
+SYNC_TABLE_MODES = ("snapshot", "triggered", "continuous")
 
 
 def normalize_sync_table_mode(value: Any = None) -> str:
-    """Return the Lakeflow schedule OntoBricks can run against an R2RML view.
+    """Return the configured Lakeflow schedule: ``snapshot``, ``triggered`` or ``continuous``.
 
-    Triggered and Continuous need Change Data Feed. The mapped source is a
-    Unity Catalog view, so only Snapshot is valid. Legacy values are coerced.
+    ``None`` and blank mean ``snapshot``. The value is a *cap*: a build syncs at
+    the schedule its materialization mode asks for (``full`` → snapshot,
+    ``incremental`` → triggered, ``microbatch`` → continuous), never above this
+    one. Triggered and Continuous apply row-level changes, so they need a source
+    with a change data feed — a Delta table or materialized view, never a plain
+    VIEW. The build pipeline guarantees that by syncing ``…_data`` (or a complete
+    ``…_slots``) and keeps a VIEW source on snapshots.
     """
     if value is None:
         return "snapshot"
     if not isinstance(value, str):
         raise ValueError("graph_engine_config.sync_table_mode must be a string")
-    v = value.strip().lower()
-    if not v or v == "snapshot":
-        return "snapshot"
-    if v in _LEGACY_UNSUPPORTED_SYNC_TABLE_MODES:
-        logger.warning(
-            "sync_table_mode=%r is not supported for R2RML views (no Change Data "
-            "Feed); using snapshot",
-            value,
-        )
-        return "snapshot"
+    v = value.strip().lower() or "snapshot"
+    if v in SYNC_TABLE_MODES:
+        return v
     raise ValueError(
-        "graph_engine_config.sync_table_mode must be snapshot "
-        "(triggered and continuous require CDF and cannot sync a view)"
+        "graph_engine_config.sync_table_mode must be one of " + ", ".join(SYNC_TABLE_MODES)
     )
 
 
@@ -96,9 +95,11 @@ def validate_engine_config_keys(config: Dict[str, Any]) -> Tuple[bool, str]:
       for Lakebase (Postgres ``search_path`` + UC synced-table middle segment).
     * ``sync_mode``        -- ``app_managed`` (runtime default when omitted) or
       ``managed_synced`` (what Settings proposes when the key is unset).
-    * ``sync_table_mode``  -- Lakeflow scheduling. Only ``snapshot`` is
-      supported (source is a view with no CDF). Legacy ``triggered`` /
-      ``continuous`` values are coerced to ``snapshot``.
+    * ``sync_table_mode``  -- most frequent Lakeflow schedule a build may use:
+      ``snapshot`` (default; every build re-copies the graph), ``triggered``
+      (incremental / microbatch domains apply row changes on each build) or
+      ``continuous`` (microbatch domains stream them). ``full`` domains and a
+      VIEW source always sync a snapshot.
     * ``sync_timeout_s``   -- positive integer; how long to wait for a sync run.
     * ``sync_uc_catalog``  -- UC catalog where the synced table is registered;
       defaults to the snapshot Delta catalog used by the build pipeline.
