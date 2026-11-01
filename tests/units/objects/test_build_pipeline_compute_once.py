@@ -225,7 +225,12 @@ class TestLakeflowSource:
             "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_data)"
         ) in warnings[0]
 
-    def test_a_slots_sync_names_the_slots_table_it_synced(self):
+    def test_complete_slots_still_sync_the_data_relation(self):
+        """``_slots`` is an internal staging table: Lakeflow always reads ``_data``.
+
+        Asserted-only readers query the synced table directly, so a slots
+        source would leak duplicate slot rows and blank objects to them.
+        """
         pipe = self._synced("materialized_view")
         pipe.mode_decision = ModeDecision("incremental", "incremental", "")
         pipe.slots_table, pipe.slots_complete = "cat.sch.v_g_slots", True
@@ -233,7 +238,7 @@ class TestLakeflowSource:
         warnings = self._empty_sync_warnings(pipe)
 
         assert (
-            "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_slots)"
+            "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_data)"
         ) in warnings[0]
 
     def test_a_synced_data_table_carries_object_hash(self):
@@ -480,7 +485,7 @@ class TestBuildRunTrace:
         assert entry["triples_source"] == _VIEW
         assert entry["inferred_reset"] is False
 
-    def test_trace_fields_has_exactly_the_eight_keys(self):
+    def test_trace_fields_has_exactly_the_ten_keys(self):
         fields = TwinBuildPostMaterialize.trace_fields(
             SimpleNamespace(view_table=_VIEW)
         )
@@ -494,6 +499,8 @@ class TestBuildRunTrace:
             "refresh_technique": "",
             "slot_pipeline_id": "",
             "slots_table": "",
+            "sync_source": "",
+            "sync_mode_effective": "",
         }
 
     def test_trace_fields_reports_the_incremental_facts(self):
