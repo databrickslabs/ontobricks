@@ -183,6 +183,18 @@ class LakebaseBase(GraphDBBackend):
     def get_node_table(self, table_name: str) -> str:
         return self.physical_table_id(table_name)
 
+    def drop_union_view(self, name: str) -> None:
+        """Drop the graph's union view (the read path over ``_sync`` and the companion).
+
+        Lakeflow purges a synced table's Postgres ``_sync`` table when the
+        registration is deleted and recreated; the view depending on it would get
+        in the way. ``LakebaseFlatStore.ensure_synced_union_view`` re-creates it.
+        """
+        from back.core.graphdb.lakebase import _companion_ddl
+
+        with self._cursor() as cur:
+            _companion_ddl.drop_view(cur, self.physical_table_id(name))
+
     # -- Capability / connection --------------------------------------------
 
     @property

@@ -49,6 +49,15 @@ _TRIPLE_TABLE_INDEXES: tuple[tuple[str, str], ...] = (
     ("oph", "object_hash, predicate"),
 )
 
+#: What a Lakeflow synced table was registered on: a triples relation
+#: (``…_data`` or the R2RML VIEW, keyed on ``LAKEFLOW_SYNC_PRIMARY_KEY``) or the
+#: ``…_slots`` streaming table (one row per ``map_id, source_key, predicate``).
+SOURCE_KIND_TRIPLES = "triples"
+SOURCE_KIND_SLOTS = "slots"
+
+# A ``…_slots``-sourced synced table has no ``object_hash`` column.
+_SLOTS_SYNC_INDEXES: tuple[tuple[str, str], ...] = (("sp", "subject, predicate"),)
+
 
 def _safe(name: str) -> str:
     return (safe_identifier(name) or "triples").lower()
@@ -243,14 +252,19 @@ def upgrade_legacy_triple_table_to_object_hash(cur: Any, table_ref: str) -> None
     )
 
 
-def ensure_graph_indexes(cur: Any, table_ref: str) -> None:
+def ensure_graph_indexes(
+    cur: Any, table_ref: str, *, source_kind: str = SOURCE_KIND_TRIPLES
+) -> None:
     """Create standard graph lookup indexes on *table_ref* if absent.
 
     ``table_ref`` may be bare (``g_x_v1_sync``) or schema-qualified
     (``"schema".g_x_v1_sync``). Index names use the physical table name only.
+    A ``…_slots``-sourced synced table (*source_kind* ``"slots"``) has no
+    ``object_hash`` and gets the ``(subject, predicate)`` index only.
     """
     table_name = table_ref.split(".")[-1].strip('"')
-    for sfx, cols in _TRIPLE_TABLE_INDEXES:
+    indexes = _SLOTS_SYNC_INDEXES if source_kind == SOURCE_KIND_SLOTS else _TRIPLE_TABLE_INDEXES
+    for sfx, cols in indexes:
         cur.execute(
             f"CREATE INDEX IF NOT EXISTS {_idx_name(table_name, sfx)} "
             f"ON {table_ref} ({cols})"
@@ -322,16 +336,54 @@ def ensure_companion(cur: Any, schema: str, companion: str) -> None:
     _create_triple_table(cur, schema, companion)
 
 
+def build_union_view_sql(view: str, synced: str, companion: str) -> str:
+    """Union view over a triples-sourced synced table (``…_data`` / VIEW) and the companion.
+
+    The synced side is NULL-padded for ``datatype`` / ``lang`` so the view
+    has a uniform 5-column shape regardless of which side a row came from.
+    """
+    return (
+        f"CREATE OR REPLACE VIEW {view} AS "
+        f"SELECT subject, predicate, object, "
+        f"NULL::TEXT AS datatype, NULL::TEXT AS lang "
+        f"FROM {synced} "
+        f"UNION ALL "
+        f"SELECT subject, predicate, object, datatype, lang FROM {companion}"
+    )
+
+
+def build_union_view_sql_for_slots(view: str, synced: str, companion: str) -> str:
+    """Union view over a ``…_slots``-sourced synced table and the companion.
+
+    The slots table carries ``map_id`` / ``source_key`` next to the triple and
+    one row per slot, so the synced side projects the three triple columns and
+    de-duplicates them (classes that share a TriplesMap emit the same triple).
+    Blank attribute objects are dropped exactly as the ``…_data`` relation drops
+    them. The output columns match :func:`build_union_view_sql`, so ``CREATE OR
+    REPLACE`` switches between the two.
+    """
+    return (
+        f"CREATE OR REPLACE VIEW {view} AS "
+        f"SELECT DISTINCT subject, predicate, object, "
+        f"NULL::TEXT AS datatype, NULL::TEXT AS lang "
+        f"FROM {synced} WHERE object IS NOT NULL AND TRIM(object) <> '' "
+        f"UNION ALL "
+        f"SELECT subject, predicate, object, datatype, lang FROM {companion}"
+    )
+
+
 def ensure_union_view(
     cur: Any,
     view: str,
     synced: str,
     companion: str,
+    *,
+    source_kind: str = SOURCE_KIND_TRIPLES,
 ) -> None:
     """``CREATE OR REPLACE`` the union view that readers query.
 
-    The synced side is NULL-padded for ``datatype`` / ``lang`` so the view
-    has a uniform 5-column shape regardless of which side a row came from.
+    *source_kind* picks :func:`build_union_view_sql_for_slots` for a
+    ``…_slots``-sourced synced table and :func:`build_union_view_sql` otherwise.
 
     If ``view`` already exists as a TABLE (e.g. from an old app-managed build
     before the managed_synced migration), it is dropped first — Postgres's
@@ -356,15 +408,10 @@ def ensure_union_view(
         "  END IF; "
         "END $$"
     )
-    sql = (
-        f"CREATE OR REPLACE VIEW {view} AS "
-        f"SELECT subject, predicate, object, "
-        f"NULL::TEXT AS datatype, NULL::TEXT AS lang "
-        f"FROM {synced} "
-        f"UNION ALL "
-        f"SELECT subject, predicate, object, datatype, lang FROM {companion}"
+    build = (
+        build_union_view_sql_for_slots if source_kind == SOURCE_KIND_SLOTS else build_union_view_sql
     )
-    cur.execute(sql)
+    cur.execute(build(view, synced, companion))
 
 
 def truncate_companion(cur: Any, companion: str) -> None:

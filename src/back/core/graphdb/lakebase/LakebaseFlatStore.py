@@ -332,6 +332,7 @@ class LakebaseFlatStore(LakebaseBase):
         wait_s: int = 0,
         poll_interval_s: float = 5.0,
         synced_phy_override: str = "",
+        source_kind: str = _companion_ddl.SOURCE_KIND_TRIPLES,
     ) -> None:
         """Create the union view once the ``_sync`` table exists (after Lakeflow snapshot).
 
@@ -352,9 +353,10 @@ class LakebaseFlatStore(LakebaseBase):
         (default 300s).  ``poll_interval_s`` can be overridden via
         ``ONTOBRICKS_SYNC_VIEW_POLL_S`` (default 5s).
 
-        *synced_phy_override* lets callers supply the actual Postgres table name
-        when ``SyncedTableManager.ensure()`` used a ghost-state fallback suffix
-        (e.g. ``cust360auto_v4_sync_b`` instead of ``cust360auto_v4_sync``).
+        *synced_phy_override* is the Postgres table name when ``SyncedTableManager.ensure()``
+        used a ghost-state fallback suffix (e.g. ``cust360auto_v4_sync_b``). *source_kind*
+        ``"slots"`` builds the de-duplicated three-column view (and only the subject index)
+        that a ``…_slots``-sourced synced table needs.
         """
         import os
         import time as _time
@@ -365,9 +367,7 @@ class LakebaseFlatStore(LakebaseBase):
         if wait_s == 0:
             wait_s = int(os.environ.get("ONTOBRICKS_SYNC_VIEW_WAIT_S", "") or 300)
         if poll_interval_s == 5.0:
-            poll_interval_s = float(
-                os.environ.get("ONTOBRICKS_SYNC_VIEW_POLL_S", "") or 5.0
-            )
+            poll_interval_s = float(os.environ.get("ONTOBRICKS_SYNC_VIEW_POLL_S", "") or 5.0)
 
         companion = self.companion_phy(name)
         synced_bare = synced_phy_override or self.synced_phy(name)
@@ -420,14 +420,14 @@ class LakebaseFlatStore(LakebaseBase):
             # DDL idempotently so BFS and neighbour traversals stay performant
             # even if the physical _sync table was recreated upstream.
             try:
-                _companion_ddl.ensure_graph_indexes(cur, synced)
+                _companion_ddl.ensure_graph_indexes(cur, synced, source_kind=source_kind)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "ensure_synced_union_view: could not ensure indexes on %s: %s",
                     synced,
                     exc,
                 )
-            _companion_ddl.ensure_union_view(cur, view, synced, companion)
+            _companion_ddl.ensure_union_view(cur, view, synced, companion, source_kind=source_kind)
 
     @staticmethod
     def _sync_table_exists(cur: Any, schema: str, table: str) -> bool:
