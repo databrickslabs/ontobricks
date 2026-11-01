@@ -484,3 +484,52 @@ Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-01.log
 
 Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/back/core/w3c/sparql tests/units/architecture tests/units/objects/test_build_pipeline_materialize.py tests/units/dtwin -> 1060 passed
+
+================================================================================
+## Lakehouse//RT guardrail routing for Delta graph reads
+================================================================================
+
+Context: Task 7 of incremental triple materialization (spec layer 3a). Graph
+reads already use a separate query warehouse, optionally a Lakehouse//RT one
+(`graph_engine_config.lakehouse.use_sea`). RT enforces guardrails (2-minute
+runtime, 300 GB shuffle, statement timeout), so a heavy traversal such as the
+recursive BFS could fail on RT although the build warehouse would answer it.
+`DeltaFlatStore.execute_query`, the single read entry point, now retries such a
+refused statement once on the build warehouse. The query/build warehouse
+plumbing itself is reused unchanged.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   New module constant `RT_FALLBACK_MARKERS` (guardrail, exceeds,
+   statement_timeout, query timed out, 501, lakehouse//rt, not supported on
+   this warehouse). `execute_query` retries once on a lazily created build
+   client (`create_databricks_client(domain, settings, for_write=True)`, cached
+   in `_fallback_client`) when the lower-cased error contains a marker, logs a
+   warning with the SQL length and first 120 characters, and keeps the graph
+   statement timeout on both warehouses (shared `_run_read` helper). Other
+   errors, unbound stores (`domain=None`) and a missing fallback client
+   re-raise the original exception. New read-only `last_read_route`
+   (`"query"` | `"build-fallback"`) records which path answered.
+2. tests/units/graphdb/delta/test_read_warehouse_routing.py (new)
+   22 tests: guardrail error retried once on the build client
+   (`for_write=True`) with `last_read_route == "build-fallback"`, every marker
+   triggers the fallback, the fallback client is cached, non-marked errors
+   propagate without creating it, success never touches it, unbound store and
+   missing client re-raise the original error, the route is read-only and
+   resets after a later success, and the statement timeout is preserved on both
+   warehouses.
+3. documentation/incremental-materialization.md (new)
+   Title plus the Lakehouse//RT subsection (`_graph` is a materialized view in
+   incremental/microbatch modes so RT can read it; guardrail fallback to the
+   build warehouse; `last_read_route`). A marker comment is left for the rest
+   of the document.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_read_warehouse_routing.py (new)
+- documentation/incremental-materialization.md (new)
+- changelogs/v0.9.1/dermot-smyth_2026-11-01.log
+
+Tests: uv run --frozen pytest -q tests/units/graphdb/delta tests/units/architecture -> 225 passed
+       uv run --frozen pytest -q tests/units/graphdb tests/units/core tests/back/core -> 2107 passed

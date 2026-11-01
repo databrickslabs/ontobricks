@@ -10,6 +10,7 @@ from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.graphdb.adjacency import expand_and_fetch_sql
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming, materialize
+from back.core.graphdb.delta.DeltaBase import create_databricks_client
 from back.core.graphdb.delta.DeltaOverviewStats import DeltaOverviewStats
 from back.core.graphdb.entity_search import (
     is_missing_relation_error,
@@ -23,6 +24,20 @@ from back.core.helpers import sql_escape as _escape_sql_string, validate_table_n
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Lower-case substrings of a read error that mean the Lakehouse//RT query
+# warehouse refused or aborted the statement (guardrails: 2-minute runtime,
+# 300 GB shuffle, statement timeout, unsupported feature).  Such a read is
+# retried once on the build warehouse; any other error propagates unchanged.
+RT_FALLBACK_MARKERS = (
+    "guardrail",
+    "exceeds",
+    "statement_timeout",
+    "query timed out",
+    "501",
+    "lakehouse//rt",
+    "not supported on this warehouse",
+)
 
 
 class DeltaFlatStore(GraphDBBackend):
@@ -48,6 +63,13 @@ class DeltaFlatStore(GraphDBBackend):
         self._client = client
         self._domain = domain
         self._settings = settings
+        self._fallback_client: Any = None
+        self._last_read_route = "query"
+
+    @property
+    def last_read_route(self) -> str:
+        """Warehouse path that answered the last read: ``query`` or ``build-fallback``."""
+        return self._last_read_route
 
     @property
     def query_dialect(self) -> str:
@@ -556,14 +578,58 @@ class DeltaFlatStore(GraphDBBackend):
         CTE) is cancelled server-side instead of pinning a warehouse session.
         The unbounded ``client.execute_query`` is intentionally reserved for
         full-graph dumps (``query_triples``) and the build pipeline.
+
+        A read refused by a Lakehouse//RT guardrail (see
+        :data:`RT_FALLBACK_MARKERS`) is retried once on the build warehouse;
+        :attr:`last_read_route` records which path answered.
         """
+        try:
+            rows = self._run_read(self._client, query)
+        except Exception as exc:
+            fallback = self._rt_fallback_client(exc)
+            if fallback is None:
+                raise
+            logger.warning(
+                "Delta read refused by the query warehouse, retrying on the "
+                "build warehouse (sql_len=%d, sql=%s): %s",
+                len(query),
+                query[:120],
+                exc,
+            )
+            rows = self._run_read(fallback, query)
+            self._last_read_route = "build-fallback"
+            return rows
+        self._last_read_route = "query"
+        return rows
+
+    @staticmethod
+    def _run_read(client: Any, query: str) -> List[Dict[str, Any]]:
+        """Run *query* on *client*, bounded by the graph statement timeout."""
         from back.core.query_limits import get_graph_query_timeout_s
 
         timeout_s = get_graph_query_timeout_s()
-        sql_service = getattr(self._client, "sql", None)
+        sql_service = getattr(client, "sql", None)
         if sql_service is not None and hasattr(sql_service, "execute_query"):
             return sql_service.execute_query(query, statement_timeout_s=timeout_s)
-        return self._client.execute_query(query)
+        return client.execute_query(query)
+
+    def _rt_fallback_client(self, exc: Exception) -> Optional[Any]:
+        """Build-warehouse client for *exc*, or ``None`` when no retry applies.
+
+        Only guardrail-marked errors on a domain-bound store qualify.  The
+        client is created lazily (``for_write=True`` selects the build
+        warehouse) and cached for later reads.
+        """
+        message = str(exc).lower()
+        if not any(marker in message for marker in RT_FALLBACK_MARKERS):
+            return None
+        if self._domain is None:
+            return None
+        if self._fallback_client is None:
+            self._fallback_client = create_databricks_client(
+                self._domain, self._settings, for_write=True
+            )
+        return self._fallback_client
 
     @staticmethod
     def _expansion_level_ctes(
