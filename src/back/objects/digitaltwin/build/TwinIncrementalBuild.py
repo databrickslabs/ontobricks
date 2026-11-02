@@ -99,9 +99,13 @@ class TwinIncrementalBuild:
                 pipe.relationship_mappings,
                 base_uri=getattr(pipe, "base_uri", ""),
             )
-            pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
-                pipe, source_tables=spec.source_tables
-            )
+            try:
+                pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
+                    pipe, source_tables=spec.source_tables
+                )
+            except InfrastructureError:
+                TwinIncrementalBuild._keep_schedule_without_probe(pipe, gate.effective)
+                raise
             pipe.sync_schedule_mode = pipe.mode_decision.effective
             if pipe.mode_decision.effective == "full":
                 TwinIncrementalBuild._leave(pipe)
@@ -113,6 +117,20 @@ class TwinIncrementalBuild:
             TwinIncrementalBuild._fall_back(pipe, requested, exc)
             return False
         return True
+
+    @staticmethod
+    def _keep_schedule_without_probe(pipe: Any, gate_mode: str) -> None:
+        """The probe failed (no resolver decision): keep the last good build's schedule.
+
+        For a Lakeflow-synced store only (the schedule matters nowhere else):
+        the base run's registered schedule, else *gate_mode*. Neither a
+        genuinely untracked domain (snapshot) nor a tracked one (triggered)
+        is then re-registered because the probe could not answer once.
+        """
+        from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
+
+        if pipe._uses_synced_pipeline():
+            pipe.sync_schedule_mode = TwinLakebaseSync.previous_schedule_mode(pipe) or gate_mode
 
     @staticmethod
     def _leave(pipe: Any, *, only_if_slots_exist: bool = False) -> None:

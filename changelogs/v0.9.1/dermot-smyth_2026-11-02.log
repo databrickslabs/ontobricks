@@ -710,9 +710,6 @@ Changes:
    tests/units/front/test_settings_lakebase_sync_defaults.py.
 
 Known limitations (follow-ups):
-- Reverse case of the kept schedule: a domain whose sources are genuinely
-  untracked (registered as a snapshot) and whose probe fails registers the
-  synced table as triggered once; the next good build returns it to snapshot.
 - TwinIncrementalBuild is 483 lines (soft budget 400; hard 800): an Extract
   Class of the slot-pipeline steps (find/ensure/update/stop, channel, timeout)
   would bring it near 300.

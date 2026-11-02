@@ -38,6 +38,8 @@ logger = get_logger(__name__)
 
 #: Lakeflow schedule each effective materialization mode asks for.
 _MODE_SCHEDULE = {"full": "snapshot", "incremental": "triggered", "microbatch": "continuous"}
+#: The mode whose schedule a registration is (the inverse of _MODE_SCHEDULE).
+_SCHEDULE_MODE = {schedule: mode for mode, schedule in _MODE_SCHEDULE.items()}
 
 #: ``data_relation_mode`` values whose ``…_data`` holds a computed copy of the triples.
 _COPIED_RELATIONS = ("table", TwinBuildPostMaterialize.MATERIALIZED_VIEW)
@@ -69,6 +71,19 @@ class TwinLakebaseSync:
             configured_sync_table_mode=getattr(pipe.store, "sync_table_mode", "snapshot"),
             source_is_view=getattr(pipe, "data_relation_mode", None) not in _COPIED_RELATIONS,
         )
+
+    @staticmethod
+    def previous_schedule_mode(pipe: Any) -> str:
+        """The mode whose schedule the base run registered, ``""`` when there is none.
+
+        Read from its ``stats.materialization.sync_mode_effective``
+        (snapshot -> ``full``, triggered -> ``incremental``, continuous ->
+        ``microbatch``) through :meth:`TwinBuildRunHistory.previous_materialization_stats`.
+        """
+        from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
+
+        facts = TwinBuildRunHistory.previous_materialization_stats(pipe)
+        return _SCHEDULE_MODE.get(str(facts.get("sync_mode_effective") or ""), "")
 
     @staticmethod
     def sync_plan_for(

@@ -706,6 +706,43 @@ class TestNetApplyFallsBackToTheFullStream:
         assert pipe.tm.messages[0].startswith("Full rebuild: ")
 
 
+class TestAFailedProbeKeepsThePreviousSchedule:
+    """No resolver decision: the schedule the last good build registered holds."""
+
+    @staticmethod
+    def _run_with_failed_probe(registry, previous_schedule):
+        pipe = _modes._pipeline("incremental", backend="lakebase")
+        pipe._is_lakebase_synced = True
+        pipe.store.sync_table_mode = "continuous"
+        if previous_schedule:
+            run = _run_record(sync_mode="managed_synced", apply_mode="lakeflow_sync")
+            run["stats"]["materialization"]["sync_mode_effective"] = previous_schedule
+            registry.load_build_runs.return_value = [run]
+        _modes._run(pipe, warehouse=_modes._Warehouse([], fail_on="SHOW TBLPROPERTIES"))
+        assert pipe.mode_decision.reason == "incremental_failed:InfrastructureError"
+        return _modes.TwinLakebaseSync.sync_plan(pipe).sync_mode
+
+    def test_an_untracked_domain_registered_as_a_snapshot_stays_a_snapshot(self, registry):
+        assert self._run_with_failed_probe(registry, "snapshot") == "snapshot"
+
+    def test_a_tracked_domain_registered_triggered_stays_triggered(self, registry):
+        assert self._run_with_failed_probe(registry, "triggered") == "triggered"
+
+    def test_a_continuous_registration_stays_continuous(self, registry):
+        assert self._run_with_failed_probe(registry, "continuous") == "continuous"
+
+    def test_without_a_previous_run_the_gate_decides(self, registry):
+        assert self._run_with_failed_probe(registry, None) == "triggered"
+
+    def test_a_store_that_is_not_synced_reads_no_previous_run(self, registry):
+        pipe = _modes._pipeline("incremental", backend="lakebase")
+
+        _modes._run(pipe, warehouse=_modes._Warehouse([], fail_on="SHOW TBLPROPERTIES"))
+
+        registry.load_build_runs.assert_not_called()
+        assert pipe.sync_schedule_mode == "incremental"
+
+
 class TestEmptyDataAfterAFallback:
     def test_an_empty_graph_records_no_apply_and_no_version(self, registry):
         """The empty-graph completion never touches the store: no base for the next build."""

@@ -39,9 +39,11 @@ slot pipeline, the row-tracking probe, the MV or the MERGE fails during a build 
 `_data` is rebuilt by CTAS (row tracking and `object_hash` on), the synced table
 keeps its triggered/continuous registration instead of being deleted and recreated
 as a snapshot (and back on the next good build); `materialization_mode_effective`
-still reports `full`. The one reverse case — a domain whose sources are genuinely
-untracked (registered as a snapshot) and whose probe fails — registers triggered
-once and returns to snapshot on the next good build. The synced
+still reports `full`. When the row-tracking probe itself fails there is no resolver
+decision: the synced table keeps the schedule the last good build registered (its
+`sync_mode_effective`), so neither a genuinely untracked domain (snapshot) nor a
+tracked one (triggered) is re-registered; without such a run the gate (the sources
+counted as tracked) decides. The synced
 table is always registered on `_data` (never on `_slots`); a pass-through `_data`
 view falls back to the gateway VIEW as a snapshot.
 
