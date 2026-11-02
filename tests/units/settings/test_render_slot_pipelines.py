@@ -19,6 +19,17 @@ SCRIPT = REPO_ROOT / "scripts/_internal/_render-slot-pipelines.py"
 _SP = "00000000-aaaa-bbbb-cccc-111111111111"
 
 
+def _topic():
+    from back.core.streaming import TopicSource
+
+    return TopicSource(
+        bootstrap_servers="broker-1:9092", topic="sales.customers", secret_scope="s", secret_key="k"
+    )
+
+
+_TOPIC = _topic()
+
+
 @pytest.fixture(scope="module")
 def renderer():
     spec = importlib.util.spec_from_file_location("_render_slot_pipelines", SCRIPT)
@@ -124,6 +135,27 @@ class TestCollect:
         resources = _collect(renderer, _Registry({"sales": "3"}), {"sales": mode})
 
         assert resources["ontobricks_slots_sales_v3"]["continuous"] is True
+
+    def test_a_realtime_domain_with_its_topic_compiles_the_topic_fed_pipeline(
+        self, renderer, mappings, monkeypatch
+    ):
+        """The renderer compiles through ``compile_for``, as the build does (same source)."""
+        specs: list = []
+        compile_for = TwinIncrementalBuild.compile_for
+
+        def spy(*args, **kwargs):
+            specs.append(compile_for(*args, **kwargs))
+            return specs[-1]
+
+        monkeypatch.setattr(TwinIncrementalBuild, "compile_for", staticmethod(spy))
+        monkeypatch.setattr(
+            TwinIncrementalBuild, "slot_topic", staticmethod(lambda domain, settings: _TOPIC)
+        )
+
+        resources = _collect(renderer, _Registry({"sales": "3"}), {"sales": "realtime"})
+
+        assert resources["ontobricks_slots_sales_v3"]["continuous"] is True
+        assert [spec.source for spec in specs] == ["topic"]
 
     def test_a_new_pipeline_gets_no_fingerprint_an_existing_one_keeps_its_own(self, renderer, mappings):
         runner = _Runner({"ontobricks-slots-sales-v3": "fp-deployed"})

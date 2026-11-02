@@ -88,6 +88,7 @@ class TestReport:
             {"table": _CUSTOMERS, "row_tracking": True},
             {"table": _ORDERS, "row_tracking": False},
         ]
+        assert report["row_tracking_required"] is True
         assert report["serverless_available"] is True
         assert report["previews"] == {"slot_pipeline_channel": "PREVIEW"}
 
@@ -120,7 +121,7 @@ class TestReport:
         def broken(domain, settings):
             raise _ValidationError("Entity mapping has no class_uri")
 
-        monkeypatch.setattr(TwinIncrementalReadiness, "source_tables", staticmethod(broken))
+        monkeypatch.setattr(TwinIncrementalReadiness, "_spec", staticmethod(broken))
 
         report = TwinIncrementalReadiness.report(_domain(), SimpleNamespace(), _Client())
 
@@ -232,3 +233,45 @@ class TestRealtimeFacts:
 
         assert report["realtime"]["enabled"] is False
         assert report["decision"]["reason"] == "realtime_not_available"
+
+    def _topic_domain(self, kind="kafka"):
+        return SimpleNamespace(
+            info={
+                "name": "dom",
+                "materialization_mode": "realtime",
+                "graph_backend": "lakebase",
+                "realtime_source": {**self._SOURCE, "kind": kind},
+            },
+            current_version=3,
+            delta={"catalog": "cat", "schema": "sch"},
+            uc_domain_folder="dom",
+        )
+
+    def test_a_topic_fed_pipeline_needs_no_row_tracking(self, two_sources):
+        client = _Client({_CUSTOMERS: False, _ORDERS: False})
+
+        report = TwinIncrementalReadiness.report(
+            self._topic_domain(), SimpleNamespace(realtime_enabled=True), client
+        )
+
+        assert report["decision"] == {"effective": "realtime", "reason": "", "merge_fallback": False}
+        assert report["row_tracking_required"] is False
+        assert report["sources"] == [
+            {"table": _CUSTOMERS, "row_tracking": None},
+            {"table": _ORDERS, "row_tracking": None},
+        ]
+        assert client.queries == []
+
+    def test_a_kinesis_stream_keeps_the_change_feed_and_its_probe(self, two_sources):
+        client = _Client({_CUSTOMERS: True, _ORDERS: False})
+
+        report = TwinIncrementalReadiness.report(
+            self._topic_domain("kinesis"), SimpleNamespace(realtime_enabled=True), client
+        )
+
+        assert report["row_tracking_required"] is True
+        assert report["decision"] == {
+            "effective": "full",
+            "reason": "row_tracking_missing",
+            "merge_fallback": False,
+        }

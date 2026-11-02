@@ -59,3 +59,12 @@ def test_the_compile_error_and_the_merge_fallback_are_shown() -> None:
     start = js.index("function renderMaterializationReadiness")
     body = js[start : js.index("async function loadMaterializationReadiness")]
     assert "compile_error" in body and "merge_fallback" in body
+
+
+def test_only_a_probed_untracked_source_asks_for_row_tracking() -> None:
+    """A topic-fed realtime pipeline lists its sources unprobed (``row_tracking: null``)."""
+    js = SCRIPT.read_text(encoding="utf-8")
+    start = js.index("function _readinessUntracked")
+    body = js[start : js.index("function renderMaterializationReadiness")]
+    assert "s.row_tracking === false" in body
+    assert "row_tracking_required === false" in js

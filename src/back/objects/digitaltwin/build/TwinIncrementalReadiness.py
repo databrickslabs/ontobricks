@@ -30,15 +30,17 @@ class TwinIncrementalReadiness:
     @staticmethod
     def report(domain: Any, settings: Any, client: Any) -> dict:
         """``mode_requested``, ``decision``, ``serverless_available``, ``sources``,
-        ``compile_error``, ``realtime``, ``previews``.
+        ``row_tracking_required``, ``compile_error``, ``realtime``, ``previews``.
 
         ``decision`` is what a build would run: ``effective``, ``reason`` and
         ``merge_fallback`` — an ``incremental`` request without serverless runs
         as ``incremental`` by MERGE (:meth:`TwinMergeFallback.promotes`), as
         the build does. Mappings that do not compile are reported in
         ``compile_error`` with the build's ``incremental_failed:ValidationError``
-        decision. A probe that fails raises :class:`InfrastructureError` (an
-        unknown answer is not a "no").
+        decision. A slot pipeline fed by the realtime topic reads no change
+        feed: ``row_tracking_required`` is false and its sources are listed
+        unprobed (``row_tracking: None``). A probe that fails raises
+        :class:`InfrastructureError` (an unknown answer is not a "no").
         """
         from back.core.graphdb.GraphDBFactory import (
             GraphDBFactory,
@@ -51,12 +53,15 @@ class TwinIncrementalReadiness:
         requested = normalize_materialization_mode(
             GraphDBFactory.resolve_materialization_mode(domain, settings)
         )
-        compile_error = ""
+        compile_error, tables, probed, required = "", [], [], True
         try:
-            tables = TwinIncrementalReadiness.source_tables(domain, settings)
+            spec = TwinIncrementalReadiness._spec(domain, settings)
+            if spec is not None:
+                tables, probed = list(spec.source_tables), TwinIncrementalBuild.feed_tables(spec)
+                required = spec.needs_row_tracking
         except ValidationError as exc:
-            tables, compile_error = [], str(exc)
-        tracked = SourceReadiness.check(client, tables)
+            compile_error = str(exc)
+        tracked = SourceReadiness.check(client, probed)
         decision = TwinBuildPostMaterialize.resolve_for(
             domain, settings, sources_row_tracked=all(tracked.values())
         )
@@ -71,7 +76,8 @@ class TwinIncrementalReadiness:
                 "merge_fallback": merge,
             },
             "serverless_available": TwinBuildPostMaterialize.serverless_available(settings),
-            "sources": [{"table": table, "row_tracking": tracked[table]} for table in tables],
+            "sources": [{"table": table, "row_tracking": tracked.get(table)} for table in tables],
+            "row_tracking_required": required,
             "compile_error": compile_error,
             "realtime": TwinIncrementalReadiness.realtime_facts(domain, settings),
             "previews": {"slot_pipeline_channel": TwinSlotPipeline.channel(settings)},
@@ -126,14 +132,19 @@ class TwinIncrementalReadiness:
     @staticmethod
     def source_tables(domain: Any, settings: Any) -> list:
         """The slot pipeline's source tables for the domain's current mappings (``[]`` without)."""
+        spec = TwinIncrementalReadiness._spec(domain, settings)
+        return [] if spec is None else list(spec.source_tables)
+
+    @staticmethod
+    def _spec(domain: Any, settings: Any) -> Any:
+        """The domain's slot pipeline spec as a build compiles it; ``None`` without mappings."""
         mappings = TwinIncrementalBuild.mappings_for(domain)
         if mappings is None:
-            return []
+            return None
         entity_mappings, relationship_mappings, base_uri = mappings
-        spec = TwinIncrementalBuild.compile_for(
+        return TwinIncrementalBuild.compile_for(
             domain, settings, entity_mappings, relationship_mappings, base_uri=base_uri
         )
-        return list(spec.source_tables)
 
     @staticmethod
     def _enable(client: Any, table: str) -> dict:

@@ -123,7 +123,9 @@ class TwinScheduledRefresh:
         if mode != "incremental":
             return {"reason": "", "before": {}, "after": {}}
         return TwinSlotRefreshPlan.plan(
-            client, TwinBuildRunHistory.recent_runs_for(domain, settings), spec.source_tables
+            client,
+            TwinBuildRunHistory.recent_runs_for(domain, settings),
+            TwinIncrementalBuild.feed_tables(spec),
         )
 
     @staticmethod

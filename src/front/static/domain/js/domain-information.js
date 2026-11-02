@@ -255,8 +255,9 @@ function populateVersionDropdown(versions, currentVersion) {
 
 // Readiness of an incremental / microbatch domain: what the mode would run as and
 // which slot-pipeline sources lack row tracking (GET /dtwin/incremental/readiness).
+// A topic-fed realtime pipeline lists its sources unprobed (row_tracking null).
 function _readinessUntracked(report) {
-    return (report.sources || []).filter(s => !s.row_tracking).map(s => s.table);
+    return (report.sources || []).filter(s => s.row_tracking === false).map(s => s.table);
 }
 
 function renderMaterializationReadiness(report) {
@@ -289,6 +290,7 @@ function renderMaterializationReadiness(report) {
               + (rt.backend_eligible ? '' : ' · needs the Lakebase backend')
               + ` · topic ${rt.source_configured ? `${rt.kind} ${rt.topic}` : 'not configured'}`
               + (rt.experimental ? ' (experimental source)' : '')
+              + (report.row_tracking_required === false ? ' · slot pipeline reads the topic (no row tracking needed)' : '')
             : '';
         realtimeLine.classList.toggle('d-none', !showRealtime);
     }

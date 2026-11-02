@@ -15,7 +15,7 @@ from back.objects.registry.schedule import build as scheduled_build
 pytestmark = pytest.mark.unit
 
 _DATA = "cat.sch.triplestore_dom_V3_data"
-_SPEC = SimpleNamespace(source_tables=["main.sales.customers"])
+_SPEC = SimpleNamespace(source_tables=["main.sales.customers"], needs_row_tracking=True)
 
 
 @pytest.fixture

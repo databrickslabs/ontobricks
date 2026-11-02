@@ -119,7 +119,7 @@ class TwinIncrementalBuild:
             )
             try:
                 pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
-                    pipe, source_tables=spec.source_tables
+                    pipe, source_tables=TwinIncrementalBuild.feed_tables(spec)
                 )
             except InfrastructureError:
                 TwinIncrementalBuild._keep_schedule_without_probe(pipe, gate.effective)
@@ -238,23 +238,59 @@ class TwinIncrementalBuild:
     ):
         """The slot pipeline spec of the mappings, writing *domain*'s ``…_slots`` table.
 
-        Shared by the main build, the MERGE fingerprint and the scheduled tick's
-        row-tracking probe, so all three see the same row-local / batch split.
-        Raises :class:`ValidationError` when the slots table name cannot be
-        resolved or a mapping cannot be compiled.
+        Shared by the main build, the MERGE fingerprint, the scheduled tick,
+        the readiness preflight and the DAB renderer, so all of them see the
+        same row-local / batch split, the same source (:meth:`slot_topic`) and
+        therefore the same SQL fingerprint. Raises :class:`ValidationError`
+        when the slots table name cannot be resolved or a mapping cannot be
+        compiled.
         """
         from back.core.graphdb.delta import _table_naming
         from back.core.streaming import SlotProjectionCompiler
+        from back.core.streaming.SlotPipelineSpec import SOURCE_CDF, SOURCE_TOPIC
 
         slots_fqn = _table_naming.slots_table_fqn(domain, settings)
         if not slots_fqn:
             raise ValidationError("Could not resolve the slots table name")
+        topic = TwinIncrementalBuild.slot_topic(domain, settings)
         return SlotProjectionCompiler.compile(
             entity_mappings or {},
             relationship_mappings or [],
             base_uri=base_uri or "",
             slots_fqn=slots_fqn,
+            source=SOURCE_CDF if topic is None else SOURCE_TOPIC,
+            topic=topic,
         )
+
+    @staticmethod
+    def slot_topic(domain: Any, settings: Any):
+        """The topic a ``realtime`` domain's slot pipeline reads; ``None``: the change data feed.
+
+        A domain whose best mode is ``realtime`` (its topic available,
+        serverless, a Lakebase backend: :meth:`TwinBuildPostMaterialize.gate_decision`)
+        reads the Debezium topic its stream job reads, so ``…_slots`` / ``…_data``
+        and ``_live`` follow the same changes — except a Kinesis stream, which
+        ``read_kafka`` cannot read: that slot pipeline keeps the change feed.
+        """
+        from back.core.graphdb import RealtimeSource
+        from back.core.streaming import TopicSource
+
+        if TwinBuildPostMaterialize.gate_decision(domain, settings).effective != "realtime":
+            return None
+        config = RealtimeSource.of(domain)
+        if config.get("kind") == "kinesis":
+            return None
+        return TopicSource.from_realtime_source(config)
+
+    @staticmethod
+    def feed_tables(spec: Any) -> list:
+        """The sources whose change data feed the slot pipeline reads; none for a topic-fed one.
+
+        Their row tracking is probed and their history checked for rewrites
+        (:class:`TwinSlotRefreshPlan`); a topic-fed pipeline needs neither (a
+        full refresh replays the topic).
+        """
+        return list(spec.source_tables) if spec.needs_row_tracking else []
 
     @staticmethod
     def _build(pipe: Any, spec: Any) -> None:
@@ -272,7 +308,7 @@ class TwinIncrementalBuild:
         plan = TwinSlotRefreshPlan.plan(
             pipe.source_client,
             TwinBuildRunHistory.recent_runs(pipe),
-            spec.source_tables if slots else (),
+            TwinIncrementalBuild.feed_tables(spec) if slots else (),
         )
         pipe.slot_refresh_facts = dict(plan["before"])
         if slots:

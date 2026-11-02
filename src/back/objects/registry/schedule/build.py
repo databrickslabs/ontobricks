@@ -290,6 +290,20 @@ def _slot_spec(
     return spec
 
 
+def _probed_tables(slot_spec: Any) -> list[str] | None:
+    """The tables whose row tracking the tick probes, as the main build does.
+
+    ``None`` (sources unknown, counted as untracked) without a compiled spec;
+    none for a topic-fed realtime pipeline, which reads no change feed
+    (``TwinIncrementalBuild.feed_tables``).
+    """
+    if slot_spec is None:
+        return None
+    from back.objects.digitaltwin.build import TwinIncrementalBuild
+
+    return TwinIncrementalBuild.feed_tables(slot_spec)
+
+
 def _reconcile_after_tick(
     store,
     src,
@@ -612,7 +626,7 @@ def run(ctx: TaskContext) -> RunOutcome:
         delta_cfg=getattr(domain, "delta", None) or {},
         domain=domain,
         settings=ctx.settings,
-        source_tables=list(slot_spec.source_tables) if slot_spec is not None else None,
+        source_tables=_probed_tables(slot_spec),
         mappings=tick,
     )
     _close_tick_facts(ctx, tick, store, src)

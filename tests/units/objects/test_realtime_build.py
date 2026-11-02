@@ -94,3 +94,102 @@ def test_the_synced_table_of_a_realtime_domain_streams_continuously():
     )
 
     assert plan.sync_mode == "continuous"
+
+
+def _slot_sql(log) -> str:
+    [ensure] = _modes._events(log, "ensure")
+    return ensure[1]["sql_text"]
+
+
+def _row_tracking_probes(warehouse) -> list:
+    return [s for s in warehouse.calls if "delta.enableRowTracking" in s and s.startswith("SHOW")]
+
+
+class TestTheSlotPipelineReadsTheTopic:
+    """An effective ``realtime`` domain's slot pipeline consumes the stream job's topic."""
+
+    def test_an_effective_realtime_domain_compiles_its_slot_pipeline_from_the_topic(self):
+        pipe = realtime_pipeline()
+
+        log, _, warehouse = _modes._run(pipe, existing="pipe-1", stored="fp-current")
+
+        sql = _slot_sql(log)
+        assert "STREAM read_kafka(" in sql and "sales.customers" in sql
+        assert "readChangeFeed" not in sql
+        assert pipe.mode_decision == ModeDecision("realtime", "realtime", "")
+
+    def test_untracked_sources_neither_are_probed_nor_hold_it_back(self):
+        pipe = realtime_pipeline()
+        warehouse = _modes._Warehouse([], tracked=False)
+
+        _, _, warehouse = _modes._run(pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current")
+
+        assert _row_tracking_probes(warehouse) == []
+        assert pipe.mode_decision == ModeDecision("realtime", "realtime", "")
+
+    def test_no_source_history_is_read_for_a_full_refresh(self):
+        """A source rewrite does not reach the topic: no ``DESCRIBE HISTORY`` of the sources."""
+        pipe = realtime_pipeline()
+
+        _, _, warehouse = _modes._run(pipe, existing="pipe-1", stored="fp-current")
+
+        assert not any("main.sales." in s and s.startswith("DESCRIBE") for s in warehouse.calls)
+        assert pipe.slot_refresh_facts["source_versions"] == {}
+
+    @pytest.mark.parametrize(
+        ("enabled", "source"),
+        [
+            (False, None),
+            (True, {**REALTIME_SOURCE, "kind": "kinesis", "bootstrap_servers": "eu-west-1"}),
+        ],
+        ids=["realtime-not-available", "kinesis"],
+    )
+    def test_otherwise_it_reads_the_change_feed_and_probes_its_sources(self, enabled, source):
+        pipe = realtime_pipeline(enabled=enabled, source=source)
+
+        log, _, warehouse = _modes._run(pipe, existing="pipe-1", stored="fp-current")
+
+        sql = _slot_sql(log)
+        assert "readChangeFeed" in sql and "read_kafka" not in sql
+        assert _row_tracking_probes(warehouse)
+
+    def test_every_compile_of_the_domain_gives_the_same_slot_sql(self):
+        """Build, scheduled tick, readiness and DAB renderer all go through ``compile_for``."""
+        from back.objects.digitaltwin.build import TwinIncrementalBuild
+
+        pipe = realtime_pipeline()
+
+        log, _, _ = _modes._run(pipe, existing="pipe-1", stored="fp-current")
+        spec = TwinIncrementalBuild.compile_for(
+            pipe.domain,
+            pipe.settings,
+            pipe.entity_mappings,
+            pipe.relationship_mappings,
+            base_uri=pipe.base_uri,
+        )
+
+        assert spec.to_sql() == _slot_sql(log)
+        assert TwinIncrementalBuild.feed_tables(spec) == []
+
+    def test_the_scheduled_tick_probes_no_table_for_a_topic_fed_pipeline(self):
+        from back.objects.digitaltwin.build import TwinIncrementalBuild
+        from back.objects.registry.schedule import build as scheduled
+
+        pipe = realtime_pipeline()
+        spec = TwinIncrementalBuild.compile_for(
+            pipe.domain, pipe.settings, pipe.entity_mappings, [], base_uri=pipe.base_uri
+        )
+
+        assert spec.source == "topic"
+        assert scheduled._probed_tables(spec) == []
+        assert scheduled._probed_tables(None) is None
+
+
+def test_a_realtime_request_is_never_merged():
+    """The MERGE fallback (and its source-version fingerprint) is for ``incremental`` requests only."""
+    from back.core.graphdb.MaterializationModeResolver import MaterializationModeResolver
+    from back.objects.digitaltwin.build import TwinMergeFallback
+
+    reason = MaterializationModeResolver.REASON_SERVERLESS_UNAVAILABLE
+
+    assert TwinMergeFallback.promotes(ModeDecision("realtime", "full", reason)) is False
