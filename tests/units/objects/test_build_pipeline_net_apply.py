@@ -1029,6 +1029,115 @@ class TestMergeSkipsAnUnchangedBuild:
         assert _merged(warehouse)
 
 
+class TestMergeRecordsTheDataVersion:
+    """The MERGE build records the version (and table id) its ``…_data`` ended at."""
+
+    def test_a_merge_records_the_data_version_and_table_id(self):
+        pipe = _merge_pipeline()
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], data_version=8, table_id="t-1"))
+
+        assert (pipe.data_table_version, pipe.data_table_id) == (8, "t-1")
+
+    def test_an_unreadable_history_records_no_version(self):
+        pipe = _merge_pipeline()
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], fail_on="DESCRIBE HISTORY"))
+
+        assert pipe.data_table_version is None
+        assert pipe.strategy == "merge"
+
+
+class TestDeltaMergeSkipChecksTheDataVersion:
+    """On the Delta engine ``…_data`` is the served graph: a skip needs it unchanged."""
+
+    @staticmethod
+    def _pipeline():
+        return _merge_pipeline(entities={_modes._CUSTOMER: _modes._row_local()})
+
+    def _base(self, registry, *, version=7, table_id=""):
+        first = self._pipeline()
+        _modes._run(first, warehouse=_CDFWarehouse([], version=4))
+        run = _run_record(version=version)
+        run["stats"]["materialization"].update(
+            fingerprint=first.fingerprint,
+            strategy="merge",
+            apply_mode="none",
+            data_table_id=table_id,
+        )
+        registry.load_build_runs.return_value = [run]
+
+    def test_a_data_table_merged_since_the_base_is_merged_again(self, registry):
+        """A later failed build merged other content into ``…_data``: never skip over it."""
+        self._base(registry, version=7)
+        pipe = self._pipeline()
+
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_version=8, data_exists=True)
+        )
+
+        assert _merged(warehouse)
+
+    def test_the_data_table_at_the_base_version_skips(self, registry):
+        self._base(registry, version=7)
+        pipe = self._pipeline()
+
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True)
+        )
+
+        assert not _merged(warehouse)
+        assert pipe.tm.messages == [_SKIPPED]
+
+    def test_a_data_table_with_another_id_is_merged_again(self, registry):
+        self._base(registry, version=7, table_id="t-1")
+        pipe = self._pipeline()
+
+        _, _, warehouse = _modes._run(
+            pipe,
+            warehouse=_CDFWarehouse(
+                [], version=4, data_version=7, table_id="t-2", data_exists=True
+            ),
+        )
+
+        assert _merged(warehouse)
+
+    def test_the_skip_carries_the_base_version_and_id_forward(self, registry):
+        self._base(registry, version=7, table_id="t-1")
+        pipe = self._pipeline()
+        del pipe._record_build_run
+
+        _modes._run(
+            pipe,
+            warehouse=_CDFWarehouse(
+                [], version=4, data_version=7, table_id="t-1", data_exists=True
+            ),
+        )
+
+        facts = registry.record_build_run.call_args[0][1]["stats"]["materialization"]
+        assert (facts["apply_mode"], facts["data_table_version"], facts["data_table_id"]) == (
+            "none",
+            7,
+            "t-1",
+        )
+
+
+class TestMergeSkipStoreProbe:
+    def test_a_failing_store_probe_merges_instead_of_failing(self, registry):
+        TestMergeSkipsAnUnchangedBuild()._base(registry)
+        pipe = TestMergeSkipsAnUnchangedBuild._pipeline()
+        pipe.store.table_exists.side_effect = RuntimeError("Lakebase unreachable")
+
+        with patch("back.objects.digitaltwin.build.TwinMergeFallback.logger") as logger:
+            _, _, warehouse = _modes._run(
+                pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True)
+            )
+
+        assert _merged(warehouse)
+        assert pipe.tm.failed is False
+        logger.warning.assert_called_once()
+
+
 class TestMergeIsPersisted:
     def test_the_entry_reports_incremental_by_merge(self, registry):
         pipe = _merge_pipeline()

@@ -77,8 +77,9 @@ class TwinMergeFallback:
         if not data:
             return None  # the CTAS path reports the unresolved name
         fingerprint = TwinMergeFallback._fingerprint(pipe)
-        if fingerprint and TwinMergeFallback._unchanged(pipe, fingerprint, data):
-            TwinMergeFallback._complete_skipped(pipe, data, fingerprint)
+        base = TwinMergeFallback._unchanged_base(pipe, fingerprint, data) if fingerprint else None
+        if base is not None:
+            TwinMergeFallback._complete_skipped(pipe, data, fingerprint, base)
             return False
         pipe.tm.update_progress(pipe.task_id, 30, f"Merging mapped triples into {data}...")
         try:
@@ -99,6 +100,7 @@ class TwinMergeFallback:
             )
             return None
         TwinMergeFallback._record(pipe, data, fingerprint)
+        TwinMergeFallback._record_data_version(pipe, data)
         logger.info("[DT-BUILD %s] merged %s into %s", pipe.task_id, pipe.view_table, data)
         return True
 
@@ -137,42 +139,51 @@ class TwinMergeFallback:
         )
 
     @staticmethod
-    def _unchanged(pipe: Any, fingerprint: str, data: str) -> bool:
-        """The base run merged the same fingerprint, into the ``…_data`` still there.
+    def _unchanged_base(pipe: Any, fingerprint: str, data: str) -> dict | None:
+        """The base run when it merged the same fingerprint into the ``…_data`` still there.
 
-        ``…_data`` must exist and, when the base recorded its version, still be
-        at that version; the store must still hold the graph when it can say so.
+        ``…_data`` must exist and, when the base recorded them, still be at its
+        version and table id (a later build that failed after merging other
+        content moved them); the store must still hold the graph when it can say
+        so. ``None`` means "merge".
         """
         from back.core.graphdb.delta import materialize
 
         base = TwinBuildRunHistory.previous_materialization_stats(pipe)
         if base.get("fingerprint") != fingerprint or base.get("strategy") != "merge":
-            return False
+            return None
         if not materialize.relation_exists(pipe.source_client, data):
-            return False
-        return TwinMergeFallback._data_unchanged_since(
-            pipe, data, base.get("data_table_version")
-        ) and TwinMergeFallback._store_holds_graph(pipe)
+            return None
+        if not TwinMergeFallback._data_unchanged_since(pipe, data, base):
+            return None
+        return base if TwinMergeFallback._store_holds_graph(pipe) else None
 
     @staticmethod
-    def _data_unchanged_since(pipe: Any, data: str, version: Any) -> bool:
-        """``…_data`` is still at the base's *version* (no recorded version: nothing to check)."""
+    def _data_unchanged_since(pipe: Any, data: str, base: dict) -> bool:
+        """``…_data`` still has the base's version and table id (each checked when recorded)."""
         from back.core.graphdb.delta import ChangeFeedReader
 
-        if isinstance(version, bool) or not isinstance(version, int):
+        client = pipe.source_client
+        version = base.get("data_table_version")
+        if isinstance(version, int) and not isinstance(version, bool):
+            try:
+                if ChangeFeedReader.latest_version(client, data) != version:
+                    return False
+            except InfrastructureError as exc:
+                logger.debug("[DT-BUILD %s] no version of %s: %s", pipe.task_id, data, exc)
+                return False
+        base_id = base.get("data_table_id") or ""
+        if not base_id:
             return True
-        try:
-            return ChangeFeedReader.latest_version(pipe.source_client, data) == version
-        except InfrastructureError as exc:
-            logger.debug("[DT-BUILD %s] no version of %s: %s", pipe.task_id, data, exc)
-            return False
+        live_id = ChangeFeedReader.table_id(client, data)
+        return not live_id or live_id == base_id
 
     @staticmethod
     def _store_holds_graph(pipe: Any) -> bool:
         """The store still has the graph (a store dropped outside a build never skips).
 
         Not asked on the Delta engine, whose graph is ``…_data``, nor of a store
-        without the probe.
+        without the probe. A probe that fails reads as "no graph": the build merges.
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
@@ -180,7 +191,33 @@ class TwinMergeFallback:
             return True
         if not hasattr(pipe.store, "table_exists"):
             return True
-        return bool(pipe.store.table_exists(pipe.graph_name))
+        try:
+            return bool(pipe.store.table_exists(pipe.graph_name))
+        except Exception as exc:  # noqa: BLE001 — a failed probe must not fail the build
+            logger.warning(
+                "[DT-BUILD %s] could not check %s in the graph store; merging instead "
+                "of skipping: %s",
+                pipe.task_id,
+                pipe.graph_name,
+                exc,
+            )
+            return False
+
+    @staticmethod
+    def _record_data_version(pipe: Any, data: str) -> None:
+        """Record the version and table id the MERGE left ``…_data`` at (``None`` / ``""``).
+
+        That is what lets a later skip check that nothing merged into ``…_data``
+        since. The net change apply reads both again for its own window.
+        """
+        from back.core.graphdb.delta import ChangeFeedReader
+
+        try:
+            pipe.data_table_version = ChangeFeedReader.latest_version(pipe.source_client, data)
+        except InfrastructureError as exc:
+            logger.debug("[DT-BUILD %s] no version of %s: %s", pipe.task_id, data, exc)
+            pipe.data_table_version = None
+        pipe.data_table_id = ChangeFeedReader.table_id(pipe.source_client, data)
 
     @staticmethod
     def _record(pipe: Any, data: str, fingerprint: str) -> None:
@@ -190,9 +227,14 @@ class TwinMergeFallback:
         pipe.strategy, pipe.fingerprint = "merge", fingerprint
 
     @staticmethod
-    def _complete_skipped(pipe: Any, data: str, fingerprint: str) -> None:
-        """Complete and record the build as a success through the pipeline's completion."""
+    def _complete_skipped(pipe: Any, data: str, fingerprint: str, base: dict) -> None:
+        """Complete and record the build as a success through the pipeline's completion.
+
+        ``…_data`` is the base's, so its version and table id carry forward.
+        """
         TwinMergeFallback._record(pipe, data, fingerprint)
+        pipe.data_table_version = base.get("data_table_version")
+        pipe.data_table_id = str(base.get("data_table_id") or "")
         pipe.apply_mode = "none"
         pipe.triple_count = pipe._count_source_triples()
         logger.info(
