@@ -321,6 +321,13 @@ targets:
   dev:
     mode: development
     default: true
+    # Development mode would rename every resource "[dev <user>] <name>" and
+    # deploy pipelines with development: true; the slot pipelines must keep the
+    # name and settings the app's runner looks up and applies
+    # (SlotPipelineRunner; docs/incremental-materialization.md › DAB deployment).
+    presets:
+      name_prefix: ""
+      pipelines_development: false
     # AWS workspace (cloud.databricks.com): the stream job's node type and
     # on-demand workers (a reclaimed spot worker would stall the stream).
     variables:
@@ -347,6 +354,13 @@ targets:
   # extra config.
   dev-lakebase:
     mode: development
+    # Development mode would rename every resource "[dev <user>] <name>" and
+    # deploy pipelines with development: true; the slot pipelines must keep the
+    # name and settings the app's runner looks up and applies
+    # (SlotPipelineRunner; docs/incremental-materialization.md › DAB deployment).
+    presets:
+      name_prefix: ""
+      pipelines_development: false
     # AWS workspace (cloud.databricks.com): the stream job's node type and
     # on-demand workers (a reclaimed spot worker would stall the stream).
     variables:

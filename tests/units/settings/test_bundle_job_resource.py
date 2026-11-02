@@ -337,6 +337,16 @@ class TestTheRealtimeStreamJob:
         assert cluster["job_cluster_key"] == "rtm"
         assert cluster["new_cluster"]["aws_attributes"]["availability"] == "ON_DEMAND"
 
+    @pytest.mark.parametrize("target", ["dev", "dev-lakebase"])
+    def test_the_development_targets_keep_the_slot_pipeline_names(self, target):
+        config = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())["targets"][target]
+        assert config["mode"] == "development"
+        assert config["presets"] == {"name_prefix": "", "pipelines_development": False}
+
+    def test_the_generated_instance_target_keeps_them_too(self):
+        script = (REPO_ROOT / "scripts/_internal/_ensure-instance-target.sh").read_text()
+        assert 'name_prefix: ""' in script and "pipelines_development: false" in script
+
     def test_the_generated_instance_target_is_aws_too(self):
         script = (REPO_ROOT / "scripts/_internal/_ensure-instance-target.sh").read_text()
         assert "realtime_node_type_id: i3.xlarge" in script

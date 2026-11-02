@@ -416,7 +416,7 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 1 P0 | Compute the source once (`count`, stream, Lakeflow source read `_data`) | ✅ | `TwinBuildPostMaterialize.triples_source_relation`, `SyncPlan` |
 | 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples; the MERGE *skip* (no source change) keeps it |
 | 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | SCD1 physical deletes stand in for a `deleted` column |
-| 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource |
+| 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource; development targets set `presets: {name_prefix: "", pipelines_development: false}` and the runner also finds a `[dev <user>] ` name |
 | 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ◐ | `_data` MV ✅; `_graph` stays a VIEW (Lakehouse//RT reads `_data`); `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
 | 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
 | 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ◐ | from `_data` only (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode` |
@@ -726,8 +726,25 @@ the bundle declared it (same name, no bundle deployment metadata) would get a tw
 on the same `_slots` table from `bundle deploy`. The renderer lists those in
 `resources/_generated_triple_slots.bind` (`<resource key> <pipeline id>`, gitignored),
 and `deploy.sh` runs `databricks bundle deployment bind <key> <id> --auto-approve`
-for each before the deploy; a CLI without `bundle deployment bind` skips the step
-with a notice. A pipeline another bundle manages is never listed.
+for each before the deploy (Lakebase targets only); a CLI without `bundle deployment
+bind` skips the step with a notice. A pipeline another bundle manages is never listed.
+
+**Development mode.** A target in `mode: development` would deploy every resource as
+`[dev <user>] <name>` and every pipeline with `development: true`, so the adopted
+pipeline would be renamed under the runner. The repo's development targets (`dev`,
+`dev-lakebase`, the generated `dev-lakebase-<id>`) therefore set — and any other
+development target should set —
+
+```yaml
+presets:
+  name_prefix: ""
+  pipelines_development: false
+```
+
+As a safety net the runner also finds a pipeline deployed as `[dev <user>] <name>`
+(an exact name wins; two distinct candidates are refused with a `ConflictError`),
+keeps that deployed name when it updates the pipeline, and reads the fingerprint
+from it; the renderer prints a notice when a deployed pipeline carries a prefix.
 
 **Identities.** Bundle-deployed pipelines run as the deployer, and their library is
 the SQL file under `/Workspace/Users/<app principal>/.ontobricks/pipelines/`: the

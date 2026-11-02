@@ -667,15 +667,16 @@ fi
 # would get a twin on the same _slots table from ``bundle deploy``; the
 # renderer lists those in resources/_generated_triple_slots.bind and they are
 # bound to their resource first. A CLI without ``bundle deployment bind``
-# skips the step with a notice.
+# skips the step with a notice. Rendered on Lakebase targets only, like the
+# pipelines themselves; each CLI call reads /dev/null, not the bind list.
 _SLOT_BIND_FILE="resources/_generated_triple_slots.bind"
-if [[ -s "$_SLOT_BIND_FILE" ]]; then
+if $IS_LAKEBASE && [[ -s "$_SLOT_BIND_FILE" ]]; then
     begin_step "Bind existing slot pipelines"
-    if databricks bundle deployment bind --help >/dev/null 2>&1; then
+    if databricks bundle deployment bind --help >/dev/null 2>&1 </dev/null; then
         while read -r _key _pipeline_id; do
             [[ -z "${_key:-}" || -z "${_pipeline_id:-}" ]] && continue
             if databricks bundle deployment bind "$_key" "$_pipeline_id" \
-                    -t "$TARGET" "${_dab_var_overrides[@]}" --auto-approve; then
+                    -t "$TARGET" "${_dab_var_overrides[@]}" --auto-approve </dev/null; then
                 ok "bound $_key → $_pipeline_id"
             else
                 warn "could not bind $_key ($_pipeline_id): the deploy may create a second pipeline on the same _slots table"

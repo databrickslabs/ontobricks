@@ -42,12 +42,19 @@ class _Registry:
 
 
 class _Runner:
-    def __init__(self, existing: dict | None = None, bundled: tuple = ()):
+    """*existing*: name → fingerprint; *deployed*: name → the name it was deployed under."""
+
+    def __init__(self, existing: dict | None = None, bundled: tuple = (), deployed: dict | None = None):
         self.existing = existing or {}
         self.bundled = set(bundled)
+        self.deployed = deployed or {}
+
+    def find_pipeline(self, name):
+        return (f"pid-{name}", self.deployed.get(name, name)) if name in self.existing else None
 
     def find_pipeline_id(self, name):
-        return f"pid-{name}" if name in self.existing else None
+        found = self.find_pipeline(name)
+        return found[0] if found else None
 
     def stored_fingerprint(self, pipeline_id):
         return self.existing[pipeline_id.removeprefix("pid-")]
@@ -128,6 +135,23 @@ class TestCollect:
         key = "ontobricks.slot_sql_sha256"
         assert resources["ontobricks_slots_sales_v3"]["configuration"][key] == "fp-deployed"
         assert resources["ontobricks_slots_hr_v1"]["configuration"][key] == ""
+
+    def test_a_development_prefixed_pipeline_keeps_its_fingerprint_with_a_notice(self, renderer, mappings):
+        runner = _Runner(
+            {"ontobricks-slots-sales-v3": "fp-deployed"},
+            bundled=("ontobricks-slots-sales-v3",),
+            deployed={"ontobricks-slots-sales-v3": "[dev ada] ontobricks-slots-sales-v3"},
+        )
+        notices: list = []
+
+        resources = _collect(
+            renderer, _Registry({"sales": "3"}), {"sales": "incremental"}, runner, notices=notices
+        )
+
+        key = "ontobricks.slot_sql_sha256"
+        assert resources["ontobricks_slots_sales_v3"]["configuration"][key] == "fp-deployed"
+        assert "development-mode prefix" in notices[0] and "name_prefix" in notices[0]
+        assert renderer.SlotPipelineBundle.bindings(resources, runner) == []
 
     def test_full_unpublished_and_batch_only_versions_get_none(self, renderer, mappings, monkeypatch):
         registry = _Registry({"full_dom": "1", "draft_dom": None, "sales": "2"})
@@ -283,4 +307,5 @@ class TestDeployWiring:
         assert bind < deploy.index('databricks bundle deploy -t "$TARGET"')
         assert "resources/_generated_triple_slots.bind" in deploy
         assert "databricks bundle deployment bind --help" in deploy
-        assert "--auto-approve" in deploy[bind : bind + 300]
+        assert "--auto-approve </dev/null" in deploy[bind : bind + 300]
+        assert 'if $IS_LAKEBASE && [[ -s "$_SLOT_BIND_FILE" ]]' in deploy

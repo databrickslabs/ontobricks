@@ -42,6 +42,10 @@ ensure_instance_target() {
 targets:
   ${target}:
     mode: development
+    # Keep the slot pipelines' names and settings (see databricks.yml dev targets).
+    presets:
+      name_prefix: ""
+      pipelines_development: false
     # AWS workspace, like dev / dev-lakebase in databricks.yml: the realtime
     # stream job's node type and on-demand workers.
     variables:

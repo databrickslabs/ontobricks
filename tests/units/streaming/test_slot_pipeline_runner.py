@@ -15,7 +15,12 @@ from databricks.sdk.service.pipelines import (
 )
 from databricks.sdk.service.workspace import ImportFormat
 
-from back.core.errors import InfrastructureError, OperationCancelledError, ValidationError
+from back.core.errors import (
+    ConflictError,
+    InfrastructureError,
+    OperationCancelledError,
+    ValidationError,
+)
 from back.core.streaming import SlotPipelineRunner
 
 pytestmark = pytest.mark.unit
@@ -223,12 +228,13 @@ class TestEnsure:
         assert len(client.pipelines.created) == 1
         assert [pid for pid, _ in client.pipelines.updated] == [first]
 
-    def test_the_lookup_filters_by_name(self):
+    def test_the_lookup_lists_the_name_with_any_prefix(self):
         runner, client = _runner()
 
         runner.find_pipeline_id(_NAME)
 
-        assert client.pipelines.list_filters == [f"name LIKE '{_NAME}'"]
+        assert client.pipelines.list_filters == [f"name LIKE '%{_NAME}'"]
+
 
     def test_a_missing_pipeline_is_not_found(self):
         runner, _ = _runner()
@@ -363,3 +369,50 @@ class TestStateAndStop:
 
         with pytest.raises(InfrastructureError):
             runner.stop("pipe-1")
+
+
+class TestDevelopmentModeNames:
+    """DAB development mode deploys ``<name>`` as ``[dev <user>] <name>``."""
+
+    @staticmethod
+    def _deployed(client, pipeline_id: str, name: str) -> None:
+        client.pipelines.specs[pipeline_id] = {"name": name, "configuration": {}}
+
+    def test_a_prefixed_pipeline_is_found_with_its_deployed_name(self):
+        runner, client = _runner()
+        self._deployed(client, "pipe-dab", f"[dev ada] {_NAME}")
+
+        assert runner.find_pipeline(_NAME) == ("pipe-dab", f"[dev ada] {_NAME}")
+        assert runner.find_pipeline_id(_NAME) == "pipe-dab"
+
+    def test_an_exact_name_wins_over_a_prefixed_one(self):
+        runner, client = _runner()
+        self._deployed(client, "pipe-dab", f"[dev ada] {_NAME}")
+        self._deployed(client, "pipe-app", _NAME)
+
+        assert runner.find_pipeline_id(_NAME) == "pipe-app"
+
+    def test_two_prefixed_pipelines_and_no_exact_one_are_refused(self):
+        runner, client = _runner()
+        self._deployed(client, "pipe-ada", f"[dev ada] {_NAME}")
+        self._deployed(client, "pipe-bob", f"[dev bob] {_NAME}")
+
+        with pytest.raises(ConflictError, match="2 pipelines match"):
+            runner.find_pipeline_id(_NAME)
+
+    def test_a_longer_name_with_the_same_ending_does_not_match(self):
+        runner, client = _runner()
+        self._deployed(client, "pipe-other", f"x{_NAME}")
+        self._deployed(client, "pipe-other2", f"[dev ada] x{_NAME}")
+
+        assert runner.find_pipeline_id(_NAME) is None
+
+    def test_updating_a_prefixed_pipeline_keeps_its_deployed_name(self):
+        runner, client = _runner()
+        self._deployed(client, "pipe-dab", f"[dev ada] {_NAME}")
+
+        assert _ensure(runner) == "pipe-dab"
+
+        [(pipeline_id, spec)] = client.pipelines.updated
+        assert pipeline_id == "pipe-dab" and spec["name"] == f"[dev ada] {_NAME}"
+        assert client.pipelines.created == []

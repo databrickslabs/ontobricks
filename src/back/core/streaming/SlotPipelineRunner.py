@@ -27,6 +27,7 @@ from datetime import timedelta
 from typing import Any
 
 from back.core.errors import (
+    ConflictError,
     InfrastructureError,
     OntoBricksError,
     OperationCancelledError,
@@ -37,6 +38,8 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_API_TIMEOUT_S = 90
+#: DAB development mode deploys ``<name>`` as ``[dev <user>] <name>``.
+_DEV_PREFIX_END = "] "
 DEFAULT_STOP_TIMEOUT_S = 600
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -80,7 +83,7 @@ class SlotPipelineRunner:
         self._stop_timeout_s = max(1, int(stop_timeout_s))
         self._client: Any | None = None
         self._user_name: str | None = None
-        self._ids: dict[str, str] = {}
+        self._found: dict[str, tuple[str, str]] = {}
 
     @staticmethod
     def _default_factory() -> Any:
@@ -140,19 +143,48 @@ class SlotPipelineRunner:
         return hashlib.sha256((sql_text or "").encode("utf-8")).hexdigest()
 
     def find_pipeline_id(self, name: str) -> str | None:
-        """Id of the pipeline called *name*, or ``None`` (cached once found)."""
+        """Id of the pipeline called *name* (see :meth:`find_pipeline`), or ``None``."""
+        found = self.find_pipeline(name)
+        return found[0] if found else None
+
+    def find_pipeline(self, name: str) -> tuple[str, str] | None:
+        """``(id, deployed name)`` of the pipeline *name*, or ``None`` (cached once found).
+
+        A bundle in development mode deploys the pipeline as
+        ``[dev <user>] <name>``, so that name matches too; an exact match wins.
+        Two distinct pipelines that match the same way (two exact names, or two
+        prefixed ones and no exact one) are a :class:`ConflictError`: either may
+        own the ``_slots`` table, so neither is picked.
+        """
         self._require_name(name)
-        if name in self._ids:
-            return self._ids[name]
-        found = self._call(
+        if name in self._found:
+            return self._found[name]
+        listed = self._call(
             f"list pipelines {name}",
-            lambda w: list(w.pipelines.list_pipelines(filter=f"name LIKE '{name}'")),
+            lambda w: list(w.pipelines.list_pipelines(filter=f"name LIKE '%{name}'")),
         )
-        match = next((p for p in found if getattr(p, "name", None) == name), None)
-        pipeline_id = getattr(match, "pipeline_id", None) if match else None
-        if pipeline_id:
-            self._ids[name] = pipeline_id
-        return pipeline_id
+        exact = [p for p in listed if getattr(p, "name", None) == name]
+        prefixed = [
+            p for p in listed if str(getattr(p, "name", "") or "").endswith(_DEV_PREFIX_END + name)
+        ]
+        matches = {getattr(p, "pipeline_id", None): p for p in exact or prefixed}
+        matches.pop(None, None)
+        if len(matches) > 1:
+            names = ", ".join(sorted(f"{p.name!r} ({pid})" for pid, p in matches.items()))
+            raise ConflictError(
+                f"{len(matches)} pipelines match the slot pipeline {name}: {names}; delete the stray one"
+            )
+        if not matches:
+            return None
+        if exact and prefixed:
+            logger.warning(
+                "Slot pipeline %s exists both as itself and with a development prefix; using %s",
+                name,
+                next(iter(matches)),
+            )
+        pipeline_id, match = next(iter(matches.items()))
+        self._found[name] = (pipeline_id, str(match.name))
+        return self._found[name]
 
     def stored_fingerprint(self, pipeline_id: str) -> str:
         """The SQL fingerprint in the pipeline's configuration (``""`` when absent)."""
@@ -213,12 +245,15 @@ class SlotPipelineRunner:
                 )
             },
         }
-        existing = self.find_pipeline_id(name)
-        if existing:
+        found = self.find_pipeline(name)
+        if found:
+            existing, deployed_name = found
+            # A bundle-deployed pipeline keeps the name the bundle gave it.
+            spec["name"] = deployed_name
             self._call(
                 f"update pipeline {name}", lambda w: w.pipelines.update(existing, **spec)
             )
-            logger.info("Updated slot pipeline %s (%s)", name, existing)
+            logger.info("Updated slot pipeline %s (%s)", deployed_name, existing)
             return existing
         created = self._call(f"create pipeline {name}", lambda w: w.pipelines.create(**spec))
         pipeline_id = getattr(created, "pipeline_id", None)
@@ -226,7 +261,7 @@ class SlotPipelineRunner:
             raise InfrastructureError(
                 f"Slot pipeline {name} was created but the SDK returned no id"
             )
-        self._ids[name] = pipeline_id
+        self._found[name] = (pipeline_id, name)
         logger.info("Created slot pipeline %s (%s)", name, pipeline_id)
         return pipeline_id
 

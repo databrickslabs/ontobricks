@@ -32,8 +32,12 @@ resource (with a notice). A version that stops being published, or a domain
 switched to ``full``, drops out of the file and its pipeline is deleted by the
 next deploy.
 
-A pipeline the app's runner created before the bundle managed it (same name,
-no bundle deployment metadata) is listed in ``_generated_triple_slots.bind``
+A deployed pipeline is found under its name or, deployed by a bundle in
+development mode, ``[dev <user>] <name>`` (with a notice: the dev targets set
+``presets: {name_prefix: "", pipelines_development: false}`` so the bundle and
+the runner agree on the name). A pipeline the app's runner created before the
+bundle managed it (same name, no bundle deployment metadata) is listed in
+``_generated_triple_slots.bind``
 (``<resource key> <pipeline id>`` per line): ``scripts/deploy.sh`` binds it to
 its resource before ``bundle deploy``, which would otherwise create a second
 pipeline on the same ``_slots`` table. A pipeline another bundle manages is
@@ -168,7 +172,13 @@ class SlotPipelineBundle:
                 continue
             if not spec.row_local_map_ids:
                 continue
-            pipeline_id = runner.find_pipeline_id(name)
+            found = runner.find_pipeline(name)
+            pipeline_id = found[0] if found else None
+            if found and found[1] != name:
+                notice(
+                    f"{found[1]!r} carries a development-mode prefix: set the target's presets "
+                    "name_prefix: '' and pipelines_development: false (docs: DAB deployment)"
+                )
             resources[key] = SlotPipelineBundle.pipeline_resource(
                 name=name,
                 slots_fqn=spec.slots_fqn,
