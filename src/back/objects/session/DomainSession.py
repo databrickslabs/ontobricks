@@ -27,6 +27,7 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Set, Tuple
 
+from back.core.graphdb.RealtimeSource import RealtimeSource
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
 from shared.config.constants import (
@@ -100,6 +101,8 @@ def get_empty_domain() -> Dict[str, Any]:
                 # realtime. The build resolves what actually runs (fallback
                 # ladder), so ``full`` is always safe.
                 "materialization_mode": "full",
+                # The realtime topic (names only; RealtimeSource): empty until set.
+                "realtime_source": {},
                 # Search companions (adj / entity-search / props). On until
                 # the operator turns the Backend switch off. New domains stay
                 # pending_refresh until the first successful rebuild.
@@ -1279,6 +1282,7 @@ class DomainSession:
             "materialization_mode": normalize_materialization_mode(
                 stored.get("materialization_mode")
             ),
+            "realtime_source": RealtimeSource.coerce(stored.get("realtime_source")),
             "graph_cache_enabled": normalize_graph_cache_enabled(
                 stored.get("graph_cache_enabled")
             ),
@@ -1417,6 +1421,7 @@ class DomainSession:
             dest["materialization_mode"] = normalize_materialization_mode(
                 info.get("materialization_mode")
             )
+            dest["realtime_source"] = RealtimeSource.coerce(info.get("realtime_source"))
             dest["graph_cache_enabled"] = normalize_graph_cache_enabled(
                 info.get("graph_cache_enabled"), default=True
             )

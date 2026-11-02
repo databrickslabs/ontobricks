@@ -179,3 +179,33 @@ class TestEnableRowTracking:
         assert result["tables"][0] == {"table": _CUSTOMERS, "success": True}
         assert result["tables"][1]["success"] is False
         assert "PERMISSION_DENIED" in result["tables"][1]["error"]
+
+
+class TestRealtimeFacts:
+    _SOURCE = {
+        "kind": "kafka",
+        "bootstrap_servers": "b:9092",
+        "topic": "sales",
+        "secret_scope": "s",
+        "secret_key": "k",
+    }
+
+    def test_a_configured_topic_with_the_setting_on(self):
+        domain = SimpleNamespace(info={"realtime_source": self._SOURCE})
+
+        facts = TwinIncrementalReadiness.realtime_facts(domain, SimpleNamespace(realtime_enabled=True))
+
+        assert facts == {"enabled": True, "source_configured": True, "kind": "kafka", "topic": "sales"}
+
+    def test_nothing_configured(self):
+        facts = TwinIncrementalReadiness.realtime_facts(_domain(), SimpleNamespace())
+
+        assert facts == {"enabled": False, "source_configured": False, "kind": "", "topic": ""}
+
+    def test_the_report_carries_them(self, two_sources):
+        report = TwinIncrementalReadiness.report(
+            _domain("realtime"), SimpleNamespace(), _Client({_CUSTOMERS: True, _ORDERS: True})
+        )
+
+        assert report["realtime"]["enabled"] is False
+        assert report["decision"]["reason"] == "realtime_not_available"

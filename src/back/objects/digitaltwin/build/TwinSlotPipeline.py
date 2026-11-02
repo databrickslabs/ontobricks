@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from back.core.errors import OntoBricksError, OperationCancelledError
+from back.core.graphdb.GraphDBFactory import CONTINUOUS_MATERIALIZATION_MODES
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 
@@ -77,7 +78,7 @@ class TwinSlotPipeline:
             "channel": TwinSlotPipeline.channel(pipe.settings),
         }
         current = SlotPipelineRunner.fingerprint(definition["sql_text"])
-        continuous = pipe.mode_decision.effective == "microbatch"
+        continuous = pipe.mode_decision.effective in CONTINUOUS_MATERIALIZATION_MODES
 
         existing = runner.find_pipeline_id(name)
         stored = runner.stored_fingerprint(existing) if existing else ""

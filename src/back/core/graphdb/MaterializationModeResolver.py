@@ -42,33 +42,35 @@ class MaterializationModeResolver:
 
         Ladder, in order:
 
-        1. ``realtime`` -> ``microbatch`` (``realtime_not_available``).
-        2. ``incremental`` / ``microbatch`` -> ``full`` when serverless compute
-           is unavailable (``serverless_unavailable``) or the backend is not
-           one of :attr:`ELIGIBLE_BACKENDS` (``backend_not_eligible``).
-        3. ``microbatch`` -> ``incremental`` when the sources do not track row
-           changes (``row_tracking_missing``).
+        1. ``realtime`` -> ``microbatch`` when no realtime topic is available
+           (``realtime_not_available``): the domain's source config is
+           incomplete or ``settings.realtime_enabled`` is off.
+        2. ``incremental`` / ``microbatch`` / ``realtime`` -> ``full`` when
+           serverless compute is unavailable (``serverless_unavailable``) or
+           the backend is not one of :attr:`ELIGIBLE_BACKENDS`
+           (``backend_not_eligible``): ``realtime`` runs on top of the
+           ``microbatch`` slot pipeline.
+        3. ``microbatch`` / ``realtime`` -> ``incremental`` when the sources do
+           not track row changes (``row_tracking_missing``).
         4. ``incremental`` -> ``full`` when the sources do not track row
            changes (``row_tracking_missing``).
 
         ``previews`` (workspace preview flags) is accepted so the signature is
         stable; no step consults it yet.
         """
-        # Realtime is reserved for a later release: ``realtime_topic_available``
-        # is deliberately ignored, so it always resolves to ``microbatch`` first.
         cls = MaterializationModeResolver
         requested = normalize_materialization_mode(requested)
         mode, reason = requested, ""
 
-        if mode == "realtime":
+        if mode == "realtime" and not realtime_topic_available:
             mode, reason = "microbatch", cls.REASON_REALTIME_NOT_AVAILABLE
 
-        if mode in ("incremental", "microbatch"):
+        if mode in ("incremental", "microbatch", "realtime"):
             blocker = cls._gate_blocker(serverless_available, backend)
             if blocker:
                 mode, reason = "full", reason or blocker
 
-        if mode == "microbatch" and not sources_row_tracked:
+        if mode in ("microbatch", "realtime") and not sources_row_tracked:
             mode, reason = "incremental", reason or cls.REASON_ROW_TRACKING_MISSING
 
         if mode == "incremental" and not sources_row_tracked:

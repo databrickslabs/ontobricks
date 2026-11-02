@@ -122,36 +122,50 @@ class TestLadderStaysPut:
         assert decision == ModeDecision("full", "full", "")
 
 
+_COMPLETE_SOURCE = {
+    "kind": "kafka",
+    "bootstrap_servers": "broker-1:9092,broker-2:9092",
+    "topic": "sales.customers",
+    "secret_scope": "ontobricks",
+    "secret_key": "kafka-sasl",
+    "key_format": "json",
+}
+
+
 class TestRealtime:
-    def test_realtime_resolves_to_microbatch_first(self):
+    def test_realtime_without_a_topic_resolves_to_microbatch_first(self):
         assert _resolve("realtime") == ModeDecision(
             "realtime", "microbatch", "realtime_not_available"
         )
 
-    def test_the_topic_kwarg_is_ignored_in_this_release(self):
+    def test_realtime_with_its_topic_runs_realtime(self):
         decision = _resolve("realtime", realtime_topic_available=True)
-        assert decision == ModeDecision(
-            "realtime", "microbatch", "realtime_not_available"
-        )
+        assert decision == ModeDecision("realtime", "realtime", "")
 
     def test_realtime_without_row_tracking_walks_down_one_step_at_a_time(self):
         decision = _resolve("realtime", sources_row_tracked=False)
         assert decision.effective == "full"
         assert decision.reason == "realtime_not_available"
 
+    def test_realtime_with_its_topic_but_untracked_sources_is_incremental_then_full(self):
+        """The stream bootstraps from ``_slots``, which the change feed fills."""
+        decision = _resolve("realtime", realtime_topic_available=True, sources_row_tracked=False)
+        assert decision == ModeDecision("realtime", "full", "row_tracking_missing")
+
     def test_realtime_without_serverless_ends_full_with_the_first_reason(self):
         decision = _resolve("realtime", serverless_available=False)
         assert decision == ModeDecision("realtime", "full", "realtime_not_available")
 
-    def test_realtime_is_never_the_effective_mode(self):
-        for kwargs in (
-            {},
-            {"realtime_topic_available": True},
-            {"serverless_available": False},
-            {"sources_row_tracked": False},
-            {"backend": "none"},
-        ):
-            assert _resolve("realtime", **kwargs).effective != "realtime"
+    def test_realtime_with_its_topic_still_needs_serverless(self):
+        decision = _resolve("realtime", realtime_topic_available=True, serverless_available=False)
+        assert decision == ModeDecision("realtime", "full", "serverless_unavailable")
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [{}, {"serverless_available": False}, {"sources_row_tracked": False}, {"backend": "none"}],
+    )
+    def test_realtime_needs_its_topic(self, kwargs):
+        assert _resolve("realtime", **kwargs).effective != "realtime"
 
 
 class TestServerlessAndBackendGate:
@@ -300,6 +314,16 @@ class TestDecideMode:
             _pipe({"materialization_mode": "realtime"})
         )
         assert decision == ModeDecision("realtime", "full", "realtime_not_available")
+
+    def test_realtime_is_available_with_a_complete_source_and_the_setting_on(self):
+        from back.objects.digitaltwin.build import TwinBuildPostMaterialize as Post
+
+        info = {"materialization_mode": "realtime", "realtime_source": _COMPLETE_SOURCE}
+        on, off = SimpleNamespace(realtime_enabled=True), SimpleNamespace(realtime_enabled=False)
+        domain = SimpleNamespace(info=info)
+
+        assert Post._resolver_inputs(domain, on)["realtime_topic_available"] is True
+        assert Post._resolver_inputs(domain, off)["realtime_topic_available"] is False
 
     def test_a_graphless_domain_requesting_a_mode_still_runs_full(self):
         decision = TwinBuildPostMaterialize.decide_mode(

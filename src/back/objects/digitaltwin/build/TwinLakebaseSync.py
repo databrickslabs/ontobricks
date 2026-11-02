@@ -37,9 +37,16 @@ from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
 logger = get_logger(__name__)
 
 #: Lakeflow schedule each effective materialization mode asks for.
-_MODE_SCHEDULE = {"full": "snapshot", "incremental": "triggered", "microbatch": "continuous"}
-#: The mode whose schedule a registration is (the inverse of _MODE_SCHEDULE).
-_SCHEDULE_MODE = {schedule: mode for mode, schedule in _MODE_SCHEDULE.items()}
+_MODE_SCHEDULE = {
+    "full": "snapshot",
+    "incremental": "triggered",
+    "microbatch": "continuous",
+    # Realtime serves its freshest rows from ``_live``; ``_data`` syncs like microbatch.
+    "realtime": "continuous",
+}
+#: The mode whose schedule a registration is (the inverse of _MODE_SCHEDULE;
+#: ``continuous`` reads back as ``microbatch``, the mode both share it with).
+_SCHEDULE_MODE = {"snapshot": "full", "triggered": "incremental", "continuous": "microbatch"}
 
 #: ``data_relation_mode`` values whose ``…_data`` holds a computed copy of the triples.
 _COPIED_RELATIONS = ("table", TwinBuildPostMaterialize.MATERIALIZED_VIEW)

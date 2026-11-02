@@ -280,6 +280,16 @@ function renderMaterializationReadiness(report) {
     }));
     list.classList.toggle('d-none', untracked.length === 0);
     button.classList.toggle('d-none', untracked.length === 0);
+    const realtimeLine = document.getElementById('materializationReadinessRealtime');
+    if (realtimeLine) {
+        const rt = report.realtime || {};
+        const showRealtime = report.mode_requested === 'realtime';
+        realtimeLine.textContent = showRealtime
+            ? `Real-time: ${rt.enabled ? 'enabled' : 'disabled on this deployment (ONTOBRICKS_REALTIME_ENABLED)'}`
+              + ` · topic ${rt.source_configured ? `${rt.kind} ${rt.topic}` : 'not configured'}`
+            : '';
+        realtimeLine.classList.toggle('d-none', !showRealtime);
+    }
     button.dataset.tables = JSON.stringify(untracked);
     box.classList.remove('d-none');
 }
@@ -331,6 +341,14 @@ async function enableRowTracking() {
         button.disabled = false;
         loadMaterializationReadiness();
     }
+}
+
+/** Show the real-time source fields only for the ``realtime`` mode. */
+function toggleRealtimeSourceSection() {
+    const modeEl = document.getElementById('domainMaterializationMode');
+    const section = document.getElementById('realtimeSourceSection');
+    if (!modeEl || !section) return;
+    section.classList.toggle('d-none', modeEl.value !== 'realtime');
 }
 
 // No-op: version selector has been replaced by a read-only label
@@ -457,6 +475,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (enableRowTrackingBtn) {
             enableRowTrackingBtn.addEventListener('click', enableRowTracking);
         }
+        const materializationModeSelect = document.getElementById('domainMaterializationMode');
+        if (materializationModeSelect) {
+            materializationModeSelect.addEventListener('change', toggleRealtimeSourceSection);
+        }
+        toggleRealtimeSourceSection();
         loadMaterializationReadiness();
         initGraphBackendCards();
         syncNeo4jConnectionSection();

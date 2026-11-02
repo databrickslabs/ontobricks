@@ -221,6 +221,46 @@ class Settings(BaseSettings):
         ),
     )
 
+    # The ``realtime`` materialization mode: a classic-compute job (bundle
+    # resource ``resources/triple_rtm.job.yml``) streams a domain's Kafka-
+    # compatible topic into the Lakebase ``_live`` table on top of the
+    # ``microbatch`` slot pipeline. Off (the default): ``realtime`` resolves to
+    # ``microbatch`` (``realtime_not_available``) whatever the domain config.
+    realtime_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("ONTOBRICKS_REALTIME_ENABLED", "realtime_enabled"),
+    )
+
+    # Name of the deployed stream job (``${var.app_name}-triple-rtm``); the
+    # orchestrator resolves it like the analytics job (``[dev <user>] `` prefix).
+    realtime_job_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("ONTOBRICKS_REALTIME_JOB_NAME", "realtime_job_name"),
+    )
+
+    # Postgres role the stream job writes ``_live`` as, and the Databricks
+    # secret (``scope/key``) holding its password. Names only — never a value.
+    realtime_lakebase_user: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_REALTIME_LAKEBASE_USER", "realtime_lakebase_user"
+        ),
+    )
+    realtime_lakebase_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_REALTIME_LAKEBASE_SECRET", "realtime_lakebase_secret"
+        ),
+    )
+
+    # Root (a UC volume path) under which each stream keeps its checkpoint.
+    realtime_checkpoint_root: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_REALTIME_CHECKPOINT_ROOT", "realtime_checkpoint_root"
+        ),
+    )
+
     # Lakeflow channel of the per-domain slot pipelines. Incremental
     # materialized-view refreshes (Enzyme) need ``PREVIEW`` at the time of
     # writing; ``CURRENT`` once they are generally available.

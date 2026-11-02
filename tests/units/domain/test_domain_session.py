@@ -584,6 +584,27 @@ class TestExportImport:
         domain_session.import_from_file(export)
         assert domain_session.info["materialization_mode"] == "incremental"
 
+    def test_realtime_source_round_trip(self, domain_session):
+        source = {
+            "kind": "eventhubs",
+            "bootstrap_servers": "ns.servicebus.windows.net:9093",
+            "topic": "orders",
+            "secret_scope": "sc",
+            "secret_key": "k",
+            "key_format": "json",
+        }
+        domain_session.info["name"] = "RoundTrip"
+        domain_session.info["realtime_source"] = dict(source)
+        export = domain_session.export_for_save()
+        assert export["info"]["realtime_source"] == source
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["realtime_source"] == source
+
+    def test_an_invalid_stored_realtime_source_is_dropped_on_export(self, domain_session):
+        domain_session.info["realtime_source"] = {"kind": "kafka", "password": "x"}
+        assert domain_session.export_for_save()["info"]["realtime_source"] == {}
+
     def test_materialization_mode_is_normalized_on_export(self, domain_session):
         domain_session.info["materialization_mode"] = " Microbatch "
         export = domain_session.export_for_save()

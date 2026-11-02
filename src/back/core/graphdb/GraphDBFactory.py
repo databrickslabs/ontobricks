@@ -51,8 +51,13 @@ DEFAULT_LAKEHOUSE_MATERIALIZATION = "table"
 #   ``full``        -> rebuild every triple from the sources (the default)
 #   ``incremental`` -> apply only the source rows that changed since last build
 #   ``microbatch``  -> incremental, on a short schedule
-#   ``realtime``    -> reserved: validates, but resolves to ``microbatch``
+#   ``realtime``    -> microbatch plus a Kafka-fed stream into Lakebase ``_live``
+#                      (needs the domain's ``realtime_source`` and
+#                      ``settings.realtime_enabled``; else resolves to microbatch)
 MATERIALIZATION_MODES: Tuple[str, ...] = ("full", "incremental", "microbatch", "realtime")
+#: Effective modes whose slot pipeline runs continuously and whose ``…_data``
+#: materialized view refreshes itself between builds.
+CONTINUOUS_MATERIALIZATION_MODES: Tuple[str, ...] = ("microbatch", "realtime")
 DEFAULT_MATERIALIZATION_MODE = "full"
 
 

@@ -298,6 +298,40 @@ class TestSaveDomainInfo:
         data = Domain(_mock_domain()).get_domain_template_data()
         assert data["materialization_mode"] == "full"
 
+    _REALTIME = {
+        "kind": "kafka",
+        "bootstrap_servers": "b:9092",
+        "topic": "sales",
+        "secret_scope": "sc",
+        "secret_key": "k",
+        "key_format": "json",
+    }
+
+    def test_save_realtime_source(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"realtime_source": dict(self._REALTIME)})
+        assert domain.info["realtime_source"] == self._REALTIME
+        assert result["realtime_source"] == self._REALTIME
+
+    def test_a_secret_value_in_the_realtime_source_is_refused(self):
+        from back.core.errors import ValidationError
+
+        with pytest.raises(ValidationError):
+            Domain(_mock_domain()).save_domain_info(
+                {"realtime_source": {**self._REALTIME, "password": "hunter2"}}
+            )
+
+    def test_saving_without_the_key_keeps_the_realtime_source(self):
+        domain = _mock_domain()
+        domain.info["realtime_source"] = dict(self._REALTIME)
+        Domain(domain).save_domain_info({"description": "changed"})
+        assert domain.info["realtime_source"] == self._REALTIME
+
+    def test_the_realtime_source_is_exposed_to_the_template(self):
+        domain = _mock_domain()
+        domain.info["realtime_source"] = dict(self._REALTIME)
+        assert Domain(domain).get_domain_template_data()["realtime_source"] == self._REALTIME
+
     def test_review_quorum_clamped_to_minimum_one(self):
         domain = _mock_domain()
         Domain(domain).save_domain_info({"review_quorum": 0})

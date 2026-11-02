@@ -17,7 +17,7 @@ from back.objects.digitaltwin.build.TwinSlotRefreshPlan import (
 logger = get_logger(__name__)
 
 #: Effective modes whose ``…_data`` is the slot pipeline's materialized view.
-_VIEW_MODES = ("incremental", "microbatch")
+_VIEW_MODES = ("incremental", "microbatch", "realtime")
 
 
 class TwinScheduledRefresh:

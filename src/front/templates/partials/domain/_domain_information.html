@@ -325,18 +325,62 @@
                                 <option value="full" {% if (domain.materialization_mode or 'full') == 'full' %}selected{% endif %}>Full rebuild</option>
                                 <option value="incremental" {% if domain.materialization_mode == 'incremental' %}selected{% endif %}>Incremental</option>
                                 <option value="microbatch" {% if domain.materialization_mode == 'microbatch' %}selected{% endif %}>Micro-batch</option>
-                                <option value="realtime" disabled {% if domain.materialization_mode == 'realtime' %}selected{% endif %}>Real-time (later release)</option>
+                                <option value="realtime" {% if domain.materialization_mode == 'realtime' %}selected{% endif %}>Real-time</option>
                             </select>
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>How a build refreshes the mapped triples.
                                 <strong>Full rebuild</strong> recomputes everything every time.
                                 <strong>Incremental</strong> and <strong>Micro-batch</strong> apply only the source
-                                changes; when the workspace or the sources do not support the mode yet, the build
-                                falls back to a full rebuild and records the reason.
+                                changes; <strong>Real-time</strong> also streams a Kafka-compatible topic into the
+                                graph. When the workspace or the sources do not support the mode yet, the build
+                                falls back to the next mode and records the reason.
                             </small>
+                            {% set rt = domain.realtime_source or {} %}
+                            <fieldset class="border rounded p-2 mt-2 {% if domain.materialization_mode != 'realtime' %}d-none{% endif %}"
+                                      id="realtimeSourceSection">
+                                <legend class="float-none w-auto px-1 small fw-semibold mb-0">
+                                    <i class="bi bi-broadcast me-1"></i> Real-time source
+                                </legend>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label small mb-0" for="realtimeSourceKind">Kind</label>
+                                        <select class="form-select form-select-sm domain-editable" id="realtimeSourceKind">
+                                            {% for kind, label in [('kafka', 'Kafka'), ('eventhubs', 'Event Hubs'), ('kinesis', 'Kinesis')] %}
+                                            <option value="{{ kind }}" {% if (rt.kind or 'kafka') == kind %}selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label small mb-0" for="realtimeSourceServers">Bootstrap servers (Kinesis: region)</label>
+                                        <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceServers"
+                                               value="{{ rt.bootstrap_servers or '' }}" placeholder="broker-1:9092,broker-2:9092">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small mb-0" for="realtimeSourceTopic">Topic</label>
+                                        <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceTopic"
+                                               value="{{ rt.topic or '' }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small mb-0" for="realtimeSourceSecretScope">Secret scope</label>
+                                        <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceSecretScope"
+                                               value="{{ rt.secret_scope or '' }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small mb-0" for="realtimeSourceSecretKey">Secret key</label>
+                                        <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceSecretKey"
+                                               value="{{ rt.secret_key or '' }}">
+                                    </div>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    <i class="bi bi-shield-lock me-1"></i>Credentials stay in the Databricks secret
+                                    scope: only its scope and key names are saved. Records arrive as JSON
+                                    change envelopes.
+                                </small>
+                            </fieldset>
                             <div class="mt-2 small d-none" id="materializationReadiness" aria-live="polite">
                                 <div class="fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness</div>
                                 <div class="text-muted" id="materializationReadinessText"></div>
+                                <div class="text-muted d-none" id="materializationReadinessRealtime"></div>
                                 <ul class="list-unstyled mb-1 d-none" id="materializationReadinessSources"></ul>
                                 <button type="button" class="btn btn-sm btn-outline-primary domain-editable d-none"
                                         id="enableRowTrackingBtn">

@@ -30,7 +30,7 @@ class TwinIncrementalReadiness:
     @staticmethod
     def report(domain: Any, settings: Any, client: Any) -> dict:
         """``mode_requested``, ``decision``, ``serverless_available``, ``sources``,
-        ``compile_error``, ``previews``.
+        ``compile_error``, ``realtime``, ``previews``.
 
         ``decision`` is what a build would run: ``effective``, ``reason`` and
         ``merge_fallback`` — an ``incremental`` request without serverless runs
@@ -73,7 +73,24 @@ class TwinIncrementalReadiness:
             "serverless_available": TwinBuildPostMaterialize.serverless_available(settings),
             "sources": [{"table": table, "row_tracking": tracked[table]} for table in tables],
             "compile_error": compile_error,
+            "realtime": TwinIncrementalReadiness.realtime_facts(domain, settings),
             "previews": {"slot_pipeline_channel": TwinSlotPipeline.channel(settings)},
+        }
+
+    @staticmethod
+    def realtime_facts(domain: Any, settings: Any) -> dict:
+        """``enabled`` (the setting), ``source_configured``, ``kind`` and ``topic`` of the domain.
+
+        No secret is read: the config holds the secret's scope and key names only.
+        """
+        from back.core.graphdb import RealtimeSource
+
+        config = RealtimeSource.of(domain)
+        return {
+            "enabled": getattr(settings, "realtime_enabled", False) is True,
+            "source_configured": RealtimeSource.is_complete(config),
+            "kind": config.get("kind", ""),
+            "topic": config.get("topic", ""),
         }
 
     @staticmethod

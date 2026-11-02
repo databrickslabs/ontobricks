@@ -807,6 +807,20 @@ function buildDomainInfoPayload() {
             : undefined,
         // Applies to every backend; the build resolves what actually runs.
         materialization_mode: materializationModeEl ? materializationModeEl.value : undefined,
+        // Names only (the secret itself stays in the scope); kept whatever the mode.
+        realtime_source: (function () {
+            const topicEl = document.getElementById('realtimeSourceTopic');
+            if (!topicEl) return undefined;
+            const value = id => ((document.getElementById(id) || {}).value || '').trim();
+            return {
+                kind: value('realtimeSourceKind'),
+                bootstrap_servers: value('realtimeSourceServers'),
+                topic: value('realtimeSourceTopic'),
+                secret_scope: value('realtimeSourceSecretScope'),
+                secret_key: value('realtimeSourceSecretKey'),
+                key_format: 'json',
+            };
+        })(),
         graph_cache_enabled: (function () {
             const backend = graphBackendEl ? graphBackendEl.value : '';
             const cacheEl = document.getElementById('domainGraphCacheEnabled');

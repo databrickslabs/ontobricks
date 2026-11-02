@@ -205,12 +205,14 @@ class TwinBuildPostMaterialize:
     @staticmethod
     def _resolver_inputs(domain: Any, settings: Any) -> dict:
         """``MaterializationModeResolver.resolve`` inputs read from the domain and settings."""
+        from back.core.graphdb import RealtimeSource
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         return {
             "serverless_available": TwinBuildPostMaterialize.serverless_available(settings),
             "backend": GraphDBFactory._resolve_graph_backend(domain),
             "previews": {},
+            "realtime_topic_available": RealtimeSource.topic_available(domain, settings),
         }
 
     @staticmethod

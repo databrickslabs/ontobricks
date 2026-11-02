@@ -9,7 +9,7 @@ and none of them is visible from the backend tests:
 2. Both save paths send the field. ``domain.js`` and the pre-UC-save auto-save
    in ``navbar.js`` post to the same ``/domain/info``; a field missing from
    either silently reverts the user's choice.
-3. Real-time is listed but cannot be chosen until a later release.
+3. Real-time can be chosen; its source fields show only for that mode.
 """
 
 import re
@@ -81,13 +81,8 @@ class TestThePicker:
         assert "Micro-batch" in _option(rendered, "microbatch")
         assert "Real-time" in _option(rendered, "realtime")
 
-    def test_realtime_is_disabled_and_marked_for_a_later_release(self):
-        option = _option(_render_picker(), "realtime")
-        assert "disabled" in option
-        assert "later release" in option
-
-    @pytest.mark.parametrize("value", ["full", "incremental", "microbatch"])
-    def test_the_other_options_are_enabled(self, value):
+    @pytest.mark.parametrize("value", ["full", "incremental", "microbatch", "realtime"])
+    def test_every_option_is_enabled(self, value):
         assert "disabled" not in _option(_render_picker(), value)
 
     @pytest.mark.parametrize(
@@ -109,7 +104,7 @@ class TestThePicker:
         assert "selected" not in _option(rendered, "full")
 
     def test_a_stored_realtime_choice_is_not_silently_replaced(self):
-        """The option is disabled, but a value set through the API must survive a save."""
+        """A stored realtime choice is re-selected after a refresh."""
         rendered = _render_picker(materialization_mode="realtime")
         assert "selected" in _option(rendered, "realtime")
         assert "selected" not in _option(rendered, "full")
@@ -200,3 +195,37 @@ class TestBothSavePathsSendTheField:
             f"materializationModeEl.dataset.savedValue = domainInfoPayload.{FIELD}"
             in body
         )
+
+
+class TestTheRealtimeSource:
+    def _section(self, **domain) -> str:
+        from jinja2 import Environment
+
+        html = _read(INFO_HTML)
+        start = html.rindex("{% set rt", 0, html.index('id="realtimeSourceSection"'))
+        end = html.index("</fieldset>", start) + len("</fieldset>")
+        return Environment(autoescape=True).from_string(html[start:end]).render(domain=domain)
+
+    def test_the_fields_show_only_for_the_realtime_mode(self):
+        hidden = self._section(materialization_mode="microbatch")
+        shown = self._section(materialization_mode="realtime")
+        assert 'class="border rounded p-2 mt-2 d-none"' in hidden
+        assert "d-none" not in shown.split(">", 1)[0]
+
+    def test_the_stored_names_are_rendered(self):
+        rt = {"kind": "kinesis", "topic": "orders", "secret_scope": "sc", "secret_key": "k"}
+
+        rendered = self._section(materialization_mode="realtime", realtime_source=rt)
+
+        assert 'value="orders"' in rendered and 'value="sc"' in rendered
+        assert '<option value="kinesis" selected>' in rendered
+
+    def test_no_secret_value_field_exists(self):
+        section = self._section(materialization_mode="realtime").lower()
+        assert "password" not in section and 'type="password"' not in section
+
+    def test_the_payload_sends_the_names_and_the_mode_toggle_is_wired(self):
+        body = _function_body(_read(NAVBAR_JS), "function buildDomainInfoPayload(", span=4500)
+        assert "realtime_source:" in body and "'realtimeSourceSecretKey'" in body
+        js = _read(INFO_JS)
+        assert "addEventListener('change', toggleRealtimeSourceSection)" in js

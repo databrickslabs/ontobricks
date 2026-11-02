@@ -40,6 +40,7 @@ from back.core.errors import (
     OperationCancelledError,
     ValidationError,
 )
+from back.core.graphdb.GraphDBFactory import CONTINUOUS_MATERIALIZATION_MODES
 from back.core.graphdb.ModeDecision import ModeDecision
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
@@ -297,7 +298,7 @@ class TwinIncrementalBuild:
         from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
 
         clause = ""
-        if mode == "microbatch":
+        if mode in CONTINUOUS_MATERIALIZATION_MODES:
             clause = MaterializedViewBuilder.microbatch_refresh_clause(spec.mv_source_count())
         return {
             "slots_fqn": spec.slots_fqn if spec.row_local_map_ids else None,

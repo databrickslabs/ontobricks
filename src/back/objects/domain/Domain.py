@@ -45,6 +45,7 @@ from back.core.helpers import (
     resolve_warehouse_id,
     run_blocking,
 )
+from back.core.graphdb.RealtimeSource import RealtimeSource
 from back.core.logging import get_logger
 from back.core.mcp_tools import (
     MCP_CONTEXT_FEATURES,
@@ -441,6 +442,9 @@ class Domain:
                         self._s.info.get("materialization_mode"),
                     )
                 ),
+                "realtime_source": RealtimeSource.parse(
+                    data.get("realtime_source", self._s.info.get("realtime_source"))
+                ),
             }
         )
         self._apply_graph_cache_save(data)
@@ -512,6 +516,7 @@ class Domain:
             "materialization_mode": self._coerce_materialization_mode(
                 info.get("materialization_mode")
             ),
+            "realtime_source": RealtimeSource.coerce(info.get("realtime_source")),
             "graph_cache_enabled": cache_enabled,
             "graph_cache_state": self._coerce_graph_cache_state(
                 info.get("graph_cache_state"), enabled=cache_enabled
