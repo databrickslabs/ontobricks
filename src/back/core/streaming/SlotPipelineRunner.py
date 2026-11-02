@@ -38,6 +38,8 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_API_TIMEOUT_S = 90
+#: The Lakeflow API's answer when a (continuous) pipeline already runs an update.
+_ACTIVE_UPDATE = re.compile(r"active update .* already exists", re.IGNORECASE)
 #: DAB development mode deploys ``<name>`` as ``[dev <user>] <name>``.
 _DEV_PREFIX_END = "] "
 DEFAULT_STOP_TIMEOUT_S = 600
@@ -270,13 +272,31 @@ class SlotPipelineRunner:
     # ------------------------------------------------------------------
 
     def start_update(self, pipeline_id: str, *, full_refresh: bool = False) -> str:
-        """Start an update and return its id."""
-        response = self._call(
-            f"start update on {pipeline_id}",
-            lambda w: w.pipelines.start_update(
-                pipeline_id=pipeline_id, full_refresh=bool(full_refresh)
-            ),
-        )
+        """Start an update and return its id.
+
+        A continuous pipeline starts its own update as soon as it is switched
+        to continuous (verified live, 2026-11-02: the next ``start_update``
+        answers ``An active update … already exists``). That active update is
+        the one wanted, so it is returned instead of raising — unless a full
+        refresh was asked for, which the running update is not.
+        """
+        try:
+            response = self._call(
+                f"start update on {pipeline_id}",
+                lambda w: w.pipelines.start_update(
+                    pipeline_id=pipeline_id, full_refresh=bool(full_refresh)
+                ),
+            )
+        except InfrastructureError as exc:
+            active = self._active_update(pipeline_id) if _ACTIVE_UPDATE.search(str(exc)) else ""
+            if not active or full_refresh:
+                raise
+            logger.info(
+                "Slot pipeline %s already runs update %s; adopting it instead of starting one",
+                pipeline_id,
+                active,
+            )
+            return active
         update_id = getattr(response, "update_id", None)
         if not update_id:
             raise InfrastructureError(
@@ -289,6 +309,15 @@ class SlotPipelineRunner:
             bool(full_refresh),
         )
         return update_id
+
+    def _active_update(self, pipeline_id: str) -> str:
+        """The newest update id the pipeline reports, or ``""``."""
+        try:
+            info = self._call(f"get pipeline {pipeline_id}", lambda w: w.pipelines.get(pipeline_id=pipeline_id))
+        except InfrastructureError:
+            return ""
+        latest = getattr(info, "latest_updates", None) or []
+        return str(getattr(latest[0], "update_id", "") or "") if latest else ""
 
     def wait_for_update(
         self,

@@ -291,6 +291,46 @@ class TestUpdates:
         assert runner.start_update("pipe-1", full_refresh=True) == "upd-1"
         assert client.pipelines.started == [("pipe-1", True)]
 
+    def test_a_continuous_pipeline_that_already_runs_an_update_is_adopted(self):
+        """Switching a pipeline to continuous starts its own update (verified live,
+        2026-11-02): the next ``start_update`` is refused with "already exists" and
+        the runner returns that active update instead of raising."""
+
+        class _Busy(_FakePipelines):
+            def start_update(self, pipeline_id, full_refresh=None):
+                self.started.append((pipeline_id, full_refresh))
+                raise RuntimeError(
+                    f"An active update 'u-9' already exists for pipeline '{pipeline_id}'."
+                )
+
+            def get(self, pipeline_id):
+                return SimpleNamespace(
+                    state=PipelineState("RUNNING"),
+                    spec=SimpleNamespace(configuration={}, deployment=None),
+                    latest_updates=[SimpleNamespace(update_id="u-9")],
+                )
+
+        client = _client()
+        client.pipelines = _Busy()
+        runner = SlotPipelineRunner(client_factory=lambda: client)
+
+        assert runner.start_update("pipe-1") == "u-9"
+
+    def test_a_full_refresh_is_not_satisfied_by_the_running_update(self):
+        class _Busy(_FakePipelines):
+            def start_update(self, pipeline_id, full_refresh=None):
+                raise RuntimeError("An active update 'u-9' already exists for pipeline 'pipe-1'.")
+
+            def get(self, pipeline_id):
+                return SimpleNamespace(latest_updates=[SimpleNamespace(update_id="u-9")])
+
+        client = _client()
+        client.pipelines = _Busy()
+        runner = SlotPipelineRunner(client_factory=lambda: client)
+
+        with pytest.raises(InfrastructureError, match="already exists"):
+            runner.start_update("pipe-1", full_refresh=True)
+
     def test_wait_follows_the_states_to_completion(self):
         runner, _ = _runner(_client(update_states=("QUEUED", "RUNNING", "COMPLETED")))
         seen: list[str] = []
