@@ -94,7 +94,8 @@ class TwinBuildPostMaterialize:
                 pipe.source_client, materialize.build_truncate_sql(inferred)
             )
             if getattr(pipe, "graph_relation", "") == GraphRelation.MATERIALIZED:
-                # TwinGraphRelation made …_graph an MV: refreshing it drops the old inferences.
+                # TwinGraphRelation made …_graph an MV: this refresh, the build's only one,
+                # drops the old inferences and brings in the new …_data.
                 GraphRelation.refresh_materialized(pipe.source_client, graph)
             else:
                 materialize.ensure_graph_view(pipe.source_client, graph, data, inferred)

@@ -209,3 +209,26 @@ def test_a_raw_write_to_an_inferred_companion_refreshes_its_graph_relation():
         store.insert_triples("cat.sch.t_inferred", [{"subject": "s", "predicate": "p", "object": "o"}])
 
     refresh.assert_called_once_with(client, "cat.sch.t_inferred")
+
+
+def test_the_graph_cache_is_rebuilt_after_the_graph_relation_refreshed():
+    """The refresh is synchronous, so the cache rebuilt next reads the purged ``…_graph``."""
+    order: list = []
+    store = DeltaFlatStore(MagicMock(), domain=MagicMock(), settings=MagicMock())
+
+    with (
+        patch.object(store, "_writable_table_fqn", return_value="cat.sch.sales_inferred"),
+        patch.object(store, "count_triples", return_value=1),
+        patch("back.core.graphdb.delta.DeltaFlatStore.materialize.truncate_table"),
+        patch(
+            "back.core.graphdb.delta.DeltaFlatStore.GraphRelation.refresh_after_write",
+            side_effect=lambda *a: order.append("refresh"),
+        ),
+        patch(
+            "back.core.graphdb.search_cache.rebuild_graph_cache_if_enabled",
+            side_effect=lambda *a: order.append("cache"),
+        ),
+    ):
+        store.purge_materialized_triples("sales_V3")
+
+    assert order == ["refresh", "cache"]

@@ -318,6 +318,13 @@ class TestIncremental:
         )
         assert pipe.graph_relation == "mv"
 
+    def test_the_graph_view_is_refreshed_once_by_the_inferred_reset(self):
+        _, _, warehouse = _run(_pipeline("incremental"))
+
+        refresh = f"REFRESH MATERIALIZED VIEW {_GRAPH}"
+        assert warehouse.calls.count(refresh) == 1
+        assert warehouse.calls.index(f"TRUNCATE TABLE {_INFERRED}") < warehouse.calls.index(refresh)
+
     def test_another_engine_keeps_the_graph_union_view(self):
         pipe = _pipeline("incremental", backend="lakebase")
 

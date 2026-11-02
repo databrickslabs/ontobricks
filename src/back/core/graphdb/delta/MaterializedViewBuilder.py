@@ -233,10 +233,10 @@ class MaterializedViewBuilder:
         return "EXPLAIN " + _OR_REPLACE_MV.sub("CREATE MATERIALIZED VIEW", mv_sql, count=1)
 
     @staticmethod
-    def refresh_sql(fqn: str, *, full: bool = False, wait: bool = True) -> str:
-        """``REFRESH MATERIALIZED VIEW`` (``… FULL`` recomputes; ``… ASYNC`` returns at once)."""
+    def refresh_sql(fqn: str, *, full: bool = False) -> str:
+        """``REFRESH MATERIALIZED VIEW`` (``… FULL`` forces a full recompute)."""
         validate_table_name(fqn)
-        return f"REFRESH MATERIALIZED VIEW {fqn}" + (" FULL" if full else "") + ("" if wait else " ASYNC")
+        return f"REFRESH MATERIALIZED VIEW {fqn}" + (" FULL" if full else "")
 
     @staticmethod
     def refresh_technique_sql(fqn: str) -> str:

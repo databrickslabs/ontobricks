@@ -15,12 +15,18 @@ class GraphRelation:
     """``…_graph`` = ``…_data`` ∪ ``…_inferred``, as a union VIEW or a materialized view.
 
     The ``full`` mode keeps the union VIEW; the incremental modes make it a
-    materialized view, which Lakehouse//RT reads. A graph MV carries its
-    definition fingerprint (``ontobricks.mv_sql_sha256``), which is also how it
-    is told from the VIEW. Writers of ``…_inferred`` keep the VIEW as it is
-    (:meth:`ensure_view`) and refresh the MV (:meth:`refresh` /
-    :meth:`refresh_after_write`), so inferred triples reach the MV's readers
-    once that refresh ran.
+    materialized view on the Lakehouse engine, which Lakehouse//RT reads. A
+    graph MV carries its definition fingerprint (``ontobricks.mv_sql_sha256``),
+    which is also how it is told from the VIEW. Writers of ``…_inferred`` keep
+    the VIEW as it is (:meth:`ensure_view`) and refresh the MV
+    (:meth:`refresh_after_write`), so inferred triples reach the MV's readers
+    — and the graph caches rebuilt from it — once the write returns.
+
+    The kind is probed by the fingerprint (:meth:`is_materialized`), which
+    reads as "not an MV" when the probe fails. A transient failure therefore
+    skips a refresh (the next write, build or trigger catches up) and makes
+    :meth:`ensure_view` try ``CREATE OR REPLACE VIEW``, which a real MV refuses:
+    the write fails, nothing is replaced.
     """
 
     VIEW = "view"
@@ -28,7 +34,7 @@ class GraphRelation:
 
     @staticmethod
     def is_materialized(client: Any, graph_fqn: str) -> bool:
-        """True when *graph_fqn* is a graph materialized view (it has a fingerprint)."""
+        """True when *graph_fqn* is a graph materialized view (it has a fingerprint); False on a failed probe."""
         return bool(graph_fqn) and bool(MaterializedViewBuilder.existing_mv_sha(client, graph_fqn))
 
     @staticmethod
@@ -70,27 +76,30 @@ class GraphRelation:
         materialize.ensure_graph_view(client, graph_fqn, data_fqn, inferred_fqn)
 
     @staticmethod
-    def refresh(client: Any, graph_fqn: str, *, wait: bool = True) -> bool:
+    def refresh(client: Any, graph_fqn: str) -> bool:
         """:meth:`refresh_materialized` when *graph_fqn* is a graph MV; False (nothing run) for a VIEW."""
         if not GraphRelation.is_materialized(client, graph_fqn):
             return False
-        GraphRelation.refresh_materialized(client, graph_fqn, wait=wait)
+        GraphRelation.refresh_materialized(client, graph_fqn)
         return True
 
     @staticmethod
-    def refresh_materialized(client: Any, graph_fqn: str, *, wait: bool = True) -> None:
-        """``REFRESH MATERIALIZED VIEW <graph>`` (``ASYNC`` unless *wait*), for a caller that knows it is one."""
-        materialize.run_sql(client, MaterializedViewBuilder.refresh_sql(graph_fqn, wait=wait))
+    def refresh_materialized(client: Any, graph_fqn: str) -> None:
+        """``REFRESH MATERIALIZED VIEW <graph>`` (synchronous), for a caller that knows it is one."""
+        materialize.run_sql(client, MaterializedViewBuilder.refresh_sql(graph_fqn))
 
     @staticmethod
     def refresh_after_write(client: Any, written_fqn: str) -> bool:
-        """:meth:`refresh` the ``…_graph`` over *written_fqn* ``ASYNC`` after a write; never raises.
+        """:meth:`refresh` the ``…_graph`` over *written_fqn* after a write; never raises.
 
         Every writer of an ``…_inferred`` companion calls this with the table it
-        wrote; any other table has no graph relation (nothing is run). The write
-        itself succeeded: an MV that is not refreshed now serves the new
-        inferred triples after its next refresh (the next write, build or
-        trigger), so the writer is never failed or blocked for it.
+        wrote; any other table has no graph relation (nothing is run). The
+        refresh is synchronous: the writers (background tasks) rebuild the
+        graph caches from ``…_graph`` right after, and back-to-back writes
+        must not leave the last one waiting for a later refresh. The write
+        itself succeeded, so a refresh that fails is logged and the MV serves
+        the new triples after its next refresh (the next write, build or
+        trigger): the writer is never failed for it.
         """
         from back.core.graphdb.delta import _table_naming
 
@@ -99,7 +108,7 @@ class GraphRelation:
             return False
         graph = written_fqn[: -len(suffix)] + _table_naming.graph_suffix()
         try:
-            return GraphRelation.refresh(client, graph, wait=False)
+            return GraphRelation.refresh(client, graph)
         except Exception as exc:  # noqa: BLE001 — best-effort, see above
             logger.warning("Graph materialized view %s not refreshed after a write: %s", graph, exc)
             return False

@@ -14,12 +14,15 @@ class TwinGraphRelation:
 
     A Lakehouse domain (the ``databricks`` engine — the only one whose readers,
     Lakehouse//RT included, read ``…_graph``) gets a graph materialized view
-    over ``…_data`` ∪ ``…_inferred`` in every incremental mode (``incremental``,
-    ``microbatch``, ``realtime``): created with ``…_data`` or on the first build
-    that finds the VIEW or an older definition, refreshed right after
-    ``…_data``, and self-refreshing (``TRIGGER ON UPDATE``, two upstreams)
-    when ``…_data`` is. Other engines read their own store and keep the VIEW.
-    The build records the relation as ``graph_relation`` (``mv`` / ``view``).
+    over ``…_data`` ∪ ``…_inferred`` in ``incremental`` and ``microbatch``:
+    created with ``…_data`` or on the first build that finds the VIEW or an
+    older definition, refreshed by the inferred reset that follows the
+    ``…_data`` refresh (``TwinBuildPostMaterialize.reset_inferred_companion``,
+    one refresh per build), and self-refreshing (``TRIGGER ON UPDATE``, two
+    upstreams) when ``…_data`` is. Other engines read their own store and keep
+    the VIEW — every ``realtime`` domain among them (realtime is
+    Lakebase-only). The build records the relation as ``graph_relation``
+    (``mv`` / ``view``).
     """
 
     @staticmethod
@@ -40,14 +43,15 @@ class TwinGraphRelation:
     def after_data(
         pipe: Any, *, data: str, graph: str, inferred: str, definition: dict, created: bool
     ) -> None:
-        """Step d': bring ``…_graph`` up to date once ``…_data`` is refreshed.
+        """Step d': give ``…_graph`` its kind once ``…_data`` is refreshed.
 
         *created*: ``…_data`` was just (re)created with ``…_graph``
         (``MaterializedViewBuilder.apply``), which already holds the current
         graph relation. Otherwise a graph MV is created when it is missing or
         has another definition, and an engine that keeps the VIEW replaces a
-        leftover MV. A graph MV is then refreshed synchronously. Warehouse
-        errors raise :class:`InfrastructureError` (the build falls back).
+        leftover MV. The MV is refreshed by the inferred reset that follows
+        (the build always runs it), not here. Warehouse errors raise
+        :class:`InfrastructureError` (the build falls back).
         """
         from back.core.graphdb.delta import GraphRelation
         from back.core.helpers import WarehouseStatements
@@ -73,7 +77,5 @@ class TwinGraphRelation:
                     refresh_clause=TwinGraphRelation.refresh_clause(definition),
                 ),
             )
-        pipe.tm.update_progress(pipe.task_id, 34, f"Refreshing materialized view {graph}...")
-        step(f"refresh {graph}", lambda: GraphRelation.refresh_materialized(client, graph))
         pipe.graph_relation = GraphRelation.MATERIALIZED
-        logger.info("[DT-BUILD %s] %s is a materialized view, refreshed", pipe.task_id, graph)
+        logger.info("[DT-BUILD %s] %s is a materialized view", pipe.task_id, graph)

@@ -316,11 +316,6 @@ class TestGraphMvSql:
         sql = MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED, refresh_clause=_TRIGGER)
         assert f"\n  {_TRIGGER}\nAS SELECT" in sql
 
-    def test_an_async_refresh_returns_at_once(self):
-        assert MaterializedViewBuilder.refresh_sql(GRAPH, wait=False) == (
-            f"REFRESH MATERIALIZED VIEW {GRAPH} ASYNC"
-        )
-
     def test_policy_keyword(self):
         sql = MaterializedViewBuilder.graph_mv_sql(
             GRAPH, DATA, INFERRED, refresh_policy="AUTO"

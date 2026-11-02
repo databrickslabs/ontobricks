@@ -101,11 +101,12 @@ class TestTheViewAndTheRefresh:
 
 
 class TestRefreshAfterWrite:
-    def test_a_write_refreshes_a_materialized_view_asynchronously(self):
+    def test_a_write_refreshes_a_materialized_view_before_it_returns(self):
+        """Synchronous: the graph caches rebuilt right after read the new triples."""
         client = _Client({GRAPH: _SHA})
 
         assert GraphRelation.refresh_after_write(client, INFERRED) is True
-        assert client.statements == [f"REFRESH MATERIALIZED VIEW {GRAPH} ASYNC"]
+        assert client.statements == [f"REFRESH MATERIALIZED VIEW {GRAPH}"]
 
     def test_a_view_needs_no_refresh(self):
         client = _Client()
