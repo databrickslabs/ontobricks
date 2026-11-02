@@ -240,3 +240,63 @@ tests/units/core/test_lakebase_flat_store.py tests/units/dtwin tests/units/strea
 -> 2089 passed in 6.55s (slowest test 0.88s, test_class_per_file); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10469 passed, 338 skipped, 9 deselected in 53.44s (slowest test 1.04s).
+
+================================================================================
+## Fix: Task 6 review round 2 (MERGE skip records the _data version; one-way history dependency)
+================================================================================
+
+Context: Review round 2 of Task 6. Only the app-managed Lakebase net apply
+recorded `data_table_version`, so on the Delta engine (and on managed-synced
+Lakebase and Neo4j) the MERGE skip's version check never applied: a build that
+merged other content into `_data` and then failed before its apply was passed
+over, and a later build whose mapping reverted to the base's could be skipped
+while `_data`, the served graph, held the failed build's content. A failing
+store probe in the skip check failed the build, and the last_build stamp's lazy
+import made TwinBuildPostMaterialize and TwinBuildRunHistory depend on each
+other.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinMergeFallback.py
+   After a successful MERGE the build records `data_table_version` and
+   `data_table_id` of `_data` (None / "" when unreadable; the Lakebase net
+   apply reads both again). A skipped build carries the base's version and
+   table id forward. The skip compares the live table id with the base's
+   when both have one, next to the version check. A store probe that raises
+   reads as "no graph" (warning; the build merges instead of skipping).
+2. src/back/objects/digitaltwin/build/TwinBuildRunHistory.py,
+   src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py,
+   src/back/objects/digitaltwin/build/_build_pipeline.py
+   Move Method `persist_last_build_to_registry` into TwinBuildRunHistory; the
+   pipeline hook calls it there. TwinBuildPostMaterialize no longer imports
+   TwinBuildRunHistory.
+3. Tests: tests/units/objects/test_build_pipeline_net_apply.py (the MERGE
+   records the version and table id; Delta base merge@7 with `_data`@8 merges,
+   @7 skips; another table id merges; the skip carries version and id forward;
+   a failing store probe merges), and the delegation test in
+   tests/units/objects/test_build_pipeline_compute_once.py
+   (`TestPersistLastBuildHook::test_the_pipeline_delegates_to_the_collaborator`,
+   now patching TwinBuildRunHistory).
+
+Known limitations (deferred by review):
+- Lakebase skip runs are passed over in the base search, so after 50
+  consecutive skipped builds the base leaves the window and one full stream
+  runs (safe, periodic).
+- The empty-graph completion in `_apply_full_rebuild` keeps its own message
+  and `build_mode: "full"`.
+
+Modified files:
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinMergeFallback.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/graphdb tests/units/objects
+tests/units/core/test_lakebase_flat_store.py tests/units/dtwin tests/units/streaming
+tests/units/architecture tests/back/core/digitaltwin -> 2189 passed in 6.57s (slowest test
+0.85s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10476 passed, 338 skipped, 9 deselected in 54.11s (slowest test 1.06s).
