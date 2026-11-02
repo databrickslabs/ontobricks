@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the live equivalence round): 11378 passed, 341 skipped, 9 deselected
+Final test result (after the Lakehouse//RT fast-path rounds): 11441 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -2812,3 +2812,34 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 11441 passed, 341 skipped, 9 deselected in 76.87s; architecture suite green; baseline.json unchanged.
+
+================================================================================
+## Close-out: fast-path re-review nits, README
+================================================================================
+
+Context: the second re-review of the Lakehouse//RT fast path approved the
+round and left four P3 notes; the two that are a one-line edit are applied
+here, the other two are recorded (a lookup in flight across a cache drop can
+re-cache for ≤ 30 s — now stated in the guide; the existence probe's inline
+`physical_table_id` call predates the feature).
+
+Changes:
+
+1. docs/incremental-materialization.md — Lakehouse//RT: the lookup runs inline
+   in `dt_triples` (all of its store reads) and in the bridge seed; the ≤ 30 s
+   in-flight re-cache window is stated.
+2. src/back/core/graphdb/GraphDBBackend.py — `sql_table_reference` docstring:
+   read-only SQL, write with a logical name (in place; the class is baselined).
+3. README.md — "What's new in 0.9.2": the microbatch fast path and its measured
+   `_slots` cadence (8 s median on the integration workspace).
+4. changelogs/v0.9.2/dermot-smyth_2026-11-02.log — roll-up test line updated.
+
+Modified files:
+- docs/incremental-materialization.md
+- src/back/core/graphdb/GraphDBBackend.py
+- README.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: full suite on `685a58f4` (`uv run --frozen pytest -q -m "not scenario"`,
+readiness-route test deselected): 11441 passed, 341 skipped, 9 deselected;
+architecture suite re-run green after the docstring edit.

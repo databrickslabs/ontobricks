@@ -360,12 +360,13 @@ statement timeout but with the guardrail fallback below.
 
 The lookup runs on the reading store's own client (the query warehouse, as the
 reader), wherever the store runs that read: in the `run_blocking` worker thread for the
-store methods the routes offload, and inline in their handlers for the two callers that
-build their own SQL (`dt_triples`' type filter and the bridge seed), as their store
-reads already did. It never opens a build-warehouse client. An absent `_data` reads as
-`graph` quietly; any other failing lookup is logged at warning and reads as `graph`.
-The decision is cached per `_data` table (one per domain version) for 30 s
-(`GraphReadRelation.TTL_S`). The process that changes `_data` drops its cache at once:
+store methods the routes offload, and inline in `dt_triples` (all of its store reads)
+and in the bridge seed, as those reads already ran. It never opens a build-warehouse
+client. An absent `_data` reads as `graph` quietly; any other failing lookup is logged
+at warning and reads as `graph`. The decision is cached per `_data` table (one per
+domain version) for 30 s (`GraphReadRelation.TTL_S`); a lookup that was in flight
+across a cache drop can re-cache the old answer for at most that long, in its process
+only. The process that changes `_data` drops its cache at once:
 `TwinIncrementalBuild._leave` (leaving the incremental modes or falling back),
 `_apply_views` once a new definition is in place, and `materialize.apply_data_relation`
 when a full build, a fallback or a scheduled tick replaces the view by a table or a
