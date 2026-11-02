@@ -1174,6 +1174,8 @@ class TestSlotsTable:
 
 
 _TRIPLE_KEY = ("subject", "predicate", "object_hash")
+_SLOT_KEY = ("map_id", "source_key", "predicate")
+_SLOTS = "cat.sch.triplestore_dom_V3_slots"
 _ORDER_OF_SCHEDULES = ("snapshot", "triggered", "continuous")
 _MODE_SCHEDULE = {"full": "snapshot", "incremental": "triggered", "microbatch": "continuous"}
 
@@ -1218,6 +1220,61 @@ class TestLakebaseSyncPlan:
         plan = _plan(mode_effective="incremental", configured_sync_table_mode="continuous")
 
         assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "triggered")
+        assert plan.source_kind == "triples"
+
+    @pytest.mark.parametrize("mode", ["incremental", "microbatch"])
+    def test_slots_that_carry_the_whole_graph_are_the_source_of_a_scheduled_sync(self, mode):
+        """A streaming table has a change feed everywhere; the ``_data`` MV needs a preview."""
+        plan = _plan(
+            mode_effective=mode,
+            configured_sync_table_mode="continuous",
+            slots_table=_SLOTS,
+            batch_mappings=0,
+        )
+
+        assert plan == SyncPlan(_SLOTS, _SLOT_KEY, _MODE_SCHEDULE[mode], "slots")
+
+    def test_a_snapshot_schedule_syncs_the_data_relation_even_with_live_slots(self):
+        plan = _plan(mode_effective="incremental", slots_table=_SLOTS, batch_mappings=0)
+
+        assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "snapshot")
+
+    def test_a_batch_mapping_keeps_the_data_relation_as_the_source(self):
+        plan = _plan(
+            mode_effective="microbatch",
+            configured_sync_table_mode="continuous",
+            slots_table=_SLOTS,
+            batch_mappings=1,
+        )
+
+        assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "continuous")
+
+    @pytest.mark.parametrize("batch_mappings", [None, "0", False, MagicMock()])
+    def test_an_unknown_batch_count_keeps_the_data_relation(self, batch_mappings):
+        plan = _plan(
+            mode_effective="microbatch",
+            configured_sync_table_mode="continuous",
+            slots_table=_SLOTS,
+            batch_mappings=batch_mappings,
+        )
+
+        assert plan.source_fqn == _DATA
+
+    def test_without_a_slots_table_the_data_relation_is_the_source(self):
+        plan = _plan(
+            mode_effective="microbatch", configured_sync_table_mode="continuous", batch_mappings=0
+        )
+
+        assert plan == SyncPlan(_DATA, _TRIPLE_KEY, "continuous")
+
+    def test_the_source_kind_is_not_an_ensure_argument(self):
+        plan = SyncPlan(_SLOTS, _SLOT_KEY, "continuous", "slots")
+
+        assert plan.ensure_kwargs() == {
+            "source_table_full_name": _SLOTS,
+            "primary_key_columns": list(_SLOT_KEY),
+            "sync_mode": "continuous",
+        }
 
     def test_a_view_source_is_always_a_snapshot_of_the_gateway_view(self):
         plan = _plan(
@@ -1370,7 +1427,7 @@ class TestSyncedApplyUsesThePlan:
         assert kwargs["source_table_full_name"] == "cat.sch.v_g_data"
         assert kwargs["primary_key_columns"] == list(_TRIPLE_KEY)
         assert kwargs["sync_mode"] == "continuous"
-        assert "source_kind" not in pipe.store.ensure_synced_union_view.call_args.kwargs
+        assert pipe.store.ensure_synced_union_view.call_args.kwargs["source_kind"] == "triples"
 
     def test_the_sync_source_and_schedule_are_recorded_for_the_trace(self):
         pipe = self._microbatch_pipe()

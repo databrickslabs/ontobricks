@@ -287,6 +287,7 @@ class _BuildPipeline:
         self.slots_table: Optional[str] = None
         # What the Lakebase synced table was registered on (TwinLakebaseSync.register).
         self.sync_source: str = ""
+        self.sync_source_kind: str = ""
         self.sync_mode_effective: str = ""
         # The resolver's mode the sync schedule follows (a runtime fallback keeps it).
         self.sync_schedule_mode: str = ""
@@ -1352,6 +1353,7 @@ class _BuildPipeline:
             self.store.ensure_synced_union_view(
                 self.graph_name,
                 synced_phy_override=_actual_synced_phy,
+                source_kind=plan.source_kind,
             )
             logger.info(
                 "[DT-BUILD %s] step 6/7 done: union view created/refreshed "

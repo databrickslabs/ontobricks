@@ -218,21 +218,45 @@ class TestLakeflowSource:
             "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_data)"
         ) in warnings[0]
 
-    def test_complete_slots_still_sync_the_data_relation(self):
-        """``_slots`` is an internal staging table: Lakeflow always reads ``_data``.
+    def test_complete_slots_are_the_source_of_a_triggered_sync(self):
+        """Slots that carry the whole graph have a change feed every workspace can sync.
 
-        Asserted-only readers query the synced table directly, so a slots
-        source would leak duplicate slot rows and blank objects to them.
+        The count still reads ``_data`` (the complete relation); asserted-only
+        readers go through the Postgres asserted view, so the slot rows and
+        blank objects never reach them.
         """
         pipe = self._synced("materialized_view")
         pipe.mode_decision = ModeDecision("incremental", "incremental", "")
+        pipe.store.sync_table_mode = "triggered"
         pipe.slots_table = "cat.sch.v_g_slots"
+        pipe.batch_mappings = 0
+
+        warnings = self._empty_sync_warnings(pipe)
+
+        assert (
+            "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_slots)"
+        ) in warnings[0]
+        assert pipe.sync_source_kind == "slots"
+        assert pipe._mgr.ensure.call_args.kwargs["primary_key_columns"] == [
+            "map_id",
+            "source_key",
+            "predicate",
+        ]
+        assert pipe.store.ensure_synced_union_view.call_args.kwargs["source_kind"] == "slots"
+
+    def test_complete_slots_still_sync_the_data_relation_as_a_snapshot(self):
+        """The default snapshot schedule has no change feed to gain from the slots."""
+        pipe = self._synced("materialized_view")
+        pipe.mode_decision = ModeDecision("incremental", "incremental", "")
+        pipe.slots_table = "cat.sch.v_g_slots"
+        pipe.batch_mappings = 0
 
         warnings = self._empty_sync_warnings(pipe)
 
         assert (
             "post-sync cat.sch.v_g_data contains 0 triples (Lakeflow synced cat.sch.v_g_data)"
         ) in warnings[0]
+        assert pipe.sync_source_kind == "triples"
 
     def test_a_synced_data_table_carries_object_hash(self):
         """Lakeflow's primary key includes ``object_hash``; ``_data`` must have it."""
@@ -491,7 +515,7 @@ class TestBuildRunTrace:
         assert entry["triples_source"] == _VIEW
         assert entry["inferred_reset"] is False
 
-    def test_trace_fields_has_exactly_the_ten_keys(self):
+    def test_trace_fields_has_exactly_the_eleven_keys(self):
         fields = TwinBuildPostMaterialize.trace_fields(
             SimpleNamespace(view_table=_VIEW)
         )
@@ -506,6 +530,7 @@ class TestBuildRunTrace:
             "slot_pipeline_id": "",
             "slots_table": "",
             "sync_source": "",
+            "sync_source_kind": "",
             "sync_mode_effective": "",
         }
 

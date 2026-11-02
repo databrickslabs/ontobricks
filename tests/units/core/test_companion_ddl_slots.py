@@ -17,6 +17,8 @@ from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase._companion_ddl import (
     SOURCE_KIND_SLOTS,
     SOURCE_KIND_TRIPLES,
+    asserted_view_phy,
+    build_asserted_view_sql,
     build_union_view_sql,
     build_union_view_sql_for_slots,
     ensure_graph_indexes,
@@ -71,9 +73,10 @@ class TestEnsureUnionView:
 
         ensure_union_view(cur, "g_v1", "g_v1_sync", "g_v1__app", source_kind=SOURCE_KIND_SLOTS)
 
-        assert _statements(cur)[-1] == build_union_view_sql_for_slots(
-            "g_v1", "g_v1_sync", "g_v1__app"
-        )
+        assert _statements(cur)[-2:] == [
+            build_union_view_sql_for_slots("g_v1", "g_v1_sync", "g_v1__app"),
+            build_asserted_view_sql("g_v1_asserted", "g_v1_sync", source_kind=SOURCE_KIND_SLOTS),
+        ]
 
     def test_the_default_source_creates_the_triples_view(self):
         cur = MagicMock()
@@ -81,7 +84,42 @@ class TestEnsureUnionView:
 
         ensure_union_view(cur, "g_v1", "g_v1_sync", "g_v1__app")
 
-        assert _statements(cur)[-1] == build_union_view_sql("g_v1", "g_v1_sync", "g_v1__app")
+        assert _statements(cur)[-2:] == [
+            build_union_view_sql("g_v1", "g_v1_sync", "g_v1__app"),
+            build_asserted_view_sql("g_v1_asserted", "g_v1_sync"),
+        ]
+
+    def test_a_schema_qualified_view_gets_its_asserted_view_in_the_same_schema(self):
+        cur = MagicMock()
+        cur.fetchone.return_value = None
+
+        ensure_union_view(cur, "gs.g_v1", "gs.g_v1_sync", "gs.g_v1__app")
+
+        assert _statements(cur)[-1].startswith("CREATE OR REPLACE VIEW gs.g_v1_asserted AS ")
+
+
+class TestAssertedView:
+    """What asserted-only readers query: the synced triples alone, as ``…_data`` reads."""
+
+    def test_the_name_sits_next_to_the_union_view(self):
+        assert asserted_view_phy("G_V1") == "g_v1_asserted"
+
+    def test_a_slots_source_is_deduplicated_and_blank_objects_are_dropped(self):
+        sql = build_asserted_view_sql("g_v1_asserted", "g_v1_sync", source_kind=SOURCE_KIND_SLOTS)
+
+        assert sql == (
+            "CREATE OR REPLACE VIEW g_v1_asserted AS "
+            "SELECT DISTINCT subject, predicate, object FROM g_v1_sync "
+            "WHERE object IS NOT NULL AND TRIM(object) <> ''"
+        )
+
+    def test_a_triples_source_projects_the_three_columns_as_they_are(self):
+        sql = build_asserted_view_sql("g_v1_asserted", "g_v1_sync", source_kind=SOURCE_KIND_TRIPLES)
+
+        assert sql == (
+            "CREATE OR REPLACE VIEW g_v1_asserted AS "
+            "SELECT subject, predicate, object FROM g_v1_sync"
+        )
 
     def test_a_stale_table_under_the_view_name_is_still_dropped_first(self):
         cur = MagicMock()
@@ -146,12 +184,18 @@ class TestFlatStoreSlotsView:
         indexes = [s for s in executed if "CREATE INDEX IF NOT EXISTS" in s]
         assert len(indexes) == 1 and "object_hash" not in indexes[0]
 
-    def test_drop_union_view_drops_only_the_view(self, store):
+    def test_drop_union_view_drops_both_views_and_never_the_sync_table(self, store):
         cur = MagicMock()
         with patch.object(store, "_cursor", self._cursor(cur)):
             store.drop_union_view("G_V1")
 
-        assert _statements(cur) == ["DROP VIEW IF EXISTS g_v1"]
+        assert _statements(cur) == [
+            "DROP VIEW IF EXISTS g_v1",
+            "DROP VIEW IF EXISTS g_v1_asserted",
+        ]
+
+    def test_asserted_only_readers_query_the_asserted_view(self, store):
+        assert store.synced_table_name("G_V1") == "g_v1_asserted"
 
 
 def test_the_source_kinds_are_the_two_documented_values():

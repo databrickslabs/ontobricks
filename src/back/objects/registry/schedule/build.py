@@ -163,14 +163,10 @@ def _apply_synced_pipeline(
     data_table = _table_naming.data_table_fqn(domain, settings) if domain is not None else ""
     # Decided (and probed) before anything is written: a failed probe drops nothing.
     data_mode, sync_mode = _tick_modes(domain, settings, src, source_tables)
-    if data_table:
-        _refresh_data_relation(src, domain, settings, view_table, data_table, data_mode, mappings)
-    plan = TwinLakebaseSync.sync_plan_for(
-        view_table=view_table,
-        data_table=data_table,
-        mode_effective=sync_mode,
-        configured_sync_table_mode=store.sync_table_mode,
+    kept = bool(data_table) and _refresh_data_relation(
+        src, domain, settings, view_table, data_table, data_mode, mappings
     )
+    plan = _tick_sync_plan(store, view_table, data_table, sync_mode, mappings, kept)
     mgr.ensure(
         synced_uc,
         before_delete=TwinLakebaseSync.union_view_dropper(store, graph_name),
@@ -186,7 +182,7 @@ def _apply_synced_pipeline(
         synced_uc,
         state,
     )
-    store.ensure_synced_union_view(graph_name)
+    store.ensure_synced_union_view(graph_name, source_kind=plan.source_kind)
     if full:
         try:
             store.truncate_companion(graph_name)
@@ -216,6 +212,33 @@ def _tick_modes(
     )
     promoted = TwinMergeFallback.promotes(decision)
     return decision.effective, "incremental" if promoted else decision.effective
+
+
+def _tick_sync_plan(
+    store: Any,
+    view_table: str,
+    data_table: str,
+    sync_mode: str,
+    mappings: Optional[Dict[str, Any]],
+    kept: bool,
+) -> Any:
+    """The tick's :class:`SyncPlan`, decided as the main build decides it.
+
+    *kept* (the ``…_data`` view was refreshed in place) means the slot pipeline
+    is live, so the compiled ``spec``'s slots can be the source exactly as
+    :meth:`TwinLakebaseSync.sync_plan` allows; a rebuilt ``…_data`` syncs itself.
+    """
+    from back.objects.digitaltwin.build import TwinLakebaseSync
+
+    spec = (mappings or {}).get("spec") if kept else None
+    return TwinLakebaseSync.sync_plan_for(
+        view_table=view_table,
+        data_table=data_table,
+        mode_effective=sync_mode,
+        configured_sync_table_mode=store.sync_table_mode,
+        slots_table=getattr(spec, "slots_fqn", "") or "",
+        batch_mappings=len(spec.batch_mappings) if spec is not None else None,
+    )
 
 
 def _refresh_data_relation(

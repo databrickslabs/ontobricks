@@ -56,6 +56,9 @@ _TRIPLE_TABLE_INDEXES: tuple[tuple[str, str], ...] = (
 SOURCE_KIND_TRIPLES = "triples"
 SOURCE_KIND_SLOTS = "slots"
 
+#: Synced-table key of a ``…_slots`` source: one row per slot, unique by construction.
+SLOT_SYNC_PRIMARY_KEY: tuple[str, ...] = ("map_id", "source_key", "predicate")
+
 # A ``…_slots``-sourced synced table has no ``object_hash`` column.
 _SLOTS_SYNC_INDEXES: tuple[tuple[str, str], ...] = (("sp", "subject, predicate"),)
 
@@ -81,6 +84,17 @@ def companion_phy(name: str) -> str:
 def view_phy(name: str) -> str:
     """Postgres view name readers see (matches the legacy single-table name)."""
     return _safe(name)
+
+
+def asserted_view_phy(name: str) -> str:
+    """Postgres view of the synced (asserted) triples alone: distinct, non-blank.
+
+    Asserted-only readers (``include_inferred=False`` reads, the asserted
+    entity-search rebuild, BFS expansion) query it instead of the ``_sync``
+    table, so a ``…_slots``-sourced sync — one row per slot, blank attribute
+    objects kept — reads like the ``…_data`` relation.
+    """
+    return f"{_safe(name)}_asserted"
 
 
 def live_phy(name: str) -> str:
@@ -525,6 +539,31 @@ def _live_ref(view: str) -> str:
     return f"{head}{sep}{leaf.strip(chr(34))}_live"
 
 
+def _asserted_ref(view: str) -> str:
+    """The asserted view next to *view* (same schema qualification; :func:`asserted_view_phy`)."""
+    head, sep, leaf = view.rpartition(".")
+    return f"{head}{sep}{leaf.strip(chr(34))}_asserted"
+
+
+def build_asserted_view_sql(
+    asserted: str, synced: str, *, source_kind: str = SOURCE_KIND_TRIPLES
+) -> str:
+    """``CREATE OR REPLACE`` the asserted view: the synced triples alone, as ``…_data`` reads.
+
+    Over a ``…_slots``-sourced synced table the view de-duplicates and drops
+    blank attribute objects (one row per slot otherwise); over a triples source
+    it projects the three triple columns. Readers that leave inferred triples
+    out query this view (``LakebaseFlatStore.synced_table_name``).
+    """
+    if source_kind == SOURCE_KIND_SLOTS:
+        return (
+            f"CREATE OR REPLACE VIEW {asserted} AS "
+            f"SELECT DISTINCT subject, predicate, object FROM {synced} "
+            f"WHERE object IS NOT NULL AND TRIM(object) <> ''"
+        )
+    return f"CREATE OR REPLACE VIEW {asserted} AS SELECT subject, predicate, object FROM {synced}"
+
+
 def ensure_union_view(
     cur: Any,
     view: str,
@@ -570,11 +609,14 @@ def ensure_union_view(
         cur.execute(
             build_union_view_sql_with_live(view, synced, companion, live, source_kind=source_kind)
         )
-        return
-    build = (
-        build_union_view_sql_for_slots if source_kind == SOURCE_KIND_SLOTS else build_union_view_sql
-    )
-    cur.execute(build(view, synced, companion))
+    else:
+        build = (
+            build_union_view_sql_for_slots
+            if source_kind == SOURCE_KIND_SLOTS
+            else build_union_view_sql
+        )
+        cur.execute(build(view, synced, companion))
+    cur.execute(build_asserted_view_sql(_asserted_ref(view), synced, source_kind=source_kind))
 
 
 def truncate_companion(cur: Any, companion: str) -> None:
@@ -587,4 +629,6 @@ def drop_companion(cur: Any, companion: str) -> None:
 
 
 def drop_view(cur: Any, view: str) -> None:
+    """Drop the union view and the asserted view next to it (both depend on the ``_sync`` table)."""
     cur.execute(f"DROP VIEW IF EXISTS {view}")
+    cur.execute(f"DROP VIEW IF EXISTS {_asserted_ref(view)}")

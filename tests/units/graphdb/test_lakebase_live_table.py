@@ -87,7 +87,7 @@ class TestUnionViewWithLive:
     def test_a_served_live_table_joins_the_view(self):
         statements = self._ensure(comment=_companion_ddl.LIVE_SERVING_COMMENT)
 
-        assert statements[-1] == _companion_ddl.build_union_view_sql_with_live(
+        assert statements[-2] == _companion_ddl.build_union_view_sql_with_live(
             "g_v1", "g_v1_sync", "g_v1__app", "g_v1_live"
         )
 
@@ -95,7 +95,7 @@ class TestUnionViewWithLive:
     def test_an_absent_or_retired_live_table_stays_out_of_the_view(self, comment):
         statements = self._ensure(comment=comment)
 
-        assert statements[-1] == _companion_ddl.build_union_view_sql("g_v1", "g_v1_sync", "g_v1__app")
+        assert statements[-2] == _companion_ddl.build_union_view_sql("g_v1", "g_v1_sync", "g_v1__app")
 
     def test_a_schema_qualified_view_looks_for_its_live_table_by_bare_name(self):
         cur = MagicMock()

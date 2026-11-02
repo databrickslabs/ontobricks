@@ -9,12 +9,19 @@ with what it knows.
 
 Source: ``…_data`` (table or materialized view — the complete graph, slots and
 batch branch) keyed on ``LAKEFLOW_SYNC_PRIMARY_KEY``; the R2RML gateway VIEW
-when ``…_data`` is not a copy (a pass-through VIEW, or nothing built yet).
-``…_slots`` is never a source in this release, even when it holds every
-triple (no batch mapping): asserted-only readers (entity-search rebuild,
-``include_inferred=False`` reads, BFS expansion) query the ``_sync`` table
-directly and would see one row per slot and the blank attribute objects
-``…_data`` filters out.
+when ``…_data`` is not a copy (a pass-through VIEW, or nothing built yet); and
+the ``…_slots`` streaming table, keyed on ``SLOT_SYNC_PRIMARY_KEY``, when the
+schedule is triggered or continuous and the slots carry the whole graph (a slot
+pipeline ran and the build counted no batch mapping). A streaming table has a
+change feed every workspace can sync from; the ``…_data`` materialized view
+only has one where the MV change-feed preview is enabled (measured live: the
+sync pipeline fails with ``MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA``
+without it). Asserted-only readers (entity-search rebuild,
+``include_inferred=False`` reads, BFS expansion) query the Postgres asserted
+view — distinct, non-blank — rather than the ``_sync`` table, so a slots source
+reads like ``…_data`` to them. A build that fell back to the full path has no
+live slots and syncs ``…_data`` again (a source switch recreates the
+registration: delete, purge, full resync).
 
 Schedule: the mode's schedule (``full`` → snapshot, ``incremental`` →
 triggered, ``microbatch`` → continuous) capped by the configured
@@ -77,6 +84,8 @@ class TwinLakebaseSync:
             mode_effective=scheduled,
             configured_sync_table_mode=getattr(pipe.store, "sync_table_mode", "snapshot"),
             source_is_view=getattr(pipe, "data_relation_mode", None) not in _COPIED_RELATIONS,
+            slots_table=getattr(pipe, "slots_table", "") or "",
+            batch_mappings=getattr(pipe, "batch_mappings", None),
         )
 
     @staticmethod
@@ -100,17 +109,35 @@ class TwinLakebaseSync:
         mode_effective: str,
         configured_sync_table_mode: Any,
         source_is_view: bool = False,
+        slots_table: str = "",
+        batch_mappings: Any = None,
     ) -> SyncPlan:
         """Decide the source, primary key and schedule of the synced table.
 
         *source_is_view* means *data_table* is not a copy of the triples (a
         pass-through VIEW without ``object_hash``): Lakeflow then syncs the
-        gateway VIEW, as a snapshot.
+        gateway VIEW, as a snapshot. A triggered or continuous schedule syncs
+        *slots_table* instead of *data_table* when the slots carry the whole
+        graph: *batch_mappings* is the build's count of join / aggregate /
+        ``sql_query`` / relationship mappings and must be exactly ``0`` (a
+        missing count — no slot pipeline, a fallback, an older trace — keeps
+        ``…_data``).
         """
-        from back.core.graphdb.lakebase._companion_ddl import LAKEFLOW_SYNC_PRIMARY_KEY
+        from back.core.graphdb.lakebase._companion_ddl import (
+            LAKEFLOW_SYNC_PRIMARY_KEY,
+            SLOT_SYNC_PRIMARY_KEY,
+            SOURCE_KIND_SLOTS,
+        )
 
         if data_table and not source_is_view:
             schedule = TwinLakebaseSync._schedule(mode_effective, configured_sync_table_mode)
+            whole_graph = (
+                isinstance(batch_mappings, int)
+                and not isinstance(batch_mappings, bool)
+                and batch_mappings == 0
+            )
+            if schedule != "snapshot" and slots_table and whole_graph:
+                return SyncPlan(slots_table, SLOT_SYNC_PRIMARY_KEY, schedule, SOURCE_KIND_SLOTS)
             return SyncPlan(data_table, LAKEFLOW_SYNC_PRIMARY_KEY, schedule)
         return SyncPlan(view_table, LAKEFLOW_SYNC_PRIMARY_KEY, "snapshot")
 
@@ -127,6 +154,7 @@ class TwinLakebaseSync:
             **plan.ensure_kwargs(),
         )
         pipe.sync_source, pipe.sync_mode_effective = plan.source_fqn, plan.sync_mode
+        pipe.sync_source_kind = plan.source_kind
         return synced
 
     @staticmethod

@@ -137,7 +137,7 @@ class TestScheduledLakeflowSource:
         _apply(store, _warehouse(log), domain=_domain())
 
         [view] = [e for e in log if e[0] == "union_view"]
-        assert view[2] == {}
+        assert view[2] == {"source_kind": "triples"}
 
     def test_ensure_drops_the_union_view_only_through_its_delete_hook(self):
         log: list = []
@@ -373,6 +373,29 @@ class TestScheduledTickKeepsTheIncrementalView:
 
         assert f"REFRESH MATERIALIZED VIEW {_DATA}" in _statements(log)
         assert [event[0] for event in slot_runner.log] == ["find"]  # its SQL is checked
+
+    def test_a_tick_whose_slots_carry_the_whole_graph_syncs_the_slots(self, slot_runner):
+        """Same decision as the main build: a kept view, live slots, no batch mapping."""
+        log: list = []
+        mappings = _mappings(batch=False)
+
+        self._tick("microbatch", log, mappings=mappings)
+
+        [(_, _, kwargs)] = _ensures(log)
+        assert kwargs["source_table_full_name"] == mappings["spec"].slots_fqn
+        assert kwargs["primary_key_columns"] == ["map_id", "source_key", "predicate"]
+        assert kwargs["sync_mode"] == "continuous"
+        [view] = [e for e in log if e[0] == "union_view"]
+        assert view[2] == {"source_kind": "slots"}
+
+    def test_a_tick_with_a_batch_mapping_keeps_syncing_the_data_view(self, slot_runner):
+        log: list = []
+
+        self._tick("microbatch", log, mappings=_mappings(batch=True))
+
+        [(_, _, kwargs)] = _ensures(log)
+        assert kwargs["source_table_full_name"] == _DATA
+        assert kwargs["primary_key_columns"] == ["subject", "predicate", "object_hash"]
 
     def test_an_incremental_view_without_row_local_mappings_needs_no_slot_update(
         self, slot_runner

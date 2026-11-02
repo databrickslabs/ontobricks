@@ -47,6 +47,7 @@ _TRACE_KEYS = {
     "slot_pipeline_id",
     "slots_table",
     "sync_source",
+    "sync_source_kind",
     "sync_mode_effective",
 }
 _FACT_KEYS = {

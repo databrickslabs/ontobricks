@@ -225,8 +225,8 @@ class LakebaseFlatStore(LakebaseBase):
         return self.physical_table_id(name)
 
     def synced_table_name(self, table_name: str) -> str:
-        """Return the ``_sync`` table name so callers can query without materialised triples."""
-        return _companion_ddl.synced_phy(table_name)
+        """The asserted view over ``_sync`` (:func:`_companion_ddl.asserted_view_phy`) for asserted-only reads."""
+        return _companion_ddl.asserted_view_phy(table_name)
 
     def get_inferred_triple_count(self, table_name: str) -> int:
         """Return the count of triples in the companion (reasoning / app-written) table.

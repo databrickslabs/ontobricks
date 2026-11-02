@@ -253,6 +253,7 @@ class TwinBuildPostMaterialize:
             "slot_pipeline_id": text(pipe, "slot_pipeline_id"),
             "slots_table": text(pipe, "slots_table"),
             "sync_source": text(pipe, "sync_source"),
+            "sync_source_kind": text(pipe, "sync_source_kind"),
             "sync_mode_effective": text(pipe, "sync_mode_effective"),
         }
 
