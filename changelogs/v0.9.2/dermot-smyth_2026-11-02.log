@@ -488,6 +488,13 @@ probes live services and hangs without network).
 ## Incremental triple materialization — roll-up (Tasks 0-8)
 ================================================================================
 
+Context (branch state): `origin/master` (the default branch) had no commits beyond
+the merge base b3f70b9a after `git fetch --all`; the release line `origin/0.9.2`
+(version 0.9.2, six fixes) is merged into the branch (a3481562), which is why these
+changelog files live under v0.9.2 and the README gained a "What's new in 0.9.2"
+section. The design document was re-read against the branch; the traceability
+table is in docs/incremental-materialization.md ("Design traceability").
+
 Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 (`realtime` reserved) for the knowledge-graph build, implemented over
 2026-11-01 (Tasks 0-5, 7: changelogs/v0.9.1/dermot-smyth_2026-11-01.log) and

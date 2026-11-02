@@ -20,6 +20,7 @@ Settings) and defaults to `full`, so existing domains behave as before.
 - [Reconciliation](#reconciliation)
 - [Preview enrolment](#preview-enrolment)
 - [Verification](#verification)
+- [Design traceability](#design-traceability)
 - [Known limitations](#known-limitations)
 - [Realtime (deferred)](#realtime-deferred)
 <!-- /toc -->
@@ -390,6 +391,32 @@ integration workspace, with `ONTOBRICKS_EXTERNAL_WAREHOUSE=1` and
 schema if absent).
 
 Without those variables the test is skipped, so the unit run stays offline.
+
+## Design traceability
+
+Requirements of the design document (`[Design] Incremental Triple Materialization | OntoBricks`)
+against this release. ✅ implemented · ◐ implemented with a documented deviation · ⛔ deferred.
+
+| Phase | Requirement | Status | Where |
+|---|---|---|---|
+| 1 P0 | Compute the source once (`count`, stream, Lakeflow source read `_data`) | ✅ | `TwinBuildPostMaterialize.triples_source_relation`, `SyncPlan` |
+| 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples; the MERGE *skip* (no source change) keeps it |
+| 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | SCD1 physical deletes stand in for a `deleted` column |
+| 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ◐ | created at runtime by `SlotPipelineRunner` (domains are not known at deploy time); `resources/triple_slots.pipeline.yml.example` documents the resource |
+| 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ◐ | `_data` MV ✅; `_graph` stays a VIEW (Lakehouse//RT reads `_data`); `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
+| 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
+| 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ◐ | from `_data` only (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode` |
+| 1 P0 | Build-run trace: mode, refresh technique, fallback reason | ✅ | `stats.materialization`; cockpit column, details and status card |
+| 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ◐ | Lakebase ✅ (`TwinNetChangeApply`); Neo4j streams in full — its model has no place to mark a triple as inferred |
+| 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | `DeltaMergeMaterializer`, `TwinMergeFallback` |
+| 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh |
+| 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline |
+| 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | `DeltaFlatStore` reads-only fallback as the caller |
+| 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | `ContinuousSyncWait`; Postgres union view |
+| 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | `GET /dtwin/incremental/status` + status card; fallback events in the trace |
+| 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh |
+| 3 P2 | `realtime` (RTM, `SlotDiffProcessor`, `_live`) | ⛔ | deferred by decision; enum reserved, resolves to `microbatch` |
+| Verif. | Unit · property (Hypothesis slot fold) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold_property.py`, `tests/external/…` |
 
 ## Known limitations
 
