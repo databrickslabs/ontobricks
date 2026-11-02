@@ -8,7 +8,9 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.streaming import SlotRowProjector
-from jobs.triple_stream.main import LIVE_COLUMNS, TripleStreamJob, _LiveSinkWriter
+from jobs.triple_stream.LiveSink import LIVE_COLUMNS, LiveSink
+from jobs.triple_stream.main import TripleStreamJob
+from jobs.triple_stream.TripleStreamEnvelope import TripleStreamEnvelope
 
 pytestmark = pytest.mark.unit
 
@@ -37,7 +39,7 @@ _ARGS = [
 
 
 def _projectors() -> dict:
-    return TripleStreamJob.projectors_by_table(
+    return TripleStreamEnvelope.projectors_by_table(
         SlotRowProjector.for_mappings({"C": _MAPPING}, [], base_uri="http://ex.org/")
     )
 
@@ -129,19 +131,19 @@ class TestEnvelopes:
         return json.dumps({"source": {"table": "Main.Sales.Customers"}, **record})
 
     def test_an_insert_reads_the_after_image(self):
-        envelope = TripleStreamJob.parse_envelope(self._envelope(op="c", after={"id": 1, "name": "a"}))
+        envelope = TripleStreamEnvelope.parse(self._envelope(op="c", after={"id": 1, "name": "a"}))
 
         assert envelope == {"op": "upsert", "row": {"id": 1, "name": "a"}, "before": None, "table": _TABLE}
 
     def test_an_update_keeps_its_pre_image(self):
-        envelope = TripleStreamJob.parse_envelope(
+        envelope = TripleStreamEnvelope.parse(
             self._envelope(op="u", before={"id": 1}, after={"id": 2})
         )
 
         assert envelope["row"] == {"id": 2} and envelope["before"] == {"id": 1}
 
     def test_a_delete_reads_the_before_image(self):
-        envelope = TripleStreamJob.parse_envelope(
+        envelope = TripleStreamEnvelope.parse(
             self._envelope(op="d", before={"id": 1}, after=None)
         )
 
@@ -152,7 +154,7 @@ class TestEnvelopes:
             {"schema": {}, "payload": {"op": "u", "after": {"id": 2}, "source": {"table": _TABLE}}}
         )
 
-        assert TripleStreamJob.parse_envelope(wrapped.encode())["row"] == {"id": 2}
+        assert TripleStreamEnvelope.parse(wrapped.encode())["row"] == {"id": 2}
 
     @pytest.mark.parametrize(
         "value",
@@ -167,14 +169,14 @@ class TestEnvelopes:
         ids=["tombstone", "garbage", "truncate", "no-image", "no-table", "not-an-object"],
     )
     def test_records_without_a_change_are_skipped(self, value):
-        assert TripleStreamJob.parse_envelope(value) is None
+        assert TripleStreamEnvelope.parse(value) is None
 
 
 class TestExplode:
     def test_one_input_row_per_mapping_of_the_table(self):
         envelope = {"op": "upsert", "row": {"id": 7, "name": "Ada"}, "table": _TABLE}
 
-        [row] = TripleStreamJob.explode(envelope, 42, _projectors())
+        [row] = TripleStreamEnvelope.explode(envelope, 42, _projectors())
 
         assert row["source_key"] == "7" and row["op"] == "upsert" and row["seq"] == 42
         assert json.loads(row["row_json"]) == {"id": "7", "name": "Ada"}
@@ -184,7 +186,7 @@ class TestExplode:
         envelope = {"op": "upsert", "row": {"id": 7, "name": 3.5}, "before": None, "table": _TABLE}
         types = {_TABLE: {"id": "int", "name": "double"}}
 
-        [row] = TripleStreamJob.explode(envelope, 1, _projectors(), types)
+        [row] = TripleStreamEnvelope.explode(envelope, 1, _projectors(), types)
 
         assert json.loads(row["row_json"]) == {"id": "7", "name": "3.5"}
 
@@ -196,7 +198,7 @@ class TestExplode:
             "table": _TABLE,
         }
 
-        rows = TripleStreamJob.explode(envelope, 42, _projectors())
+        rows = TripleStreamEnvelope.explode(envelope, 42, _projectors())
 
         assert [(r["source_key"], r["op"], r["seq"]) for r in rows] == [
             ("7", "delete", 42),
@@ -207,24 +209,52 @@ class TestExplode:
     def test_an_update_that_keeps_the_key_is_one_upsert(self):
         envelope = {"op": "upsert", "row": {"id": 7, "name": "B"}, "before": {"id": 7, "name": "A"}, "table": _TABLE}
 
-        assert [r["op"] for r in TripleStreamJob.explode(envelope, 1, _projectors())] == ["upsert"]
+        assert [r["op"] for r in TripleStreamEnvelope.explode(envelope, 1, _projectors())] == ["upsert"]
 
     def test_a_null_key_yields_nothing(self):
         envelope = {"op": "upsert", "row": {"id": None, "name": "x"}, "table": _TABLE}
 
-        assert TripleStreamJob.explode(envelope, 1, _projectors()) == []
+        assert TripleStreamEnvelope.explode(envelope, 1, _projectors()) == []
 
     def test_another_table_yields_nothing(self):
         envelope = {"op": "upsert", "row": {"id": 1}, "table": "main.hr.staff"}
 
-        assert TripleStreamJob.explode(envelope, 1, _projectors()) == []
+        assert TripleStreamEnvelope.explode(envelope, 1, _projectors()) == []
 
-    def test_records_are_parsed_then_exploded(self):
+    def test_records_are_parsed_then_exploded_and_skips_are_reported(self):
         value = json.dumps({"op": "c", "after": {"id": 1, "name": "a"}, "source": {"table": _TABLE}})
+        other = json.dumps({"op": "c", "after": {"id": 1}, "source": {"table": "main.hr.staff"}})
+        skipped: list = []
 
-        rows = TripleStreamJob.explode_records([(value, 5), ("garbage", 6), (value, None)], _projectors())
+        rows = TripleStreamEnvelope.explode_records(
+            [(value, 5), ("garbage", 6), (value, None), (other, 7)],
+            _projectors(),
+            on_skip=skipped.append,
+        )
 
         assert [row["seq"] for row in rows] == [5]
+        assert skipped == ["unparsable", "no_seq", "unmapped_table"]
+
+    def test_one_bad_value_is_skipped_not_raised(self):
+        bad = json.dumps({"op": "c", "after": {"id": "x", "name": "a"}, "source": {"table": _TABLE}})
+        good = json.dumps({"op": "c", "after": {"id": 2, "name": "b"}, "source": {"table": _TABLE}})
+        skipped: list = []
+
+        rows = TripleStreamEnvelope.explode_records(
+            [(bad, 1), (good, 2)], _projectors(), {_TABLE: {"id": "int"}}, on_skip=skipped.append
+        )
+
+        assert [row["source_key"] for row in rows] == ["2"] and skipped == ["bad_value"]
+
+    def test_a_stock_debezium_bare_table_name_matches_the_mapping_by_leaf(self):
+        envelope = {"op": "upsert", "row": {"id": 7, "name": "Ada"}, "before": None, "table": "customers"}
+
+        assert len(TripleStreamEnvelope.explode(envelope, 1, _projectors())) == 1
+
+    def test_an_ambiguous_leaf_name_matches_nothing(self):
+        twins = {**_projectors(), "main.crm.customers": _projectors()[_TABLE]}
+
+        assert TripleStreamEnvelope.table_of("customers", twins) is None
 
     def test_the_mappings_file_round_trips(self, tmp_path):
         path = tmp_path / "m.json"
@@ -236,13 +266,11 @@ class TestExplode:
 
 
 class TestSink:
-    def test_the_upsert_keeps_the_newest_seq_per_slot(self):
-        assert TripleStreamJob.upsert_sql("ontobricks_graph.sales_v3_live") == (
+    def test_one_change_is_upserted_when_newer(self):
+        assert LiveSink.upsert_sql("ontobricks_graph.sales_v3_live") == (
             "INSERT INTO ontobricks_graph.sales_v3_live AS live (map_id, source_key, predicate, "
             "subject, object, object_hash, deleted, seq, updated_at) "
-            "SELECT DISTINCT ON (map_id, source_key, predicate) map_id, source_key, predicate, "
-            "subject, object, object_hash, deleted, seq, now() FROM ob_live_stage "
-            "ORDER BY map_id, source_key, predicate, seq DESC "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now()) "
             "ON CONFLICT (map_id, source_key, predicate) DO UPDATE SET "
             "subject = EXCLUDED.subject, object = EXCLUDED.object, "
             "object_hash = EXCLUDED.object_hash, deleted = EXCLUDED.deleted, seq = EXCLUDED.seq, "
@@ -251,55 +279,41 @@ class TestSink:
 
     def test_an_unsafe_table_name_is_refused(self):
         with pytest.raises(ValueError):
-            TripleStreamJob.upsert_sql("live; drop table x")
+            LiveSink(lambda: None, "live; drop table x")
 
-    def test_a_batch_is_copied_then_upserted_in_one_transaction(self):
+    def test_each_change_is_upserted_as_it_arrives(self):
+        """Real-Time Mode keeps a batch open for the checkpoint interval: no buffering."""
         connection = _Connection()
+        sink = LiveSink(lambda: connection, "g_v3_live")
         change = {column: f"v-{column}" for column in LIVE_COLUMNS} | {"deleted": False, "seq": 3}
-
-        assert TripleStreamJob.write_changes(connection, "g_v3_live", [change]) == 1
-
-        assert connection.cursor_.statements == [
-            TripleStreamJob.staging_sql(),
-            TripleStreamJob.copy_sql(),
-            TripleStreamJob.upsert_sql("g_v3_live"),
-        ]
-        assert connection.cursor_.copied == [tuple(change[c] for c in LIVE_COLUMNS)]
-        assert connection.commits == 1
-
-    def test_an_empty_batch_touches_nothing(self):
-        connection = _Connection()
-
-        assert TripleStreamJob.write_changes(connection, "g_v3_live", []) == 0
-        assert connection.commits == 0
-
-    def test_the_foreach_writer_upserts_a_partition_on_close(self):
-        connection = _Connection()
-        sink = _LiveSinkWriter(lambda: connection, "g_v3_live")
-        change = {column: None for column in LIVE_COLUMNS} | {"seq": 1, "deleted": True}
 
         assert sink.open(0, 1) is True
         sink.process(SimpleNamespace(asDict=lambda: change))
+
+        assert connection.autocommit is True
+        assert connection.cursor_.executed == [
+            (LiveSink.upsert_sql("g_v3_live"), tuple(change[c] for c in LIVE_COLUMNS))
+        ]
+        sink.process(change | {"seq": 4})
+        assert len(connection.cursor_.executed) == 2
+
+    def test_close_releases_the_connection(self):
+        connection = _Connection()
+        sink = LiveSink(lambda: connection, "g_v3_live")
+        sink.open(0, 1)
+
         sink.close(None)
 
-        assert connection.commits == 1 and connection.closed
-
-    def test_a_failed_partition_is_not_written(self):
-        connection = _Connection()
-        sink = _LiveSinkWriter(lambda: connection, "g_v3_live")
-        sink.open(0, 1)
-        sink.process({"seq": 1})
-
-        sink.close(RuntimeError("task failed"))
-
-        assert connection.commits == 0
+        assert connection.closed
+        sink.close(RuntimeError("task failed"))  # no connection left: nothing to do
 
 
 class TestTrigger:
     class _Writer:
-        def __init__(self, *, refuse_real_time=False):
-            self.refuse = refuse_real_time
+        def __init__(self, *, refuse_real_time=False, refuse_start=False):
+            self.refuse, self.refuse_start = refuse_real_time, refuse_start
             self.trigger_kwargs = None
+            self.started = 0
 
         def trigger(self, **kwargs):
             if "realTime" in kwargs and self.refuse:
@@ -307,49 +321,66 @@ class TestTrigger:
             self.trigger_kwargs = kwargs
             return self
 
+        def start(self):
+            if self.refuse_start and "realTime" in (self.trigger_kwargs or {}):
+                raise RuntimeError("[UNSUPPORTED_OUTPUT_MODE] real-time mode")
+            self.started += 1
+            return "query"
+
     def _spark(self, *, refuse_conf=False):
         def set_conf(key, value):
-            if refuse_conf:
+            if refuse_conf and value == "true":
                 raise RuntimeError("[CONFIG_NOT_AVAILABLE] realTimeMode")
             confs[key] = value
 
         confs: dict = {}
         return SimpleNamespace(conf=SimpleNamespace(set=set_conf)), confs
 
-    def test_real_time_mode_turns_the_conf_on_and_sets_the_trigger(self):
+    def test_real_time_mode_turns_the_conf_on_sets_the_trigger_and_starts(self):
         spark, confs = self._spark()
         writer = self._Writer()
 
-        _writer, mode = TripleStreamJob.with_trigger(spark, writer, TripleStreamJob.parse_args(_ARGS))
+        query, mode = TripleStreamJob.start(spark, writer, TripleStreamJob.parse_args(_ARGS))
 
-        assert mode == "real_time"
+        assert (query, mode) == ("query", "real_time")
         assert confs == {"spark.databricks.streaming.realTimeMode.enabled": "true"}
-        assert writer.trigger_kwargs == {"realTime": "5 minutes"}
+        assert writer.trigger_kwargs == {"realTime": "5 minutes"} and writer.started == 1
 
-    @pytest.mark.parametrize(("refuse_conf", "refuse_trigger"), [(True, False), (False, True)])
-    def test_a_runtime_without_it_falls_back_to_micro_batches(self, refuse_conf, refuse_trigger):
-        spark, _ = self._spark(refuse_conf=refuse_conf)
-        writer = self._Writer(refuse_real_time=refuse_trigger)
+    @pytest.mark.parametrize(
+        ("refuse_conf", "refuse_trigger", "refuse_start"),
+        [(True, False, False), (False, True, False), (False, False, True)],
+        ids=["conf", "trigger", "start"],
+    )
+    def test_a_runtime_without_it_falls_back_to_micro_batches(
+        self, refuse_conf, refuse_trigger, refuse_start
+    ):
+        spark, confs = self._spark(refuse_conf=refuse_conf)
+        writer = self._Writer(refuse_real_time=refuse_trigger, refuse_start=refuse_start)
 
-        _writer, mode = TripleStreamJob.with_trigger(spark, writer, TripleStreamJob.parse_args(_ARGS))
+        _query, mode = TripleStreamJob.start(spark, writer, TripleStreamJob.parse_args(_ARGS))
 
         assert mode == "micro_batch" and writer.trigger_kwargs == {"processingTime": "10 seconds"}
+        assert writer.started == 1
+        assert confs.get("spark.databricks.streaming.realTimeMode.enabled", "false") == "false"
 
     def test_micro_batches_on_request(self):
         spark, confs = self._spark()
         writer = self._Writer()
 
-        TripleStreamJob.with_trigger(
-            spark, writer, TripleStreamJob.parse_args([*_ARGS, "--no-real-time-mode"])
-        )
+        TripleStreamJob.start(spark, writer, TripleStreamJob.parse_args([*_ARGS, "--no-real-time-mode"]))
 
         assert confs == {} and writer.trigger_kwargs == {"processingTime": "10 seconds"}
+
+    def test_the_state_ttl_defaults_to_three_days_in_processing_time_mode(self):
+        args = TripleStreamJob.parse_args(_ARGS)
+
+        assert args.state_ttl_hours == 72
+        assert TripleStreamJob.time_mode(args.state_ttl_hours) == "ProcessingTime"
 
 
 class _Cursor:
     def __init__(self):
-        self.statements: list[str] = []
-        self.copied: list[tuple] = []
+        self.executed: list = []
 
     def __enter__(self):
         return self
@@ -357,37 +388,18 @@ class _Cursor:
     def __exit__(self, *exc):
         return False
 
-    def execute(self, sql):
-        self.statements.append(sql)
-
-    def copy(self, sql):
-        self.statements.append(sql)
-        cursor = self
-
-        class _Copy:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *exc):
-                return False
-
-            def write_row(self, row):
-                cursor.copied.append(row)
-
-        return _Copy()
+    def execute(self, sql, params=None):
+        self.executed.append((sql, params))
 
 
 class _Connection:
     def __init__(self):
         self.cursor_ = _Cursor()
-        self.commits = 0
+        self.autocommit = False
         self.closed = False
 
     def cursor(self):
         return self.cursor_
-
-    def commit(self):
-        self.commits += 1
 
     def close(self):
         self.closed = True
