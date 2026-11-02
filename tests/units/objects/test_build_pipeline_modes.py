@@ -942,6 +942,49 @@ class TestLakebaseSyncPlanFromThePipeline:
         assert TwinLakebaseSync.sync_plan(pipe) == SyncPlan(_DATA, _TRIPLE_KEY, "continuous")
 
 
+class TestSyncScheduleSurvivesARuntimeFallback:
+    """The Lakebase schedule follows the resolver, not a transient incremental failure.
+
+    A snapshot registration after one failed build (and back to triggered after
+    the next good one) deletes, purges and resyncs the synced table twice; the
+    CTAS ``_data`` the fallback builds has row tracking and ``object_hash``, so a
+    triggered sync reads it fine.
+    """
+
+    def test_a_runtime_fallback_keeps_the_resolved_schedule_mode(self):
+        pipe = _pipeline("incremental", backend="lakebase")
+        warehouse = _Warehouse([], fail_on=f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}")
+
+        _run(pipe, warehouse=warehouse)
+
+        assert pipe.mode_decision.effective == "full"
+        assert pipe.sync_schedule_mode == "incremental"
+
+    def test_a_full_decision_schedules_a_snapshot(self):
+        pipe = _pipeline("incremental", backend="lakebase")
+
+        _run(pipe, warehouse=_Warehouse([], tracked=False))
+
+        assert pipe.sync_schedule_mode == "full"
+
+    def test_a_failed_build_keeps_the_triggered_registration(self):
+        pipe = _streaming.TestApplyViaSyncedPipeline()._synced_pipe()
+        pipe.mode_decision = ModeDecision(
+            "incremental", "full", "incremental_failed:InfrastructureError"
+        )
+        pipe.sync_schedule_mode = "incremental"
+        pipe.data_table = f"{pipe.view_table}_data"
+        pipe.data_relation_mode = "table"
+        pipe.store.sync_table_mode = "triggered"
+
+        assert pipe._apply_via_synced_pipeline() is True
+
+        assert pipe._mgr.ensure.call_args.kwargs["sync_mode"] == "triggered"
+        fields = TwinBuildPostMaterialize.trace_fields(pipe)
+        assert fields["sync_mode_effective"] == "triggered"
+        assert fields["materialization_mode_effective"] == "full"
+
+
 class TestSyncedApplyUsesThePlan:
     """``_apply_via_synced_pipeline`` registers, refreshes, reads and traces what the plan says."""
 

@@ -239,6 +239,7 @@ class TwinMergeFallback:
         decision = pipe.mode_decision
         pipe.data_table, pipe.data_relation_mode = data, "table"
         pipe.mode_decision = ModeDecision(decision.requested, "incremental", decision.reason)
+        pipe.sync_schedule_mode = "incremental"
         pipe.strategy, pipe.fingerprint = "merge", fingerprint
 
     @staticmethod

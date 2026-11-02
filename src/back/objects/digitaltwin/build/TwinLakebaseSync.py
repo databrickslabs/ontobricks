@@ -48,12 +48,24 @@ class TwinLakebaseSync:
 
     @staticmethod
     def sync_plan(pipe: Any) -> SyncPlan:
-        """:meth:`sync_plan_for` from the running pipeline's relation and mode facts."""
+        """:meth:`sync_plan_for` from the running pipeline's relation and mode facts.
+
+        The schedule follows ``sync_schedule_mode``, the resolver's decision
+        before any runtime fallback (a MERGE promotion sets ``incremental``):
+        a transient slot-pipeline or MV failure must not re-register a
+        triggered/continuous table as a snapshot (delete, purge, full resync)
+        and back on the next good build. The CTAS ``…_data`` such a fallback
+        builds has row tracking and ``object_hash``, so the schedule still
+        holds. Without it, the effective mode decides.
+        """
         decision = getattr(pipe, "mode_decision", None)
+        scheduled = getattr(pipe, "sync_schedule_mode", "")
+        if not (isinstance(scheduled, str) and scheduled):
+            scheduled = getattr(decision, "effective", "full")
         return TwinLakebaseSync.sync_plan_for(
             view_table=pipe.view_table,
             data_table=getattr(pipe, "data_table", "") or "",
-            mode_effective=getattr(decision, "effective", "full"),
+            mode_effective=scheduled,
             configured_sync_table_mode=getattr(pipe.store, "sync_table_mode", "snapshot"),
             source_is_view=getattr(pipe, "data_relation_mode", None) not in _COPIED_RELATIONS,
         )

@@ -854,6 +854,16 @@ class TestMergeInsteadOfCtas:
             "table",
         )
 
+    def test_the_merge_build_syncs_on_the_incremental_schedule(self):
+        """The scheduled tick registers TRIGGERED for this domain (TwinMergeFallback.promotes)."""
+        pipe = _merge_pipeline(backend="lakebase")
+        pipe.store.sync_table_mode = "triggered"
+
+        _modes._run(pipe)
+
+        assert pipe.sync_schedule_mode == "incremental"
+        assert _modes.TwinLakebaseSync.sync_plan(pipe).sync_mode == "triggered"
+
     def test_a_slot_pipeline_failure_mentioning_serverless_also_merges(self):
         pipe = _merge_pipeline()
         pipe.settings.serverless_pipelines_enabled = True

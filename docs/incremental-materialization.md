@@ -34,8 +34,13 @@ Settings) and defaults to `full`, so existing domains behave as before.
 The Lakebase schedule is the mode's schedule capped by
 `graph_engine_config.lakebase.sync_table_mode` (snapshot < triggered < continuous):
 the default `snapshot` keeps every domain on snapshots until an operator raises the
-cap. The synced table is always registered on `_data` (never on `_slots`); a
-pass-through `_data` view falls back to the gateway VIEW as a snapshot.
+cap. The schedule follows the resolver's decision, not a runtime fallback: when the
+slot pipeline or the MV fails during a build and `_data` is rebuilt by CTAS (row
+tracking and `object_hash` on), the synced table keeps its triggered/continuous
+registration instead of being deleted and recreated as a snapshot (and back on the
+next good build); `materialization_mode_effective` still reports `full`. The synced
+table is always registered on `_data` (never on `_slots`); a pass-through `_data`
+view falls back to the gateway VIEW as a snapshot.
 
 ### What the slot pipeline does
 

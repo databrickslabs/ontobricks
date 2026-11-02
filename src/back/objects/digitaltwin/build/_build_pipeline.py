@@ -288,6 +288,8 @@ class _BuildPipeline:
         # What the Lakebase synced table was registered on (TwinLakebaseSync.register).
         self.sync_source: str = ""
         self.sync_mode_effective: str = ""
+        # The resolver's mode the sync schedule follows (a runtime fallback keeps it).
+        self.sync_schedule_mode: str = ""
         self.slot_pipeline_id: str = ""
         self.refresh_technique: str = ""
         self.mode_fallback_detail: str = ""  # message of the incremental fallback, if any

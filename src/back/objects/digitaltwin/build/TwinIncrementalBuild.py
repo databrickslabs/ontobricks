@@ -125,6 +125,8 @@ class TwinIncrementalBuild:
             pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
                 pipe, source_tables=spec.source_tables
             )
+            # The Lakebase sync schedule follows this decision; _fall_back keeps it.
+            pipe.sync_schedule_mode = pipe.mode_decision.effective
             if pipe.mode_decision.effective == "full":
                 TwinIncrementalBuild._leave(pipe)
                 return False
