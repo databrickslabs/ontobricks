@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import re
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -81,22 +83,33 @@ class TestMeasure:
         assert probe.measure(changes=1) == {"live": [None]}
         assert sum(clock.sleeps) == 5.0
 
-    def test_each_path_is_timed_on_its_own(self, script):
-        clock = _Clock()
+    def test_each_path_is_polled_on_its_own_thread(self, script):
+        """A slow path never delays the stamp of a fast one (realtime p99 < 1 s needs it)."""
         written: dict = {}
-        readers = {
-            "fast": lambda marker: clock.now - written["at"] >= 0.5,
-            "slow": lambda marker: clock.now - written["at"] >= 3.0,
-        }
+
+        def slow(shown: str) -> bool:
+            time.sleep(0.2)
+            return time.monotonic() - written["at"] >= 0.4
+
         probe = script.FreshnessProbe(
-            lambda marker: written.update(at=clock.now),
-            readers,
-            poll_s=0.5,
-            clock=clock,
-            sleep=clock.sleep,
+            lambda marker: written.update(at=time.monotonic()),
+            {"live": lambda shown: True, "graph": slow},
+            poll_s=0.01,
         )
 
-        assert probe.measure(changes=1) == {"fast": [0.5], "slow": [3.0]}
+        latencies = probe.measure(changes=1)
+
+        assert latencies["live"][0] < 0.1 <= 0.4 <= latencies["graph"][0]
+
+    def test_the_paths_look_for_the_object_the_write_shows(self, script):
+        asked: list = []
+        probe = script.FreshnessProbe(
+            lambda marker: "1234.00", {"data": lambda shown: asked.append(shown) or True}
+        )
+
+        probe.measure(changes=1)
+
+        assert asked == ["1234.00"]
 
     def test_every_change_writes_a_new_marker(self, script):
         markers: list[str] = []
@@ -164,19 +177,22 @@ class TestVerdict:
 
 
 class TestWarehouseSQL:
-    def test_the_update_escapes_its_values(self, script):
-        sql = script._Warehouse.update_sql("main.s.customers", "id", "4'2", "name", "ob-x")
+    def test_the_update_casts_and_escapes_its_values(self, script):
+        sql = script._Warehouse.update_sql("main.s.customers", "id", "4'2", "name", "ob-x", "string")
 
-        assert sql == "UPDATE main.s.customers SET name = 'ob-x' WHERE id = '4''2'"
+        assert sql == "UPDATE main.s.customers SET name = CAST('ob-x' AS string) WHERE id = '4''2'"
 
     def test_a_null_original_value_is_restored_as_null(self, script):
-        sql = script._Warehouse.update_sql("main.s.customers", "id", "42", "name", None)
+        sql = script._Warehouse.update_sql("main.s.customers", "id", "42", "age", None, "int")
 
-        assert "SET name = NULL" in sql
+        assert "SET age = NULL" in sql
 
-    def test_a_bad_column_is_refused(self, script):
-        with pytest.raises(ValueError, match="Not a column name"):
-            script._Warehouse.update_sql("main.s.customers", "id; DROP", "42", "name", "x")
+    @pytest.mark.parametrize(
+        ("column", "sql_type"), [("id; DROP", "string"), ("name", "string); DROP TABLE x --")]
+    )
+    def test_a_bad_column_or_type_is_refused(self, script, column, sql_type):
+        with pytest.raises(ValueError, match="Not a"):
+            script._Warehouse.update_sql("main.s.customers", "id", "42", column, "x", sql_type)
 
     def test_visibility_looks_for_the_marker_object(self, script):
         assert script._Warehouse.visible_sql("main.kg.t_V1_graph", "ob-1") == (
@@ -187,6 +203,122 @@ class TestWarehouseSQL:
         build, read = SimpleNamespace(), SimpleNamespace(execute_query=lambda sql: [{"hit": 1}])
 
         assert script._Warehouse(build, read).reader("main.kg.t_V1_graph")("ob-1") is True
+
+
+class TestMarkerValue:
+    @pytest.mark.parametrize("sql_type", ["string", "varchar(40)", "text", "character varying"])
+    def test_a_text_column_takes_the_marker(self, script, sql_type):
+        assert script.FreshnessProbe.marker_value("ob-freshness-ab12-3", sql_type) == (
+            "ob-freshness-ab12-3",
+            "ob-freshness-ab12-3",
+        )
+
+    @pytest.mark.parametrize(
+        ("sql_type", "shown"),
+        [("int", r"\d{4}"), ("bigint", r"\d{4}"), ("decimal(10,2)", r"\d{4}\.00"), ("double", r"\d{4}\.0")],
+    )
+    def test_a_numeric_column_takes_a_number_printed_as_cast_prints_it(self, script, sql_type, shown):
+        value, text = script.FreshnessProbe.marker_value("ob-freshness-ab12-3", sql_type)
+
+        assert value.isdigit() and re.fullmatch(shown, text) and text.startswith(value)
+
+    def test_each_change_of_a_run_gets_its_own_number(self, script):
+        values = {script.FreshnessProbe.marker_value(f"ob-freshness-ab12-{i}", "int")[0] for i in range(5)}
+
+        assert len(values) == 5
+
+    def test_another_type_is_a_usage_error(self, script):
+        with pytest.raises(script._UsageError, match="Unsupported value column type"):
+            script.FreshnessProbe.marker_value("ob-freshness-ab12-0", "date")
+
+
+class TestPathsAndGuard:
+    @staticmethod
+    def _args(script, *argv):
+        return script.parse_args(["--source-table", "main.ob_it.ob_it_customers", *argv])
+
+    def test_the_default_paths_follow_the_mode(self, script):
+        assert script.paths_for(self._args(script)) == ["data", "graph"]
+        realtime = self._args(script, "--mode", "realtime", "--pg-dsn", "x", "--live-table", "s.l")
+        assert script.paths_for(realtime) == ["data", "graph", "live"]
+        synced = self._args(script, "--pg-dsn", "x", "--sync-table", "s.t")
+        assert script.paths_for(synced) == ["data", "graph", "sync"]
+
+    def test_a_realtime_run_without_live_fails_fast(self, script):
+        with pytest.raises(script._UsageError, match="live path needs"):
+            script.paths_for(self._args(script, "--mode", "realtime"))
+
+    def test_an_unknown_path_fails_fast(self, script):
+        with pytest.raises(script._UsageError, match="Unknown path"):
+            script.paths_for(self._args(script, "--paths", "data,slots"))
+
+    def test_only_a_fixture_table_is_updated(self, script):
+        script.guard_fixture(self._args(script))
+        with pytest.raises(script._UsageError, match="not a fixture table"):
+            script.guard_fixture(script.parse_args(["--source-table", "main.sales.customers"]))
+
+
+class _OneRowTable:
+    """A warehouse holding one source row (``id = 42``) whose value every path shows at once."""
+
+    def __init__(self, value: str = "Ada"):
+        self.value = value
+
+    def execute_query(self, sql: str):
+        if sql.startswith("DESCRIBE TABLE"):
+            return [{"col_name": "id", "data_type": "int"}, {"col_name": "name", "data_type": "string"}]
+        if sql.startswith("SELECT CAST(name AS STRING)"):
+            return [{"v": self.value}]
+        if sql.startswith("SELECT 1 AS hit"):
+            return [{"hit": 1}] if f"'{self.value}'" in sql else []
+        raise AssertionError(sql)
+
+    def execute_statement(self, sql: str):
+        match = re.search(r"SET name = (NULL|CAST\('([^']*)' AS string\))", sql)
+        self.value = None if match.group(1) == "NULL" else match.group(2)
+        return True
+
+
+class TestRun:
+    def test_it_reconciles_while_the_last_change_is_in_and_then_restores_the_row(self, script, monkeypatch):
+        table = _OneRowTable()
+        seen_at_reconcile: list = []
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        monkeypatch.setattr(
+            script._Warehouse,
+            "reconcile",
+            lambda self, stem, **kw: seen_at_reconcile.append(table.value) or {"pairs": {"view_data": False}},
+        )
+        args = script.parse_args(
+            [
+                "--stem", "main.kg.triplestore_d_V1", "--source-table", "main.ob_it.ob_it_customers",
+                "--key-column", "id", "--key-value", "42", "--value-column", "name",
+                "--changes", "2", "--spacing", "0", "--poll", "0.01",
+            ]
+        )
+
+        report = script.run(args)
+
+        assert seen_at_reconcile[0].startswith("ob-freshness-") and seen_at_reconcile[0].endswith("-1")
+        assert table.value == "Ada"
+        assert report["violations"] == [] and report["summary"]["graph"]["seen"] == 2
+
+    def test_a_missing_key_writes_nothing(self, script, monkeypatch):
+        table = _OneRowTable()
+        table.execute_query = lambda sql: [] if sql.startswith("SELECT CAST") else _OneRowTable.execute_query(table, sql)
+        writes: list = []
+        table.execute_statement = writes.append
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        args = script.parse_args(
+            [
+                "--stem", "main.kg.triplestore_d_V1", "--source-table", "main.ob_it.ob_it_customers",
+                "--key-column", "id", "--key-value", "404", "--value-column", "name",
+            ]
+        )
+
+        with pytest.raises(script._UsageError, match="no row with id = '404'"):
+            script.run(args)
+        assert writes == []
 
 
 class TestCli:
@@ -203,3 +335,13 @@ class TestCli:
             monkeypatch.delenv(f"ONTOBRICKS_FRESHNESS_{name}", raising=False)
 
         assert script.main([]) == 2
+
+
+def test_an_empty_variable_reads_as_unset(script, monkeypatch):
+    """CI sets an undefined repository variable to ''."""
+    monkeypatch.setenv("ONTOBRICKS_FRESHNESS_ALLOW_PATTERN", "")
+    monkeypatch.setenv("ONTOBRICKS_FRESHNESS_CHANGES", "")
+
+    args = script.parse_args([])
+
+    assert (args.allow_pattern, args.changes) == ("*ob_it_*,*fixture*", 5)

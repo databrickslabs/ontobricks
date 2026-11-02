@@ -8,19 +8,25 @@ through ``_live`` within 1 s p99; reconciliation drift is 0.
 
 The probe updates one row of a source table *N* times (``--changes``, default
 5, ``--spacing`` seconds apart), each time to a new marker value of a column
-the domain maps as a plain literal, and polls every configured path until the
-marker is the object of a triple there:
+the domain maps as a plain literal (text, or a number for a numeric column),
+and polls every path — each on its own thread, timed from the write — until
+the marker is the object of a triple there:
 
 * ``data`` / ``graph``: ``…_data`` / ``…_graph`` on the warehouse
   (``--read-warehouse-id``: the Lakehouse//RT query warehouse);
 * ``sync`` / ``live``: the Lakebase synced table / ``_live`` (``--pg-dsn``).
 
-Per path it reports p50 / p95 / p99 (a change not seen within ``--timeout``
-counts as never seen), reconciles ``…_data`` with the batch recompute (the
-gateway VIEW), the synced table and ``_live`` (``SlotReconciler``), restores
-the row's original value and checks the SLOs of ``--mode``. The source row is
-updated on the warehouse, or with ``--source-dsn`` on the Postgres database a
-``realtime`` domain's Debezium topic captures.
+``--paths`` defaults to ``data,graph`` (plus ``live`` in ``realtime``, plus
+``sync`` when ``--sync-table`` is set); a Lakebase path without its DSN and
+table is a usage error. Per path it reports p50 / p95 / p99 (a change not seen
+within ``--timeout`` counts as never seen); once the last change is seen it
+reconciles ``…_data`` with the batch recompute (the gateway VIEW), the synced
+table and ``_live`` (``SlotReconciler``), then restores the row's original
+value and checks the SLOs of ``--mode``. The source row is updated on the
+warehouse, or with ``--source-dsn`` on the Postgres database a ``realtime``
+domain's Debezium topic captures. Only a fixture table is updated: its name
+must match ``--allow-pattern`` (default ``*ob_it_*,*fixture*``), and the key
+must name an existing row.
 
 Credentials, as ``tests/external/test_mv_incremental_plan.py``: a CLI profile
 (``DATABRICKS_CONFIG_PROFILE`` + ``ONTOBRICKS_EXTERNAL_WAREHOUSE_ID``) or
@@ -38,6 +44,7 @@ Exit status 0 when the SLOs hold (or with ``--no-check``), 1 when one fails.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import math
 import os
@@ -45,20 +52,34 @@ import re
 import sys
 import time
 import uuid
+import zlib
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 _IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _PG_RELATION = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*")
+_SQL_TYPE = re.compile(r"[a-z][a-z0-9_ ]*(\(\s*\d+\s*(,\s*\d+\s*)?\))?")
 _PERCENTILES = (50, 95, 99)
+_TEXT_TYPES = ("string", "varchar", "char", "text", "character")
+_INT_TYPES = ("int", "integer", "bigint", "long", "int4", "int8")
+_SMALL_INT_TYPES = ("smallint", "int2", "short")
+_FLOAT_TYPES = ("double", "float", "real", "double precision", "float4", "float8")
+_DECIMAL_TYPES = ("decimal", "numeric", "dec")
+
+
+class _UsageError(ValueError):
+    """A target that must not or cannot be measured (exit status 2)."""
 
 
 class FreshnessProbe:
     """Times source changes until each read path shows them; percentiles and SLO verdicts.
 
-    *write* sets the source row's value column to a marker; *readers* maps a
-    path name to ``marker -> visible``. *clock* and *sleep* are injectable so
-    the timing logic runs without a workspace.
+    *write* sets the source row's value column to a marker and returns the
+    object text the paths will show (``None``: the marker itself); *readers*
+    maps a path name to ``object -> visible``. Each path is polled on its own
+    thread, timed from the write. *clock* and *sleep* are injectable so the
+    timing logic runs without a workspace.
     """
 
     PATHS = ("data", "graph", "sync", "live")
@@ -74,7 +95,7 @@ class FreshnessProbe:
 
     def __init__(
         self,
-        write: Callable[[str], None],
+        write: Callable[[str], str | None],
         readers: Mapping[str, Callable[[str], bool]],
         *,
         timeout_s: float = 120.0,
@@ -98,17 +119,51 @@ class FreshnessProbe:
         return latencies
 
     def _time_one(self, marker: str) -> dict[str, float | None]:
-        """Write *marker*, then poll every path until it shows it or the timeout passes."""
-        self._write(marker)
+        """Write *marker*, then poll each path on its own thread until it shows it or times out."""
+        shown = self._write(marker) or marker
         start = self._clock()
-        seen: dict[str, float | None] = dict.fromkeys(self._readers)
+        if not self._readers:
+            return {}
+        with ThreadPoolExecutor(max_workers=len(self._readers)) as pool:
+            waits = {
+                path: pool.submit(self._wait, visible, shown, start)
+                for path, visible in self._readers.items()
+            }
+        return {path: wait.result() for path, wait in waits.items()}
+
+    def _wait(self, visible: Callable[[str], bool], shown: str, start: float) -> float | None:
+        """Seconds from *start* until *visible*; ``None`` after the timeout."""
         while True:
-            for path, visible in self._readers.items():
-                if seen[path] is None and visible(marker):
-                    seen[path] = round(self._clock() - start, 3)
-            if all(v is not None for v in seen.values()) or self._clock() - start >= self._timeout_s:
-                return seen
+            if visible(shown):
+                return round(self._clock() - start, 3)
+            if self._clock() - start >= self._timeout_s:
+                return None
             self._sleep(self._poll_s)
+
+    @staticmethod
+    def marker_value(marker: str, sql_type: str) -> tuple[str, str]:
+        """``(value written, object text shown)`` of *marker* for a column of *sql_type*.
+
+        A text column takes the marker; a numeric one a number unique to the
+        run and the change (the marker's index added to a run base), printed
+        as ``CAST(<column> AS STRING)`` prints it. Any other type is a usage
+        error (no unique, comparable marker).
+        """
+        run, index = marker.rsplit("-", 1)
+        kind = sql_type.strip().lower()
+        family = kind.split("(")[0].strip()
+        if family.startswith(_TEXT_TYPES):
+            return marker, marker
+        base = 1000 + zlib.crc32(run.encode()) % 8000 + int(index)
+        if family in _SMALL_INT_TYPES or family in _INT_TYPES:
+            return str(base), str(base)
+        if family in _FLOAT_TYPES:
+            return str(base), f"{base}.0"
+        if family in _DECIMAL_TYPES:
+            scale = re.search(r",\s*(\d+)\s*\)", kind)
+            digits = int(scale.group(1)) if scale else 0
+            return str(base), f"{base}.{'0' * digits}" if digits else str(base)
+        raise _UsageError(f"Unsupported value column type {sql_type!r} (use a text or numeric column)")
 
     @staticmethod
     def percentile(latencies: list[float | None], q: int) -> float | None:
@@ -176,14 +231,25 @@ class _Warehouse:
         return "'" + str(value).replace("\\", "\\\\").replace("'", "''") + "'"
 
     @staticmethod
-    def update_sql(table: str, key_column: str, key_value: str, column: str, value: str | None) -> str:
+    def sql_type(name: str) -> str:
+        """*name* when it reads as a SQL type (it is inlined into ``CAST``), else ValueError."""
+        kind = (name or "").strip().lower()
+        if not _SQL_TYPE.fullmatch(kind):
+            raise ValueError(f"Not a SQL type: {name!r}")
+        return kind
+
+    @staticmethod
+    def update_sql(
+        table: str, key_column: str, key_value: str, column: str, value: str | None, sql_type: str
+    ) -> str:
         from back.core.helpers import validate_table_name
 
         validate_table_name(table)
-        _Warehouse.ident(key_column)
-        _Warehouse.ident(column)
-        new = "NULL" if value is None else _Warehouse.literal(value)
-        return f"UPDATE {table} SET {column} = {new} WHERE {key_column} = {_Warehouse.literal(key_value)}"
+        new = "NULL" if value is None else f"CAST({_Warehouse.literal(value)} AS {_Warehouse.sql_type(sql_type)})"
+        return (
+            f"UPDATE {table} SET {_Warehouse.ident(column)} = {new} "
+            f"WHERE {_Warehouse.ident(key_column)} = {_Warehouse.literal(key_value)}"
+        )
 
     @staticmethod
     def visible_sql(relation: str, marker: str) -> str:
@@ -198,7 +264,10 @@ class _Warehouse:
             raise ValueError(f"Not a column name: {name!r}")
         return name
 
-    def current_value(self, table: str, key_column: str, key_value: str, column: str) -> str | None:
+    def current_value(
+        self, table: str, key_column: str, key_value: str, column: str
+    ) -> tuple[bool, str | None]:
+        """``(row found, its value as text)``."""
         from back.core.helpers import validate_table_name
 
         validate_table_name(table)
@@ -207,10 +276,26 @@ class _Warehouse:
             f"WHERE {self.ident(key_column)} = {self.literal(key_value)} LIMIT 1"
         )
         rows = self._client.execute_query(select) or []
-        return rows[0].get("v") if rows else None
+        return (True, rows[0].get("v")) if rows else (False, None)
 
-    def update(self, table: str, key_column: str, key_value: str, column: str, value: str | None) -> None:
-        self._client.execute_statement(self.update_sql(table, key_column, key_value, column, value))
+    def column_type(self, table: str, column: str) -> str:
+        """The UC type of *column* (``DESCRIBE TABLE``); ValueError when it has none."""
+        from back.core.helpers import validate_table_name
+
+        validate_table_name(table)
+        for row in self._client.execute_query(f"DESCRIBE TABLE {table}") or []:
+            name = str(row.get("col_name") or "").strip()
+            if not name or name.startswith("#"):
+                break
+            if name.lower() == column.lower():
+                return str(row.get("data_type") or "").strip().lower()
+        raise ValueError(f"{table} has no column {column!r}")
+
+    def update(
+        self, table: str, key_column: str, key_value: str, column: str, value: str | None, sql_type: str
+    ) -> None:
+        sql = self.update_sql(table, key_column, key_value, column, value, sql_type)
+        self._client.execute_statement(sql)
 
     def reader(self, relation: str) -> Callable[[str], bool]:
         return lambda marker: bool(self._read.execute_query(self.visible_sql(relation, marker)))
@@ -231,7 +316,7 @@ class _Warehouse:
 
 
 class _Postgres:
-    """A Postgres connection: Lakebase ``_sync`` / ``_live`` checks, or a Debezium-captured source."""
+    """A Postgres connection: a Lakebase ``_sync`` / ``_live`` path, or a Debezium-captured source."""
 
     def __init__(self, dsn: str) -> None:
         import psycopg
@@ -246,10 +331,10 @@ class _Postgres:
             raise ValueError(f"Not a schema.table name: {name!r}")
         return sql.Identifier(*name.split("."))
 
-    def _query(self, statement: Any, params: tuple = ()) -> list:
+    def _query(self, statement: Any, params: tuple = ()) -> tuple[list, int]:
         with self._conn.cursor() as cur:
             cur.execute(statement, params)
-            return cur.fetchall() if cur.description else []
+            return (cur.fetchall() if cur.description else []), cur.rowcount
 
     def reader(self, name: str, *, live: bool) -> Callable[[str], bool]:
         from psycopg import sql
@@ -258,7 +343,7 @@ class _Postgres:
         statement = sql.SQL("SELECT 1 FROM {} WHERE object = %s{} LIMIT 1").format(
             self.relation(name), served
         )
-        return lambda marker: bool(self._query(statement, (marker,)))
+        return lambda marker: bool(self._query(statement, (marker,))[0])
 
     def count(self, name: str, *, live: bool) -> int:
         from psycopg import sql
@@ -267,24 +352,47 @@ class _Postgres:
         statement = sql.SQL(
             "SELECT count(*) FROM {} WHERE coalesce(trim(object), '') <> ''{}"
         ).format(self.relation(name), served)
-        return int(self._query(statement)[0][0])
+        return int(self._query(statement)[0][0][0])
 
-    def current_value(self, table: str, key_column: str, key_value: str, column: str) -> str | None:
+    def current_value(
+        self, table: str, key_column: str, key_value: str, column: str
+    ) -> tuple[bool, str | None]:
         from psycopg import sql
 
         statement = sql.SQL("SELECT {}::text FROM {} WHERE {}::text = %s LIMIT 1").format(
             sql.Identifier(column), self.relation(table), sql.Identifier(key_column)
         )
-        rows = self._query(statement, (key_value,))
-        return rows[0][0] if rows else None
+        rows, _ = self._query(statement, (key_value,))
+        return (True, rows[0][0]) if rows else (False, None)
 
-    def update(self, table: str, key_column: str, key_value: str, column: str, value: str | None) -> None:
+    def column_type(self, table: str, column: str) -> str:
+        schema, name = table.split(".", 1)
+        rows, _ = self._query(
+            "SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = %s AND column_name = %s",
+            (schema, name, column),
+        )
+        if not rows:
+            raise ValueError(f"{table} has no column {column!r}")
+        kind, precision, scale = rows[0]
+        if kind == "numeric" and precision is not None:
+            return f"numeric({precision},{scale or 0})"
+        return str(kind)
+
+    def update(
+        self, table: str, key_column: str, key_value: str, column: str, value: str | None, sql_type: str
+    ) -> None:
         from psycopg import sql
 
-        statement = sql.SQL("UPDATE {} SET {} = %s WHERE {}::text = %s").format(
-            self.relation(table), sql.Identifier(column), sql.Identifier(key_column)
+        statement = sql.SQL("UPDATE {} SET {} = CAST(%s AS {}) WHERE {}::text = %s").format(
+            self.relation(table),
+            sql.Identifier(column),
+            sql.SQL(_Warehouse.sql_type(sql_type)),
+            sql.Identifier(key_column),
         )
-        self._query(statement, (value, key_value))
+        _, updated = self._query(statement, (value, key_value))
+        if updated != 1:
+            raise _UsageError(f"{table}: {updated} rows have {key_column} = {key_value!r} (expected 1)")
 
 
 def _env(name: str) -> str:
@@ -297,33 +405,57 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     def option(name: str, default: Any = "", **kw: Any) -> None:
         env = "ONTOBRICKS_FRESHNESS_" + name.upper().replace("-", "_")
-        parser.add_argument(f"--{name}", default=os.environ.get(env, default), **kw)
+        # An empty variable (an unset CI variable) reads as unset.
+        parser.add_argument(f"--{name}", default=_env(env) or default, **kw)
 
     option("stem", help="the domain version's gateway VIEW, catalog.schema.triplestore_<dom>_V<n>")
     option("mode", "microbatch", choices=sorted(FreshnessProbe.SLOS))
     option("source-table")
     option("key-column")
     option("key-value")
-    option("value-column", help="a column the domain maps as a plain literal")
+    option("value-column", help="a text or numeric column the domain maps as a plain literal")
+    option("allow-pattern", "*ob_it_*,*fixture*", help="fnmatch patterns a source table must match")
     option("changes", 5, type=int)
     option("spacing", 10.0, type=float)
     option("timeout", 120.0, type=float)
     option("poll", 0.5, type=float)
+    option("paths", help="paths polled (default: data,graph [+live in realtime] [+sync with --sync-table])")
     option("read-warehouse-id", help="the query (Lakehouse//RT) warehouse; default: the build one")
     option("pg-dsn", help="Lakebase libpq DSN for the sync / live paths")
     option("sync-table", help="the synced table, schema.table")
     option("live-table", help="the realtime _live table, schema.table")
     option("source-dsn", help="update the source row on this Postgres instead of the warehouse")
-    parser.add_argument(
-        "--paths",
-        default=_env("ONTOBRICKS_FRESHNESS_PATHS") or "data,graph",
-        help="the warehouse paths polled (sync / live follow --sync-table / --live-table)",
-    )
     parser.add_argument("--no-recompute", action="store_true", help="skip the gateway VIEW recompute")
     parser.add_argument("--no-check", action="store_true", help="report only; exit 0")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     parser.add_argument("--summary-file", default=_env("ONTOBRICKS_FRESHNESS_REPORT"))
     return parser.parse_args(argv)
+
+
+def paths_for(args: argparse.Namespace) -> list[str]:
+    """The paths to poll; :class:`_UsageError` for an unknown one or a Lakebase one not configured."""
+    if args.paths:
+        paths = [p.strip() for p in args.paths.split(",") if p.strip()]
+    else:
+        paths = ["data", "graph"] + (["live"] if args.mode == "realtime" else [])
+        paths += ["sync"] if args.sync_table else []
+    unknown = [p for p in paths if p not in FreshnessProbe.PATHS]
+    if unknown:
+        raise _UsageError(f"Unknown path(s) {', '.join(unknown)} (expected {', '.join(FreshnessProbe.PATHS)})")
+    for path, table in (("sync", args.sync_table), ("live", args.live_table)):
+        if path in paths and not (args.pg_dsn and table):
+            raise _UsageError(f"The {path} path needs --pg-dsn and --{path}-table")
+    return paths
+
+
+def guard_fixture(args: argparse.Namespace) -> None:
+    """Only a table matching ``--allow-pattern`` is updated (the probe rewrites one of its rows)."""
+    patterns = [p.strip() for p in (args.allow_pattern or "").split(",") if p.strip()]
+    table = (args.source_table or "").lower()
+    if not any(fnmatch.fnmatch(table, pattern.lower()) for pattern in patterns):
+        raise _UsageError(
+            f"Refusing to update {args.source_table!r}: not a fixture table (--allow-pattern {args.allow_pattern!r})"
+        )
 
 
 def _warehouse_clients(read_warehouse_id: str) -> tuple[Any, Any]:
@@ -349,36 +481,58 @@ def _warehouse_clients(read_warehouse_id: str) -> tuple[Any, Any]:
     return client, DatabricksClient(host=host, token=token, warehouse_id=read_warehouse_id)
 
 
-def run(args: argparse.Namespace) -> dict:
-    """Measure, reconcile and judge one domain; the report as a dict (``violations`` empty: met)."""
-    client, read_client = _warehouse_clients(args.read_warehouse_id)
-    warehouse = _Warehouse(client, read_client)
-    lakebase = _Postgres(args.pg_dsn) if args.pg_dsn else None
-    source = _Postgres(args.source_dsn) if args.source_dsn else warehouse
-    paths = [p.strip() for p in args.paths.split(",") if p.strip()]
+def _readers(args: argparse.Namespace, paths: list[str], warehouse: _Warehouse) -> tuple[dict, Any]:
+    """``(readers, a Lakebase connection or None)``: one Postgres connection per Lakebase path,
+    so the paths' polling threads never wait on each other."""
     readers: dict[str, Callable[[str], bool]] = {}
+    lakebase = None
     for path in paths:
         if path in ("data", "graph"):
             readers[path] = warehouse.reader(f"{args.stem}_{path}")
-    if lakebase is not None and args.sync_table:
-        readers["sync"] = lakebase.reader(args.sync_table, live=False)
-    if lakebase is not None and args.live_table:
-        readers["live"] = lakebase.reader(args.live_table, live=True)
+            continue
+        connection = _Postgres(args.pg_dsn)
+        lakebase = lakebase or connection
+        table = args.sync_table if path == "sync" else args.live_table
+        readers[path] = connection.reader(table, live=path == "live")
+    return readers, lakebase
+
+
+def run(args: argparse.Namespace) -> dict:
+    """Measure, reconcile and judge one domain; the report as a dict (``violations`` empty: met).
+
+    The reconciliation runs once the last change was seen (or timed out) and
+    before the row is restored, so ``…_data`` and the batch recompute both
+    hold the last marker. :class:`_UsageError` for a target that cannot be
+    measured (nothing written then).
+    """
+    guard_fixture(args)
+    paths = paths_for(args)
+    client, read_client = _warehouse_clients(args.read_warehouse_id)
+    warehouse = _Warehouse(client, read_client)
+    source = _Postgres(args.source_dsn) if args.source_dsn else warehouse
+    readers, lakebase = _readers(args, paths, warehouse)
     row = (args.source_table, args.key_column, args.key_value, args.value_column)
-    original = source.current_value(*row)
-    probe = FreshnessProbe(
-        lambda marker: source.update(*row, marker), readers, timeout_s=args.timeout, poll_s=args.poll
-    )
+    found, original = source.current_value(*row)
+    if not found:
+        raise _UsageError(f"{args.source_table} has no row with {args.key_column} = {args.key_value!r}")
+    sql_type = source.column_type(args.source_table, args.value_column)
+
+    def write(marker: str) -> str:
+        value, shown = FreshnessProbe.marker_value(marker, sql_type)
+        source.update(*row, value, sql_type)
+        return shown
+
+    probe = FreshnessProbe(write, readers, timeout_s=args.timeout, poll_s=args.poll)
     try:
         latencies = probe.measure(args.changes, args.spacing)
+        reconciliation = warehouse.reconcile(
+            args.stem,
+            recompute=not args.no_recompute,
+            sync_rows=lakebase.count(args.sync_table, live=False) if "sync" in readers else None,
+            live_rows=lakebase.count(args.live_table, live=True) if "live" in readers else None,
+        )
     finally:
-        source.update(*row, original)
-    reconciliation = warehouse.reconcile(
-        args.stem,
-        recompute=not args.no_recompute,
-        sync_rows=lakebase.count(args.sync_table, live=False) if lakebase and args.sync_table else None,
-        live_rows=lakebase.count(args.live_table, live=True) if lakebase and args.live_table else None,
-    )
+        source.update(*row, original, sql_type)
     summary = FreshnessProbe.summarize(latencies)
     pairs = reconciliation.get("pairs", {})
     failed = FreshnessProbe.violations(summary, args.mode, pairs)
@@ -397,7 +551,11 @@ def main(argv: list[str] | None = None) -> int:
     if not (args.stem and args.source_table and args.key_column and args.value_column):
         print("measure_freshness: --stem, --source-table, --key-column and --value-column are required")
         return 2
-    report = run(args)
+    try:
+        report = run(args)
+    except _UsageError as exc:
+        print(f"measure_freshness: {exc}")
+        return 2
     print(json.dumps(report, indent=2, default=str) if args.json else report["markdown"])
     if args.summary_file:
         with open(args.summary_file, "a", encoding="utf-8") as handle:

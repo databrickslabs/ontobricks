@@ -145,6 +145,11 @@ jobs:
           ONTOBRICKS_FRESHNESS_KEY_COLUMN: ${{ vars.ONTOBRICKS_INT_FRESHNESS_KEY_COLUMN }}
           ONTOBRICKS_FRESHNESS_KEY_VALUE: ${{ vars.ONTOBRICKS_INT_FRESHNESS_KEY_VALUE }}
           ONTOBRICKS_FRESHNESS_VALUE_COLUMN: ${{ vars.ONTOBRICKS_INT_FRESHNESS_VALUE_COLUMN }}
+          # The probe rewrites one row: only a fixture table (default *ob_it_*,*fixture*).
+          ONTOBRICKS_FRESHNESS_ALLOW_PATTERN: ${{ vars.ONTOBRICKS_INT_FRESHNESS_ALLOW_PATTERN }}
+          # The Lakehouse//RT query warehouse (repository variable) and the Lakebase
+          # libpq DSN (repository secret); the paths default from the mode, so a
+          # realtime domain also polls _live (ONTOBRICKS_INT_FRESHNESS_LIVE_TABLE).
           ONTOBRICKS_FRESHNESS_READ_WAREHOUSE_ID: ${{ vars.ONTOBRICKS_INT_RT_WAREHOUSE_ID }}
           ONTOBRICKS_FRESHNESS_PG_DSN: ${{ secrets.ONTOBRICKS_INT_LAKEBASE_DSN }}
           ONTOBRICKS_FRESHNESS_SYNC_TABLE: ${{ vars.ONTOBRICKS_INT_FRESHNESS_SYNC_TABLE }}
