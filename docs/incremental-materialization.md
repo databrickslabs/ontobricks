@@ -431,7 +431,7 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh |
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
 | 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ◐ | `jobs/triple_stream` (`main.py`, `processor.py`); the Spark / connector / RTM wiring is live-unverified |
-| 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots`, in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them |
+| 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them |
 | 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; one stream per domain and per deployment at a time; the slot pipeline reads the CDF, not the topic ([why](#realtime)); cluster sizing and run-as grants are live-unverified |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
 
@@ -572,7 +572,8 @@ whitespace-only, as `TRIM(object) != ''`) as tombstones. A `seq` that is not new
 than the state's is ignored, and a delete keeps `(None, None, seq)` watermarks for
 the row's predicates instead of emptying the state, so a late or replayed event
 cannot resurrect a deleted row. The initial state is loaded from the `…_slots`
-snapshot, and state eviction is the `state_ttl_ms` passed to the processor
+snapshot at the version `_live` was seeded at (`--slots-version`), and state
+eviction is the `state_ttl_ms` passed to the processor
 (`--state-ttl-hours`; with a TTL the job runs `timeMode="ProcessingTime"`, which
 `transformWithState` requires, without one `"None"`). The TTL must exceed the
 maximum event lateness — an evicted watermark no longer guards its slot; with no
@@ -583,7 +584,8 @@ TTL the state keeps one watermark per deleted predicate (unbounded). The equival
 **The job** (`jobs/triple_stream/main.py`, `TripleStreamJob`): arguments
 (`--domain`, `--version`, the source, `--slots-table`, `--mappings-json-path`, the
 Lakebase host / database / role / secret, `--live-table`, `--checkpoint`,
-`--state-ttl-hours`), `spark.readStream` of the topic, the envelope parse and
+`--state-ttl-hours`, `--slots-version`, `--start-timestamp-ms`), `spark.readStream`
+of the topic, the envelope parse and
 explode (`TripleStreamEnvelope`, `mapInPandas`), the stateful diff
 (`transformWithState`, output mode **update** — the only one Real-Time Mode runs),
 and a `foreach` writer (`LiveSink`, `writeStream.outputMode("update")`) that upserts
@@ -643,16 +645,31 @@ effective `realtime` build starts the stream once the slot pipeline and the `_da
 view are up. `start` checks the prerequisites, cancels a run of the same domain at
 another version (one stream per domain), and reuses a run of this version — found
 among the job's active runs by its `domain` / `version` parameters, so `stop` and
-`status` need no stored state. Otherwise it creates `_live` (with the grants), seeds
-it from the `…_slots` snapshot (read on the build warehouse in batches, at the
-snapshot `seq` -1, so every stream event wins), marks it served and refreshes the
-union view, uploads the mappings JSON to the checkpoint volume
-(`<checkpoint root>/_mappings/<run name>.json`), and `run_now`s the job with
-`job_parameters` (`state_ttl_hours` included). The build records `realtime_run_id` /
-`realtime_state`; a stream that cannot start is recorded (`failed:<Error>`), never
-fails the build. `stop` cancels the run and retires `_live` (emptied, no longer
+`status` need no stored state; the cancelled version's `_live` is retired. Otherwise
+it creates `_live` (with the grants), seeds it from the `…_slots` snapshot **at a
+pinned Delta version** (`DESCRIBE HISTORY … LIMIT 1`, then `SELECT … VERSION AS OF
+<v>`, read on the build warehouse in batches, at the snapshot `seq` -1, so every
+stream event wins), marks it served and refreshes the union view, uploads the
+mappings JSON to the checkpoint volume (`<checkpoint root>/_mappings/<run name>.json`),
+and `run_now`s the job with `job_parameters` (`state_ttl_hours`, `slots_version` =
+`<v>` and `start_timestamp_ms` included). A failed upload or `run_now` after the seed
+retires `_live` again before the error is raised. The build records
+`realtime_run_id` / `realtime_state` and `slots_seed_version` (`<v>`); a stream that
+cannot start is recorded (`failed:<Error>`), never fails the build.
+
+**No change between the seed and the stream's start is lost.** The job reads its
+`transformWithState` initial state from the same `…_slots` version `<v>` and, on a
+query's first start, replays the topic from `start_timestamp_ms` — `<v>`'s commit
+time less ten minutes, the slot pipeline's lag between a source change and its
+`_slots` commit (Kafka and the Event Hubs Kafka endpoint: `startingTimestamp` for
+every partition, the newest offset for a partition with nothing newer; Kinesis:
+`initialPosition` `at_timestamp`). The overlap replays in order, so each slot
+converges on its newest event (a slot may show an older value for the moment the
+replay passes it); the sink's `seq` guard absorbs duplicates. A restarted run
+resumes from its checkpoint instead. `stop` cancels the run and retires `_live` (emptied, no longer
 served); a later build that is not `realtime`, on a Lakebase store whose `_live` is
-served, does the same. A scheduled tick of a `realtime` domain retires a served
+served (on a deployment with realtime enabled; otherwise no Postgres query is
+made), does the same. A scheduled tick of a `realtime` domain retires a served
 `_live` whose stream no longer runs (crashed past its retries: readers fall back to
 the microbatch graph until the next build restarts it) and otherwise purges
 tombstones older than the state TTL (at least 24 hours). `POST
@@ -667,8 +684,10 @@ The app principal needs CAN_MANAGE_RUN on the job (granted by
 (the mappings upload). A target may set the job's `run_as` instead, if its deployer
 holds `servicePrincipal.user` on that principal.
 
-**Reconciliation.** For a `realtime` domain the reconciliation also counts `_live`
-(not deleted, non-blank) against the `_slots` slot rows (`live_slots`, counts only).
+**Reconciliation.** For a `realtime` domain whose `_live` is served the
+reconciliation also counts `_live` (not deleted, non-blank) against the `_slots` slot
+rows (`live_slots`, counts only); a retired `_live` is not counted, so a stopped
+stream reports no drift.
 A difference is `live_drift` — the stream diverged; restart it — and never a slot
 full refresh. A scheduled tick of a realtime domain reconciles that pair (no batch
 recompute: its slots run ahead) and records `live_drift`.
@@ -689,7 +708,10 @@ Kinesis connectors; executors importing the synced source through `PYTHONPATH`, 
 the `databricks-sql-connector` install leaving the runtime's `pandas` / `pyarrow`
 alone; the DBR 19 key `deploy.sh` resolves; the run-as identity's grants (secret
 scope, `_slots`, checkpoint volume) and the `_live` grants to the stream role; the
-job's `[dev <user>] ` name lookup; Debezium encodings beyond the defaults
+job's `[dev <user>] ` name lookup; `VERSION AS OF` on the `_slots` streaming table
+(the seed and the initial state) and the timestamp start of the Kafka, Event Hubs
+(Kafka endpoint) and Kinesis sources; whether `presets.name_prefix: ""` turns the
+development prefix off on the CLI in use; Debezium encodings beyond the defaults
 (`decimal.handling.mode=precise` / `string`, `time.precision.mode=adaptive`).
 
 ## DAB deployment

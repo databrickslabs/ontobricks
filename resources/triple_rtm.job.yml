@@ -135,6 +135,11 @@ resources:
               - "{{job.parameters.checkpoint}}"
               - "--state-ttl-hours"
               - "{{job.parameters.state_ttl_hours}}"
+              # The _slots version _live was seeded at, and the topic replay start.
+              - "--slots-version"
+              - "{{job.parameters.slots_version}}"
+              - "--start-timestamp-ms"
+              - "{{job.parameters.start_timestamp_ms}}"
 
       parameters:
         - name: domain
@@ -169,3 +174,7 @@ resources:
           default: ""
         - name: state_ttl_hours
           default: "72"
+        - name: slots_version
+          default: "-1"
+        - name: start_timestamp_ms
+          default: "0"

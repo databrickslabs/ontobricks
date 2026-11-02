@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover
 
 from back.core.graphdb.lakebase.LakebaseLiveTable import LakebaseLiveTable  # noqa: E402
 from back.core.graphdb.lakebase.SyncedTableManager import SyncedTableManager  # noqa: E402
+from back.core.graphdb.lakebase.SyncedTableName import SyncedTableName  # noqa: E402
 from back.core.graphdb.lakebase.SyncedTableRegistration import (  # noqa: E402
     SyncedTableRegistration,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "LakebaseFlatStore",
     "LakebaseLiveTable",
     "SyncedTableManager",
+    "SyncedTableName",
     "SyncedTableRegistration",
     "default_schema",
     "normalize_sync_table_mode",

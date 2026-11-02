@@ -13,7 +13,10 @@ domain version by ``TwinRealtimeStream`` (``jobs.run_now`` with
    (:class:`TripleStreamEnvelope`), every value as Spark text;
 3. ``groupBy("map_id", "source_key").transformWithState`` with
    :class:`jobs.triple_stream.processor.SlotDiffStatefulProcessor` in
-   ``Update`` mode, the state seeded from the domain's ``…_slots`` snapshot;
+   ``Update`` mode, the state seeded from the domain's ``…_slots`` snapshot at
+   the Delta version ``_live`` was seeded at (``--slots-version``), the topic
+   replayed from just before that snapshot (``--start-timestamp-ms``) so no
+   change between the seed and the stream's start is lost;
 4. upsert every slot change into ``_live`` as it arrives (:class:`LiveSink`, a
    ``foreach`` writer guarded by ``WHERE EXCLUDED.seq > live.seq``).
 
@@ -37,6 +40,7 @@ import re
 import sys
 from collections import Counter
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +90,18 @@ class TripleStreamJob:
         add("--lakebase-secret", required=True, help="scope/key of the Postgres password")
         add("--live-table", required=True, help="schema.table of the _live table")
         add("--checkpoint", required=True)
+        add(
+            "--slots-version",
+            type=int,
+            default=-1,
+            help="Delta version of the …_slots snapshot _live was seeded at (-1: the newest)",
+        )
+        add(
+            "--start-timestamp-ms",
+            type=int,
+            default=0,
+            help="replay the topic from this epoch millisecond (0: from the newest offsets)",
+        )
         add("--real-time-mode", action=argparse.BooleanOptionalAction, default=True)
         add("--real-time-interval", default="5 minutes")
         add("--processing-time", default="10 seconds")
@@ -126,6 +142,10 @@ class TripleStreamJob:
             return "--checkpoint must not be empty"
         if args.state_ttl_hours < 0:
             return "--state-ttl-hours must not be negative"
+        if args.slots_version < -1:
+            return "--slots-version must be a Delta version or -1"
+        if args.start_timestamp_ms < 0:
+            return "--start-timestamp-ms must not be negative"
         return ""
 
     # ------------------------------------------------------------------
@@ -133,20 +153,27 @@ class TripleStreamJob:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def source_options(kind: str, servers: str, topic: str, secret: str) -> tuple[str, dict]:
+    def source_options(
+        kind: str, servers: str, topic: str, secret: str, start_timestamp_ms: int = 0
+    ) -> tuple[str, dict]:
         """``(format, options)`` of ``spark.readStream`` for the topic.
 
         *secret* is the value of the configured secret: the SASL JAAS config
         for ``kafka``, the namespace connection string for ``eventhubs`` (its
         Kafka endpoint, ``$ConnectionString`` login) and ``ACCESS_KEY:SECRET``
-        for ``kinesis``.
+        for ``kinesis``. A *start_timestamp_ms* replays the topic from that
+        time on a query's first start (a checkpoint wins afterwards): Kafka and
+        the Event Hubs Kafka endpoint ``startingTimestamp`` (every partition,
+        the newest offset for a partition with nothing newer), Kinesis
+        ``initialPosition`` ``at_timestamp``; without one the stream starts at
+        the newest records.
         """
         if kind == "kinesis":
             access, _, secret_key = secret.partition(":")
             return "kinesis", {
                 "streamName": topic,
                 "region": servers,
-                "initialPosition": "latest",
+                "initialPosition": TripleStreamJob.kinesis_position(start_timestamp_ms),
                 "awsAccessKey": access,
                 "awsSecretKey": secret_key,
             }
@@ -157,15 +184,36 @@ class TripleStreamJob:
                 "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required "
                 f'username="$ConnectionString" password="{quoted}";'
             )
+        start = (
+            {"startingTimestamp": str(start_timestamp_ms), "startingOffsetsByTimestampStrategy": "latest"}
+            if start_timestamp_ms > 0
+            else {"startingOffsets": "latest"}
+        )
         return "kafka", {
             "kafka.bootstrap.servers": servers,
             "subscribe": topic,
-            "startingOffsets": "latest",
+            **start,
             "kafka.security.protocol": "SASL_SSL",
             "kafka.sasl.mechanism": "PLAIN",
             "kafka.sasl.jaas.config": jaas,
             "failOnDataLoss": "false",
         }
+
+    @staticmethod
+    def kinesis_position(start_timestamp_ms: int) -> str:
+        """Kinesis ``initialPosition``: ``at_timestamp`` (UTC) for a replay, else ``latest``."""
+        if start_timestamp_ms <= 0:
+            return "latest"
+        moment = datetime.fromtimestamp(start_timestamp_ms / 1000, tz=timezone.utc)
+        return json.dumps(
+            {"at_timestamp": moment.strftime("%m/%d/%Y %H:%M:%S +0000"), "format": "MM/dd/yyyy HH:mm:ss ZZZ"}
+        )
+
+    @staticmethod
+    def initial_state_sql(slots_table: str, slots_version: int) -> str:
+        """The ``transformWithState`` initial state: the slot rows, at *slots_version* when pinned."""
+        pinned = f" VERSION AS OF {int(slots_version)}" if slots_version >= 0 else ""
+        return f"SELECT * FROM {slots_table}{pinned}"
 
     @staticmethod
     def record_columns(kind: str) -> tuple[str, str]:
@@ -266,6 +314,7 @@ class TripleStreamJob:
             args.bootstrap_servers,
             args.topic,
             secrets.get(args.secret_scope, args.secret_key),
+            args.start_timestamp_ms,
         )
         value_expr, seq_expr = TripleStreamJob.record_columns(args.source_kind)
         records = (
@@ -287,7 +336,9 @@ class TripleStreamJob:
                 outputStructType=OUTPUT_SCHEMA,
                 outputMode="Update",
                 timeMode=TripleStreamJob.time_mode(args.state_ttl_hours),
-                initialState=spark.read.table(args.slots_table).groupBy("map_id", "source_key"),
+                initialState=spark.sql(
+                    TripleStreamJob.initial_state_sql(args.slots_table, args.slots_version)
+                ).groupBy("map_id", "source_key"),
             )
         )
         password = secrets.get(*args.lakebase_secret.split("/", 1))

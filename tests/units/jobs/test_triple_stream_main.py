@@ -64,6 +64,8 @@ class TestArguments:
             ("--lakebase-secret", "no-slash"),
             ("--checkpoint", " "),
             ("--state-ttl-hours", "-1"),
+            ("--slots-version", "-2"),
+            ("--start-timestamp-ms", "-5"),
         ],
     )
     def test_an_unusable_argument_is_refused(self, flag, value):
@@ -76,6 +78,18 @@ class TestArguments:
         with pytest.raises(SystemExit) as exc:
             TripleStreamJob.parse_args(argv)
         assert exc.value.code == 2
+
+    def test_the_seed_version_and_replay_start_default_to_the_newest(self):
+        args = TripleStreamJob.parse_args(_ARGS)
+
+        assert (args.slots_version, args.start_timestamp_ms) == (-1, 0)
+
+    def test_the_seed_version_and_replay_start_parse(self):
+        args = TripleStreamJob.parse_args(
+            [*_ARGS, "--slots-version", "12", "--start-timestamp-ms", "1793613000000"]
+        )
+
+        assert (args.slots_version, args.start_timestamp_ms) == (12, 1793613000000)
 
     def test_an_unknown_source_kind_is_refused(self):
         argv = list(_ARGS)
@@ -101,6 +115,34 @@ class TestSourceOptions:
         jaas = options["kafka.sasl.jaas.config"]
         assert 'username="$ConnectionString"' in jaas
         assert 'password="Endpoint=sb://ns/;Key=\\"k\\""' in jaas
+
+    def test_without_a_replay_start_kafka_reads_the_newest_offsets(self):
+        _fmt, options = TripleStreamJob.source_options("kafka", "b:9092", "t", "JAAS")
+
+        assert options["startingOffsets"] == "latest" and "startingTimestamp" not in options
+
+    @pytest.mark.parametrize("kind", ["kafka", "eventhubs"])
+    def test_a_replay_start_reads_every_partition_from_that_time(self, kind):
+        _fmt, options = TripleStreamJob.source_options(kind, "b:9093", "t", "x", 1793613000000)
+
+        assert options["startingTimestamp"] == "1793613000000"
+        assert options["startingOffsetsByTimestampStrategy"] == "latest"
+        assert "startingOffsets" not in options
+
+    def test_a_kinesis_replay_starts_at_that_timestamp(self):
+        _fmt, options = TripleStreamJob.source_options("kinesis", "us-west-2", "o", "AK:SK", 1793613000000)
+
+        assert json.loads(options["initialPosition"]) == {
+            "at_timestamp": "11/02/2026 09:50:00 +0000",
+            "format": "MM/dd/yyyy HH:mm:ss ZZZ",
+        }
+        assert TripleStreamJob.source_options("kinesis", "r", "o", "A:S")[1]["initialPosition"] == "latest"
+
+    def test_the_initial_state_is_the_seeded_version(self):
+        assert TripleStreamJob.initial_state_sql("main.kg.t_slots", 12) == (
+            "SELECT * FROM main.kg.t_slots VERSION AS OF 12"
+        )
+        assert TripleStreamJob.initial_state_sql("main.kg.t_slots", -1) == "SELECT * FROM main.kg.t_slots"
 
     def test_kinesis_reads_the_stream_in_its_region(self):
         fmt, options = TripleStreamJob.source_options("kinesis", "us-west-2", "orders", "AK:SK")

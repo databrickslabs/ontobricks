@@ -18,9 +18,11 @@ class TwinRealtimeStream:
 
     :meth:`start` checks the prerequisites, cancels a run of the same domain
     at another version (one stream per domain; the job allows one run at a
-    time), creates ``_live``, seeds it from ``…_slots`` and serves it (the
-    union view reads it from then on), uploads the mappings and starts the job
-    (:class:`TwinRealtimeJob`). :meth:`stop` cancels the run and retires
+    time) and retires that version's ``_live``, creates ``_live``, seeds it
+    from ``…_slots`` at a pinned version and serves it (the union view reads it
+    from then on), uploads the mappings and starts the job
+    (:class:`TwinRealtimeJob`) on the same snapshot version, replaying the
+    topic from just before it. :meth:`stop` cancels the run and retires
     ``_live`` (emptied, no longer served), so a stopped stream never leaves a
     frozen ``_live`` in the view. The build and the scheduled tick call
     :meth:`after_build` / :meth:`after_tick`.
@@ -37,15 +39,19 @@ class TwinRealtimeStream:
     def start(self, domain: Any, *, store: Any = None, client: Any = None) -> dict:
         """Start (or reuse) the stream of *domain*'s published version.
 
-        Returns ``{"run_id", "state", "reused", "seeded"}``. *client* is the
+        Returns ``{"run_id", "state", "reused", "seeded", "slots_version"}``
+        (``slots_version``: the ``_slots`` version ``_live`` was seeded at and
+        the job starts from; ``None`` for a reused run). *client* is the
         warehouse client the ``_slots`` snapshot is read on (default: the
         domain's build warehouse). Prerequisites that do not hold raise
         :class:`ValidationError`; Databricks API errors
         :class:`InfrastructureError`; a job that is not deployed
-        :class:`NotFoundError`.
+        :class:`NotFoundError`. A failure after the seed retires ``_live``
+        again before it is raised.
         """
         config = self._require_ready(domain)
         name, version = self._domain_key(domain)
+        store = store if store is not None else self._store(domain)
         reused = None
         for run_version, run in self._job.active_runs(name):
             if run_version == version and reused is None:
@@ -53,30 +59,48 @@ class TwinRealtimeStream:
             else:
                 logger.info("Stopping the stream of %s v%s for v%s", name, run_version, version)
                 self._job.cancel(int(run.run_id))
+                self._retire_quietly(store, self._at_version(domain, run_version))
         if reused is not None:
             return {
                 "run_id": int(reused.run_id),
                 "state": self._job.run_state(reused),
                 "reused": True,
                 "seeded": 0,
+                "slots_version": None,
             }
-        store = store if store is not None else self._store(domain)
         live = TwinLiveServing.live(store)
-        seeded = TwinLiveServing.start(
+        seed = TwinLiveServing.start(
             store, domain, self._settings, client if client is not None else self._client(domain)
         )
         graph = self._graph(domain)
-        params = self.job_parameters(
-            domain,
-            self._settings,
-            config,
-            live_table=f"{live.connection()['schema']}.{live.table_name(graph)}",
-            connection=live.connection(),
-            mappings_path=self._job.upload_mappings(self._run_name(domain), self._mappings(domain)),
+        try:
+            params = self.job_parameters(
+                domain,
+                self._settings,
+                config,
+                live_table=f"{live.connection()['schema']}.{live.table_name(graph)}",
+                connection=live.connection(),
+                mappings_path=self._job.upload_mappings(self._run_name(domain), self._mappings(domain)),
+                seed=seed,
+            )
+            run_id = self._job.run_now(params)
+        except Exception:
+            self._retire_quietly(store, domain)
+            raise
+        logger.info(
+            "Started realtime stream run %s for %s (%d seeded at slots v%s)",
+            run_id,
+            graph,
+            seed["seeded"],
+            seed["slots_version"],
         )
-        run_id = self._job.run_now(params)
-        logger.info("Started realtime stream run %s for %s (%d seeded)", run_id, graph, seeded)
-        return {"run_id": run_id, "state": "PENDING", "reused": False, "seeded": seeded}
+        return {
+            "run_id": run_id,
+            "state": "PENDING",
+            "reused": False,
+            "seeded": seed["seeded"],
+            "slots_version": seed["slots_version"],
+        }
 
     def stop(self, domain: Any, *, store: Any = None) -> dict:
         """Cancel *domain*'s stream run and retire its ``_live``; ``{"run_id", "state"}``."""
@@ -86,7 +110,7 @@ class TwinRealtimeStream:
             if run_version == version:
                 run_id = int(run.run_id)
                 self._job.cancel(run_id)
-        TwinLiveServing.retire(store if store is not None else self._store(domain), domain)
+        TwinLiveServing.retire(store if store is not None else self._store(domain), domain, self._settings)
         return {"run_id": run_id, "state": "CANCELLING" if run_id else "not_running"}
 
     def status(self, domain: Any) -> dict:
@@ -112,25 +136,34 @@ class TwinRealtimeStream:
 
         Best-effort: the build has already produced the microbatch graph, so a
         stream that cannot start or stop is recorded (``realtime_state =
-        failed:<Error>``) and logged, never raised. A build that is not
-        ``realtime`` on a Lakebase store whose ``_live`` is still served cancels
-        the stream (when the job is configured) and retires ``_live``.
+        failed:<Error>``) and logged, never raised. A started stream records the
+        ``_slots`` version ``_live`` was seeded at (``slots_seed_version``). A
+        build that is not ``realtime``, on a deployment with realtime enabled
+        and a Lakebase store whose ``_live`` is still served, cancels the stream
+        (when the job is configured) and retires ``_live``; with realtime off
+        no Postgres query is made.
         """
         from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
 
         decision = getattr(pipe, "mode_decision", None)
         realtime = getattr(decision, "effective", "") == "realtime"
+        enabled = getattr(pipe.settings, "realtime_enabled", False) is True
         store = getattr(pipe, "store", None)
         stream = (factory or TwinRealtimeStream)(pipe.settings)
         try:
             if realtime:
                 started = stream.start(pipe.domain, store=store, client=pipe.source_client)
                 pipe.realtime_run_id, pipe.realtime_state = str(started["run_id"]), started["state"]
-            elif isinstance(store, LakebaseBase) and TwinLiveServing.serving(store, pipe.domain):
+                pipe.slots_seed_version = started.get("slots_version")
+            elif (
+                enabled
+                and isinstance(store, LakebaseBase)
+                and TwinLiveServing.serving(store, pipe.domain)
+            ):
                 stopped = stream.stop_quietly(pipe.domain, store=store)
                 pipe.realtime_run_id = str(stopped["run_id"] or "")
                 pipe.realtime_state = stopped["state"]
-        except OntoBricksError as exc:
+        except Exception as exc:  # noqa: BLE001 — Postgres / SDK errors too; the build has succeeded
             logger.warning("[DT-BUILD %s] realtime stream: %s", pipe.task_id, exc)
             pipe.realtime_state = f"failed:{type(exc).__name__}"
 
@@ -140,8 +173,26 @@ class TwinRealtimeStream:
             return self.stop(domain, store=store)
         except OntoBricksError as exc:
             logger.warning("Realtime stream not cancelled (%s); retiring its live table", exc)
-            TwinLiveServing.retire(store, domain)
+            TwinLiveServing.retire(store, domain, self._settings)
             return {"run_id": None, "state": "retired"}
+
+    def _retire_quietly(self, store: Any, domain: Any) -> None:
+        """:meth:`TwinLiveServing.retire`, logged instead of raised (the caller's error wins)."""
+        try:
+            TwinLiveServing.retire(store, domain, self._settings)
+        except Exception as exc:  # noqa: BLE001 — best-effort clean-up
+            logger.warning("Live table of %s not retired: %s", self._graph(domain), exc)
+
+    @staticmethod
+    def _at_version(domain: Any, version: str) -> Any:
+        """*domain* as seen at another *version* (its graph name and ``_live`` table)."""
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            info=getattr(domain, "info", None) or {},
+            current_version=version,
+            delta=getattr(domain, "delta", None) or {},
+        )
 
     def after_tick(self, domain: Any, store: Any) -> dict:
         """A realtime tick's housekeeping: retire a dead stream's ``_live``, purge tombstones.
@@ -158,7 +209,7 @@ class TwinRealtimeStream:
             return {}
         state = self.status(domain)["state"]
         if state in ("not_running", "not_configured"):
-            TwinLiveServing.retire(store, domain)
+            TwinLiveServing.retire(store, domain, self._settings)
             logger.warning("Realtime stream of %s is not running: _live retired", self._graph(domain))
             return {"realtime_state": "retired"}
         hours = max(24, int(RealtimeSource.of(domain).get("state_ttl_hours") or 24))
@@ -177,8 +228,14 @@ class TwinRealtimeStream:
         live_table: str,
         connection: dict,
         mappings_path: str,
+        seed: dict,
     ) -> dict:
-        """The ``job_parameters`` of one run (every argument the job parses; no secret value)."""
+        """The ``job_parameters`` of one run (every argument the job parses; no secret value).
+
+        *seed* is :meth:`TwinLiveServing.start`'s result: the job reads its
+        initial state at ``slots_version`` and replays the topic from
+        ``start_timestamp_ms``.
+        """
         from back.core.graphdb.delta import _table_naming
 
         name, version = TwinRealtimeStream._domain_key(domain)
@@ -200,6 +257,8 @@ class TwinRealtimeStream:
             "live_table": live_table,
             "checkpoint": f"{root}/{TwinRealtimeStream._run_name(domain)}",
             "state_ttl_hours": str(config.get("state_ttl_hours", 72)),
+            "slots_version": str(int(seed["slots_version"])),
+            "start_timestamp_ms": str(int(seed["start_timestamp_ms"])),
         }
 
     def _require_ready(self, domain: Any) -> dict:

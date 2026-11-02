@@ -48,8 +48,9 @@ class TwinBuildRunHistory:
         ``""`` when the apply phase was never reached),
         ``apply_fallback_reason``, ``data_table_id`` (the Delta table id the
         version belongs to, ``""`` when unknown) and the realtime stream run it
-        started or stopped (``realtime_run_id``, ``realtime_state``,
-        ``TwinRealtimeStream.after_build``). A build that reached the
+        started or stopped (``realtime_run_id``, ``realtime_state``, and the
+        ``_slots`` version a started stream was seeded at,
+        ``slots_seed_version``; ``TwinRealtimeStream.after_build``). A build that reached the
         incremental step adds its ``slot_refresh_facts``
         (:class:`TwinSlotRefreshPlan`: ``source_versions``,
         ``source_table_ids``, ``slot_full_refresh_pending``,
@@ -78,6 +79,9 @@ class TwinBuildRunHistory:
             "data_table_id": text(pipe, "data_table_id"),
             "realtime_run_id": text(pipe, "realtime_run_id"),
             "realtime_state": text(pipe, "realtime_state"),
+            "slots_seed_version": TwinBuildRunHistory._version_or_none(
+                getattr(pipe, "slots_seed_version", None)
+            ),
             **TwinBuildRunHistory._slot_refresh_facts(pipe),
         }
         return {**stats, "materialization": materialization}
