@@ -21,7 +21,8 @@ from back.core.helpers import (
     validate_table_name,
 )
 from back.core.logging import get_logger
-from back.core.streaming.SlotPipelineSpec import SlotPipelineSpec
+from back.core.streaming.SlotPipelineSpec import SOURCE_CDF, SOURCE_TOPIC, SlotPipelineSpec
+from back.core.streaming.TopicSource import TopicSource
 
 logger = get_logger(__name__)
 
@@ -210,8 +211,15 @@ class SlotProjectionCompiler:
         *,
         base_uri: str,
         slots_fqn: str,
+        source: str = SOURCE_CDF,
+        topic: TopicSource | None = None,
     ) -> SlotPipelineSpec:
         """Compile every row-local mapping; collect the rest as batch mappings.
+
+        *source* ``"cdf"`` (default) reads each source table's change data
+        feed; ``"topic"`` reads the realtime domain's Debezium *topic*
+        (:class:`TopicSlotSource`) and needs no row tracking on the sources.
+        The ``_slots`` table and the AUTO CDC flows are the same either way.
 
         *entity_mappings* is the ``{class_uri: mapping}`` dict of
         ``extract_r2rml_mappings``. A TriplesMap with several classes shares
@@ -226,6 +234,7 @@ class SlotProjectionCompiler:
         can select them by identity in the translator's ``mappings_filter``.
         """
         compiler = SlotProjectionCompiler
+        view_sql = compiler._view_emitter(entity_mappings, relationship_mappings, source, topic)
         statements = [compiler.slots_table_sql(slots_fqn)]
         row_local_ids: list[str] = []
         batch_mappings: list[dict] = []
@@ -239,14 +248,7 @@ class SlotProjectionCompiler:
             if mapping_id in row_local_ids:
                 continue
             view_name = f"slot_events_{mapping_id}"
-            statements.append(
-                compiler.slot_event_view_sql(
-                    mapping,
-                    base_uri=base_uri,
-                    view_name=view_name,
-                    source_fqn=mapping["table"],
-                )
-            )
+            statements.append(view_sql(mapping, base_uri, view_name))
             statements.append(
                 compiler.auto_cdc_flow_sql(
                     flow_name=f"slot_flow_{mapping_id}",
@@ -268,6 +270,36 @@ class SlotProjectionCompiler:
             row_local_map_ids=row_local_ids,
             batch_mappings=batch_mappings,
             source_tables=sorted(source_tables),
+            source=source,
+            topic=topic,
+        )
+
+    @staticmethod
+    def _view_emitter(entity_mappings, relationship_mappings, source: str, topic):
+        """``(mapping, base_uri, view_name) -> view SQL`` for *source* (validated here)."""
+        compiler = SlotProjectionCompiler
+        if source == SOURCE_CDF:
+            if topic is not None:
+                raise ValidationError("A change-feed slot pipeline takes no topic")
+            return lambda mapping, base_uri, view_name: compiler.slot_event_view_sql(
+                mapping, base_uri=base_uri, view_name=view_name, source_fqn=mapping["table"]
+            )
+        if source != SOURCE_TOPIC:
+            raise ValidationError(f"Unknown slot pipeline source {source!r} (cdf or topic)")
+        if not isinstance(topic, TopicSource):
+            raise ValidationError("A topic slot pipeline needs its topic")
+        from back.core.streaming.TopicSlotSource import TopicSlotSource
+
+        tables = {
+            mapping["table"]
+            for mapping in compiler.row_local_mappings(entity_mappings, relationship_mappings)
+        }
+        leaves = [table.rsplit(".", 1)[-1].lower() for table in tables]
+        return lambda mapping, base_uri, view_name: TopicSlotSource.slot_event_view_sql(
+            mapping,
+            view_name=view_name,
+            topic=topic,
+            match_leaf=leaves.count(mapping["table"].rsplit(".", 1)[-1].lower()) == 1,
         )
 
     # ------------------------------------------------------------------

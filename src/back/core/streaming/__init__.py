@@ -21,6 +21,8 @@ from back.core.streaming.SlotProjectionCompiler import (  # noqa: F401
 from back.core.streaming.SlotReconciler import SlotReconciler  # noqa: F401
 from back.core.streaming.SlotRowProjector import SlotRowProjector  # noqa: F401
 from back.core.streaming.SourceReadiness import SourceReadiness  # noqa: F401
+from back.core.streaming.TopicSlotSource import TopicSlotSource  # noqa: F401
+from back.core.streaming.TopicSource import TopicSource  # noqa: F401
 
 __all__ = [
     "SlotChange",
@@ -31,4 +33,6 @@ __all__ = [
     "SlotReconciler",
     "SlotRowProjector",
     "SourceReadiness",
+    "TopicSlotSource",
+    "TopicSource",
 ]
