@@ -522,6 +522,13 @@ them into a Lakebase `_live` table the graph's union view reads.
 
 **Prerequisites.**
 
+- Switching `ONTOBRICKS_REALTIME_ENABLED` off deployment-wide does not stop running
+  streams or retire a served `_live` (the realtime tick no longer runs): call
+  `POST /dtwin/incremental/realtime/stop` for every realtime domain first.
+- The replay window the stream starts from is the seed version's commit time minus a
+  fixed 10-minute margin (`TwinLiveServing`); a source fed from the topic with more
+  lag, or a slot update longer than ten minutes, needs a wider margin (follow-up:
+  make it a setting).
 - The deployment: `ONTOBRICKS_REALTIME_ENABLED=true`, the stream job deployed
   (`resources/triple_rtm.job.yml`, name `<app>-triple-rtm` or
   `ONTOBRICKS_REALTIME_JOB_NAME`, the app principal with `CAN_MANAGE_RUN` on it), a
@@ -708,7 +715,9 @@ Kinesis connectors; executors importing the synced source through `PYTHONPATH`, 
 the `databricks-sql-connector` install leaving the runtime's `pandas` / `pyarrow`
 alone; the DBR 19 key `deploy.sh` resolves; the run-as identity's grants (secret
 scope, `_slots`, checkpoint volume) and the `_live` grants to the stream role; the
-job's `[dev <user>] ` name lookup; `VERSION AS OF` on the `_slots` streaming table
+job's `[dev <user>] ` name lookup and whether `presets.name_prefix: ""` really
+suppresses that prefix for pipelines (the runner finds the pipeline under either
+name, so the twin problem is covered either way); `VERSION AS OF` on the `_slots` streaming table
 (the seed and the initial state) and the timestamp start of the Kafka, Event Hubs
 (Kafka endpoint) and Kinesis sources; whether `presets.name_prefix: ""` turns the
 development prefix off on the CLI in use; Debezium encodings beyond the defaults
