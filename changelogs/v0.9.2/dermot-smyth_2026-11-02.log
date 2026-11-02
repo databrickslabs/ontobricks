@@ -3297,3 +3297,41 @@ Modified files:
 
 Test result: see the roll-up line ("Incremental triple materialization —
 roll-up" section) for the full-suite number after this section.
+
+================================================================================
+## Live run of the realtime processing leg on Spark (serverless notebook, AvailableNow)
+================================================================================
+
+Context: the Phase 3 processor (`SlotDiffStatefulProcessor` under
+`transformWithState`) and `LiveSink` had only been exercised without Spark;
+the earlier serverless *script* task aborted with SIGABRT before reporting
+anything. Run as a serverless *notebook* task instead, the same harness got
+through, and the actual platform limits surfaced one by one (no code change;
+the findings are recorded in the guide's Live verification).
+
+Observed (2026-11-02, fevm-ontobricks-int, Lakebase `ontobricks-int`, scratch
+objects dropped afterwards):
+- Serverless compute refuses continuous streaming triggers:
+  `[INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED] Trigger type ProcessingTime is
+  not supported for this cluster type. Use … AvailableNow, Once` — the precise
+  reason Real-Time Mode (and any always-on stream) needs classic compute.
+  The DBFS root is disabled there too (checkpoints go to a UC volume, as the
+  RTM job already does with `ONTOBRICKS_REALTIME_CHECKPOINT_ROOT`); the
+  runtime's bundled SDK predates the Lakebase API (the credential was minted
+  by the submitter and passed as a parameter).
+- With `trigger(availableNow=True)` over a Delta table of Debezium-style
+  events (standing in for the topic), two waves on one checkpoint:
+  wave 1, 40 upserts → 80 state rows and 80 live rows in the `_live` table
+  (two slots per customer), 0 tombstones; wave 2, state restored from the
+  checkpoint, 10 renames + 5 deletes → 70 live rows, 10 tombstones, 10 renamed
+  labels, 0 stale labels, 0 deleted keys still live. The processor's state
+  init / restore, slot diff, delete → tombstone and `seq` handling and the
+  sink's guarded upserts behave on real Spark as the property tests say.
+- Not measured: Real-Time-Mode latency (the design's p99 < 1 s) and a Kafka
+  source — both need a classic DBR 19 cluster and a topic.
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: documentation only.

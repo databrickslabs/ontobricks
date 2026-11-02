@@ -730,11 +730,11 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ○ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace |
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh. Live: `drift: false`, identical counts and `xxhash64` sums after bootstrap and after mutations |
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | ○ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
-| 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ✅ | ○ | `jobs/triple_stream` (`main.py`, `processor.py`); the diff logic is property-tested without Spark; the Spark / RTM wiring could not run on the workspace (serverless-only; RTM needs classic DBR 19 compute) |
+| 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ✅ | ◐ | `jobs/triple_stream` (`main.py`, `processor.py`); the diff logic is property-tested without Spark. Live on Spark (serverless, `availableNow`): the processor under `transformWithState` + `LiveSink` into `_live` — 40 upserts → 80 live rows, then state restored from the checkpoint, 10 renames + 5 deletes → 70 live rows / 10 tombstones, no stale labels. Real-Time Mode itself (continuous trigger, p99 < 1 s) needs classic DBR 19 compute: serverless refuses it (`INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED`) |
 | 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them. Live: DDL, `seq` guard, tombstone, purge, detach on `ontobricks-int`; sink upsert p50 105 ms / p99 218 ms |
 | 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ✅ | ○ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time. The topic-fed pipeline SQL validates in Lakeflow; cluster sizing and run-as grants need a classic-compute workspace with a topic |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
-| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; **`microbatch` through Lakehouse//RT 14.0 s p50 / 22.9 s p95 (n = 10) — the ≤ 30 s p95 KPI is met ✅**; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; `incremental` source → `_data` 82 s; `realtime` p99 < 1 s ○ — needs a topic and classic compute, which this workspace cannot offer (the sink's share, Lakebase upsert p99 218 ms, is measured) |
+| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; **`microbatch` through Lakehouse//RT 14.0 s p50 / 22.9 s p95 (n = 10) — the ≤ 30 s p95 KPI is met ✅**; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; `incremental` source → `_data` 82 s; `realtime` p99 < 1 s ○ — needs a topic and classic compute, which this workspace cannot offer (serverless refuses continuous triggers); the processing leg is verified functionally on Spark (`availableNow`, two waves) and the sink's share, Lakebase upsert p99 218 ms, is measured |
 | Verif. | KPIs: domains per mode, fallback events by reason, build DBUs | ✅ | ○ | `GET /dtwin/incremental/overview` (admin): `domains_per_mode`, `fallbacks_by_reason`, per-domain rows; DBUs are not computed by the app — the trace's pipeline id, `slot_update_id` and `warehouse_id` join to `system.billing.usage` |
 
 ## Known limitations
@@ -932,18 +932,34 @@ Live Lakebase synced tables (2026-11-02, instance `ontobricks-int`, through the 
   design's Lakebase target is < 60 s). This is why a domain whose slots carry the whole graph syncs
   Lakebase from `_slots` in the triggered and continuous schedules.
 
-Attempted and blocked on the workspace (2026-11-02): the `transformWithState` processor + `LiveSink`
-harness could not run there — classic job clusters are refused ("Only serverless compute is
-supported in the workspace"), and on serverless job compute the slim closure imports fine
-(`back.core.streaming`, `jobs.triple_stream.processor`, `psycopg`) but any streaming query start
-(`rate` source → `foreachBatch`, with or without `transformWithState`) aborts the Python client
-with SIGABRT before producing output (Databricks trace IDs 7474660131088429/…/584058328432402 and
-…/77296344132098). The Real-Time-Mode path needs classic DBR 19 compute by design, so this is an
-environment limit, not a code path that was exercised and failed. (Lakehouse//RT itself is no
-longer blocked: RT warehouses are created in the UI — Compute → SQL Warehouses → Create →
-Real-Time; the SDK's warehouse types are still `CLASSIC` / `PRO` only and the API lists an RT
-warehouse with `warehouse_type: null` — and the measurements above were taken once one existed;
-`scripts/measure_freshness.py --read-warehouse-id <rt>` repeats them against a deployed domain.)
+Live realtime processing leg on Spark (2026-11-02, a serverless **notebook** task — the same
+harness as a serverless *script* task aborts the Python client with SIGABRT before reporting
+anything; classic job clusters are refused on the workspace, "Only serverless compute is
+supported"):
+
+- **What the platform says.** Serverless compute refuses any continuous trigger —
+  `[INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED] Trigger type ProcessingTime is not supported for
+  this cluster type. Use … AvailableNow, Once` — which is the precise reason Real-Time Mode (and
+  every always-on stream) needs classic DBR 19 compute. The DBFS root is disabled there
+  (checkpoints go to a UC volume, as the RTM job does with `ONTOBRICKS_REALTIME_CHECKPOINT_ROOT`),
+  and the runtime's bundled SDK predates the Lakebase API (the submitter minted the credential).
+- **What ran.** With `trigger(availableNow=True)` over a Delta table of Debezium-style events
+  (standing in for the topic), `SlotDiffStatefulProcessor` under `transformWithState` →
+  `LiveSink` into a Lakebase `_live` table, two waves on one checkpoint: wave 1, 40 upserts → 80
+  state rows and **80 live rows** (two slots per customer), 0 tombstones; wave 2, state restored
+  from the checkpoint, 10 renames + 5 deletes → **70 live rows, 10 tombstones**, 10 renamed
+  labels, 0 stale labels, 0 deleted keys still live. State init / restore, the slot diff, delete
+  → tombstone, `seq` handling and the sink's guarded upserts behave on real Spark as the property
+  tests say.
+- **Not measured.** Real-Time-Mode latency (the design's p99 < 1 s; the sink's share is the
+  Lakebase upsert p99 218 ms above) and a Kafka / Event Hubs source — both need a classic DBR 19
+  cluster and a topic, which this workspace cannot offer.
+
+Lakehouse//RT is no longer blocked either: RT warehouses are created in the UI — Compute → SQL
+Warehouses → Create → Real-Time; the SDK's warehouse types are still `CLASSIC` / `PRO` only and the
+API lists an RT warehouse with `warehouse_type: null` — and the measurements above were taken once
+one existed; `scripts/measure_freshness.py --read-warehouse-id <rt>` repeats them against a
+deployed domain.
 
 Live-unverified (workspace spike checklist):
 
