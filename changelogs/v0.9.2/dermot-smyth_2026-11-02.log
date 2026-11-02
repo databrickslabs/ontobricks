@@ -2598,3 +2598,43 @@ Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/te
 -> 11419 passed, 341 skipped, 9 deselected in 93.36s (new file: 35 tests in
 1.9 s); architecture suite green; tests/units/architecture/baseline.json
 unchanged.
+
+================================================================================
+## Live `_slots` landing latency and the design traceability table
+================================================================================
+
+Context: the microbatch fast path reads `_slots` directly, so the KPI that
+matters for it is the time from a source commit to the slot landing in
+`_slots`, not to the `_graph` view. A second continuous run of the change-feed
+slot pipeline on one fixture table (scratch schema, dropped afterwards) measured
+it; the traceability table was restructured so "built as designed" and "verified
+on the workspace" are two separate facts per row.
+
+Changes:
+
+1. docs/incremental-materialization.md — Live verification: new bullet with the
+   `_slots` landing latency; Design traceability: `Built` and `Live` columns
+   (✅ / ◐ / ⛔ and ✅ / ○ / —), every row annotated with what the workspace
+   exercised. Rows that were ◐ for a justified reading of the design are ✅ with
+   the reason kept in `Where`: `_inferred` reset (a MERGE skip changes nothing,
+   so it keeps the inferences), `_graph` as an MV on the Lakehouse engine only
+   (the design wants the MV for Lakehouse//RT reads, and only that engine's
+   readers read `_graph`), Lakebase syncing from `_data` (the design offers
+   `_slots` or `_data`), and the realtime processing/operations rows (built;
+   live column ○). The KPI row carries every live number.
+2. changelogs/v0.9.2/dermot-smyth_2026-11-02.log — this section.
+
+Measured (2026-11-02, continuous pipeline, eight single-row source updates, the
+slots table polled every second from the build warehouse):
+- source commit → new label in `_slots`: 8.1 s median, 11.9 s max, 3.1 s min
+  (n = 8; samples 11.9, 8.1, 8.0, 8.1, 8.2, 10.3, 3.1, 8.2). A Lakehouse//RT
+  read adds query latency only, so the design's ≤ 30 s p95 holds at the
+  pipeline's cadence; the RT read itself is unmeasured (RT is enabled on the
+  workspace but an RT warehouse is created in the UI only, and none exists).
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: documentation only; the full-suite number is in the "Incremental
+triple materialization — roll-up" section above.

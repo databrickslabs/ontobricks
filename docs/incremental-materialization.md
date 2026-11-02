@@ -588,32 +588,35 @@ libpq DSN for `sync` / `live`). An empty variable reads as unset.
 ## Design traceability
 
 Requirements of the design document (`[Design] Incremental Triple Materialization | OntoBricks`)
-against this release. ✅ implemented · ◐ implemented with a documented deviation · ⛔ deferred.
+against this release. Two facts per row, kept apart: **Built** — ✅ as designed · ◐ with a
+documented deviation · ⛔ deferred; **Live** — whether the row was exercised on the integration
+workspace `fevm-ontobricks-int` (✅ verified · ○ unit/property-tested only · — nothing to run).
+The live evidence is under [Known limitations](#known-limitations) › Live verification.
 
-| Phase | Requirement | Status | Where |
-|---|---|---|---|
-| 1 P0 | Compute the source once (`count`, stream, Lakeflow source read `_data`) | ✅ | `TwinBuildPostMaterialize.triples_source_relation`, `SyncPlan` |
-| 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples, and by a Lakehouse scheduled tick (which empties it before refreshing `_data` / `_graph`, as every other tick discards its store's inferences); the MERGE *skip* (no source change) keeps it |
-| 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | SCD1 physical deletes stand in for a `deleted` column |
-| 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource; development targets set `presets: {name_prefix: "", pipelines_development: false}` and the runner also finds a `[dev <user>] ` name |
-| 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ◐ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation)); deviation: `_graph` is an MV on the Lakehouse engine only (the only one whose readers read it), Lakebase / Neo4j — every `realtime` domain among them — keep the VIEW; `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
-| 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
-| 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ◐ | from `_data` only (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode` |
-| 1 P0 | Build-run trace: mode, refresh technique, fallback reason | ✅ | `stats.materialization`; cockpit column, details and status card |
-| 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | `TwinNetChangeApply`; Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`) |
-| 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | `DeltaMergeMaterializer`, `TwinMergeFallback` |
-| 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh |
-| 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline |
-| 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | `DeltaFlatStore` reads-only fallback as the caller |
-| 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | `ContinuousSyncWait`; Postgres union view |
-| 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | `GET /dtwin/incremental/status` + status card; fallback events in the trace |
-| 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh |
-| 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
-| 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ◐ | `jobs/triple_stream` (`main.py`, `processor.py`); the Spark / connector / RTM wiring is live-unverified |
-| 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them |
-| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time; cluster sizing, run-as grants and the topic-fed SDP pipeline are live-unverified |
-| Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
-| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ◐ | measured live (fixtures, serverless): drift 0 after bootstrap and after mutations; `incremental` source→`_data` 82 s; `microbatch` through the view 217–383 s (view trigger cadence) — the ≤ 30 s path needs Lakehouse//RT (gated beta) and `realtime` needs a topic + `_live`; `scripts/measure_freshness.py` + nightly step for the deployed app |
+| Phase | Requirement | Built | Live | Where |
+|---|---|---|---|---|
+| 1 P0 | Compute the source once (`count`, stream, Lakeflow source read `_data`) | ✅ | ○ | `TwinBuildPostMaterialize.triples_source_relation`, `SyncPlan` |
+| 1 P0 | `_inferred` reset on both build paths | ✅ | ○ | reset on every build that changes base triples, and by a Lakehouse scheduled tick (which empties it before refreshing `_data` / `_graph`, as every other tick discards its store's inferences); a MERGE *skip* (no source change) has nothing to reset and keeps it |
+| 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | ✅ | SCD1 physical deletes stand in for a `deleted` column; both pipeline variants (change feed, Debezium topic) validate in Lakeflow, the change-feed one bootstraps and folds mutations to the translator's output exactly |
+| 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource; development targets set `presets: {name_prefix: "", pipelines_development: false}` and the runner also finds a `[dev <user>] ` name. Live: the runner's create / validate / start / adopt / stop cycle (the DAB render itself is a unit test) |
+| 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ✅ | ✅ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation)); `_graph` is an MV on the Lakehouse engine — the design wants the MV so Lakehouse//RT can read it, and only that engine's readers read `_graph`; Lakebase / Neo4j (every `realtime` domain among them) keep the VIEW their sync and stream read. Live: `EXPLAIN` incremental-eligible (`tests/external/test_mv_incremental_plan.py`, nightly), post-mutation refresh `GROUP_AGGREGATE` |
+| 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | ○ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
+| 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ✅ | ○ | the design offers either; from `_data` (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode`. An MV as a triggered/continuous synced-table source is a private preview the workspace does not have |
+| 1 P0 | Build-run trace: mode, refresh technique, fallback reason | ✅ | ○ | `stats.materialization`; cockpit column, details and status card |
+| 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | ○ | `TwinNetChangeApply`; Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`); the MV change feed needs external metadata (private preview) — until then the apply falls back to a full stream as designed, the MERGE-table feed works |
+| 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | ○ | `DeltaMergeMaterializer`, `TwinMergeFallback` |
+| 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh. Live: the continuous pipeline lands a source change in `_slots` after 8.1 s median / 11.9 s max (n = 8) |
+| 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | ○ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline |
+| 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ○ | query warehouse + "Use Lakehouse//RT"; `DeltaFlatStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Lakehouse//RT is enabled on the workspace but an RT warehouse is created in the UI only — none exists yet |
+| 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | ○ | `ContinuousSyncWait`; Postgres union view |
+| 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ○ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace |
+| 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh. Live: `drift: false`, identical counts and `xxhash64` sums after bootstrap and after mutations |
+| 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | ○ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
+| 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ✅ | ○ | `jobs/triple_stream` (`main.py`, `processor.py`); the diff logic is property-tested without Spark; the Spark / RTM wiring could not run on the workspace (serverless-only; RTM needs classic DBR 19 compute) |
+| 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them. Live: DDL, `seq` guard, tombstone, purge, detach on `ontobricks-int`; sink upsert p50 105 ms / p99 218 ms |
+| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ✅ | ○ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time. The topic-fed pipeline SQL validates in Lakeflow; cluster sizing and run-as grants need a classic-compute workspace with a topic |
+| Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
+| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; `incremental` source → `_data` 82 s; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; the RT read over `_slots` adds query latency only, but no RT warehouse exists to measure it; `realtime` p99 needs a topic and classic compute (not on this workspace) |
 
 ## Known limitations
 
@@ -751,6 +754,13 @@ afterwards):
   two further samples were lost when the warehouse session dropped). This is the materialized-view
   path; the design's ≤ 30 s target is the Lakehouse//RT path over `_slots` / `_graph`, which this
   workspace cannot offer (gated beta). Treat "seconds" as the pipeline's and "minutes" as the view's.
+- **Continuous (`microbatch`) freshness at `_slots`** (same day, a second continuous run of the
+  change-feed pipeline on one fixture table, eight single-row updates spaced apart, the slots table
+  polled every second from the build warehouse): source commit → new label in `_slots` after
+  **8.1 s median, 11.9 s max, 3.1 s min** (n = 8). This is what the [fast path](#lakehousert)
+  reads — a Lakehouse//RT warehouse adds its own query latency (milliseconds) on top, so the
+  design's ≤ 30 s p95 holds at the pipeline's cadence; the RT read itself is still unmeasured
+  (no RT warehouse on the workspace, see below).
 - **Found and fixed**: switching the pipeline to continuous starts an update by itself, so the
   explicit `start_update` of the microbatch bootstrap was refused (`An active update … already
   exists`) — the runner now adopts that update.
