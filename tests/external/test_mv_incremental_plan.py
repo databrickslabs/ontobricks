@@ -4,18 +4,23 @@
 of the ``_data`` definition a build would create, compiled from fixture
 mappings, must name an incremental technique and no ``FULL_RECOMPUTE``.
 
-Opt-in (``external``): skipped unless ``ONTOBRICKS_EXTERNAL_WAREHOUSE=1``,
-``DATABRICKS_CONFIG_PROFILE`` (a logged-in Databricks CLI profile),
-``ONTOBRICKS_EXTERNAL_WAREHOUSE_ID`` (a SQL warehouse) and
-``ONTOBRICKS_EXTERNAL_SCHEMA`` (``catalog.schema`` the caller may create
-tables in) are set::
+Opt-in (``external``): skipped unless ``ONTOBRICKS_EXTERNAL_WAREHOUSE=1`` and
+``ONTOBRICKS_EXTERNAL_SCHEMA`` (``catalog.schema`` the caller may create tables
+in) are set, with one of two credential paths:
 
-    ONTOBRICKS_EXTERNAL_WAREHOUSE=1 DATABRICKS_CONFIG_PROFILE=<profile> \\
-    ONTOBRICKS_EXTERNAL_WAREHOUSE_ID=<id> ONTOBRICKS_EXTERNAL_SCHEMA=<cat.schema> \\
+* a logged-in Databricks CLI profile: ``DATABRICKS_CONFIG_PROFILE`` and
+  ``ONTOBRICKS_EXTERNAL_WAREHOUSE_ID``;
+* host and token, as the nightly ``external-smoke`` job provides them:
+  ``DATABRICKS_HOST``, ``DATABRICKS_TOKEN`` and ``DATABRICKS_SQL_WAREHOUSE_ID``.
+
+::
+
+    ONTOBRICKS_EXTERNAL_WAREHOUSE=1 ONTOBRICKS_EXTERNAL_SCHEMA=<cat.schema> \\
+    DATABRICKS_CONFIG_PROFILE=<profile> ONTOBRICKS_EXTERNAL_WAREHOUSE_ID=<id> \\
     uv run --frozen pytest -q -m external tests/external/test_mv_incremental_plan.py
 
-The test creates (if absent) a source table and a Delta table with the slot
-columns standing in for the ``_slots`` streaming table; nothing is
+The test creates (if absent) the schema, a source table and a Delta table with
+the slot columns standing in for the ``_slots`` streaming table; nothing is
 materialized (``EXPLAIN`` only).
 """
 
@@ -25,18 +30,33 @@ import os
 
 import pytest
 
+
+def _env(name: str) -> str:
+    return (os.environ.get(name) or "").strip()
+
+
+def _profile_credentials() -> bool:
+    return bool(_env("DATABRICKS_CONFIG_PROFILE") and _env("ONTOBRICKS_EXTERNAL_WAREHOUSE_ID"))
+
+
+def _token_credentials() -> bool:
+    return bool(
+        _env("DATABRICKS_HOST") and _env("DATABRICKS_TOKEN") and _env("DATABRICKS_SQL_WAREHOUSE_ID")
+    )
+
+
 pytestmark = [
     pytest.mark.external,
     pytest.mark.skipif(
         not (
-            os.environ.get("ONTOBRICKS_EXTERNAL_WAREHOUSE") == "1"
-            and os.environ.get("DATABRICKS_CONFIG_PROFILE")
-            and os.environ.get("ONTOBRICKS_EXTERNAL_WAREHOUSE_ID")
-            and os.environ.get("ONTOBRICKS_EXTERNAL_SCHEMA")
+            _env("ONTOBRICKS_EXTERNAL_WAREHOUSE") == "1"
+            and _env("ONTOBRICKS_EXTERNAL_SCHEMA")
+            and (_profile_credentials() or _token_credentials())
         ),
         reason=(
-            "external: set ONTOBRICKS_EXTERNAL_WAREHOUSE=1, DATABRICKS_CONFIG_PROFILE, "
-            "ONTOBRICKS_EXTERNAL_WAREHOUSE_ID and ONTOBRICKS_EXTERNAL_SCHEMA"
+            "external: set ONTOBRICKS_EXTERNAL_WAREHOUSE=1, ONTOBRICKS_EXTERNAL_SCHEMA and "
+            "either DATABRICKS_CONFIG_PROFILE + ONTOBRICKS_EXTERNAL_WAREHOUSE_ID or "
+            "DATABRICKS_HOST + DATABRICKS_TOKEN + DATABRICKS_SQL_WAREHOUSE_ID"
         ),
     ),
 ]
@@ -50,17 +70,21 @@ _RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
 @pytest.fixture(scope="module")
 def warehouse():
+    """A SQL client on the external warehouse, from a CLI profile or host + token."""
     from back.core.databricks import DatabricksClient
     from tests.fixtures.databricks_auth import DatabricksAuth
 
-    profile = os.environ["DATABRICKS_CONFIG_PROFILE"]
-    minted = DatabricksAuth.mint_host_and_token(profile)
-    if minted is None:
-        pytest.skip(f"Could not mint a token from the Databricks CLI profile {profile!r}")
-    host, token = minted
-    return DatabricksClient(
-        host=host, token=token, warehouse_id=os.environ["ONTOBRICKS_EXTERNAL_WAREHOUSE_ID"]
-    )
+    if _profile_credentials():
+        profile = _env("DATABRICKS_CONFIG_PROFILE")
+        minted = DatabricksAuth.mint_host_and_token(profile)
+        if minted is None:
+            pytest.skip(f"Could not mint a token from the Databricks CLI profile {profile!r}")
+        host, token = minted
+        warehouse_id = _env("ONTOBRICKS_EXTERNAL_WAREHOUSE_ID")
+    else:
+        host, token = _env("DATABRICKS_HOST"), _env("DATABRICKS_TOKEN")
+        warehouse_id = _env("DATABRICKS_SQL_WAREHOUSE_ID")
+    return DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
 
 
 @pytest.fixture(scope="module")
@@ -68,8 +92,9 @@ def tables(warehouse):
     """``(source, slots, data)`` FQNs in the external schema; the first two exist."""
     from back.core.graphdb.delta import materialize
 
-    schema = os.environ["ONTOBRICKS_EXTERNAL_SCHEMA"]
+    schema = _env("ONTOBRICKS_EXTERNAL_SCHEMA")
     source, slots, data = (f"{schema}.ob_it_{leaf}" for leaf in ("customers", "slots", "data"))
+    materialize.run_sql(warehouse, f"CREATE SCHEMA IF NOT EXISTS {schema}")
     materialize.run_sql(
         warehouse,
         f"CREATE TABLE IF NOT EXISTS {source} (id STRING, name STRING) {_PROPERTIES}",

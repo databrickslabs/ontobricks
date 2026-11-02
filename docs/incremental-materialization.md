@@ -366,14 +366,22 @@ runs `EXPLAIN CREATE MATERIALIZED VIEW …` (`MaterializedViewBuilder.explain_sq
 which explains a `CREATE OR REPLACE` as its `CREATE`) and asserts
 `MaterializedViewBuilder.plan_is_incremental`: an incremental technique
 (`ROW_BASED`, `GROUP_AGGREGATE`, `APPEND_ONLY`, …) and no `FULL_RECOMPUTE`. It
-creates a source table and a Delta table with the slot columns (standing in for
-the `_slots` streaming table) if absent, and materializes nothing:
+creates the schema, a source table and a Delta table with the slot columns
+(standing in for the `_slots` streaming table) if absent, and materializes nothing:
 
 ```bash
-ONTOBRICKS_EXTERNAL_WAREHOUSE=1 DATABRICKS_CONFIG_PROFILE=<profile> \
-ONTOBRICKS_EXTERNAL_WAREHOUSE_ID=<warehouse id> ONTOBRICKS_EXTERNAL_SCHEMA=<catalog.schema> \
+ONTOBRICKS_EXTERNAL_WAREHOUSE=1 ONTOBRICKS_EXTERNAL_SCHEMA=<catalog.schema> \
+DATABRICKS_CONFIG_PROFILE=<profile> ONTOBRICKS_EXTERNAL_WAREHOUSE_ID=<warehouse id> \
 uv run --frozen pytest -q -m external tests/external/test_mv_incremental_plan.py
 ```
+
+Instead of a CLI profile it also takes host and token —
+`DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_SQL_WAREHOUSE_ID` — which is how
+the nightly `external-smoke` job (`.github/workflows/nightly.yml`) runs it on the
+integration workspace, with `ONTOBRICKS_EXTERNAL_WAREHOUSE=1` and
+`ONTOBRICKS_EXTERNAL_SCHEMA` from the repository variable
+`ONTOBRICKS_INT_EXTERNAL_SCHEMA` (default `main.ontobricks_it`; the test creates the
+schema if absent).
 
 Without those variables the test is skipped, so the unit run stays offline.
 

@@ -97,6 +97,10 @@ jobs:
           DATABRICKS_TOKEN: ${{ secrets.ONTOBRICKS_INT_TOKEN }}
           DATABRICKS_SQL_WAREHOUSE_ID: ${{ secrets.ONTOBRICKS_INT_WAREHOUSE_ID }}
           SECRET_KEY: ${{ secrets.ONTOBRICKS_INT_SECRET_KEY }}
+          # tests/external/test_mv_incremental_plan.py: EXPLAIN of the _data view on the
+          # integration warehouse, in a schema the token may create tables in.
+          ONTOBRICKS_EXTERNAL_WAREHOUSE: "1"
+          ONTOBRICKS_EXTERNAL_SCHEMA: ${{ vars.ONTOBRICKS_INT_EXTERNAL_SCHEMA || 'main.ontobricks_it' }}
         run: |
           # Probe MCP server health endpoint + a representative tool call.
           # If the workspace isn't reachable or auth fails, the run is reported but no PR is gated.
