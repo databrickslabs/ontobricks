@@ -10,6 +10,7 @@ from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
 from back.objects.digitaltwin.build.TwinLakehouseBuild import TwinLakehouseBuild
 from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
 from back.objects.digitaltwin.build.TwinNetChangeApply import TwinNetChangeApply
+from back.objects.digitaltwin.build.TwinSlotReconciliation import TwinSlotReconciliation
 
 __all__ = [
     "SyncPlan",
@@ -22,4 +23,5 @@ __all__ = [
     "TwinLakehouseBuild",
     "TwinMergeFallback",
     "TwinNetChangeApply",
+    "TwinSlotReconciliation",
 ]

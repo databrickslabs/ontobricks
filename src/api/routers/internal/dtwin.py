@@ -1169,6 +1169,24 @@ async def sync_info(
 # ===========================================
 
 
+@router.post(
+    "/incremental/reconcile",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def reconcile_incremental_slots(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Compare the domain's ``…_slots`` streaming table with ``…_data`` (drift check)."""
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
+    from back.objects.digitaltwin.build import TwinSlotReconciliation
+
+    domain = get_domain(session_mgr)
+    client = create_databricks_client(domain, settings)
+    result = await run_blocking(TwinSlotReconciliation.run, domain, settings, client)
+    return {"success": True, **result}
+
+
 @router.get("/databricks-build/info")
 async def databricks_build_info(
     session_mgr: SessionManager = Depends(get_session_manager),
