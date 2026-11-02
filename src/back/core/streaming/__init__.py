@@ -11,13 +11,13 @@ projection in Python, :class:`SlotDiffProcessor` diffs a source row's slots
 against its state and emits :class:`SlotChange` upserts and tombstones.
 """
 
+from back.core.streaming.SlotChange import SlotChange  # noqa: F401
+from back.core.streaming.SlotDiffProcessor import SlotDiffProcessor  # noqa: F401
 from back.core.streaming.SlotPipelineRunner import SlotPipelineRunner  # noqa: F401
 from back.core.streaming.SlotPipelineSpec import SlotPipelineSpec  # noqa: F401
 from back.core.streaming.SlotProjectionCompiler import (  # noqa: F401
     SlotProjectionCompiler,
 )
-from back.core.streaming.SlotChange import SlotChange  # noqa: F401
-from back.core.streaming.SlotDiffProcessor import SlotDiffProcessor  # noqa: F401
 from back.core.streaming.SlotReconciler import SlotReconciler  # noqa: F401
 from back.core.streaming.SlotRowProjector import SlotRowProjector  # noqa: F401
 from back.core.streaming.SourceReadiness import SourceReadiness  # noqa: F401

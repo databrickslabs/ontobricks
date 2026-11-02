@@ -130,15 +130,47 @@ class TestSlots:
 
     @pytest.mark.parametrize(
         ("value", "text"),
-        [(True, "true"), (False, "false"), (0, "0"), (1.5, "1.5"), ("x", "x"), (None, None)],
+        [(True, "true"), (False, "false"), (0, "0"), (-7, "-7"), ("x", "x"), (None, None)],
     )
-    def test_values_are_stringified_like_a_spark_cast(self, value, text):
+    def test_strings_integers_and_booleans_render_like_a_spark_cast(self, value, text):
         assert SlotRowProjector.spark_string(value) == text
+
+    @pytest.mark.parametrize("value", [1.5, 1e20, float("nan"), {"a": 1}, [1], b"x"])
+    def test_other_values_must_be_cast_in_spark_first(self, value):
+        """Python renders them unlike Spark (``1e+20`` vs ``1.0E20``, ``nan`` vs ``NaN``)."""
+        with pytest.raises(ValidationError, match="'age'"):
+            SlotRowProjector.spark_string(value, "age")
+
+    def test_a_float_attribute_in_a_row_names_its_column(self):
+        projector = SlotRowProjector.from_mapping(_customer(), base_uri="")
+
+        with pytest.raises(ValidationError, match="'age'"):
+            projector.slots({"id": "1", "name": "Ann", "age": 41.5})
+
+    def test_columns_are_looked_up_case_insensitively_like_spark(self):
+        projector = SlotRowProjector.from_mapping(_customer(), base_uri="")
+        row = {"ID": "1", "Name": "Ann", "AGE": "41"}
+
+        assert projector.project(row) == (
+            "1",
+            "http://ex.org/Customer/1",
+            {_RDF_TYPE: _CUSTOMER, _RDFS_LABEL: "Ann", "http://ex.org/age": "41"},
+        )
+
+    def test_project_equals_the_three_projections(self):
+        projector = SlotRowProjector.from_mapping(_customer(), base_uri="")
+        row = {"id": "1", "name": None, "age": "41"}
+
+        assert projector.project(row) == (
+            projector.source_key(row),
+            projector.subject(row),
+            projector.slots(row),
+        )
 
     def test_the_predicates_are_the_slot_predicates_in_stack_order(self):
         projector = SlotRowProjector.from_mapping(_customer(), base_uri="")
 
-        assert projector.predicates == (_RDF_TYPE, _RDFS_LABEL, "http://ex.org/age")
+        assert projector.predicates() == (_RDF_TYPE, _RDFS_LABEL, "http://ex.org/age")
 
 
 class TestForMappings:
@@ -225,7 +257,11 @@ def _sql_oracle(mapping: dict):
         cond.replace(" IS NOT NULL", "").strip()
         for cond in _WHERE.search(view)["conditions"].split(" AND ")
     ]
-    cast = SlotRowProjector.spark_string
+
+    def cast(value):
+        """``CAST(<string> AS STRING)``: the stream's rows hold strings or NULL only."""
+        assert value is None or isinstance(value, str)
+        return value
 
     def evaluate(row: dict):
         if any(row.get(column) is None for column in not_null):
@@ -242,9 +278,7 @@ def _sql_oracle(mapping: dict):
 
 
 _COLUMNS = ["id", "a", "b", "name", "age"]
-_VALUES = st.one_of(
-    st.none(), st.sampled_from(["", " ", "x", "it's", "Ann"]), st.integers(-3, 3), st.booleans()
-)
+_VALUES = st.one_of(st.none(), st.sampled_from(["", " ", "\t", "x", "it's", "Ann", "7"]))
 
 
 @st.composite

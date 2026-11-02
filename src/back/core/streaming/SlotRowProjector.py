@@ -14,6 +14,13 @@ compiler's own projection facts (``map_id``, ``key_columns``,
 * an object is the class literal for ``rdf:type``, else
   ``COALESCE(TRY_CAST(<column> AS STRING), '')`` — never ``None``, an unset
   attribute is ``''``.
+
+Columns are looked up case-insensitively, as Spark resolves them. Row values
+must be strings (or ``None``): the stream casts every source column to STRING
+in Spark, from the table schema, before it serialises the row, because
+Python's rendering of floats, decimals, dates or nested values differs from
+Spark's ``CAST(... AS STRING)``. Integers and booleans are accepted (they
+render alike); any other type raises :class:`ValidationError`.
 """
 
 from __future__ import annotations
@@ -76,35 +83,76 @@ class SlotRowProjector:
             )
         ]
 
-    @property
     def predicates(self) -> tuple[str, ...]:
-        """Every predicate a row of this mapping has a slot for, in ``stack()`` order."""
+        """Every predicate a row of this mapping can have a slot for, in ``stack()`` order.
+
+        ``rdf:type``, ``rdfs:label`` when the mapping has a label column, then
+        the attribute predicates.
+        """
         return tuple(predicate for predicate, _literal, _column in self.sources)
+
+    def project(self, row: Mapping) -> tuple[str | None, str | None, dict[str, str]]:
+        """``(source_key, subject, slots)`` of *row* in one pass (one lower-cased copy)."""
+        values = self._lowered(row)
+        return self._key(values), self._subject(values), self._slots(values)
 
     def source_key(self, row: Mapping) -> str | None:
         """The slot key of *row*; ``None`` when a key column is NULL (the row is ignored)."""
-        values = [row.get(column) for column in self.key_columns]
-        if any(value is None for value in values):
-            return None
-        return "|".join(self.spark_string(value) for value in values)
+        return self._key(self._lowered(row))
 
     def subject(self, row: Mapping) -> str | None:
         """The subject URI of *row*; ``None`` when its id column is NULL."""
-        text = self.spark_string(row.get(self.id_column))
-        return None if text is None else self.subject_prefix + text
+        return self._subject(self._lowered(row))
 
     def slots(self, row: Mapping) -> dict[str, str]:
         """``predicate -> object`` for every slot of *row*; an unset attribute is ``''``."""
-        return {
-            predicate: literal if column is None else (self.spark_string(row.get(column)) or "")
-            for predicate, literal, column in self.sources
-        }
+        return self._slots(self._lowered(row))
 
     @staticmethod
-    def spark_string(value) -> str | None:
-        """``CAST(<value> AS STRING)`` as Spark renders it: booleans are ``true`` / ``false``."""
+    def spark_string(value, column: str = "") -> str | None:
+        """``CAST(<value> AS STRING)`` for the values whose Spark rendering Python matches.
+
+        Strings pass through, ``None`` stays ``None``, integers render alike
+        and booleans are ``true`` / ``false``. Anything else (floats, decimals,
+        dates, nested values) raises :class:`ValidationError` naming
+        *column*: the stream must cast the row to strings in Spark, from the
+        table schema, before it serialises it.
+        """
         if value is None or isinstance(value, str):
             return value
         if isinstance(value, bool):
             return "true" if value else "false"
-        return str(value)
+        if isinstance(value, int):
+            return str(value)
+        raise ValidationError(
+            f"Column {column!r} holds a {type(value).__name__} value; the realtime stream "
+            "expects every source column cast to STRING in Spark before serialisation"
+        )
+
+    # ------------------------------------------------------------------
+    # Projection on a lower-cased row
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _lowered(row: Mapping) -> dict:
+        """*row* keyed by lower-cased column names: Spark resolves columns case-insensitively."""
+        return {str(column).lower(): value for column, value in row.items()}
+
+    def _value(self, values: dict, column: str) -> str | None:
+        return self.spark_string(values.get(column.lower()), column)
+
+    def _key(self, values: dict) -> str | None:
+        parts = [self._value(values, column) for column in self.key_columns]
+        if any(part is None for part in parts):
+            return None
+        return "|".join(parts)
+
+    def _subject(self, values: dict) -> str | None:
+        text = self._value(values, self.id_column)
+        return None if text is None else self.subject_prefix + text
+
+    def _slots(self, values: dict) -> dict[str, str]:
+        return {
+            predicate: literal if column is None else (self._value(values, column) or "")
+            for predicate, literal, column in self.sources
+        }

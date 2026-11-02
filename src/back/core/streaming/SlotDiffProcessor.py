@@ -12,6 +12,19 @@ removed stays in the state as ``(None, None, seq)``: that watermark is what
 makes a late or replayed event (``seq`` not above the highest one in the
 state) a no-op even after the row was deleted, instead of resurrecting it.
 
+A key with no state at all — never seen, or evicted by the state TTL — is
+*unknown*: any slot of it may still be live in ``_live``. Its first event then
+emits an upsert for every non-blank slot and a tombstone for every other
+predicate the mapping can produce (a delete tombstones them all); the sink's
+``seq`` guard makes the extra tombstones harmless. Two consequences for the
+caller that configures the TTL:
+
+* the TTL must exceed the maximum event lateness — after an eviction a late
+  event is applied again, and only the sink's ``seq`` guard stands between
+  it and ``_live``;
+* without a TTL (the default) the state keeps one watermark per predicate of
+  every key it ever saw, deleted rows included: it only grows.
+
 A blank object (``None`` or only spaces, the full build's
 ``TRIM(object) != ''`` filter) is never a slot: the AUTO CDC ``_slots`` table
 keeps such rows, the ``_data`` relation and this diff do not.
@@ -72,11 +85,12 @@ class SlotDiffProcessor:
     ) -> tuple[SlotState, list[SlotChange]]:
         """Apply one change of the source row ``(map_id, source_key)``: ``(new state, changes)``.
 
-        *op* is ``"upsert"`` (*row* is the after-image) or ``"delete"``. A
-        *seq* not above the highest one in *state* returns *state* unchanged
-        and no change. An upsert whose row has a NULL key is ignored, as the
-        slot-event view's ``WHERE <key> IS NOT NULL`` does. Changes are sorted
-        by predicate.
+        *op* is ``"upsert"`` (*row* is the after-image, string-valued: see
+        :class:`SlotRowProjector`) or ``"delete"``. A *seq* not above the
+        highest one in *state* returns *state* unchanged and no change. An
+        upsert whose row has a NULL key is ignored, as the slot-event view's
+        ``WHERE <key> IS NOT NULL`` does. An empty or ``None`` *state* is
+        unknown (see the module docstring). Changes are sorted by predicate.
         """
         current = state or {}
         if current and seq <= max(entry[2] for entry in current.values()):
@@ -85,19 +99,19 @@ class SlotDiffProcessor:
             if row is None:
                 raise ValidationError(f"An upsert of {map_id}/{source_key} needs a row")
             projector = self._projector(map_id)
-            if projector.source_key(row) is None:
+            key, subject, slots = projector.project(row)
+            if key is None:
                 return current, []
-            subject = projector.subject(row)
             live = {
                 predicate: (subject, obj)
-                for predicate, obj in projector.slots(row).items()
+                for predicate, obj in slots.items()
                 if not self.is_blank(obj)
             }
-            known = projector.predicates
+            known = projector.predicates()
         elif op == self.DELETE:
             live = {}
             projector = self._projectors.get(map_id)
-            known = projector.predicates if projector else ()
+            known = projector.predicates() if projector else ()
         else:
             raise ValidationError(f"Unknown slot change op {op!r} (expected upsert or delete)")
         return self._diff(current, live, known, map_id=map_id, source_key=source_key, seq=seq)
@@ -123,16 +137,21 @@ class SlotDiffProcessor:
         source_key: str,
         seq: int,
     ) -> tuple[SlotState, list[SlotChange]]:
-        """Compare *live* slots with *current*; removed or unseen predicates keep a watermark."""
+        """Compare *live* slots with *current*; removed or unseen predicates keep a watermark.
+
+        With no *current* state every predicate may be live in ``_live``: each
+        non-live one is tombstoned.
+        """
+        unknown = not current
         new_state: SlotState = {}
         changes: list[SlotChange] = []
         for predicate in sorted(set(current) | set(live) | set(known)):
             old = current.get(predicate)
-            was_live = old is not None and old[1] is not None
+            had_slot = old is not None and old[1] is not None
             if predicate in live:
                 subject, obj = live[predicate]
                 new_state[predicate] = (subject, obj, seq)
-                if not was_live or (old[0], old[1]) != (subject, obj):
+                if not had_slot or (old[0], old[1]) != (subject, obj):
                     changes.append(
                         SlotChange.upsert(
                             map_id=map_id,
@@ -145,7 +164,7 @@ class SlotDiffProcessor:
                     )
                 continue
             new_state[predicate] = (None, None, seq)
-            if was_live:
+            if had_slot or unknown:
                 changes.append(
                     SlotChange.tombstone(
                         map_id=map_id, source_key=source_key, predicate=predicate, seq=seq

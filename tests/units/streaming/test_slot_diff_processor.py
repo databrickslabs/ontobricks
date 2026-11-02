@@ -119,7 +119,21 @@ class TestUpsert:
     def test_a_blank_slot_never_creates_a_slot(self):
         _state, changes = _upsert(None, {"name": "", "age": None}, seq=1)
 
-        assert [c.predicate for c in changes] == [_RDF_TYPE]
+        assert [c.predicate for c in changes if not c.deleted] == [_RDF_TYPE]
+
+    def test_a_tab_is_not_blank_like_spark_trim(self):
+        """``TRIM`` strips spaces only, so a tab-only object is a slot in ``_data`` too."""
+        _state, changes = _upsert(None, {"name": "\t", "age": None}, seq=1)
+
+        assert (_LABEL, "\t") in [(c.predicate, c.object) for c in changes if not c.deleted]
+
+    def test_a_known_state_never_tombstones_a_slot_that_was_not_live(self):
+        """A ``_slots`` snapshot without the age slot: a blank age stays silent."""
+        snapshot = {_LABEL: (_SUBJECT, "Ann", SlotDiffProcessor.SNAPSHOT_SEQ)}
+
+        _state, changes = _upsert(snapshot, {"name": "Ann", "age": ""}, seq=1)
+
+        assert [(c.predicate, c.deleted) for c in changes] == [(_RDF_TYPE, False)]
 
     def test_an_unchanged_row_emits_nothing(self):
         state, _ = _upsert(None, {"name": "Ann", "age": 41}, seq=1)
@@ -149,8 +163,20 @@ class TestDelete:
         ]
         assert _live(state) == {}
 
-    def test_a_delete_of_an_unknown_row_emits_nothing(self):
+    def test_a_delete_of_an_unknown_row_tombstones_every_predicate_of_the_mapping(self):
+        """No state: any slot may be live in ``_live``; the sink's seq guard absorbs extras."""
         _state, changes = _delete(None, seq=1)
+
+        assert [(c.predicate, c.deleted, c.seq) for c in changes] == [
+            (_AGE, True, 1),
+            (_RDF_TYPE, True, 1),
+            (_LABEL, True, 1),
+        ]
+
+    def test_a_delete_of_an_unknown_mapping_emits_nothing(self):
+        _state, changes = _processor().apply(
+            None, map_id="map_unknown", source_key="1", op="delete", row=None, seq=1
+        )
 
         assert changes == []
 
@@ -191,6 +217,31 @@ class TestOrderingGuard:
         state, _ = _delete(None, seq=7)
 
         assert _upsert(state, {"name": "Ann", "age": 41}, seq=6) == (state, [])
+
+
+class TestEvictedState:
+    """After the MapState TTL evicts a key, its next event must still reach ``_live``."""
+
+    def test_evicted_state_and_a_delete_tombstone_every_known_predicate(self):
+        state, _ = _upsert(None, {"name": "Ann", "age": 41}, seq=1)
+        assert state  # the key was live, then the TTL evicted its state
+
+        _state, changes = _delete(None, seq=2)
+
+        assert {c.predicate for c in changes if c.deleted} == {_AGE, _RDF_TYPE, _LABEL}
+
+    def test_evicted_state_and_an_upsert_with_a_blank_column_tombstone_it(self):
+        _upsert(None, {"name": "Ann", "age": 41}, seq=1)
+
+        _state, changes = _upsert(None, {"name": "Ann", "age": None}, seq=2)
+
+        assert (_AGE, True) in [(c.predicate, c.deleted) for c in changes]
+        assert (_LABEL, "Ann") in [(c.predicate, c.object) for c in changes if not c.deleted]
+
+    def test_an_empty_state_counts_as_evicted(self):
+        _state, changes = _delete({}, seq=2)
+
+        assert len(changes) == 3
 
 
 class TestInitialState:
