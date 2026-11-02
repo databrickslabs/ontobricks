@@ -94,9 +94,11 @@ class GraphRelation:
 
         Every writer of an ``…_inferred`` companion calls this with the table it
         wrote; any other table has no graph relation (nothing is run). The
-        refresh is synchronous: the writers (background tasks) rebuild the
-        graph caches from ``…_graph`` right after, and back-to-back writes
-        must not leave the last one waiting for a later refresh. The write
+        refresh is synchronous: the callers rebuild the graph caches from
+        ``…_graph`` right after, and back-to-back writes must not leave the
+        last one waiting for a later refresh. A caller that writes inside an
+        HTTP request (cohort materialization, the inferred purge) therefore
+        answers only once the refresh completed. The write
         itself succeeded, so a refresh that fails is logged and the MV serves
         the new triples after its next refresh (the next write, build or
         trigger): the writer is never failed for it.

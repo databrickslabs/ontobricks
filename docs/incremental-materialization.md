@@ -290,7 +290,8 @@ tick refreshes it in place instead of replacing it: `incremental` runs one trigg
 update of the slot pipeline, then `REFRESH MATERIALIZED VIEW`; `microbatch` only
 refreshes (its continuous pipeline keeps `_slots` current). A `_graph` materialized
 view is refreshed right after it. On the **Lakehouse engine**, whose graph is `_data`,
-the tick does the same and streams nothing into the store (as the main build); any
+the tick does the same, empties `_inferred` first (as the main build's reset; the
+inferences were derived from the previous data) and streams nothing into the store; any
 other `_data` there is rebuilt from the gateway VIEW the way the main build builds it
 (a table, or the domain's pass-through view). It refreshes in place only while
 the view still has the current definition: the tick recompiles the mappings and
@@ -535,7 +536,7 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | Phase | Requirement | Status | Where |
 |---|---|---|---|
 | 1 P0 | Compute the source once (`count`, stream, Lakeflow source read `_data`) | ✅ | `TwinBuildPostMaterialize.triples_source_relation`, `SyncPlan` |
-| 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples; the MERGE *skip* (no source change) keeps it |
+| 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples, and by a Lakehouse scheduled tick (which empties it before refreshing `_data` / `_graph`, as every other tick discards its store's inferences); the MERGE *skip* (no source change) keeps it |
 | 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | SCD1 physical deletes stand in for a `deleted` column |
 | 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource; development targets set `presets: {name_prefix: "", pipelines_development: false}` and the runner also finds a `[dev <user>] ` name |
 | 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ◐ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation)); deviation: `_graph` is an MV on the Lakehouse engine only (the only one whose readers read it), Lakebase / Neo4j — every `realtime` domain among them — keep the VIEW; `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
@@ -569,8 +570,8 @@ Also after upgrading:
 
 - **Lakehouse domains with a schedule.** Earlier scheduled ticks on the Lakehouse
   engine appended every asserted triple to `_inferred` (and created a stray
-  `<Name>_V<n>` table in the warehouse's default schema); a tick no longer does. Run
-  one main build, whose inferred reset empties `_inferred`, and drop the stray table.
+  `<Name>_V<n>` table in the warehouse's default schema); a tick no longer does. The
+  next tick or main build empties `_inferred`; drop the stray table by hand.
 - **Neo4j domains** that are not `full`, MERGE-promoted ones included, stream in full
   once (`no_previous_version`): their earlier inferences were never listed, so a net
   apply could not purge them.
@@ -603,7 +604,10 @@ Behaviour in this release:
     purge runs, loses that listing (the list is cleared by triple values).
 - A write to `_inferred` on the Lakehouse engine (reasoning, cohorts, the purge)
   waits for the synchronous `_graph` refresh: the writer takes as long as the refresh,
-  and readers see the old union until it completes.
+  and readers see the old union until it completes. Requests that write inside the
+  request — `POST /cohorts/materialize`, `DELETE /reasoning/inferred` — answer only
+  after that refresh, which on a large graph may exceed a proxy timeout; run
+  reasoning as a background task there.
 - The MERGE fallback engages for any slot-pipeline failure in `incremental`
   (every runner message mentions the pipeline); `microbatch` falls back to CTAS.
   The MERGE skip only fires for all-row-local domains. A MERGE build sets the table
