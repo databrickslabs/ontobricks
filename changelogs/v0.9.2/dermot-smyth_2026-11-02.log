@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the round A2 re-review fixes): 11369 passed, 341 skipped, 9 deselected
+Final test result (after the live verification fixes): 11376 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -2340,3 +2340,66 @@ Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/te
 -> 11369 passed, 341 skipped, 9 deselected in 69.95s (slowest 1.21s,
 test_class_per_file); architecture suite green before each commit;
 tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Live verification on fevm-ontobricks-int (serverless warehouse, Lakeflow validate-only)
+================================================================================
+
+Context: the design's verification strategy names the integration workspace for
+the external checks. With an interactive OAuth login to `fevm-ontobricks-int`
+the emitted DDL/DML and both slot-pipeline variants were exercised against the
+real services (scratch schema `ontobricks_int_catalog.itm_spike`, dropped
+afterwards). Two defects surfaced only there and are fixed here.
+
+Changes:
+
+1. src/back/core/graphdb/delta/MaterializedViewBuilder.py
+   `plan_is_incremental` reads the live `EXPLAIN CREATE MATERIALIZED VIEW`
+   verdict ("The Materialized View can be incrementally refreshed" / "cannot
+   be …") before the event-log technique names, and `COMPLETE_RECOMPUTE` (the
+   live name of a full recompute) counts as not incremental.
+   `existing_mv_sha` accepts the `value`-only row a key-filtered
+   `SHOW TBLPROPERTIES` returns on Databricks SQL — before this the fingerprint
+   never matched and every incremental build replaced the `_data` view.
+   New `sync_external_metadata`: `REPAIR TABLE … SYNC METADATA` after creating
+   the `_data` (and `_graph`) view, best-effort — the one-time step a view's
+   change data feed needs; on a workspace without external metadata it logs the
+   refusal and the change-feed consumers fall back (`cdf_unavailable`).
+2. tests/units/graphdb/delta/test_materialized_view_builder.py
+   Live-shape tests (eligibility verdict, value-only property row,
+   COMPLETE_RECOMPUTE, REPAIR after CREATE, refusal tolerated); statement
+   sequences pinned with the REPAIR.
+3. docs/incremental-materialization.md
+   "Live verification" record (what ran, what the workspace refused, error
+   codes) and the pruned live-unverified list.
+
+Observed live (2026-11-02):
+- `EXPLAIN CREATE MATERIALIZED VIEW` → incremental-eligible, no issues, for the
+  incremental and the scheduled (microbatch) `_data` definitions;
+  tests/external/test_mv_incremental_plan.py passes against the workspace.
+- `_data` MV create/refresh, `_graph` MV, MERGE fallback (insert / delete+insert
+  on a source update), `table_changes` on the MERGE table, `DESCRIBE HISTORY` on
+  sources, `event_log(TABLE(mv))`: all run as emitted.
+- Lakeflow `start_update(validate_only=True)`: COMPLETED for the change-feed slot
+  pipeline (streaming table, stack() view over readChangeFeed, AUTO CDC SCD1) and
+  for the Debezium-topic variant (read_kafka + secret()); a missing secret key
+  fails analysis (`FAILED_FUNCTION_CALL … None.get`), so the nightly must point
+  `ONTOBRICKS_EXTERNAL_TOPIC_SECRET_SCOPE/_KEY` at a real secret.
+- Refused: `table_changes` / `DESCRIBE HISTORY` / `DESCRIBE DETAIL` /
+  `VERSION AS OF` on a materialized view
+  (`MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA`, `EXPECT_TABLE_NOT_VIEW`) and
+  `REPAIR TABLE … SYNC METADATA` (`REPAIR_TABLE_REQUIRES_EXTERNAL_METADATA`):
+  external metadata for pipeline tables is a private preview the workspace is
+  not enrolled in; `ALTER MATERIALIZED VIEW … SET TBLPROPERTIES` is unsupported.
+- Not measurable there: the freshness KPIs (no incremental domain of this branch
+  is deployed on that workspace; no Kafka topic) — the harness and the nightly
+  step exist for the first deployment.
+
+Modified files:
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: full suite 11376 passed, 341 skipped, 9 deselected; architecture suite green;
+`baseline.json` unchanged; tests/external/test_mv_incremental_plan.py 1 passed live.

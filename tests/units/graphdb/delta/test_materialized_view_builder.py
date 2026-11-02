@@ -425,6 +425,10 @@ class TestPlanIsIncremental:
                          "== Physical Plan ==\nExecute CreateMaterializedViewCommand ..."}]
         assert MaterializedViewBuilder.plan_is_incremental(rows) is True
 
+    def test_complete_recompute_is_the_live_name_of_a_full_recompute(self):
+        rows = [{"plan": "planned to be executed as COMPLETE_RECOMPUTE"}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
+
     def test_a_not_eligible_verdict_is_not_incremental(self):
         rows = [{"plan": "== Incremental Update Eligibility ==\n"
                          "The Materialized View cannot be incrementally refreshed.\n"
@@ -461,9 +465,11 @@ class TestApply:
             MaterializedViewBuilder.data_mv_sql(
                 DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
             ),
+            f"REPAIR TABLE {DATA} SYNC METADATA",
             materialize.build_ensure_inferred_sql(INFERRED),
             f"ALTER TABLE {INFERRED} SET TBLPROPERTIES {ROW_TRACKING}",
             MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED),
+            f"REPAIR TABLE {GRAPH} SYNC METADATA",
         ]
         return statements
 
@@ -582,6 +588,7 @@ class TestApplyKeepsTheGraphView:
             f"DROP VIEW IF EXISTS {DATA}",
             f"DROP MATERIALIZED VIEW IF EXISTS {GRAPH}",
             MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH),
+            f"REPAIR TABLE {DATA} SYNC METADATA",
             materialize.build_ensure_inferred_sql(INFERRED),
             materialize.build_union_view_sql(GRAPH, DATA, INFERRED),
         ]
@@ -677,6 +684,35 @@ class TestLastRefreshTechnique:
         assert client.queries == []
 
 
+class TestSyncExternalMetadata:
+    """``REPAIR TABLE … SYNC METADATA`` follows every created view; a refusal is not an error."""
+
+    def test_the_repair_statement_runs_after_the_view_is_created(self):
+        client = RecordingClient()
+
+        MaterializedViewBuilder.apply(
+            client,
+            data_fqn=DATA,
+            graph_fqn=GRAPH,
+            inferred_fqn=INFERRED,
+            slots_fqn=None,
+            batch_branch_sql="SELECT 's' AS subject, 'p' AS predicate, 'o' AS object",
+            drop_existing_table=False,
+        )
+
+        create = next(
+            i for i, q in enumerate(client.statements) if q.startswith("CREATE OR REPLACE MATERIALIZED VIEW")
+        )
+        repair = client.statements.index(f"REPAIR TABLE {DATA} SYNC METADATA")
+        assert repair == create + 1
+
+    def test_a_workspace_without_external_metadata_does_not_fail_the_build(self):
+        client = RecordingClient(fail_when=("REPAIR TABLE",))
+
+        assert MaterializedViewBuilder.sync_external_metadata(client, DATA) is False
+        assert client.statements == [f"REPAIR TABLE {DATA} SYNC METADATA"]
+
+
 class TestExistingMvSha:
     """The stored definition fingerprint lets a build skip an unchanged ``CREATE OR REPLACE``."""
 
@@ -687,6 +723,19 @@ class TestExistingMvSha:
 
         assert MaterializedViewBuilder.existing_mv_sha(client, DATA) == self.SHA
         assert client.queries == [f"SHOW TBLPROPERTIES {DATA} ('ontobricks.mv_sql_sha256')"]
+
+    def test_reads_the_value_only_row_a_filtered_show_tblproperties_returns(self):
+        """Filtered by key, Databricks SQL answers a single ``value`` column
+        (verified live, 2026-11-02): without this the fingerprint never matched
+        and every build replaced the view."""
+        client = RecordingClient(rows=[{"value": self.SHA}])
+
+        assert MaterializedViewBuilder.existing_mv_sha(client, DATA) == self.SHA
+
+    def test_a_value_only_row_that_is_not_a_sha_reads_as_no_sha(self):
+        client = RecordingClient(rows=[{"value": f"Table {DATA} does not have property: x"}])
+
+        assert MaterializedViewBuilder.existing_mv_sha(client, DATA) == ""
 
     def test_a_relation_without_the_property_has_no_sha(self):
         client = RecordingClient(

@@ -48,7 +48,9 @@ _INCREMENTAL_TECHNIQUES = re.compile(
     r"|WINDOW_FUNCTION|GENERIC_AGGREGATE|NO_OP)\b",
     re.IGNORECASE,
 )
-_FULL_RECOMPUTE = re.compile(r"\bFULL_RECOMPUTE\b", re.IGNORECASE)
+#: ``COMPLETE_RECOMPUTE`` is what the event log reports for a full recompute
+#: (verified live, 2026-11-02); ``FULL_RECOMPUTE`` is the documented alias.
+_FULL_RECOMPUTE = re.compile(r"\b(?:FULL|COMPLETE)_RECOMPUTE\b", re.IGNORECASE)
 #: ``EXPLAIN CREATE MATERIALIZED VIEW`` on Databricks SQL opens with an
 #: "Incremental Update Eligibility" section whose verdict is one of these
 #: sentences (verified live on 2026-11-02); the event-log technique names
@@ -172,9 +174,15 @@ class MaterializedViewBuilder:
                 return ""
             rows = client.execute_query(f"SHOW TBLPROPERTIES {fqn} ('{MV_SHA_PROPERTY}')")
             for row in rows or []:
-                if isinstance(row, Mapping) and row.get("key") == MV_SHA_PROPERTY:
-                    value = str(row.get("value") or "").strip()
-                    return value if _SHA256_HEX.fullmatch(value) else ""
+                if not isinstance(row, Mapping):
+                    continue
+                # Filtered by key, Databricks SQL answers a single ``value``
+                # column (verified live, 2026-11-02); unfiltered answers carry
+                # ``key`` + ``value`` — accept both shapes.
+                if "key" in row and row.get("key") != MV_SHA_PROPERTY:
+                    continue
+                value = str(row.get("value") or "").strip()
+                return value if _SHA256_HEX.fullmatch(value) else ""
         except Exception as exc:  # noqa: BLE001 — contract: never raises
             logger.debug("No materialized view fingerprint for %s: %s", fqn, exc)
         return ""
@@ -348,6 +356,7 @@ class MaterializedViewBuilder:
         )
         logger.info("Creating the data materialized view %s", data_fqn)
         materialize.run_sql(client, data_sql)
+        MaterializedViewBuilder.sync_external_metadata(client, data_fqn)
         materialize.ensure_inferred_table(client, inferred_fqn)
         if not with_graph_mv:
             materialize.ensure_graph_view(client, graph_fqn, data_fqn, inferred_fqn)
@@ -355,7 +364,31 @@ class MaterializedViewBuilder:
         materialize.run_sql(client, enable_tracking_sql)
         logger.info("Creating the graph materialized view %s", graph_fqn)
         materialize.run_sql(client, graph_sql)
+        MaterializedViewBuilder.sync_external_metadata(client, graph_fqn)
         return {"data_mv": data_fqn, "graph_mv": graph_fqn}
+
+    @staticmethod
+    def sync_external_metadata(client: Any, fqn: str) -> bool:
+        """``REPAIR TABLE <fqn> SYNC METADATA`` — the one-time step a materialized
+        view's change data feed needs (``table_changes``, ``DESCRIBE HISTORY``,
+        ``VERSION AS OF`` on the view).
+
+        Best-effort: on a workspace whose pipelines have no external metadata
+        the statement fails with ``REPAIR_TABLE_REQUIRES_EXTERNAL_METADATA``
+        (verified live, 2026-11-02) and the change-feed consumers fall back
+        (``cdf_unavailable``); returns whether the sync succeeded.
+        """
+        try:
+            materialize.run_sql(client, f"REPAIR TABLE {fqn} SYNC METADATA")
+        except Exception as exc:  # noqa: BLE001 — preview feature; consumers fall back
+            logger.info(
+                "External metadata not synced for %s (%s); change-feed reads on the view "
+                "will fall back",
+                fqn,
+                str(exc).splitlines()[0][:200],
+            )
+            return False
+        return True
 
     @staticmethod
     def last_refresh_technique(client: Any, fqn: str) -> str:

@@ -651,20 +651,49 @@ Behaviour in this release:
   (the next main build recreates it), and it never stops a running `microbatch`
   slot pipeline.
 
+Live verification (2026-11-02, workspace `fevm-ontobricks-int`, serverless SQL warehouse,
+scratch schema `ontobricks_int_catalog.itm_spike`, everything dropped afterwards):
+
+- `EXPLAIN CREATE MATERIALIZED VIEW` of the generated `_data` definition answers
+  "The Materialized View can be incrementally refreshed — No issues detected" for
+  both the `incremental` and the `microbatch` (scheduled) DDL; `tests/external/test_mv_incremental_plan.py`
+  passes against the workspace.
+- The generated `_data` MV (`REFRESH POLICY INCREMENTAL`, custom `ontobricks.mv_sql_sha256`
+  property, `SCHEDULE CRON … AT TIME ZONE 'UTC'`), `REFRESH MATERIALIZED VIEW`, the `_graph` MV
+  over `_data ∪ _inferred`, the MERGE fallback statements (`ensure_table_sql`, `merge_sql`:
+  2 inserts, then 1 delete + 1 insert after a source update), `table_changes()` on the MERGE
+  table, `DESCRIBE HISTORY` on a source table and `SHOW TBLPROPERTIES` all run as emitted.
+  The custom TBLPROPERTY is persisted on the MV; filtered `SHOW TBLPROPERTIES … ('key')`
+  returns a `value`-only row (the sha reader was fixed to read it). The event log reports
+  the first refresh as `COMPLETE_RECOMPUTE` (`event_log(TABLE(…))` works on the MV).
+- Both slot-pipeline variants validate in a real Lakeflow pipeline (`start_update(validate_only)`
+  → `COMPLETED`): the change-feed variant (streaming table + `stack()` view over
+  `readChangeFeed` + `AUTO CDC … STORED AS SCD TYPE 1`) and the Debezium-topic variant
+  (`read_kafka` with backticked options and `secret()`; the secret key must exist — a
+  missing key fails analysis with `FAILED_FUNCTION_CALL … None.get`).
+- Not available on that workspace: change-feed reads on a materialized view —
+  `table_changes()`, `DESCRIBE HISTORY`, `DESCRIBE DETAIL` and `VERSION AS OF` on an MV fail
+  with `MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA` / `EXPECT_TABLE_NOT_VIEW`, and
+  `REPAIR TABLE … SYNC METADATA` with `REPAIR_TABLE_REQUIRES_EXTERNAL_METADATA` (external
+  metadata for pipeline tables is a private preview). The build now runs the REPAIR after
+  creating a view (best-effort); until the workspace is enrolled the MV-fed net-change apply
+  falls back as designed (`cdf_unavailable` → full stream) while the MERGE-table feed works.
+  `ALTER MATERIALIZED VIEW … SET TBLPROPERTIES` is not supported (properties come from the
+  definition).
+
 Live-unverified (workspace spike checklist):
 
-- `EXPLAIN CREATE MATERIALIZED VIEW` / event-log `planning_information` format;
-  custom TBLPROPERTIES on an MV; `DESCRIBE HISTORY`, `DESCRIBE DETAIL` and
-  `table_changes()` on a standalone MV; the change data feed on the MERGE table.
+- The MV change data feed and time travel once external metadata is enabled
+  (`REPAIR TABLE … SYNC METADATA`): the net-change apply from the `_data` MV and the
+  Neo4j purge's `VERSION AS OF` reads have only been exercised against the MERGE table.
 - A Lakeflow streaming table or the `_data` MV as a triggered/continuous synced
   table source.
 - `ImportFormat.AUTO` for the pipeline notebook; the stop→start race of a
   continuous pipeline.
 - A build's `REFRESH MATERIALIZED VIEW` while a `TRIGGER ON UPDATE` or scheduled
   refresh of the same view is running.
-- The Neo4j purge's time-travel reads (`VERSION AS OF` on the `_data` MV and on
-  `_inferred`) and its `DELETE … WHERE EXISTS` over a time-travel copy of the same
-  table.
+- The Neo4j purge's `DELETE … WHERE EXISTS` over a time-travel copy of `_inferred`
+  (a Delta table, so `VERSION AS OF` applies; not yet run end to end).
 - A foreign or shared (Delta Sharing) source table counted toward the ten upstream
   sources of `TRIGGER ON UPDATE`.
 - A CTAS `_data` that keeps a triggered/continuous registration — the scheduled
