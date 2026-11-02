@@ -11,7 +11,6 @@ from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
 )
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
-from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 
@@ -84,7 +83,7 @@ class TwinIncrementalReadiness:
     @staticmethod
     def source_tables(domain: Any, settings: Any) -> list:
         """The slot pipeline's source tables for the domain's current mappings (``[]`` without)."""
-        mappings = TwinIncrementalReadiness.domain_mappings(domain)
+        mappings = TwinIncrementalBuild.mappings_for(domain)
         if mappings is None:
             return []
         entity_mappings, relationship_mappings, base_uri = mappings
@@ -92,29 +91,6 @@ class TwinIncrementalReadiness:
             domain, settings, entity_mappings, relationship_mappings, base_uri=base_uri
         )
         return list(spec.source_tables)
-
-    @staticmethod
-    def domain_mappings(domain: Any) -> tuple | None:
-        """``(entity mappings, relationship mappings, base URI)`` as a build derives them.
-
-        R2RML plus the mapping configuration; ``None`` when the domain has no
-        R2RML yet.
-        """
-        from back.core.w3c import sparql
-        from back.objects.digitaltwin.DigitalTwin import DigitalTwin
-
-        r2rml = domain.get_r2rml() if hasattr(domain, "get_r2rml") else ""
-        if not r2rml:
-            return None
-        ontology = getattr(domain, "ontology", None) or {}
-        base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
-        mapping_config = getattr(domain, "assignment", None)
-        ent, rels = sparql.extract_r2rml_mappings(r2rml)
-        ent = DigitalTwin.augment_mappings_from_config(ent, mapping_config, base_uri, ontology)
-        rels = DigitalTwin.augment_relationships_from_config(
-            rels, mapping_config, base_uri, ontology
-        )
-        return ent, rels, base_uri
 
     @staticmethod
     def _enable(client: Any, table: str) -> dict:

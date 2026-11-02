@@ -131,12 +131,10 @@ class TwinSlotReconciliation:
         batch: an unknown mapping shape cannot be reconciled either.
         """
         from back.core.streaming import SlotProjectionCompiler
-        from back.objects.digitaltwin.build.TwinIncrementalReadiness import (
-            TwinIncrementalReadiness,
-        )
+        from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 
         try:
-            mappings = TwinIncrementalReadiness.domain_mappings(domain)
+            mappings = TwinIncrementalBuild.mappings_for(domain)
             if mappings is None:
                 return True
             ent, rels, base_uri = mappings

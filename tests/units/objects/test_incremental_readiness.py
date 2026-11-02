@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.errors import InfrastructureError, ValidationError
-from back.objects.digitaltwin.build import TwinIncrementalReadiness
+from back.objects.digitaltwin.build import TwinIncrementalBuild, TwinIncrementalReadiness
 from tests.units.objects import test_build_pipeline_modes as _modes
 
 pytestmark = pytest.mark.unit
@@ -55,8 +55,8 @@ def two_sources(monkeypatch):
     other = {**_modes._row_local(), "table": _ORDERS, "class_uri": _modes._ORDER}
     entities = {_modes._CUSTOMER: _modes._row_local(), _modes._ORDER: other}
     monkeypatch.setattr(
-        TwinIncrementalReadiness,
-        "domain_mappings",
+        TwinIncrementalBuild,
+        "mappings_for",
         staticmethod(lambda domain: (entities, [], "http://ex.org/")),
     )
 
@@ -66,7 +66,7 @@ class TestSourceTables:
         assert TwinIncrementalReadiness.source_tables(_domain(), None) == sorted([_CUSTOMERS, _ORDERS])
 
     def test_a_domain_without_r2rml_has_none(self, monkeypatch):
-        monkeypatch.setattr(TwinIncrementalReadiness, "domain_mappings", staticmethod(lambda d: None))
+        monkeypatch.setattr(TwinIncrementalBuild, "mappings_for", staticmethod(lambda d: None))
 
         assert TwinIncrementalReadiness.source_tables(_domain(), None) == []
 

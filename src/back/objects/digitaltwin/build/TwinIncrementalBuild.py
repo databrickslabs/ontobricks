@@ -186,6 +186,31 @@ class TwinIncrementalBuild:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def mappings_for(domain: Any) -> tuple | None:
+        """``(entity mappings, relationship mappings, base URI)`` as a build derives them.
+
+        The R2RML extracted and augmented from the mapping configuration, the
+        base URI from the ontology (``DEFAULT_BASE_URI`` when it has none) —
+        the one derivation the readiness preflight, the reconciliation and the
+        scheduled tick share with the main build's plan. ``None`` when the
+        domain has no R2RML yet.
+        """
+        from back.core.w3c import sparql
+        from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+        from shared.config.constants import DEFAULT_BASE_URI
+
+        r2rml = domain.get_r2rml() if hasattr(domain, "get_r2rml") else ""
+        if not r2rml:
+            return None
+        ontology = getattr(domain, "ontology", None) or {}
+        base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
+        config = getattr(domain, "assignment", None)
+        ent, rels = sparql.extract_r2rml_mappings(r2rml)
+        ent = DigitalTwin.augment_mappings_from_config(ent, config, base_uri, ontology)
+        rels = DigitalTwin.augment_relationships_from_config(rels, config, base_uri, ontology)
+        return ent, rels, base_uri
+
+    @staticmethod
     def compile_for(
         domain: Any,
         settings: Any,

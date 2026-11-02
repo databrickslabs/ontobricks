@@ -38,11 +38,13 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
     Returns ``(sql_text, view_table, graph_name, base_uri, ent, rels)``.
     """
     from back.core.w3c import sparql
-    from back.objects.digitaltwin import DigitalTwin
+    from back.objects.digitaltwin.build import TwinIncrementalBuild
 
-    r2rml = domain.get_r2rml()
-    if not r2rml:
+    logger.info("Scheduled build [%s]: generating SQL from R2RML", domain_name)
+    mappings = TwinIncrementalBuild.mappings_for(domain)
+    if mappings is None:
         raise ValidationError("No R2RML mapping available")
+    ent, rels, base_uri = mappings
 
     delta = domain.delta or {}
     _name = (domain.info or {}).get("name", DEFAULT_GRAPH_NAME)
@@ -55,18 +57,6 @@ def _generate_sql_from_r2rml(domain, domain_name: str):
         raise ValidationError(f"View not fully qualified: {view_table}")
     graph_name = f"{_name}_V{_version}"
 
-    base_uri = domain.ontology.get("base_uri", "http://example.org/")
-    mapping_config = domain.assignment
-    ontology_config = domain.ontology
-
-    logger.info("Scheduled build [%s]: generating SQL from R2RML", domain_name)
-    ent, rels = sparql.extract_r2rml_mappings(r2rml)
-    ent = DigitalTwin.augment_mappings_from_config(
-        ent, mapping_config, base_uri, ontology_config
-    )
-    rels = DigitalTwin.augment_relationships_from_config(
-        rels, mapping_config, base_uri, ontology_config
-    )
     if not ent and not rels:
         raise ValidationError("No valid mappings found")
 
