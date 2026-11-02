@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the Phase 3 review fixes, realtime): 11111 passed, 339 skipped, 9 deselected
+Final test result (after the Phase 3 re-review fixes, realtime): 11153 passed, 339 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -1735,4 +1735,105 @@ tests/units/streaming tests/units/core tests/units/ontology tests/units/architec
 -> 8122 passed, 12 skipped in 46.24s (slowest 1.50s, test_class_per_file); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 11111 passed, 339 skipped, 9 deselected in 64.09s; architecture suite green;
+tests/units/architecture/baseline.json unchanged.
+
+## Fix: Phase 3 re-review
+================================================================================
+
+Context: Re-review of the Phase 3 review fixes: three items still open
+(development-mode pipeline names after a bind, envelope errors that still
+crashed the stream, and a gap between the _live seed and the stream's start)
+plus minors. B's core files are untouched.
+
+Changes:
+
+1. src/back/core/streaming/SlotPipelineRunner.py (C4)
+   `find_pipeline` matches `<name>` and the development-mode `[dev <user>]
+   <name>` (an exact name wins; two distinct candidates raise ConflictError)
+   and backs `find_pipeline_id`, the fingerprint and bundle-managed reads;
+   `ensure` keeps the deployed name when it updates a prefixed pipeline.
+2. databricks.yml, scripts/_internal/_ensure-instance-target.sh,
+   scripts/_internal/_render-slot-pipelines.py (C4)
+   The development targets (dev, dev-lakebase, generated dev-lakebase-<id>)
+   set `presets: {name_prefix: "", pipelines_development: false}`; the
+   renderer prints a notice when a deployed pipeline still carries a prefix.
+3. scripts/deploy.sh (minor)
+   The bind step runs on Lakebase targets only, like the render, and each CLI
+   call reads /dev/null instead of the bind list.
+4. src/jobs/triple_stream/TripleStreamEnvelope.py (I9)
+   explode_records skips and counts any ValueError, TypeError,
+   ArithmeticError (OverflowError, decimal.InvalidOperation) or
+   ValidationError per envelope, with a %-style warning naming the type.
+5. src/back/objects/digitaltwin/build/TwinLiveServing.py,
+   src/jobs/triple_stream/main.py, resources/triple_rtm.job.yml (NEW-1)
+   _live is seeded from `_slots VERSION AS OF` its newest version (DESCRIBE
+   HISTORY LIMIT 1); the job reads its initial state at the same version
+   (`--slots-version`) and replays the topic from that commit's time less a
+   10-minute margin (`--start-timestamp-ms`: Kafka / Event Hubs Kafka endpoint
+   `startingTimestamp` + `startingOffsetsByTimestampStrategy=latest`, Kinesis
+   `initialPosition` `at_timestamp`), so no change between the seed and the
+   start is lost.
+6. src/back/objects/digitaltwin/build/TwinRealtimeStream.py,
+   TwinBuildRunHistory.py, _build_pipeline.py (NEW-1, minors)
+   The job parameters carry `slots_version` and `start_timestamp_ms`; the
+   trace records `slots_seed_version`. Cancelling another version's run
+   retires that version's _live; a failed upload or run_now after the seed
+   retires _live before raising. after_build makes no Postgres query with
+   realtime off and records any error as best-effort.
+7. src/back/core/graphdb/lakebase/SyncedTableName.py (new), TwinLiveServing.py (minor)
+   refresh_view passes `synced_phy_override` when the synced table is
+   registered under a ghost-state fallback name, as the build does.
+8. src/back/objects/digitaltwin/build/TwinSlotReconciliation.py (minor)
+   _live is counted only while served: a retired one reports no live_drift.
+9. src/front/static/global/js/navbar.js, _domain_information.html (minor)
+   The save keeps the stored state_ttl_hours (rendered on the section).
+10. docs/incremental-materialization.md
+    Traceability (Serving after the pinned seed, DAB adoption with the presets
+    note), development mode, the pinned seed and replay, the reconciliation
+    gate, and the live-unverified list (VERSION AS OF on the streaming table,
+    timestamp starts, the empty name prefix).
+11. tests
+    Prefix resolution (prefixed, exact wins, conflict, longer name, update
+    keeps the name), renderer prefix notice, presets, bind gating, envelope
+    error types, seed version / replay start / Kinesis position / initial
+    state SQL, retire on cancel and on failure, after_build gate, refresh_view
+    override, SyncedTableName, reconciliation gate, TTL preservation.
+
+Modified files:
+- databricks.yml
+- docs/incremental-materialization.md
+- resources/triple_rtm.job.yml
+- scripts/_internal/_ensure-instance-target.sh
+- scripts/_internal/_render-slot-pipelines.py
+- scripts/deploy.sh
+- src/back/core/graphdb/lakebase/SyncedTableName.py (new)
+- src/back/core/graphdb/lakebase/__init__.py
+- src/back/core/streaming/SlotPipelineRunner.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinLiveServing.py
+- src/back/objects/digitaltwin/build/TwinRealtimeStream.py
+- src/back/objects/digitaltwin/build/TwinSlotReconciliation.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/front/static/global/js/navbar.js
+- src/front/templates/partials/domain/_domain_information.html
+- src/jobs/triple_stream/TripleStreamEnvelope.py
+- src/jobs/triple_stream/main.py
+- tests/units/api/test_dtwin_reconcile.py
+- tests/units/front/test_materialization_mode_ui.py
+- tests/units/graphdb/test_synced_table_name.py (new)
+- tests/units/jobs/test_triple_stream_main.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/objects/test_live_serving.py (new)
+- tests/units/objects/test_realtime_stream.py
+- tests/units/settings/test_bundle_job_resource.py
+- tests/units/settings/test_render_slot_pipelines.py
+- tests/units/streaming/test_slot_pipeline_runner.py
+
+Tests: uv run --frozen pytest -q --durations=3 tests/units/objects tests/units/registry
+tests/units/graphdb tests/units/settings tests/units/api tests/units/front tests/units/jobs
+tests/units/streaming tests/units/core tests/units/ontology tests/units/architecture
+(readiness-route test deselected)
+-> 8164 passed, 12 skipped in 45.63s (slowest 1.41s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11153 passed, 339 skipped, 9 deselected in 60.90s; architecture suite green;
 tests/units/architecture/baseline.json unchanged.
