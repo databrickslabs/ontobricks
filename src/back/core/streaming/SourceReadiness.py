@@ -88,14 +88,17 @@ class SourceReadiness:
         """True when *table_fqn* was rewritten after Delta version *since_version*.
 
         *latest_version* (the table's newest version, read before) bounds the
-        ``DESCRIBE HISTORY`` read to the versions since; a newest version below
+        ``DESCRIBE HISTORY`` read to the versions since, plus one (a commit
+        landing between the two reads stays covered); a newest version below
         *since_version* means the history restarted (``DROP`` + ``CREATE``), a
         rewrite. A row counts when its ``version`` is greater than
         *since_version* and its ``operation`` replaces the data wholesale: a
         rewriting operation (``REPLACE``, ``CLONE``, ``TRUNCATE``, ``RESTORE``),
         a ``WRITE`` in ``Overwrite`` mode or a ``Complete``-mode streaming
-        update. More versions than :data:`_HISTORY_CAP` count as a rewrite too
-        (the check could not see them all).
+        update. Conservatively a rewrite too: more versions than
+        :data:`_HISTORY_CAP`, and a history that does not reach back to the
+        version after *since_version* (log retention, a busy table) — the
+        check could not see them all.
         """
         SourceReadiness._require_fqn(table_fqn)
         since = int(since_version)
@@ -111,15 +114,28 @@ class SourceReadiness:
                 _HISTORY_CAP,
             )
             return True
-        rows = WarehouseStatements.query(
-            client,
-            f"DESCRIBE HISTORY {table_fqn} LIMIT {window}",
-            f"read the history of {table_fqn}",
-        )
+        limit = _HISTORY_CAP if latest_version is None else window + 1
+        rows = [
+            row
+            for row in WarehouseStatements.query(
+                client,
+                f"DESCRIBE HISTORY {table_fqn} LIMIT {limit}",
+                f"read the history of {table_fqn}",
+            )
+            if isinstance(row, Mapping)
+        ]
+        versions = [int(row.get("version") or 0) for row in rows]
+        if not versions or min(versions) > since + 1:
+            logger.info(
+                "%s history does not reach back to version %d: counted as rewritten",
+                table_fqn,
+                since + 1,
+            )
+            return True
         return any(
             SourceReadiness._rewrites(row)
-            for row in rows
-            if isinstance(row, Mapping) and int(row.get("version") or 0) > since
+            for row, version in zip(rows, versions, strict=True)
+            if version > since
         )
 
     @staticmethod

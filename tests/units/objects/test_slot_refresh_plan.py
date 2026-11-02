@@ -88,7 +88,8 @@ class TestPreviousSourceState:
 
 class TestPlan:
     def test_no_rewrite_no_debt_is_an_incremental_update(self):
-        warehouse = _Warehouse(version=7, table_id="id-1")
+        history = [{"version": 7, "operation": "MERGE"}, {"version": 6, "operation": "MERGE"}]
+        warehouse = _Warehouse(version=7, table_id="id-1", history=history)
         runs = [_run(source_versions={_SRC: 5}, source_table_ids={_SRC: "id-1"})]
 
         plan = TwinSlotRefreshPlan.plan(warehouse, runs, [_SRC])
@@ -108,7 +109,7 @@ class TestPlan:
                 "slot_full_refresh_reason": "",
             },
         }
-        assert f"DESCRIBE HISTORY {_SRC} LIMIT 2" in warehouse.calls
+        assert f"DESCRIBE HISTORY {_SRC} LIMIT 3" in warehouse.calls
 
     def test_a_rewrite_is_pending_until_the_update_completes(self):
         warehouse = _Warehouse(history=[{"version": 6, "operation": "TRUNCATE"}])

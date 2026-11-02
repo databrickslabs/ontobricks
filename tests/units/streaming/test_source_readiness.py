@@ -131,6 +131,7 @@ class TestSourceOverwrittenSince:
                 (9, "WRITE", {"mode": "Append"}),
                 (8, "MERGE", {}),
                 (7, "DELETE", {}),
+                (6, "UPDATE", {}),
             )
         )
 
@@ -168,7 +169,24 @@ class TestSourceOverwrittenSince:
 
         SourceReadiness.source_overwritten_since(client, _SRC, 5, latest_version=9)
 
-        assert client.calls == [f"DESCRIBE HISTORY {_SRC} LIMIT 4"]
+        assert client.calls == [f"DESCRIBE HISTORY {_SRC} LIMIT 5"]
+
+    def test_a_history_without_the_version_after_the_recorded_one_is_a_rewrite(self):
+        """Version 6 is missing (log retention): what happened there cannot be checked."""
+        client = _Client(history=_history((8, "MERGE", {}), (7, "MERGE", {})))
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5, latest_version=8) is True
+
+    def test_a_commit_between_the_two_reads_is_still_covered(self):
+        """The newest version was 8; a commit (9) landed before the history read."""
+        client = _Client(
+            history=_history((9, "MERGE", {}), (8, "MERGE", {}), (7, "MERGE", {}), (6, "MERGE", {}))
+        )
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5, latest_version=8) is False
+
+    def test_an_empty_history_is_a_rewrite(self):
+        assert SourceReadiness.source_overwritten_since(_Client(), _SRC, 5, latest_version=8) is True
 
     def test_without_the_latest_version_the_history_read_is_capped(self):
         client = _Client()

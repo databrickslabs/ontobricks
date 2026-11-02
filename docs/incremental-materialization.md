@@ -142,7 +142,8 @@ Delta version and table id are read, and compared with the ones the last
 *completed* update recorded (the newest run with `source_versions`, whatever the
 store base). A source is rewritten when its table id changed, its newest version is
 below the recorded one (`DROP` + `CREATE` restarted the history), or its history
-since (`DESCRIBE HISTORY … LIMIT <versions since>`, at most 10000 versions; more
+since (`DESCRIBE HISTORY … LIMIT <versions since + 1>`, at most 10000 versions;
+more, or a history that does not reach back to the version after the recorded one,
 count as a rewrite) holds `CREATE OR REPLACE TABLE [AS SELECT]`, `REPLACE TABLE
 [AS SELECT]`, `CLONE`, `TRUNCATE`, `RESTORE`, an `INSERT OVERWRITE` (a `WRITE` in
 `Overwrite` mode) or a `Complete`-mode `STREAMING UPDATE`. A rewrite breaks the
