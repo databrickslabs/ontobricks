@@ -722,14 +722,20 @@ class TestScheduledTickPlansTheSlotUpdate:
             "slot_full_refresh_reason": "source_overwritten",
         }
 
-    def test_an_unreadable_source_history_rebuilds_by_ctas(self, slot_runner, monkeypatch):
+    def test_an_unreadable_source_history_leaves_the_view_as_is(self, slot_runner, monkeypatch):
+        """A transient failure must not drop the view for a CTAS (every later tick would CTAS)."""
         log: list = []
         runs = [self._run(source_versions={_CUSTOMERS: 5})]
 
-        self._tick(log, monkeypatch, runs=runs, fail_history=True)
+        with patch("back.objects.digitaltwin.build.TwinScheduledRefresh.logger") as logger:
+            facts = self._tick(log, monkeypatch, runs=runs, fail_history=True)
 
-        assert _ctas(log)
+        statements = _statements(log)
+        assert not _ctas(log)
+        assert not any(s.startswith(("REFRESH", "DROP")) for s in statements)
         assert slot_runner.log == []
+        assert facts == {}
+        logger.warning.assert_called_once()
 
     def test_a_microbatch_tick_plans_nothing(self, slot_runner, monkeypatch):
         log: list = []

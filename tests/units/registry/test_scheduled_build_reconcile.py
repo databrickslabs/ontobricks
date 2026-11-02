@@ -154,3 +154,30 @@ class TestTickRecordsDrift:
 
     def test_no_drift_records_no_materialization_facts(self, monkeypatch):
         assert "materialization" not in self._run(monkeypatch, drift=False)
+
+
+class TestTickTrace:
+    def _record(self, stats):
+        from back.objects.registry.schedule.RunOutcome import RunOutcome
+
+        registry = MagicMock()
+        ctx = SimpleNamespace(
+            _svc=object(),
+            tm=None,
+            task_id="t",
+            domain_name="dom",
+            version="3",
+            run_ts="2026-11-02T00:00:00+00:00",
+            scratch={"stats": stats},
+            registry_service=registry,
+        )
+        scheduled_build.on_finish(ctx, RunOutcome(status="error", message="boom"), 1.0)
+        return registry.record_build_run.call_args[0][1]["stats"]
+
+    def test_a_tick_that_failed_before_any_fact_records_no_materialization(self):
+        assert self._record({"ontology": {}, "materialization": {}}) == {"ontology": {}}
+
+    def test_a_tick_that_left_a_refresh_pending_records_it(self):
+        facts = {"slot_full_refresh_pending": True, "slot_full_refresh_reason": "reconcile_drift"}
+
+        assert self._record({"materialization": facts})["materialization"] == facts

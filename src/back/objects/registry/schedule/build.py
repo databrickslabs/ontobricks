@@ -377,6 +377,18 @@ def _close_tick_facts(ctx: TaskContext, tick: Dict[str, Any], store, src) -> Non
         del ctx.scratch["stats"]["materialization"]
 
 
+def _trace_stats(stats: Any) -> Dict[str, Any]:
+    """The tick's stats for its build-run trace, without an empty ``materialization``.
+
+    A tick that failed before any fact was recorded leaves the dict it attached
+    up front empty; an empty dict would still read as "facts" to the readers.
+    """
+    trace = dict(stats) if isinstance(stats, dict) else {}
+    if not trace.get("materialization"):
+        trace.pop("materialization", None)
+    return trace
+
+
 def _count_view_triples(src, view_table: str) -> int:
     """Return the server-side triple count for *view_table*.
 
@@ -617,7 +629,7 @@ def on_finish(ctx: TaskContext, outcome: RunOutcome, duration_s: float) -> None:
                 "graph_name": scratch.get("graph_name", ""),
                 "task_id": ctx.task_id or "",
                 "phase_times": step_times_from_task(task) if task else {},
-                "stats": scratch.get("stats", {}),
+                "stats": _trace_stats(scratch.get("stats", {})),
             },
         )
     except Exception as trace_exc:  # noqa: BLE001

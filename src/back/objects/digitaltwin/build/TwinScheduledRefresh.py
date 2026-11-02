@@ -47,14 +47,17 @@ class TwinScheduledRefresh:
         spec: Any = None,
         facts: dict | None = None,
     ) -> bool:
-        """True when ``…_data`` was refreshed in place; ``False``: build it by CTAS.
+        """True when ``…_data`` is kept (refreshed in place); ``False``: build it by CTAS.
 
         ``False`` for any other *mode* (``full``, a MERGE-promoted domain), when
         ``…_data`` is not a materialized view of ours, when the mappings are
         unknown or no longer give the view's definition (its stored fingerprint)
-        or the slot pipeline's SQL, when the slot pipeline is missing, and when
-        a source history cannot be read. *spec* is the tick's compiled slot spec
-        of those mappings (``None``: they did not compile).
+        or the slot pipeline's SQL, and when the slot pipeline is missing.
+        *spec* is the tick's compiled slot spec of those mappings (``None``:
+        they did not compile). A source history that cannot be read (often
+        transient) keeps the view as it is for this tick — ``True``, nothing
+        refreshed, nothing dropped, nothing recorded — rather than replace it
+        by a CTAS every later tick would repeat.
 
         An ``incremental`` tick decides its slot update the way a build does
         (:class:`TwinSlotRefreshPlan`: a full refresh after a source rewrite or
@@ -80,11 +83,12 @@ class TwinScheduledRefresh:
             plan = TwinScheduledRefresh._plan(client, domain, settings, spec, mode)
         except InfrastructureError as exc:
             logger.warning(
-                "Scheduled build: a source history is unreadable (%s); rebuilding %s by CTAS",
+                "Scheduled build: a source history is unreadable (%s); %s is left as it is "
+                "this tick (nothing dropped)",
                 exc,
                 data_fqn,
             )
-            return False
+            return True
         facts.update(plan["before"])
         if spec.row_local_map_ids and not TwinScheduledRefresh._slots_current(
             domain, spec, update=mode == "incremental", full_refresh=bool(plan["reason"])

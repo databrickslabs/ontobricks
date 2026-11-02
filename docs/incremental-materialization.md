@@ -157,7 +157,9 @@ it and the `_data` refresh completed, and a run whose update did not complete
 carries the previous `source_versions` forward, so the next build or tick retries.
 The versions recorded are the ones read *before* the update: a commit landing
 during it is checked next time. A source history that cannot be read is an
-`incremental_failed:InfrastructureError` for a build and a CTAS for a tick.
+`incremental_failed:InfrastructureError` for a build; a tick leaves `_data` as it
+is for that tick (nothing refreshed, nothing dropped) instead of a CTAS every later
+tick would repeat.
 
 Two further fallbacks apply after the mode is decided:
 
