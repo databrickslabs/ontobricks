@@ -6,17 +6,22 @@ Copy this file, rename it to ``<EngineName>Store.py``, and replace every
 See ``docs/backend.md`` (Engine integration) for the full integration guide.
 
 Triples are stored as ``(subject, predicate, object)`` rows.  If your engine
-speaks SQL, the inherited named-query defaults from ``GraphDBBackend``
+speaks SQL, the inherited named-query defaults from ``GraphBackend``
 will work out of the box.  If not (Cypher, Gremlin, …), you must override
 every named-query method — see ``LakebaseFlatStore`` for a complete SQL
 reference implementation.
+
+This template is a *materialized* engine (it owns a copy of the triples), so it
+subclasses :class:`MaterializedGraphBackend`.  A read-only, no-copy pass-through
+engine would subclass :class:`VirtualBackend` instead and omit the write
+methods.
 """
 
 import os
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from back.core.logging import get_logger
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
@@ -32,7 +37,7 @@ except ImportError:
     _engine = None  # type: ignore[assignment]
 
 
-class ExampleStore(GraphDBBackend):
+class ExampleStore(MaterializedGraphBackend):
     """Example graph database backend.
 
     Parameters
@@ -70,7 +75,7 @@ class ExampleStore(GraphDBBackend):
         #   self._remote_port = self.engine_config.get("port", 7687)
 
     # ======================================================================
-    #  GraphDBBackend — capability flags
+    #  GraphBackend — capability flags
     # ======================================================================
 
     @property
@@ -103,7 +108,7 @@ class ExampleStore(GraphDBBackend):
     #     ...
 
     # ======================================================================
-    #  GraphDBBackend — connection management  (MUST implement)
+    #  GraphBackend — connection management  (MUST implement)
     # ======================================================================
 
     def get_connection(self) -> Any:
@@ -126,7 +131,7 @@ class ExampleStore(GraphDBBackend):
         logger.debug("Example connection closed")
 
     # ======================================================================
-    #  GraphDBBackend — schema helpers  (override as needed)
+    #  GraphBackend — schema helpers  (override as needed)
     # ======================================================================
 
     def get_node_table(self, table_name: str) -> str:
@@ -144,7 +149,7 @@ class ExampleStore(GraphDBBackend):
         return None
 
     # ======================================================================
-    #  GraphDBBackend — sync to/from UC Volume  (override as needed)
+    #  MaterializedGraphBackend — sync to/from UC Volume  (override as needed)
     # ======================================================================
 
     def sync_to_remote(
@@ -175,7 +180,7 @@ class ExampleStore(GraphDBBackend):
         return None
 
     # ======================================================================
-    #  GraphDBBackend — reasoning support
+    #  GraphBackend — reasoning support
     # ======================================================================
 
     def get_query_translator(self, table_name: str = "") -> Any:
@@ -189,7 +194,7 @@ class ExampleStore(GraphDBBackend):
         return super().get_query_translator(table_name)
 
     # ======================================================================
-    #  GraphDBBackend — core CRUD  (MUST implement)
+    #  MaterializedGraphBackend — core CRUD  (MUST implement)
     # ======================================================================
 
     def create_table(self, table_name: str) -> None:
@@ -303,7 +308,7 @@ class ExampleStore(GraphDBBackend):
         #       Otherwise, raise NotImplementedError:
         raise NotImplementedError(
             "Example backend does not support raw SQL queries. "
-            "Use the named query methods on GraphDBBackend instead."
+            "Use the named query methods on GraphBackend instead."
         )
 
     def optimize_table(self, table_name: str) -> None:
@@ -318,7 +323,7 @@ class ExampleStore(GraphDBBackend):
     #  Named query overrides  (MUST override for non-SQL engines)
     #
     #  If your engine speaks SQL, the inherited defaults from
-    #  GraphDBBackend will work and you can DELETE this entire section.
+    #  GraphBackend will work and you can DELETE this entire section.
     #
     #  If your engine is NON-SQL (Cypher, Gremlin, …), you MUST implement
     #  every method below.  Use LakebaseFlatStore as a SQL reference; for

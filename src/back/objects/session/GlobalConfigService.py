@@ -421,11 +421,14 @@ class GlobalConfigService:
         """
         if not isinstance(config, dict):
             return False, "graph_engine_config must be a JSON object"
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.engine_config import normalize_graph_engine_config
-        from back.core.graphdb.lakebase.LakebaseBase import validate_engine_config_keys
 
         nested = normalize_graph_engine_config(config)
-        ok_keys, msg_keys = validate_engine_config_keys(nested.get("lakebase") or {})
+        provisioner = GraphDBFactory.get_provisioner(None, engine="lakebase")
+        ok_keys, msg_keys = provisioner.validate_engine_config(
+            nested.get("lakebase") or {}
+        )
         if not ok_keys:
             return False, msg_keys
         return self._save(host, token, registry_cfg, {"graph_engine_config": nested})

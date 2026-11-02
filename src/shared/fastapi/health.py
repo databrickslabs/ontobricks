@@ -367,9 +367,9 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
         )
 
     try:
-        from back.core.graphdb.lakebase.pool import _require_psycopg
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        psycopg, _ = _require_psycopg()
+        psycopg = GraphDBFactory.get_health_probe(None, engine="lakebase").psycopg()
         kwargs = auth.kwargs(application_name="ontobricks-graphdb-health")
         if database:
             kwargs["dbname"] = database
@@ -1024,9 +1024,9 @@ def _check_graphdb_tables(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Lakebase not bound — Graph DB not probed"
 
     try:
-        from back.core.graphdb.lakebase.pool import _require_psycopg
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        psycopg, _ = _require_psycopg()
+        psycopg = GraphDBFactory.get_health_probe(None, engine="lakebase").psycopg()
         kwargs = auth.kwargs(application_name="ontobricks-graphdb-diag")
         if database:
             kwargs["dbname"] = database
@@ -1086,9 +1086,9 @@ def _check_graphdb_permissions(settings: Settings) -> Tuple[str, str]:
         return _WARNING, "Lakebase not bound — Graph DB permissions not probed"
 
     try:
-        from back.core.graphdb.lakebase.pool import _require_psycopg
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        psycopg, _ = _require_psycopg()
+        psycopg = GraphDBFactory.get_health_probe(None, engine="lakebase").psycopg()
         kwargs = auth.kwargs(application_name="ontobricks-graphdb-diag")
         if database:
             kwargs["dbname"] = database

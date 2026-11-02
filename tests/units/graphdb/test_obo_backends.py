@@ -85,9 +85,13 @@ def test_delta_backend_read_applies_obo(monkeypatch, obo_spy):
     import importlib
 
     captured = _patch_delta(monkeypatch, app_mode=True)
-    dfs_mod = importlib.import_module("back.core.graphdb.delta.DeltaFlatStore")
+    dfs_mod = importlib.import_module(
+        "back.core.graphdb.delta.DeltaMaterializedStore"
+    )
     monkeypatch.setattr(
-        dfs_mod, "DeltaFlatStore", lambda client, **kw: SimpleNamespace(client=client)
+        dfs_mod,
+        "DeltaMaterializedStore",
+        lambda client, **kw: SimpleNamespace(client=client),
     )
 
     store = GraphDBFactory().create(

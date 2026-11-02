@@ -298,6 +298,10 @@ class TestSimulationFacade:
                 class Cur:
                     def execute(self, sql, params=None):
                         seen.append(sql)
+
+                    def fetchone(self):
+                        # Sandbox existence probe (to_regclass) → present.
+                        return ("some_oid",)
                 yield Cur()
 
         store = Store()
@@ -305,9 +309,10 @@ class TestSimulationFacade:
         expect = _companion_ddl.sim_union_phy("G_HR_v1", row["id"])
         sandbox = LakebaseSimulationStore.sandbox_table_name("G_HR_v1", row["id"])
         assert view == expect
-        assert seen and "UNION ALL" in seen[0]
-        assert "FROM g_hr_v1 l" in seen[0]
-        assert f"FROM {sandbox} s" in seen[0]
+        create_view_sql = next((s for s in seen if "UNION ALL" in s), "")
+        assert create_view_sql, f"no union view DDL in {seen!r}"
+        assert "FROM g_hr_v1 l" in create_view_sql
+        assert f"FROM {sandbox} s" in create_view_sql
 
     def test_diff_page(self):
         reg = _Registry()

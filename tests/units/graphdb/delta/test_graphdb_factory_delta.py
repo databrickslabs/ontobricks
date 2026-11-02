@@ -1,4 +1,4 @@
-"""Tests for DeltaFlatStore factory registration."""
+"""Tests for DeltaMaterializedStore factory registration."""
 
 from unittest.mock import MagicMock, patch
 

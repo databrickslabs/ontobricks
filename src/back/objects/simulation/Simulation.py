@@ -116,9 +116,9 @@ class Simulation:
             (getattr(self._domain, "info", None) or {}).get("graph_backend")
         )
         if backend == "lakebase":
-            from back.core.graphdb.lakebase import LakebaseSimulationStore
+            from back.core.graphdb import GraphDBFactory
 
-            return LakebaseSimulationStore.sandbox_table_name(
+            return GraphDBFactory.get_simulation("lakebase").sandbox_table_name(
                 effective_graph_name(self._domain), sim_id
             )
         from back.objects.simulation.Sandbox import Sandbox
@@ -161,10 +161,12 @@ class Simulation:
             store=graph_store,
         )
         if backend == "lakebase":
-            from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
+            from back.core.graphdb import GraphDBFactory
 
-            view = _companion_ddl.sim_union_phy(graph_name, sim_id)
-            LakebaseSimulationUnion(graph_store).ensure(
+            sim = GraphDBFactory.get_simulation("lakebase")
+            view = sim.sim_union_view_name(graph_name, sim_id)
+            sim.ensure_union(
+                graph_store,
                 view,
                 live_union,
                 self.sandbox_relation(sim_id, store=graph_store),

@@ -140,13 +140,10 @@ class GraphEngineNeo4jSettings:
         """
         import time as _time
 
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.engine_config import (
             list_neo4j_connections,
             resolve_neo4j_connection,
-        )
-        from back.core.graphdb.neo4j.Neo4jConnection import (
-            Neo4jConnection,
-            resolve_neo4j_database,
         )
 
         gcfg: Dict[str, Any] = {}
@@ -202,14 +199,9 @@ class GraphEngineNeo4jSettings:
             }
 
         try:
-            conn = Neo4jConnection(
-                uri=uri,
-                database=resolve_neo4j_database(gcfg),
-                auth_method=str(gcfg.get("auth_method") or "databricks_secret").strip()
-                or "databricks_secret",
-                engine_config=gcfg,
-                encrypted=bool(gcfg.get("encrypted", True)),
-            )
+            conn = GraphDBFactory.get_health_probe(
+                None, engine="neo4j"
+            ).connection(gcfg)
         except ValidationError as exc:
             return {"success": True, "ok": False, "error": str(exc), "category": "config"}
         except ImportError as exc:
@@ -272,7 +264,7 @@ class GraphEngineNeo4jSettings:
     @staticmethod
     def _neo4j_credentials_source(gcfg: Dict[str, Any]) -> str:
         """Human-readable description of where the Neo4j password came from."""
-        from back.core.graphdb.neo4j.Neo4jConnection import NEO4J_PASSWORD_ENV
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         auth_method = str(gcfg.get("auth_method") or "basic").strip() or "basic"
         if auth_method == "databricks_secret":
@@ -280,7 +272,8 @@ class GraphEngineNeo4jSettings:
             key = str(gcfg.get("secret_key") or "").strip()
             return "Databricks secret (%s/%s)" % (scope, key)
         if _ss.is_neo4j_password_from_secret():
-            return "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
+            env = GraphDBFactory.get_provisioner(None, engine="neo4j").password_env()
+            return "env var (%s — Databricks Apps secret)" % env
         return "engine_config (local-dev fallback)"
 
     @staticmethod
@@ -329,13 +322,10 @@ class GraphEngineNeo4jSettings:
         Shared by the Neo4j admin endpoints (objects list, health, drop).
         Returns ``(conn, profile)`` or raises the mapped error.
         """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.engine_config import (
             list_neo4j_connections,
             resolve_neo4j_connection,
-        )
-        from back.core.graphdb.neo4j.Neo4jConnection import (
-            Neo4jConnection,
-            resolve_neo4j_database,
         )
 
         _, host, token, registry_cfg = SettingsService._resolve_context(
@@ -357,14 +347,7 @@ class GraphEngineNeo4jSettings:
             raise ValidationError(
                 f"Neo4j connection {name!r} is missing or has no Bolt URI."
             )
-        conn = Neo4jConnection(
-            uri=str(gcfg["uri"]).strip(),
-            database=resolve_neo4j_database(gcfg),
-            auth_method=str(gcfg.get("auth_method") or "databricks_secret").strip()
-            or "databricks_secret",
-            engine_config=gcfg,
-            encrypted=bool(gcfg.get("encrypted", True)),
-        )
+        conn = GraphDBFactory.get_health_probe(None, engine="neo4j").connection(gcfg)
         return conn, gcfg
 
     @staticmethod
@@ -375,13 +358,14 @@ class GraphEngineNeo4jSettings:
         connection_name: str = "",
     ) -> Dict[str, Any]:
         """List Neo4j databases on the server for a named connection (admin)."""
-        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
+        probe = GraphDBFactory.get_health_probe(None, engine="neo4j")
         conn, gcfg = SettingsService._neo4j_connection_from_config(
             session_mgr, settings, connection_name=connection_name
         )
         try:
-            names = Neo4jReadOps(conn).list_databases()
+            names = probe.read_ops(conn).list_databases()
         finally:
             try:
                 conn.close()
@@ -405,13 +389,14 @@ class GraphEngineNeo4jSettings:
         connection_name: str = "",
     ) -> Dict[str, Any]:
         """List materialised Neo4j graphs (marker labels) + counts for the admin Objects tab."""
-        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
+        probe = GraphDBFactory.get_health_probe(None, engine="neo4j")
         conn, gcfg = SettingsService._neo4j_connection_from_config(
             session_mgr, settings, connection_name=connection_name
         )
         try:
-            labels = Neo4jReadOps(conn).list_labels()
+            labels = probe.read_ops(conn).list_labels()
         finally:
             try:
                 conn.close()
@@ -468,8 +453,10 @@ class GraphEngineNeo4jSettings:
         connection_name: str = "",
     ) -> Dict[str, Any]:
         """Drop one Neo4j graph (marker label): its nodes, rels, constraint, schema map."""
-        from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps, sanitise_label
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
+        probe = GraphDBFactory.get_health_probe(None, engine="neo4j")
+        builder = GraphDBFactory.get_builder(None, engine="neo4j")
         clean = (label or "").strip()
         if not clean:
             raise ValidationError("No graph label provided to drop.")
@@ -477,10 +464,10 @@ class GraphEngineNeo4jSettings:
             session_mgr, settings, connection_name=connection_name
         )
         try:
-            Neo4jWriteOps(conn).drop_table(clean)
+            probe.write_ops(conn).drop_table(clean)
         finally:
             try:
                 conn.close()
             except Exception:  # noqa: BLE001
                 pass
-        return {"success": True, "dropped": sanitise_label(clean)}
+        return {"success": True, "dropped": builder.sanitise_label(clean)}

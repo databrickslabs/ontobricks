@@ -112,7 +112,7 @@ class LakebaseFlatStore(LakebaseBase):
     :class:`SyncedTableManager`.
 
     ``search_path`` is set on every pooled connection so generated SQL from
-    :class:`GraphDBBackend` helpers resolves correctly.
+    :class:`GraphBackend` helpers resolves correctly.
     """
 
     supports_materialized_inference_purge = True

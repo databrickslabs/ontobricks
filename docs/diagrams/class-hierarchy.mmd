@@ -22,9 +22,9 @@ classDiagram
     RuntimeError <|-- LakebaseGraphPoolError
     RuntimeError <|-- StoreError
 
-    %% ─── Storage / Backend Hierarchy ───────────────────────────────────────────
+    %% ─── Storage / Backend Hierarchy (two hats over a shared read root) ─────────
     class ABC
-    class GraphDBBackend {
+    class GraphBackend {
         <<ABC>>
         +create_table()
         +insert_triples()
@@ -33,10 +33,26 @@ classDiagram
         +query_dialect()
         +get_connection()
     }
-    class DeltaFlatStore {
+    class MaterializedGraphBackend {
+        <<ABC>>
+        +delete_triples()
+        +sync_to_remote()
+        +rebuild_adjacency()
+    }
+    class VirtualBackend {
+        <<ABC>>
+        +read-only, no-copy
+    }
+    class DeltaReadStore {
+        +expand_and_fetch_subgraph()
+        +execute_query()
+    }
+    class DeltaMaterializedStore {
         +create_table()
         +insert_triples()
-        +get_inferred_triple_count()
+    }
+    class DeltaViewStore {
+        +pass-through view
     }
     class LakebaseBase {
         +physical_table_id()
@@ -48,16 +64,58 @@ classDiagram
         +is_synced()
         +sync_uc_catalog()
     }
+    class Neo4jStore {
+        +get_connection()
+    }
     class ExampleStore {
         +get_connection()
         +close()
     }
 
-    ABC              <|-- GraphDBBackend
-    GraphDBBackend   <|-- DeltaFlatStore
-    GraphDBBackend   <|-- LakebaseBase
-    GraphDBBackend   <|-- ExampleStore
-    LakebaseBase     <|-- LakebaseFlatStore
+    ABC                      <|-- GraphBackend
+    GraphBackend             <|-- MaterializedGraphBackend
+    GraphBackend             <|-- VirtualBackend
+    MaterializedGraphBackend <|-- LakebaseBase
+    MaterializedGraphBackend <|-- DeltaMaterializedStore
+    MaterializedGraphBackend <|-- Neo4jStore
+    MaterializedGraphBackend <|-- ExampleStore
+    VirtualBackend           <|-- DeltaViewStore
+    DeltaReadStore           <|-- DeltaMaterializedStore
+    DeltaReadStore           <|-- DeltaViewStore
+    LakebaseBase             <|-- LakebaseFlatStore
+
+    %% ─── Graph DB Capabilities (factory-vended, per backend) ────────────────────
+    class GraphBuilder { <<ABC>> }
+    class GraphHealthProbe { <<ABC>> }
+    class GraphProvisioner { <<ABC>> }
+    class GraphSimulation {
+        <<ABC>>
+        +simulation_store()
+    }
+    class GraphDBFactory {
+        +get_graphdb()
+        +get_builder()
+        +get_health_probe()
+        +get_provisioner()
+        +get_simulation()
+        +classify_store()
+    }
+
+    GraphBuilder     <|-- DeltaGraphBuilder
+    GraphBuilder     <|-- LakebaseGraphBuilder
+    GraphBuilder     <|-- Neo4jGraphBuilder
+    GraphHealthProbe <|-- DeltaHealthProbe
+    GraphHealthProbe <|-- LakebaseHealthProbe
+    GraphHealthProbe <|-- Neo4jHealthProbe
+    GraphProvisioner <|-- LakebaseProvisioner
+    GraphProvisioner <|-- Neo4jProvisioner
+    GraphSimulation  <|-- LakebaseSimulation
+    GraphSimulation  <|-- DeltaSimulation
+    GraphSimulation  <|-- Neo4jSimulation
+    GraphDBFactory ..> GraphBuilder : vends
+    GraphDBFactory ..> GraphHealthProbe : vends
+    GraphDBFactory ..> GraphProvisioner : vends
+    GraphDBFactory ..> GraphSimulation : vends
 
     %% ─── Registry Store Hierarchy ───────────────────────────────────────────────
     class RegistryStore {

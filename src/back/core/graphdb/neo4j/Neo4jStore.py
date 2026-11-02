@@ -51,7 +51,7 @@ full SWRL → Cypher translation lands in a follow-up PR.
 
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.neo4j.Neo4jConnection import (
     DEFAULT_AUTH_METHOD,
     DEFAULT_DATABASE,
@@ -81,12 +81,12 @@ __all__ = [
 ]
 
 
-class Neo4jStore(GraphDBBackend):
+class Neo4jStore(MaterializedGraphBackend):
     """Neo4j (Bolt / Cypher) graph database backend — typed property-graph model.
 
     Public façade composing :class:`Neo4jConnection`, :class:`Neo4jWriteOps`,
     and :class:`Neo4jReadOps`. Implements both the ``TripleStoreBackend``
-    and ``GraphDBBackend`` contracts.
+    and ``MaterializedGraphBackend`` contracts.
 
     Parameters
     ----------
@@ -169,7 +169,7 @@ class Neo4jStore(GraphDBBackend):
         self._reads = Neo4jReadOps(self._connection)
 
     # ======================================================================
-    #  GraphDBBackend — capability flags
+    #  GraphBackend — capability flags
     # ======================================================================
 
     @property
@@ -231,7 +231,7 @@ class Neo4jStore(GraphDBBackend):
         return self._connection._resolve_auth()
 
     # ======================================================================
-    #  GraphDBBackend — schema helpers
+    #  GraphBackend — schema helpers
     # ======================================================================
 
     def get_node_table(self, table_name: str) -> str:
@@ -242,7 +242,7 @@ class Neo4jStore(GraphDBBackend):
         return None
 
     # ======================================================================
-    #  GraphDBBackend — sync to/from UC Volume (Aura is remote; no-ops)
+    #  MaterializedGraphBackend — sync to/from UC Volume (Aura is remote; no-ops)
     # ======================================================================
 
     def sync_to_remote(self, uc_path: str, volume_service: Any) -> Tuple[bool, str]:
@@ -258,7 +258,7 @@ class Neo4jStore(GraphDBBackend):
         return None
 
     # ======================================================================
-    #  GraphDBBackend — reasoning support
+    #  GraphBackend — reasoning support
     # ======================================================================
 
     def get_query_translator(self, table_name: str = "") -> Any:

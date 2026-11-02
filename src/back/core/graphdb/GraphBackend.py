@@ -1,4 +1,4 @@
-"""Abstract base class for graph database backends.
+"""Shared read root for all graph database backends.
 
 A graph DB backend is a graph-capable triple store (e.g. Lakebase Postgres,
 Databricks Delta, or any future Cypher / Gremlin engine plugged in via
@@ -6,14 +6,24 @@ Databricks Delta, or any future Cypher / Gremlin engine plugged in via
 model.  It is the single storage abstraction used across OntoBricks for
 querying, reasoning, graph traversal, and analytics.
 
-``GraphDBBackend`` provides:
+``GraphBackend`` is the common **read** contract shared by both backend
+families.  Concrete engines do not subclass it directly — they subclass one of
+the two "hat" interfaces:
 
-* the core CRUD abstract methods every backend must implement;
-* a large set of named query / reasoning methods with default SQL
+* :class:`MaterializedGraphBackend` — engines that own a physical copy of the
+  triples (Lakebase, Delta ``table``, Neo4j): full write / companion / sync
+  surface.
+* :class:`VirtualBackend` — read-only pass-through engines over a live source
+  (Delta ``view``): no writes, no companions, no sync.
+
+``GraphBackend`` provides:
+
+* the core read abstract methods every backend must implement;
+* a large set of named query / reasoning-read methods with default SQL
   implementations (SQL-based backends inherit these; non-SQL engines such as
   Cypher or Gremlin override with native queries);
-* graph-specific concerns — connection management, schema introspection, sync
-  to/from remote storage, capability flags, and query-translator selection.
+* graph-specific read concerns — connection management, schema introspection,
+  companion-readiness probing, capability flags, and query-translator selection.
 """
 
 from abc import ABC, abstractmethod
@@ -37,11 +47,13 @@ from back.core.graphdb.entity_search import (
 logger = get_logger(__name__)
 
 
-class GraphDBBackend(ABC):
-    """Abstract base for graph DB engines (Lakebase Postgres, Delta, KuzuDB, ...).
+class GraphBackend(ABC):
+    """Shared read root for graph DB engines (see module docstring).
 
-    Subclasses must implement the core CRUD abstract methods **plus** the
-    graph-specific abstract methods (``get_connection`` / ``close``).
+    Concrete engines subclass one of the two hats —
+    :class:`MaterializedGraphBackend` or :class:`VirtualBackend` — never this
+    class directly.  Subclasses must implement the core read abstract methods
+    plus connection management (``get_connection`` / ``close``).
     """
 
     supports_materialized_inference_purge = False
@@ -52,29 +64,8 @@ class GraphDBBackend(ABC):
     _search_cache_mode = "auto"
 
     # ------------------------------------------------------------------
-    # Core abstract methods
+    # Core read abstract methods
     # ------------------------------------------------------------------
-
-    @abstractmethod
-    def create_table(self, table_name: str) -> None:
-        """Create the (subject, predicate, object) table."""
-        ...
-
-    @abstractmethod
-    def drop_table(self, table_name: str) -> None:
-        """Drop if exists."""
-        ...
-
-    @abstractmethod
-    def insert_triples(
-        self,
-        table_name: str,
-        triples: List[Dict[str, str]],
-        batch_size: int = 500,
-        on_progress: Optional[Callable[[int, int], None]] = None,
-    ) -> int:
-        """Batch insert triples, returns count inserted."""
-        ...
 
     def delete_triples(
         self,
@@ -1153,7 +1144,7 @@ class GraphDBBackend(ABC):
     @staticmethod
     def is_cypher_backend(store) -> bool:
         """Check if *store* is a Cypher-capable graph DB backend."""
-        return isinstance(store, GraphDBBackend) and store.supports_cypher
+        return isinstance(store, GraphBackend) and store.supports_cypher
 
     # ------------------------------------------------------------------
     # Connection management

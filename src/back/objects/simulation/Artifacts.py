@@ -72,9 +72,10 @@ class Artifacts:
                 cls._object("table", _ROLE_SANDBOX, name),
                 cls._object("view", _ROLE_INFERRED, name.replace("__sim_", "__smu_")),
             ]
-        from back.core.graphdb.lakebase import _companion_ddl
+        from back.core.graphdb import GraphDBFactory
 
-        table = sandbox_table or _companion_ddl.sim_phy(graph_name, sim_id)
+        sim = GraphDBFactory.get_simulation("lakebase")
+        table = sandbox_table or sim.sim_table_name(graph_name, sim_id)
         objects = [cls._object("table", _ROLE_SANDBOX, table)]
         objects.extend(cls._lakebase_views(graph_name, sim_id))
         return objects
@@ -96,13 +97,14 @@ class Artifacts:
 
     @staticmethod
     def _lakebase_views(graph_name: str, sim_id: str) -> List[Dict[str, str]]:
-        from back.core.graphdb.lakebase import _companion_ddl
+        from back.core.graphdb import GraphDBFactory
 
+        sim = GraphDBFactory.get_simulation("lakebase")
         return [
             Artifacts._object(
                 "view",
                 _ROLE_INFERRED,
-                _companion_ddl.sim_union_phy(graph_name, sim_id),
+                sim.sim_union_view_name(graph_name, sim_id),
             ),
         ]
 

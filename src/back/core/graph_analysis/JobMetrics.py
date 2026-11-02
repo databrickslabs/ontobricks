@@ -113,12 +113,9 @@ def analytics_snapshot(domain: Any, settings: Any, source_table: str) -> Iterato
         yield source_table
         return
 
-    from back.core.graphdb.delta import _table_naming, materialize
-    from back.core.graphdb.delta.DeltaBase import create_databricks_client
-
-    snapshot = _table_naming.analytics_snapshot_fqn(domain, settings)
-    client = create_databricks_client(domain, settings, for_write=True)
-    if not snapshot or client is None:
+    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+    snapshot = builder.analytics_snapshot_fqn()
+    if not snapshot or not builder.has_client():
         raise InfrastructureError(
             "Graph analytics needs a temporary Delta snapshot for a view-only "
             "domain, and it could not be prepared",
@@ -130,12 +127,12 @@ def analytics_snapshot(domain: Any, settings: Any, source_table: str) -> Iterato
         )
 
     logger.info("Materializing analytics snapshot %s from %s", snapshot, source_table)
-    materialize.materialize_from_view(client, source_table, snapshot)
+    builder.materialize_from_view(source_table, snapshot)
     try:
         yield snapshot
     finally:
         logger.info("Dropping analytics snapshot %s", snapshot)
-        materialize.drop_relation(client, snapshot, kind="table")
+        builder.drop_relation(snapshot, kind="table")
 
 
 # ---------------------------------------------------------------------------

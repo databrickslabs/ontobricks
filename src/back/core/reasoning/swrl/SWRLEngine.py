@@ -4,7 +4,7 @@ Translates SWRL rules to SQL via the backend-provided translator and
 executes inference (producing inferred triples) against the active
 triple store.  All currently supported backends are SQL-based; a
 future Cypher / Gremlin engine would supply its own translator via
-:meth:`GraphDBBackend.get_query_translator`.
+:meth:`GraphBackend.get_query_translator`.
 
 Violation detection for SWRL rules is handled separately by the
 Data Quality runner (see ``run_sql_checks`` in
@@ -15,7 +15,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.GraphBackend import GraphBackend
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
@@ -44,7 +44,7 @@ class SWRLEngine:
         Args:
             rules: List of rule dicts with ``name``, ``antecedent``,
                    ``consequent``, and optionally ``description``.
-            store: A :class:`GraphDBBackend` instance.
+            store: A :class:`GraphBackend` instance.
             table_name: The logical triple-store table/graph name.
             materialize: If True, also insert inferred triples into the store.
             inference_limit: Max inferred triples per rule (None = unlimited).
@@ -248,10 +248,10 @@ class SWRLEngine:
     def _get_translator(store, table_name: str = ""):
         """Return the SWRL→SQL translator for the backend.
 
-        Backends override :meth:`GraphDBBackend.get_query_translator` to plug
+        Backends override :meth:`GraphBackend.get_query_translator` to plug
         in their own translator (e.g. a future Cypher engine).
         """
-        if isinstance(store, GraphDBBackend):
+        if isinstance(store, GraphBackend):
             return store.get_query_translator(table_name)
         from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 

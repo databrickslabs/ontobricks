@@ -5,7 +5,7 @@ via the official ``neo4j`` Python driver.
 
 Public API (split during the PR #47 review — Benoit 2026-06-18):
 
-- :class:`Neo4jStore` — ``GraphDBBackend`` implementation. Thin façade
+- :class:`Neo4jStore` — ``MaterializedGraphBackend`` implementation. Thin façade
   composing the three services below.
 - :class:`Neo4jConnection` — driver lifecycle, auth resolution, single
   Cypher execution entry point (with INFO-level logging).

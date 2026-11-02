@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Set
 
 from back.core.errors import ValidationError
-from back.core.graphdb.lakebase import LakebaseFlatStore, LakebaseSimulationStore
+from back.core.graphdb import GraphDBFactory
 from back.core.helpers import is_uri
 from back.core.logging import get_logger
 from back.objects.digitaltwin.constants import RDF_TYPE
@@ -25,13 +25,14 @@ class _LakebaseSandbox:
     MAX_TRIPLES = 250_000
 
     def __init__(self, live_store: Any, graph_name: str, sim_id: str) -> None:
-        if LakebaseFlatStore is None or not isinstance(live_store, LakebaseFlatStore):
+        self._sim = GraphDBFactory.get_simulation("lakebase")
+        if not self._sim.is_native_store(live_store):
             raise ValidationError("Lakebase simulation sandbox requires Lakebase")
         self._live = live_store
         self._graph_name = graph_name
         self._sim_id = sim_id
-        self.table = LakebaseSimulationStore.sandbox_table_name(graph_name, sim_id)
-        self.store = LakebaseSimulationStore.from_store(live_store)
+        self.table = self._sim.sandbox_table_name(graph_name, sim_id)
+        self.store = self._sim.simulation_store(live_store)
 
     def reset(self) -> None:
         self._drop_explorer_views()
@@ -44,16 +45,12 @@ class _LakebaseSandbox:
 
     def _drop_explorer_views(self) -> None:
         """Remove Explorer views before their sandbox dependency is dropped."""
-        from back.core.graphdb.lakebase import LakebaseSimulationUnion
-
-        LakebaseSimulationUnion(self._live).drop_all(self._graph_name, self._sim_id)
+        self._sim.drop_union(self._live, self._graph_name, self._sim_id)
 
     def ensure_explorer_views(self, live_union: str) -> None:
         """Materialise the Explorer union view (live inferred ∪ sandbox) after a run."""
-        from back.core.graphdb.lakebase import LakebaseSimulationUnion, _companion_ddl
-
-        view = _companion_ddl.sim_union_phy(self._graph_name, self._sim_id)
-        LakebaseSimulationUnion(self._live).ensure(view, live_union, self.table)
+        view = self._sim.sim_union_view_name(self._graph_name, self._sim_id)
+        self._sim.ensure_union(self._live, view, live_union, self.table)
 
     def seed(self, entities: List[str]) -> int:
         source = self._live.sql_table_reference(self._graph_name)
@@ -422,9 +419,7 @@ class _DeltaSandbox(_StoreSandbox):
         return f"{source}__sim_{self._token(sim_id)}"
 
     def _sandbox_store(self, live_store: Any) -> Any:
-        from back.core.graphdb.delta import DeltaFlatStore
-
-        return DeltaFlatStore(live_store._client)
+        return GraphDBFactory.get_simulation("delta").simulation_store(live_store)
 
     def _view_name(self) -> str:
         return self.table.replace("__sim_", "__smu_")
@@ -451,14 +446,12 @@ class Sandbox(_LakebaseSandbox):
     """Create the isolation implementation for the active graph backend."""
 
     def __new__(cls, live_store: Any, graph_name: str, sim_id: str) -> Any:
-        from back.core.graphdb.delta import DeltaFlatStore
-        from back.core.graphdb.neo4j import Neo4jStore
-
-        if LakebaseFlatStore is not None and isinstance(live_store, LakebaseFlatStore):
+        kind = GraphDBFactory.classify_store(live_store)
+        if kind == "lakebase":
             return super().__new__(cls)
-        if isinstance(live_store, DeltaFlatStore):
+        if kind == "delta":
             return _DeltaSandbox(live_store, graph_name, sim_id)
-        if isinstance(live_store, Neo4jStore):
+        if kind == "neo4j":
             return _Neo4jSandbox(live_store, graph_name, sim_id)
         raise ValidationError(
             f"Simulations are unsupported for graph store {type(live_store).__name__}"

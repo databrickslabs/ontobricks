@@ -38,6 +38,8 @@ def _raise_if_cancelled(cancel_check) -> None:
         raise
     except Exception:  # noqa: BLE001
         pass
+
+
 from back.core.logging import get_logger
 from back.objects.digitaltwin.models import DomainSnapshot
 
@@ -273,9 +275,7 @@ class _BuildPipeline:
     def _log_phase(self, name: str, t0_phase: float) -> None:
         elapsed = time.time() - t0_phase
         self.phase_times[name] = elapsed
-        logger.info(
-            "[DT-BUILD %s] phase [%s]: %.2fs", self.task_id, name, elapsed
-        )
+        logger.info("[DT-BUILD %s] phase [%s]: %.2fs", self.task_id, name, elapsed)
 
     def _is_cancelled(self) -> bool:
         """Cancel-check hook passed to long-running workers.
@@ -377,20 +377,32 @@ class _BuildPipeline:
             return True
         return self._lakebase_managed_synced()
 
+    def _delta_write_builder(self):
+        """Delta builder bound to the (already-open) build-warehouse client."""
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        return GraphDBFactory.get_builder(
+            self.domain, self.settings, engine="delta", client=self.source_client
+        )
+
+    def _lakebase_builder(self):
+        """Lakebase builder vending Lakeflow sync / naming helpers."""
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        return GraphDBFactory.get_builder(
+            self.domain, self.settings, engine="lakebase"
+        )
+
     def _count_view_triples(self) -> int:
         """Return the number of triples in the VIEW (server-side COUNT).
 
         Raises :class:`InfrastructureError` when the count cannot run, so a
         lost connection fails the build instead of reading as 0 triples.
         """
-        from back.core.graphdb.delta import materialize
-
+        logger.debug("[DT-BUILD %s] counting VIEW %s", self.task_id, self.view_table)
+        count = self._delta_write_builder().count_triples(self.view_table)
         logger.debug(
-            "[DT-BUILD %s] counting triples in VIEW %s", self.task_id, self.view_table
-        )
-        count = materialize.count_triples(self.source_client, self.view_table)
-        logger.debug(
-            "[DT-BUILD %s] VIEW %s contains %d triple(s)",
+            "[DT-BUILD %s] VIEW %s has %d triple(s)",
             self.task_id,
             self.view_table,
             count,
@@ -442,9 +454,7 @@ class _BuildPipeline:
         except OperationCancelledError as exc:
             # Cooperative cancel from a wait loop bubbled up past the
             # phase-level handler — task is already CANCELLED, just log.
-            logger.info(
-                "[DT-BUILD %s] aborted by cancel: %s", self.task_id, exc
-            )
+            logger.info("[DT-BUILD %s] aborted by cancel: %s", self.task_id, exc)
             self._record_build_run("cancelled", message=str(exc))
         except Exception as exc:  # noqa: BLE001 — orchestrator final guard
             self._fail_unexpected(exc)
@@ -462,8 +472,7 @@ class _BuildPipeline:
 
     def _log_start(self) -> None:
         logger.info(
-            "[DT-BUILD %s] START kind=%s domain=%s view=%s graph=%s "
-            "warehouse=%s",
+            "[DT-BUILD %s] START kind=%s domain=%s view=%s graph=%s " "warehouse=%s",
             self.task_id,
             self.build_kind,
             self.domain_name,
@@ -562,9 +571,7 @@ class _BuildPipeline:
                 self.task_id,
                 result.get("message", "Translation failed"),
             )
-            self.tm.fail_task(
-                self.task_id, result.get("message", "Translation failed")
-            )
+            self.tm.fail_task(self.task_id, result.get("message", "Translation failed"))
             return False
 
         self.spark_sql = result["sql"]
@@ -579,11 +586,7 @@ class _BuildPipeline:
         """Return warehouse VIEW DDL, including ``object_hash`` when Lakeflow sync is active."""
         view_sql = self.spark_sql or ""
         if self._wrap_view_sql_for_lakeflow():
-            from back.core.graphdb.lakebase._companion_ddl import (
-                wrap_triple_view_sql_for_lakeflow,
-            )
-
-            view_sql = wrap_triple_view_sql_for_lakeflow(view_sql)
+            view_sql = self._lakebase_builder().wrap_view_sql_for_lakeflow(view_sql)
         return view_sql
 
     def _create_view(self) -> bool:
@@ -624,13 +627,9 @@ class _BuildPipeline:
                         self.view_table,
                         detail,
                     )
-                    self.tm.fail_task(
-                        self.task_id, f"Failed to create VIEW: {detail}"
-                    )
+                    self.tm.fail_task(self.task_id, f"Failed to create VIEW: {detail}")
                 return False
-            logger.info(
-                "[DT-BUILD %s] VIEW %s created", self.task_id, self.view_table
-            )
+            logger.info("[DT-BUILD %s] VIEW %s created", self.task_id, self.view_table)
             return True
         except Exception as exc:  # noqa: BLE001
             if self.is_api:
@@ -705,9 +704,7 @@ class _BuildPipeline:
         if self.is_api:
             self.tm.update_progress(self.task_id, 25, "VIEW created")
         else:
-            self.tm.update_progress(
-                self.task_id, 25, f"VIEW {self.view_table} created"
-            )
+            self.tm.update_progress(self.task_id, 25, f"VIEW {self.view_table} created")
 
     def _materialize_data_table(self) -> bool:
         """Build the ``…_data`` relation from the R2RML VIEW for every engine.
@@ -723,9 +720,9 @@ class _BuildPipeline:
         read (see ``GraphDBFactory.resolve_lakehouse_materialization``).
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
-        from back.core.graphdb.delta import _table_naming, materialize
 
-        data_table = _table_naming.data_table_fqn(self.domain, self.settings)
+        builder = self._delta_write_builder()
+        data_table = builder.data_table_fqn()
         if not data_table:
             self.tm.fail_task(
                 self.task_id, "Could not resolve the mapped-triples table name"
@@ -745,9 +742,7 @@ class _BuildPipeline:
             ),
         )
         try:
-            materialize.apply_data_relation(
-                self.source_client, self.view_table, data_table, mode=mode
-            )
+            builder.apply_data_relation(self.view_table, data_table, mode=mode)
         except Exception as exc:  # noqa: BLE001
             msg = f"Could not build {data_table}: {exc}"
             logger.error("[DT-BUILD %s] %s", self.task_id, msg)
@@ -819,7 +814,9 @@ class _BuildPipeline:
             self.view_table,
         )
         if not self.is_api:
-            self.tm.update_progress(self.task_id, 40, "Reading all triples from VIEW...")
+            self.tm.update_progress(
+                self.task_id, 40, "Reading all triples from VIEW..."
+            )
 
         triple_count = self._count_view_triples()
         self._log_phase("fetch_triples", t_fetch)
@@ -899,17 +896,13 @@ class _BuildPipeline:
             triple_count,
             self.graph_name,
         )
-        select_sql = (
-            f"SELECT subject, predicate, object FROM {self.view_table}"
-        )
+        select_sql = f"SELECT subject, predicate, object FROM {self.view_table}"
         if hasattr(self.store, "bulk_load_into_sync"):
             # Lakebase app_managed: warehouse data goes into *_sync; app writes
             # (reasoning / materialise) target the companion (*__app) via
             # _writable_table_id.  Non-Lakebase backends fall through to the
             # legacy single-table path below.
-            triple_iter = self.source_client.iter_rows(
-                select_sql, batch_size=5000
-            )
+            triple_iter = self.source_client.iter_rows(select_sql, batch_size=5000)
             written = self.store.bulk_load_into_sync(
                 self.graph_name,
                 triple_iter,
@@ -959,8 +952,7 @@ class _BuildPipeline:
         """Stream warehouse rows into the graph store via the bulk insert iterator."""
         use_iter = hasattr(self.store, "bulk_insert_iter")
         logger.debug(
-            "[DT-BUILD %s] streaming triples into %s "
-            "(batch_size=%d method=%s)",
+            "[DT-BUILD %s] streaming triples into %s " "(batch_size=%d method=%s)",
             self.task_id,
             self.graph_name,
             insert_batch_size,
@@ -1017,16 +1009,12 @@ class _BuildPipeline:
         7. ``TRUNCATE`` the companion for a clean reasoning slate.
         """
         from back.core.errors import InfrastructureError
-        from back.core.graphdb.lakebase.LakebaseFlatStore import (
-            resolve_sync_uc_fallback_catalog,
-        )
 
+        builder = self._lakebase_builder()
         t0 = time.time()
         try:
             mgr = self.store.synced_manager()
-            fallback_cat = resolve_sync_uc_fallback_catalog(
-                self.domain, self.settings, self.delta_cfg
-            )
+            fallback_cat = builder.resolve_sync_uc_fallback_catalog(self.delta_cfg)
             synced_uc = self.store.synced_uc_name(
                 self.graph_name, fallback_catalog=fallback_cat
             )
@@ -1061,10 +1049,6 @@ class _BuildPipeline:
         # Step 2 is already active (set by _announce_apply_step → advance_step).
         _upd(45, f"Ensuring UC schema for {synced_uc}…")
         try:
-            from back.core.graphdb.lakebase._sync_uc_schema import (
-                ensure_uc_schema_for_synced_table_fqn,
-            )
-
             # Step 2 — ensure the UC schema exists (warehouse DDL).
             t_step = time.time()
             logger.debug(
@@ -1072,7 +1056,7 @@ class _BuildPipeline:
                 self.task_id,
                 synced_uc,
             )
-            ensure_uc_schema_for_synced_table_fqn(
+            builder.ensure_uc_schema_for_synced(
                 self.source_client,
                 synced_uc,
                 task_log_prefix=f"[DT-BUILD {self.task_id}]",
@@ -1098,22 +1082,16 @@ class _BuildPipeline:
                 self.view_table,
                 self.store.sync_table_mode,
             )
-            from back.core.graphdb.lakebase._companion_ddl import (
-                LAKEFLOW_SYNC_PRIMARY_KEY,
-            )
-
             _synced_obj = mgr.ensure(
                 synced_uc,
                 source_table_full_name=self.view_table,
-                primary_key_columns=list(LAKEFLOW_SYNC_PRIMARY_KEY),
+                primary_key_columns=builder.lakeflow_primary_key(),
                 sync_mode=self.store.sync_table_mode,
             )
             # ensure() may have used a fallback name (ghost control-plane state);
             # extract the actual UC FQN from the returned object so downstream
             # steps (trigger_and_wait, ensure_synced_union_view) use the right name.
-            actual_synced_uc = (
-                getattr(_synced_obj, "name", None) or synced_uc
-            )
+            actual_synced_uc = getattr(_synced_obj, "name", None) or synced_uc
             if actual_synced_uc != synced_uc:
                 logger.warning(
                     "[DT-BUILD %s] synced table registered under fallback UC name %s "
@@ -1193,8 +1171,7 @@ class _BuildPipeline:
                 self.graph_name,
             )
         logger.debug(
-            "[DT-BUILD %s] step 5/7: triggering Lakeflow sync for %s "
-            "(timeout=%ss)",
+            "[DT-BUILD %s] step 5/7: triggering Lakeflow sync for %s " "(timeout=%ss)",
             self.task_id,
             synced_uc,
             self.store.sync_timeout_s,
@@ -1260,9 +1237,7 @@ class _BuildPipeline:
                 time.time() - t_sync,
                 exc,
             )
-            self.tm.fail_task(
-                self.task_id, f"Lakebase sync did not complete: {exc}"
-            )
+            self.tm.fail_task(self.task_id, f"Lakebase sync did not complete: {exc}")
             return False
 
         _adv()  # → "Creating graph viewer union view"
@@ -1286,8 +1261,7 @@ class _BuildPipeline:
                 synced_phy_override=_actual_synced_phy,
             )
             logger.info(
-                "[DT-BUILD %s] step 6/7 done: union view created/refreshed "
-                "in %.2fs",
+                "[DT-BUILD %s] step 6/7 done: union view created/refreshed " "in %.2fs",
                 self.task_id,
                 time.time() - t_step,
             )
@@ -1499,7 +1473,9 @@ class _BuildPipeline:
                     "finished_at", ""
                 )
                 if build_ts:
-                    ok, msg = svc._store.stamp_last_build(folder, str(version), build_ts)
+                    ok, msg = svc._store.stamp_last_build(
+                        folder, str(version), build_ts
+                    )
                     if ok:
                         logger.info(
                             "[DT-BUILD %s] stamped last_build=%s in registry",
@@ -1514,8 +1490,7 @@ class _BuildPipeline:
                         )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "[DT-BUILD %s] could not record build-run trace "
-                "(non-fatal): %s",
+                "[DT-BUILD %s] could not record build-run trace " "(non-fatal): %s",
                 self.task_id,
                 exc,
             )
@@ -1600,8 +1575,7 @@ class _BuildPipeline:
             self.domain_name,
             self.triple_count,
             duration,
-            ", ".join(f"{k}={v:.2f}s" for k, v in self.phase_times.items())
-            or "n/a",
+            ", ".join(f"{k}={v:.2f}s" for k, v in self.phase_times.items()) or "n/a",
         )
 
         result_data: Dict[str, Any] = {
@@ -1634,13 +1608,10 @@ class _BuildPipeline:
 
     def _sync_failure_message(self, exc: Exception) -> str:
         from back.core.errors import InfrastructureError
-        from back.core.graphdb.lakebase.LakebaseFlatStore import (
-            _is_index_row_size_error,
-        )
 
         if isinstance(exc, InfrastructureError):
             return str(exc)
-        if _is_index_row_size_error(exc):
+        if self._lakebase_builder().is_index_row_size_error(exc):
             return (
                 "Triple store sync failed: a mapped literal object exceeds the "
                 "Postgres btree index size limit. Run a full Knowledge Graph rebuild "

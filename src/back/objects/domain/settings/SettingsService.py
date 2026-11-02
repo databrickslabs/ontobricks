@@ -19,7 +19,6 @@ from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import DatabricksClient, is_databricks_app
 from back.core.databricks.constants import PERMISSIONS_APPS_PATH
-from back.core.graphdb.neo4j.Neo4jConnection import is_neo4j_password_from_secret
 from back.core.databricks.lakebase.grants import resolve_mcp_app_name
 from back.core.helpers import (
     DEFAULT_LOGO_PATH,
@@ -61,6 +60,19 @@ from back.objects.session import (
 )
 
 logger = get_logger(__name__)
+
+
+def is_neo4j_password_from_secret() -> bool:
+    """True when the Neo4j password is set in the environment.
+
+    Module-level wrapper (``_ss.is_neo4j_password_from_secret()``) delegating to
+    the Neo4j provisioner so Settings code never imports ``neo4j.*`` directly.
+    """
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    return GraphDBFactory.get_provisioner(
+        None, engine="neo4j"
+    ).is_password_from_secret()
 
 
 class SettingsService:

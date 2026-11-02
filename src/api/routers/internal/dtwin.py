@@ -1224,9 +1224,6 @@ async def databricks_build_info(
     ``materialization`` tells the page whether that relation is a Delta table
     or a pass-through view, so it can label it and explain the triple count.
     """
-    from back.core.graphdb.delta import _table_naming
-    from back.core.graphdb.delta.health import probe_from_client
-    from back.core.graphdb.delta.DeltaBase import create_databricks_client
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
     domain = get_domain(session_mgr)
@@ -1234,8 +1231,9 @@ async def databricks_build_info(
     readiness = HomeService.validate_status(domain)
     view_table = effective_view_table(domain)
     data_table = effective_databricks_table(domain, settings)
-    client = create_databricks_client(domain, settings)
-    data_status = probe_from_client(client, data_table) if data_table else {}
+    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+    probe = GraphDBFactory.get_health_probe(domain, settings, engine="delta")
+    data_status = probe.probe_status(data_table) if data_table else {}
     return {
         "success": True,
         "triple_store_backend": backend,
@@ -1245,7 +1243,7 @@ async def databricks_build_info(
         "readiness": readiness,
         "view_table": view_table,
         "data_table": data_table,
-        "inferred_table": _table_naming.inferred_table_fqn(domain, settings),
+        "inferred_table": builder.inferred_table_fqn(),
         "triplestore_status": data_status,
     }
 
@@ -1262,9 +1260,7 @@ async def start_databricks_triplestore_build(
     """Materialize UC Delta triple store (VIEW → TABLE); no Lakebase sync."""
     import threading
     from back.core.task_manager import get_task_manager
-    from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
-        lakehouse_build_steps,
-    )
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
     from back.objects.digitaltwin.build._databricks_triplestore_build import (
         run_databricks_triplestore_build,
     )
@@ -1281,11 +1277,12 @@ async def start_databricks_triplestore_build(
         is_databricks_app_fn=is_databricks_app,
     )
 
+    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
     tm = get_task_manager()
     task = tm.create_task(
         name="Databricks Triple Store Build",
         task_type="databricks_triplestore_build",
-        steps=lakehouse_build_steps(plan.materialization),
+        steps=builder.build_steps(plan.materialization),
     )
 
     def run_build():

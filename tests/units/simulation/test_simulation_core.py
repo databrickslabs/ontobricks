@@ -570,9 +570,11 @@ class TestSandboxLifecycle:
                 events.append(("create", table))
 
         import back.core.graphdb.lakebase as lakebase
+        from back.core.graphdb import GraphDBFactory
 
         monkeypatch.setattr(lakebase, "LakebaseSimulationUnion", Union)
         sandbox = object.__new__(Sandbox)
+        sandbox._sim = GraphDBFactory.get_simulation("lakebase")
         sandbox._live = object()
         sandbox._graph_name = "g_v1"
         sandbox._sim_id = "s1"

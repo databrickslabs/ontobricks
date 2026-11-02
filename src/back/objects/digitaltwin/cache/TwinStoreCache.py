@@ -207,13 +207,8 @@ class TwinStoreCache:
             try:
                 from back.core.graphdb import GraphDBFactory
                 from back.core.graphdb.engine_config import lakebase_section
-                from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
-                from back.core.graphdb.lakebase.LakebaseFlatStore import (
-                    resolve_lakebase_graph_schema,
-                    resolve_sync_uc_fallback_catalog,
-                )
-                from back.core.graphdb.lakebase._companion_ddl import synced_phy
 
+                builder = GraphDBFactory.get_builder(domain, settings, engine="lakebase")
                 engine_config = lakebase_section(
                     GraphDBFactory._resolve_graph_engine_config(domain, settings) or {}
                 )
@@ -222,20 +217,18 @@ class TwinStoreCache:
                     or "app_managed"
                 )
                 schema_raw = str(engine_config.get("schema") or "").strip()
-                lk_schema = resolve_lakebase_graph_schema(domain, settings, schema_raw)
-                lk_table = (
-                    LakebaseBase.physical_table_id(graph_name) if graph_name else ""
-                )
+                lk_schema = builder.resolve_graph_schema(schema_raw)
+                lk_table = builder.physical_table_id(graph_name) if graph_name else ""
                 result["lakebase_schema"] = lk_schema
                 result["lakebase_table"] = lk_table
                 # Database display needs a live connection; leave blank while pending.
                 if sync_mode == "managed_synced" and lk_schema and graph_name:
                     catalog = str(engine_config.get("sync_uc_catalog") or "").strip()
                     if not catalog:
-                        catalog = resolve_sync_uc_fallback_catalog(domain, settings)
+                        catalog = builder.resolve_sync_uc_fallback_catalog()
                     if catalog:
                         result["lakebase_synced_uc"] = (
-                            f"{catalog}.{lk_schema}.{synced_phy(graph_name)}"
+                            f"{catalog}.{lk_schema}.{builder.synced_phy(graph_name)}"
                         )
             except Exception as exc:  # noqa: BLE001 — keep skeleton best-effort
                 logger.debug(
@@ -415,12 +408,8 @@ class TwinStoreCache:
         try:
             from back.core.graphdb import GraphDBFactory
             from back.core.graphdb.engine_config import lakebase_section
-            from back.core.graphdb.lakebase.LakebaseFlatStore import (
-                resolve_sync_uc_fallback_catalog,
-                resolve_lakebase_graph_schema,
-            )
-            from back.core.graphdb.lakebase._companion_ddl import synced_phy
 
+            builder = GraphDBFactory.get_builder(domain, settings, engine="lakebase")
             engine_config = lakebase_section(
                 GraphDBFactory._resolve_graph_engine_config(domain, settings) or {}
             )
@@ -428,19 +417,18 @@ class TwinStoreCache:
 
             # Populate schema/table from config so the card shows values even without Postgres
             schema_raw = str(engine_config.get("schema") or "").strip()
-            lk_schema = resolve_lakebase_graph_schema(domain, settings, schema_raw)
+            lk_schema = builder.resolve_graph_schema(schema_raw)
             if graph_name:
-                from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
-                lk_table = LakebaseBase.physical_table_id(graph_name)
+                lk_table = builder.physical_table_id(graph_name)
 
             # Compute UC sync FQN (managed_synced only)
             if lk_sync_mode == "managed_synced":
                 catalog = str(engine_config.get("sync_uc_catalog") or "").strip()
                 if not catalog:
-                    catalog = resolve_sync_uc_fallback_catalog(domain, settings)
+                    catalog = builder.resolve_sync_uc_fallback_catalog()
                 uc_schema = lk_schema  # always equals the graph schema
                 if catalog and uc_schema:
-                    lk_synced_uc_cfg = f"{catalog}.{uc_schema}.{synced_phy(graph_name)}"
+                    lk_synced_uc_cfg = f"{catalog}.{uc_schema}.{builder.synced_phy(graph_name)}"
         except Exception as e:
             logger.warning("DT existence: lakebase config resolution failed: %s", e)
 
@@ -477,9 +465,7 @@ class TwinStoreCache:
                 "lk_check_error": None,
             }
             try:
-                from back.core.graphdb.lakebase.LakebaseFlatStore import (
-                    resolve_sync_uc_fallback_catalog,
-                )
+                from back.core.graphdb import GraphDBFactory
 
                 graph_store = get_graphdb(domain, settings)
                 if graph_store:
@@ -495,7 +481,9 @@ class TwinStoreCache:
                         data["lk_database"] = db_fn() or ""
                     if getattr(graph_store, "is_synced", False) and not lk_synced_uc_cfg:
                         try:
-                            fallback_cat = resolve_sync_uc_fallback_catalog(domain, settings)
+                            fallback_cat = GraphDBFactory.get_builder(
+                                domain, settings, engine="lakebase"
+                            ).resolve_sync_uc_fallback_catalog()
                             data["lk_synced_uc"] = graph_store.synced_uc_name(
                                 graph_name, fallback_catalog=fallback_cat
                             )
@@ -630,9 +618,10 @@ class TwinStoreCache:
             logger.warning("DT existence: neo4j graph check failed: %s", e)
             result["neo4j_check_error"] = str(e)
 
-        from back.core.graphdb.neo4j.Neo4jWriteOps import sanitise_label
+        from back.core.graphdb import GraphDBFactory
 
-        marker = sanitise_label(graph_name) if graph_name else ""
+        n4j = GraphDBFactory.get_builder(None, engine="neo4j")
+        marker = n4j.sanitise_label(graph_name) if graph_name else ""
         db = result["neo4j_database"]
         result["neo4j_marker_label"] = marker
         result["graph_display"] = " · ".join([p for p in (db, marker) if p]) or marker

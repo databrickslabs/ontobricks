@@ -144,6 +144,19 @@ def ensure_sim_union_view(cur: Any, view: str, live: str, sandbox: str) -> None:
     cur.execute(sql)
 
 
+def relation_exists(cur: Any, relation: str) -> bool:
+    """True when *relation* (a physical table/view id) exists in the database.
+
+    ``to_regclass`` resolves the identifier against the session ``search_path``
+    and returns ``NULL`` when the relation is absent — a cheap existence probe
+    that works for both tables and views without catalog remapping.  The
+    ``SELECT 1 WHERE … IS NOT NULL`` shape yields a row only when it exists, so
+    the check is independent of the cursor's row factory (tuple vs dict_row).
+    """
+    cur.execute("SELECT 1 WHERE to_regclass(%s) IS NOT NULL", (relation,))
+    return cur.fetchone() is not None
+
+
 def _idx_name(table: str, suffix: str) -> str:
     base = f"g_{table}_{suffix}".lower()
     return base[:63]

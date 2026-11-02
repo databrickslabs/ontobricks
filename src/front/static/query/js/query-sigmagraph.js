@@ -2309,11 +2309,15 @@ var SigmaGraph = (function () {
         }
 
         if (!resp.ok) {
-            if (resp.status === 502 && /graph expansion/i.test(contextLabel || '')) {
-                throw new Error('Graph expansion exceeded gateway time limit. Reduce Depth/Max entities and retry.');
-            }
+            // A structured backend error (e.g. a missing simulation sandbox)
+            // carries its own actionable message — surface it before falling
+            // back to the generic gateway-timeout text, which only applies to a
+            // bodiless proxy 502.
             if (data && typeof data === 'object' && data.message) {
                 throw new Error(data.message);
+            }
+            if (resp.status === 502 && /graph expansion/i.test(contextLabel || '')) {
+                throw new Error('Graph expansion exceeded gateway time limit. Reduce Depth/Max entities and retry.');
             }
             var detail = (raw || '').trim();
             if (detail) {

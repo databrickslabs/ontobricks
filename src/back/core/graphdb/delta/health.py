@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from back.core.logging import get_logger
-from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
+from back.core.graphdb.delta.DeltaViewStore import DeltaViewStore
 
 logger = get_logger(__name__)
 
@@ -75,7 +76,7 @@ def schema_permission_summary(
     }
 
 
-def probe_table_status(store: DeltaFlatStore, table_fqn: str) -> Dict[str, Any]:
+def probe_table_status(store: DeltaReadStore, table_fqn: str) -> Dict[str, Any]:
     """Return existence, count, and optional ``DESCRIBE DETAIL`` metadata."""
     out: Dict[str, Any] = {
         "table_fqn": table_fqn,
@@ -118,4 +119,4 @@ def probe_from_client(client: Any, table_fqn: str) -> Dict[str, Any]:
             "count": 0,
             "error": "Databricks client not configured",
         }
-    return probe_table_status(DeltaFlatStore(client), table_fqn)
+    return probe_table_status(DeltaViewStore(client), table_fqn)

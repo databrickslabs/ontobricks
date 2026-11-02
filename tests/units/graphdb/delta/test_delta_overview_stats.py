@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
 
 
 GRAPH = "cat.sch.triplestore_mydomain_V1_graph"
@@ -21,7 +21,7 @@ def _domain():
 
 def _store(client):
     client.sql = None
-    store = DeltaFlatStore(client, domain=_domain())
+    store = DeltaMaterializedStore(client, domain=_domain())
     store.entity_search_ready = MagicMock(return_value=True)
     store.adjacency_ready = MagicMock(return_value=True)
     return store

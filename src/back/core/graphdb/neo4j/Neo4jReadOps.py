@@ -1,6 +1,6 @@
 """Neo4j read-side queries over the **typed property-graph** model.
 
-Implements the named-query methods of the ``GraphDBBackend`` contract against
+Implements the named-query methods of the ``GraphBackend`` contract against
 the property graph written by :class:`Neo4jWriteOps`: nodes keyed on ``uri``
 carry a graph **marker label**, class labels (from ``rdf:type``), a ``name``
 property (from ``rdfs:label``), literal properties, and outgoing relationships.

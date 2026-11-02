@@ -13,7 +13,7 @@ counting, dropping, and isolation. The forward transform is pure
 triples on read are persisted by :class:`Neo4jSchemaMap`.
 
 Public method signatures are unchanged from the flat-triple version so the
-``GraphDBBackend`` contract and all callers keep working.
+``MaterializedGraphBackend`` contract and all callers keep working.
 """
 
 from typing import Any, Callable, Dict, List, Optional

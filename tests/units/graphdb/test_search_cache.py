@@ -22,12 +22,12 @@ from back.core.graphdb.search_cache import (
     resolve_search_cache_mode,
     search_cache_usage,
 )
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
 
 pytestmark = pytest.mark.unit
 
 
-class _FakeStore(GraphDBBackend):
+class _FakeStore(MaterializedGraphBackend):
     supports_adjacency = True
     supports_entity_search = True
     supports_props = True

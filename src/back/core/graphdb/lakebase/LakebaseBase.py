@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from back.core.errors import InfrastructureError
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -153,7 +153,7 @@ def _require_psycopg():
     return _rq()
 
 
-class LakebaseBase(GraphDBBackend):
+class LakebaseBase(MaterializedGraphBackend):
     """Connection flags + naming shared by Lakebase graph stores."""
 
     def __init__(
@@ -166,7 +166,7 @@ class LakebaseBase(GraphDBBackend):
         self._schema = validate_graph_schema(schema)
         self._database_override = database_override or ""
 
-    # -- GraphDBBackend / TripleStore naming --------------------------------
+    # -- GraphBackend / TripleStore naming ----------------------------------
 
     @staticmethod
     def physical_table_id(name: str) -> str:

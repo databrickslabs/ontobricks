@@ -3,7 +3,7 @@
 The typed-node model sanitises class/predicate URIs into Neo4j labels and
 relationship types (``.../Customer`` → label ``Customer``; ``.../filedBy`` →
 reltype ``filedBy``). To reconstruct the *exact* original SPO triples on read
-(so the ``GraphDBBackend`` contract is preserved bit-for-bit), we must reverse
+(so the ``GraphBackend`` contract is preserved bit-for-bit), we must reverse
 those names back to their full URIs.
 
 This registry persists three reverse maps as JSON on a single reserved

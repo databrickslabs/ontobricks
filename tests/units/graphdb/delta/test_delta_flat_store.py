@@ -1,10 +1,10 @@
-"""Tests for DeltaFlatStore inferred companion routing."""
+"""Tests for DeltaMaterializedStore inferred companion routing."""
 
 import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
-from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
 from back.core.graphdb.props import (
     known_missing_props,
     remember_missing_props,
@@ -38,11 +38,11 @@ def _executed_statements(client):
     return statements
 
 
-class TestDeltaFlatStoreInferredRouting:
+class TestDeltaMaterializedStoreInferredRouting:
     def test_insert_triples_targets_inferred_companion(self):
         client = MagicMock()
         domain = _domain()
-        store = DeltaFlatStore(client, domain=domain)
+        store = DeltaMaterializedStore(client, domain=domain)
         triples = [
             {
                 "subject": "http://ex/s",
@@ -75,14 +75,14 @@ class TestDeltaFlatStoreInferredRouting:
         )
 
     def test_synced_table_name_strips_graph_suffix(self):
-        store = DeltaFlatStore(MagicMock())
+        store = DeltaMaterializedStore(MagicMock())
         fqn = "cat.sch.triplestore_mydomain_V1_graph"
         assert store.synced_table_name(fqn) == "cat.sch.triplestore_mydomain_V1_data"
 
     def test_sql_relation_resolves_logical_graph_name(self):
         client = MagicMock()
         domain = _domain()
-        store = DeltaFlatStore(client, domain=domain)
+        store = DeltaMaterializedStore(client, domain=domain)
         with patch.object(store, "table_exists", return_value=True):
             ref = store.sql_table_reference("MyDomain_V1")
         assert ref == "cat.sch.triplestore_mydomain_V1_graph"
@@ -90,20 +90,20 @@ class TestDeltaFlatStoreInferredRouting:
     def test_sql_relation_falls_back_to_data_when_graph_view_missing(self):
         client = MagicMock()
         domain = _domain()
-        store = DeltaFlatStore(client, domain=domain)
+        store = DeltaMaterializedStore(client, domain=domain)
         with patch.object(store, "table_exists", return_value=False):
             ref = store.sql_table_reference("MyDomain_V1")
         assert ref == "cat.sch.triplestore_mydomain_V1_data"
 
     def test_sql_relation_passes_through_fqn(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
         fqn = "cat.sch.triplestore_mydomain_V1_data"
         assert store.sql_table_reference(fqn) == fqn
 
     def test_optimize_inferred_companion_targets_inferred_fqn(self):
         client = MagicMock()
         domain = _domain()
-        store = DeltaFlatStore(client, domain=domain)
+        store = DeltaMaterializedStore(client, domain=domain)
         with patch("back.core.graphdb.delta.materialize.optimize_table") as mock_opt:
             store.optimize_inferred_companion("MyDomain_V1")
         mock_opt.assert_called_once_with(
@@ -113,7 +113,7 @@ class TestDeltaFlatStoreInferredRouting:
     def test_rebuild_adjacency_builds_all_graph_index_companions(self):
         client = MagicMock()
         domain = _domain()
-        store = DeltaFlatStore(client, domain=domain)
+        store = DeltaMaterializedStore(client, domain=domain)
         props = store.props_table_id("MyDomain_V1")
         remember_missing_props(props)
 
@@ -164,13 +164,13 @@ class TestDeltaFlatStoreInferredRouting:
     def test_rebuild_adjacency_keeps_going_when_optimize_fails(self):
         client = MagicMock()
         domain = _domain()
-        store = DeltaFlatStore(client, domain=domain)
+        store = DeltaMaterializedStore(client, domain=domain)
 
         with patch(
             "back.core.graphdb.delta.materialize.optimize_table",
             side_effect=RuntimeError("optimize failed"),
         ), patch(
-            "back.core.graphdb.delta.DeltaFlatStore.logger.warning"
+            "back.core.graphdb.delta.DeltaMaterializedStore.logger.warning"
         ) as mock_warning:
             store.rebuild_adjacency("MyDomain_V1")
 
@@ -184,7 +184,7 @@ class TestDeltaFlatStoreInferredRouting:
     def test_rebuild_adjacency_still_fails_when_ctas_fails(self):
         client = MagicMock()
         domain = _domain()
-        store = DeltaFlatStore(client, domain=domain)
+        store = DeltaMaterializedStore(client, domain=domain)
         client.execute_statement.side_effect = RuntimeError("ctas failed")
 
         with pytest.raises(RuntimeError, match="ctas failed"):
@@ -192,7 +192,7 @@ class TestDeltaFlatStoreInferredRouting:
 
     def test_rebuild_adjacency_table_runs_ctas_and_optimize_for_direction(self):
         client = MagicMock()
-        store = DeltaFlatStore(client, domain=_domain())
+        store = DeltaMaterializedStore(client, domain=_domain())
         relation = "cat.sch.graph"
         adj_out = "cat.sch.triplestore_mydomain_V1_adj_out"
 
@@ -223,7 +223,7 @@ class TestDeltaFlatStoreInferredRouting:
 
     def test_rebuild_props_forgets_missing_cache_only_after_success(self):
         client = MagicMock()
-        store = DeltaFlatStore(client, domain=_domain())
+        store = DeltaMaterializedStore(client, domain=_domain())
         props = store.props_table_id("MyDomain_V1")
         remember_missing_props(props)
 
@@ -234,7 +234,7 @@ class TestDeltaFlatStoreInferredRouting:
 
     def test_rebuild_props_forgets_missing_cache_when_optimize_fails(self):
         client = MagicMock()
-        store = DeltaFlatStore(client, domain=_domain())
+        store = DeltaMaterializedStore(client, domain=_domain())
         props = store.props_table_id("MyDomain_V1")
         remember_missing_props(props)
 
@@ -250,7 +250,7 @@ class TestDeltaFlatStoreInferredRouting:
     def test_rebuild_props_keeps_missing_cache_when_ctas_fails(self):
         client = MagicMock()
         client.execute_statement.side_effect = RuntimeError("ctas failed")
-        store = DeltaFlatStore(client, domain=_domain())
+        store = DeltaMaterializedStore(client, domain=_domain())
         props = store.props_table_id("MyDomain_V1")
         remember_missing_props(props)
 
@@ -260,7 +260,7 @@ class TestDeltaFlatStoreInferredRouting:
         assert known_missing_props(props) is True
 
     def test_rebuild_adjacency_runs_all_companion_jobs_concurrently(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
         barrier = threading.Barrier(5, timeout=2)
         calls = []
 
@@ -276,7 +276,7 @@ class TestDeltaFlatStoreInferredRouting:
         assert len(calls) == 5
 
     def test_parallel_rebuild_propagates_companion_failure(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
 
         with patch.object(
             store, "_rebuild_props_table", side_effect=RuntimeError("props failed")
@@ -290,7 +290,7 @@ class TestDeltaFlatStoreInferredRouting:
 
     def test_try_optimize_calls_optimize_table(self):
         client = MagicMock()
-        store = DeltaFlatStore(client, domain=_domain())
+        store = DeltaMaterializedStore(client, domain=_domain())
         fqn = "cat.sch.some_table"
 
         with patch(
@@ -301,13 +301,13 @@ class TestDeltaFlatStoreInferredRouting:
         mock_opt.assert_called_once_with(client, fqn)
 
     def test_try_optimize_logs_kind_on_failure_and_does_not_raise(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
 
         with patch(
             "back.core.graphdb.delta.materialize.optimize_table",
             side_effect=RuntimeError("boom"),
         ), patch(
-            "back.core.graphdb.delta.DeltaFlatStore.logger.warning"
+            "back.core.graphdb.delta.DeltaMaterializedStore.logger.warning"
         ) as mock_warn:
             store._try_optimize("cat.sch.tbl", "entity-search table")
 
@@ -330,7 +330,7 @@ class TestDeltaFlatStoreInferredRouting:
         self, method, kind
     ):
         client = MagicMock()
-        store = DeltaFlatStore(client, domain=_domain())
+        store = DeltaMaterializedStore(client, domain=_domain())
         recorded: list[str] = []
 
         def _capture(fqn, k):
@@ -357,7 +357,7 @@ class TestDeltaSingleStatementExpansion:
 
     @staticmethod
     def _store(rows=None):
-        store = DeltaFlatStore(MagicMock())
+        store = DeltaMaterializedStore(MagicMock())
         store.execute_query = MagicMock(return_value=rows or [])
         store.table_exists = MagicMock(return_value=False)
         return store
@@ -457,7 +457,7 @@ class TestDeltaSingleStatementExpansion:
         assert result["capped"] is True
 
     def test_when_adj_ready_expansion_uses_adj_tables_for_hops(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
         store.execute_query = MagicMock(return_value=[])
         store.table_exists = MagicMock(return_value=True)
 
@@ -474,7 +474,7 @@ class TestDeltaSingleStatementExpansion:
         assert "t.object = frontier.entity" not in sql
 
     def test_when_props_is_missing_expansion_retries_with_spo(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
         store.table_exists = MagicMock(return_value=True)
         store.execute_query = MagicMock(
             side_effect=[
@@ -498,7 +498,7 @@ class TestDeltaSingleStatementExpansion:
         assert "FROM cat.sch.triplestore_mydomain_V1_data triples" in fallback_sql
 
     def test_when_props_is_known_missing_expansion_skips_props_sql(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
         store.table_exists = MagicMock(return_value=True)
         store.execute_query = MagicMock(
             side_effect=[
@@ -532,7 +532,7 @@ class TestDeltaSingleStatementExpansion:
         )
 
     def test_unrelated_props_query_failure_propagates(self):
-        store = DeltaFlatStore(MagicMock(), domain=_domain())
+        store = DeltaMaterializedStore(MagicMock(), domain=_domain())
         store.table_exists = MagicMock(return_value=True)
         store.execute_query = MagicMock(side_effect=RuntimeError("permission denied"))
 
@@ -568,10 +568,10 @@ class _AppsClient:
         raise AssertionError("Apps inserts must not open a Thrift session")
 
 
-class TestDeltaFlatStoreAppsInsert:
+class TestDeltaMaterializedStoreAppsInsert:
     def test_insert_uses_statement_execution_not_thrift(self):
         client = _AppsClient()
-        store = DeltaFlatStore(client)
+        store = DeltaMaterializedStore(client)
         triples = [
             {
                 "subject": "http://ex/s",

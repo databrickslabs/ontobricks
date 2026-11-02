@@ -25,10 +25,28 @@ import re
 from typing import Any, Dict, Optional
 
 from back.core.errors import ValidationError
-from back.core.graphdb.neo4j.graph_model import _sanitise_ident, label_from_class_uri, reltype_from_predicate
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _neo4j_builder() -> Any:
+    """Neo4j naming builder vended by the factory (no direct ``neo4j.*`` import)."""
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    return GraphDBFactory.get_builder(None, engine="neo4j")
+
+
+def _sanitise_ident(name: str) -> str:
+    return _neo4j_builder().sanitise_ident(name)
+
+
+def label_from_class_uri(class_uri: str) -> str:
+    return _neo4j_builder().label_from_class_uri(class_uri)
+
+
+def reltype_from_predicate(predicate_uri: str) -> str:
+    return _neo4j_builder().reltype_from_predicate(predicate_uri)
 
 
 class SWRLFlatCypherTranslator:

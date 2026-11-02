@@ -1,15 +1,16 @@
-"""Tests for GraphDBFactory, GraphDBBackend, and graph DB capability flags."""
+"""Tests for GraphDBFactory, GraphBackend, and graph DB capability flags."""
 
 import pytest
 from unittest.mock import patch, MagicMock
 
 from back.core.graphdb.GraphDBFactory import GraphDBFactory, _get_factory_singleton
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.GraphBackend import GraphBackend
+from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
 
 
 def _concrete_backend():
-    """Build a minimal concrete GraphDBBackend subclass for testing."""
-    class _Concrete(GraphDBBackend):
+    """Build a minimal concrete MaterializedGraphBackend subclass for testing."""
+    class _Concrete(MaterializedGraphBackend):
         def get_connection(self): return None
         def close(self): pass
         def create_table(self, n): pass
@@ -24,7 +25,7 @@ def _concrete_backend():
     return _Concrete()
 
 
-class TestGraphDBBackend:
+class TestGraphBackend:
     """Test the abstract base class default behaviour / capability flags."""
 
     def test_supports_cypher_default(self):
@@ -34,7 +35,7 @@ class TestGraphDBBackend:
         assert backend.query_dialect == "sql"
 
     def test_is_cypher_backend_false(self):
-        assert GraphDBBackend.is_cypher_backend(MagicMock(spec=[])) is False
+        assert GraphBackend.is_cypher_backend(MagicMock(spec=[])) is False
 
     def test_get_node_table_default(self):
         assert _concrete_backend().get_node_table("test") == "test"

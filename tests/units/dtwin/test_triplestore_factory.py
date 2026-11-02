@@ -112,7 +112,7 @@ class TestGetGraphdb:
             ),
             patch("back.core.databricks.DatabricksClient") as mock_client_cls,
             patch(
-                "back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore"
+                "back.core.graphdb.delta.DeltaViewStore.DeltaViewStore"
             ) as mock_delta_cls,
         ):
             mock_client_cls.return_value = MagicMock()
@@ -150,7 +150,7 @@ class TestGetGraphdb:
             ),
             patch("back.core.databricks.DatabricksClient") as mock_client_cls,
             patch(
-                "back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore"
+                "back.core.graphdb.delta.DeltaViewStore.DeltaViewStore"
             ) as mock_delta_cls,
         ):
             mock_client_cls.return_value = MagicMock()

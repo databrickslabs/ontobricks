@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.GraphBackend import GraphBackend
 from back.core.graphdb.entity_search import is_missing_relation_error
 
 
@@ -21,7 +21,7 @@ class DeltaOverviewStats:
 
     def aggregate(self, table_name: str) -> Dict[str, int]:
         if not self._store.entity_search_ready(table_name):
-            return GraphDBBackend.get_aggregate_stats(self._store, table_name)
+            return GraphBackend.get_aggregate_stats(self._store, table_name)
         search = self._store.entity_search_table_id(table_name)
         props = self._store.props_table_id(table_name)
         adj_out, _ = self._store.adjacency_table_ids(table_name)
@@ -44,7 +44,7 @@ class DeltaOverviewStats:
 
     def type_distribution(self, table_name: str) -> List[Dict[str, Any]]:
         if not self._store.entity_search_ready(table_name):
-            return GraphDBBackend.get_type_distribution(self._store, table_name)
+            return GraphBackend.get_type_distribution(self._store, table_name)
         search = self._store._sql_relation(self._store.entity_search_table_id(table_name))
         sql = (
             f"SELECT type_uri AS type_uri, COUNT(*) AS cnt FROM {search} "
@@ -54,7 +54,7 @@ class DeltaOverviewStats:
 
     def predicate_distribution(self, table_name: str) -> List[Dict[str, Any]]:
         if not self._store.adjacency_ready(table_name):
-            return GraphDBBackend.get_predicate_distribution(self._store, table_name)
+            return GraphBackend.get_predicate_distribution(self._store, table_name)
         adj_out, _ = self._store.adjacency_table_ids(table_name)
         relation = self._store._sql_relation(adj_out)
         sql = (

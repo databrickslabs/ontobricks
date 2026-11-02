@@ -559,21 +559,15 @@ class ReasoningService:
         Returns:
             Number of triples inserted.
         """
-        from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        store = DeltaFlatStore(client)
-        logger.info("Materialise to Delta: ensuring table %s exists", table_name)
-        store.create_table(table_name)
-
-        logger.info("Materialise to Delta: clearing existing rows in %s", table_name)
-        client.execute_statement(f"DELETE FROM {table_name}")
-
+        builder = GraphDBFactory.get_builder(None, engine="delta", client=client)
         logger.info(
-            "Materialise to Delta: inserting %d triples into %s",
+            "Materialise to Delta: writing %d triples into %s",
             len(triples),
             table_name,
         )
-        count = store.insert_triples(table_name, triples)
+        count = builder.materialize_triples(table_name, triples)
         logger.info(
             "Materialise to Delta: done — %d triples written to %s", count, table_name
         )

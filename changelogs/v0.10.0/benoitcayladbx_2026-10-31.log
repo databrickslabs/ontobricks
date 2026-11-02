@@ -1,0 +1,483 @@
+# 2026-10-31 — GraphDB backend cloisonnement
+
+## Phase 1 — Two-hat type hierarchy over a shared read root
+
+### Context
+Design spec `docs/superpowers/specs/2026-10-31-graphdb-backend-cloisonnement-design.md`.
+The graph-database layer had a single abstract base, `GraphDBBackend` (~1228
+LOC), conflating the read contract, the write/companion/sync machinery, and
+capability flags. Read-only engines inherited a write surface they cannot
+honor, and the materialized-vs-no-copy distinction was a runtime flag rather
+than a type. Phase 1 introduces the type hierarchy; it is behavior-identical.
+
+### Changes
+1. `src/back/core/graphdb/GraphBackend.py` (renamed from `GraphDBBackend.py`):
+   renamed the base class `GraphDBBackend` → `GraphBackend` (the shared **read**
+   root). Removed the three abstract write methods (`create_table`,
+   `drop_table`, `insert_triples`) — they now live on the materialized hat.
+   Updated the module/class docstrings and the `is_cypher_backend` isinstance.
+2. `src/back/core/graphdb/MaterializedGraphBackend.py` (new): hat interface for
+   copy-owning engines (Lakebase, Delta `table`, Neo4j). Declares the abstract
+   write contract (`create_table` / `drop_table` / `insert_triples`).
+3. `src/back/core/graphdb/VirtualBackend.py` (new): hat interface for read-only,
+   no-copy pass-through engines (Delta `view`). It omits the write/build/sync
+   surface but does **not** hard-disable the companion read flags — companions
+   remain an option governed by the existing search-cache UI setting
+   (`auto`/`force_on`/`force_off`); concrete virtual stores set `supports_*`
+   per the companions they can actually read.
+4. `src/back/core/graphdb/__init__.py`: export `GraphBackend`,
+   `MaterializedGraphBackend`, `VirtualBackend` (dropped the `GraphDBBackend`
+   export — no backward-compat shim per `.cursor/07`).
+5. Re-parented the three backends onto the materialized hat:
+   `src/back/core/graphdb/lakebase/LakebaseBase.py`,
+   `src/back/core/graphdb/delta/DeltaFlatStore.py`,
+   `src/back/core/graphdb/neo4j/Neo4jStore.py`.
+6. Updated the base-class references in callers/helpers:
+   `src/back/core/graphdb/delta/DeltaOverviewStats.py`,
+   `src/back/core/reasoning/swrl/SWRLEngine.py`, plus docstring/comment
+   references in `adjacency.py`, `GraphDBFactory.py`, `_starter_kit/ExampleStore.py`
+   (now subclasses `MaterializedGraphBackend`), the Neo4j modules,
+   `SWRLFlatCypherTranslator.py`, `SPARQLRuleEngine.py`, and `LakebaseFlatStore.py`.
+7. Updated the refactoring guide example in `src/.coding_rules.md` to describe
+   the new `GraphBackend` → hats hierarchy.
+8. Tests: repointed subclasses/imports/patch-targets to the new names in
+   `tests/units/graphdb/test_graphdb_adjacency_contract.py`,
+   `test_search_cache.py`, `test_v090_graph_access_backend.py`,
+   `test_materialized_inference_purge.py`,
+   `tests/units/core/test_graphdb_factory.py`, `test_sql_literal_escaping.py`,
+   `tests/units/dtwin/test_digitaltwin_api.py`.
+9. Architecture baseline: renamed the oversized-class key
+   `GraphDBBackend.py::GraphDBBackend` → `GraphBackend.py::GraphBackend` and
+   tightened it to 1170 via the ratchet
+   (`tests/units/architecture/baseline.json`).
+
+### Modified / added files
+- src/back/core/graphdb/GraphBackend.py (renamed, edited)
+- src/back/core/graphdb/MaterializedGraphBackend.py (new)
+- src/back/core/graphdb/VirtualBackend.py (new)
+- src/back/core/graphdb/__init__.py
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/DeltaOverviewStats.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/core/graphdb/neo4j/__init__.py
+- src/back/core/graphdb/neo4j/Neo4jReadOps.py
+- src/back/core/graphdb/neo4j/Neo4jWriteOps.py
+- src/back/core/graphdb/neo4j/Neo4jSchemaMap.py
+- src/back/core/graphdb/adjacency.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/_starter_kit/ExampleStore.py
+- src/back/core/reasoning/swrl/SWRLEngine.py
+- src/back/core/reasoning/swrl/SWRLFlatCypherTranslator.py
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- src/.coding_rules.md
+- docs/superpowers/specs/2026-10-31-graphdb-backend-cloisonnement-design.md (design spec)
+- tests/units/graphdb/test_graphdb_adjacency_contract.py
+- tests/units/graphdb/test_search_cache.py
+- tests/units/graphdb/test_v090_graph_access_backend.py
+- tests/units/graphdb/test_materialized_inference_purge.py
+- tests/units/core/test_graphdb_factory.py
+- tests/units/core/test_sql_literal_escaping.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- tests/units/architecture/baseline.json
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9840 passed, 326 skipped,
+8 deselected** (57.9s). Architecture ratchet re-run clean.
+
+## Phase 2 — Split DeltaFlatStore into materialized + virtual stores
+
+### Context
+With the two hats in place, `DeltaFlatStore` (used both as a `table`/CTAS copy
+and as a no-copy `engine="view"` pass-through) is split into two concrete
+classes on the correct hats, sharing one read mixin. Behavior-identical; the
+companion behaviour is preserved as an option (search-cache setting) on both
+stores — the split is about the write/build/sync surface only.
+
+### Changes
+1. `src/back/core/graphdb/delta/DeltaReadStore.py` (new): plain mixin holding the
+   full SQL **read** surface shared by both Delta stores — connection/FQN
+   resolution, `query_triples`/`count_triples`, companion read accessors
+   (`adjacency_table_ids`, `entity_search_table_id(_asserted)`, `props_table_id`,
+   `synced_table_name`), stats (`get_aggregate_stats`,
+   `get_type/predicate_distribution`), status probes, `execute_query`, and
+   `expand_and_fetch_subgraph`.
+2. `src/back/core/graphdb/delta/DeltaMaterializedStore.py` (renamed from
+   `DeltaFlatStore.py`, rewritten): `DeltaMaterializedStore(DeltaReadStore,
+   MaterializedGraphBackend)` — keeps only the write/build surface (table
+   lifecycle, triple ingestion, companion rebuild, inference purge, OPTIMIZE).
+   `supports_materialized_inference_purge/adjacency/entity_search/props = True`.
+3. `src/back/core/graphdb/delta/DeltaViewStore.py` (new):
+   `DeltaViewStore(DeltaReadStore, VirtualBackend)` — the no-copy `engine="view"`
+   store. Keeps `supports_adjacency/entity_search/props = True` (companions a
+   build pipeline materialized next to the live relation stay readable, governed
+   by the search-cache option); `supports_materialized_inference_purge = False`.
+4. `src/back/core/graphdb/delta/__init__.py`: export `DeltaReadStore`,
+   `DeltaMaterializedStore`, `DeltaViewStore` (dropped `DeltaFlatStore`).
+5. `src/back/core/graphdb/GraphDBFactory.py`: `_create_delta` →
+   `DeltaMaterializedStore`, `_create_delta_view` → `DeltaViewStore`.
+6. Repointed the remaining `src/` consumers:
+   `src/back/objects/simulation/Sandbox.py` (sandbox store →
+   `DeltaMaterializedStore`, isinstance → `DeltaReadStore`),
+   `src/back/core/reasoning/ReasoningService.py` (materialize path →
+   `DeltaMaterializedStore`),
+   `src/back/core/graphdb/delta/health.py` (`probe_table_status` type →
+   `DeltaReadStore`, `probe_from_client` → `DeltaViewStore`),
+   `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+   (cache rebuild store → `DeltaMaterializedStore`),
+   `src/back/core/databricks/SQLWarehouse.py` (docstring).
+7. Architecture baseline: moved the oversized-function key
+   `delta/DeltaFlatStore.py::DeltaFlatStore.expand_and_fetch_subgraph` →
+   `delta/DeltaReadStore.py::DeltaReadStore.expand_and_fetch_subgraph` (114).
+8. Tests: routed `engine="view"` patch targets to `DeltaViewStore` and the OBO
+   `engine="delta"` path to `DeltaMaterializedStore`; repointed the remaining
+   materialized-path test imports/patches/constructions
+   (`test_triplestore_factory.py`, `test_obo_backends.py`,
+   `test_sql_literal_escaping.py`, `test_materialized_inference_purge.py`,
+   `test_delta_status_probe.py`, `test_delta_overview_stats.py`,
+   `test_delta_flat_store.py`, `test_delta_build_pipeline.py`,
+   `test_graph_query_bounds.py`, `test_graphdb_factory_delta.py`).
+9. Corrected the design spec and the Phase 1 changelog note: `VirtualBackend`
+   does not hard-disable companion flags — companions are preserved as an option.
+
+### Modified / added files
+- src/back/core/graphdb/delta/DeltaReadStore.py (new)
+- src/back/core/graphdb/delta/DeltaMaterializedStore.py (renamed from DeltaFlatStore.py, rewritten)
+- src/back/core/graphdb/delta/DeltaViewStore.py (new)
+- src/back/core/graphdb/delta/__init__.py
+- src/back/core/graphdb/delta/health.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/VirtualBackend.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/databricks/SQLWarehouse.py
+- docs/superpowers/specs/2026-10-31-graphdb-backend-cloisonnement-design.md
+- tests/units/dtwin/test_triplestore_factory.py
+- tests/units/graphdb/test_obo_backends.py
+- tests/units/core/test_sql_literal_escaping.py
+- tests/units/core/test_graph_query_bounds.py
+- tests/units/graphdb/test_materialized_inference_purge.py
+- tests/units/graphdb/delta/test_delta_status_probe.py
+- tests/units/graphdb/delta/test_delta_overview_stats.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- tests/units/graphdb/delta/test_graphdb_factory_delta.py
+- tests/units/architecture/baseline.json
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9840 passed, 326 skipped,
+8 deselected** (56.0s). Architecture guardrails green.
+
+## Phase 3a — Capability interfaces + Delta family cloisonnement
+
+### Context
+Design spec §4.4. Build / health / object-listing logic was imported directly
+from the Delta backend package by ~13 modules outside `back/core/graphdb/`
+(`digitaltwin/**`, `api/**`, `settings/graphengine/**`, `graph_analysis/**`,
+`reasoning/**`, `registry/schedule/**`, `core/helpers/**`). This step introduces
+the three factory-vended capability interfaces and migrates every Delta call
+site off `back.core.graphdb.delta.*` (the `simulation/**` package is handled in
+a dedicated cross-cutting `GraphSimulation` step; Lakebase and Neo4j follow in
+3b/3c). Companion behaviour is unchanged. Behaviour-identical: the Delta impls
+delegate to the same `delta.*` source functions, so existing test patch targets
+keep working.
+
+### Changes
+1. `src/back/core/graphdb/GraphBuilder.py` (new): ABC — build / materialize
+   contract (relation naming, `materialize_triples`, `materialize_from_view`,
+   `apply_data_relation`, `drop_relation`, `count_triples`,
+   `execute_query`/`execute_statement`, `build_steps`, `run_triplestore_build`).
+2. `src/back/core/graphdb/GraphHealthProbe.py` (new): ABC — health / quality /
+   UC object-listing contract (`probe_status`, `schema_permission_summary`,
+   `fetch_schema_tables`, `group_triplestore_objects`, `group_analytics_objects`,
+   `domain_match_key`).
+3. `src/back/core/graphdb/GraphProvisioner.py` (new): marker ABC (populated in
+   the Lakebase step).
+4. `src/back/core/graphdb/delta/DeltaGraphBuilder.py` (new): Delta `GraphBuilder`
+   — thin facade over `_table_naming` / `materialize` / `DeltaBase` /
+   `DeltaMaterializedStore` / `DeltaTripleStoreBuildPipeline`. Lazy Build-warehouse
+   client, injectable for pipelines that already hold one.
+5. `src/back/core/graphdb/delta/DeltaHealthProbe.py` (new): Delta
+   `GraphHealthProbe` — facade over `health` / `objects` / `DeltaBase`.
+6. `src/back/core/graphdb/GraphDBFactory.py`: `get_builder` / `get_health_probe` /
+   `get_provisioner` accessors. `engine="delta"` forces the Delta facade for the
+   Graph-Analytics materialization path (every backend materializes a Delta
+   snapshot for analytics).
+7. `src/back/core/graphdb/__init__.py`: export `GraphBuilder`,
+   `GraphHealthProbe`, `GraphProvisioner`.
+8. Migrated Delta call sites onto the factory accessors:
+   `reasoning/ReasoningService.py` (materialize inferred → builder),
+   `core/helpers/SQLHelpers.py` (naming → builder),
+   `digitaltwin/quality/DataQualitySnapshot.py` (DQ snapshot → builder),
+   `digitaltwin/TwinAnalytics.py` (analytics client/query → builder),
+   `graph_analysis/JobMetrics.py` + `graph_analysis/preflight.py` (snapshot /
+   probe → builder), `digitaltwin/build/_build_pipeline.py` (data relation +
+   count, shared `_delta_write_builder`), `digitaltwin/build/_databricks_triplestore_build.py`
+   (pipeline → `builder.run_triplestore_build`), `api/routers/internal/dtwin.py`
+   (build info + build steps → builder/probe), `registry/schedule/build.py`
+   (count → builder), `settings/graphengine/GraphEngineSettings.py` (objects +
+   schema permissions → `_delta_health_probe`).
+9. Architecture baseline re-tightened via the ratchet; `_BuildPipeline` shrank
+   (compacted debug logs + shared builder helper) so it stays under its budget.
+10. `tests/units/dtwin/test_v090_twin_analytics.py`: assert the analytics query
+    routes through the Build-warehouse client (via the builder) by invoking it,
+    instead of comparing callable identity.
+
+### Modified / added files
+- src/back/core/graphdb/GraphBuilder.py (new)
+- src/back/core/graphdb/GraphHealthProbe.py (new)
+- src/back/core/graphdb/GraphProvisioner.py (new)
+- src/back/core/graphdb/delta/DeltaGraphBuilder.py (new)
+- src/back/core/graphdb/delta/DeltaHealthProbe.py (new)
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/__init__.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/digitaltwin/quality/DataQualitySnapshot.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/preflight.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/digitaltwin/build/_databricks_triplestore_build.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/domain/settings/graphengine/GraphEngineSettings.py
+- tests/units/dtwin/test_v090_twin_analytics.py
+- tests/units/architecture/baseline.json
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9840 passed, 326 skipped,
+8 deselected** (48.8s). Architecture guardrails green.
+
+---
+
+## Graph DB cloisonnement — Phase 3b: Lakebase family behind the capability factory
+
+### Context
+Continuation of the backend cloisonnement. Phase 3b vends the Lakebase family
+through the same three factory capabilities and migrates every remaining
+`back.core.graphdb.lakebase.*` import outside the `graphdb/` package onto the
+factory — except `simulation/**`, which is handled in the dedicated
+cross-cutting `GraphSimulation` step (Phase 3d). The capability ABCs are now
+**markers** (`GraphBuilder` / `GraphHealthProbe` / `GraphProvisioner`): Delta's
+and Lakebase's concrete surfaces diverge, so the method set lives on each
+concrete impl while the factory vends the right one per backend. Behaviour is
+identical — the Lakebase impls delegate to the same `lakebase.*` source
+functions, so existing patch targets keep working.
+
+### Changes
+1. `src/back/core/graphdb/GraphBuilder.py` / `GraphHealthProbe.py`: converted
+   from Delta-specific ABCs to capability **markers** (the engine-specific
+   method surface moves to the concrete impls).
+2. `src/back/core/graphdb/lakebase/LakebaseGraphBuilder.py` (new): Lakebase
+   `GraphBuilder` — Lakeflow sync-view DDL (`wrap_view_sql_for_lakeflow`,
+   `lakeflow_primary_key`, `ensure_uc_schema_for_synced`), naming / resolution
+   (`resolve_sync_uc_fallback_catalog`, `resolve_graph_schema`,
+   `physical_table_id`, `synced_phy`) and `is_index_row_size_error`. Thin facade
+   over `_companion_ddl` / `_sync_uc_schema` / `LakebaseFlatStore` / `LakebaseBase`.
+3. `src/back/core/graphdb/lakebase/LakebaseProvisioner.py` (new): Lakebase
+   `GraphProvisioner` — config/schema validation (`validate_engine_config`,
+   `default_schema`, `validate_graph_schema`, `resolve_postgres_database_override`),
+   instance provisioning (`default_branch`/`default_capacity`, `provision_steps`,
+   `run_provision`) and synced-table control plane (`delete_synced_table`,
+   `sync_manager`, `sync_to_dict`, `sync_state`, `sync_pipeline_id`).
+4. `src/back/core/graphdb/lakebase/LakebaseHealthProbe.py` (new): Lakebase
+   `GraphHealthProbe` — vends the `psycopg` driver handle (`psycopg()`) so health
+   / settings probes keep their connection orchestration without importing
+   `lakebase.pool` directly.
+5. `src/back/core/graphdb/GraphDBFactory.py`: `_builder_engine` maps a domain's
+   graph backend to its builder engine; `get_builder` / `get_health_probe` /
+   `get_provisioner` now vend the Lakebase impls (`engine="lakebase"` forces them).
+6. Migrated Lakebase call sites onto the factory accessors:
+   `session/GlobalConfigService.py` (config validation),
+   `domain/settings/graphengine/GraphEngineSettings.py` (synced-table delete),
+   `domain/settings/graphengine/GraphEngineLakebaseSettings.py` (schema helpers,
+   provisioning, synced-state listing, psycopg probes),
+   `digitaltwin/build/_build_pipeline.py` (sync view DDL + UC-schema + PK +
+   index-error classifier via new `_lakebase_builder`),
+   `registry/schedule/build.py` (sync view DDL + UC-schema + PK),
+   `digitaltwin/cache/TwinStoreCache.py` (schema/table/sync-UC name resolution),
+   `shared/fastapi/health.py` (3 Lakebase psycopg probes).
+
+### Modified / added files
+- src/back/core/graphdb/lakebase/LakebaseGraphBuilder.py (new)
+- src/back/core/graphdb/lakebase/LakebaseProvisioner.py (new)
+- src/back/core/graphdb/lakebase/LakebaseHealthProbe.py (new)
+- src/back/core/graphdb/GraphBuilder.py
+- src/back/core/graphdb/GraphHealthProbe.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/settings/graphengine/GraphEngineSettings.py
+- src/back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/digitaltwin/cache/TwinStoreCache.py
+- src/shared/fastapi/health.py
+- tests/units/architecture/baseline.json
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9840 passed, 326 skipped,
+8 deselected** (48.6s). Architecture guardrails green (baseline re-tightened).
+
+---
+
+## Graph DB cloisonnement — Phase 3c: Neo4j family behind the capability factory
+
+### Context
+Continuation of the backend cloisonnement. Phase 3c vends the Neo4j family
+through the same three factory capabilities and migrates every remaining
+`back.core.graphdb.neo4j.*` import outside the `graphdb/` package onto the
+factory — except `simulation/**` (Phase 3d). Behaviour is identical: the Neo4j
+impls delegate to the same `neo4j.*` source functions.
+
+### Changes
+1. `src/back/core/graphdb/neo4j/Neo4jGraphBuilder.py` (new): Neo4j `GraphBuilder`
+   — property-graph naming helpers (`sanitise_label`, `sanitise_ident`,
+   `label_from_class_uri`, `reltype_from_predicate`). Facade over `graph_model`
+   / `Neo4jWriteOps.sanitise_label`.
+2. `src/back/core/graphdb/neo4j/Neo4jProvisioner.py` (new): Neo4j
+   `GraphProvisioner` — credential helpers (`password_env`,
+   `is_password_from_secret`).
+3. `src/back/core/graphdb/neo4j/Neo4jHealthProbe.py` (new): Neo4j
+   `GraphHealthProbe` — builds a `Neo4jConnection` from an engine config
+   (`connection`) and vends the read / write op wrappers (`read_ops`,
+   `write_ops`), so Settings callers keep their Bolt orchestration without
+   importing `neo4j.*`.
+4. `src/back/core/graphdb/GraphDBFactory.py`: `get_builder` / `get_health_probe`
+   / `get_provisioner` now vend the Neo4j impls for `engine="neo4j"`.
+5. Migrated Neo4j call sites onto the factory accessors:
+   `domain/settings/SettingsService.py` (`is_neo4j_password_from_secret` →
+   module-level wrapper delegating to the provisioner),
+   `domain/settings/graphengine/GraphEngineNeo4jSettings.py` (connection test,
+   `_neo4j_connection_from_config`, databases/labels listing, drop-label,
+   credentials-source),
+   `reasoning/swrl/SWRLFlatCypherTranslator.py` (naming helpers → factory-backed
+   module wrappers),
+   `digitaltwin/cache/TwinStoreCache.py` (Neo4j marker-label via builder).
+
+### Modified / added files
+- src/back/core/graphdb/neo4j/Neo4jGraphBuilder.py (new)
+- src/back/core/graphdb/neo4j/Neo4jProvisioner.py (new)
+- src/back/core/graphdb/neo4j/Neo4jHealthProbe.py (new)
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/domain/settings/SettingsService.py
+- src/back/objects/domain/settings/graphengine/GraphEngineNeo4jSettings.py
+- src/back/core/reasoning/swrl/SWRLFlatCypherTranslator.py
+- src/back/objects/digitaltwin/cache/TwinStoreCache.py
+- tests/units/architecture/baseline.json
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9840 passed, 326 skipped,
+8 deselected** (50.0s). Architecture guardrails green (baseline re-tightened).
+
+---
+
+## Graph DB cloisonnement — Phase 3d: GraphSimulation cross-cutting step
+
+### Context
+Final migration step of Phase 3. The `simulation/**` package dispatched across
+all three backends (Lakebase overlay union views, Delta UC sandbox store, Neo4j
+marker-label isolation) by importing backend classes directly. Phase 3d lifts
+those touch-points behind a new factory-vended `GraphSimulation` capability, so
+after this step **no module outside `back/core/graphdb/` imports
+`back.core.graphdb.{lakebase,delta,neo4j}.*`** — every backend import is now
+confined to `GraphDBFactory`. Behaviour is identical.
+
+### Changes
+1. `src/back/core/graphdb/GraphSimulation.py` (new): capability ABC — sandbox
+   write store (`simulation_store`), `__sim_` / `__smu_` naming
+   (`sandbox_table_name`, `sim_union_view_name`, `sim_table_name`), Explorer
+   union-view lifecycle (`drop_union` / `ensure_union`), `is_native_store`.
+   Safe defaults; each backend overrides what it supports.
+2. `src/back/core/graphdb/lakebase/LakebaseSimulation.py` (new): Lakebase impl —
+   facade over `LakebaseSimulationStore` / `LakebaseSimulationUnion` /
+   `_companion_ddl`.
+3. `src/back/core/graphdb/delta/DeltaSimulation.py` (new): Delta impl — vends the
+   raw `DeltaMaterializedStore` so sandbox writes can't reach the live inferred
+   companion.
+4. `src/back/core/graphdb/neo4j/Neo4jSimulation.py` (new): Neo4j impl — sandbox
+   store is the live store (marker-label isolation).
+5. `src/back/core/graphdb/GraphDBFactory.py`: `classify_store(store)` (store
+   instance → backend kind, for sandbox dispatch) and `get_simulation(kind)`
+   (vends the impl; accepts `databricks` ≡ Delta).
+6. `src/back/core/graphdb/__init__.py`: export `GraphSimulation`.
+7. Migrated `simulation/**` call sites onto the factory:
+   `simulation/Sandbox.py` (`__new__` dispatch via `classify_store`,
+   Lakebase/Delta sandbox stores + union views via the capability),
+   `simulation/Simulation.py` (`sandbox_relation` / `explorer_relation`),
+   `simulation/Artifacts.py` (sandbox table + union-view names).
+8. `tests/units/simulation/test_simulation_core.py`: updated the sandbox
+   lifecycle test to set the capability (`_sim`) on the bypassed instance.
+
+### Modified / added files
+- src/back/core/graphdb/GraphSimulation.py (new)
+- src/back/core/graphdb/lakebase/LakebaseSimulation.py (new)
+- src/back/core/graphdb/delta/DeltaSimulation.py (new)
+- src/back/core/graphdb/neo4j/Neo4jSimulation.py (new)
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/__init__.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/Artifacts.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/architecture/baseline.json
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9840 passed, 326 skipped,
+8 deselected** (54.9s). Architecture guardrails green (baseline re-tightened).
+All `back.core.graphdb.{lakebase,delta,neo4j}.*` imports are now confined to
+`GraphDBFactory`.
+
+---
+
+## Graph DB cloisonnement — Phase 4: lock it in (guardrail + docs)
+
+### Context
+Final phase. With every backend import confined to `graphdb/` (Phases 3a–3d),
+Phase 4 adds the architecture guardrail that **keeps** it that way and updates
+the developer-facing docs + starter kit to the new shape (two hats + four
+capability interfaces + the import boundary).
+
+### Changes
+1. `tests/units/architecture/test_backend_import_boundary.py` (new): AST guardrail
+   over `src/` — asserts **no module outside `src/back/core/graphdb/` imports
+   `back.core.graphdb.{lakebase,delta,neo4j}.*`**. Zero offenders today (strict
+   assertion, no baseline needed); fails CI on any regression.
+2. `docs/diagrams/class-hierarchy.mmd`: redrew the Storage/Backend hierarchy —
+   `GraphBackend` read root → `MaterializedGraphBackend` / `VirtualBackend` hats;
+   Delta split (`DeltaReadStore` → `DeltaMaterializedStore` / `DeltaViewStore`);
+   added the four capability ABCs + their per-backend impls and the
+   `GraphDBFactory` accessors. `class-hierarchy.png` regenerated from the updated
+   `.mmd` source.
+3. `docs/backend.md`: renamed `GraphDBBackend` → `GraphBackend`; split stale
+   `DeltaFlatStore` references into `DeltaReadStore` / `DeltaMaterializedStore` /
+   `DeltaViewStore`; documented the two hats in "The Contract"; added §2.3
+   "Capability interfaces & the import boundary"; extended the integration
+   checklist with the hat choice, capability impls, and the boundary rule.
+4. `docs/architecture.md`: same `GraphDBBackend` → `GraphBackend` and
+   `DeltaFlatStore` → `DeltaMaterializedStore` corrections.
+5. `src/back/core/graphdb/_starter_kit/README.md`: added hat selection, a
+   "Capabilities & the import boundary" section, and the boundary rule.
+
+### Modified / added files
+- tests/units/architecture/test_backend_import_boundary.py (new)
+- docs/diagrams/class-hierarchy.mmd
+- docs/diagrams/class-hierarchy.png (regenerated)
+- docs/backend.md
+- docs/architecture.md
+- src/back/core/graphdb/_starter_kit/README.md
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9841 passed, 326 skipped,
+8 deselected** (58.9s). New import-boundary guardrail green with zero offenders.
+
+### Cloisonnement — final state
+The graph DB backend layer is fully compartmentalized:
+- **Two hats** over a shared read root: `MaterializedGraphBackend` (copy-owning)
+  and `VirtualBackend` (read-only, no-copy), with Delta split accordingly.
+- **Four factory-vended capabilities** (`GraphBuilder`, `GraphHealthProbe`,
+  `GraphProvisioner`, `GraphSimulation`) implemented per backend.
+- **Zero** `back.core.graphdb.{lakebase,delta,neo4j}.*` imports outside
+  `graphdb/`, enforced by `test_backend_import_boundary.py`.
