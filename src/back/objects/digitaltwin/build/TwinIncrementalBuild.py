@@ -47,6 +47,10 @@ from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
 )
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
+from back.objects.digitaltwin.build.TwinSlotRefreshPlan import (
+    REASON_RECONCILE_DRIFT,
+    TwinSlotRefreshPlan,
+)
 
 logger = get_logger(__name__)
 
@@ -252,18 +256,18 @@ class TwinIncrementalBuild:
                 definition["refresh_clause"],
             )
         slots = definition["slots_fqn"]
+        plan = TwinSlotRefreshPlan.plan(
+            pipe.source_client,
+            TwinBuildRunHistory.recent_runs(pipe),
+            spec.source_tables if slots else (),
+        )
+        pipe.slot_refresh_facts = dict(plan["before"])
         if slots:
-            rewritten = TwinIncrementalBuild._rewritten_sources(pipe, spec)
-            drifted = TwinBuildRunHistory.reconcile_drift_pending(pipe)
-            if drifted:
-                logger.info(
-                    "[DT-BUILD %s] a scheduled reconciliation found drift: full refresh of "
-                    "the slot pipeline",
-                    pipe.task_id,
-                )
-            TwinSlotPipeline.run(pipe, spec, force_full_refresh=bool(rewritten) or drifted)
-            pipe.source_versions = TwinIncrementalBuild._source_versions(pipe, spec)
-        TwinIncrementalBuild._apply_views(pipe, definition)
+            TwinSlotPipeline.run(pipe, spec, force_full_refresh=bool(plan["reason"]))
+        TwinIncrementalBuild._apply_views(
+            pipe, definition, full_refresh=plan["reason"] == REASON_RECONCILE_DRIFT
+        )
+        pipe.slot_refresh_facts = dict(plan["after"])
         pipe.slots_table = slots
         logger.info(
             "[DT-BUILD %s] %s build of %s done: %d row-local, %d batch mapping(s), "
@@ -275,61 +279,6 @@ class TwinIncrementalBuild:
             len(spec.batch_mappings),
             pipe.refresh_technique,
         )
-
-    @staticmethod
-    def _rewritten_sources(pipe: Any, spec: Any) -> list:
-        """Sources rewritten since the base run recorded their version (``DESCRIBE HISTORY``).
-
-        An ``INSERT OVERWRITE`` / ``CREATE OR REPLACE`` / ``TRUNCATE`` /
-        ``RESTORE`` breaks the change feed the slot pipeline reads: the build
-        then runs a full refresh of the slot pipeline in the same mode and
-        records ``source_overwritten`` as the mode's reason. A history that
-        cannot be read raises (the incremental build falls back, as for the
-        row-tracking probe).
-        """
-        from back.core.streaming import SourceReadiness
-
-        base = TwinBuildRunHistory.previous_materialization_stats(pipe)
-        recorded = base.get("source_versions")
-        if not isinstance(recorded, dict):
-            return []
-        rewritten = [
-            table
-            for table in spec.source_tables
-            if isinstance(recorded.get(table), int)
-            and SourceReadiness.source_overwritten_since(
-                pipe.source_client, table, recorded[table]
-            )
-        ]
-        if rewritten:
-            decision = pipe.mode_decision
-            pipe.mode_decision = ModeDecision(
-                decision.requested, decision.effective, "source_overwritten"
-            )
-            logger.info(
-                "[DT-BUILD %s] %s rewritten since the last build: full refresh of the slot "
-                "pipeline",
-                pipe.task_id,
-                ", ".join(rewritten),
-            )
-        return rewritten
-
-    @staticmethod
-    def _source_versions(pipe: Any, spec: Any) -> dict:
-        """``{source table: latest Delta version}`` for the next build's overwrite check.
-
-        Best-effort: a table whose history cannot be read is left out (the next
-        build then cannot tell, and does not force a refresh for it).
-        """
-        from back.core.graphdb.delta import ChangeFeedReader
-
-        versions = {}
-        for table in spec.source_tables:
-            try:
-                versions[table] = ChangeFeedReader.latest_version(pipe.source_client, table)
-            except InfrastructureError as exc:
-                logger.debug("[DT-BUILD %s] no version of %s: %s", pipe.task_id, table, exc)
-        return versions
 
     @staticmethod
     def data_definition_for(
@@ -387,11 +336,12 @@ class TwinIncrementalBuild:
         return sql
 
     @staticmethod
-    def _apply_views(pipe: Any, definition: dict) -> None:
+    def _apply_views(pipe: Any, definition: dict, *, full_refresh: bool = False) -> None:
         """Step d: the ``…_data`` materialized view, a synchronous refresh, its technique.
 
         *definition* holds the :meth:`MaterializedViewBuilder.data_mv_sql` keywords
-        (``slots_fqn``, ``batch_branch_sql``, ``refresh_clause``).
+        (``slots_fqn``, ``batch_branch_sql``, ``refresh_clause``). *full_refresh*
+        (a reconciliation found drift) makes the refresh ``… FULL``.
 
         ``CREATE OR REPLACE`` would recompute the view from scratch, so it only
         runs when the stored definition fingerprint (``ontobricks.mv_sql_sha256``)
@@ -426,7 +376,9 @@ class TwinIncrementalBuild:
         pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
         TwinIncrementalBuild.warehouse_step(
             f"refresh {data}",
-            lambda: materialize.run_sql(client, MaterializedViewBuilder.refresh_sql(data)),
+            lambda: materialize.run_sql(
+                client, MaterializedViewBuilder.refresh_sql(data, full=full_refresh)
+            ),
         )
         pipe.refresh_technique = MaterializedViewBuilder.last_refresh_technique(client, data)
         pipe.data_table = data

@@ -46,10 +46,12 @@ class TwinBuildRunHistory:
         (``mv`` / ``merge`` / ``ctas`` / ``""``), ``apply_mode``
         (``net_changes`` / ``full_stream`` / ``lakeflow_sync`` / ``none``;
         ``""`` when the apply phase was never reached),
-        ``apply_fallback_reason``, ``data_table_id`` (the Delta table id the
-        version belongs to, ``""`` when unknown) and ``source_versions`` (the
-        Delta version of each slot-pipeline source, for the next build's
-        overwrite check).
+        ``apply_fallback_reason`` and ``data_table_id`` (the Delta table id the
+        version belongs to, ``""`` when unknown). A build that reached the
+        incremental step adds its ``slot_refresh_facts``
+        (:class:`TwinSlotRefreshPlan`: ``source_versions``,
+        ``source_table_ids``, ``slot_full_refresh_pending``,
+        ``slot_full_refresh_reason``).
         """
         from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
 
@@ -72,7 +74,7 @@ class TwinBuildRunHistory:
             "apply_mode": text(pipe, "apply_mode"),
             "apply_fallback_reason": text(pipe, "apply_fallback_reason"),
             "data_table_id": text(pipe, "data_table_id"),
-            "source_versions": TwinBuildRunHistory._source_versions(pipe),
+            **TwinBuildRunHistory._slot_refresh_facts(pipe),
         }
         return {**stats, "materialization": materialization}
 
@@ -135,21 +137,50 @@ class TwinBuildRunHistory:
         the same graph in another sync mode, which rewrote it.
         Best-effort: any error reads as ``{}`` (debug log), i.e. "no base".
         """
+        runs = TwinBuildRunHistory.recent_runs(pipe)
+        return TwinBuildRunHistory._base_materialization(pipe, runs)
+
+    @staticmethod
+    def recent_runs(pipe: Any) -> list:
+        """The newest runs of this build's folder + version, read once per build.
+
+        Newest first, at most :data:`_PREVIOUS_RUNS_LIMIT`; cached on *pipe*
+        for every reader of the build (base run, slot refresh plan).
+        Best-effort: an unreadable registry is ``[]`` (debug log).
+        """
+        cached = getattr(pipe, "_recent_build_runs", None)
+        if isinstance(cached, list):
+            return cached
+        runs = TwinBuildRunHistory._load_runs(
+            lambda: (pipe.domain, pipe.settings, TwinBuildRunHistory.build_run_key(pipe)),
+            getattr(pipe, "task_id", ""),
+        )
+        pipe._recent_build_runs = runs
+        return runs
+
+    @staticmethod
+    def recent_runs_for(domain: Any, settings: Any) -> list:
+        """The newest runs of *domain*'s folder + version, for a caller without a build."""
+        return TwinBuildRunHistory._load_runs(
+            lambda: (domain, settings, TwinBuildRunHistory.run_key_of(domain)), "-"
+        )
+
+    @staticmethod
+    def _load_runs(context: Any, task_id: Any) -> list:
+        """``load_build_runs`` of *context* ``() -> (domain, settings, (folder, version))``."""
         try:
             from back.objects.registry.RegistryService import RegistryService
 
-            folder, version = TwinBuildRunHistory.build_run_key(pipe)
+            domain, settings, (folder, version) = context()
             if not (folder and version):
-                return {}
-            runs = RegistryService.from_context(pipe.domain, pipe.settings).load_build_runs(
+                return []
+            runs = RegistryService.from_context(domain, settings).load_build_runs(
                 folder, version=version, limit=_PREVIOUS_RUNS_LIMIT
             )
-            return TwinBuildRunHistory._base_materialization(pipe, runs)
-        except Exception as exc:  # noqa: BLE001 — best-effort read; no base means a full apply
-            logger.debug(
-                "[DT-BUILD %s] could not read the previous build runs: %s", pipe.task_id, exc
-            )
-            return {}
+        except Exception as exc:  # noqa: BLE001 — best-effort read; no history
+            logger.debug("[DT-BUILD %s] could not read the previous build runs: %s", task_id, exc)
+            return []
+        return runs if isinstance(runs, list) else []
 
     @staticmethod
     def _base_materialization(pipe: Any, runs: Any) -> dict:
@@ -162,7 +193,7 @@ class TwinBuildRunHistory:
         delta = GraphDBFactory._resolve_graph_backend(pipe.domain) == "databricks"
         accepted = _DELTA_BASE_APPLY_MODES if delta else _BASE_APPLY_MODES
         for run in runs:
-            facts = TwinBuildRunHistory._facts(run)
+            facts = TwinBuildRunHistory.facts_of(run)
             if facts is None or run.get("build_kind") == "scheduled":
                 return {}
             if run.get("status") != "success":
@@ -177,38 +208,7 @@ class TwinBuildRunHistory:
         return {}
 
     @staticmethod
-    def reconcile_drift_pending(pipe: Any) -> bool:
-        """True when a scheduled tick found drift that no build has refreshed since.
-
-        Over the newest runs of this folder + version: a run whose
-        ``materialization.reconcile_drift`` is true means pending; a successful
-        build that ran the slot pipeline (effective mode ``incremental`` or
-        ``microbatch``) before reaching one means consumed. Best-effort: any
-        error reads as ``False`` (debug log).
-        """
-        try:
-            from back.objects.registry.RegistryService import RegistryService
-
-            folder, version = TwinBuildRunHistory.build_run_key(pipe)
-            if not (folder and version):
-                return False
-            runs = RegistryService.from_context(pipe.domain, pipe.settings).load_build_runs(
-                folder, version=version, limit=_PREVIOUS_RUNS_LIMIT
-            )
-        except Exception as exc:  # noqa: BLE001 — best-effort read; nothing pending
-            logger.debug("[DT-BUILD %s] could not read the build runs: %s", pipe.task_id, exc)
-            return False
-        for run in runs if isinstance(runs, list) else []:
-            facts = TwinBuildRunHistory._facts(run) or {}
-            if facts.get("reconcile_drift") is True:
-                return True
-            refreshed = facts.get("materialization_mode_effective") in ("incremental", "microbatch")
-            if run.get("status") == "success" and refreshed:
-                return False
-        return False
-
-    @staticmethod
-    def _facts(run: Any) -> dict | None:
+    def facts_of(run: Any) -> dict | None:
         """``stats["materialization"]`` of a persisted *run*, ``None`` when it has none."""
         stats = run.get("stats") if isinstance(run, dict) else None
         facts = stats.get("materialization") if isinstance(stats, dict) else None
@@ -308,16 +308,10 @@ class TwinBuildRunHistory:
         return "mv" if mode == TwinBuildPostMaterialize.MATERIALIZED_VIEW else ""
 
     @staticmethod
-    def _source_versions(pipe: Any) -> dict:
-        """``{source table: Delta version}`` the slot pipeline read (``{}`` when none)."""
-        value = getattr(pipe, "source_versions", None)
-        if not isinstance(value, dict):
-            return {}
-        return {
-            str(table): version
-            for table, version in value.items()
-            if TwinBuildRunHistory._version_or_none(version) is not None
-        }
+    def _slot_refresh_facts(pipe: Any) -> dict:
+        """The build's ``slot_refresh_facts`` (``{}`` when it did not reach a slot update)."""
+        value = getattr(pipe, "slot_refresh_facts", None)
+        return dict(value) if isinstance(value, dict) else {}
 
     @staticmethod
     def _version_or_none(value: Any) -> int | None:

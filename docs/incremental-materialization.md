@@ -126,14 +126,27 @@ as the caller, so Unity Catalog decides who may alter which table, and reports
 answer under the materialization mode (Readiness line, "Enable row tracking"
 button for editors when a source is untracked).
 
-After the probe, before the slot pipeline update, every source is checked against
-the Delta version the base build recorded for it (`source_versions`): a rewrite
-since then (`CREATE OR REPLACE`, `REPLACE TABLE AS SELECT`, `INSERT OVERWRITE` —
-a `WRITE` in `Overwrite` mode —, `TRUNCATE`, `RESTORE`, read from `DESCRIBE
-HISTORY`) breaks the change feed, so the build runs a **full refresh of the slot
-pipeline in the same mode** and records `mode_fallback_reason = source_overwritten`.
-A history that cannot be read is an `incremental_failed:InfrastructureError`, as
-for the probe.
+**Full refresh of the slot pipeline** (`TwinSlotRefreshPlan`). Before every
+slot pipeline update — a main build's and an `incremental` tick's — each source's
+Delta version and table id are read, and compared with the ones the last
+*completed* update recorded (the newest run with `source_versions`, whatever the
+store base). A source is rewritten when its table id changed, its newest version is
+below the recorded one (`DROP` + `CREATE` restarted the history), or its history
+since (`DESCRIBE HISTORY … LIMIT <versions since>`, at most 10000 versions; more
+count as a rewrite) holds `CREATE OR REPLACE TABLE [AS SELECT]`, `REPLACE TABLE
+[AS SELECT]`, `CLONE`, `TRUNCATE`, `RESTORE`, an `INSERT OVERWRITE` (a `WRITE` in
+`Overwrite` mode) or a `Complete`-mode `STREAMING UPDATE`. A rewrite breaks the
+change feed the pipeline reads, so the update runs as a **full refresh in the same
+mode**. A reconciliation drift (see [Reconciliation](#reconciliation)) does too,
+and also refreshes `_data` with `REFRESH MATERIALIZED VIEW … FULL`. The reason is
+recorded as `slot_full_refresh_reason` (`source_overwritten` / `reconcile_drift`);
+`mode_fallback_reason` keeps the first downgrade. The refresh is **sticky**:
+`slot_full_refresh_pending` is recorded true before the update and false only once
+it and the `_data` refresh completed, and a run whose update did not complete
+carries the previous `source_versions` forward, so the next build or tick retries.
+The versions recorded are the ones read *before* the update: a commit landing
+during it is checked next time. A source history that cannot be read is an
+`incremental_failed:InfrastructureError` for a build and a CTAS for a tick.
 
 Two further fallbacks apply after the mode is decided:
 
@@ -238,7 +251,9 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `strategy` | `mv`, `merge`, `ctas` or `""` |
 | `apply_mode`, `apply_fallback_reason` | `net_changes`, `full_stream`, `lakeflow_sync`, `none`; why a net apply was not done |
 | `data_table_version`, `data_table_id`, `fingerprint` | the `_data` version/table id the store matches; the MERGE fingerprint |
-| `source_versions` | the Delta version of each slot-pipeline source the build read (the next build's overwrite check) |
+| `source_versions`, `source_table_ids` | each slot-pipeline source's Delta version and table id read before the last completed update (only on runs that reached a slot update) |
+| `slot_full_refresh_pending`, `slot_full_refresh_reason` | a full refresh owed until an update completes it; `source_overwritten` / `reconcile_drift` (only on runs that reached a slot update) |
+| `reconcile_drift` | a scheduled tick's reconciliation found drift (tick runs only) |
 
 The Knowledge Graph › Runs cockpit shows the effective mode (with the requested
 one and the fallback reason when they differ), the strategy / refresh technique
@@ -304,10 +319,13 @@ place (a CTAS table equals the VIEW by construction) reconciles at the end,
 right after the synced-table refresh. Drift is logged at warning and recorded
 as `stats.materialization.reconcile_drift = true` on the tick's build run (a
 scheduled run still ends the base-run search: the tick rewrote the store). The
-next incremental build reads it (`TwinBuildRunHistory.reconcile_drift_pending`:
-pending until a successful `incremental` / `microbatch` build) and runs the slot
-pipeline update with `full_refresh=True`, logging why. A reconciliation that
-fails (no slots table, warehouse down) is logged and never fails the tick.
+next build or `incremental` tick that updates the slots owes a full refresh
+(`TwinSlotRefreshPlan.owed`): its slot pipeline update runs with
+`full_refresh=True` and `_data` refreshes `FULL`; a batch-only domain refreshes
+`_data` `FULL`. The drift stays owed until such a run records
+`slot_full_refresh_pending = false`; runs that never reach a slot update (MERGE
+or full builds) pass it on. A reconciliation that fails is logged and never fails
+the tick.
 
 ## Preview enrolment
 

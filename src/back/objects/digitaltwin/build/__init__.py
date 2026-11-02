@@ -14,6 +14,7 @@ from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
 from back.objects.digitaltwin.build.TwinNetChangeApply import TwinNetChangeApply
 from back.objects.digitaltwin.build.TwinScheduledRefresh import TwinScheduledRefresh
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
+from back.objects.digitaltwin.build.TwinSlotRefreshPlan import TwinSlotRefreshPlan
 from back.objects.digitaltwin.build.TwinSlotReconciliation import TwinSlotReconciliation
 
 __all__ = [
@@ -31,5 +32,6 @@ __all__ = [
     "TwinNetChangeApply",
     "TwinScheduledRefresh",
     "TwinSlotPipeline",
+    "TwinSlotRefreshPlan",
     "TwinSlotReconciliation",
 ]

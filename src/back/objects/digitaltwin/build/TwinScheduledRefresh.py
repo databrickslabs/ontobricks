@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from back.core.errors import OntoBricksError
+from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.logging import get_logger
+from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
+from back.objects.digitaltwin.build.TwinSlotRefreshPlan import (
+    REASON_RECONCILE_DRIFT,
+    TwinSlotRefreshPlan,
+)
 
 logger = get_logger(__name__)
 
@@ -40,17 +45,24 @@ class TwinScheduledRefresh:
         entity_mappings: Any = None,
         relationship_mappings: Any = None,
         spec: Any = None,
+        facts: dict | None = None,
     ) -> bool:
         """True when ``…_data`` was refreshed in place; ``False``: build it by CTAS.
 
         ``False`` for any other *mode* (``full``, a MERGE-promoted domain), when
         ``…_data`` is not a materialized view of ours, when the mappings are
         unknown or no longer give the view's definition (its stored fingerprint)
-        or the slot pipeline's SQL, and when the slot pipeline is missing.
-        *spec* is the tick's compiled slot spec of those mappings (``None``:
-        they did not compile).
-        Pipeline and warehouse errors raise :class:`InfrastructureError`;
-        nothing has been dropped then.
+        or the slot pipeline's SQL, when the slot pipeline is missing, and when
+        a source history cannot be read. *spec* is the tick's compiled slot spec
+        of those mappings (``None``: they did not compile).
+
+        An ``incremental`` tick decides its slot update the way a build does
+        (:class:`TwinSlotRefreshPlan`: a full refresh after a source rewrite or
+        while one is owed; a drift also makes the view refresh ``FULL``) and
+        writes the plan's facts into *facts* — the tick's
+        ``stats.materialization`` — before the update and again once it and
+        the refresh completed. Pipeline and warehouse errors raise
+        :class:`InfrastructureError`; nothing has been dropped then.
         """
         from back.core.graphdb.delta import MaterializedViewBuilder, materialize
 
@@ -63,15 +75,43 @@ class TwinScheduledRefresh:
             data_fqn, existing, mode, (entity_mappings, relationship_mappings, spec)
         ):
             return False
-        if spec.row_local_map_ids:
-            if not TwinScheduledRefresh._slots_current(domain, spec, update=mode == "incremental"):
-                return False
+        facts = {} if facts is None else facts
+        try:
+            plan = TwinScheduledRefresh._plan(client, domain, settings, spec, mode)
+        except InfrastructureError as exc:
+            logger.warning(
+                "Scheduled build: a source history is unreadable (%s); rebuilding %s by CTAS",
+                exc,
+                data_fqn,
+            )
+            return False
+        facts.update(plan["before"])
+        if spec.row_local_map_ids and not TwinScheduledRefresh._slots_current(
+            domain, spec, update=mode == "incremental", full_refresh=bool(plan["reason"])
+        ):
+            return False
+        full = plan["reason"] == REASON_RECONCILE_DRIFT
         TwinIncrementalBuild.warehouse_step(
             f"refresh {data_fqn}",
-            lambda: materialize.run_sql(client, MaterializedViewBuilder.refresh_sql(data_fqn)),
+            lambda: materialize.run_sql(
+                client, MaterializedViewBuilder.refresh_sql(data_fqn, full=full)
+            ),
         )
+        facts.update(plan["after"])
         logger.info("Scheduled build: refreshed the %s view %s in place", mode, data_fqn)
         return True
+
+    @staticmethod
+    def _plan(client: Any, domain: Any, settings: Any, spec: Any, mode: str) -> dict:
+        """The slot refresh plan of an ``incremental`` tick; ``microbatch`` plans nothing.
+
+        A source history that cannot be read raises :class:`InfrastructureError`.
+        """
+        if mode != "incremental":
+            return {"reason": "", "before": {}, "after": {}}
+        return TwinSlotRefreshPlan.plan(
+            client, TwinBuildRunHistory.recent_runs_for(domain, settings), spec.source_tables
+        )
 
     @staticmethod
     def _definition_current(data_fqn: str, existing: str, mode: str, mappings: tuple) -> bool:
@@ -112,8 +152,12 @@ class TwinScheduledRefresh:
         return True
 
     @staticmethod
-    def _slots_current(domain: Any, spec: Any, *, update: bool) -> bool:
+    def _slots_current(
+        domain: Any, spec: Any, *, update: bool, full_refresh: bool = False
+    ) -> bool:
         """The slot pipeline runs the current SQL; with *update*, one triggered update.
+
+        *full_refresh* makes that update a full refresh.
 
         ``False`` when the pipeline is missing or its stored SQL fingerprint is
         another mapping's.
@@ -140,6 +184,6 @@ class TwinScheduledRefresh:
             return False
         if update:
             TwinSlotPipeline.run_update(
-                runner, pipeline_id, full_refresh=False, until_running=False
+                runner, pipeline_id, full_refresh=full_refresh, until_running=False
             )
         return True

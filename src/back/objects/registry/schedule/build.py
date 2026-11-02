@@ -234,8 +234,17 @@ def _refresh_data_relation(
     from back.core.graphdb.delta import materialize
     from back.objects.digitaltwin.build import TwinScheduledRefresh
 
+    tick = mappings or {}
     refreshed = TwinScheduledRefresh.refresh(
-        src, domain, settings, data_table, data_mode, **(mappings or {})
+        src,
+        domain,
+        settings,
+        data_table,
+        data_mode,
+        entity_mappings=tick.get("entity_mappings"),
+        relationship_mappings=tick.get("relationship_mappings"),
+        spec=tick.get("spec"),
+        facts=tick.get("facts"),
     )
     if refreshed:
         return
@@ -315,6 +324,25 @@ def _reconcile_after_tick(
         sorted(name for name, differs in (result.get("pairs") or {}).items() if differs),
     )
     return True
+
+
+def _tick_facts(ctx: TaskContext) -> Dict[str, Any]:
+    """The tick's ``stats.materialization`` (slot refresh plan, reconciliation).
+
+    Attached to the run's stats right away, so a tick that fails half-way
+    still records the full refresh it left pending.
+    """
+    facts: Dict[str, Any] = {}
+    ctx.scratch["stats"]["materialization"] = facts
+    return facts
+
+
+def _close_tick_facts(ctx: TaskContext, facts: Dict[str, Any], store, src, slot_spec) -> None:
+    """Reconcile at the end of the tick (drift recorded), then drop empty facts."""
+    if _reconcile_after_tick(store, src, ctx.domain, ctx.settings, slot_spec, ctx.domain_name):
+        facts["reconcile_drift"] = True
+    if not facts:
+        del ctx.scratch["stats"]["materialization"]
 
 
 def _count_view_triples(src, view_table: str) -> int:
@@ -485,6 +513,7 @@ def run(ctx: TaskContext) -> RunOutcome:
         raise InfrastructureError("Could not initialize graph backend")
 
     slot_spec = _slot_spec(domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name)
+    facts = _tick_facts(ctx)
     triple_count = _write_graph_triples(
         store,
         src,
@@ -499,11 +528,11 @@ def run(ctx: TaskContext) -> RunOutcome:
             "entity_mappings": ent_mappings,
             "relationship_mappings": rel_mappings,
             "spec": slot_spec,
+            "facts": facts,
         },
     )
 
-    if _reconcile_after_tick(store, src, domain, ctx.settings, slot_spec, domain_name):
-        ctx.scratch["stats"]["materialization"] = {"reconcile_drift": True}
+    _close_tick_facts(ctx, facts, store, src, slot_spec)
 
     ctx.progress(95, "Saving domain metadata...")
     _persist_domain_metadata(

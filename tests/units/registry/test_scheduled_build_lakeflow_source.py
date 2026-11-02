@@ -27,6 +27,14 @@ _DATA = "cat.sch.triplestore_dom_V3_data"
 _SYNCED_UC = "cat.ontobricks_graph.triplestore_dom_v3_sync"
 
 
+@pytest.fixture(autouse=True)
+def _no_registry(monkeypatch):
+    """A tick reads no build-run history unless a test scripts one: no registry, ever."""
+    from back.objects.digitaltwin.build import TwinBuildRunHistory
+
+    monkeypatch.setattr(TwinBuildRunHistory, "recent_runs_for", staticmethod(lambda d, s: []))
+
+
 def _domain(mode: str | None = None):
     info = {"name": "dom"}
     if mode:
@@ -603,3 +611,129 @@ class TestSlotSpec:
             )
 
         assert apply_.call_args.kwargs["source_tables"] == ["main.sales.customers"]
+
+
+_CUSTOMERS = "main.sales.customers"
+
+
+def _history_warehouse(log: list, *, mv_sha: str, version=7, history=(), fail_history=False):
+    """The MV warehouse, also answering the sources' ``DESCRIBE HISTORY``."""
+    src = _mv_warehouse(log, mv_sha=mv_sha)
+    base = src.execute_query.side_effect
+
+    def _query(sql):
+        if sql.startswith("DESCRIBE HISTORY") and sql.endswith(" LIMIT 1"):
+            log.append(("query", sql))
+            return [{"version": version}]
+        if sql.startswith("DESCRIBE HISTORY"):
+            log.append(("query", sql))
+            if fail_history:
+                raise RuntimeError("PERMISSION_DENIED")
+            return list(history)
+        return base(sql)
+
+    src.execute_query.side_effect = _query
+    return src
+
+
+class TestScheduledTickPlansTheSlotUpdate:
+    """An incremental tick decides its slot update like a build and records the facts."""
+
+    @staticmethod
+    def _tick(log, monkeypatch, *, runs=(), mode="incremental", facts=None, **warehouse_kw):
+        from back.objects.digitaltwin.build import TwinBuildRunHistory
+
+        monkeypatch.setattr(
+            TwinBuildRunHistory, "recent_runs_for", staticmethod(lambda d, s: list(runs))
+        )
+        mappings = {**_mappings(), "facts": {} if facts is None else facts}
+        stored = _current_sha(mode, mappings)
+        store, _ = _store(log, sync_table_mode="continuous")
+        with patch.object(SourceReadiness, "check", _readiness()):
+            _apply(
+                store,
+                _history_warehouse(log, mv_sha=stored, **warehouse_kw),
+                domain=_domain(mode),
+                source_tables=_SOURCES,
+                mappings=mappings,
+            )
+        return mappings["facts"]
+
+    @staticmethod
+    def _run(**facts) -> dict:
+        return {"status": "success", "stats": {"materialization": facts}}
+
+    def test_a_completed_update_records_the_versions_read_before_it(
+        self, slot_runner, monkeypatch
+    ):
+        log: list = []
+
+        facts = self._tick(log, monkeypatch, version=7)
+
+        assert facts == {
+            "source_versions": {_CUSTOMERS: 7},
+            "source_table_ids": {},
+            "slot_full_refresh_pending": False,
+            "slot_full_refresh_reason": "",
+        }
+        assert slot_runner.log[1] == ("start", "pipe-1", False)
+
+    def test_a_rewritten_source_makes_the_update_a_full_refresh(self, slot_runner, monkeypatch):
+        log: list = []
+        runs = [self._run(source_versions={_CUSTOMERS: 5})]
+
+        facts = self._tick(
+            log, monkeypatch, runs=runs, history=[{"version": 6, "operation": "TRUNCATE"}]
+        )
+
+        assert slot_runner.log[1] == ("start", "pipe-1", True)
+        assert facts["slot_full_refresh_reason"] == "source_overwritten"
+        assert facts["slot_full_refresh_pending"] is False
+
+    def test_an_owed_drift_refreshes_the_slots_and_the_view_in_full(
+        self, slot_runner, monkeypatch
+    ):
+        log: list = []
+
+        self._tick(log, monkeypatch, runs=[self._run(reconcile_drift=True)])
+
+        assert slot_runner.log[1] == ("start", "pipe-1", True)
+        assert f"REFRESH MATERIALIZED VIEW {_DATA} FULL" in _statements(log)
+
+    def test_a_failed_update_leaves_the_refresh_pending(self, slot_runner, monkeypatch):
+        log: list = []
+        slot_runner.fail_on = ("wait",)
+        runs = [self._run(source_versions={_CUSTOMERS: 5})]
+        facts: dict = {}
+
+        with pytest.raises(InfrastructureError):
+            self._tick(
+                log,
+                monkeypatch,
+                runs=runs,
+                facts=facts,
+                history=[{"version": 6, "operation": "TRUNCATE"}],
+            )
+
+        assert facts == {
+            "source_versions": {_CUSTOMERS: 5},
+            "source_table_ids": {},
+            "slot_full_refresh_pending": True,
+            "slot_full_refresh_reason": "source_overwritten",
+        }
+
+    def test_an_unreadable_source_history_rebuilds_by_ctas(self, slot_runner, monkeypatch):
+        log: list = []
+        runs = [self._run(source_versions={_CUSTOMERS: 5})]
+
+        self._tick(log, monkeypatch, runs=runs, fail_history=True)
+
+        assert _ctas(log)
+        assert slot_runner.log == []
+
+    def test_a_microbatch_tick_plans_nothing(self, slot_runner, monkeypatch):
+        log: list = []
+
+        facts = self._tick(log, monkeypatch, mode="microbatch")
+
+        assert facts == {}

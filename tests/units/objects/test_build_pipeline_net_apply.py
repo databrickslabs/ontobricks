@@ -28,6 +28,7 @@ from back.objects.digitaltwin.build import (
     TwinBuildRunHistory,
     TwinMergeFallback,
     TwinNetChangeApply,
+    TwinSlotPipeline,
 )
 from back.objects.registry.RegistryService import RegistryService
 from tests.units.objects import test_build_pipeline_modes as _modes
@@ -50,7 +51,6 @@ _TRACE_KEYS = {
 _FACT_KEYS = {
     "data_table_version",
     "data_table_id",
-    "source_versions",
     "fingerprint",
     "strategy",
     "apply_mode",
@@ -150,7 +150,6 @@ class TestBuildRunStats:
         assert {key: facts[key] for key in _FACT_KEYS} == {
             "data_table_version": None,
             "data_table_id": "",
-            "source_versions": {},
             "fingerprint": "",
             "strategy": "",
             "apply_mode": "",
@@ -332,53 +331,18 @@ class TestPreviousMaterializationStats:
         registry.load_build_runs.assert_not_called()
 
 
-def _drift_pending(registry, runs) -> bool:
-    registry.load_build_runs.return_value = runs
-    pipe = _bare_pipeline()
-    pipe.domain_snap = _snap()
-    return TwinBuildRunHistory.reconcile_drift_pending(pipe)
-
-
-def _tick(*, drift: bool) -> dict:
-    facts = {"reconcile_drift": True} if drift else {}
+def _tick(*, drift: bool = False, **facts) -> dict:
+    """A scheduled tick's run; *facts* are its slot refresh facts."""
+    if drift:
+        facts["reconcile_drift"] = True
     return {"status": "success", "build_kind": "scheduled", "stats": {"materialization": facts}}
 
 
-def _build(mode: str = "incremental", status: str = "success") -> dict:
-    run = _run_record(status=status)
-    run["stats"]["materialization"]["materialization_mode_effective"] = mode
+def _slot_run(**facts) -> dict:
+    """A main build's run that reached the slot step (its slot refresh facts)."""
+    run = _run_record(apply_mode="none")
+    run["stats"]["materialization"].update(facts)
     return run
-
-
-class TestReconcileDriftPending:
-    def test_a_tick_that_found_drift_is_pending(self, registry):
-        assert _drift_pending(registry, [_tick(drift=True), _build()]) is True
-
-    def test_an_incremental_build_since_the_drift_consumed_it(self, registry):
-        assert _drift_pending(registry, [_build(), _tick(drift=True)]) is False
-
-    @pytest.mark.parametrize(
-        "newer",
-        [_build(mode="full"), _build(status="error"), _tick(drift=False)],
-        ids=["full-build", "failed-build", "clean-tick"],
-    )
-    def test_a_run_that_did_not_refresh_the_slots_keeps_it_pending(self, registry, newer):
-        assert _drift_pending(registry, [newer, _tick(drift=True)]) is True
-
-    def test_no_drift_recorded(self, registry):
-        assert _drift_pending(registry, [_tick(drift=False), _build()]) is False
-
-    def test_a_registry_failure_reads_as_none_pending(self, registry):
-        registry.load_build_runs.side_effect = RuntimeError("registry down")
-        pipe = _bare_pipeline()
-        pipe.domain_snap = _snap()
-
-        assert TwinBuildRunHistory.reconcile_drift_pending(pipe) is False
-
-
-# ----------------------------------------------------------------------
-# Net change apply
-# ----------------------------------------------------------------------
 
 
 class _CDFWarehouse(_modes._Warehouse):
@@ -807,20 +771,22 @@ class TestAFailedProbeKeepsThePreviousSchedule:
 
 
 class TestSourceOverwriteDetection:
-    """A source rewritten since the base build forces a full refresh of the slot pipeline."""
+    """A source rewritten since the last completed slot update forces a full refresh."""
 
     _SOURCE = "main.sales.customers"
 
-    def _build(self, registry, *, recorded=None, history=()):
-        if recorded is not None:
-            run = _run_record(apply_mode="none")
-            run["stats"]["materialization"]["source_versions"] = recorded
-            registry.load_build_runs.return_value = [run]
+    def _build(self, registry, *, runs=(), history=(), version=7, table_id="", script_kw=None):
+        registry.load_build_runs.return_value = list(runs)
         pipe = _modes._pipeline("incremental")
-        pipe.source_versions = {}
-        warehouse = _CDFWarehouse([], version=7, source_history=list(history))
+        warehouse = _CDFWarehouse(
+            [], version=version, table_id=table_id, source_history=list(history)
+        )
         log, _, _ = _modes._run(
-            pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current"
+            pipe,
+            warehouse=warehouse,
+            existing="pipe-1",
+            stored="fp-current",
+            **(script_kw or {}),
         )
         starts = [event for event in log if event[0] == "start"]
         return pipe, starts, warehouse
@@ -832,42 +798,63 @@ class TestSourceOverwriteDetection:
     def test_a_rewriting_operation_forces_a_full_refresh(self, registry, operation):
         pipe, starts, _ = self._build(
             registry,
-            recorded={self._SOURCE: 5},
+            runs=[_slot_run(source_versions={self._SOURCE: 5})],
             history=[{"version": 6, "operation": operation}],
         )
 
         assert starts == [("start", "pipe-1", True)]
-        assert pipe.mode_decision == ModeDecision(
-            "incremental", "incremental", "source_overwritten"
-        )
+        assert pipe.slot_refresh_facts["slot_full_refresh_reason"] == "source_overwritten"
+        assert pipe.mode_decision == ModeDecision("incremental", "incremental", "")
 
     def test_an_overwrite_write_forces_a_full_refresh(self, registry):
         history = [
             {"version": 6, "operation": "WRITE", "operationParameters": {"mode": "Overwrite"}}
         ]
 
-        _, starts, _ = self._build(registry, recorded={self._SOURCE: 5}, history=history)
+        _, starts, _ = self._build(
+            registry, runs=[_slot_run(source_versions={self._SOURCE: 5})], history=history
+        )
 
         assert starts == [("start", "pipe-1", True)]
 
     def test_row_changes_keep_the_incremental_update(self, registry):
         pipe, starts, _ = self._build(
             registry,
-            recorded={self._SOURCE: 5},
+            runs=[_slot_run(source_versions={self._SOURCE: 5})],
             history=[{"version": 6, "operation": "MERGE"}, {"version": 7, "operation": "DELETE"}],
         )
 
         assert starts == [("start", "pipe-1", False)]
-        assert pipe.mode_decision.reason == ""
+        assert pipe.slot_refresh_facts["slot_full_refresh_reason"] == ""
 
-    def test_a_rewrite_before_the_recorded_version_is_ignored(self, registry):
+    def test_a_history_that_restarted_is_a_rewrite(self, registry):
+        """``DROP`` + ``CREATE``: the newest version is below the recorded one."""
         _, starts, _ = self._build(
-            registry,
-            recorded={self._SOURCE: 5},
-            history=[{"version": 4, "operation": "CREATE OR REPLACE TABLE AS SELECT"}],
+            registry, runs=[_slot_run(source_versions={self._SOURCE: 12})], version=3
         )
 
-        assert starts == [("start", "pipe-1", False)]
+        assert starts == [("start", "pipe-1", True)]
+
+    def test_another_table_id_is_a_rewrite(self, registry):
+        runs = [
+            _slot_run(
+                source_versions={self._SOURCE: 7}, source_table_ids={self._SOURCE: "id-old"}
+            )
+        ]
+
+        _, starts, _ = self._build(registry, runs=runs, version=7, table_id="id-new")
+
+        assert starts == [("start", "pipe-1", True)]
+
+    def test_a_scheduled_tick_does_not_hide_the_versions(self, registry):
+        """The versions come from the newest run that has them, not from the store base."""
+        runs = [_tick(), _slot_run(source_versions={self._SOURCE: 5})]
+
+        _, starts, _ = self._build(
+            registry, runs=runs, history=[{"version": 6, "operation": "TRUNCATE"}]
+        )
+
+        assert starts == [("start", "pipe-1", True)]
 
     def test_without_recorded_versions_no_history_is_read(self, registry):
         _, starts, warehouse = self._build(registry)
@@ -878,14 +865,55 @@ class TestSourceOverwriteDetection:
             for s in warehouse.calls
         )
 
-    def test_the_build_records_the_source_versions_it_read(self, registry):
-        pipe, _, _ = self._build(registry)
+    def test_the_versions_read_before_the_update_are_recorded(self, registry, monkeypatch):
+        """A commit landing during the update is left for the next build's check."""
+        original = TwinSlotPipeline.run
 
-        assert pipe.source_versions == {self._SOURCE: 7}
+        def run_while_a_commit_lands(pipe, spec, **kwargs):
+            pipe.source_client._version = 8
+            original(pipe, spec, **kwargs)
 
-    def test_the_versions_are_persisted(self, registry):
+        monkeypatch.setattr(TwinSlotPipeline, "run", staticmethod(run_while_a_commit_lands))
+
+        pipe, _, _ = self._build(registry, version=7)
+
+        assert pipe.slot_refresh_facts["source_versions"] == {self._SOURCE: 7}
+        assert pipe.slot_refresh_facts["slot_full_refresh_pending"] is False
+
+    def test_a_failed_update_carries_the_previous_versions_and_keeps_the_refresh_pending(
+        self, registry
+    ):
+        pipe, starts, _ = self._build(
+            registry,
+            runs=[_slot_run(source_versions={self._SOURCE: 5})],
+            history=[{"version": 6, "operation": "TRUNCATE"}],
+            script_kw={"fail_on": "wait"},
+        )
+
+        assert starts == [("start", "pipe-1", True)]
+        assert pipe.mode_decision.reason == "incremental_failed:InfrastructureError"
+        assert pipe.slot_refresh_facts == {
+            "source_versions": {self._SOURCE: 5},
+            "source_table_ids": {},
+            "slot_full_refresh_pending": True,
+            "slot_full_refresh_reason": "source_overwritten",
+        }
+
+    def test_a_pending_full_refresh_is_retried_without_a_new_rewrite(self, registry):
+        runs = [
+            _slot_run(
+                source_versions={self._SOURCE: 5},
+                slot_full_refresh_pending=True,
+                slot_full_refresh_reason="source_overwritten",
+            )
+        ]
+
+        _, starts, _ = self._build(registry, runs=runs, version=5)
+
+        assert starts == [("start", "pipe-1", True)]
+
+    def test_the_facts_are_persisted(self, registry):
         pipe = _modes._pipeline("incremental")
-        pipe.source_versions = {}
         del pipe._record_build_run
 
         _modes._run(
@@ -894,29 +922,61 @@ class TestSourceOverwriteDetection:
 
         facts = registry.record_build_run.call_args[0][1]["stats"]["materialization"]
         assert facts["source_versions"] == {self._SOURCE: 7}
+        assert facts["slot_full_refresh_pending"] is False
+        assert facts["slot_full_refresh_reason"] == ""
+
+    def test_one_registry_read_per_build(self, registry):
+        self._build(registry, runs=[_slot_run(source_versions={self._SOURCE: 5})])
+
+        assert registry.load_build_runs.call_count == 1
 
 
 class TestReconcileDriftForcesAFullRefresh:
-    """A drift found by a scheduled tick makes the next build fully refresh the slot pipeline."""
+    """A drift found by a scheduled tick makes the next build fully refresh slots and view."""
 
-    def _starts(self, registry, runs):
+    def _run(self, registry, runs, *, entities=None):
         registry.load_build_runs.return_value = runs
-        pipe = _modes._pipeline("incremental")
-        pipe.source_versions = {}
-        log, _, _ = _modes._run(
+        pipe = _modes._pipeline("incremental", entities=entities)
+        log, _, warehouse = _modes._run(
             pipe, warehouse=_CDFWarehouse([], version=7), existing="pipe-1", stored="fp-current"
         )
-        return [event for event in log if event[0] == "start"]
+        return pipe, [event for event in log if event[0] == "start"], warehouse
 
-    def test_a_pending_drift_forces_a_full_refresh(self, registry):
-        with patch("back.objects.digitaltwin.build.TwinIncrementalBuild.logger") as logger:
-            starts = self._starts(registry, [_tick(drift=True)])
+    def test_a_pending_drift_forces_a_full_refresh_of_the_slots_and_the_view(self, registry):
+        pipe, starts, warehouse = self._run(registry, [_tick(drift=True)])
 
         assert starts == [("start", "pipe-1", True)]
-        assert any("reconcil" in str(c.args[0]) for c in logger.info.call_args_list)
+        assert f"REFRESH MATERIALIZED VIEW {_DATA} FULL" in warehouse.calls
+        assert pipe.slot_refresh_facts["slot_full_refresh_reason"] == "reconcile_drift"
+        assert pipe.slot_refresh_facts["slot_full_refresh_pending"] is False
 
     def test_a_consumed_drift_keeps_the_incremental_update(self, registry):
-        assert self._starts(registry, [_build(), _tick(drift=True)]) == [("start", "pipe-1", False)]
+        runs = [_slot_run(slot_full_refresh_pending=False), _tick(drift=True)]
+
+        pipe, starts, warehouse = self._run(registry, runs)
+
+        assert starts == [("start", "pipe-1", False)]
+        assert f"REFRESH MATERIALIZED VIEW {_DATA}" in warehouse.calls
+
+    def test_a_merge_build_does_not_consume_the_drift(self, registry):
+        """A MERGE build never ran the slot pipeline: it records no slot facts."""
+        merge = _run_record(apply_mode="none")
+        merge["stats"]["materialization"].update(
+            materialization_mode_effective="incremental", strategy="merge"
+        )
+
+        _, starts, _ = self._run(registry, [merge, _tick(drift=True)])
+
+        assert starts == [("start", "pipe-1", True)]
+
+    def test_a_batch_only_domain_refreshes_its_view_in_full(self, registry):
+        pipe, starts, warehouse = self._run(
+            registry, [_tick(drift=True)], entities={_modes._ORDER: _modes._batch()}
+        )
+
+        assert starts == []
+        assert f"REFRESH MATERIALIZED VIEW {_DATA} FULL" in warehouse.calls
+        assert pipe.slot_refresh_facts["slot_full_refresh_pending"] is False
 
 
 class TestEmptyDataAfterAFallback:
