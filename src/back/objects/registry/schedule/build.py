@@ -133,9 +133,9 @@ def _apply_synced_pipeline(
     *source_tables* exactly like the main build), so the main build's
     registration is reused, not recreated. *source_tables* ``None`` means the
     sources are unknown: nothing is probed and they count as untracked.
-    *mappings* (``entity_mappings``, ``relationship_mappings``, ``base_uri``)
-    let an incremental ``…_data`` view be checked against the current
-    definition before it is refreshed in place. Without a *domain* the
+    *mappings* (``entity_mappings``, ``relationship_mappings`` and the
+    compiled ``spec``) let an incremental ``…_data`` view be checked against
+    the current definition before it is refreshed in place. Without a *domain* the
     ``…_data`` name cannot be resolved and the gateway VIEW stays the source.
     """
     from back.core.graphdb.lakebase.LakebaseFlatStore import (
@@ -254,15 +254,17 @@ def _refresh_data_relation(
     )
 
 
-def _slot_source_tables(
+def _slot_spec(
     domain: Any, settings: Any, ent: Any, rels: Any, base_uri: str, domain_name: str
-) -> Optional[List[str]]:
-    """Source tables of the row-local mappings: what the row-tracking probe reads.
+) -> Any:
+    """The slot pipeline spec of the mappings, compiled once per tick.
 
-    The same list the main build probes (``TwinIncrementalBuild.compile_for``).
-    ``None`` — sources unknown, counted as untracked — without a domain or
-    settings, for a ``full`` domain (nothing to probe), and when the mappings
-    do not compile: a scheduled tick never fails on the probe.
+    Its ``source_tables`` are what the row-tracking probe reads (the same list
+    the main build probes, ``TwinIncrementalBuild.compile_for``), and
+    ``TwinScheduledRefresh`` checks the ``…_data`` view against it. ``None`` —
+    sources unknown, counted as untracked — without a domain or settings, for
+    a ``full`` domain (nothing to probe), and when the mappings do not compile:
+    a scheduled tick never fails on the probe.
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
@@ -282,7 +284,7 @@ def _slot_source_tables(
             exc,
         )
         return None
-    return list(spec.source_tables)
+    return spec
 
 
 def _count_view_triples(src, view_table: str) -> int:
@@ -452,6 +454,7 @@ def run(ctx: TaskContext) -> RunOutcome:
     if not store:
         raise InfrastructureError("Could not initialize graph backend")
 
+    slot_spec = _slot_spec(domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name)
     triple_count = _write_graph_triples(
         store,
         src,
@@ -461,13 +464,11 @@ def run(ctx: TaskContext) -> RunOutcome:
         delta_cfg=getattr(domain, "delta", None) or {},
         domain=domain,
         settings=ctx.settings,
-        source_tables=_slot_source_tables(
-            domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name
-        ),
+        source_tables=list(slot_spec.source_tables) if slot_spec is not None else None,
         mappings={
             "entity_mappings": ent_mappings,
             "relationship_mappings": rel_mappings,
-            "base_uri": base_uri,
+            "spec": slot_spec,
         },
     )
 

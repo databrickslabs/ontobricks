@@ -39,7 +39,7 @@ class TwinScheduledRefresh:
         *,
         entity_mappings: Any = None,
         relationship_mappings: Any = None,
-        base_uri: str = "",
+        spec: Any = None,
     ) -> bool:
         """True when ``…_data`` was refreshed in place; ``False``: build it by CTAS.
 
@@ -47,6 +47,8 @@ class TwinScheduledRefresh:
         ``…_data`` is not a materialized view of ours, when the mappings are
         unknown or no longer give the view's definition (its stored fingerprint)
         or the slot pipeline's SQL, and when the slot pipeline is missing.
+        *spec* is the tick's compiled slot spec of those mappings (``None``:
+        they did not compile).
         Pipeline and warehouse errors raise :class:`InfrastructureError`;
         nothing has been dropped then.
         """
@@ -57,11 +59,9 @@ class TwinScheduledRefresh:
         existing = MaterializedViewBuilder.existing_mv_sha(client, data_fqn)
         if not existing:
             return False
-        spec = TwinScheduledRefresh._current_spec(
-            domain, settings, data_fqn, existing, mode,
-            (entity_mappings, relationship_mappings, base_uri),
-        )
-        if spec is None:
+        if not TwinScheduledRefresh._definition_current(
+            data_fqn, existing, mode, (entity_mappings, relationship_mappings, spec)
+        ):
             return False
         if spec.row_local_map_ids:
             if not TwinScheduledRefresh._slots_current(domain, spec, update=mode == "incremental"):
@@ -74,24 +74,22 @@ class TwinScheduledRefresh:
         return True
 
     @staticmethod
-    def _current_spec(
-        domain: Any, settings: Any, data_fqn: str, existing: str, mode: str, mappings: tuple
-    ) -> Any:
-        """The slot spec of the current mappings when they still give the view's definition.
+    def _definition_current(data_fqn: str, existing: str, mode: str, mappings: tuple) -> bool:
+        """The mappings and their *spec* still give the view's definition fingerprint.
 
-        ``None`` (and an info log saying why) when the mappings are unknown, do
-        not compile, or give another definition fingerprint than *existing*.
+        ``False`` (and an info log saying why) when they are unknown or did not
+        compile, give no view definition, or another fingerprint than *existing*.
         """
         from back.core.graphdb.delta import MaterializedViewBuilder
 
-        entity_mappings, relationship_mappings, base_uri = mappings
-        if entity_mappings is None and relationship_mappings is None:
-            logger.info("Scheduled build: mappings unknown; rebuilding %s by CTAS", data_fqn)
-            return None
-        try:
-            spec = TwinIncrementalBuild.compile_for(
-                domain, settings, entity_mappings, relationship_mappings, base_uri=base_uri
+        entity_mappings, relationship_mappings, spec = mappings
+        if spec is None:
+            logger.info(
+                "Scheduled build: mappings unknown or not compiled; rebuilding %s by CTAS",
+                data_fqn,
             )
+            return False
+        try:
             definition = TwinIncrementalBuild.data_definition_for(
                 spec, entity_mappings, relationship_mappings, mode
             )
@@ -102,7 +100,7 @@ class TwinScheduledRefresh:
                 exc,
                 data_fqn,
             )
-            return None
+            return False
         if MaterializedViewBuilder.data_mv_sha(**definition) != existing:
             logger.info(
                 "Scheduled build: the view definition of %s no longer matches the mappings "
@@ -110,8 +108,8 @@ class TwinScheduledRefresh:
                 "recreates the view",
                 data_fqn,
             )
-            return None
-        return spec
+            return False
+        return True
 
     @staticmethod
     def _slots_current(domain: Any, spec: Any, *, update: bool) -> bool:

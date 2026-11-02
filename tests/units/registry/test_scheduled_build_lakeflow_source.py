@@ -273,7 +273,12 @@ def _mappings(*, batch: bool = True, row_local: bool = True) -> dict:
         entities[_modes._CUSTOMER] = _modes._row_local()
     if batch:
         entities[_modes._ORDER] = _modes._batch()
-    return {"entity_mappings": entities, "relationship_mappings": [], "base_uri": "http://ex.org/"}
+    from back.objects.digitaltwin.build import TwinIncrementalBuild
+
+    spec = TwinIncrementalBuild.compile_for(
+        _domain("incremental"), None, entities, [], base_uri="http://ex.org/"
+    )
+    return {"entity_mappings": entities, "relationship_mappings": [], "spec": spec}
 
 
 def _current_sha(mode: str, mappings: dict) -> str:
@@ -282,10 +287,7 @@ def _current_sha(mode: str, mappings: dict) -> str:
     from back.objects.digitaltwin.build import TwinIncrementalBuild
 
     ent, rels = mappings["entity_mappings"], mappings["relationship_mappings"]
-    spec = TwinIncrementalBuild.compile_for(
-        _domain(mode), None, ent, rels, base_uri=mappings["base_uri"]
-    )
-    definition = TwinIncrementalBuild.data_definition_for(spec, ent, rels, mode)
+    definition = TwinIncrementalBuild.data_definition_for(mappings["spec"], ent, rels, mode)
     return MaterializedViewBuilder.data_mv_sha(**definition)
 
 
@@ -392,6 +394,18 @@ class TestScheduledTickKeepsTheIncrementalView:
 
         call = logger.info.call_args
         assert "definition" in (call.args[0] % call.args[1:])
+
+    def test_the_tick_compiled_spec_is_reused_not_compiled_again(self, slot_runner):
+        from back.objects.digitaltwin.build import TwinIncrementalBuild
+
+        mappings = _mappings()
+        log: list = []
+        with patch.object(
+            TwinIncrementalBuild, "compile_for", side_effect=AssertionError("compiled twice")
+        ):
+            self._tick("incremental", log, mappings=mappings, stored_for=mappings)
+
+        assert f"REFRESH MATERIALIZED VIEW {_DATA}" in _statements(log)
 
     def test_unknown_mappings_rebuild_by_ctas(self, slot_runner):
         log: list = []
@@ -521,8 +535,8 @@ class TestDecideModeFor:
         assert "row_tracking_missing" in call.args[0] % call.args[1:]
 
 
-class TestSlotSourceTables:
-    """What the scheduled tick probes: the source tables of the row-local mappings."""
+class TestSlotSpec:
+    """The tick's one compile: its source tables are what the probe reads."""
 
     _ROW_LOCAL = {
         "table": "main.sales.customers",
@@ -537,7 +551,7 @@ class TestSlotSourceTables:
     }
 
     def test_the_row_local_source_tables_are_compiled_from_the_mappings(self):
-        tables = scheduled_build._slot_source_tables(
+        spec = scheduled_build._slot_spec(
             _domain("incremental"),
             SimpleNamespace(databricks_triplestore_table=""),
             {"http://ex.org/Customer": self._ROW_LOCAL},
@@ -546,11 +560,12 @@ class TestSlotSourceTables:
             "dom",
         )
 
-        assert tables == ["main.sales.customers"]
+        assert spec.source_tables == ["main.sales.customers"]
+        assert len(spec.row_local_map_ids) == 1
 
     def test_a_full_domain_is_not_compiled(self):
         with patch.object(SlotProjectionCompiler, "compile") as compile_:
-            tables = scheduled_build._slot_source_tables(
+            tables = scheduled_build._slot_spec(
                 _domain(None), SimpleNamespace(), {}, [], "http://ex.org/", "dom"
             )
 
@@ -559,7 +574,7 @@ class TestSlotSourceTables:
 
     def test_without_settings_the_sources_are_unknown(self):
         assert (
-            scheduled_build._slot_source_tables(
+            scheduled_build._slot_spec(
                 _domain("incremental"), None, {}, [], "http://ex.org/", "dom"
             )
             is None
@@ -569,7 +584,7 @@ class TestSlotSourceTables:
         with patch.object(
             SlotProjectionCompiler, "compile", side_effect=ValidationError("unsupported mapping")
         ), patch.object(scheduled_build, "logger") as logger:
-            tables = scheduled_build._slot_source_tables(
+            tables = scheduled_build._slot_spec(
                 _domain("incremental"), SimpleNamespace(), {}, [], "http://ex.org/", "dom"
             )
 
