@@ -563,7 +563,7 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them |
 | 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time; cluster sizing, run-as grants and the topic-fed SDP pipeline are live-unverified |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
-| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ◐ | `scripts/measure_freshness.py` + `tests/external/test_freshness_slo.py`, nightly non-blocking step ([Verification](#verification)); not yet run on the integration workspace |
+| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ◐ | measured live (fixtures, serverless): drift 0 after bootstrap and after mutations; `incremental` source→`_data` 82 s; `microbatch` through the view 217–383 s (view trigger cadence) — the ≤ 30 s path needs Lakehouse//RT (gated beta) and `realtime` needs a topic + `_live`; `scripts/measure_freshness.py` + nightly step for the deployed app |
 
 ## Known limitations
 
@@ -680,6 +680,30 @@ scratch schema `ontobricks_int_catalog.itm_spike`, everything dropped afterwards
   falls back as designed (`cdf_unavailable` → full stream) while the MERGE-table feed works.
   `ALTER MATERIALIZED VIEW … SET TBLPROPERTIES` is not supported (properties come from the
   definition).
+
+Live cross-mode equivalence and freshness (2026-11-02, same workspace; a real Lakeflow run of the
+change-feed slot pipeline on two fixture tables, 30 slots / 28 distinct triples; all objects dropped
+afterwards):
+
+- **Equivalence**: after the pipeline bootstrap, and again after a round of `UPDATE`, `DELETE`,
+  `INSERT` on the sources plus an incremental pipeline update and `REFRESH MATERIALIZED VIEW`,
+  the `_data` view equals the full-build translator output exactly — `EXCEPT` is empty both ways,
+  the reconciler reports `drift: false` with identical row counts and `xxhash64` sums (28 → 29
+  triples; the deleted subject gone, the inserted one present). The design's "AUTO CDC fold =
+  translator output" holds on the workspace.
+- **Refresh technique**: the post-mutation refresh planned as `GROUP_AGGREGATE` (incremental), not
+  a recompute.
+- **Triggered (`incremental`) freshness**: slot pipeline bootstrap 65 s; incremental pipeline
+  update 59 s; source commit → change visible in `_data` **82 s** (update + refresh, serverless).
+- **Continuous (`microbatch`) freshness through the view**: with the pipeline continuous and the
+  `_data` view on `TRIGGER ON UPDATE`, three source updates became visible after **383 s, 217 s and
+  361 s** (the slot was in `_slots` long before — the view's trigger runs at a cadence of minutes;
+  two further samples were lost when the warehouse session dropped). This is the materialized-view
+  path; the design's ≤ 30 s target is the Lakehouse//RT path over `_slots` / `_graph`, which this
+  workspace cannot offer (gated beta). Treat "seconds" as the pipeline's and "minutes" as the view's.
+- **Found and fixed**: switching the pipeline to continuous starts an update by itself, so the
+  explicit `start_update` of the microbatch bootstrap was refused (`An active update … already
+  exists`) — the runner now adopts that update.
 
 Live-unverified (workspace spike checklist):
 

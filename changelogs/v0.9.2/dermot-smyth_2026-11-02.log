@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the live verification fixes): 11376 passed, 341 skipped, 9 deselected
+Final test result (after the live equivalence round): 11378 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -2403,3 +2403,46 @@ Modified files:
 
 Test result: full suite 11376 passed, 341 skipped, 9 deselected; architecture suite green;
 `baseline.json` unchanged; tests/external/test_mv_incremental_plan.py 1 passed live.
+
+================================================================================
+## Live cross-mode equivalence and freshness measurement (fevm-ontobricks-int)
+================================================================================
+
+Context: the design's verification strategy asks for cross-mode equivalence and
+freshness numbers on a workspace. A real Lakeflow run of the change-feed slot
+pipeline on two fixture tables (scratch schema, dropped afterwards) provided
+them; one production defect surfaced and is fixed here.
+
+Changes:
+
+1. src/back/core/streaming/SlotPipelineRunner.py
+   `start_update` adopts the update a pipeline starts by itself when switched
+   to continuous (the API refuses a second one with "An active update …
+   already exists"); a requested full refresh still raises. Without this the
+   microbatch bootstrap fell back to the full path on every build.
+2. tests/units/streaming/test_slot_pipeline_runner.py — adoption and
+   full-refresh refusal pinned.
+3. docs/incremental-materialization.md — measurements recorded; KPI
+   traceability row carries the numbers.
+
+Measured (2026-11-02):
+- Equivalence: `_data` (MV over `_slots`) == full-build translator output,
+  EXCEPT empty both ways, reconciler drift false, identical hashes — after the
+  bootstrap (28 triples) and after UPDATE/DELETE/INSERT + incremental update
+  (29 triples). Post-mutation refresh technique: GROUP_AGGREGATE.
+- incremental: bootstrap 65 s; incremental pipeline update 59 s; source commit →
+  `_data` visible 82 s.
+- microbatch through the view (continuous pipeline + TRIGGER ON UPDATE): 383 s,
+  217 s, 361 s for three source updates (the slot landed in `_slots` first; the
+  view's trigger cadence is minutes). The ≤ 30 s target is the Lakehouse//RT
+  path over `_slots`/`_graph`, not available on this workspace; `realtime`
+  needs a topic and `_live` (no broker there).
+
+Modified files:
+- src/back/core/streaming/SlotPipelineRunner.py
+- tests/units/streaming/test_slot_pipeline_runner.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: full suite 11378 passed, 341 skipped, 9 deselected; architecture suite green;
+`baseline.json` unchanged.
