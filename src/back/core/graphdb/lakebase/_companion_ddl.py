@@ -82,6 +82,11 @@ def view_phy(name: str) -> str:
     return _safe(name)
 
 
+def live_phy(name: str) -> str:
+    """Postgres table name of a ``realtime`` domain's ``_live`` serving table."""
+    return f"{_safe(name)}_live"
+
+
 def _idx_name(table: str, suffix: str) -> str:
     base = f"g_{table}_{suffix}".lower()
     return base[:63]
@@ -372,6 +377,96 @@ def build_union_view_sql_for_slots(view: str, synced: str, companion: str) -> st
     )
 
 
+# -- realtime ``_live`` serving table ---------------------------------------
+
+#: The stream job's sink: one row per slot ``(map_id, source_key, predicate)``;
+#: a delete keeps a tombstone (``deleted``) so a late event cannot win, and the
+#: newest ``seq`` per slot wins at the sink (``INSERT … ON CONFLICT … WHERE``).
+_LIVE_TABLE_COLUMNS = (
+    "map_id TEXT NOT NULL, source_key TEXT NOT NULL, predicate TEXT NOT NULL, "
+    "subject TEXT, object TEXT, object_hash TEXT, "
+    "deleted BOOLEAN NOT NULL DEFAULT FALSE, seq BIGINT NOT NULL, "
+    "updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
+    "PRIMARY KEY (map_id, source_key, predicate)"
+)
+
+#: Partial indexes over the live (not deleted) rows the union view reads.
+_LIVE_TABLE_INDEXES: tuple[tuple[str, str], ...] = (
+    ("ls", "subject"),
+    ("lps", "predicate, subject"),
+    ("loh", "object_hash"),
+)
+
+#: A tombstone-heavy upsert table: vacuum and analyse it early.
+_LIVE_AUTOVACUUM = "autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.01"
+
+#: The live rows the union view serves (blank objects dropped like ``…_data``).
+_LIVE_ROWS = "WHERE NOT deleted AND object IS NOT NULL AND TRIM(object) <> ''"
+
+
+def live_table_ddl(table: str) -> list[str]:
+    """``CREATE TABLE`` / partial indexes / autovacuum settings of the ``_live`` *table*."""
+    bare = _table_bare_name(table)
+    return [
+        f"CREATE TABLE IF NOT EXISTS {table} ({_LIVE_TABLE_COLUMNS})",
+        *(
+            f"CREATE INDEX IF NOT EXISTS {_idx_name(bare, sfx)} ON {table} ({cols}) "
+            "WHERE NOT deleted"
+            for sfx, cols in _LIVE_TABLE_INDEXES
+        ),
+        f"ALTER TABLE {table} SET ({_LIVE_AUTOVACUUM})",
+    ]
+
+
+def purge_live_tombstones_sql(table: str, older_than_hours: int) -> str:
+    """``DELETE`` the tombstones of *table* older than *older_than_hours* (a whole number ≥ 0).
+
+    Keep them at least as long as an event can arrive late: a purged tombstone
+    no longer guards its slot against an older ``seq``.
+    """
+    if isinstance(older_than_hours, bool) or not isinstance(older_than_hours, int):
+        raise InfrastructureError(f"older_than_hours must be an integer, got {older_than_hours!r}")
+    if older_than_hours < 0:
+        raise InfrastructureError("older_than_hours must not be negative")
+    return (
+        f"DELETE FROM {table} WHERE deleted "
+        f"AND updated_at < now() - interval '{older_than_hours} hours'"
+    )
+
+
+def count_live_rows_sql(table: str) -> str:
+    """``count(*)`` of the slots *table* serves (not deleted, non-blank object)."""
+    return f"SELECT count(*) AS cnt FROM {table} {_LIVE_ROWS}"
+
+
+def build_union_view_sql_with_live(
+    view: str, synced: str, companion: str, live: str, *, source_kind: str = SOURCE_KIND_TRIPLES
+) -> str:
+    """Union view of a ``realtime`` domain: the synced table, the companion and ``_live``.
+
+    The companion holds both app writes and inferred triples, so the three
+    relations are the synced, app, inferred and live sides. ``UNION``
+    (distinct) rather than ``UNION ALL``: the stream's ``_live`` rows repeat
+    triples the synced table already carries until its next sync. A slot
+    deleted by the stream stays visible through the synced table until that
+    table syncs the delete.
+    """
+    base = (
+        build_union_view_sql_for_slots if source_kind == SOURCE_KIND_SLOTS else build_union_view_sql
+    )(view, synced, companion)
+    return (
+        base.replace(" UNION ALL ", " UNION ")
+        + " UNION SELECT subject, predicate, object, NULL::TEXT AS datatype, NULL::TEXT AS lang "
+        + f"FROM {live} {_LIVE_ROWS}"
+    )
+
+
+def _live_ref(view: str) -> str:
+    """The ``_live`` table next to *view* (same schema qualification)."""
+    head, sep, leaf = view.rpartition(".")
+    return f"{head}{sep}{leaf.strip(chr(34))}_live"
+
+
 def ensure_union_view(
     cur: Any,
     view: str,
@@ -384,6 +479,8 @@ def ensure_union_view(
 
     *source_kind* picks :func:`build_union_view_sql_for_slots` for a
     ``…_slots``-sourced synced table and :func:`build_union_view_sql` otherwise.
+    When the view's ``_live`` table exists (a ``realtime`` domain), the view
+    also unions its live rows (:func:`build_union_view_sql_with_live`).
 
     If ``view`` already exists as a TABLE (e.g. from an old app-managed build
     before the managed_synced migration), it is dropped first — Postgres's
@@ -408,6 +505,12 @@ def ensure_union_view(
         "  END IF; "
         "END $$"
     )
+    live = _live_ref(view)
+    if _table_exists(cur, _table_bare_name(live)):
+        cur.execute(
+            build_union_view_sql_with_live(view, synced, companion, live, source_kind=source_kind)
+        )
+        return
     build = (
         build_union_view_sql_for_slots if source_kind == SOURCE_KIND_SLOTS else build_union_view_sql
     )

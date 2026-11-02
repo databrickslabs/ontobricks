@@ -67,6 +67,7 @@ class TestSlotsUnionViewSQL:
 class TestEnsureUnionView:
     def test_a_slots_source_creates_the_slots_view(self):
         cur = MagicMock()
+        cur.fetchone.return_value = None  # no _live table
 
         ensure_union_view(cur, "g_v1", "g_v1_sync", "g_v1__app", source_kind=SOURCE_KIND_SLOTS)
 
@@ -76,6 +77,7 @@ class TestEnsureUnionView:
 
     def test_the_default_source_creates_the_triples_view(self):
         cur = MagicMock()
+        cur.fetchone.return_value = None  # no _live table
 
         ensure_union_view(cur, "g_v1", "g_v1_sync", "g_v1__app")
 

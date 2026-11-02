@@ -195,6 +195,12 @@ class LakebaseBase(GraphDBBackend):
         with self._cursor() as cur:
             _companion_ddl.drop_view(cur, self.physical_table_id(name))
 
+    def live_table(self) -> Any:
+        """The ``_live`` serving table of a ``realtime`` domain (:class:`LakebaseLiveTable`)."""
+        from back.core.graphdb.lakebase.LakebaseLiveTable import LakebaseLiveTable
+
+        return LakebaseLiveTable(self._cursor, schema=self._schema, auth=self._auth)
+
     # -- Capability / connection --------------------------------------------
 
     @property
