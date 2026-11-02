@@ -54,20 +54,32 @@ class DeltaMergeMaterializer:
         """``MERGE`` the deduplicated VIEW triples into *data_fqn*; delete what left the VIEW.
 
         Objects match null-safely (``<=>``). With *with_object_hash* new rows
-        also get ``sha2(object, 256)``, the hash the MV and the wrapped VIEW use.
+        also get ``sha2(object, 256)``, the hash the MV and the wrapped VIEW use,
+        and a matched row whose ``object_hash`` is ``NULL`` gets it too: rows
+        merged before the column was added (a domain that became
+        Lakeflow-synced) would otherwise keep a ``NULL`` in the synced table's
+        primary key. In the same statement as the merge, so a failed backfill
+        is retried by the next build; once filled no row matches.
         """
         validate_table_name(view_fqn)
         validate_table_name(data_fqn)
         columns, values = "subject, predicate, object", "s.subject, s.predicate, s.object"
+        backfill = ""
         if with_object_hash:
+            object_hash = SQLHelpers.object_hash_sql("s.object")
             columns += ", object_hash"
-            values += f", {SQLHelpers.object_hash_sql('s.object')}"
+            values += f", {object_hash}"
+            backfill = (
+                "WHEN MATCHED AND t.object_hash IS NULL "
+                f"THEN UPDATE SET object_hash = {object_hash}\n"
+            )
         return (
             f"MERGE INTO {data_fqn} t\n"
             f"USING (SELECT subject, predicate, object FROM {view_fqn} "
             "GROUP BY subject, predicate, object) s\n"
             "  ON t.subject = s.subject AND t.predicate = s.predicate "
             "AND t.object <=> s.object\n"
+            f"{backfill}"
             f"WHEN NOT MATCHED THEN INSERT ({columns}) VALUES ({values})\n"
             "WHEN NOT MATCHED BY SOURCE THEN DELETE"
         )
@@ -105,7 +117,8 @@ class DeltaMergeMaterializer:
         properties on when ``SHOW TBLPROPERTIES`` lacks one (a table left by a
         CTAS has none; an unreadable answer counts as lacking), add the
         ``object_hash`` column when *with_object_hash* finds a table without
-        it (a domain that became Lakeflow-synced), and ``MERGE``. A table that
+        it (a domain that became Lakeflow-synced; the ``MERGE`` fills it on
+        the existing rows), and ``MERGE``. A table that
         already has everything gets no metadata commit. Driver errors become
         :class:`InfrastructureError`.
         """

@@ -51,13 +51,22 @@ class TestMergeSql:
             "WHEN NOT MATCHED BY SOURCE THEN DELETE"
         )
 
-    def test_a_lakeflow_source_also_inserts_the_object_hash(self):
-        sql = DeltaMergeMaterializer.merge_sql(VIEW, DATA, with_object_hash=True)
-
-        assert (
+    def test_a_lakeflow_source_hashes_new_rows_and_backfills_old_ones(self):
+        assert DeltaMergeMaterializer.merge_sql(VIEW, DATA, with_object_hash=True) == (
+            f"MERGE INTO {DATA} t\n"
+            f"USING (SELECT subject, predicate, object FROM {VIEW} "
+            "GROUP BY subject, predicate, object) s\n"
+            "  ON t.subject = s.subject AND t.predicate = s.predicate "
+            "AND t.object <=> s.object\n"
+            "WHEN MATCHED AND t.object_hash IS NULL "
+            "THEN UPDATE SET object_hash = sha2(s.object, 256)\n"
             "WHEN NOT MATCHED THEN INSERT (subject, predicate, object, object_hash) "
-            "VALUES (s.subject, s.predicate, s.object, sha2(s.object, 256))"
-        ) in sql
+            "VALUES (s.subject, s.predicate, s.object, sha2(s.object, 256))\n"
+            "WHEN NOT MATCHED BY SOURCE THEN DELETE"
+        )
+
+    def test_without_the_hash_matched_rows_are_left_alone(self):
+        assert "WHEN MATCHED" not in DeltaMergeMaterializer.merge_sql(VIEW, DATA)
 
     @pytest.mark.parametrize(("view", "data"), [("", DATA), (VIEW, "")])
     def test_names_are_required(self, view, data):
@@ -236,6 +245,18 @@ class TestApplyTouchesOnlyWhatIsMissing:
         assert client.statements.index(add) < next(
             i for i, s in enumerate(client.statements) if s.startswith("MERGE INTO")
         )
+
+    def test_the_rows_of_an_added_object_hash_column_are_backfilled_by_the_merge(self):
+        client = DescribingClient()
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA, with_object_hash=True)
+
+        ensure = DeltaMergeMaterializer.ensure_table_sql(DATA, with_object_hash=True)
+        add = f"ALTER TABLE {DATA} ADD COLUMNS (object_hash STRING)"
+        merge = DeltaMergeMaterializer.merge_sql(VIEW, DATA, with_object_hash=True)
+        assert [s for s in client.statements if not s.startswith("DROP")] == [ensure, add, merge]
+        assert client.queries == [f"SHOW TBLPROPERTIES {DATA}", f"SHOW COLUMNS IN {DATA}"]
+        assert "WHEN MATCHED AND t.object_hash IS NULL" in merge
 
     def test_an_existing_object_hash_column_is_kept(self):
         client = DescribingClient(columns=("subject", "predicate", "object", "object_hash"))

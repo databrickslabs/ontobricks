@@ -298,7 +298,10 @@ Behaviour in this release:
   (every runner message mentions the pipeline); `microbatch` falls back to CTAS.
   The MERGE skip only fires for all-row-local domains. A MERGE build sets the table
   properties only when `SHOW TBLPROPERTIES` lacks one, and adds `object_hash` to an
-  existing MERGE table that lacks it (a domain that became Lakeflow-synced).
+  existing MERGE table that lacks it (a domain that became Lakeflow-synced); the
+  same MERGE fills `object_hash` on the rows merged before
+  (`WHEN MATCHED AND t.object_hash IS NULL THEN UPDATE SET object_hash = sha2(s.object, 256)`),
+  so the synced table's key is never `NULL`.
 - With no new `_data` version the net apply still purges inferences, optimizes
   and rebuilds the graph cache; the Lakebase graph cache is rebuilt once inside
   the purge.
