@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the Lakehouse//RT fast-path rounds): 11441 passed, 341 skipped, 9 deselected
+Final test result (after the design-doc gap round and the live Lakehouse//RT verification): 11503 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -3104,3 +3104,29 @@ Test result: `uv run --frozen pytest -q -m "not scenario" --deselect tests/units
 -> 11503 passed, 341 skipped, 9 deselected in 74.41s; architecture suite green;
 baseline.json unchanged (SlotUpdateMetrics 79 LOC, SlotPipelineRunner 393,
 TwinIncrementalReadiness 239, TwinIncrementalStatus 235).
+
+================================================================================
+## Close-out: gap-round re-review nits, roll-up
+================================================================================
+
+Context: the re-review of the design-doc gap fix approved it and left two P3
+notes, applied here; the roll-up test line is updated to the final suite run.
+
+Changes:
+
+1. src/back/core/streaming/SlotUpdateMetrics.py — a count given as a string is
+   accepted only when it is ASCII digits (`"²".isdigit()` is true and `int()`
+   would raise; the runner turned that into a logged `None`).
+2. tests/units/objects/test_build_pipeline_modes.py — the fake runner returns a
+   distinct id per `start_update`, and the microbatch bootstrap test pins that
+   the recorded `slot_update_id` and the metrics read are the first update's,
+   not the continuous switch's.
+3. changelogs/v0.9.2/dermot-smyth_2026-11-02.log — roll-up test line.
+
+Modified files:
+- src/back/core/streaming/SlotUpdateMetrics.py
+- tests/units/objects/test_build_pipeline_modes.py
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: see the roll-up line ("Incremental triple materialization —
+roll-up" section) for the full-suite number after these edits.

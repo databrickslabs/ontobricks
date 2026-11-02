@@ -61,7 +61,9 @@ class SlotUpdateMetrics:
             return None
         if isinstance(value, int):
             return value
-        return int(value) if isinstance(value, str) and value.isdigit() else None
+        if isinstance(value, str) and value.isascii() and value.isdigit():
+            return int(value)
+        return None
 
     @staticmethod
     def _update_events(w: Any, pipeline_id: str, update_id: str) -> list | None:

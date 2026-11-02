@@ -208,8 +208,11 @@ class _FakeRunner(SlotPipelineRunner):
         self._step("stop", pipeline_id)
 
     def start_update(self, pipeline_id, *, full_refresh=False):
+        # Distinct ids per start, so a test can tell the first update (the one
+        # the build records) from the continuous switch that follows it.
         self._step("start", pipeline_id, full_refresh)
-        return "upd-1"
+        self.starts = getattr(self, "starts", 0) + 1
+        return f"upd-{self.starts}"
 
     def wait_for_update(self, pipeline_id, update_id, **kwargs):
         self._step("wait", update_id, kwargs)
@@ -1071,7 +1074,9 @@ class TestSlotsChanged:
         _, script, _ = _run(pipe)
 
         assert pipe.slots_changed["full_refresh"] is True
-        assert len(script.metrics_reads) == 1
+        # two starts (full refresh, then the continuous switch); only the first is recorded
+        assert pipe.slot_update_id == "upd-1"
+        assert script.metrics_reads == [("pipe-1", "upd-1")]
 
     def test_an_adopted_continuous_update_records_its_metrics(self):
         pipe = _pipeline("microbatch")
