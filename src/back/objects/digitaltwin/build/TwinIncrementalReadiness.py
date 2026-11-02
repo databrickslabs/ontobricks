@@ -79,17 +79,22 @@ class TwinIncrementalReadiness:
 
     @staticmethod
     def realtime_facts(domain: Any, settings: Any) -> dict:
-        """``enabled`` (the setting), ``source_configured``, ``kind`` and ``topic`` of the domain.
+        """``enabled`` (the setting), ``backend_eligible`` (Lakebase only), ``source_configured``,
+        ``kind``, ``experimental`` (the kind) and ``topic`` of the domain.
 
         No secret is read: the config holds the secret's scope and key names only.
         """
         from back.core.graphdb import RealtimeSource
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.RealtimeSource import EXPERIMENTAL_SOURCE_KINDS
 
         config = RealtimeSource.of(domain)
         return {
             "enabled": getattr(settings, "realtime_enabled", False) is True,
+            "backend_eligible": GraphDBFactory._resolve_graph_backend(domain) == "lakebase",
             "source_configured": RealtimeSource.is_complete(config),
             "kind": config.get("kind", ""),
+            "experimental": config.get("kind", "") in EXPERIMENTAL_SOURCE_KINDS,
             "topic": config.get("topic", ""),
         }
 

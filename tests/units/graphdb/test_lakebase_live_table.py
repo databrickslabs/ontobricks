@@ -8,8 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from back.core.errors import InfrastructureError
+from back.core.errors import ValidationError
 from back.core.graphdb.lakebase import LakebaseLiveTable, _companion_ddl
+from back.core.streaming.SlotChange import SlotChange
 
 pytestmark = pytest.mark.unit
 
@@ -52,7 +53,7 @@ class TestLiveTableDDL:
 
     @pytest.mark.parametrize("hours", [-1, 1.5, "24", True])
     def test_the_purge_age_must_be_a_whole_number(self, hours):
-        with pytest.raises(InfrastructureError):
+        with pytest.raises(ValidationError):
             _companion_ddl.purge_live_tombstones_sql("g_v1_live", hours)
 
 
@@ -77,21 +78,22 @@ class TestUnionViewWithLive:
 
         assert "SELECT DISTINCT subject, predicate, object" in sql and "FROM g_v1_live" in sql
 
-    def _ensure(self, *, live_exists: bool, view="g_v1") -> list[str]:
+    def _ensure(self, *, comment, view="g_v1") -> list[str]:
         cur = MagicMock()
-        cur.fetchone.return_value = (1,) if live_exists else None
+        cur.fetchone.return_value = None if comment is False else {"comment": comment}
         _companion_ddl.ensure_union_view(cur, view, "g_v1_sync", "g_v1__app")
         return [str(c.args[0]) for c in cur.execute.call_args_list]
 
-    def test_an_existing_live_table_joins_the_view(self):
-        statements = self._ensure(live_exists=True)
+    def test_a_served_live_table_joins_the_view(self):
+        statements = self._ensure(comment=_companion_ddl.LIVE_SERVING_COMMENT)
 
         assert statements[-1] == _companion_ddl.build_union_view_sql_with_live(
             "g_v1", "g_v1_sync", "g_v1__app", "g_v1_live"
         )
 
-    def test_without_a_live_table_the_view_is_unchanged(self):
-        statements = self._ensure(live_exists=False)
+    @pytest.mark.parametrize("comment", [False, None, "something else"], ids=["absent", "retired", "other"])
+    def test_an_absent_or_retired_live_table_stays_out_of_the_view(self, comment):
+        statements = self._ensure(comment=comment)
 
         assert statements[-1] == _companion_ddl.build_union_view_sql("g_v1", "g_v1_sync", "g_v1__app")
 
@@ -108,11 +110,16 @@ class TestUnionViewWithLive:
 class _Cursor:
     def __init__(self, *, rowcount=0, row=None):
         self.statements: list[str] = []
+        self.batches: list[list] = []
         self.rowcount = rowcount
         self._row = row
 
     def execute(self, sql, params=None):
         self.statements.append(sql)
+
+    def executemany(self, sql, rows):
+        self.statements.append(sql)
+        self.batches.append(list(rows))
 
     def fetchone(self):
         return self._row
@@ -133,6 +140,57 @@ class TestLakebaseLiveTable:
 
         assert _live(cur).ensure("Sales_V3") == "sales_v3_live"
         assert cur.statements == _companion_ddl.live_table_ddl("sales_v3_live")
+
+    def test_ensure_grants_the_stream_role_what_the_sink_needs(self):
+        cur = _Cursor()
+
+        _live(cur).ensure("Sales_V3", writer_role="ontobricks_rtm")
+
+        assert cur.statements[-2:] == [
+            'GRANT USAGE ON SCHEMA "ontobricks_graph" TO "ontobricks_rtm"',
+            'GRANT SELECT, INSERT, UPDATE ON sales_v3_live TO "ontobricks_rtm"',
+        ]
+
+    def test_an_unsafe_role_name_is_refused(self):
+        with pytest.raises(ValidationError):
+            _live(_Cursor()).ensure("Sales_V3", writer_role='x"; DROP TABLE y; --')
+
+    def test_attach_empties_seeds_the_snapshot_and_serves(self):
+        cur = _Cursor()
+        snapshot = [
+            {"map_id": "m", "source_key": "1", "predicate": "p", "subject": "s1", "object": "a"},
+            {"map_id": "m", "source_key": "2", "predicate": "p", "subject": "s2", "object": "  "},
+            {"map_id": "m", "source_key": "3", "predicate": "p", "subject": None, "object": "b"},
+        ]
+
+        assert _live(cur).attach("Sales_V3", snapshot) == 1
+
+        assert cur.statements[0] == "TRUNCATE TABLE sales_v3_live"
+        assert cur.statements[1] == _companion_ddl.seed_live_sql("sales_v3_live")
+        [[row]] = cur.batches
+        assert row == ("m", "1", "p", "s1", "a", SlotChange.hash_object("a"), -1)
+        assert cur.statements[-1] == "COMMENT ON TABLE sales_v3_live IS 'ontobricks:live:serving'"
+
+    def test_detach_empties_and_stops_serving(self):
+        cur = _Cursor(row=(1,))
+
+        _live(cur).detach("Sales_V3")
+
+        assert cur.statements[-2:] == [
+            "TRUNCATE TABLE sales_v3_live",
+            "COMMENT ON TABLE sales_v3_live IS NULL",
+        ]
+
+    def test_detach_without_a_table_does_nothing(self):
+        cur = _Cursor(row=None)
+
+        _live(cur).detach("Sales_V3")
+
+        assert not any(s.startswith(("TRUNCATE", "COMMENT")) for s in cur.statements)
+
+    def test_serving_reads_the_table_comment(self):
+        assert _live(_Cursor(row={"comment": "ontobricks:live:serving"})).serving("Sales_V3") is True
+        assert _live(_Cursor(row={"comment": None})).serving("Sales_V3") is False
 
     def test_the_purge_reports_the_deleted_rows(self):
         cur = _Cursor(rowcount=7)

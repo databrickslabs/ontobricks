@@ -286,7 +286,9 @@ function renderMaterializationReadiness(report) {
         const showRealtime = report.mode_requested === 'realtime';
         realtimeLine.textContent = showRealtime
             ? `Real-time: ${rt.enabled ? 'enabled' : 'disabled on this deployment (ONTOBRICKS_REALTIME_ENABLED)'}`
+              + (rt.backend_eligible ? '' : ' · needs the Lakebase backend')
               + ` · topic ${rt.source_configured ? `${rt.kind} ${rt.topic}` : 'not configured'}`
+              + (rt.experimental ? ' (experimental source)' : '')
             : '';
         realtimeLine.classList.toggle('d-none', !showRealtime);
     }

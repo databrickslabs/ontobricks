@@ -592,6 +592,7 @@ class TestExportImport:
             "secret_scope": "sc",
             "secret_key": "k",
             "key_format": "json",
+            "state_ttl_hours": 72,
         }
         domain_session.info["name"] = "RoundTrip"
         domain_session.info["realtime_source"] = dict(source)

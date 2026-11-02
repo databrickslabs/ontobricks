@@ -1,224 +1,168 @@
-"""Start, stop and report the realtime stream job of a published domain version."""
+"""Start, stop and report the realtime stream of a published domain version."""
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from typing import Any
 
-from back.core.errors import InfrastructureError, NotFoundError, OntoBricksError, ValidationError
+from back.core.errors import OntoBricksError, ValidationError
 from back.core.logging import get_logger
+from back.objects.digitaltwin.build.TwinLiveServing import TwinLiveServing
+from back.objects.digitaltwin.build.TwinRealtimeJob import TwinRealtimeJob
 
 logger = get_logger(__name__)
 
-#: Run life-cycle states in which a stream is (about to be) running.
-_ACTIVE_STATES = ("PENDING", "QUEUED", "BLOCKED", "RUNNING", "TERMINATING", "WAITING_FOR_RETRY")
-
 
 class TwinRealtimeStream:
-    """The ``realtime`` mode's stream job (``resources/triple_rtm.job.yml``) for one domain version.
+    """The ``realtime`` mode's stream for one domain version: its job run and its ``_live``.
 
-    :meth:`start` checks the prerequisites (the deployment setting, a
-    published version, a complete ``realtime_source``, a Lakebase store, the
-    sink credentials and checkpoint root), creates the ``_live`` table,
-    uploads the mappings the job projects with, resolves the job by name and
-    ``run_now``\\ s it with ``job_parameters``. A run is found again by its
-    ``domain`` / ``version`` parameters among the job's active runs, so a
-    second start reuses it and :meth:`stop` / :meth:`status` need no stored
-    state. The build records the run in its trace (``realtime_run_id``,
-    ``realtime_state``). Every call goes through *client_factory* (a
-    ``WorkspaceClient`` by default).
+    :meth:`start` checks the prerequisites, cancels a run of the same domain
+    at another version (one stream per domain; the job allows one run at a
+    time), creates ``_live``, seeds it from ``…_slots`` and serves it (the
+    union view reads it from then on), uploads the mappings and starts the job
+    (:class:`TwinRealtimeJob`). :meth:`stop` cancels the run and retires
+    ``_live`` (emptied, no longer served), so a stopped stream never leaves a
+    frozen ``_live`` in the view. The build and the scheduled tick call
+    :meth:`after_build` / :meth:`after_tick`.
     """
 
     def __init__(self, settings: Any, *, client_factory: Callable[[], Any] | None = None) -> None:
         self._settings = settings
-        self._client_factory = client_factory or self._default_factory
-        self._client: Any = None
-        self._job_id: int | None = None
-
-    @staticmethod
-    def _default_factory() -> Any:
-        from databricks.sdk import WorkspaceClient
-
-        return WorkspaceClient()
-
-    def _call(self, what: str, call: Callable[[Any], Any]) -> Any:
-        try:
-            if self._client is None:
-                self._client = self._client_factory()
-            return call(self._client)
-        except OntoBricksError:
-            raise
-        except Exception as exc:  # noqa: BLE001 — translated, not swallowed
-            raise InfrastructureError(f"Could not {what}", detail=str(exc)) from exc
-
-    # ------------------------------------------------------------------
-    # Job and runs
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def job_name(settings: Any) -> str:
-        """``ONTOBRICKS_REALTIME_JOB_NAME``, else ``<app>-triple-rtm`` (``""`` without an app name)."""
-        explicit = (getattr(settings, "realtime_job_name", "") or "").strip()
-        if explicit:
-            return explicit
-        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
-        return f"{app_name}-triple-rtm" if app_name else ""
-
-    def resolve_job_id(self) -> int:
-        """The deployed job's id: an exact name, else a ``[dev <user>] `` prefixed one."""
-        if self._job_id is not None:
-            return self._job_id
-        name = self.job_name(self._settings)
-        if not name:
-            raise NotFoundError(
-                "No realtime stream job name is configured (ONTOBRICKS_REALTIME_JOB_NAME)"
-            )
-        jobs = self._call("list the Databricks jobs", lambda w: list(w.jobs.list()))
-        names = [(getattr(getattr(j, "settings", None), "name", "") or "", j) for j in jobs]
-        match = [j for n, j in names if n == name] or [
-            j for n, j in names if n.endswith(f"] {name}")
-        ]
-        if not match:
-            raise NotFoundError(
-                f"Databricks job {name!r} was not found: deploy the bundle (make deploy) and "
-                "grant the app CAN_MANAGE_RUN on it (make bootstrap-perms)"
-            )
-        self._job_id = int(match[0].job_id)
-        return self._job_id
-
-    def active_run(self, domain: Any) -> Any:
-        """The job's active run streaming *domain*'s version, or ``None``."""
-        name, version = self._domain_key(domain)
-        job_id = self.resolve_job_id()
-        runs = self._call(
-            "list the stream job runs",
-            lambda w: list(w.jobs.list_runs(job_id=job_id, active_only=True)),
-        )
-        for run in runs:
-            params = {
-                getattr(p, "name", ""): getattr(p, "value", "")
-                for p in (getattr(run, "job_parameters", None) or [])
-            }
-            if params.get("domain") == name and params.get("version") == version:
-                return run
-        return None
-
-    @staticmethod
-    def run_state(run: Any) -> str:
-        """The life-cycle state of *run* (``RUNNING``, ``PENDING``, …)."""
-        state = getattr(run, "state", None)
-        value = getattr(state, "life_cycle_state", "") or ""
-        return str(getattr(value, "value", value) or "UNKNOWN")
+        self._job = TwinRealtimeJob(settings, client_factory=client_factory)
 
     # ------------------------------------------------------------------
     # Start / stop / status
     # ------------------------------------------------------------------
 
-    def start(self, domain: Any, *, store: Any = None) -> dict:
+    def start(self, domain: Any, *, store: Any = None, client: Any = None) -> dict:
         """Start (or reuse) the stream of *domain*'s published version.
 
-        Returns ``{"run_id", "state", "reused"}``. Prerequisites that do not
-        hold raise :class:`ValidationError`; Databricks API errors
+        Returns ``{"run_id", "state", "reused", "seeded"}``. *client* is the
+        warehouse client the ``_slots`` snapshot is read on (default: the
+        domain's build warehouse). Prerequisites that do not hold raise
+        :class:`ValidationError`; Databricks API errors
         :class:`InfrastructureError`; a job that is not deployed
         :class:`NotFoundError`.
         """
         config = self._require_ready(domain)
-        existing = self.active_run(domain)
-        if existing is not None:
-            return {"run_id": int(existing.run_id), "state": self.run_state(existing), "reused": True}
+        name, version = self._domain_key(domain)
+        reused = None
+        for run_version, run in self._job.active_runs(name):
+            if run_version == version and reused is None:
+                reused = run
+            else:
+                logger.info("Stopping the stream of %s v%s for v%s", name, run_version, version)
+                self._job.cancel(int(run.run_id))
+        if reused is not None:
+            return {
+                "run_id": int(reused.run_id),
+                "state": self._job.run_state(reused),
+                "reused": True,
+                "seeded": 0,
+            }
         store = store if store is not None else self._store(domain)
-        live = self._live_table(store, domain)
+        live = TwinLiveServing.live(store)
+        seeded = TwinLiveServing.start(
+            store, domain, self._settings, client if client is not None else self._client(domain)
+        )
+        graph = self._graph(domain)
         params = self.job_parameters(
             domain,
             self._settings,
             config,
-            live_table=f"{live.connection()['schema']}.{live.table_name(self._graph(domain))}",
+            live_table=f"{live.connection()['schema']}.{live.table_name(graph)}",
             connection=live.connection(),
-            mappings_path=self._upload_mappings(domain),
+            mappings_path=self._job.upload_mappings(self._run_name(domain), self._mappings(domain)),
         )
-        job_id = self.resolve_job_id()
-        started = self._call(
-            "start the realtime stream job",
-            lambda w: w.jobs.run_now(job_id=job_id, job_parameters=params),
-        )
-        run_id = getattr(started, "run_id", None) or getattr(
-            getattr(started, "response", None), "run_id", None
-        )
-        if run_id is None:
-            raise InfrastructureError("The stream job was started but the SDK returned no run id")
-        logger.info("Started realtime stream run %s for %s", run_id, params["live_table"])
-        return {"run_id": int(run_id), "state": "PENDING", "reused": False}
+        run_id = self._job.run_now(params)
+        logger.info("Started realtime stream run %s for %s (%d seeded)", run_id, graph, seeded)
+        return {"run_id": run_id, "state": "PENDING", "reused": False, "seeded": seeded}
 
-    def stop(self, domain: Any) -> dict:
-        """Cancel *domain*'s active stream run; ``{"run_id", "state"}`` (``not_running`` when none)."""
-        run = self.active_run(domain)
-        if run is None:
-            return {"run_id": None, "state": "not_running"}
-        run_id = int(run.run_id)
-        self._call("cancel the realtime stream run", lambda w: w.jobs.cancel_run(run_id=run_id))
-        logger.info("Cancelled realtime stream run %s", run_id)
-        return {"run_id": run_id, "state": "CANCELLING"}
+    def stop(self, domain: Any, *, store: Any = None) -> dict:
+        """Cancel *domain*'s stream run and retire its ``_live``; ``{"run_id", "state"}``."""
+        name, version = self._domain_key(domain)
+        run_id = None
+        for run_version, run in self._job.active_runs(name):
+            if run_version == version:
+                run_id = int(run.run_id)
+                self._job.cancel(run_id)
+        TwinLiveServing.retire(store if store is not None else self._store(domain), domain)
+        return {"run_id": run_id, "state": "CANCELLING" if run_id else "not_running"}
 
     def status(self, domain: Any) -> dict:
         """``{"run_id", "state"}`` of *domain*'s stream; ``not_configured`` / ``not_running`` / ``unknown``."""
-        if not self.job_name(self._settings):
+        if not TwinRealtimeJob.job_name(self._settings):
             return {"run_id": None, "state": "not_configured"}
+        name, version = self._domain_key(domain)
         try:
-            run = self.active_run(domain)
+            runs = [run for v, run in self._job.active_runs(name) if v == version]
         except OntoBricksError as exc:
             return {"run_id": None, "state": "unknown", "error": str(exc)}
-        if run is None:
+        if not runs:
             return {"run_id": None, "state": "not_running"}
-        return {"run_id": int(run.run_id), "state": self.run_state(run)}
+        return {"run_id": int(runs[0].run_id), "state": self._job.run_state(runs[0])}
 
     # ------------------------------------------------------------------
-    # Build hooks
+    # Build and tick hooks
     # ------------------------------------------------------------------
 
     @staticmethod
     def after_build(pipe: Any, *, factory: Callable[[Any], Any] | None = None) -> None:
-        """Start the stream of an effective ``realtime`` build; stop a leftover one otherwise.
+        """Start the stream of an effective ``realtime`` build; retire a served ``_live`` otherwise.
 
         Best-effort: the build has already produced the microbatch graph, so a
-        stream that cannot start is recorded (``realtime_state =
-        failed:<Error>``) and logged, never raised. A non-realtime build of a
-        deployment with realtime enabled looks for a stream only when the
-        recent build runs recorded one; with realtime disabled it looks for
-        none (stop a leftover stream from the domain's status card).
+        stream that cannot start or stop is recorded (``realtime_state =
+        failed:<Error>``) and logged, never raised. A build that is not
+        ``realtime`` on a Lakebase store whose ``_live`` is still served cancels
+        the stream (when the job is configured) and retires ``_live``.
         """
-        from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
+        from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
 
-        if getattr(pipe.settings, "realtime_enabled", False) is not True:
-            return
         decision = getattr(pipe, "mode_decision", None)
         realtime = getattr(decision, "effective", "") == "realtime"
-        if not realtime and not TwinRealtimeStream._streamed_before(
-            TwinBuildRunHistory.recent_runs(pipe)
-        ):
-            return
+        store = getattr(pipe, "store", None)
         stream = (factory or TwinRealtimeStream)(pipe.settings)
         try:
             if realtime:
-                started = stream.start(pipe.domain, store=getattr(pipe, "store", None))
+                started = stream.start(pipe.domain, store=store, client=pipe.source_client)
                 pipe.realtime_run_id, pipe.realtime_state = str(started["run_id"]), started["state"]
-            else:
-                stopped = stream.stop(pipe.domain)
+            elif isinstance(store, LakebaseBase) and TwinLiveServing.serving(store, pipe.domain):
+                stopped = stream.stop_quietly(pipe.domain, store=store)
                 pipe.realtime_run_id = str(stopped["run_id"] or "")
                 pipe.realtime_state = stopped["state"]
         except OntoBricksError as exc:
             logger.warning("[DT-BUILD %s] realtime stream: %s", pipe.task_id, exc)
             pipe.realtime_state = f"failed:{type(exc).__name__}"
 
-    @staticmethod
-    def _streamed_before(runs: Any) -> bool:
-        """True when a recent build run recorded a stream run."""
-        from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
+    def stop_quietly(self, domain: Any, *, store: Any) -> dict:
+        """:meth:`stop`, with a job that cannot be reached still retiring ``_live``."""
+        try:
+            return self.stop(domain, store=store)
+        except OntoBricksError as exc:
+            logger.warning("Realtime stream not cancelled (%s); retiring its live table", exc)
+            TwinLiveServing.retire(store, domain)
+            return {"run_id": None, "state": "retired"}
 
-        return any(
-            (TwinBuildRunHistory.facts_of(run) or {}).get("realtime_run_id")
-            for run in (runs if isinstance(runs, list) else [])
-        )
+    def after_tick(self, domain: Any, store: Any) -> dict:
+        """A realtime tick's housekeeping: retire a dead stream's ``_live``, purge tombstones.
+
+        A served ``_live`` whose stream no longer runs (crashed past its
+        retries) is retired, so readers fall back to the microbatch graph
+        until the next build restarts the stream; otherwise tombstones older
+        than the state TTL (at least 24 hours) are purged. Returns the facts
+        the tick records.
+        """
+        from back.core.graphdb import RealtimeSource
+
+        if not TwinLiveServing.serving(store, domain):
+            return {}
+        state = self.status(domain)["state"]
+        if state in ("not_running", "not_configured"):
+            TwinLiveServing.retire(store, domain)
+            logger.warning("Realtime stream of %s is not running: _live retired", self._graph(domain))
+            return {"realtime_state": "retired"}
+        hours = max(24, int(RealtimeSource.of(domain).get("state_ttl_hours") or 24))
+        return {"live_tombstones_purged": TwinLiveServing.purge(store, domain, hours)}
 
     # ------------------------------------------------------------------
     # Parameters and prerequisites
@@ -255,6 +199,7 @@ class TwinRealtimeStream:
             "lakebase_secret": str(getattr(settings, "realtime_lakebase_secret", "") or ""),
             "live_table": live_table,
             "checkpoint": f"{root}/{TwinRealtimeStream._run_name(domain)}",
+            "state_ttl_hours": str(config.get("state_ttl_hours", 72)),
         }
 
     def _require_ready(self, domain: Any) -> dict:
@@ -287,49 +232,25 @@ class TwinRealtimeStream:
 
         return get_graphdb(domain, self._settings)
 
-    def _live_table(self, store: Any, domain: Any) -> Any:
-        """The store's ``_live`` table, created; its union view refreshed when synced."""
-        if store is None or not hasattr(store, "live_table"):
-            raise ValidationError("Realtime serving needs the Lakebase graph backend")
-        live = store.live_table()
-        graph = self._graph(domain)
-        live.ensure(graph)
-        if getattr(store, "is_synced", False) is True:
-            try:
-                store.ensure_synced_union_view(graph)
-            except Exception as exc:  # noqa: BLE001 — the next sync recreates the view
-                logger.warning("Union view of %s not refreshed yet: %s", graph, exc)
-        return live
+    def _client(self, domain: Any) -> Any:
+        """The domain's client on its build warehouse (the ``_slots`` snapshot read)."""
+        from back.core.graphdb.delta.DeltaBase import create_databricks_client
+        from back.core.helpers import resolve_build_warehouse_id
 
-    def _upload_mappings(self, domain: Any) -> str:
-        """Upload the mappings the job projects with; return the workspace file path."""
+        return create_databricks_client(
+            domain,
+            self._settings,
+            warehouse_id=resolve_build_warehouse_id(domain, self._settings) or None,
+        )
+
+    @staticmethod
+    def _mappings(domain: Any) -> tuple:
         from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
 
         mappings = TwinIncrementalBuild.mappings_for(domain)
         if mappings is None:
             raise ValidationError("The domain has no R2RML mappings to stream")
-        entities, relationships, base_uri = mappings
-        payload = json.dumps(
-            {"entity_mappings": entities, "relationship_mappings": relationships, "base_uri": base_uri},
-            default=str,
-        ).encode("utf-8")
-        me = self._call("resolve the current user", lambda w: w.current_user.me())
-        folder = f"/Workspace/Users/{getattr(me, 'user_name', '')}/.ontobricks/realtime"
-        path = f"{folder}/{self._run_name(domain)}.json"
-        self._call(f"create {folder}", lambda w: w.workspace.mkdirs(folder))
-        self._call(
-            f"upload {path}",
-            lambda w: w.workspace.upload(path, payload, format=self._auto_format(), overwrite=True),
-        )
-        return path
-
-    @staticmethod
-    def _auto_format() -> Any:
-        try:
-            from databricks.sdk.service.workspace import ImportFormat
-        except ImportError:  # pragma: no cover — every supported SDK has it
-            return None
-        return ImportFormat.AUTO
+        return mappings
 
     @staticmethod
     def _domain_key(domain: Any) -> tuple[str, str]:

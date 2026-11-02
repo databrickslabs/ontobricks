@@ -305,6 +305,7 @@ class TestSaveDomainInfo:
         "secret_scope": "sc",
         "secret_key": "k",
         "key_format": "json",
+        "state_ttl_hours": 72,
     }
 
     def test_save_realtime_source(self):

@@ -390,8 +390,31 @@ def _close_tick_facts(ctx: TaskContext, tick: Dict[str, Any], store, src) -> Non
             sync_state=tick.get("sync_state", ""),
         )
     )
+    facts.update(_realtime_tick(ctx, store))
     if not facts:
         del ctx.scratch["stats"]["materialization"]
+
+
+def _realtime_tick(ctx: TaskContext, store) -> Dict[str, Any]:
+    """A realtime domain's tick housekeeping (``TwinRealtimeStream.after_tick``), best-effort.
+
+    Retires a served ``_live`` whose stream no longer runs and purges old
+    tombstones; any other domain or store records nothing.
+    """
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory, normalize_materialization_mode
+    from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+    from back.objects.digitaltwin.build import TwinRealtimeStream
+
+    mode = normalize_materialization_mode(
+        GraphDBFactory.resolve_materialization_mode(ctx.domain, ctx.settings)
+    )
+    if mode != "realtime" or not isinstance(store, LakebaseBase):
+        return {}
+    try:
+        return TwinRealtimeStream(ctx.settings).after_tick(ctx.domain, store)
+    except Exception as exc:  # noqa: BLE001 — housekeeping never fails the tick
+        logger.warning("Scheduled build [%s]: realtime housekeeping skipped: %s", ctx.domain_name, exc)
+        return {}
 
 
 def _trace_stats(stats: Any) -> Dict[str, Any]:

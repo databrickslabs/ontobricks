@@ -32,6 +32,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from back.core.graphdb.lakebase.LakebaseLiveTable import LakebaseLiveTable
 from back.core.streaming import SlotDiffProcessor, SlotRowProjector
 from tests.property import test_slot_fold
 from tests.units.streaming.test_slot_row_projector import _sql_oracle
@@ -298,9 +299,10 @@ def test_a_stream_started_from_a_slots_snapshot_reaches_the_final_rows(before, a
         for (map_id, key, predicate), (s, o) in snapshot.items()
     ]
     initial = SlotDiffProcessor(_PROJECTORS).initial_state(rows)
+    # ``_live`` as the stream's start seeds it (``LakebaseLiveTable.seed_rows``).
     baseline = {
-        slot: (SlotDiffProcessor.SNAPSHOT_SEQ, value)
-        for slot, value in _non_blank_slots(snapshot).items()
+        (map_id, key, predicate): (seq, (subject, obj))
+        for map_id, key, predicate, subject, obj, _hash, seq in LakebaseLiveTable.seed_rows(rows)
     }
     suffix = [entry for entry in _inputs(events) if entry[4] >= len(snapshot_events)]
 

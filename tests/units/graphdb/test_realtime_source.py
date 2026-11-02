@@ -18,6 +18,7 @@ _COMPLETE = {
     "secret_scope": "ontobricks",
     "secret_key": "kafka-sasl",
     "key_format": "json",
+    "state_ttl_hours": 72,
 }
 
 
@@ -33,6 +34,16 @@ class TestParse:
         config = RealtimeSource.parse({**_COMPLETE, "kind": " Kafka ", "topic": " t1 "})
 
         assert config["kind"] == "kafka" and config["topic"] == "t1"
+
+    def test_the_state_ttl_defaults_to_three_days(self):
+        config = {k: v for k, v in _COMPLETE.items() if k != "state_ttl_hours"}
+
+        assert RealtimeSource.parse(config)["state_ttl_hours"] == 72
+
+    @pytest.mark.parametrize("hours", [-1, "soon", True])
+    def test_the_state_ttl_must_be_whole_hours(self, hours):
+        with pytest.raises(ValidationError, match="state_ttl_hours"):
+            RealtimeSource.parse({**_COMPLETE, "state_ttl_hours": hours})
 
     def test_the_key_format_defaults_to_json(self):
         config = {k: v for k, v in _COMPLETE.items() if k != "key_format"}

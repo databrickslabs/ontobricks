@@ -8,10 +8,15 @@ from typing import Any
 
 from back.core.errors import ValidationError
 
-#: Connector families the stream job can read (``TripleStreamJob``).
+#: Connector families the stream job can read (``TripleStreamJob``); ``kinesis``
+#: is experimental (opaque sequence numbers, ordering within ~1 ms arbitrary).
 REALTIME_SOURCE_KINDS = ("kafka", "eventhubs", "kinesis")
+EXPERIMENTAL_SOURCE_KINDS = ("kinesis",)
+#: The stream's state TTL when the domain sets none (longer than any expected lateness).
+DEFAULT_STATE_TTL_HOURS = 72
 _KEY_FORMATS = ("json",)
-_FIELDS = ("kind", "bootstrap_servers", "topic", "secret_scope", "secret_key", "key_format")
+_TEXT_FIELDS = ("kind", "bootstrap_servers", "topic", "secret_scope", "secret_key", "key_format")
+_FIELDS = (*_TEXT_FIELDS, "state_ttl_hours")
 #: Fields a complete config needs (``key_format`` has a default).
 _REQUIRED = ("kind", "bootstrap_servers", "topic", "secret_scope", "secret_key")
 _PATTERNS = {
@@ -28,10 +33,11 @@ _PATTERNS = {
 class RealtimeSource:
     """Validation and readiness of a domain's ``info["realtime_source"]``.
 
-    ``{kind, bootstrap_servers, topic, secret_scope, secret_key, key_format}``:
-    the topic the ``realtime`` stream job reads and the *names* of the
-    Databricks secret holding its credentials. A secret value is never stored —
-    any other field is refused.
+    ``{kind, bootstrap_servers, topic, secret_scope, secret_key, key_format,
+    state_ttl_hours}``: the topic the ``realtime`` stream job reads, the
+    *names* of the Databricks secret holding its credentials, and how long the
+    stream keeps a row's state (hours; it must exceed the event lateness). A
+    secret value is never stored — any other field is refused.
     """
 
     @staticmethod
@@ -52,9 +58,10 @@ class RealtimeSource:
                 f"Unknown realtime_source field(s): {', '.join(unknown)} — credentials are "
                 "referenced by secret_scope / secret_key, never stored"
             )
-        values = {field: str(raw.get(field) or "").strip() for field in _FIELDS}
+        values: dict = {field: str(raw.get(field) or "").strip() for field in _TEXT_FIELDS}
         if not any(values[field] for field in _REQUIRED):
             return {}
+        values["state_ttl_hours"] = RealtimeSource._ttl_hours(raw.get("state_ttl_hours"))
         values["kind"] = values["kind"].lower()
         values["key_format"] = (values["key_format"] or "json").lower()
         if values["kind"] and values["kind"] not in REALTIME_SOURCE_KINDS:
@@ -67,6 +74,18 @@ class RealtimeSource:
             if values[field] and pattern.fullmatch(values[field]) is None:
                 raise ValidationError(f"Invalid realtime_source {field}: {values[field]!r}")
         return values
+
+    @staticmethod
+    def _ttl_hours(raw: Any) -> int:
+        if raw in (None, ""):
+            return DEFAULT_STATE_TTL_HOURS
+        try:
+            hours = int(raw)
+        except (TypeError, ValueError):
+            hours = -1
+        if isinstance(raw, bool) or hours < 0:
+            raise ValidationError("realtime_source state_ttl_hours must be a whole number of hours")
+        return hours
 
     @staticmethod
     def coerce(raw: Any) -> dict:

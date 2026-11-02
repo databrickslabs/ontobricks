@@ -195,12 +195,35 @@ class TestRealtimeFacts:
 
         facts = TwinIncrementalReadiness.realtime_facts(domain, SimpleNamespace(realtime_enabled=True))
 
-        assert facts == {"enabled": True, "source_configured": True, "kind": "kafka", "topic": "sales"}
+        assert facts == {
+            "enabled": True,
+            "backend_eligible": True,
+            "source_configured": True,
+            "kind": "kafka",
+            "experimental": False,
+            "topic": "sales",
+        }
+
+    def test_a_non_lakebase_domain_is_not_eligible_and_kinesis_is_experimental(self):
+        domain = SimpleNamespace(
+            info={"graph_backend": "neo4j", "realtime_source": {**self._SOURCE, "kind": "kinesis"}}
+        )
+
+        facts = TwinIncrementalReadiness.realtime_facts(domain, SimpleNamespace(realtime_enabled=True))
+
+        assert facts["backend_eligible"] is False and facts["experimental"] is True
 
     def test_nothing_configured(self):
         facts = TwinIncrementalReadiness.realtime_facts(_domain(), SimpleNamespace())
 
-        assert facts == {"enabled": False, "source_configured": False, "kind": "", "topic": ""}
+        assert facts == {
+            "enabled": False,
+            "backend_eligible": False,
+            "source_configured": False,
+            "kind": "",
+            "experimental": False,
+            "topic": "",
+        }
 
     def test_the_report_carries_them(self, two_sources):
         report = TwinIncrementalReadiness.report(

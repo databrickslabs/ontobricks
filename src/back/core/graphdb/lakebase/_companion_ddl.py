@@ -19,9 +19,10 @@ side so SPARQL / KG-search readers see a uniform schema.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from back.core.errors import InfrastructureError
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.helpers import SQLHelpers, safe_identifier, sql_cast
 
 # Lakeflow synced-table PK (object_hash comes from the Delta warehouse view).
@@ -425,13 +426,70 @@ def purge_live_tombstones_sql(table: str, older_than_hours: int) -> str:
     no longer guards its slot against an older ``seq``.
     """
     if isinstance(older_than_hours, bool) or not isinstance(older_than_hours, int):
-        raise InfrastructureError(f"older_than_hours must be an integer, got {older_than_hours!r}")
+        raise ValidationError(f"older_than_hours must be an integer, got {older_than_hours!r}")
     if older_than_hours < 0:
-        raise InfrastructureError("older_than_hours must not be negative")
+        raise ValidationError("older_than_hours must not be negative")
     return (
         f"DELETE FROM {table} WHERE deleted "
         f"AND updated_at < now() - interval '{older_than_hours} hours'"
     )
+
+
+#: Table comment that marks a ``_live`` table as served by the union view: set
+#: when a stream starts (``TwinRealtimeStream``), cleared — with the rows — when
+#: it stops or the domain's build is not ``realtime``, so a frozen ``_live`` never
+#: lingers in the view.
+LIVE_SERVING_COMMENT = "ontobricks:live:serving"
+#: A Postgres role the grants quote: a native role, a user e-mail or a principal id.
+_ROLE_NAME = re.compile(r"[A-Za-z0-9_.@\-]{1,63}")
+
+
+def live_serving_sql(table: str, serving: bool) -> str:
+    """``COMMENT ON TABLE`` marking *table* served (or not) by the union view."""
+    value = f"'{LIVE_SERVING_COMMENT}'" if serving else "NULL"
+    return f"COMMENT ON TABLE {table} IS {value}"
+
+
+def truncate_live_sql(table: str) -> str:
+    return f"TRUNCATE TABLE {table}"
+
+
+def seed_live_sql(table: str) -> str:
+    """Insert one snapshot slot into *table*; a slot already there is kept."""
+    return (
+        f"INSERT INTO {table} (map_id, source_key, predicate, subject, object, object_hash, "
+        "deleted, seq) VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s) "
+        "ON CONFLICT (map_id, source_key, predicate) DO NOTHING"
+    )
+
+
+def live_grants_sql(table: str, schema: str, role: str) -> list[str]:
+    """The privileges the stream job's Postgres *role* needs to upsert *table*."""
+    if not _ROLE_NAME.fullmatch(role or ""):
+        raise ValidationError(f"Not a Postgres role name: {role!r}")
+    return [
+        f'GRANT USAGE ON SCHEMA "{schema}" TO "{role}"',
+        f'GRANT SELECT, INSERT, UPDATE ON {table} TO "{role}"',
+    ]
+
+
+def is_live_serving(cur: Any, bare_name: str) -> bool:
+    """True when the ``_live`` table *bare_name* exists and is marked served."""
+    cur.execute(
+        """
+        SELECT obj_description(c.oid, 'pg_class') AS comment
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = %s
+          AND n.nspname = ANY(current_schemas(false))
+          AND c.relkind = 'r'
+        LIMIT 1
+        """,
+        (bare_name,),
+    )
+    row = cur.fetchone()
+    value = row.get("comment") if isinstance(row, dict) else (row[0] if row else None)
+    return value == LIVE_SERVING_COMMENT
 
 
 def count_live_rows_sql(table: str) -> str:
@@ -479,8 +537,10 @@ def ensure_union_view(
 
     *source_kind* picks :func:`build_union_view_sql_for_slots` for a
     ``…_slots``-sourced synced table and :func:`build_union_view_sql` otherwise.
-    When the view's ``_live`` table exists (a ``realtime`` domain), the view
-    also unions its live rows (:func:`build_union_view_sql_with_live`).
+    When the view's ``_live`` table is marked served (:data:`LIVE_SERVING_COMMENT`
+    — a ``realtime`` domain whose stream runs), the view also unions its live
+    rows (:func:`build_union_view_sql_with_live`); an unmarked or absent one
+    is left out.
 
     If ``view`` already exists as a TABLE (e.g. from an old app-managed build
     before the managed_synced migration), it is dropped first — Postgres's
@@ -506,7 +566,7 @@ def ensure_union_view(
         "END $$"
     )
     live = _live_ref(view)
-    if _table_exists(cur, _table_bare_name(live)):
+    if is_live_serving(cur, _table_bare_name(live)):
         cur.execute(
             build_union_view_sql_with_live(view, synced, companion, live, source_kind=source_kind)
         )

@@ -12,6 +12,8 @@ from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
 from back.objects.digitaltwin.build.TwinLakehouseBuild import TwinLakehouseBuild
 from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
 from back.objects.digitaltwin.build.TwinNetChangeApply import TwinNetChangeApply
+from back.objects.digitaltwin.build.TwinLiveServing import TwinLiveServing
+from back.objects.digitaltwin.build.TwinRealtimeJob import TwinRealtimeJob
 from back.objects.digitaltwin.build.TwinRealtimeStream import TwinRealtimeStream
 from back.objects.digitaltwin.build.TwinScheduledRefresh import TwinScheduledRefresh
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
@@ -31,6 +33,8 @@ __all__ = [
     "TwinLakehouseBuild",
     "TwinMergeFallback",
     "TwinNetChangeApply",
+    "TwinLiveServing",
+    "TwinRealtimeJob",
     "TwinRealtimeStream",
     "TwinScheduledRefresh",
     "TwinSlotPipeline",
