@@ -102,8 +102,8 @@ class DeltaFlatStore(GraphDBBackend):
         return
 
     def physical_table_id(self, graph_name: str) -> str:
-        """Resolve logical graph name (``Domain_V5``) to a UC FQN for SQL."""
-        return self._sql_relation(graph_name)
+        """Resolve logical graph name (``Domain_V5``) to a UC FQN: names only, never the live relation."""
+        return graph_name if graph_name.count(".") == 2 else (self._readable_table_fqn() or graph_name)
 
     def _readable_table_fqn(self) -> str:
         """UC object for read queries (union VIEW, or ``_data`` if VIEW not built yet)."""
@@ -120,7 +120,10 @@ class DeltaFlatStore(GraphDBBackend):
         return data or graph or ""
 
     def _sql_relation(self, table_name: str) -> str:
-        """Map logical names to UC ``…_graph`` / ``…_data``; an FQN passes (``GraphReadRelation`` may swap it)."""
+        """Map logical names to UC ``…_graph`` / ``…_data``; an FQN passes (``GraphReadRelation`` may swap it).
+
+        Read-only SQL: a swapped FQN is a subquery (a write must pass a logical name or the table).
+        """
         if table_name.count(".") == 2:
             return GraphReadRelation.for_read(table_name, self._domain, self._settings, self._client)
         resolved = self._readable_table_fqn()
@@ -198,7 +201,8 @@ class DeltaFlatStore(GraphDBBackend):
         )
 
     def rebuild_adjacency(self, table_name: str) -> None:
-        relation = self._sql_relation(table_name)
+        # The FQN as given (never the live slots): a rebuild follows a refreshed ``…_data``.
+        relation = table_name if table_name.count(".") == 2 else self._sql_relation(table_name)
         adj_out, adj_in = self.adjacency_table_ids(table_name)
         search = self.entity_search_table_id(table_name)
         search_asserted = self.entity_search_asserted_table_id(table_name)

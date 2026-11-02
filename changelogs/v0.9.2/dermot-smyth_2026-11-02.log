@@ -2739,3 +2739,76 @@ Modified files:
 Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 11435 passed, 341 skipped, 9 deselected in 97.54s; architecture suite green; baseline.json
 unchanged.
+
+================================================================================
+## Fix: fast-path re-review
+================================================================================
+
+Context: the re-review of `06671847` confirmed the twelve review findings fixed
+and raised one narrow P1 (N1) and five P2s (N2–N6), fixed here.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py (N1, N4)
+   `physical_table_id` resolves names only (an FQN as given, a logical name
+   through `_readable_table_fqn`) and never swaps or probes: the Build page's
+   async existence check called it inline and got the inline subquery as its
+   table name, with a fingerprint probe on the event loop. `rebuild_adjacency`
+   reads the FQN it was given unswapped (after a build `_data` was just
+   refreshed; four `SELECT DISTINCT` passes over `_slots` gained nothing).
+   `_sql_relation`'s docstring says its result is read-only SQL. Class at 793 LOC.
+2. src/back/core/graphdb/GraphDBBackend.py
+   `sql_table_reference`'s one-line docstring says the same (no added line:
+   the class is baselined).
+3. src/back/core/graphdb/delta/materialize.py (N2)
+   `apply_data_relation` clears `GraphReadRelation`'s cache right after dropping
+   the `_data` materialized view, so the full build, the fallback and the
+   scheduled tick's CTAS stop the fast path in this process at once (a decision
+   cached before the drop cannot survive it; later probes see no view). The
+   clears in `_leave` / `_apply_views` stay.
+4. src/back/objects/digitaltwin/explorer/GraphFind.py (N3)
+   `build_find_seed_where(store, table, …)` builds its subqueries over
+   `store.sql_table_reference(table)`, so the find seed and its BFS walk read the
+   same relation.
+5. src/back/core/graphdb/delta/GraphReadRelation.py (N6)
+   `microbatch_data_sha(slots_fqn)`: the fingerprint `_probe` expects, now
+   callable by the build-side coupling test.
+6. docs/incremental-materialization.md (N5), Lakehouse//RT section only — the
+   probe runs wherever the store runs its read (the `run_blocking` worker for
+   offloaded store methods, inline for `dt_triples`' type filter and the bridge
+   seed, as their reads already did); a tick's or a fallback's CTAS clears the
+   fast path at once in that process and within 30 s elsewhere; a companion
+   rebuild reads `_graph` / `_data`, not the slots; `physical_table_id` answers
+   the table name; the result is read-only SQL; data-quality and SHACL reads
+   keep the views; the fingerprint probe on the RT warehouse is not verified
+   live. The four sentences the re-review quoted are replaced.
+7. Tests (N6) — tests/units/graphdb/delta/test_graph_read_relation.py: a rebuild
+   reads `_graph` / `_data` with a warm `slots_live` decision (flipped); the
+   physical id is the table name and never probes; the find seed reads the live
+   relation; `apply_data_relation` clears the cache right after the view drop.
+   tests/units/objects/test_build_pipeline_modes.py: the slots-only microbatch
+   definition the build stores (`compile_for` + `data_definition_for` +
+   `data_mv_sha`) equals `GraphReadRelation.microbatch_data_sha`; incremental and
+   batch-branch builds differ. File-level `pytestmark = pytest.mark.unit` in
+   tests/units/api/test_node_context_endpoint.py and
+   tests/units/dtwin/test_digitaltwin_api.py. Find doubles gain
+   `sql_table_reference` (tests/units/graphdb/test_v090_graph_access_filter.py,
+   tests/back/core/digitaltwin/test_digitaltwin_units.py).
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/GraphReadRelation.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/objects/digitaltwin/explorer/GraphFind.py
+- tests/units/graphdb/delta/test_graph_read_relation.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- tests/units/graphdb/test_v090_graph_access_filter.py
+- tests/back/core/digitaltwin/test_digitaltwin_units.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11441 passed, 341 skipped, 9 deselected in 76.87s; architecture suite green; baseline.json unchanged.

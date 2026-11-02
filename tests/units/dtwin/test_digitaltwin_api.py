@@ -19,6 +19,7 @@ from api.routers.digitaltwin import (
 from back.core.graphdb import GraphDBBackend
 from back.objects.digitaltwin import DigitalTwin
 
+pytestmark = pytest.mark.unit
 
 # ---------------------------------------------------------------------------
 # DigitalTwin.resolve_domain — read_only fast path

@@ -160,7 +160,7 @@ class GraphDBBackend(ABC):
         return table_name
 
     def sql_table_reference(self, graph_name: str) -> str:
-        """Stable identifier for translators (SWRL, SPARQL, aggregate/DT SQL)."""
+        """Identifier for translators (SWRL, SPARQL, rule SQL); read-only SQL (Delta may give a subquery)."""
         return self._sql_relation(graph_name)
 
     def get_inferred_triple_count(self, table_name: str) -> int:

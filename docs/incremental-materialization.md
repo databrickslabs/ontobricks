@@ -321,7 +321,8 @@ limitations](#known-limitations) › Live verification). A `microbatch` domain r
 through Lakehouse//RT therefore skips both views and reads the slots, so a change is
 visible at the pipeline's commit cadence (seconds). The swap happens in the store:
 `DeltaFlatStore._sql_relation` — every read template's `FROM`, and
-`sql_table_reference` for callers that build their own subquery — turns this domain's
+`sql_table_reference` for callers that build their own subquery (the `dt_triples` type
+filter, the bridge seed of the node context, the find seed) — turns this domain's
 `_graph` FQN into
 
 ```sql
@@ -331,7 +332,9 @@ visible at the pipeline's commit cadence (seconds). The swap happens in the stor
 
 (one line) and its `_data` FQN into the first branch alone
 (`(SELECT DISTINCT subject, predicate, object FROM <_slots> WHERE …)`); every other name
-(the companions, `_inferred`, logical graph names, other domains) is left alone. That is
+(the companions, `_inferred`, logical graph names, other domains) is left alone, and
+`physical_table_id` always answers the table name. The result is read-only SQL: a
+writer (the reasoning `INSERT INTO`) passes a logical name, which is never swapped. That is
 exactly `_graph`'s multiset: `_data`'s `GROUP BY` over the non-blank slots, `UNION ALL`
 the inferred. The relation carries no alias — the templates alias it themselves
 (`FROM {relation} t`) and Spark names an unaliased subquery; a unit test parses every
@@ -352,25 +355,32 @@ statement timeout but with the guardrail fallback below.
   the non-blank slots (a join, aggregate, `sql_query` or relationship mapping adds a
   batch branch and changes it), and that it is the self-refreshing variant (the
   `incremental` view has no refresh clause and another fingerprint). A cancelled or
-  failed build that already replaced `_data`, or a scheduled tick that rebuilt it by
-  CTAS (no property), therefore turns the fast path off at once.
+  failed build that already replaced `_data`, or a scheduled tick or a fallback that
+  rebuilt it by CTAS (no property), therefore turns the fast path off.
 
-The lookup runs on the reading store's own client, so as the reader and in the
-`run_blocking` worker thread the read already runs in — never on the event loop and
-never on a build-warehouse client of its own. An absent `_data` reads as `graph`
-quietly; any other failing lookup is logged at warning and reads as `graph`. The
-decision is cached per `_data` table (one per domain version) for 30 s
-(`GraphReadRelation.TTL_S`); the build clears this process's cache when it leaves the
-incremental modes or falls back (`TwinIncrementalBuild._leave`) and once a new `_data`
-definition is in place (`_apply_views`), so elsewhere a change is seen within 30 s.
-Reads answered from the graph-index companions (`_entity_search`, `_adj_*`, `_props`,
-when the search cache serves them) keep the freshness of their last rebuild (a rebuild
-reads the same relation as the reads). The remaining difference from `_graph` is the
-grants: the reader needs `SELECT` on `_slots` and `_inferred` themselves, not only on
-`_graph` (the build grants nothing on these relations; grant them on the schema). RT
-is not yet verified live: each reference to the relation re-reads the slots with a
-`DISTINCT`, so measure a domain's heavy reads (unfiltered counts, dumps, deep
-traversals) on its RT warehouse before turning the toggle on.
+The lookup runs on the reading store's own client (the query warehouse, as the
+reader), wherever the store runs that read: in the `run_blocking` worker thread for the
+store methods the routes offload, and inline in their handlers for the two callers that
+build their own SQL (`dt_triples`' type filter and the bridge seed), as their store
+reads already did. It never opens a build-warehouse client. An absent `_data` reads as
+`graph` quietly; any other failing lookup is logged at warning and reads as `graph`.
+The decision is cached per `_data` table (one per domain version) for 30 s
+(`GraphReadRelation.TTL_S`). The process that changes `_data` drops its cache at once:
+`TwinIncrementalBuild._leave` (leaving the incremental modes or falling back),
+`_apply_views` once a new definition is in place, and `materialize.apply_data_relation`
+when a full build, a fallback or a scheduled tick replaces the view by a table or a
+pass-through view. Other workers see the change within 30 s. Reads answered from the
+graph-index companions (`_entity_search`, `_adj_*`, `_props`, when the search cache
+serves them) keep the freshness of their last rebuild, and a rebuild reads `_graph` /
+`_data` themselves, never the slots (it follows a refreshed `_data`). Data-quality and
+SHACL reads keep the views too. The remaining difference from `_graph` is the grants:
+the reader needs `SELECT` on `_slots` and `_inferred` themselves, not only on `_graph`
+(the build grants nothing on these relations; grant them on the schema). RT is not yet
+verified live — neither the reads nor the fingerprint probe (`SHOW TBLPROPERTIES` on
+the RT warehouse; a refusal keeps the views, with a warning every 30 s). Each reference
+to the relation re-reads the slots with a `DISTINCT`, so measure a domain's heavy reads
+(unfiltered counts, dumps, deep traversals) on its RT warehouse before turning the
+toggle on.
 
 Graph reads go to the query warehouse (`graph_engine_config.lakehouse.warehouse_id`
 plus "Use Lakehouse//RT for queries"). A heavy traversal can trip an RT guardrail

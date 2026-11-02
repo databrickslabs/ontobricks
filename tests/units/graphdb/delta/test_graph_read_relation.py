@@ -351,19 +351,69 @@ class TestStoreSwap:
         assert build.reads == query.reads == [f"SELECT subject, predicate, object FROM {_LIVE}"]
         assert store.last_read_route == "build-fallback"
 
-    def test_a_cache_rebuild_reads_the_same_relation_as_the_reads(self, rt, monkeypatch):
+    def test_a_cache_rebuild_reads_the_views_even_on_the_fast_path(self, rt, monkeypatch):
         from back.core.graphdb.delta import materialize
 
         sources = []
         monkeypatch.setattr(
             materialize, "build_adj_ctas_sql", lambda rel, fqn, d: sources.append(rel) or "SELECT 1"
         )
-        monkeypatch.setattr(materialize, "build_props_ctas_sql", lambda rel, fqn: "SELECT 1")
-        monkeypatch.setattr(materialize, "build_entity_search_ctas_sql", lambda rel, fqn: "SELECT 1")
+        monkeypatch.setattr(
+            materialize, "build_props_ctas_sql", lambda rel, fqn: sources.append(rel) or "SELECT 1"
+        )
+        monkeypatch.setattr(
+            materialize,
+            "build_entity_search_ctas_sql",
+            lambda rel, fqn: sources.append(rel) or "SELECT 1",
+        )
+        warehouse = _Warehouse()
+        store = _store(warehouse)
+        assert store._sql_relation(_GRAPH) == _LIVE  # a warm slots_live decision
 
-        _store(_Warehouse()).rebuild_adjacency(_GRAPH)
+        store.rebuild_adjacency(_GRAPH)
 
-        assert sources == [_LIVE, _LIVE]
+        assert sorted(sources) == sorted([_GRAPH] * 4 + [_DATA])
+
+    def test_the_physical_id_is_the_table_name_and_never_probes(self, rt):
+        warehouse = _Warehouse()
+        store = _store(warehouse)
+        assert store._sql_relation(_GRAPH) == _LIVE  # a warm slots_live decision
+
+        assert store.physical_table_id(_GRAPH) == _GRAPH
+        GraphReadRelation.clear_cache()
+        assert store.physical_table_id(_DATA) == _DATA
+        assert len(warehouse.probes) == 1
+
+    def test_a_find_seed_reads_the_live_relation_like_its_walk(self, rt):
+        from back.objects.digitaltwin.explorer.GraphFind import GraphFind
+
+        where = GraphFind.build_find_seed_where(
+            _store(_Warehouse()), _GRAPH, entity_type="Customer", search="ann"
+        )
+
+        assert where.count(f"SELECT subject FROM {_LIVE} WHERE") == 2
+        assert _GRAPH not in where
+
+
+class TestDataRelationReplaced:
+    def test_replacing_data_drops_the_cached_decisions_after_the_view_drop(self, rt, monkeypatch):
+        from back.core.graphdb.delta import materialize
+
+        warehouse = _Warehouse()
+        _decide(warehouse)
+        statements_at_clear = []
+        clear = GraphReadRelation.clear_cache
+        monkeypatch.setattr(
+            GraphReadRelation,
+            "clear_cache",
+            staticmethod(lambda: statements_at_clear.append(list(warehouse.queries)) or clear()),
+        )
+
+        materialize.apply_data_relation(warehouse, _STEM, _DATA, mode="table")
+
+        assert GraphReadRelation._cache == {}
+        before = statements_at_clear[0]
+        assert before[-1] == f"DROP MATERIALIZED VIEW IF EXISTS {_DATA}"
 
 
 def _read_statements(warehouse, table):

@@ -256,6 +256,9 @@ class _FindStore:
     def find_subjects_by_patterns(self, table, patterns):
         return set()
 
+    def sql_table_reference(self, table):
+        return table
+
     def get_triples_page_for_subjects(self, table, subjects, *, limit, offset):
         self.page_args = (limit, offset)
         n = max(0, min(self.page_size, self.total - offset))
@@ -282,7 +285,9 @@ class TestFindPaging:
         assert out["seed_count"] == 1
 
     def test_seed_where_escapes_quotes(self):
-        where = GraphFind.build_find_seed_where("g", entity_type="O'T", search="it's")
+        where = GraphFind.build_find_seed_where(
+            _FindStore([], 0, 0), "g", entity_type="O'T", search="it's"
+        )
         assert "o''t" in where
         assert "it''s" in where
 

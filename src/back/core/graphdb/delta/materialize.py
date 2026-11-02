@@ -324,8 +324,16 @@ def apply_data_relation(
 
     *with_object_hash* applies to ``table`` mode only: a pass-through view is
     never a Lakeflow source (the gateway VIEW is), so it keeps three columns.
+
+    Once the materialized view is gone, reads in this process stop trusting a
+    cached Lakehouse//RT fast path (``GraphReadRelation``; other processes
+    re-read the fingerprint within its TTL): a decision taken before the drop
+    would keep reading the slots.
     """
+    from back.core.graphdb.delta.GraphReadRelation import GraphReadRelation
+
     drop_relation(client, data_fqn, kind="materialized_view")
+    GraphReadRelation.clear_cache()
     if mode == "view":
         drop_relation(client, data_fqn, kind="table")
         create_data_view(client, view_fqn, data_fqn)

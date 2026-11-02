@@ -148,16 +148,27 @@ class GraphReadRelation:
         return entry[1]
 
     @staticmethod
+    def microbatch_data_sha(slots_fqn: str) -> str:
+        """The fingerprint the fast path expects: the ``microbatch`` ``…_data`` view over *slots_fqn* alone.
+
+        What ``TwinIncrementalBuild`` stores for a slots-only ``microbatch``
+        definition (no batch branch; one source, so ``TRIGGER ON UPDATE``).
+        """
+        from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
+
+        return MaterializedViewBuilder.data_mv_sha(
+            slots_fqn=slots_fqn,
+            batch_branch_sql=None,
+            refresh_clause=MaterializedViewBuilder.microbatch_refresh_clause(1),
+        )
+
+    @staticmethod
     def _probe(domain: Any, settings: Any, data_fqn: str, client: Any) -> str:
         """The uncached decision: the RT toggle, then ``…_data``'s stored fingerprint."""
         from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
 
         if not resolve_lakehouse_use_sea(domain, settings):
             return GraphReadRelation.GRAPH
-        expected = MaterializedViewBuilder.data_mv_sha(
-            slots_fqn=_table_naming.slots_table_fqn(domain, settings),
-            batch_branch_sql=None,
-            refresh_clause=MaterializedViewBuilder.microbatch_refresh_clause(1),
-        )
+        expected = GraphReadRelation.microbatch_data_sha(_table_naming.slots_table_fqn(domain, settings))
         stored = MaterializedViewBuilder.existing_mv_sha(client, data_fqn, strict=True)
         return GraphReadRelation.SLOTS_LIVE if stored == expected else GraphReadRelation.GRAPH

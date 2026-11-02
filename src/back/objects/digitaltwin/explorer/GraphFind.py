@@ -39,6 +39,7 @@ class GraphFind:
 
     @staticmethod
     def build_find_seed_where(
+        store: Any,
         table: str,
         *,
         entity_type: Optional[str] = None,
@@ -48,13 +49,16 @@ class GraphFind:
 
         Shared by the public ``/api/v1/digitaltwin/triples/find`` route and the
         session-aware ``/dtwin/triples/find`` Graph Chat route so the two
-        surfaces cannot drift on seed semantics.
+        surfaces cannot drift on seed semantics. The subqueries read what
+        *store* reads for *table* (``sql_table_reference``: the live slots on
+        the Lakehouse//RT fast path), so the seed and the walk agree.
         """
+        relation = store.sql_table_reference(table)
         seed_conditions: List[str] = []
         if entity_type:
             esc = escape_sql_value(sql_like_escape(entity_type)).lower()
             seed_conditions.append(
-                f"subject IN (SELECT subject FROM {table} "
+                f"subject IN (SELECT subject FROM {relation} "
                 f"WHERE predicate = '{RDF_TYPE}' AND "
                 f"(LOWER(object) LIKE '%#{esc}' {LIKE_ESCAPE} "
                 f"OR LOWER(object) LIKE '%/{esc}' {LIKE_ESCAPE}))"
@@ -62,7 +66,7 @@ class GraphFind:
         if search:
             esc = escape_sql_value(sql_like_escape(search)).lower()
             seed_conditions.append(
-                f"(subject IN (SELECT subject FROM {table} "
+                f"(subject IN (SELECT subject FROM {relation} "
                 f"WHERE (predicate = '{RDFS_LABEL}' "
                 f"OR predicate LIKE '%#label' OR predicate LIKE '%/label' "
                 f"OR predicate LIKE '%#name' OR predicate LIKE '%/name') "
@@ -89,7 +93,7 @@ class GraphFind:
         pagination fields). An empty match yields ``message`` and empty lists.
         """
         seed_where = GraphFind.build_find_seed_where(
-            table, entity_type=entity_type, search=search
+            store, table, entity_type=entity_type, search=search
         )
         bfs_rows = store.bfs_traversal(
             table,

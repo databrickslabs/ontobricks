@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 from shared.fastapi.main import app
 from api.routers.digitaltwin import _RDF_TYPE
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def client():

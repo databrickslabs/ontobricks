@@ -578,6 +578,44 @@ class TestReadRelationCache:
         assert warehouse.clears
 
 
+class TestFastPathFingerprint:
+    """The Lakehouse//RT fast path recognises exactly the ``_data`` view a build stores."""
+
+    @staticmethod
+    def _stored_sha(mode, entities):
+        from back.core.graphdb.delta import MaterializedViewBuilder
+
+        pipe = _pipeline(mode, entities=entities)
+        spec = TwinIncrementalBuild.compile_for(
+            pipe.domain, pipe.settings, entities, [], base_uri="http://ex.org/"
+        )
+        definition = TwinIncrementalBuild.data_definition_for(spec, entities, [], mode)
+        return spec, MaterializedViewBuilder.data_mv_sha(**definition)
+
+    def test_a_slots_only_microbatch_build_stores_what_the_reader_expects(self):
+        from back.core.graphdb.delta import GraphReadRelation
+
+        spec, stored = self._stored_sha("microbatch", {_CUSTOMER: _row_local()})
+
+        assert spec.slots_fqn == _SLOTS and not spec.batch_mappings
+        assert stored == GraphReadRelation.microbatch_data_sha(_SLOTS)
+
+    @pytest.mark.parametrize(
+        ("mode", "entities"),
+        [
+            ("incremental", {_CUSTOMER: _row_local()}),
+            ("microbatch", {_CUSTOMER: _row_local(), _ORDER: _batch()}),
+        ],
+        ids=["incremental", "batch-branch"],
+    )
+    def test_any_other_build_stores_another_fingerprint(self, mode, entities):
+        from back.core.graphdb.delta import GraphReadRelation
+
+        _spec, stored = self._stored_sha(mode, entities)
+
+        assert stored != GraphReadRelation.microbatch_data_sha(_SLOTS)
+
+
 class TestFallback:
     @pytest.mark.parametrize("step", ["ensure", "start", "wait"])
     def test_a_runner_failure_falls_back_to_full(self, step):

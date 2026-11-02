@@ -250,6 +250,9 @@ class TestFindTriplesBfsPaging:
         def find_subjects_by_patterns(self, _table_name, _patterns):
             return self._alias_rows
 
+        def sql_table_reference(self, table_name):
+            return table_name
+
         def get_triples_page_for_subjects(
             self, _table, subjects, *, limit: int, offset: int
         ):
