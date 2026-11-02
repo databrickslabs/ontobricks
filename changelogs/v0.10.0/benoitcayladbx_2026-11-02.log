@@ -109,3 +109,36 @@ never indexes a row and therefore works under any row factory (matching the
 existing `cur.fetchone() is None` existence-probe convention in this module).
 Tests updated accordingly. `uv run --frozen pytest -q -m "not scenario"` →
 **9864 passed, 326 skipped**.
+
+---
+
+# Explorer defaults to the live inferred view on open
+
+## Context
+The shared graph-source picker (`KgGraphSource`) restored the last stored source
+from `sessionStorage` when the Explorer opened, so re-entering the Explorer could
+land on a sandbox/asserted view the user picked elsewhere (Query/Chat) instead of
+the live inferred graph. Requested behavior: opening the Explorer should default
+to the live inferred view, not "the last one".
+
+## Changes
+1. `src/front/static/query/js/query-graph-source.js` — `wanted(explicit,
+   forceDefault)` now returns `LIVE_INFERRED` instead of the stored value when
+   `forceDefault` is set; `populate()` forwards `opts.forceDefault`. Resolution
+   order on open becomes: explicit arg → `?simulation=` URL → **live inferred**
+   (stored value is skipped). A deep-link `?simulation=` still wins.
+2. `src/front/static/query/js/query-sigmagraph.js` — `_loadSimulationSelect`
+   forwards `forceDefault`; the Explorer `init()` open path passes
+   `forceDefault: true`. The legacy (non-`KgGraphSource`) fallback honors it too.
+   Manual refresh (`loadSimulations()`) stays unforced, preserving the current
+   selection; the Query/API page (`query-api.js`) is unchanged.
+
+## Modified files
+- `src/front/static/query/js/query-graph-source.js`
+- `src/front/static/query/js/query-sigmagraph.js`
+
+## Tests
+Updated the JS-string assertions in `tests/units/front/test_kg_graph_source.py`
+and `tests/units/front/test_explorer_simulation_select.py` (new
+`test_explorer_open_defaults_to_live_inferred`).
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**.

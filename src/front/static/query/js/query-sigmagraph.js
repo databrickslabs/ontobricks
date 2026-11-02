@@ -254,7 +254,7 @@ var SigmaGraph = (function () {
         if (typeof KgGraphSource !== 'undefined') {
             _simulationSelectLoading = true;
             try {
-                await KgGraphSource.populate({ simulationId: opts.simulationId });
+                await KgGraphSource.populate({ simulationId: opts.simulationId, forceDefault: opts.forceDefault });
                 var src = KgGraphSource.current();
                 _rememberSimulationChoice(src.value || LIVE_INFERRED);
             } catch (err) {
@@ -268,7 +268,8 @@ var SigmaGraph = (function () {
         var sel = document.getElementById('sgSimulationSelect');
         if (!sel) return;
         var previous = sel.value || _chosenSimulationId;
-        var wanted = opts.simulationId || _urlSimulationId() || _chosenSimulationId;
+        var wanted = opts.simulationId || _urlSimulationId()
+            || (opts.forceDefault ? LIVE_INFERRED : _chosenSimulationId);
         try {
             var resp = await fetch('/simulation/list', { credentials: 'same-origin' });
             var data = await resp.json();
@@ -2997,7 +2998,7 @@ var SigmaGraph = (function () {
         }
         _initialized = true;
 
-        _loadSimulationSelect({ simulationId: _urlSimulationId() }).then(function () {
+        _loadSimulationSelect({ simulationId: _urlSimulationId(), forceDefault: true }).then(function () {
             if (!focusUri) return;
             _waitForGraphLibs(10000).then(function () {
                 SigmaGraph.focusEntityByUri(focusUri).finally(function () {

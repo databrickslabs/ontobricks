@@ -56,10 +56,13 @@ const KgGraphSource = (function () {
         }
     }
 
-    function wanted(explicit) {
+    function wanted(explicit, forceDefault) {
         if (explicit) return explicit;
         var fromUrl = wantedFromUrl();
         if (fromUrl) return fromUrl;
+        // ``forceDefault`` opens on the live inferred view rather than restoring
+        // the last stored source (used by the Explorer on open).
+        if (forceDefault) return LIVE_INFERRED;
         return readStored() || LIVE_INFERRED;
     }
 
@@ -152,7 +155,7 @@ const KgGraphSource = (function () {
         var nodes = selects();
         if (!nodes.length) return;
         var previous = nodes[0].value || readStored();
-        var target = wanted(opts.simulationId || opts.wanted);
+        var target = wanted(opts.simulationId || opts.wanted, opts.forceDefault);
         var html = liveOptionsHtml();
         try {
             var resp = await fetch('/simulation/list', { credentials: 'same-origin' });

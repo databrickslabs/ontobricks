@@ -51,9 +51,13 @@ def test_graph_source_module_persists_and_applies_payload() -> None:
     assert "include_inferred" in js
     assert "live:inferred" in js
     assert "/simulation/list" in js
-    wanted = js.split("function wanted(explicit)", 1)[1].split("function selects", 1)[0]
+    wanted = js.split("function wanted(explicit, forceDefault)", 1)[1].split(
+        "function selects", 1
+    )[0]
     assert wanted.index("wantedFromUrl()") < wanted.index("readStored()")
     assert "if (!stored || stored === LIVE_INFERRED)" not in wanted
+    # forceDefault skips the stored value and opens on the live inferred view.
+    assert wanted.index("forceDefault") < wanted.index("readStored()")
 
 
 def test_graphql_and_chat_and_sparql_send_graph_source() -> None:

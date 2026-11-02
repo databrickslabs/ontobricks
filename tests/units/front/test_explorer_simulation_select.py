@@ -68,9 +68,21 @@ def test_simulation_select_keeps_user_choice_across_reloads() -> None:
     js = SIGMA_JS.read_text(encoding="utf-8")
     assert "var _chosenSimulationId = 'live:inferred'" in js
     assert "_rememberSimulationChoice(sel ? sel.value" in js
-    assert "wanted = opts.simulationId || _urlSimulationId() || _chosenSimulationId" in js
-    assert "_loadSimulationSelect({ simulationId: _urlSimulationId() })" in js
+    # Legacy fallback: keep the chosen sandbox unless opening forces the default.
+    assert "opts.forceDefault ? LIVE_INFERRED : _chosenSimulationId" in js
+    # Re-entering an already-initialized Explorer (no focus) short-circuits, so the
+    # in-session choice is preserved across tab switches.
     assert "alreadyInitialized && !focusUri" in js
+
+
+def test_explorer_open_defaults_to_live_inferred() -> None:
+    """Opening the Explorer forces the live inferred view, not the last source."""
+    js = SIGMA_JS.read_text(encoding="utf-8")
+    assert (
+        "_loadSimulationSelect({ simulationId: _urlSimulationId(), forceDefault: true })"
+        in js
+    )
+    assert "forceDefault: opts.forceDefault" in js
 
 
 def test_results_open_in_explorer() -> None:
