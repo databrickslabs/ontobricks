@@ -753,3 +753,71 @@ class TestScheduledTickPlansTheSlotUpdate:
         facts = self._tick(log, monkeypatch, mode="microbatch")
 
         assert facts == {}
+
+
+def _lakehouse_domain(mode: str | None = None):
+    domain = _domain(mode)
+    domain.info["graph_backend"] = "databricks"
+    return domain
+
+
+class TestALakehouseTickStreamsNothing:
+    """On the Lakehouse engine ``…_data`` is the graph: a tick refreshes it, never streams."""
+
+    _GRAPH = _DATA.removesuffix("_data") + "_graph"
+
+    @staticmethod
+    def _tick(src, domain, mappings=None, source_tables=None) -> tuple:
+        store = MagicMock()
+        store.is_synced = False
+        with patch.object(scheduled_build, "_count_view_triples", return_value=7) as count:
+            written = scheduled_build._write_graph_triples(
+                store,
+                src,
+                "dom_V3",
+                _VIEW,
+                "dom",
+                domain=domain,
+                settings=SimpleNamespace(databricks_triplestore_table=""),
+                source_tables=source_tables,
+                mappings=mappings,
+            )
+        return store, written, count
+
+    @staticmethod
+    def _no_store_write(store) -> None:
+        for name in ("drop_table", "create_table", "insert_triples", "bulk_insert_iter"):
+            getattr(store, name).assert_not_called()
+
+    def test_a_full_domain_rebuilds_data_from_the_view(self):
+        log: list = []
+
+        store, written, count = self._tick(_mv_warehouse(log, mv_sha=""), _lakehouse_domain())
+
+        self._no_store_write(store)
+        assert _ctas(log)
+        assert written == 7 and count.call_args.args[1] == _DATA
+
+    def test_an_incremental_domain_refreshes_its_views_in_place(self, slot_runner):
+        log: list = []
+        mappings = _mappings()
+        src = _mv_warehouse(log, mv_sha=_current_sha("incremental", mappings))
+
+        with patch.object(SourceReadiness, "check", _readiness()):
+            store, _, _ = self._tick(src, _lakehouse_domain("incremental"), mappings, _SOURCES)
+
+        self._no_store_write(store)
+        statements = _statements(log)
+        assert not _ctas(log)
+        data = statements.index(f"REFRESH MATERIALIZED VIEW {_DATA}")
+        assert statements.index(f"REFRESH MATERIALIZED VIEW {self._GRAPH}") > data
+
+    def test_a_lakebase_store_still_streams_in_full(self):
+        """Not Lakehouse (and not synced): the drop-and-rebuild of the store stays."""
+        store = MagicMock()
+        store.is_synced = False
+        src = MagicMock()
+        with patch.object(scheduled_build, "_count_view_triples", return_value=2):
+            scheduled_build._write_graph_triples(store, src, "dom_V3", _VIEW, "dom")
+
+        store.drop_table.assert_called_once_with("dom_V3")

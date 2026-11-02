@@ -226,14 +226,18 @@ def _refresh_data_relation(
     data_table: str,
     data_mode: str,
     mappings: Optional[Dict[str, Any]],
+    *,
+    relation: str = "table",
+    with_object_hash: bool = True,
 ) -> None:
-    """Bring ``…_data`` up to date for the synced table.
+    """Bring ``…_data`` up to date for the synced table (or the Lakehouse graph).
 
     The incremental main build's materialized view is refreshed in place when
     it still has the current definition (``TwinScheduledRefresh``); anything
     else — a ``full`` or MERGE-promoted domain, no view yet, mappings edited
-    since, a missing slot pipeline — is the CTAS from the gateway VIEW
-    (``object_hash`` and row tracking on), as before.
+    since, a missing slot pipeline — is built from the gateway VIEW as the
+    main build builds it: a *relation* ``table`` (with *with_object_hash* and
+    row tracking for a synced table) or a Lakehouse ``view``.
     """
     from back.core.graphdb.delta import materialize
     from back.objects.digitaltwin.build import TwinScheduledRefresh
@@ -253,7 +257,7 @@ def _refresh_data_relation(
     if refreshed:
         return
     materialize.apply_data_relation(
-        src, view_table, data_table, mode="table", with_object_hash=True
+        src, view_table, data_table, mode=relation, with_object_hash=with_object_hash
     )
 
 
@@ -274,8 +278,10 @@ def _slot_spec(
     topic-fed spec reads its sources' column types on *client*, as the main
     build does, so both give the same SQL. ``None`` — sources unknown, counted
     as untracked — without a domain or settings, for a ``full`` domain
-    (nothing to probe), and when the mappings do not compile: a scheduled tick
-    never fails on the probe.
+    (nothing to probe), and when the mappings do not compile
+    (``ValidationError``). Anything else raises and fails the tick before it
+    writes: a topic-fed source that cannot be described is an
+    ``InfrastructureError`` (compiling without its types would give other SQL).
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
@@ -464,6 +470,55 @@ def _count_view_triples(src, view_table: str) -> int:
     return materialize.count_triples(src, view_table)
 
 
+def _is_lakehouse(domain: Any, settings: Any) -> bool:
+    """True for a domain on the Lakehouse (Delta) engine, whose graph is ``…_data``."""
+    if domain is None or settings is None:
+        return False
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    return GraphDBFactory._resolve_triple_store_backend(domain, settings) == "databricks"
+
+
+def _refresh_lakehouse_graph(
+    src: Any,
+    domain: Any,
+    settings: Any,
+    view_table: str,
+    *,
+    source_tables: list[str] | None,
+    mappings: dict[str, Any] | None,
+) -> int:
+    """A Lakehouse tick: ``…_data`` and ``…_graph`` brought up to date; the ``…_data`` count.
+
+    As the main build (``TwinIncrementalBuild.skips_graph_stream``), nothing is
+    streamed into the store: that would append every asserted triple to
+    ``…_inferred``. The mode is decided (and probed) first, so a failed probe
+    writes nothing; ``…_data`` is the incremental view refreshed in place or
+    built from the gateway VIEW (a table, or the domain's pass-through view);
+    a ``…_graph`` materialized view is then refreshed (a VIEW needs nothing).
+    """
+    from back.core.graphdb.delta import GraphRelation, _table_naming
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    data_table = _table_naming.data_table_fqn(domain, settings)
+    if not data_table:
+        raise ValidationError("Could not resolve the mapped-triples table name")
+    data_mode, _sync_mode = _tick_modes(domain, settings, src, source_tables)
+    _refresh_data_relation(
+        src,
+        domain,
+        settings,
+        view_table,
+        data_table,
+        data_mode,
+        mappings,
+        relation=GraphDBFactory.resolve_lakehouse_materialization(domain, settings),
+        with_object_hash=False,
+    )
+    GraphRelation.refresh(src, _table_naming.graph_view_fqn(domain, settings))
+    return _count_view_triples(src, data_table)
+
+
 def _write_graph_triples(
     store,
     src,
@@ -480,7 +535,9 @@ def _write_graph_triples(
 
     When the store is in Lakebase ``managed_synced`` mode the entire branch is
     replaced by a Lakeflow synced-table refresh (*source_tables* feeds its
-    row-tracking probe) — triples never enter this process. Otherwise a full
+    row-tracking probe) — triples never enter this process. On the Lakehouse
+    engine ``…_data`` is the graph: it is brought up to date and nothing is
+    streamed (:func:`_refresh_lakehouse_graph`). Otherwise a full
     drop-and-rebuild is performed.
     """
     if _is_managed_synced(store):
@@ -507,6 +564,10 @@ def _write_graph_triples(
                 exc,
             )
             return 0
+    if _is_lakehouse(domain, settings):
+        return _refresh_lakehouse_graph(
+            src, domain, settings, view_table, source_tables=source_tables, mappings=mappings
+        )
 
     triple_count = _count_view_triples(src, view_table)
     logger.info(
