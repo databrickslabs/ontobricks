@@ -107,3 +107,18 @@ class TestTopicAvailable:
 
     def test_a_domain_without_info(self):
         assert not RealtimeSource.topic_available(SimpleNamespace(), SimpleNamespace(realtime_enabled=True))
+
+
+class TestKindOptions:
+    def test_every_kind_is_offered_and_the_stored_one_is_selected(self):
+        options = RealtimeSource.kind_options("eventhubs")
+
+        assert [o["kind"] for o in options] == ["kafka", "eventhubs", "kinesis"]
+        assert [o["kind"] for o in options if o["selected"]] == ["eventhubs"]
+
+    def test_kafka_is_the_default_and_kinesis_says_it_is_experimental(self):
+        options = {o["kind"]: o for o in RealtimeSource.kind_options()}
+
+        assert options["kafka"]["selected"] is True
+        assert options["kinesis"]["label"] == "Kinesis (experimental)"
+        assert options["eventhubs"]["label"] == "Event Hubs"

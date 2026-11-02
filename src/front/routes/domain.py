@@ -8,6 +8,7 @@ from front.fastapi.dependencies import (
     templates,
     triplestore_page_context,
 )
+from back.core.graphdb import RealtimeSource
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from back.objects.domain import Domain
 from shared.config.settings import Settings, get_settings
@@ -27,11 +28,14 @@ async def domain_page(
     if redirect is not None:
         return redirect
     domain_data = Domain(domain_session).get_domain_template_data()
+    realtime_source = domain_data.get("realtime_source") or {}  # coerced by Domain
     return templates.TemplateResponse(
         request,
         "domain.html",
         {
             "domain": domain_data,
+            "realtime_source": realtime_source,
+            "realtime_kinds": RealtimeSource.kind_options(realtime_source.get("kind", "")),
             **triplestore_page_context(domain_session, settings),
         },
     )

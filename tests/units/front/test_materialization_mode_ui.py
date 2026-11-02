@@ -198,13 +198,20 @@ class TestBothSavePathsSendTheField:
 
 
 class TestTheRealtimeSource:
-    def _section(self, **domain) -> str:
+    def _section(self, realtime_source=None, **domain) -> str:
         from jinja2 import Environment
 
+        from back.core.graphdb import RealtimeSource
+
         html = _read(INFO_HTML)
-        start = html.rindex("{% set rt", 0, html.index('id="realtimeSourceSection"'))
+        start = html.rindex("<fieldset", 0, html.index('id="realtimeSourceSection"'))
         end = html.index("</fieldset>", start) + len("</fieldset>")
-        return Environment(autoescape=True).from_string(html[start:end]).render(domain=domain)
+        source = RealtimeSource.coerce(realtime_source)
+        return Environment(autoescape=True).from_string(html[start:end]).render(
+            domain=domain,
+            realtime_source=source,
+            realtime_kinds=RealtimeSource.kind_options(source.get("kind", "")),
+        )
 
     def test_the_fields_show_only_for_the_realtime_mode(self):
         hidden = self._section(materialization_mode="microbatch")
@@ -213,12 +220,24 @@ class TestTheRealtimeSource:
         assert "d-none" not in shown.split(">", 1)[0]
 
     def test_the_stored_names_are_rendered(self):
-        rt = {"kind": "kinesis", "topic": "orders", "secret_scope": "sc", "secret_key": "k"}
+        rt = {"kind": "kinesis", "bootstrap_servers": "us-west-2", "topic": "orders", "secret_scope": "sc", "secret_key": "k"}
 
         rendered = self._section(materialization_mode="realtime", realtime_source=rt)
 
         assert 'value="orders"' in rendered and 'value="sc"' in rendered
         assert '<option value="kinesis" selected>' in rendered
+
+    def test_kinesis_is_offered_as_experimental_and_kafka_is_the_default(self):
+        rendered = self._section(materialization_mode="realtime")
+
+        assert ">Kinesis (experimental)</option>" in rendered
+        assert '<option value="kafka" selected>' in rendered
+
+    def test_the_route_not_the_template_builds_the_kind_options(self):
+        html = _read(INFO_HTML)
+        assert "{% set rt" not in html and "('kinesis', 'Kinesis')" not in html
+        route = _read(REPO_ROOT / "src/front/routes/domain.py")
+        assert '"realtime_kinds": RealtimeSource.kind_options(' in route
 
     def test_no_secret_value_field_exists(self):
         section = self._section(materialization_mode="realtime").lower()

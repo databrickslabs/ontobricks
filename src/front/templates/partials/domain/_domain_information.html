@@ -335,7 +335,6 @@
                                 graph. When the workspace or the sources do not support the mode yet, the build
                                 falls back to the next mode and records the reason.
                             </small>
-                            {% set rt = domain.realtime_source or {} %}
                             <fieldset class="border rounded p-2 mt-2 {% if domain.materialization_mode != 'realtime' %}d-none{% endif %}"
                                       id="realtimeSourceSection">
                                 <legend class="float-none w-auto px-1 small fw-semibold mb-0">
@@ -345,30 +344,30 @@
                                     <div class="col-md-4">
                                         <label class="form-label small mb-0" for="realtimeSourceKind">Kind</label>
                                         <select class="form-select form-select-sm domain-editable" id="realtimeSourceKind">
-                                            {% for kind, label in [('kafka', 'Kafka'), ('eventhubs', 'Event Hubs'), ('kinesis', 'Kinesis')] %}
-                                            <option value="{{ kind }}" {% if (rt.kind or 'kafka') == kind %}selected{% endif %}>{{ label }}</option>
+                                            {% for option in realtime_kinds %}
+                                            <option value="{{ option.kind }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
                                             {% endfor %}
                                         </select>
                                     </div>
                                     <div class="col-md-8">
                                         <label class="form-label small mb-0" for="realtimeSourceServers">Bootstrap servers (Kinesis: region)</label>
                                         <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceServers"
-                                               value="{{ rt.bootstrap_servers or '' }}" placeholder="broker-1:9092,broker-2:9092">
+                                               value="{{ realtime_source.bootstrap_servers or '' }}" placeholder="broker-1:9092,broker-2:9092">
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small mb-0" for="realtimeSourceTopic">Topic</label>
                                         <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceTopic"
-                                               value="{{ rt.topic or '' }}">
+                                               value="{{ realtime_source.topic or '' }}">
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small mb-0" for="realtimeSourceSecretScope">Secret scope</label>
                                         <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceSecretScope"
-                                               value="{{ rt.secret_scope or '' }}">
+                                               value="{{ realtime_source.secret_scope or '' }}">
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small mb-0" for="realtimeSourceSecretKey">Secret key</label>
                                         <input type="text" class="form-control form-control-sm domain-editable" id="realtimeSourceSecretKey"
-                                               value="{{ rt.secret_key or '' }}">
+                                               value="{{ realtime_source.secret_key or '' }}">
                                     </div>
                                 </div>
                                 <small class="text-muted d-block mt-1">

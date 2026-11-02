@@ -12,6 +12,7 @@ from back.core.errors import ValidationError
 #: is experimental (opaque sequence numbers, ordering within ~1 ms arbitrary).
 REALTIME_SOURCE_KINDS = ("kafka", "eventhubs", "kinesis")
 EXPERIMENTAL_SOURCE_KINDS = ("kinesis",)
+_KIND_LABELS = {"kafka": "Kafka", "eventhubs": "Event Hubs", "kinesis": "Kinesis"}
 #: The stream's state TTL when the domain sets none (longer than any expected lateness).
 DEFAULT_STATE_TTL_HOURS = 72
 _KEY_FORMATS = ("json",)
@@ -94,6 +95,19 @@ class RealtimeSource:
             return RealtimeSource.parse(raw)
         except ValidationError:
             return {}
+
+    @staticmethod
+    def kind_options(current: str = "") -> list[dict]:
+        """``[{kind, label, selected}]`` for the source kind picker (experimental kinds say so)."""
+        selected = current or REALTIME_SOURCE_KINDS[0]
+        return [
+            {
+                "kind": kind,
+                "label": _KIND_LABELS[kind] + (" (experimental)" if kind in EXPERIMENTAL_SOURCE_KINDS else ""),
+                "selected": kind == selected,
+            }
+            for kind in REALTIME_SOURCE_KINDS
+        ]
 
     @staticmethod
     def is_complete(config: Mapping) -> bool:
