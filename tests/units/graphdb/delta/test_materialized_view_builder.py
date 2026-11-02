@@ -325,6 +325,17 @@ class TestGraphMvSql:
 
 
 class TestSmallStatements:
+    def test_explain_prefixes_the_statement(self):
+        assert MaterializedViewBuilder.explain_sql("CREATE X") == "EXPLAIN CREATE X"
+
+    def test_explain_drops_or_replace_from_the_data_view(self):
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn="main.dom.t_slots")
+
+        explain = MaterializedViewBuilder.explain_sql(sql)
+
+        assert explain.startswith(f"EXPLAIN CREATE MATERIALIZED VIEW {DATA}")
+        assert explain[len("EXPLAIN ") :] == sql.replace("CREATE OR REPLACE", "CREATE", 1)
+
     def test_refresh(self):
         assert MaterializedViewBuilder.refresh_sql(DATA) == (
             f"REFRESH MATERIALIZED VIEW {DATA}"
@@ -350,6 +361,55 @@ class TestSmallStatements:
     def test_refresh_technique_requires_a_name(self):
         with pytest.raises(ValidationError):
             MaterializedViewBuilder.refresh_technique_sql("")
+
+
+class TestPlanIsIncremental:
+    @pytest.mark.parametrize(
+        "technique",
+        [
+            "ROW_BASED",
+            "GROUP_AGGREGATE",
+            "APPEND_ONLY",
+            "PARTITION_OVERWRITE",
+            "WINDOW_FUNCTION",
+            "GENERIC_AGGREGATE",
+            "NO_OP",
+        ],
+    )
+    def test_each_incremental_technique_is_true(self, technique):
+        rows = [{"plan": f"... planned to be executed as {technique} ..."}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is True
+
+    def test_full_recompute_is_false(self):
+        rows = [{"plan": "executed as FULL_RECOMPUTE"}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
+
+    def test_full_recompute_wins_over_an_incremental_technique(self):
+        rows = [{"plan": "ROW_BASED"}, {"plan": "FULL_RECOMPUTE"}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
+
+    @pytest.mark.parametrize("rows", [None, [], [{}], [{"plan": ""}], [{"plan": "nothing known"}]])
+    def test_unknown_is_false(self, rows):
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
+
+    def test_row_shapes_dict_tuple_list_and_string(self):
+        for rows in (
+            [{"a": "x", "b": "ROW_BASED"}],
+            [("x", "ROW_BASED")],
+            [["x", "ROW_BASED"]],
+            ["ROW_BASED"],
+        ):
+            assert MaterializedViewBuilder.plan_is_incremental(rows) is True
+
+    def test_matching_is_case_insensitive(self):
+        assert MaterializedViewBuilder.plan_is_incremental([{"p": "row_based"}]) is True
+        assert MaterializedViewBuilder.plan_is_incremental([{"p": "full_recompute"}]) is False
+
+    def test_tokens_inside_longer_words_do_not_match(self):
+        assert MaterializedViewBuilder.plan_is_incremental([{"p": "NOT_ROW_BASED_AT_ALL"}]) is False
+
+    def test_non_text_values_are_ignored(self):
+        assert MaterializedViewBuilder.plan_is_incremental([{"n": 3, "x": None}]) is False
 
 
 class TestApply:

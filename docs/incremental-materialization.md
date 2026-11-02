@@ -18,6 +18,7 @@ Settings) and defaults to `full`, so existing domains behave as before.
 - [Build-run trace](#build-run-trace)
 - [Reconciliation](#reconciliation)
 - [Preview enrolment](#preview-enrolment)
+- [Verification](#verification)
 - [Known limitations](#known-limitations)
 - [Realtime (deferred)](#realtime-deferred)
 <!-- /toc -->
@@ -280,6 +281,28 @@ On the customer's source tables the app only requires row tracking
 (`delta.enableRowTracking`, the basis of automatic change data feed on DBR 19);
 the `ALTER TABLE` above also turns on deletion vectors, which row tracking needs
 for in-place updates.
+
+## Verification
+
+Whether the `_data` definition a build creates plans an incremental refresh is
+checked on a real warehouse by an opt-in test, `tests/external/test_mv_incremental_plan.py`
+(`external` marker). It compiles a row-local and a `sql_query` fixture mapping,
+builds the `_data` view definition the main build would create
+(`TwinIncrementalBuild.data_definition_for` + `MaterializedViewBuilder.data_mv_sql`),
+runs `EXPLAIN CREATE MATERIALIZED VIEW …` (`MaterializedViewBuilder.explain_sql`,
+which explains a `CREATE OR REPLACE` as its `CREATE`) and asserts
+`MaterializedViewBuilder.plan_is_incremental`: an incremental technique
+(`ROW_BASED`, `GROUP_AGGREGATE`, `APPEND_ONLY`, …) and no `FULL_RECOMPUTE`. It
+creates a source table and a Delta table with the slot columns (standing in for
+the `_slots` streaming table) if absent, and materializes nothing:
+
+```bash
+ONTOBRICKS_EXTERNAL_WAREHOUSE=1 DATABRICKS_CONFIG_PROFILE=<profile> \
+ONTOBRICKS_EXTERNAL_WAREHOUSE_ID=<warehouse id> ONTOBRICKS_EXTERNAL_SCHEMA=<catalog.schema> \
+uv run --frozen pytest -q -m external tests/external/test_mv_incremental_plan.py
+```
+
+Without those variables the test is skipped, so the unit run stays offline.
 
 ## Known limitations
 
