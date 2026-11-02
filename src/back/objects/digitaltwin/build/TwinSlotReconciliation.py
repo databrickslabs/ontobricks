@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
-from back.core.helpers import WarehouseStatements
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_BASE_URI
 
@@ -31,7 +30,7 @@ class TwinSlotReconciliation:
         "no"), and :class:`NotFoundError` when the catalog lists no slots
         table (the domain never ran an incremental or microbatch build).
         """
-        from back.core.graphdb.delta import _table_naming
+        from back.core.graphdb.delta import _table_naming, materialize
         from back.core.streaming import SlotReconciler
 
         if client is None:
@@ -42,7 +41,7 @@ class TwinSlotReconciliation:
         data = _table_naming.data_table_fqn(domain, settings)
         if not slots or not data:
             raise ValidationError("The triple-store tables of this domain are not fully qualified")
-        if not TwinSlotReconciliation.slots_table_listed(client, slots):
+        if not materialize.relation_exists(client, slots, strict=True):
             raise NotFoundError(
                 f"Slots table {slots} does not exist: no incremental build has run for this domain"
             )
@@ -75,26 +74,6 @@ class TwinSlotReconciliation:
             GraphDBFactory.resolve_materialization_mode(domain, settings)
         )
         return requested in ("microbatch", "realtime")
-
-    @staticmethod
-    def slots_table_listed(client: Any, slots_fqn: str) -> bool:
-        """True when ``SHOW TABLES`` lists *slots_fqn* (names compare lower-cased).
-
-        Unlike the best-effort ``materialize.relation_exists`` a failing
-        ``SHOW TABLES`` raises :class:`InfrastructureError` here: a permission
-        gap or a warehouse outage must not read as "no incremental build".
-        """
-        WarehouseStatements.require_fqn(slots_fqn, what="slots table name")
-        catalog, schema, leaf = slots_fqn.split(".")
-        rows = WarehouseStatements.query(
-            client,
-            f"SHOW TABLES IN {catalog}.{schema} LIKE '{leaf.lower()}'",
-            f"list the tables of {catalog}.{schema}",
-        )
-        return any(
-            isinstance(row, dict) and str(row.get("tableName", "")).lower() == leaf.lower()
-            for row in rows
-        )
 
     @staticmethod
     def batch_branches_present(domain: Any, *, slots_fqn: str) -> bool:

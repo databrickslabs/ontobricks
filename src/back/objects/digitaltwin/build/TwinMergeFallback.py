@@ -119,7 +119,13 @@ class TwinMergeFallback:
         from back.core.graphdb.delta import ChangeFeedReader, DeltaMergeMaterializer
 
         try:
-            spec = TwinIncrementalBuild._compile(pipe)
+            spec = TwinIncrementalBuild.compile_for(
+                pipe.domain,
+                pipe.settings,
+                pipe.entity_mappings,
+                pipe.relationship_mappings,
+                base_uri=getattr(pipe, "base_uri", ""),
+            )
             if spec.batch_mappings or not spec.source_tables:
                 return ""
             versions = {

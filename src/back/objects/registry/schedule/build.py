@@ -210,7 +210,7 @@ def _slot_source_tables(
 ) -> Optional[List[str]]:
     """Source tables of the row-local mappings: what the row-tracking probe reads.
 
-    The same list the main build probes (``SlotProjectionCompiler.compile``).
+    The same list the main build probes (``TwinIncrementalBuild.compile_for``).
     ``None`` — sources unknown, counted as untracked — without a domain or
     settings, for a ``full`` domain (nothing to probe), and when the mappings
     do not compile: a scheduled tick never fails on the probe.
@@ -221,16 +221,10 @@ def _slot_source_tables(
         return None
     if GraphDBFactory.resolve_materialization_mode(domain, settings) == "full":
         return None
-    from back.core.graphdb.delta import _table_naming
-    from back.core.streaming import SlotProjectionCompiler
+    from back.objects.digitaltwin.build import TwinIncrementalBuild
 
     try:
-        spec = SlotProjectionCompiler.compile(
-            ent or {},
-            rels or [],
-            base_uri=base_uri,
-            slots_fqn=_table_naming.slots_table_fqn(domain, settings),
-        )
+        spec = TwinIncrementalBuild.compile_for(domain, settings, ent, rels, base_uri=base_uri)
     except ValidationError as exc:
         logger.warning(
             "Scheduled build [%s]: the mappings do not compile into a slot pipeline; "

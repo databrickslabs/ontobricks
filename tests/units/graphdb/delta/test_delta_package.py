@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graphdb.adjacency import typed_in_select, typed_out_select
 from back.core.graphdb.entity_search import entity_search_select
 from back.core.graphdb.props import props_select
@@ -359,6 +360,41 @@ class TestRelationExists:
         client = MagicMock()
 
         assert materialize.relation_exists(client, fqn) is False
+        client.execute_query.assert_not_called()
+
+
+class TestStrictRelationExists:
+    """``strict=True``: an unknown answer is an error, not "absent"."""
+
+    def test_a_listed_relation_exists(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"tableName": "v_slots"}]
+
+        assert materialize.relation_exists(client, "c.s.v_slots", strict=True) is True
+
+    def test_an_unlisted_relation_is_absent(self):
+        client = MagicMock()
+        client.execute_query.return_value = []
+
+        assert materialize.relation_exists(client, "c.s.v_slots", strict=True) is False
+
+    def test_a_failing_listing_raises(self):
+        client = MagicMock()
+        client.execute_query.side_effect = RuntimeError("PERMISSION_DENIED")
+
+        with pytest.raises(InfrastructureError, match="list the tables of c.s"):
+            materialize.relation_exists(client, "c.s.v_slots", strict=True)
+
+    def test_no_client_raises(self):
+        with pytest.raises(InfrastructureError):
+            materialize.relation_exists(None, "c.s.v_slots", strict=True)
+
+    @pytest.mark.parametrize("fqn", ["", "c.s", "c.s.v'x"])
+    def test_an_unusable_name_raises(self, fqn):
+        client = MagicMock()
+
+        with pytest.raises(ValidationError):
+            materialize.relation_exists(client, fqn, strict=True)
         client.execute_query.assert_not_called()
 
 

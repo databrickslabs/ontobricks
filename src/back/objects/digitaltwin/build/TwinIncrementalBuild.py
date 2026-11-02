@@ -45,6 +45,7 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
+from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 
 logger = get_logger(__name__)
 
@@ -115,7 +116,13 @@ class TwinIncrementalBuild:
             TwinIncrementalBuild._leave(pipe, only_if_slots_exist=True)
             return False
         try:
-            spec = TwinIncrementalBuild._compile(pipe)
+            spec = TwinIncrementalBuild.compile_for(
+                pipe.domain,
+                pipe.settings,
+                pipe.entity_mappings,
+                pipe.relationship_mappings,
+                base_uri=getattr(pipe, "base_uri", ""),
+            )
             pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
                 pipe, source_tables=spec.source_tables
             )
@@ -168,7 +175,7 @@ class TwinIncrementalBuild:
         from back.core.streaming import SlotPipelineRunner
 
         name = SlotPipelineRunner.pipeline_name(
-            pipe.domain_name, TwinIncrementalBuild._version(pipe)
+            pipe.domain_name, TwinBuildRunHistory.build_run_key(pipe)[1]
         )
         try:
             runner = SlotPipelineRunner()
@@ -214,17 +221,26 @@ class TwinIncrementalBuild:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _compile(pipe: Any):
+    def compile_for(
+        domain: Any, settings: Any, entity_mappings: Any, relationship_mappings: Any, *, base_uri: str
+    ):
+        """The slot pipeline spec of the mappings, writing *domain*'s ``…_slots`` table.
+
+        Shared by the main build, the MERGE fingerprint and the scheduled tick's
+        row-tracking probe, so all three see the same row-local / batch split.
+        Raises :class:`ValidationError` when the slots table name cannot be
+        resolved or a mapping cannot be compiled.
+        """
         from back.core.graphdb.delta import _table_naming
         from back.core.streaming import SlotProjectionCompiler
 
-        slots_fqn = _table_naming.slots_table_fqn(pipe.domain, pipe.settings)
+        slots_fqn = _table_naming.slots_table_fqn(domain, settings)
         if not slots_fqn:
             raise ValidationError("Could not resolve the slots table name")
         return SlotProjectionCompiler.compile(
-            pipe.entity_mappings or {},
-            pipe.relationship_mappings or [],
-            base_uri=getattr(pipe, "base_uri", "") or "",
+            entity_mappings or {},
+            relationship_mappings or [],
+            base_uri=base_uri or "",
             slots_fqn=slots_fqn,
         )
 
@@ -296,7 +312,7 @@ class TwinIncrementalBuild:
 
         runner = SlotPipelineRunner()
         name = SlotPipelineRunner.pipeline_name(
-            pipe.domain_name, TwinIncrementalBuild._version(pipe)
+            pipe.domain_name, TwinBuildRunHistory.build_run_key(pipe)[1]
         )
         catalog, schema, _ = spec.slots_fqn.split(".", 2)
         definition = {
@@ -473,11 +489,3 @@ class TwinIncrementalBuild:
             raise
         except Exception as exc:  # noqa: BLE001 — translated, not swallowed
             raise InfrastructureError(f"Could not {what}: {exc}", detail=str(exc)) from exc
-
-    @staticmethod
-    def _version(pipe: Any) -> str:
-        return str(
-            getattr(pipe.domain_snap, "current_version", None)
-            or getattr(pipe.domain, "current_version", None)
-            or ""
-        )

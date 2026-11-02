@@ -17,11 +17,11 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from back.core.errors import InfrastructureError, OntoBricksError
+from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
 from back.core.graphdb.adjacency import typed_in_select, typed_out_select
 from back.core.graphdb.entity_search import entity_search_select
 from back.core.graphdb.props import props_select
-from back.core.helpers import SAFE_SQL_IDENT, validate_table_name
+from back.core.helpers import SAFE_SQL_IDENT, WarehouseStatements, validate_table_name
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -238,27 +238,35 @@ def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
         logger.debug("DROP %s %s failed (may not exist): %s", statement, fqn, exc)
 
 
-def relation_exists(client: Any, fqn: str) -> bool:
+def relation_exists(client: Any, fqn: str, *, strict: bool = False) -> bool:
     """True when ``SHOW TABLES`` lists *fqn* (catalog metadata, no row scan).
 
     Names compare case-insensitively: Unity Catalog lists table names
-    lower-cased, while our leaves carry ``_V<n>``. Best-effort: an unusable
-    name or any error reads as absent. Used to decide whether a cleanup is
-    worth an API call, never to decide correctness.
+    lower-cased, while our leaves carry ``_V<n>``. By default best-effort: an
+    unusable name or any error reads as absent, which is fine for deciding
+    whether a cleanup is worth an API call. With *strict* an unknown answer is
+    not a "no": an unusable name raises :class:`ValidationError`, a missing
+    client or a failing ``SHOW TABLES`` raises :class:`InfrastructureError`.
     """
-    if (
-        not fqn
-        or SAFE_SQL_IDENT.fullmatch(fqn) is None
-        or fqn.count(".") != 2
-    ):
+    usable = bool(fqn) and SAFE_SQL_IDENT.fullmatch(fqn) is not None and fqn.count(".") == 2
+    if not usable:
+        if strict:
+            WarehouseStatements.require_fqn(fqn)
+            raise ValidationError(f"Not a catalog.schema.table name: {fqn!r}")
         return False
     catalog, schema, leaf = fqn.split(".")
     leaf = leaf.lower()
-    try:
-        rows = client.execute_query(f"SHOW TABLES IN {catalog}.{schema} LIKE '{leaf}'")
-    except Exception as exc:  # noqa: BLE001 — contract: absent on error
-        logger.debug("SHOW TABLES for %s failed (treated as absent): %s", fqn, exc)
-        return False
+    sql = f"SHOW TABLES IN {catalog}.{schema} LIKE '{leaf}'"
+    if strict:
+        if client is None:
+            raise InfrastructureError(f"No warehouse client to look up {fqn}")
+        rows = WarehouseStatements.query(client, sql, f"list the tables of {catalog}.{schema}")
+    else:
+        try:
+            rows = client.execute_query(sql)
+        except Exception as exc:  # noqa: BLE001 — contract: absent on error
+            logger.debug("SHOW TABLES for %s failed (treated as absent): %s", fqn, exc)
+            return False
     return any(
         isinstance(row, dict) and str(row.get("tableName", "")).lower() == leaf
         for row in rows or []
