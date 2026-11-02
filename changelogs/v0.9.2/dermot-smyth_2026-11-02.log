@@ -521,8 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after round A2: `_graph` MV, Neo4j net apply, topic-fed realtime pipeline,
-freshness harness): 11329 passed, 341 skipped, 9 deselected
+Final test result (after the round A2 review fixes): 11358 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -2177,4 +2176,116 @@ Modified files:
 Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 11329 passed, 341 skipped, 9 deselected in 93.99s (slowest 1.37s,
 test_class_per_file); architecture suite green;
+tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Fix: round A2 review
+================================================================================
+
+Context: the review of round A2 (`_graph` MV, Neo4j net apply, topic-fed
+realtime pipeline, freshness harness) found no Critical and five Important
+findings (I1-I4 fixed here; the fifth is the rules item, minor 11), plus
+eleven minors.
+
+Changes:
+
+1. src/back/core/graphdb/delta/GraphRelation.py, MaterializedViewBuilder.py,
+   src/back/objects/digitaltwin/build/TwinGraphRelation.py, TwinBuildPostMaterialize.py
+   I1: `refresh_after_write` refreshes a `_graph` MV synchronously (the
+   ASYNC variant is gone), so the graph caches the writers rebuild next
+   (reasoning, cohorts, the purge) read the new union and back-to-back
+   writes are never left to a later refresh; errors stay best-effort. A
+   build refreshes the MV once, in the inferred reset (minor 8). Docstrings:
+   realtime keeps the VIEW; a failed kind probe reads as a VIEW (minor 7).
+2. src/back/objects/registry/schedule/build.py
+   I2: a scheduled tick on the Lakehouse engine no longer drops / creates an
+   unqualified `<Name>_V<n>` table nor appends the asserted graph to
+   `_inferred`: like the main build's `skips_graph_stream` it decides the
+   mode, refreshes `_data` in place (or builds it from the gateway VIEW as a
+   table or the pass-through view), refreshes a `_graph` MV and returns the
+   `_data` count. The `_slot_spec` docstring states that a failed DESCRIBE
+   fails the tick on purpose (minor 4).
+3. scripts/measure_freshness.py, .github/workflows/nightly.yml
+   I3: the reconciliation runs once the last change is seen and before the
+   row is restored. I4: each path is polled on its own thread (one Postgres
+   connection per Lakebase path), timed from the write; `realtime` polls
+   `live` by default and a Lakebase path without its DSN and table fails
+   fast. Minor 9: a key naming no row and a table outside `--allow-pattern`
+   (default `*ob_it_*,*fixture*`) are usage errors with nothing written;
+   numeric value columns get numeric markers written through CAST; an empty
+   variable reads as unset; the nightly step documents
+   `ONTOBRICKS_INT_RT_WAREHOUSE_ID` and the `ONTOBRICKS_INT_LAKEBASE_DSN` secret.
+4. src/back/objects/digitaltwin/build/TwinListedInferencePurge.py (new),
+   TwinNetChangeApply.py, TwinBuildRunHistory.py
+   Minor 2: Extract Class of the Neo4j purge; the EXCEPT and the rewrite read
+   `_inferred` and `_data` VERSION AS OF pinned versions (`_data` at the
+   version the net changes reach) and only the rows of that `_inferred`
+   version leave the list (`DELETE … WHERE EXISTS`, no TRUNCATE). Minor 1: a
+   listing store records `inferred_listed` and needs a base run that did, so
+   a pre-release (incl. MERGE-promoted) Neo4j base streams in full once.
+5. src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py,
+   src/back/core/streaming/TopicSlotSource.py, SlotProjectionCompiler.py
+   Minor 5: "enable row tracking" uses the feed tables (none for a topic-fed
+   pipeline). Minor 6: `column_types=None` types nothing without a warning,
+   so the DAB renderer (no warehouse) compiles silently.
+6. src/back/objects/digitaltwin/build/TwinSlotFeed.py (new),
+   TwinIncrementalBuild.py, TwinIncrementalReadiness.py, TwinScheduledRefresh.py,
+   src/back/core/helpers/WarehouseStatements.py, src/back/core/reasoning/ReasoningService.py,
+   src/back/core/graph_analysis/CohortBuilder.py, src/back/core/graphdb/GraphDBFactory.py
+   Minor 11: Extract Class `TwinSlotFeed` (topic, column types, feed tables)
+   from `TwinIncrementalBuild` (now 457 lines); Move Method `warehouse_step`
+   to `WarehouseStatements.step`, which removes the
+   `TwinGraphRelation` -> `TwinIncrementalBuild` import cycle;
+   `InferredTripleLedger` is imported from its package.
+7. docs/incremental-materialization.md
+   Minors 3 and 10 plus the above: synchronous refresh and its writer lag;
+   `TRIGGER ON UPDATE` over the `_data` MV is documented (the CREATE
+   MATERIALIZED VIEW reference accepts MV upstreams) and leaves the
+   live-unverified list; the chained triggers can add up to a minute to
+   microbatch `_graph` freshness, stated next to the 30 s KPI; the
+   `_data` / `_graph` traceability row is ◐ (Lakehouse only); Upgrading
+   (Lakehouse ticks' `_inferred` pollution, Neo4j's one full stream);
+   the Neo4j purge residuals (local-name collisions, orphan sweep,
+   multi-valued literals, a concurrent identical listing); the trace's
+   `inferred_listed`; the harness options and CI variables.
+
+Modified files:
+- src/back/core/graphdb/delta/GraphRelation.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/helpers/WarehouseStatements.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/back/core/streaming/TopicSlotSource.py
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/objects/digitaltwin/build/TwinSlotFeed.py (new)
+- src/back/objects/digitaltwin/build/TwinListedInferencePurge.py (new)
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinGraphRelation.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/back/objects/digitaltwin/build/TwinNetChangeApply.py
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/registry/schedule/build.py
+- scripts/measure_freshness.py
+- .github/workflows/nightly.yml
+- tests/units/graphdb/delta/test_graph_relation.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/graphdb/test_materialized_inference_purge.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/objects/test_incremental_readiness.py
+- tests/units/objects/test_realtime_build.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- tests/units/settings/test_render_slot_pipelines.py
+- tests/units/streaming/test_topic_slot_source.py
+- tests/units/scripts/test_measure_freshness.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11358 passed, 341 skipped, 9 deselected in 69.49s (slowest 1.26s,
+test_class_per_file); architecture suite green before each commit;
 tests/units/architecture/baseline.json unchanged.
