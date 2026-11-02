@@ -416,7 +416,7 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 1 P0 | Compute the source once (`count`, stream, Lakeflow source read `_data`) | ✅ | `TwinBuildPostMaterialize.triples_source_relation`, `SyncPlan` |
 | 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples; the MERGE *skip* (no source change) keeps it |
 | 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | SCD1 physical deletes stand in for a `deleted` column |
-| 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); the runner still creates one a deploy has not |
+| 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource |
 | 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ◐ | `_data` MV ✅; `_graph` stays a VIEW (Lakehouse//RT reads `_data`); `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
 | 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
 | 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ◐ | from `_data` only (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode` |
@@ -431,8 +431,8 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh |
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
 | 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ◐ | `jobs/triple_stream` (`main.py`, `processor.py`); the Spark / connector / RTM wiring is live-unverified |
-| 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`; deletes reach readers once `_sync` syncs them |
-| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; one stream per deployment at a time; the slot pipeline reads the CDF, not the topic |
+| 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots`, in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them |
+| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; one stream per domain and per deployment at a time; the slot pipeline reads the CDF, not the topic ([why](#realtime)); cluster sizing and run-as grants are live-unverified |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
 
 ## Known limitations
@@ -527,18 +527,22 @@ them into a Lakebase `_live` table the graph's union view reads.
   `ONTOBRICKS_REALTIME_JOB_NAME`, the app principal with `CAN_MANAGE_RUN` on it), a
   Postgres role and a secret holding its password for the sink
   (`ONTOBRICKS_REALTIME_LAKEBASE_USER`, `ONTOBRICKS_REALTIME_LAKEBASE_SECRET` =
-  `scope/key`), and a UC volume path for the checkpoints
-  (`ONTOBRICKS_REALTIME_CHECKPOINT_ROOT`).
+  `scope/key`), and a UC volume path (`/Volumes/…`) for the checkpoints and each
+  run's mappings (`ONTOBRICKS_REALTIME_CHECKPOINT_ROOT`).
 - The domain: a **Lakebase** graph backend, a **published** version, row-tracked
   sources (as `microbatch`), and its `realtime_source` (Domain › Information ›
   Materialization mode › Real-time source):
   `{kind: kafka | eventhubs | kinesis, bootstrap_servers, topic, secret_scope,
-  secret_key, key_format: json}` — `RealtimeSource` stores the secret's scope and key
-  *names* only and refuses any other field (a password, a JAAS config). The secret
-  holds the SASL JAAS config (`kafka`), the namespace connection string
-  (`eventhubs`, through its Kafka endpoint) or `ACCESS_KEY:SECRET` (`kinesis`, whose
-  `bootstrap_servers` is the region). The readiness preflight reports `realtime`
-  (`enabled`, `source_configured`, `kind`, `topic`) and the domain panel shows it.
+  secret_key, key_format: json, state_ttl_hours}` — `RealtimeSource` stores the
+  secret's scope and key *names* only and refuses any other field (a password, a
+  JAAS config). The secret holds the SASL JAAS config (`kafka`), the namespace
+  connection string (`eventhubs`, through its Kafka endpoint) or
+  `ACCESS_KEY:SECRET` (`kinesis`, whose `bootstrap_servers` is the region).
+  **Kinesis is experimental** (its sequence numbers are opaque, see below; the panel
+  and the readiness line say so). `state_ttl_hours` (default 72) is how long the
+  stream keeps a row's state. The readiness preflight reports `realtime`
+  (`enabled`, `source_configured`, `kind`, `topic`, `backend_eligible`,
+  `experimental`) and the domain panel shows it.
 
 **The topic.** One JSON change envelope per source-row change, Debezium style:
 `{"op": "c" | "u" | "d" | "r", "after": {...}, "before": {...}, "source": {"table":
@@ -550,7 +554,11 @@ millisecond). Values are decoded with the Unity Catalog source table's types int
 the text `CAST(… AS STRING)` gives them (`SparkColumnText`: epoch dates and
 timestamps, base64 or text decimals, Java double formatting, UTC), so the stream
 projects exactly what the slot SQL projects. An update that changes a row's key also
-tombstones the old key (from `before`), as the AUTO CDC fold does.
+tombstones the old key (from `before`), as the AUTO CDC fold does. A bare
+`source.table` (Debezium often sends only the table name) matches the mapped table of
+that leaf name when exactly one has it. An envelope that does not parse, has no `seq`,
+names an unmapped table or holds a value that does not decode is skipped and counted
+per reason (logged), never failing the stream.
 
 **Realtime processing core.** The Real-Time-Mode job groups the change events by
 `(map_id, source_key)` and runs `jobs.triple_stream.processor.SlotDiffStatefulProcessor`
@@ -574,25 +582,43 @@ TTL the state keeps one watermark per deleted predicate (unbounded). The equival
 
 **The job** (`jobs/triple_stream/main.py`, `TripleStreamJob`): arguments
 (`--domain`, `--version`, the source, `--slots-table`, `--mappings-json-path`, the
-Lakebase host / database / role / secret, `--live-table`, `--checkpoint`),
-`spark.readStream` of the topic, the envelope parse and explode (`mapInPandas`), the
-stateful diff, and a `foreach` sink that COPYs a partition into a temporary table
-and upserts `_live`:
+Lakebase host / database / role / secret, `--live-table`, `--checkpoint`,
+`--state-ttl-hours`), `spark.readStream` of the topic, the envelope parse and
+explode (`TripleStreamEnvelope`, `mapInPandas`), the stateful diff
+(`transformWithState`, output mode **update** — the only one Real-Time Mode runs),
+and a `foreach` writer (`LiveSink`, `writeStream.outputMode("update")`) that upserts
+each change as it arrives:
 
 ```sql
-INSERT INTO <live> AS live (…, updated_at)
-SELECT DISTINCT ON (map_id, source_key, predicate) …, now() FROM ob_live_stage
-ORDER BY map_id, source_key, predicate, seq DESC
+INSERT INTO <live> AS live (…, updated_at) VALUES (…, now())
 ON CONFLICT (map_id, source_key, predicate) DO UPDATE SET … WHERE EXCLUDED.seq > live.seq
 ```
 
-The trigger is Real-Time Mode (`spark.databricks.streaming.realTimeMode.enabled` and
-`trigger(realTime=…)`, `--real-time-mode` by default); a runtime that refuses either
-falls back to a `processingTime` micro-batch trigger (logged). Real-Time Mode takes a
-`foreach` sink, not `foreachBatch`. The job cluster is classic (Standard runtime, no
-Photon, no autoscaling, on-demand workers, `var.realtime_num_workers`), installs the
-app wheel (bundle artifact `ontobricks_wheel`: the job's import closure is the app,
-and the executors unpickle its functions by module) and `psycopg`, and runs in UTC.
+A `foreach` writer, not the native `postgresql` streaming sink, because that sink
+has no `seq` guard: a replayed or reordered event would overwrite a newer one. The
+trigger is Real-Time Mode (`spark.databricks.streaming.realTimeMode.enabled` and
+`trigger(realTime=…)`, `--real-time-mode` by default); a runtime that refuses to
+start the query in it falls back to a `processingTime` micro-batch trigger (logged).
+
+The job cluster is classic (Standard runtime, no Photon, no autoscaling, on-demand
+workers) and runs in UTC. It installs no app wheel: the driver and the executors
+import `back.core.streaming` and `jobs.triple_stream` from the synced workspace files
+(`PYTHONPATH` = `${workspace.file_path}/src`), whose import closure needs no app
+layer, web stack, SPARQL parser or pydantic (`tests/units/jobs/test_triple_stream_closure.py`);
+the job installs `psycopg` and `databricks-sql-connector` and never pins or replaces
+the runtime's `pyarrow`. **Sizing:** Real-Time Mode schedules every stage at once, so
+the workers' task slots (`var.realtime_num_workers` × cores per worker) must be at
+least the topic's partitions plus `spark.sql.shuffle.partitions`
+(`var.realtime_shuffle_partitions`; the stream has one shuffle, the
+`transformWithState` grouping). The defaults — 2 × 4-core workers, 4 shuffle
+partitions — fit a topic of up to 4 partitions. Arrow batches to the Python
+processor hold 100 records (1 is the lowest latency, at a throughput cost).
+**Runtime:** `scripts/deploy.sh` passes the workspace's newest DBR 19 (LTS first;
+`scripts/_internal/_select-spark-version.py`) because Kinesis polling in Real-Time
+Mode needs DBR 19 and the Python `transformWithState` low-throughput latency fix
+needs 18.2 or later; when the runtimes cannot be listed the bundle default (the
+newest LTS key known to the repo) stays. A failed run retries three times a minute
+apart.
 
 **`_live`** (`_companion_ddl.live_table_ddl`, `LakebaseLiveTable`):
 `g_<dom>_v<n>_live(map_id, source_key, predicate, subject, object, object_hash,
@@ -601,24 +627,45 @@ indexes `(subject)`, `(predicate, subject)`, `(object_hash)` `WHERE NOT deleted`
 early autovacuum (`autovacuum_vacuum_scale_factor = 0.02`,
 `autovacuum_analyze_scale_factor = 0.01`). When it exists the union view is a
 distinct `UNION` of the synced table, the companion (app writes and inferences) and
-the live rows (`WHERE NOT deleted`, blank objects dropped). A deleted slot stays
-visible through the synced table until that table syncs the delete.
+the live rows (`WHERE NOT deleted`, blank objects dropped) — but only while `_live`
+is **served**, which its table comment (`ontobricks:live:serving`) records: a stopped
+or dead stream's `_live` is emptied and leaves the view, so it never freezes stale
+values in the graph. The union is distinct on the triple, not on the slot, so a
+deleted slot stays visible through the synced table until that table syncs the
+delete, and an **updated** slot shows both its old value (synced table) and its new
+one (`_live`) until then. `LakebaseLiveTable.ensure` grants the stream's Postgres
+role `USAGE` on the schema and `SELECT, INSERT, UPDATE` on `_live`.
 `LakebaseLiveTable.purge_tombstones` (`DELETE … WHERE deleted AND updated_at < now()
-- interval '<n> hours'`, default 24) keeps tombstones as long as an event can be
-late.
+- interval '<n> hours'`) keeps tombstones as long as an event can be late.
 
-**Orchestration** (`TwinRealtimeStream`). An effective `realtime` build starts the
-stream once the slot pipeline and the `_data` view are up: it checks the
-prerequisites, creates `_live` (and refreshes the union view), uploads the mappings
-JSON (`/Workspace/Users/<app principal>/.ontobricks/realtime/<run name>.json`),
-resolves the job and `run_now`s it with `job_parameters`. A stream of the same
-version is found among the job's active runs by its `domain` / `version` parameters
-and reused, so `stop` and `status` need no stored state. The build records
-`realtime_run_id` / `realtime_state`; a stream that cannot start is recorded
-(`failed:<Error>`), never fails the build. A later build that is not `realtime`
-stops a stream an earlier one started (when the deployment has realtime enabled).
-`POST /dtwin/incremental/realtime/start` / `stop` (builders) and the status
-endpoint's `realtime` section (`run_id`, `state`) and card line do the same by hand.
+**Orchestration** (`TwinRealtimeStream`, `TwinLiveServing`, `TwinRealtimeJob`). An
+effective `realtime` build starts the stream once the slot pipeline and the `_data`
+view are up. `start` checks the prerequisites, cancels a run of the same domain at
+another version (one stream per domain), and reuses a run of this version — found
+among the job's active runs by its `domain` / `version` parameters, so `stop` and
+`status` need no stored state. Otherwise it creates `_live` (with the grants), seeds
+it from the `…_slots` snapshot (read on the build warehouse in batches, at the
+snapshot `seq` -1, so every stream event wins), marks it served and refreshes the
+union view, uploads the mappings JSON to the checkpoint volume
+(`<checkpoint root>/_mappings/<run name>.json`), and `run_now`s the job with
+`job_parameters` (`state_ttl_hours` included). The build records `realtime_run_id` /
+`realtime_state`; a stream that cannot start is recorded (`failed:<Error>`), never
+fails the build. `stop` cancels the run and retires `_live` (emptied, no longer
+served); a later build that is not `realtime`, on a Lakebase store whose `_live` is
+served, does the same. A scheduled tick of a `realtime` domain retires a served
+`_live` whose stream no longer runs (crashed past its retries: readers fall back to
+the microbatch graph until the next build restarts it) and otherwise purges
+tombstones older than the state TTL (at least 24 hours). `POST
+/dtwin/incremental/realtime/start` / `stop` (builders) and the status endpoint's
+`realtime` section (`run_id`, `state`) and card line do the same by hand.
+
+**Identities.** The job runs as the deployer (its owner), who needs READ on the
+domain's secret scope (source credentials, the Lakebase password), SELECT on the
+domain's `…_slots` table, and READ VOLUME + WRITE VOLUME on the checkpoint volume.
+The app principal needs CAN_MANAGE_RUN on the job (granted by
+`scripts/bootstrap/app-permissions.sh`) and WRITE VOLUME on the checkpoint volume
+(the mappings upload). A target may set the job's `run_as` instead, if its deployer
+holds `servicePrincipal.user` on that principal.
 
 **Reconciliation.** For a `realtime` domain the reconciliation also counts `_live`
 (not deleted, non-blank) against the `_slots` slot rows (`live_slots`, counts only).
@@ -626,16 +673,24 @@ A difference is `live_drift` — the stream diverged; restart it — and never a
 full refresh. A scheduled tick of a realtime domain reconciles that pair (no batch
 recompute: its slots run ahead) and records `live_drift`.
 
-**In this release** the slot pipeline still reads the sources' change data feed and
-the stream reads the topic: two consumers of the same changes, reconciled by the
-tick. One stream runs per deployment at a time (`max_concurrent_runs: 1`; raise it
-to stream several versions).
+**Two consumers of the same changes, on purpose.** The slot pipeline reads the
+sources' change data feed and the stream reads the topic. `_slots` stays the
+complete, replayable snapshot every mode shares — `_data`, the reconciliation and the
+stream's own seed are built from it — while a topic is neither complete history nor
+guaranteed to carry every write to a source table (a backfill or a repair `UPDATE`
+reaches the change data feed only). The stream is the low-latency overlay on top,
+reconciled against `_slots` by the tick. One stream runs per deployment at a time
+(`max_concurrent_runs: 1`; raise it to stream several domains).
 
-**Live-unverified:** Real-Time Mode, `transformWithState` (row API, `MapState` TTL),
-the Kafka / Event Hubs / Kinesis connectors and the `foreach` Postgres sink on the
-configured classic runtime; the wheel artifact and the job's `[dev <user>] ` name
-lookup; Debezium encodings beyond the defaults (`decimal.handling.mode=precise` /
-`string`, `time.precision.mode=adaptive`).
+**Live-unverified:** Real-Time Mode in update output mode with
+`transformWithState` (row API, `MapState` TTL) and the per-row `foreach` Postgres
+writer; the task-slot sizing rule on the default cluster; the Kafka / Event Hubs /
+Kinesis connectors; executors importing the synced source through `PYTHONPATH`, and
+the `databricks-sql-connector` install leaving the runtime's `pandas` / `pyarrow`
+alone; the DBR 19 key `deploy.sh` resolves; the run-as identity's grants (secret
+scope, `_slots`, checkpoint volume) and the `_live` grants to the stream role; the
+job's `[dev <user>] ` name lookup; Debezium encodings beyond the defaults
+(`decimal.handling.mode=precise` / `string`, `time.precision.mode=adaptive`).
 
 ## DAB deployment
 
@@ -659,16 +714,36 @@ the app principal (`APP_SP_CLIENT_ID`, looked up from the app) gets `CAN_MANAGE`
 When the registry or the workspace cannot be reached, or the app principal is
 unknown, nothing is rendered and the previous file is **kept**: removing it would
 make the deploy delete every pipeline it deployed before, with its `_slots`
-streaming table. A version that stops being published, or a domain switched to
-`full`, drops out of the file and its pipeline is deleted by the next deploy. DAB
-declares the *requested* mode; when a build resolves another (e.g. untracked
-sources), the runner adjusts the pipeline and the next deploy re-applies the
-declared one.
+streaming table. For the same reason a version whose mappings no longer compile
+keeps its previously rendered resource (logged). A version that stops being
+published, or a domain switched to `full`, drops out of the file and its pipeline is
+deleted by the next deploy. DAB declares the *requested* mode; when a build resolves
+another (e.g. untracked sources), the runner adjusts the pipeline and the next
+deploy re-applies the declared one.
+
+**Adopting a pipeline the app created.** A slot pipeline the runner created before
+the bundle declared it (same name, no bundle deployment metadata) would get a twin
+on the same `_slots` table from `bundle deploy`. The renderer lists those in
+`resources/_generated_triple_slots.bind` (`<resource key> <pipeline id>`, gitignored),
+and `deploy.sh` runs `databricks bundle deployment bind <key> <id> --auto-approve`
+for each before the deploy; a CLI without `bundle deployment bind` skips the step
+with a notice. A pipeline another bundle manages is never listed.
+
+**Identities.** Bundle-deployed pipelines run as the deployer, and their library is
+the SQL file under `/Workspace/Users/<app principal>/.ontobricks/pipelines/`: the
+deployer needs CAN_READ on that folder (the app principal owns it), and the app
+principal keeps CAN_MANAGE on the pipeline to update and run it.
 
 The realtime stream job (`resources/triple_rtm.job.yml`) is always deployed and
 inert — no schedule, no trigger; the app starts it per realtime domain version. DAB
 cannot include a resource conditionally, so `var.realtime_enabled` (default
 `false`) only tags the deployed job; the app refuses to start a stream while
 `ONTOBRICKS_REALTIME_ENABLED` is off. Its cluster is sized by
-`var.realtime_num_workers`, `var.realtime_spark_version` and
-`var.realtime_node_type_id`.
+`var.realtime_num_workers`, `var.realtime_shuffle_partitions`,
+`var.realtime_spark_version` (resolved by `deploy.sh`, see [Realtime](#realtime)) and
+`var.realtime_node_type_id`. The job itself is cloud-neutral: the node type has no
+default and the AWS targets (`dev`, `dev-lakebase` and the generated
+`dev-lakebase-<id>`) set `i3.xlarge` with on-demand `aws_attributes`; an Azure or GCP
+target sets its own node type (e.g. `Standard_D4ds_v5`, `n2-highmem-4`) and
+`azure_attributes` / `gcp_attributes`. `scripts/bootstrap/app-permissions.sh` grants
+the app principals CAN_MANAGE_RUN on it, as on the graph analytics job.
