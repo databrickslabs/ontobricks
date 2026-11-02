@@ -13,17 +13,17 @@ from typing import Any
 from back.core.graphdb.interfaces.GraphSimulation import GraphSimulation
 
 
-class DeltaSimulation(GraphSimulation):
+class Simulation(GraphSimulation):
     """Copy-on-write UC Delta sandbox for a Databricks domain."""
 
     def simulation_store(self, live_store: Any) -> Any:
-        from back.core.graphdb.delta.DeltaMaterializedStore import (
-            DeltaMaterializedStore,
+        from back.core.graphdb.delta.MaterializedStore import (
+            MaterializedStore,
         )
 
-        return DeltaMaterializedStore(live_store._client)
+        return MaterializedStore(live_store._client)
 
     def is_native_store(self, live_store: Any) -> bool:
-        from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
+        from back.core.graphdb.delta.ReadStore import ReadStore
 
-        return isinstance(live_store, DeltaReadStore)
+        return isinstance(live_store, ReadStore)

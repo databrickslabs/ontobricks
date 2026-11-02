@@ -1,7 +1,7 @@
 """Delta implementation of the :class:`GraphHealthProbe` capability.
 
 Thin facade over the Delta health / object-listing internals (``health``,
-``objects``, ``DeltaBase.create_databricks_client``). All logic stays in those
+``objects``, ``Base.create_databricks_client``). All logic stays in those
 modules; this class only groups them behind the engine-agnostic probe contract
 so no caller outside ``back/core/graphdb/`` imports ``delta.*`` directly.
 
@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 from back.core.graphdb.interfaces.GraphHealthProbe import GraphHealthProbe
 
 
-class DeltaHealthProbe(GraphHealthProbe):
+class HealthProbe(GraphHealthProbe):
     """Health, quality and UC object-listing probes for the Delta backend."""
 
     def __init__(self, domain: Any, settings: Any = None) -> None:
@@ -24,7 +24,7 @@ class DeltaHealthProbe(GraphHealthProbe):
         self._settings = settings
 
     def probe_status(self, table_fqn: str) -> Dict[str, Any]:
-        from back.core.graphdb.delta.DeltaBase import create_databricks_client
+        from back.core.graphdb.delta.Base import create_databricks_client
         from back.core.graphdb.delta.health import probe_from_client
 
         client = create_databricks_client(self._domain, self._settings)

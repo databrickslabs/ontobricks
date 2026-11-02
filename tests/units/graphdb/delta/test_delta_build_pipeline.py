@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
-    DeltaTripleStoreBuildPipeline,
+from back.core.graphdb.delta.BuildPipeline import (
+    BuildPipeline,
     lakehouse_build_steps,
 )
 from back.core.task_manager.TaskManager import TaskManager
@@ -38,7 +38,7 @@ def test_lakehouse_build_steps_name_materialization_mode(
 
 @pytest.mark.unit
 def test_prepare_translation_uses_configured_build_transport() -> None:
-    pipe = DeltaTripleStoreBuildPipeline.__new__(DeltaTripleStoreBuildPipeline)
+    pipe = BuildPipeline.__new__(BuildPipeline)
     pipe.tm = MagicMock()
     pipe.task_id = "task-1"
     pipe.domain = SimpleNamespace()
@@ -85,7 +85,7 @@ def test_prepare_translation_uses_configured_build_transport() -> None:
 
 
 def _minimal_run_pipeline(*, materialization: str = "table"):
-    pipe = DeltaTripleStoreBuildPipeline.__new__(DeltaTripleStoreBuildPipeline)
+    pipe = BuildPipeline.__new__(BuildPipeline)
     pipe.tm = MagicMock()
     pipe.task_id = "task-run"
     pipe.domain = SimpleNamespace(
@@ -143,7 +143,7 @@ def test_run_builds_adjacency_index_after_graph_view() -> None:
     pipe._ensure_graph_view = MagicMock(side_effect=_mark_graph_view)
 
     with patch(
-        "back.core.graphdb.delta.DeltaTripleStoreBuildPipeline.DeltaMaterializedStore"
+        "back.core.graphdb.delta.BuildPipeline.MaterializedStore"
     ) as store_cls, patch("back.core.graphdb.delta.materialize.optimize_table"):
         store = store_cls.return_value
         store.rebuild_adjacency.side_effect = lambda _table: order.append("adjacency")
@@ -161,7 +161,7 @@ def test_run_fails_when_adjacency_ctas_fails() -> None:
     pipe = _minimal_run_pipeline(materialization="view")
 
     with patch(
-        "back.core.graphdb.delta.DeltaTripleStoreBuildPipeline.DeltaMaterializedStore"
+        "back.core.graphdb.delta.BuildPipeline.MaterializedStore"
     ) as store_cls:
         store_cls.return_value.rebuild_adjacency.side_effect = RuntimeError(
             "adjacency failure"
@@ -179,7 +179,7 @@ def test_run_in_table_mode_optimizes_data_before_adjacency() -> None:
     order = []
 
     with patch(
-        "back.core.graphdb.delta.DeltaTripleStoreBuildPipeline.DeltaMaterializedStore"
+        "back.core.graphdb.delta.BuildPipeline.MaterializedStore"
     ) as store_cls, patch(
         "back.core.graphdb.delta.materialize.optimize_table",
         side_effect=lambda *_args, **_kwargs: order.append("data_optimize"),
@@ -196,7 +196,7 @@ def test_run_in_table_mode_advances_all_post_materialization_stages() -> None:
     pipe = _minimal_run_pipeline(materialization="table")
 
     with (
-        patch("back.core.graphdb.delta.DeltaTripleStoreBuildPipeline.DeltaMaterializedStore"),
+        patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"),
         patch("back.core.graphdb.delta.materialize.optimize_table"),
     ):
         pipe.run()
@@ -214,9 +214,9 @@ def test_view_build_skips_optimize_stage() -> None:
     pipe = _minimal_run_pipeline(materialization="view")
 
     with (
-        patch("back.core.graphdb.delta.DeltaTripleStoreBuildPipeline.DeltaMaterializedStore"),
+        patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"),
         patch(
-            "back.core.graphdb.delta.DeltaTripleStoreBuildPipeline."
+            "back.core.graphdb.delta.BuildPipeline."
             "materialize.optimize_table"
         ) as optimize,
     ):
@@ -274,7 +274,7 @@ def test_run_sets_terminal_step_statuses_with_real_task_manager(
     pipe._complete_task = _complete_task
     try:
         with (
-            patch("back.core.graphdb.delta.DeltaTripleStoreBuildPipeline.DeltaMaterializedStore"),
+            patch("back.core.graphdb.delta.BuildPipeline.MaterializedStore"),
             patch("back.core.graphdb.delta.materialize.optimize_table"),
         ):
             pipe.run()

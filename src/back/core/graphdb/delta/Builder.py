@@ -1,8 +1,8 @@
 """Delta (Unity Catalog) implementation of the :class:`GraphBuilder` capability.
 
 Thin facade over the Delta build internals (``_table_naming``, ``materialize``,
-``DeltaBase.create_databricks_client``, ``DeltaMaterializedStore`` and
-``DeltaTripleStoreBuildPipeline``). All backend logic stays in those modules;
+``Base.create_databricks_client``, ``MaterializedStore`` and
+``BuildPipeline``). All backend logic stays in those modules;
 this class only groups them behind the engine-agnostic builder contract so no
 caller outside ``back/core/graphdb/`` imports ``delta.*`` directly.
 
@@ -21,7 +21,7 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-class DeltaGraphBuilder(GraphBuilder):
+class Builder(GraphBuilder):
     """Build / materialize the Delta graph for a domain on the Build warehouse."""
 
     def __init__(
@@ -35,7 +35,7 @@ class DeltaGraphBuilder(GraphBuilder):
     # -- Build warehouse client (lazy, for_write) -----------------------
     def _get_client(self) -> Any:
         if not self._client_resolved:
-            from back.core.graphdb.delta.DeltaBase import create_databricks_client
+            from back.core.graphdb.delta.Base import create_databricks_client
 
             self._client = create_databricks_client(
                 self._domain, self._settings, for_write=True
@@ -76,12 +76,12 @@ class DeltaGraphBuilder(GraphBuilder):
     def materialize_triples(
         self, table_name: str, triples: List[Dict[str, str]]
     ) -> int:
-        from back.core.graphdb.delta.DeltaMaterializedStore import (
-            DeltaMaterializedStore,
+        from back.core.graphdb.delta.MaterializedStore import (
+            MaterializedStore,
         )
 
         client = self._get_client()
-        store = DeltaMaterializedStore(client)
+        store = MaterializedStore(client)
         store.create_table(table_name)
         client.execute_statement(f"DELETE FROM {table_name}")
         return store.insert_triples(table_name, triples)
@@ -117,7 +117,7 @@ class DeltaGraphBuilder(GraphBuilder):
 
     # -- Triple-store build pipeline -----------------------------------
     def build_steps(self, materialization: str) -> List[str]:
-        from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
+        from back.core.graphdb.delta.BuildPipeline import (
             lakehouse_build_steps,
         )
 
@@ -140,11 +140,11 @@ class DeltaGraphBuilder(GraphBuilder):
         base_uri: str,
         build_kind: str = "ui",
     ) -> None:
-        from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
-            DeltaTripleStoreBuildPipeline,
+        from back.core.graphdb.delta.BuildPipeline import (
+            BuildPipeline,
         )
 
-        DeltaTripleStoreBuildPipeline(
+        BuildPipeline(
             tm=tm,
             task_id=task_id,
             domain=self._domain,

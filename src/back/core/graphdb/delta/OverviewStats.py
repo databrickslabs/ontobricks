@@ -13,7 +13,7 @@ from back.core.graphdb.interfaces.GraphBackend import GraphBackend
 from back.core.graphdb.entity_search import is_missing_relation_error
 
 
-class DeltaOverviewStats:
+class OverviewStats:
     """Read Overview aggregates from graph-index companions when they exist."""
 
     def __init__(self, store: Any) -> None:

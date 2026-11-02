@@ -354,7 +354,7 @@ class GraphDBFactory:
     def _create_delta_view(
         self, domain: Any, settings: Optional[Any] = None
     ) -> Optional[Any]:
-        """Instantiate a raw, read-only :class:`DeltaViewStore` on a SQL warehouse.
+        """Instantiate a raw, read-only :class:`ViewStore` on a SQL warehouse.
 
         The no-copy virtual backend: operates directly on the FQNs passed in
         (health probes against a UC view/table, SHACL/DQ SQL). Uses the Build
@@ -367,7 +367,7 @@ class GraphDBFactory:
                 resolve_build_warehouse_id,
                 resolve_use_cloud_fetch,
             )
-            from back.core.graphdb.delta.DeltaViewStore import DeltaViewStore
+            from back.core.graphdb.delta.ViewStore import ViewStore
 
             if settings is not None:
                 host, token = get_databricks_host_and_token(domain, settings)
@@ -399,7 +399,7 @@ class GraphDBFactory:
                 use_sea=False,
                 use_cloud_fetch=use_cloud_fetch,
             )
-            return DeltaViewStore(client)
+            return ViewStore(client)
         except Exception as e:
             logger.exception("Failed to create Delta view store: %s", e)
             return None
@@ -540,11 +540,11 @@ class GraphDBFactory:
         *,
         for_write: bool = False,
     ) -> Optional[Any]:
-        """Instantiate :class:`DeltaMaterializedStore` on SQL Warehouse."""
+        """Instantiate :class:`MaterializedStore` on SQL Warehouse."""
         try:
-            from back.core.graphdb.delta.DeltaBase import create_databricks_client
-            from back.core.graphdb.delta.DeltaMaterializedStore import (
-                DeltaMaterializedStore,
+            from back.core.graphdb.delta.Base import create_databricks_client
+            from back.core.graphdb.delta.MaterializedStore import (
+                MaterializedStore,
             )
         except ImportError as exc:
             logger.warning("Delta graph engine unavailable: %s", exc)
@@ -554,9 +554,9 @@ class GraphDBFactory:
         if client is None:
             return None
         try:
-            return DeltaMaterializedStore(client, domain=domain, settings=settings)
+            return MaterializedStore(client, domain=domain, settings=settings)
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to create DeltaMaterializedStore: %s", exc)
+            logger.exception("Failed to create MaterializedStore: %s", exc)
             return None
 
     @staticmethod
@@ -612,9 +612,9 @@ class GraphDBFactory:
         """
         resolved = engine or cls._builder_engine(domain, settings)
         if resolved == "delta":
-            from back.core.graphdb.delta.DeltaGraphBuilder import DeltaGraphBuilder
+            from back.core.graphdb.delta.Builder import Builder
 
-            return DeltaGraphBuilder(domain, settings, client=client)
+            return Builder(domain, settings, client=client)
         if resolved == "lakebase":
             from back.core.graphdb.lakebase.Builder import (
                 Builder,
@@ -652,9 +652,9 @@ class GraphDBFactory:
         """
         resolved = engine or cls._builder_engine(domain, settings)
         if resolved == "delta":
-            from back.core.graphdb.delta.DeltaHealthProbe import DeltaHealthProbe
+            from back.core.graphdb.delta.HealthProbe import HealthProbe
 
-            return DeltaHealthProbe(domain, settings)
+            return HealthProbe(domain, settings)
         if resolved == "lakebase":
             from back.core.graphdb.lakebase.HealthProbe import (
                 HealthProbe,
@@ -701,9 +701,9 @@ class GraphDBFactory:
 
         if FlatStore is not None and isinstance(store, FlatStore):
             return "lakebase"
-        from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
+        from back.core.graphdb.delta.ReadStore import ReadStore
 
-        if isinstance(store, DeltaReadStore):
+        if isinstance(store, ReadStore):
             return "delta"
         from back.core.graphdb.neo4j.Store import Store
 
@@ -725,9 +725,9 @@ class GraphDBFactory:
 
             return Simulation()
         if kind in ("delta", "databricks"):
-            from back.core.graphdb.delta.DeltaSimulation import DeltaSimulation
+            from back.core.graphdb.delta.Simulation import Simulation
 
-            return DeltaSimulation()
+            return Simulation()
         if kind == "neo4j":
             from back.core.graphdb.neo4j.Simulation import Simulation
 

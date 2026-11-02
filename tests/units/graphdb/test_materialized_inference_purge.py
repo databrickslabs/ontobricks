@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.graphdb.interfaces.GraphBackend import GraphBackend
-from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.lakebase.FlatStore import FlatStore
 
 pytestmark = pytest.mark.unit
@@ -17,7 +17,7 @@ def test_base_backend_reports_source_safe_purge_as_unsupported():
 
 
 def test_companion_backends_report_source_safe_purge_as_supported():
-    assert DeltaMaterializedStore.supports_materialized_inference_purge is True
+    assert MaterializedStore.supports_materialized_inference_purge is True
     assert FlatStore.supports_materialized_inference_purge is True
 
 
@@ -28,7 +28,7 @@ def test_base_backend_rejects_generated_purge():
 
 def test_delta_counts_and_truncates_only_inferred_companion():
     client = MagicMock()
-    store = DeltaMaterializedStore(client, domain=MagicMock(), settings=MagicMock())
+    store = MaterializedStore(client, domain=MagicMock(), settings=MagicMock())
     store.rebuild_adjacency = MagicMock()
 
     with (
@@ -39,7 +39,7 @@ def test_delta_counts_and_truncates_only_inferred_companion():
         ),
         patch.object(store, "count_triples", return_value=17) as count,
         patch(
-            "back.core.graphdb.delta.DeltaMaterializedStore.materialize.truncate_table"
+            "back.core.graphdb.delta.MaterializedStore.materialize.truncate_table"
         ) as truncate,
     ):
         assert store.purge_materialized_triples("sales_V3") == 17
@@ -51,7 +51,7 @@ def test_delta_counts_and_truncates_only_inferred_companion():
 
 def test_delta_purge_returns_zero_when_inferred_companion_is_missing():
     client = MagicMock()
-    store = DeltaMaterializedStore(client, domain=MagicMock(), settings=MagicMock())
+    store = MaterializedStore(client, domain=MagicMock(), settings=MagicMock())
     store.rebuild_adjacency = MagicMock()
 
     with (
@@ -66,7 +66,7 @@ def test_delta_purge_returns_zero_when_inferred_companion_is_missing():
             side_effect=RuntimeError("TABLE_OR_VIEW_NOT_FOUND: sales_inferred"),
         ),
         patch(
-            "back.core.graphdb.delta.DeltaMaterializedStore.materialize.truncate_table"
+            "back.core.graphdb.delta.MaterializedStore.materialize.truncate_table"
         ) as truncate,
     ):
         assert store.purge_materialized_triples("sales_V3") == 0
@@ -77,7 +77,7 @@ def test_delta_purge_returns_zero_when_inferred_companion_is_missing():
 
 def test_delta_purge_surfaces_adjacency_rebuild_failure():
     client = MagicMock()
-    store = DeltaMaterializedStore(client, domain=MagicMock(), settings=MagicMock())
+    store = MaterializedStore(client, domain=MagicMock(), settings=MagicMock())
     store.rebuild_adjacency = MagicMock(side_effect=RuntimeError("adjacency failed"))
 
     with (
@@ -88,7 +88,7 @@ def test_delta_purge_surfaces_adjacency_rebuild_failure():
         ),
         patch.object(store, "count_triples", return_value=17),
         patch(
-            "back.core.graphdb.delta.DeltaMaterializedStore.materialize.truncate_table"
+            "back.core.graphdb.delta.MaterializedStore.materialize.truncate_table"
         ),
     ):
         with pytest.raises(RuntimeError, match="adjacency failed"):

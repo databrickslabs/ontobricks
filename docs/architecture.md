@@ -222,7 +222,7 @@ LIMIT 100
 4. **R2RML Analyzer** - Load TriplesMap definitions, build mappings
 5. **SPARQL→SQL Translator** - Match patterns to mappings, generate SQL
 6. **Generated Spark SQL** - Query with JOINs and UNION ALL
-7. **Triple Store Backend Dispatch** - The single `GraphDBFactory` returns the active engine — a Delta-backed store (`DeltaMaterializedStore`) or the Lakebase engine (`FlatStore`). Both subclass `GraphBackend` and expose the same `(subject, predicate, object)` contract.
+7. **Triple Store Backend Dispatch** - The single `GraphDBFactory` returns the active engine — a Delta-backed store (`MaterializedStore`) or the Lakebase engine (`FlatStore`). Both subclass `GraphBackend` and expose the same `(subject, predicate, object)` contract.
 8. **RDF-style Results** - Uniform (subject, predicate, object) triples from both backends
 9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and data cluster detection (Louvain/Label Propagation/Greedy Modularity)
 
@@ -463,7 +463,7 @@ src/
 │   │   │   ├── GraphBackend.py       # Abstract base (CRUD + named queries + graph ops)
 │   │   │   ├── GraphDBFactory.py       # Engine factory (auto / lakebase / delta / view)
 │   │   │   ├── constants.py            # RDF_TYPE, RDFS_LABEL
-│   │   │   ├── delta/                  # DeltaMaterializedStore (SQL Warehouse engine)
+│   │   │   ├── delta/                  # MaterializedStore (SQL Warehouse engine)
 │   │   │   ├── lakebase/               # FlatStore, Base, SyncedTableManager
 │   │   │   └── _starter_kit/           # ExampleStore template for new engines
 │   │   │
@@ -1148,7 +1148,7 @@ Full detail: [`docs/graphdb-integration.md` § Adjacency index objects](backend.
 
 ### Backend Abstraction
 
-The Delta, Lakebase, and Neo4j paths each implement the single `GraphBackend` base (`src/back/core/graphdb/GraphBackend.py`) — `DeltaMaterializedStore`, `FlatStore`, and `Store` respectively. The base exposes the same surface for:
+The Delta, Lakebase, and Neo4j paths each implement the single `GraphBackend` base (`src/back/core/graphdb/GraphBackend.py`) — `MaterializedStore`, `FlatStore`, and `Store` respectively. The base exposes the same surface for:
 
 - Table lifecycle: `create_table`, `drop_table`, `table_exists`
 - Triple operations: `insert_triples`, `query_triples`, `count_triples`
@@ -1261,7 +1261,7 @@ Where atoms are class assertions (`Person(?x)`) or property assertions (`worksIn
 - **Violation detection**: Finds instances where the antecedent holds but the consequent does not (generates `NOT EXISTS` subqueries)
 - **Materialization**: Inserts inferred consequent triples into the store (generates `INSERT` statements)
 
-**Backend dispatch**: The two SQL backends — `DeltaMaterializedStore` (Spark SQL on the SQL Warehouse) and `FlatStore` (Postgres SQL) — use `SWRLSQLTranslator`. The `Store` engine reports `supports_cypher = True` and returns a `SWRLFlatCypherTranslator`, but that translator is currently scaffolded — full SWRL → Cypher reasoning lands in a follow-up; on Neo4j the SWRL materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct translator be selected per engine without touching `SWRLEngine`.
+**Backend dispatch**: The two SQL backends — `MaterializedStore` (Spark SQL on the SQL Warehouse) and `FlatStore` (Postgres SQL) — use `SWRLSQLTranslator`. The `Store` engine reports `supports_cypher = True` and returns a `SWRLFlatCypherTranslator`, but that translator is currently scaffolded — full SWRL → Cypher reasoning lands in a follow-up; on Neo4j the SWRL materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct translator be selected per engine without touching `SWRLEngine`.
 
 **URI resolution**: The engine builds a lowercase-name → URI map from the ontology, normalizing property URIs to the data namespace used by R2RML so that SWRL atom names match the predicates stored in the triple store.
 
@@ -2928,7 +2928,7 @@ languages, two are engine-facing dialects the platform translates *down to*.
 | **REST** | user-facing | `api/external_app.py`, `api/routers/...`, `api/routers/internal/dtwin.py` | Calls into Python services (`DigitalTwin`, `DomainQueryService`, registry, …) |
 | **GraphQL** | user-facing | `back/core/graphql/GraphQLSchemaBuilder.py`, `ResolverFactory.py`, `back/fastapi/graphql_routes.py` | Resolvers internally call SPARQL / triples-find → Spark SQL |
 | **SPARQL** | user-facing (read-only in chat) | `back/core/w3c/sparql/SparqlTranslator.py`, `SparqlQueryRunner.py`, `DomainQueryService.py` | Translated to **Spark SQL** via R2RML mappings |
-| **Spark SQL** | engine-facing | `back/core/graphdb/delta/DeltaMaterializedStore.py` | Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog |
+| **Spark SQL** | engine-facing | `back/core/graphdb/delta/MaterializedStore.py` | Native execution on Databricks SQL Warehouse against Delta views in Unity Catalog |
 | **Cypher** *(reserved for future engines)* | engine-facing | `back/core/graphdb/GraphBackend.py` + concrete engines under `back/core/graphdb/<engine>/` (`supports_cypher = True`, `query_dialect = "cypher"`) | None of the currently shipped engines speaks Cypher — Lakebase Postgres is SQL-only. The capability flags are kept as a seam for plugging in Cypher / Gremlin / SPARQL-store engines. |
 
 #### Supporting W3C standards (not query languages)
@@ -2952,7 +2952,7 @@ triple-store backend (`GraphDBFactory.create(...)`):
 
 | Layer | Storage | Native engine | SPARQL path | Cypher path |
 |---|---|---|---|---|
-| Delta engine (`DeltaMaterializedStore`) | Delta view in Unity Catalog | **Spark SQL** (Databricks SQL Warehouse) | SPARQL → Spark SQL via R2RML | n/a |
+| Delta engine (`MaterializedStore`) | Delta view in Unity Catalog | **Spark SQL** (Databricks SQL Warehouse) | SPARQL → Spark SQL via R2RML | n/a |
 | Lakebase engine (`FlatStore`) | Lakebase Postgres flat table | **Postgres SQL** | SPARQL → engine SQL | Reserved for future Cypher engines |
 
 The selection is made in `back/core/graphdb/GraphDBFactory.py`. Both engines
@@ -3094,7 +3094,7 @@ traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 | `list_domain_versions` | `GET /api/v1/domain/versions` | REST | UC Volume listing |
 | `get_design_status` | `GET /api/v1/domain/design-status` | REST | Python aggregator |
 | `describe_ontology` | `GET /api/v1/domain/ontology` + `GET /api/v1/domain/classes` | REST | Ontology schema only (no graph): structured class summary + raw OWL/Turtle |
-| `select_domain` | `GET /api/v1/digitaltwin/status` + `GET /api/v1/domain/classes` | REST | DeltaMaterializedStore status (Spark SQL) or GraphDB status; class attachments cached for `[Context]` blocks |
+| `select_domain` | `GET /api/v1/digitaltwin/status` + `GET /api/v1/domain/classes` | REST | MaterializedStore status (Spark SQL) or GraphDB status; class attachments cached for `[Context]` blocks |
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |
 | `get_entity_context` | `GET /api/v1/digitaltwin/nodes/context` | REST | Class resolution + optional **Spark SQL** dataset read and bridge traversal |
@@ -3321,7 +3321,7 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 - SPARQL — `src/back/core/w3c/sparql/{SparqlTranslator,SparqlQueryRunner,DomainQueryService}.py`
 - Graph DB factory — `src/back/core/graphdb/GraphDBFactory.py`
 - GraphDB backend — `src/back/core/graphdb/GraphBackend.py`
-- Delta engine — `src/back/core/graphdb/delta/DeltaMaterializedStore.py`
+- Delta engine — `src/back/core/graphdb/delta/MaterializedStore.py`
 - GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{Base,FlatStore,SyncedTableManager}.py`
 - Reasoning — `src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`

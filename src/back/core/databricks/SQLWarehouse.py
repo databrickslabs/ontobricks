@@ -297,7 +297,7 @@ class SQLWarehouse:
         by a session ``STATEMENT_TIMEOUT`` so the warehouse cancels a runaway
         statement server-side. The bound is reset before the (pooled)
         connection is returned so it never leaks to the next borrower. Used by
-        the graph read path (:class:`DeltaReadStore`); left unset for the
+        the graph read path (:class:`ReadStore`); left unset for the
         build pipeline and full-graph dumps which may legitimately run longer.
         """
         self._require_warehouse()

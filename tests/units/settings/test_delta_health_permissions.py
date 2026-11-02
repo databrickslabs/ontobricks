@@ -50,7 +50,7 @@ class TestTripleStoreDatabricksHealthService:
             "back.objects.domain.settings.SettingsService.get_domain",
             side_effect=AssertionError("get_domain must not be called"),
         ), patch(
-            "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+            "back.core.graphdb.delta.Base.create_databricks_client",
             side_effect=AssertionError("create_databricks_client must not be called"),
         ), patch(
             "back.core.graphdb.delta._table_naming.view_fqn",

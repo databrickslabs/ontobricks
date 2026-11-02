@@ -102,7 +102,7 @@ def _job_wiring(client):
     create = MagicMock(return_value=client)
     rcfg = SimpleNamespace(catalog="reg_cat", schema="reg_sch")
     with patch(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client", create
+        "back.core.graphdb.delta.Base.create_databricks_client", create
     ), patch("back.core.graph_analysis.LakeflowRunner") as runner, patch(
         "back.core.graph_analysis.JobMetrics"
     ) as job_metrics, patch(

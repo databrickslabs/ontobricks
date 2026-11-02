@@ -1027,9 +1027,9 @@ get_graphdb(domain, settings)          # engine=None → auto-resolve
 | `src/back/core/graphdb/GraphBuilder.py` · `GraphHealthProbe.py` · `GraphProvisioner.py` · `GraphSimulation.py` | Factory-vended **capability interfaces** — build/materialize, health/quality probes, provisioning, and sandbox/simulation. The only way code *outside* `graphdb/` reaches backend-specific build/health/provision/sim logic. |
 | `src/back/core/graphdb/GraphDBFactory.py` | Factory — engine resolution, store construction, and the capability accessors (`get_builder`, `get_health_probe`, `get_provisioner`, `get_simulation`, `classify_store`). |
 | `src/back/core/graphdb/constants.py` | Shared RDF constants (`RDF_TYPE`, `RDFS_LABEL`). |
-| `src/back/core/graphdb/delta/DeltaReadStore.py` | Shared Delta read mixin (named queries, subgraph expansion) for both the materialized and view stores. |
-| `src/back/core/graphdb/delta/DeltaMaterializedStore.py` | Unity Catalog Delta engine (`table` materialization — copy-owning). |
-| `src/back/core/graphdb/delta/DeltaViewStore.py` | Read-only, no-copy Delta `view` store (health probes, quality SQL). |
+| `src/back/core/graphdb/delta/ReadStore.py` | Shared Delta read mixin (named queries, subgraph expansion) for both the materialized and view stores. |
+| `src/back/core/graphdb/delta/MaterializedStore.py` | Unity Catalog Delta engine (`table` materialization — copy-owning). |
+| `src/back/core/graphdb/delta/ViewStore.py` | Read-only, no-copy Delta `view` store (health probes, quality SQL). |
 | `src/back/core/graphdb/delta/_table_naming.py` | FQN helpers for the R2RML VIEW, `_data`, `_inferred`, `_graph`. |
 | `src/back/core/graphdb/delta/materialize.py` | CTAS / companion / union-VIEW SQL and the triple count (`count_triples`, which raises instead of returning 0 on error) used by Build. |
 | `src/back/core/graphdb/__init__.py` | Package exports (`get_graphdb`, `GRAPHDB_AVAILABLE`). |
@@ -1227,7 +1227,7 @@ any caller reaches into a backend package directly.
 
 Each is a small facade that delegates to your backend package's internals. The
 method surface is engine-specific — look at the Delta, Lakebase and Neo4j impls
-(`DeltaGraphBuilder`, `Provisioner`, `HealthProbe`, …) for the
+(`Builder`, `Provisioner`, `HealthProbe`, …) for the
 shape. A capability the engine does not need simply has no impl and the factory
 accessor returns `None` for that engine.
 
@@ -1778,7 +1778,7 @@ mode.
 Implementation:
 
 - `src/back/core/graphdb/delta/materialize.py`
-- `src/back/core/graphdb/delta/DeltaMaterializedStore.py`
+- `src/back/core/graphdb/delta/MaterializedStore.py`
 
 #### 3. Entity Preview index
 
@@ -1850,7 +1850,7 @@ Several smaller optimizations avoid unnecessary warehouse work:
 Implementations:
 
 - `GraphBackend.get_entity_metadata`
-- `DeltaMaterializedStore.table_exists`
+- `MaterializedStore.table_exists`
 - `FlatStore.table_exists`
 - `FlatStore.find_subjects_by_patterns`
 
@@ -1961,7 +1961,7 @@ in-process fallback.
 Implementation:
 
 - `GraphBackend.get_aggregate_stats`
-- `DeltaMaterializedStore._distinct_count_expr`
+- `MaterializedStore._distinct_count_expr`
 - `GraphBackend.query_triples_for_analysis`
 
 #### 9. Snapshot rebuild and statistics
@@ -2246,7 +2246,7 @@ existing `materialize.drop_relation` guard. The Bloom filter warning on
 `entity_search` is a warehouse-tier limitation and does not affect search
 correctness.
 
-Implementation: `src/back/core/graphdb/delta/DeltaMaterializedStore.py`
+Implementation: `src/back/core/graphdb/delta/MaterializedStore.py`
 (`rebuild_adjacency`, `_rebuild_adjacency_table`, `_rebuild_props_table`,
 `_rebuild_entity_search_table`).
 

@@ -145,7 +145,7 @@ class TestTheProbeClassifiesTheFailure:
 
     def _probe(self, exc):
         with patch(
-            "back.core.graphdb.delta.DeltaBase.create_databricks_client"
+            "back.core.graphdb.delta.Base.create_databricks_client"
         ) as client:
             client.return_value.execute_query.side_effect = exc
             return probe_data_table(object(), _Settings(), "cat.sch.t_data")
@@ -179,7 +179,7 @@ class TestTheProbeClassifiesTheFailure:
 
     def test_rows_answer_true(self):
         with patch(
-            "back.core.graphdb.delta.DeltaBase.create_databricks_client"
+            "back.core.graphdb.delta.Base.create_databricks_client"
         ) as client:
             client.return_value.execute_query.return_value = [{"ok": 1}]
             assert probe_data_table(object(), _Settings(), "cat.sch.t_data") == (

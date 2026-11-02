@@ -11,16 +11,16 @@ pipeline may have materialized alongside the live relation — capability flags 
 left ``True`` and the search-cache option (``auto`` / ``force_on`` /
 ``force_off``) governs per request whether they are used, exactly as for the
 materialized store.  The SQL read surface is shared via
-:class:`back.core.graphdb.delta.DeltaReadStore.DeltaReadStore`.
+:class:`back.core.graphdb.delta.ReadStore.ReadStore`.
 """
 
 from __future__ import annotations
 
 from back.core.graphdb.interfaces.VirtualBackend import VirtualBackend
-from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
+from back.core.graphdb.delta.ReadStore import ReadStore
 
 
-class DeltaViewStore(DeltaReadStore, VirtualBackend):
+class ViewStore(ReadStore, VirtualBackend):
     """Read-only, no-copy Delta view store (live-relation pass-through)."""
 
     # Read-only, but companion tables materialized next to the live relation can

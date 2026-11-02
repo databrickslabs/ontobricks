@@ -47,7 +47,7 @@ def _info(api_client, domain):
     # No warehouse: the probe degrades to an empty status, which leaves the
     # naming and materialization fields this test is about untouched.
     with patch(f"{MODULE}.get_domain", return_value=domain), patch(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         return_value=None,
     ):
         resp = api_client.get("/dtwin/databricks-build/info")

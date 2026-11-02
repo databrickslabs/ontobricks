@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.lakebase.FlatStore import FlatStore
 from back.core.helpers import SQLHelpers
 from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
@@ -246,7 +246,7 @@ class TestSparqlTranslatorValueFilters:
 
 class TestGraphBackendEscape:
     def test_delta_store_escapes_backslash(self):
-        store = DeltaMaterializedStore.__new__(DeltaMaterializedStore)
+        store = MaterializedStore.__new__(MaterializedStore)
         assert store._sql_escape(PAYLOAD) == SQLHelpers.sql_escape(PAYLOAD, "spark")
 
     def test_lakebase_store_keeps_backslash(self):

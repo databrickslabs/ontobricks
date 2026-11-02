@@ -130,7 +130,7 @@ def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):
     client = SimpleNamespace(execute_statement=statements.append)
     builder_calls = []
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: (
             builder_calls.append(for_write) or client
         ),
@@ -153,7 +153,7 @@ def test_the_snapshot_is_dropped_even_when_the_run_fails(monkeypatch):
     statements: List[str] = []
     client = SimpleNamespace(execute_statement=statements.append)
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: client,
     )
 
@@ -167,7 +167,7 @@ def test_the_snapshot_is_dropped_even_when_the_run_fails(monkeypatch):
 def test_a_view_only_domain_without_a_warehouse_says_so(monkeypatch):
     """Silently scanning the view instead would make the run cost unbounded."""
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: None,
     )
 

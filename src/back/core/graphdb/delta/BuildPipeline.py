@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 from back.core.errors import OntoBricksError, OperationCancelledError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
@@ -34,7 +34,7 @@ def lakehouse_build_steps(materialization: str) -> list[dict[str, str]]:
     ]
 
 
-class DeltaTripleStoreBuildPipeline:
+class BuildPipeline:
     """Build the UC Delta triple store from R2RML mappings only.
 
     ``…_data`` is either materialized (CTAS) or exposed as a pass-through view
@@ -388,7 +388,7 @@ class DeltaTripleStoreBuildPipeline:
             return
         from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
 
-        store = DeltaMaterializedStore(
+        store = MaterializedStore(
             self.source_client, domain=self.domain, settings=self.settings
         )
         rebuild_graph_cache_if_enabled(store, source, self.domain)

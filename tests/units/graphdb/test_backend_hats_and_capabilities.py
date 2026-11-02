@@ -26,8 +26,8 @@ from back.core.graphdb.interfaces.GraphBackend import GraphBackend
 from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.interfaces.VirtualBackend import VirtualBackend
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
-from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
-from back.core.graphdb.delta.DeltaViewStore import DeltaViewStore
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
+from back.core.graphdb.delta.ViewStore import ViewStore
 
 pytestmark = pytest.mark.unit
 
@@ -46,26 +46,26 @@ class TestBackendHats:
     """The virtual/materialized split is a *type*, not a runtime flag."""
 
     def test_delta_view_is_a_virtual_backend(self):
-        store = DeltaViewStore(MagicMock())
+        store = ViewStore(MagicMock())
         assert isinstance(store, VirtualBackend)
         assert isinstance(store, GraphBackend)
         assert not isinstance(store, MaterializedGraphBackend)
 
     def test_delta_table_is_a_materialized_backend(self):
-        store = DeltaMaterializedStore(MagicMock())
+        store = MaterializedStore(MagicMock())
         assert isinstance(store, MaterializedGraphBackend)
         assert isinstance(store, GraphBackend)
         assert not isinstance(store, VirtualBackend)
 
     def test_virtual_store_has_no_write_surface(self):
-        store = DeltaViewStore(MagicMock())
+        store = ViewStore(MagicMock())
         for name in _WRITE_SURFACE:
             assert not hasattr(store, name), (
                 f"VirtualBackend must not expose write method {name!r}"
             )
 
     def test_materialized_store_exposes_write_surface(self):
-        store = DeltaMaterializedStore(MagicMock())
+        store = MaterializedStore(MagicMock())
         for name in _WRITE_SURFACE:
             assert callable(getattr(store, name, None)), (
                 f"MaterializedGraphBackend must expose write method {name!r}"
@@ -73,7 +73,7 @@ class TestBackendHats:
 
     def test_virtual_store_keeps_companion_read_flags(self):
         """A no-copy view still *reads* companions (search-cache governs use)."""
-        store = DeltaViewStore(MagicMock())
+        store = ViewStore(MagicMock())
         assert store.supports_adjacency is True
         assert store.supports_entity_search is True
         assert store.supports_props is True
@@ -81,7 +81,7 @@ class TestBackendHats:
         assert store.supports_materialized_inference_purge is False
 
     def test_factory_view_path_yields_a_virtual_store(self):
-        """``engine="view"`` builds a real DeltaViewStore (not mocked)."""
+        """``engine="view"`` builds a real ViewStore (not mocked)."""
         from unittest.mock import patch
 
         domain = _domain("databricks")
@@ -104,10 +104,10 @@ class TestClassifyStore:
     """Maps a live store instance to its backend kind without importing it."""
 
     def test_delta_materialized_classifies_as_delta(self):
-        assert GraphDBFactory.classify_store(DeltaMaterializedStore(MagicMock())) == "delta"
+        assert GraphDBFactory.classify_store(MaterializedStore(MagicMock())) == "delta"
 
     def test_delta_view_classifies_as_delta(self):
-        assert GraphDBFactory.classify_store(DeltaViewStore(MagicMock())) == "delta"
+        assert GraphDBFactory.classify_store(ViewStore(MagicMock())) == "delta"
 
     def test_lakebase_classifies_as_lakebase(self):
         from back.core.graphdb.lakebase.FlatStore import FlatStore
@@ -127,26 +127,26 @@ class TestClassifyStore:
 
 class TestGetBuilder:
     def test_explicit_engine_selects_impl(self):
-        from back.core.graphdb.delta.DeltaGraphBuilder import DeltaGraphBuilder
+        from back.core.graphdb.delta.Builder import Builder
         from back.core.graphdb.lakebase.Builder import Builder as LakebaseBuilder
         from back.core.graphdb.neo4j.Builder import Builder as Neo4jBuilder
 
         d = _domain("lakebase")
-        assert isinstance(GraphDBFactory.get_builder(d, engine="delta"), DeltaGraphBuilder)
+        assert isinstance(GraphDBFactory.get_builder(d, engine="delta"), Builder)
         assert isinstance(
             GraphDBFactory.get_builder(d, engine="lakebase"), LakebaseBuilder
         )
         assert isinstance(GraphDBFactory.get_builder(d, engine="neo4j"), Neo4jBuilder)
 
     def test_auto_resolution_from_domain_backend(self):
-        from back.core.graphdb.delta.DeltaGraphBuilder import DeltaGraphBuilder
-        from back.core.graphdb.lakebase.Builder import Builder
+        from back.core.graphdb.delta.Builder import Builder as DeltaBuilder
+        from back.core.graphdb.lakebase.Builder import Builder as LakebaseBuilder
 
         assert isinstance(
-            GraphDBFactory.get_builder(_domain("databricks")), DeltaGraphBuilder
+            GraphDBFactory.get_builder(_domain("databricks")), DeltaBuilder
         )
         assert isinstance(
-            GraphDBFactory.get_builder(_domain("lakebase")), Builder
+            GraphDBFactory.get_builder(_domain("lakebase")), LakebaseBuilder
         )
         # Neo4j has no auto builder engine — analytics forces Delta explicitly.
         assert GraphDBFactory.get_builder(_domain("neo4j")) is None
@@ -157,13 +157,13 @@ class TestGetBuilder:
 
 class TestGetHealthProbe:
     def test_explicit_engine_selects_impl(self):
-        from back.core.graphdb.delta.DeltaHealthProbe import DeltaHealthProbe
+        from back.core.graphdb.delta.HealthProbe import HealthProbe
         from back.core.graphdb.lakebase.HealthProbe import HealthProbe as LakebaseHealthProbe
         from back.core.graphdb.neo4j.HealthProbe import HealthProbe as Neo4jHealthProbe
 
         d = _domain("lakebase")
         assert isinstance(
-            GraphDBFactory.get_health_probe(d, engine="delta"), DeltaHealthProbe
+            GraphDBFactory.get_health_probe(d, engine="delta"), HealthProbe
         )
         assert isinstance(
             GraphDBFactory.get_health_probe(d, engine="lakebase"), LakebaseHealthProbe
@@ -173,14 +173,14 @@ class TestGetHealthProbe:
         )
 
     def test_auto_resolution_from_domain_backend(self):
-        from back.core.graphdb.delta.DeltaHealthProbe import DeltaHealthProbe
-        from back.core.graphdb.lakebase.HealthProbe import HealthProbe
+        from back.core.graphdb.delta.HealthProbe import HealthProbe as DeltaHealthProbe
+        from back.core.graphdb.lakebase.HealthProbe import HealthProbe as LakebaseHealthProbe
 
         assert isinstance(
             GraphDBFactory.get_health_probe(_domain("databricks")), DeltaHealthProbe
         )
         assert isinstance(
-            GraphDBFactory.get_health_probe(_domain("lakebase")), HealthProbe
+            GraphDBFactory.get_health_probe(_domain("lakebase")), LakebaseHealthProbe
         )
         assert GraphDBFactory.get_health_probe(_domain("neo4j")) is None
 
@@ -215,13 +215,13 @@ class TestGetProvisioner:
 class TestGetSimulation:
     def test_each_kind_selects_impl(self):
         from back.core.graphdb.lakebase.Simulation import Simulation as LakebaseSimulation
-        from back.core.graphdb.delta.DeltaSimulation import DeltaSimulation
+        from back.core.graphdb.delta.Simulation import Simulation
         from back.core.graphdb.neo4j.Simulation import Simulation as Neo4jSimulation
 
         assert isinstance(GraphDBFactory.get_simulation("lakebase"), LakebaseSimulation)
-        assert isinstance(GraphDBFactory.get_simulation("delta"), DeltaSimulation)
+        assert isinstance(GraphDBFactory.get_simulation("delta"), Simulation)
         # "databricks" is the domain-level alias for the Delta engine.
-        assert isinstance(GraphDBFactory.get_simulation("databricks"), DeltaSimulation)
+        assert isinstance(GraphDBFactory.get_simulation("databricks"), Simulation)
         assert isinstance(GraphDBFactory.get_simulation("neo4j"), Neo4jSimulation)
 
     def test_unknown_kind_returns_none(self):

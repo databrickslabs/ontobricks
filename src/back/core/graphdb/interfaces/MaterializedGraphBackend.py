@@ -11,7 +11,7 @@ Read-only pass-through engines (e.g. a Delta ``view``) use
 no write surface.
 
 Every concrete materialized engine (``FlatStore``,
-``DeltaMaterializedStore``, ``Store``) subclasses this hat, guaranteeing a
+``MaterializedStore``, ``Store``) subclasses this hat, guaranteeing a
 uniform write contract so the factory can add or drop a backend without the
 rest of the codebase caring which engine is active.
 """

@@ -2,9 +2,9 @@
 
 Mixin holding the SQL **read** surface common to both Delta backends:
 
-* :class:`back.core.graphdb.delta.DeltaMaterializedStore.DeltaMaterializedStore`
+* :class:`back.core.graphdb.delta.MaterializedStore.MaterializedStore`
   (the ``table``/CTAS copy, a :class:`MaterializedGraphBackend`), and
-* :class:`back.core.graphdb.delta.DeltaViewStore.DeltaViewStore`
+* :class:`back.core.graphdb.delta.ViewStore.ViewStore`
   (the no-copy ``view`` pass-through, a :class:`VirtualBackend`).
 
 It is a plain mixin (not a hat on its own); concrete classes combine it with the
@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from back.core.graphdb.adjacency import expand_and_fetch_sql
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming
-from back.core.graphdb.delta.DeltaOverviewStats import DeltaOverviewStats
+from back.core.graphdb.delta.OverviewStats import OverviewStats
 from back.core.graphdb.entity_search import (
     is_missing_relation_error,
     is_view_not_table_error,
@@ -30,7 +30,7 @@ from back.core.graphdb.props import execute_expand_with_props_fallback
 from back.core.helpers import validate_table_name
 
 
-class DeltaReadStore:
+class ReadStore:
     """SQL read surface shared by the Delta materialized and view stores."""
 
     def __init__(
@@ -241,7 +241,7 @@ class DeltaReadStore:
             status["path"] = row.get("path")
             status["format"] = row.get("format")
         total = (
-            DeltaOverviewStats(self).triple_count(table_name)
+            OverviewStats(self).triple_count(table_name)
             if probe != table_name
             else None
         )
@@ -259,13 +259,13 @@ class DeltaReadStore:
             raise
 
     def get_aggregate_stats(self, table_name: str) -> Dict[str, int]:
-        return DeltaOverviewStats(self).aggregate(table_name)
+        return OverviewStats(self).aggregate(table_name)
 
     def get_type_distribution(self, table_name: str) -> List[Dict[str, Any]]:
-        return DeltaOverviewStats(self).type_distribution(table_name)
+        return OverviewStats(self).type_distribution(table_name)
 
     def get_predicate_distribution(self, table_name: str) -> List[Dict[str, Any]]:
-        return DeltaOverviewStats(self).predicate_distribution(table_name)
+        return OverviewStats(self).predicate_distribution(table_name)
 
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
         """Execute a graph read query, bounded by the graph statement timeout.

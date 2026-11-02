@@ -287,7 +287,7 @@ def test_lakebase_ignores_a_view_only_setting():
 def test_the_databricks_build_endpoint_also_materialises():
     """``/dtwin/databricks-build/start`` never reaches ``_BuildPipeline``.
 
-    It drives ``DeltaTripleStoreBuildPipeline`` directly, so that pipeline has
+    It drives ``BuildPipeline`` directly, so that pipeline has
     to take the snapshot itself. The two are alternative entry points, never
     both run for one build, so this is not a duplicate of the step above.
     """
@@ -312,7 +312,7 @@ def _bare_delta_pipeline(
     triple_count: int = 5,
     real_reporting: bool = False,
 ):
-    """A ``DeltaTripleStoreBuildPipeline`` reduced to its relation-building step.
+    """A ``BuildPipeline`` reduced to its relation-building step.
 
     Driven through ``run()`` rather than the method alone, so dropping the call
     from the sequence fails the test as loudly as gutting the method would.
@@ -321,11 +321,11 @@ def _bare_delta_pipeline(
     *real_reporting* keeps ``_complete_task`` and ``_record_build_run`` intact
     for the tests that assert on what a build reports.
     """
-    from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
-        DeltaTripleStoreBuildPipeline,
+    from back.core.graphdb.delta.BuildPipeline import (
+        BuildPipeline,
     )
 
-    pipe = object.__new__(DeltaTripleStoreBuildPipeline)
+    pipe = object.__new__(BuildPipeline)
     pipe.tm = _StubTM()
     pipe.task_id = "t-test"
     pipe.domain_name = "dom"

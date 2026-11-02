@@ -10,7 +10,7 @@ splits data-plane identity by backend:
   stored Bolt profile. They *never* consult the request identity; access is
   gated at the endpoint by Team membership (`assert_domain_graph_read`).
 
-These tests pin that split at the `GraphDBFactory` / `DeltaBase` construction
+These tests pin that split at the `GraphDBFactory` / `Base` construction
 layer so a future refactor can't silently start (or stop) forwarding the user
 token on the wrong backend.
 """
@@ -57,7 +57,7 @@ def obo_spy(monkeypatch):
 
 def _patch_delta(monkeypatch, *, app_mode: bool):
     """Wire ``create_databricks_client`` deps and capture the built client."""
-    import back.core.graphdb.delta.DeltaBase as dbase
+    import back.core.graphdb.delta.Base as dbase
 
     captured: dict = {}
 
@@ -86,11 +86,11 @@ def test_delta_backend_read_applies_obo(monkeypatch, obo_spy):
 
     captured = _patch_delta(monkeypatch, app_mode=True)
     dfs_mod = importlib.import_module(
-        "back.core.graphdb.delta.DeltaMaterializedStore"
+        "back.core.graphdb.delta.MaterializedStore"
     )
     monkeypatch.setattr(
         dfs_mod,
-        "DeltaMaterializedStore",
+        "MaterializedStore",
         lambda client, **kw: SimpleNamespace(client=client),
     )
 
@@ -107,7 +107,7 @@ def test_delta_backend_read_applies_obo(monkeypatch, obo_spy):
 
 def test_delta_backend_local_mode_skips_obo(monkeypatch):
     """Outside App mode the Delta read keeps the resolved SP token (no OBO)."""
-    import back.core.graphdb.delta.DeltaBase as dbase
+    import back.core.graphdb.delta.Base as dbase
 
     captured = _patch_delta(monkeypatch, app_mode=False)
 
@@ -127,7 +127,7 @@ def test_delta_backend_local_mode_skips_obo(monkeypatch):
 
 def test_delta_build_keeps_service_principal(monkeypatch, obo_spy):
     """A build (for_write) read keeps the SP credentials even with an identity bound."""
-    import back.core.graphdb.delta.DeltaBase as dbase
+    import back.core.graphdb.delta.Base as dbase
 
     captured: dict = {}
 

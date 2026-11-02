@@ -7,8 +7,8 @@ companions.  It therefore carries the full write + build surface (table
 lifecycle, triple ingestion, companion rebuild, inference purge, OPTIMIZE).
 
 The SQL **read** surface is shared with the no-copy
-:class:`back.core.graphdb.delta.DeltaViewStore.DeltaViewStore` via
-:class:`back.core.graphdb.delta.DeltaReadStore.DeltaReadStore`.
+:class:`back.core.graphdb.delta.ViewStore.ViewStore` via
+:class:`back.core.graphdb.delta.ReadStore.ReadStore`.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.delta import _table_naming, materialize
-from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
+from back.core.graphdb.delta.ReadStore import ReadStore
 from back.core.graphdb.props import forget_missing_props
 from back.core.helpers import sql_escape as _escape_sql_string, validate_table_name
 from back.core.logging import get_logger
@@ -27,7 +27,7 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-class DeltaMaterializedStore(DeltaReadStore, MaterializedGraphBackend):
+class MaterializedStore(ReadStore, MaterializedGraphBackend):
     """GraphDB backend that queries materialized Delta triple tables in UC.
 
     With a bound *domain* it routes app writes through an inferred companion

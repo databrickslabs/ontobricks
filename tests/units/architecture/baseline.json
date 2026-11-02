@@ -116,7 +116,7 @@
     "api/routers/internal/ontology.py::auto_assign_icons": 109,
     "api/routers/internal/ontology.py::cleanup_shapes": 119,
     "back/core/graphdb/GraphDBFactory.py::GraphDBFactory._create_lakebase": 128,
-    "back/core/graphdb/delta/DeltaReadStore.py::DeltaReadStore.expand_and_fetch_subgraph": 114,
+    "back/core/graphdb/delta/ReadStore.py::ReadStore.expand_and_fetch_subgraph": 114,
     "back/core/graphdb/engine_config.py::normalize_graph_engine_config": 109,
     "back/core/graphdb/lakebase/FlatStore.py::FlatStore.ensure_synced_union_view": 103,
     "back/core/graphdb/lakebase/SyncedTableManager.py::SyncedTableManager.ensure": 299,

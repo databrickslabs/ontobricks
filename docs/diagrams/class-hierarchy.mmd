@@ -43,15 +43,15 @@ classDiagram
         <<ABC>>
         +read-only, no-copy
     }
-    class DeltaReadStore {
+    class ReadStore {
         +expand_and_fetch_subgraph()
         +execute_query()
     }
-    class DeltaMaterializedStore {
+    class MaterializedStore {
         +create_table()
         +insert_triples()
     }
-    class DeltaViewStore {
+    class ViewStore {
         +pass-through view
     }
     class Base {
@@ -76,12 +76,12 @@ classDiagram
     GraphBackend             <|-- MaterializedGraphBackend
     GraphBackend             <|-- VirtualBackend
     MaterializedGraphBackend <|-- Base
-    MaterializedGraphBackend <|-- DeltaMaterializedStore
+    MaterializedGraphBackend <|-- MaterializedStore
     MaterializedGraphBackend <|-- Store
     MaterializedGraphBackend <|-- ExampleStore
-    VirtualBackend           <|-- DeltaViewStore
-    DeltaReadStore           <|-- DeltaMaterializedStore
-    DeltaReadStore           <|-- DeltaViewStore
+    VirtualBackend           <|-- ViewStore
+    ReadStore           <|-- MaterializedStore
+    ReadStore           <|-- ViewStore
     Base             <|-- FlatStore
 
     %% ─── Graph DB Capabilities (factory-vended, per backend) ────────────────────
@@ -101,16 +101,16 @@ classDiagram
         +classify_store()
     }
 
-    GraphBuilder     <|-- DeltaGraphBuilder
     GraphBuilder     <|-- Builder
     GraphBuilder     <|-- Builder
-    GraphHealthProbe <|-- DeltaHealthProbe
+    GraphBuilder     <|-- Builder
+    GraphHealthProbe <|-- HealthProbe
     GraphHealthProbe <|-- HealthProbe
     GraphHealthProbe <|-- HealthProbe
     GraphProvisioner <|-- Provisioner
     GraphProvisioner <|-- Provisioner
     GraphSimulation  <|-- Simulation
-    GraphSimulation  <|-- DeltaSimulation
+    GraphSimulation  <|-- Simulation
     GraphSimulation  <|-- Simulation
     GraphDBFactory ..> GraphBuilder : vends
     GraphDBFactory ..> GraphHealthProbe : vends

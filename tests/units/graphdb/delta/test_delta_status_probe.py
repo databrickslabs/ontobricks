@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 
 GRAPH = "cat.sch.triplestore_mydomain_V1_graph"
 SEARCH = "cat.sch.triplestore_mydomain_V1_entity_search"
@@ -25,7 +25,7 @@ class TestDeltaTableExistsUsesCatalog:
     def test_graph_existence_describes_entity_search_not_the_view(self):
         client = MagicMock()
         client.execute_query.return_value = [{"format": "delta"}]
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         assert store.table_exists(GRAPH) is True
         sqls = _sqls(client)
@@ -39,7 +39,7 @@ class TestDeltaTableExistsUsesCatalog:
         client.execute_query.side_effect = RuntimeError(
             "TABLE_OR_VIEW_NOT_FOUND: graph"
         )
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         assert store.table_exists("cat.sch.missing_graph") is False
 
@@ -56,7 +56,7 @@ class TestZeroCopyDataView:
     def test_data_view_exists(self):
         client = MagicMock()
         client.execute_query.side_effect = RuntimeError(_VIEW_ERROR)
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         assert store.table_exists(DATA) is True
 
@@ -81,7 +81,7 @@ class TestZeroCopyDataView:
 
         client = MagicMock()
         client.execute_query.side_effect = _query
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         assert store.table_exists(DATA) is True
         probed = probe_table_status(store, DATA)
@@ -100,7 +100,7 @@ class TestZeroCopyDataView:
             raise AssertionError(f"unexpected SQL: {sql}")
 
         client.execute_query.side_effect = _query
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         status = store.get_status(DATA)
         assert status["count"] == 1
@@ -127,7 +127,7 @@ class TestDeltaGetStatusAvoidsFullCount:
             raise AssertionError(f"unexpected SQL: {sql}")
 
         client.execute_query.side_effect = _query
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         status = store.get_status(DATA)
         assert status["count"] == 1
@@ -148,7 +148,7 @@ class TestDeltaGetStatusAvoidsFullCount:
             raise AssertionError(f"unexpected SQL: {sql}")
 
         client.execute_query.side_effect = _query
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         status = store.get_status(GRAPH)
         assert status["count"] == 1234
@@ -170,6 +170,6 @@ class TestDeltaGetStatusAvoidsFullCount:
             raise AssertionError(f"unexpected SQL: {sql}")
 
         client.execute_query.side_effect = _query
-        store = DeltaMaterializedStore(client, domain=_domain())
+        store = MaterializedStore(client, domain=_domain())
 
         assert store.get_status(GRAPH)["count"] == 1
