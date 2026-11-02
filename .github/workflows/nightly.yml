@@ -75,6 +75,13 @@ jobs:
     timeout-minutes: 10
     # External tier — only on schedule, never on PR. Requires repository secrets.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      # The integration test environment, per project §5/§9 of the methodology plan.
+      ONTOBRICKS_INT_URL: https://fevm-ontobricks-int.cloud.databricks.com
+      DATABRICKS_HOST: ${{ secrets.ONTOBRICKS_INT_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.ONTOBRICKS_INT_TOKEN }}
+      DATABRICKS_SQL_WAREHOUSE_ID: ${{ secrets.ONTOBRICKS_INT_WAREHOUSE_ID }}
+      SECRET_KEY: ${{ secrets.ONTOBRICKS_INT_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v7
 
@@ -90,21 +97,37 @@ jobs:
         run: uv sync --dev
 
       - name: Smoke probe against integration workspace
-        env:
-          # The integration test environment, per project §5/§9 of the methodology plan.
-          ONTOBRICKS_INT_URL: https://fevm-ontobricks-int.cloud.databricks.com
-          DATABRICKS_HOST: ${{ secrets.ONTOBRICKS_INT_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.ONTOBRICKS_INT_TOKEN }}
-          DATABRICKS_SQL_WAREHOUSE_ID: ${{ secrets.ONTOBRICKS_INT_WAREHOUSE_ID }}
-          SECRET_KEY: ${{ secrets.ONTOBRICKS_INT_SECRET_KEY }}
-          # tests/external/test_mv_incremental_plan.py: EXPLAIN of the _data view on the
-          # integration warehouse, in a schema the token may create tables in.
-          ONTOBRICKS_EXTERNAL_WAREHOUSE: "1"
-          ONTOBRICKS_EXTERNAL_SCHEMA: ${{ vars.ONTOBRICKS_INT_EXTERNAL_SCHEMA || 'main.ontobricks_it' }}
         run: |
           # Probe MCP server health endpoint + a representative tool call.
           # If the workspace isn't reachable or auth fails, the run is reported but no PR is gated.
-          uv run pytest tests/ -m external -v --tb=short || echo "external probe failed (non-blocking)"
+          uv run pytest tests/ -m external -v --tb=short \
+            --ignore=tests/external/test_mv_incremental_plan.py \
+            || echo "external probe failed (non-blocking)"
+
+      # Blocking (unlike the probe above): a _data view that no longer plans an
+      # incremental refresh is a regression, so this step fails the job and the
+      # open-issue-on-failure job files it. Skipped when the secrets are absent.
+      - name: EXPLAIN check of the incremental _data view
+        if: env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' && env.DATABRICKS_SQL_WAREHOUSE_ID != ''
+        env:
+          # A schema the integration token may create tables in.
+          ONTOBRICKS_EXTERNAL_WAREHOUSE: "1"
+          ONTOBRICKS_EXTERNAL_SCHEMA: ${{ vars.ONTOBRICKS_INT_EXTERNAL_SCHEMA || 'main.ontobricks_it' }}
+        run: |
+          set +e  # the default shell is -eo pipefail: keep going to write the summary
+          uv run pytest tests/external/test_mv_incremental_plan.py -m external -v --tb=short -rs \
+            | tee explain-check.log
+          status=${PIPESTATUS[0]}
+          {
+            echo "### EXPLAIN check of the incremental _data view"
+            echo '```'
+            tail -n 20 explain-check.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=Incremental _data view::EXPLAIN no longer plans an incremental refresh (see the step summary)"
+          fi
+          exit "$status"
 
   open-issue-on-failure:
     name: Open issue on regression

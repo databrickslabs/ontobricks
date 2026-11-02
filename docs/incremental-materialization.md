@@ -393,7 +393,9 @@ the nightly `external-smoke` job (`.github/workflows/nightly.yml`) runs it on th
 integration workspace, with `ONTOBRICKS_EXTERNAL_WAREHOUSE=1` and
 `ONTOBRICKS_EXTERNAL_SCHEMA` from the repository variable
 `ONTOBRICKS_INT_EXTERNAL_SCHEMA` (default `main.ontobricks_it`; the test creates the
-schema if absent).
+schema if absent). That step is **blocking**, unlike the job's other external
+probes: an incremental plan that regresses fails the job (with a step summary and
+an error annotation) and the nightly opens its regression issue.
 
 Without those variables the test is skipped, so the unit run stays offline.
 
@@ -424,6 +426,12 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | Verif. | Unit · property (Hypothesis slot fold) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold_property.py`, `tests/external/…` |
 
 ## Known limitations
+
+**Upgrading.** After upgrading to this release, run one build of every
+`incremental` / `microbatch` domain. The slot pipeline SQL changed (deletes now rank
+with pre-images, `seq_rank` 0), so its fingerprint changed: that first build runs one
+full refresh of the slot pipeline, and until it has run the scheduled ticks rebuild
+`_data` by CTAS (the slot pipeline no longer runs the current SQL).
 
 Behaviour in this release:
 
