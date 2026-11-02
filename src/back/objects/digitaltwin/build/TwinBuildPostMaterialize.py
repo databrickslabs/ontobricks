@@ -7,8 +7,8 @@ one-line hooks that delegate here.
 
 State is read with ``getattr`` defaults because the relation attributes
 (``data_table``, ``data_relation_mode``, ``inferred_reset``, and the
-incremental facts ``slots_table`` / ``slots_complete`` / ``slot_pipeline_id``
-/ ``refresh_technique``) only exist once the phase that sets them has run.
+incremental facts ``slots_table`` / ``slot_pipeline_id`` /
+``refresh_technique``) only exist once the phase that sets them has run.
 ``mode_decision`` is set at the start of ``run()`` and refined by
 :class:`TwinIncrementalBuild` once the mappings are compiled.
 """

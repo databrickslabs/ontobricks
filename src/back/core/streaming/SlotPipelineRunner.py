@@ -315,13 +315,6 @@ class SlotPipelineRunner:
         )
         return _enum_name(getattr(response, "state", None))
 
-    @staticmethod
-    def read_event_log_technique(client: Any, mv_fqn: str) -> str:
-        """Refresh technique of the latest refresh of *mv_fqn* (``UNKNOWN`` on failure)."""
-        from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
-
-        return MaterializedViewBuilder.last_refresh_technique(client, mv_fqn)
-
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

@@ -347,15 +347,3 @@ class TestStateAndStop:
 
         with pytest.raises(InfrastructureError):
             runner.stop("pipe-1")
-
-
-def test_the_refresh_technique_comes_from_the_materialized_view_event_log():
-    with patch(
-        "back.core.graphdb.delta.MaterializedViewBuilder.MaterializedViewBuilder."
-        "last_refresh_technique",
-        return_value="ROW_BASED",
-    ) as technique:
-        result = SlotPipelineRunner.read_event_log_technique("client", "main.ob.t_data")
-
-    assert result == "ROW_BASED"
-    technique.assert_called_once_with("client", "main.ob.t_data")

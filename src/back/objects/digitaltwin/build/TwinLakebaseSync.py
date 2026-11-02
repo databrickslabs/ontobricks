@@ -10,8 +10,8 @@ with what it knows.
 Source: ``…_data`` (table or materialized view — the complete graph, slots and
 batch branch) keyed on ``LAKEFLOW_SYNC_PRIMARY_KEY``; the R2RML gateway VIEW
 when ``…_data`` is not a copy (a pass-through VIEW, or nothing built yet).
-``…_slots`` is never a source in this release, even when it holds every triple
-(``slots_complete``): asserted-only readers (entity-search rebuild,
+``…_slots`` is never a source in this release, even when it holds every
+triple (no batch mapping): asserted-only readers (entity-search rebuild,
 ``include_inferred=False`` reads, BFS expansion) query the ``_sync`` table
 directly and would see one row per slot and the blank attribute objects
 ``…_data`` filters out.

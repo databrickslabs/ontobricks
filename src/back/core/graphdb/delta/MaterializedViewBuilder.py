@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 from back.core.errors import ValidationError
@@ -31,12 +31,6 @@ _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 
 _NON_BLANK_OBJECT = NON_BLANK_OBJECT_SQL
 
-_INCREMENTAL_TECHNIQUES = re.compile(
-    r"\b(?:ROW_BASED|GROUP_AGGREGATE|APPEND_ONLY|PARTITION_OVERWRITE"
-    r"|WINDOW_FUNCTION|GENERIC_AGGREGATE|NO_OP)\b",
-    re.IGNORECASE,
-)
-_FULL_RECOMPUTE = re.compile(r"\bFULL_RECOMPUTE\b", re.IGNORECASE)
 _PLANNED_TECHNIQUE = re.compile(r"executed as ([A-Z_]+)")
 UNKNOWN_TECHNIQUE = "UNKNOWN"
 
@@ -162,11 +156,6 @@ class MaterializedViewBuilder:
         )
 
     @staticmethod
-    def explain_sql(mv_sql: str) -> str:
-        """``EXPLAIN`` the statement to preview the refresh technique."""
-        return "EXPLAIN " + mv_sql
-
-    @staticmethod
     def refresh_sql(fqn: str, *, full: bool = False) -> str:
         """``REFRESH MATERIALIZED VIEW`` (``… FULL`` forces a full recompute)."""
         validate_table_name(fqn)
@@ -182,20 +171,6 @@ class MaterializedViewBuilder:
             "WHERE event_type = 'planning_information' "
             "ORDER BY timestamp DESC LIMIT 1"
         )
-
-    @staticmethod
-    def plan_is_incremental(explain_rows: Any) -> bool:
-        """True when an ``EXPLAIN`` result plans an incremental refresh.
-
-        Scans every value of every row. ``FULL_RECOMPUTE`` anywhere means
-        false, even next to an incremental technique (the conservative
-        reading); otherwise any incremental technique means true. An empty or
-        unrecognised plan is false.
-        """
-        text = "\n".join(MaterializedViewBuilder._texts(explain_rows))
-        if _FULL_RECOMPUTE.search(text):
-            return False
-        return _INCREMENTAL_TECHNIQUES.search(text) is not None
 
     @staticmethod
     def apply(
@@ -332,15 +307,3 @@ class MaterializedViewBuilder:
                 f"expected one of {', '.join(_REFRESH_POLICIES)}"
             )
         return policy
-
-    @staticmethod
-    def _texts(value: Any) -> Iterator[str]:
-        """Every string inside *value*, descending into rows (dict / list / tuple)."""
-        if isinstance(value, str):
-            yield value
-        elif isinstance(value, Mapping):
-            for item in value.values():
-                yield from MaterializedViewBuilder._texts(item)
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                yield from MaterializedViewBuilder._texts(item)

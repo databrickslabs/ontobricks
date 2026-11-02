@@ -804,24 +804,22 @@ class TestSettings:
         )
 
 
-class TestSlotsComplete:
-    """``…_slots`` holds the whole graph only when no mapping is on the batch branch."""
+class TestSlotsTable:
+    """``…_slots`` is recorded only when some mapping is row-local."""
 
-    def test_row_local_mappings_only_make_the_slots_complete(self):
+    def test_row_local_mappings_record_the_slots_table(self):
         pipe = _pipeline("incremental", entities={_CUSTOMER: _row_local()})
 
         _run(pipe)
 
         assert pipe.slots_table == _SLOTS
-        assert pipe.slots_complete is True
 
-    def test_a_batch_mapping_leaves_the_slots_incomplete(self):
+    def test_a_batch_mapping_next_to_a_row_local_one_keeps_it(self):
         pipe = _pipeline("incremental")
 
         _run(pipe)
 
         assert pipe.slots_table == _SLOTS
-        assert pipe.slots_complete is False
 
     def test_batch_mappings_only_have_no_slots(self):
         pipe = _pipeline("incremental", entities={_ORDER: _batch()})
@@ -829,15 +827,6 @@ class TestSlotsComplete:
         _run(pipe)
 
         assert pipe.slots_table is None
-        assert pipe.slots_complete is False
-
-    def test_a_full_build_resets_the_fact(self):
-        pipe = _pipeline(mode=None)
-        pipe.slots_complete = True
-
-        _run(pipe)
-
-        assert pipe.slots_complete is False
 
 
 _TRIPLE_KEY = ("subject", "predicate", "object_hash")
@@ -947,7 +936,6 @@ class TestLakebaseSyncPlanFromThePipeline:
             data_table=_DATA,
             data_relation_mode="materialized_view",
             slots_table=_SLOTS,
-            slots_complete=True,
             mode_decision=ModeDecision("microbatch", "microbatch", ""),
         )
 
@@ -964,7 +952,6 @@ class TestSyncedApplyUsesThePlan:
         pipe.data_table = f"{pipe.view_table}_data"
         pipe.data_relation_mode = "materialized_view"
         pipe.slots_table = f"{pipe.view_table}_slots"
-        pipe.slots_complete = True
         pipe.store.sync_table_mode = "continuous"
         return pipe
 

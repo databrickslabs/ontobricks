@@ -171,8 +171,9 @@ def step_times_from_task(task) -> Dict[str, float]:
 def _report_post_sync_triple_count(pipe: Any, synced_source: str) -> None:
     """Count the source relation's triples after a successful Lakeflow sync.
 
-    *synced_source* is the relation the synced table was registered on (the
-    count reads ``_triples_source_relation()``, which can differ: ``…_slots``).
+    *synced_source* is the relation the synced table was registered on; the
+    count reads ``_triples_source_relation()``, the same relation (``…_data``,
+    or the gateway VIEW when ``…_data`` is a pass-through view).
 
     The count is reporting only: a lost warehouse connection must not
     turn a successful sync into a failed build, and must not publish
@@ -284,7 +285,6 @@ class _BuildPipeline:
         self.mode_decision: Optional[Any] = None
         # Incremental facts (TwinIncrementalBuild); None / "" / False on the full path.
         self.slots_table: Optional[str] = None
-        self.slots_complete: bool = False  # …_slots holds every triple (no batch branch)
         # What the Lakebase synced table was registered on (TwinLakebaseSync.register).
         self.sync_source: str = ""
         self.sync_mode_effective: str = ""
@@ -433,10 +433,6 @@ class _BuildPipeline:
             "[DT-BUILD %s] %s contains %d triple(s)", self.task_id, source, count
         )
         return count
-
-    def _count_view_triples(self) -> int:
-        """Alias of :meth:`_count_source_triples` kept for existing callers."""
-        return self._count_source_triples()
 
     # ------------------------------------------------------------------
     # Orchestrator

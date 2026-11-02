@@ -134,12 +134,6 @@ class TestComputeOnce:
         assert pipe.data_relation_mode == "table"
         assert pipe._triples_source_relation() == _DATA
 
-    def test_the_old_count_name_still_counts_the_chosen_source(self):
-        pipe = _bare_pipeline()
-
-        with patch.object(pipe, "_count_source_triples", return_value=7):
-            assert pipe._count_view_triples() == 7
-
 
 class TestTriplesSourceRelation:
     """The relation is decided from ``data_table`` + ``data_relation_mode`` alone."""

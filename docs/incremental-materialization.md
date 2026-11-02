@@ -81,9 +81,8 @@ reason is the first downgrade's:
 Row tracking is probed with `SHOW TBLPROPERTIES <table> ('delta.enableRowTracking')`
 on every source table of the compiled slot pipeline (`SourceReadiness.check`);
 a domain whose mappings are all batch has no source tables and counts as tracked.
-`SourceReadiness.enable_sql` gives the `ALTER TABLE … SET TBLPROPERTIES
-(delta.enableRowTracking = true, delta.enableDeletionVectors = true)` an owner
-runs to make a source ready. A failed probe or a failed slot pipeline / MV build
+A table owner makes a source ready with `ALTER TABLE <table> SET TBLPROPERTIES
+(delta.enableRowTracking = true, delta.enableDeletionVectors = true)`. A failed probe or a failed slot pipeline / MV build
 is `incremental_failed:<ErrorClass>` and the build continues on the full path.
 
 Two further fallbacks apply after the mode is decided:
@@ -216,8 +215,8 @@ degrade as described above:
 
 On the customer's source tables the app only requires row tracking
 (`delta.enableRowTracking`, the basis of automatic change data feed on DBR 19);
-`SourceReadiness.enable_sql` also turns on deletion vectors, which row tracking
-needs for in-place updates.
+the `ALTER TABLE` above also turns on deletion vectors, which row tracking needs
+for in-place updates.
 
 ## Known limitations
 
