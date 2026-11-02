@@ -49,6 +49,12 @@ _INCREMENTAL_TECHNIQUES = re.compile(
     re.IGNORECASE,
 )
 _FULL_RECOMPUTE = re.compile(r"\bFULL_RECOMPUTE\b", re.IGNORECASE)
+#: ``EXPLAIN CREATE MATERIALIZED VIEW`` on Databricks SQL opens with an
+#: "Incremental Update Eligibility" section whose verdict is one of these
+#: sentences (verified live on 2026-11-02); the event-log technique names
+#: below are what a *refresh* reports afterwards.
+_ELIGIBLE = re.compile(r"can be incrementally refreshed", re.IGNORECASE)
+_NOT_ELIGIBLE = re.compile(r"can\s*not be incrementally refreshed", re.IGNORECASE)
 _OR_REPLACE_MV = re.compile(
     r"\A\s*CREATE\s+OR\s+REPLACE\s+MATERIALIZED\s+VIEW\b", re.IGNORECASE
 )
@@ -253,14 +259,17 @@ class MaterializedViewBuilder:
     def plan_is_incremental(explain_rows: Any) -> bool:
         """True when an ``EXPLAIN`` result plans an incremental refresh.
 
-        Scans every value of every row. ``FULL_RECOMPUTE`` anywhere means
-        false, even next to an incremental technique (the conservative
-        reading); otherwise any incremental technique means true. An empty or
-        unrecognised plan is false.
+        Scans every value of every row. The eligibility verdict wins: "cannot
+        be incrementally refreshed" (or ``FULL_RECOMPUTE`` anywhere) means
+        false, "can be incrementally refreshed" means true; otherwise any
+        event-log technique name means true. An empty or unrecognised plan is
+        false.
         """
         text = "\n".join(MaterializedViewBuilder._texts(explain_rows))
-        if _FULL_RECOMPUTE.search(text):
+        if _NOT_ELIGIBLE.search(text) or _FULL_RECOMPUTE.search(text):
             return False
+        if _ELIGIBLE.search(text):
+            return True
         return _INCREMENTAL_TECHNIQUES.search(text) is not None
 
     @staticmethod

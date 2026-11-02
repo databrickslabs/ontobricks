@@ -415,6 +415,21 @@ class TestPlanIsIncremental:
 
     def test_matching_is_case_insensitive(self):
         assert MaterializedViewBuilder.plan_is_incremental([{"p": "row_based"}]) is True
+
+    def test_the_live_eligibility_verdict_is_recognised(self):
+        """The real ``EXPLAIN CREATE MATERIALIZED VIEW`` output (Databricks SQL,
+        2026-11-02) opens with an eligibility section, not a technique name."""
+        rows = [{"plan": "== Incremental Update Eligibility ==\n"
+                         "The Materialized View can be incrementally refreshed.\n\n"
+                         "== Detailed Incrementalization Info ==\nNo issues detected.\n\n"
+                         "== Physical Plan ==\nExecute CreateMaterializedViewCommand ..."}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is True
+
+    def test_a_not_eligible_verdict_is_not_incremental(self):
+        rows = [{"plan": "== Incremental Update Eligibility ==\n"
+                         "The Materialized View cannot be incrementally refreshed.\n"
+                         "== Detailed Incrementalization Info ==\nstack() is not supported ..."}]
+        assert MaterializedViewBuilder.plan_is_incremental(rows) is False
         assert MaterializedViewBuilder.plan_is_incremental([{"p": "full_recompute"}]) is False
 
     def test_tokens_inside_longer_words_do_not_match(self):
