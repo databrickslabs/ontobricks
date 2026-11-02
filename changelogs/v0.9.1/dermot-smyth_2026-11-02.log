@@ -514,7 +514,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the final review residuals): 10532 passed, 338 skipped, 9 deselected
+Final test result (after the follow-ups from the final review): 10545 passed, 338 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -736,4 +736,101 @@ help API, settings sync page, architecture) -> 3206 passed in 11.04s (slowest
 0.89s); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10532 passed, 338 skipped, 9 deselected in 53.91s (slowest test 1.10s);
+architecture suite green; tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Follow-ups from the final review (TwinSlotPipeline, relationship emitters, kept schedule, MERGE alters)
+================================================================================
+
+Context: The deferred findings of the final review: TwinIncrementalBuild over its
+size budget, unreachable relationship emitter code, the reverse case of the kept
+Lakebase schedule (a genuinely untracked domain whose probe failed registered
+TRIGGERED once), a MERGE that altered `_data` on every build and failed on a table
+without `object_hash`, a scheduled tick that compiled the slot spec twice, and a
+synced-table registration whose unreadable spec was kept silently.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinSlotPipeline.py (new, re-exported),
+   src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+   Extract Class: `run` (ensure/update/wait, was `_run_slot_pipeline`),
+   `run_update`, `_update`, `stop_if_active` (was `_stop_slot_pipeline`),
+   `channel` / `timeout_s` (were `slot_pipeline_channel` / `slot_pipeline_timeout_s`)
+   and the active-state set move into TwinSlotPipeline; every caller in src and
+   tests is updated, no alias. TwinIncrementalBuild 483 -> 337 lines (319 after
+   the extraction; the probe-failure helper below adds the rest),
+   TwinSlotPipeline 167. There was no `_runner_factory` seam to move (the tests
+   patch `back.core.streaming.SlotPipelineRunner`).
+2. src/back/core/streaming/SlotProjectionCompiler.py
+   The relationship paths of `map_id`, `_stack_pairs`, the key columns
+   (`_subject_parts`) and `_relationship_columns` are deleted with the five tests
+   that called them; `classify` keeps relationships batch with a one-line reason
+   (multi-valued objects would collapse under the SCD1 key).
+3. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/digitaltwin/build/TwinLakebaseSync.py
+   When the row-tracking probe raises (no resolver decision), a Lakeflow-synced
+   build keeps the schedule the base run registered
+   (`TwinLakebaseSync.previous_schedule_mode`: its
+   `stats.materialization.sync_mode_effective`, snapshot -> full, triggered ->
+   incremental, continuous -> microbatch) and only falls back to the gate without
+   one; other stores read no previous run. A failed MERGE keeps `incremental`.
+4. src/back/core/graphdb/delta/DeltaMergeMaterializer.py
+   The table properties are set only when `SHOW TBLPROPERTIES` lacks one
+   (unreadable counts as lacking): no metadata commit per build otherwise.
+   `ALTER TABLE … ADD COLUMNS (object_hash STRING)` runs when a hashed MERGE finds
+   a table without the column (schema drift once a domain becomes synced).
+5. src/back/objects/registry/schedule/build.py,
+   src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+   `_slot_spec` (was `_slot_source_tables`) compiles once per tick; the probed
+   source tables come from it and `TwinScheduledRefresh.refresh(..., spec=)` no
+   longer compiles.
+6. src/back/core/graphdb/lakebase/SyncedTableRegistration.py
+   An existing registration whose source or schedule cannot be read is kept with
+   a warning (a missing one is not a warning). Reused ghost fallbacks are
+   drift-checked; a leftover `_b` from an earlier ghost period is documented as
+   not cleaned up.
+7. docs/incremental-materialization.md
+   Probe-failure schedule sentence, MERGE limitation, synced-table limitation;
+   the relationship follow-up line removed (also from the residuals section here,
+   with the reverse-case line).
+8. Tests: tests/units/objects/test_build_pipeline_modes.py (TwinSlotPipeline
+   settings and logger), tests/units/objects/test_build_pipeline_net_apply.py
+   (previous snapshot / triggered / continuous kept, gate without a run, no
+   registry read for an unsynced store), tests/units/streaming/test_slot_projection_compiler.py,
+   tests/units/graphdb/delta/test_delta_merge_materializer.py (properties present
+   / missing / false / unreadable; object_hash missing / present / not read),
+   tests/units/registry/test_scheduled_build_lakeflow_source.py (spec reused,
+   `_slot_spec`), tests/units/core/test_synced_table_manager.py.
+
+Known limitations (follow-ups):
+- A leftover ghost fallback registration (`…_sync_b`) keeps syncing until it is
+  deleted by hand once the primary name works again.
+- `DeltaMergeMaterializer` lists the three table-property keys next to
+  `materialize.CHANGE_FEED_PROPERTIES` (keys vs SQL text).
+
+Modified files:
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+- docs/incremental-materialization.md
+- src/back/core/graphdb/delta/DeltaMergeMaterializer.py
+- src/back/core/graphdb/lakebase/SyncedTableRegistration.py
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinLakebaseSync.py
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/digitaltwin/build/TwinSlotPipeline.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/registry/schedule/build.py
+- tests/units/core/test_synced_table_manager.py
+- tests/units/graphdb/delta/test_delta_merge_materializer.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- tests/units/streaming/test_slot_projection_compiler.py
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/objects tests/units/registry
+tests/units/streaming tests/units/graphdb tests/units/core/test_lakebase_flat_store.py tests/units/architecture
+-> 2200 passed in 6.35s (slowest 0.87s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10545 passed, 338 skipped, 9 deselected in 53.71s (slowest test 1.05s);
 architecture suite green; tests/units/architecture/baseline.json unchanged.
