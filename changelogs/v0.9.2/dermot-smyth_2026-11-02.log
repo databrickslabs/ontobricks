@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the design-gaps re-review fixes): 10770 passed, 339 skipped, 9 deselected
+Final test result (after Phase 3, realtime): 11054 passed, 339 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -1383,3 +1383,176 @@ Tests: uv run --frozen pytest -q --durations=5 tests/units/streaming tests/units
 -> 369 passed in 7.23s (slowest 0.97s, test_class_per_file; slowest new test
 0.42s); architecture suite 9 passed, tests/units/architecture/baseline.json
 unchanged.
+
+
+================================================================================
+## Phase 3 (realtime): resolver, Lakebase _live, RTM job, DAB pipelines, orchestration
+================================================================================
+
+Context: The deferred `realtime` mode is now built as far as it can be without a
+live workspace (Implementer A; the pure processor classes are Implementer B's
+section above): the resolver honours a per-domain topic, Lakebase serves a `_live`
+table through the union view, a Real-Time-Mode job streams the topic into it, the
+app starts / stops / reports the stream, the reconciliation compares `_live` with
+the slots, and the per-(domain, version) slot pipelines become DAB-deployable (the
+Phase 1 "deployed via DAB" gap).
+
+Changes:
+
+1. src/back/core/graphdb/RealtimeSource.py (new, re-exported),
+   MaterializationModeResolver.py, GraphDBFactory.py, src/shared/config/settings.py,
+   TwinBuildPostMaterialize.py, TwinIncrementalReadiness.py, Domain.py,
+   DomainSession.py, the domain template / JS, navbar.js (48edb138, 07e9a1e2)
+   A domain's `realtime_source` ({kind kafka|eventhubs|kinesis, bootstrap_servers,
+   topic, secret_scope, secret_key, key_format json}; names only — any other field
+   such as a password is refused) is validated, persisted and round-tripped; with
+   `ONTOBRICKS_REALTIME_ENABLED` on and a Lakebase backend it makes
+   `realtime_topic_available`, which the resolver now honours (realtime runs
+   realtime on the microbatch pipeline; serverless, the backend and row tracking
+   gate it like microbatch; else `realtime_not_available` as before). An effective
+   realtime builds like microbatch (`CONTINUOUS_MATERIALIZATION_MODES`: continuous
+   slot pipeline, self-refreshing view, continuous sync, tick view refresh). The
+   readiness preflight reports `realtime` facts; the domain panel enables the
+   option and shows the source fields. New settings: realtime_enabled,
+   realtime_job_name, realtime_lakebase_user / _secret, realtime_checkpoint_root.
+2. src/back/core/graphdb/lakebase/_companion_ddl.py, LakebaseLiveTable.py (new,
+   re-exported), LakebaseBase.py (a9d1f06f)
+   `g_<dom>_v<n>_live` DDL (PK (map_id, source_key, predicate), partial indexes WHERE
+   NOT deleted, early autovacuum), the tombstone purge, the live-row count, and the
+   union view as a distinct UNION of the synced table, the companion and the live
+   rows when `_live` exists. LakebaseLiveTable runs on the store's cursor through
+   one LakebaseBase hook (`live_table`); the frozen LakebaseFlatStore is unchanged.
+3. src/jobs/triple_stream/main.py (new), SparkColumnText.py (new) (c4da31ce, fd16458a)
+   TripleStreamJob: validated arguments; readStream options for kafka / Event Hubs
+   (Kafka endpoint) / Kinesis with the credential from the configured secret;
+   Debezium envelope parsing (payload wrapper, tombstones, unknown ops skipped);
+   every value turned into its `CAST(... AS STRING)` text from the UC source schema
+   (epoch dates/timestamps, base64 or text decimals, Java doubles, UTC) before the
+   explode; an update that changes a key also tombstones the old key;
+   transformWithState with B's adapter (TTL -> ProcessingTime time mode) seeded from
+   `_slots`; a `foreach` sink COPYing into a temp table and upserting `_live`
+   (DISTINCT ON per slot, ON CONFLICT ... WHERE EXCLUDED.seq > live.seq); Real-Time
+   Mode trigger with a micro-batch fallback. Kinesis seq = arrival ms * 10^6 + the
+   sequence number's last six digits.
+4. resources/triple_rtm.job.yml (new), databricks.yml, pyproject.toml,
+   app.yaml.template, scripts/_internal/_render-slot-pipelines.py (new),
+   scripts/deploy.sh, .gitignore, resources/triple_slots.pipeline.yml.example
+   (4c0913f7, fd16458a)
+   The stream job on a fixed classic cluster (Standard runtime, no autoscaling,
+   on-demand, var.realtime_num_workers / _spark_version / _node_type_id, UTC),
+   with the app wheel (bundle artifact `ontobricks_wheel`, now including src/jobs)
+   and psycopg; inert until the app starts it (var.realtime_enabled only tags it —
+   DAB cannot include a resource conditionally). deploy.sh renders
+   resources/_generated_triple_slots.yml from the registry before validate: one
+   pipeline per published incremental / microbatch / realtime version, shaped like
+   SlotPipelineRunner.ensure, keeping the deployed fingerprint, the app principal
+   CAN_MANAGE; an unreachable registry keeps the previous file.
+5. src/back/objects/digitaltwin/build/TwinRealtimeStream.py (new, re-exported),
+   TwinIncrementalBuild.py, TwinBuildRunHistory.py, _build_pipeline.py,
+   TwinIncrementalStatus.py, src/api/routers/internal/dtwin.py, incremental-status.js
+   (07e9a1e2)
+   start (prerequisites, `_live` + union view, mappings JSON upload, job by name,
+   run_now with job_parameters; an active run of the same version reused), stop,
+   status (both from the job's active runs, no stored state); an effective realtime
+   build starts the stream after the pipeline and the view; a later non-realtime
+   build stops it; trace keys realtime_run_id / realtime_state; status section and
+   card line; POST /dtwin/incremental/realtime/start|stop (builders).
+6. src/back/core/streaming/SlotReconciler.py, TwinSlotReconciliation.py,
+   src/back/objects/registry/schedule/build.py (daae85b6)
+   A `live_slots` pair (`_live` live rows vs the `_slots` slot rows, counts only),
+   reported as `live_drift` apart from `reconcile_drift` (restart the stream, no slot
+   refresh); a realtime tick reconciles that pair and records `live_drift`.
+7. docs/incremental-materialization.md, README.md
+   The Realtime section (flow, prerequisites, config, the topic, B's processing
+   core paragraph with its deviations, the job, `_live`, the union view, purge,
+   orchestration, reconciliation, live-unverified list), the DAB deployment
+   section, the Modes row, the ladder, the trace keys, the traceability rows, the
+   README line.
+
+Known limitations (follow-ups):
+- Live-unverified: Real-Time Mode, transformWithState (row API, MapState TTL), the
+  Kafka / Event Hubs / Kinesis connectors, the foreach Postgres sink, the wheel
+  artifact on the job cluster, DAB-deployed pipelines referencing a not yet
+  uploaded SQL file, Debezium encodings beyond the defaults.
+- One stream per deployment at a time (max_concurrent_runs: 1). The slot pipeline
+  still reads the CDF while the stream reads the topic (two consumers, reconciled
+  by the tick). A deleted slot stays visible through `_sync` until it syncs.
+- The bundle now builds the app wheel on every deploy (`uv build`), realtime or not.
+- A deployment that turns realtime off stops no stream on later builds (stop it
+  with POST /dtwin/incremental/realtime/stop).
+- `aws_attributes` in the job cluster are AWS-only; other clouds need a target
+  override.
+
+Modified files:
+- .gitignore
+- README.md
+- app.yaml.template
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+- databricks.yml
+- docs/incremental-materialization.md
+- pyproject.toml
+- resources/triple_rtm.job.yml (new)
+- resources/triple_slots.pipeline.yml.example
+- scripts/_internal/_render-slot-pipelines.py (new)
+- scripts/deploy.sh
+- src/api/routers/internal/dtwin.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/MaterializationModeResolver.py
+- src/back/core/graphdb/RealtimeSource.py (new)
+- src/back/core/graphdb/__init__.py
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- src/back/core/graphdb/lakebase/LakebaseLiveTable.py (new)
+- src/back/core/graphdb/lakebase/__init__.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/streaming/SlotReconciler.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/back/objects/digitaltwin/build/TwinIncrementalStatus.py
+- src/back/objects/digitaltwin/build/TwinLakebaseSync.py
+- src/back/objects/digitaltwin/build/TwinRealtimeStream.py (new)
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/digitaltwin/build/TwinSlotPipeline.py
+- src/back/objects/digitaltwin/build/TwinSlotReconciliation.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/session/DomainSession.py
+- src/front/static/domain/js/domain-information.js
+- src/front/static/global/js/navbar.js
+- src/front/static/query/js/incremental-status.js
+- src/front/templates/partials/domain/_domain_information.html
+- src/jobs/triple_stream/SparkColumnText.py (new)
+- src/jobs/triple_stream/main.py (new)
+- src/shared/config/settings.py
+- tests/units/api/test_dtwin_incremental_readiness.py
+- tests/units/api/test_dtwin_reconcile.py
+- tests/units/core/test_companion_ddl_slots.py
+- tests/units/domain/test_domain_service.py
+- tests/units/domain/test_domain_session.py
+- tests/units/front/test_incremental_status_ui.py
+- tests/units/front/test_materialization_mode_ui.py
+- tests/units/graphdb/test_lakebase_live_table.py (new)
+- tests/units/graphdb/test_materialization_mode.py
+- tests/units/graphdb/test_realtime_source.py (new)
+- tests/units/jobs/test_spark_column_text.py (new)
+- tests/units/jobs/test_triple_stream_main.py (new)
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/objects/test_incremental_readiness.py
+- tests/units/objects/test_incremental_status.py
+- tests/units/objects/test_realtime_build.py (new)
+- tests/units/objects/test_realtime_stream.py (new)
+- tests/units/registry/test_scheduled_build_reconcile.py
+- tests/units/settings/test_bundle_job_resource.py
+- tests/units/settings/test_render_slot_pipelines.py (new)
+- tests/units/streaming/test_slot_reconciler.py
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/objects tests/units/registry
+tests/units/graphdb tests/units/settings tests/units/api tests/units/front tests/units/jobs
+tests/units/architecture (readiness-route test deselected)
+-> 5719 passed, 1 skipped in 36.75s (slowest 1.07s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11054 passed, 339 skipped, 9 deselected in 60.86s (slowest test 1.12s), B's files included;
+architecture suite green; tests/units/architecture/baseline.json unchanged.
