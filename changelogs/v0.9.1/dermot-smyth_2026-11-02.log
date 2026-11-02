@@ -716,9 +716,6 @@ Known limitations (follow-ups):
 - TwinIncrementalBuild is 483 lines (soft budget 400; hard 800): an Extract
   Class of the slot-pipeline steps (find/ensure/update/stop, channel, timeout)
   would bring it near 300.
-- The row-local relationship emitter branches in SlotProjectionCompiler are
-  unreachable from `compile` (relationships are batch) and still tested; about
-  85 lines to delete with their tests.
 - The scheduled tick compiles the slot spec twice (source tables, then the
   currency check); cheap, pure CPU.
 

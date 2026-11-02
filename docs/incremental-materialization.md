@@ -287,10 +287,6 @@ Behaviour in this release:
   registration costs up to four synced-table GETs per build.
 - The Lakehouse//RT fallback runs as the caller, who therefore needs CAN_USE on
   the build warehouse.
-- Follow-up: `SlotProjectionCompiler` keeps its relationship branches
-  (`map_id`, `_stack_pairs`, `_relationship_columns`, `_subject_parts`), unreachable
-  since relationship mappings classify as batch; delete them, or re-enable
-  relationships with an object-keyed slot.
 - The standalone Delta build (`/dtwin/databricks-build/start`,
   `DeltaTripleStoreBuildPipeline`) does not know the materialization modes: it
   rebuilds `_data` by CTAS, which drops an incremental domain's materialized view

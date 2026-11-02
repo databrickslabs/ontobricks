@@ -75,32 +75,22 @@ class SlotProjectionCompiler:
 
     @staticmethod
     def map_id(mapping: dict) -> str:
-        """Return the stable id of *mapping*: ``map_`` + 12 hex chars of a SHA-1.
+        """Return the stable id of an entity *mapping*: ``map_`` + 12 hex chars of a SHA-1.
 
         The hash covers the source (table or ``sql_query``), the subject
-        template, the class (entity) or object template and predicate
-        (relationship), the label column, and the predicates in canonical
+        template, the class, the label column, and the predicates in canonical
         JSON, so it is stable across runs and key order, and changes when the
-        mapping's output changes.
+        mapping's output changes. (Only entity mappings are ever row-local.)
         """
         compiler = SlotProjectionCompiler
-        if compiler._is_relationship(mapping):
-            payload = {
-                "kind": "relationship",
-                "source": compiler._source(mapping),
-                "subject": mapping.get("subject_template") or "",
-                "object": mapping.get("object_template") or "",
-                "predicate": mapping.get("predicate") or "",
-            }
-        else:
-            payload = {
-                "kind": "entity",
-                "source": compiler._source(mapping),
-                "subject": mapping.get("uri_template") or "",
-                "class_uri": mapping.get("class_uri") or "",
-                "label_column": mapping.get("label_column") or "",
-                "predicates": mapping.get("predicates") or {},
-            }
+        payload = {
+            "kind": "entity",
+            "source": compiler._source(mapping),
+            "subject": mapping.get("uri_template") or "",
+            "class_uri": mapping.get("class_uri") or "",
+            "label_column": mapping.get("label_column") or "",
+            "predicates": mapping.get("predicates") or {},
+        }
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         digest = hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False)
         return "map_" + digest.hexdigest()[:12]
@@ -145,7 +135,7 @@ class SlotProjectionCompiler:
         compiler._require_ident(view_name, "view name")
         compiler._require_fqn(source_fqn, "source table")
         pairs = compiler._stack_pairs(mapping)
-        template, id_column = compiler._subject_parts(mapping)
+        template, id_column = mapping.get("uri_template"), mapping.get("id_column")
         compiler._require_col(id_column)
         source_key = compiler.source_key_expr(mapping)  # validates the key columns
         not_null = " AND ".join(
@@ -295,8 +285,7 @@ class SlotProjectionCompiler:
         if compiler._is_relationship(mapping):
             if not mapping.get("predicate"):
                 return "relationship without predicate"
-            # The slot key is (map_id, subject key, predicate): a subject with
-            # several objects would keep only one of them under SCD TYPE 1.
+            # Multi-valued objects would collapse under the SCD1 key (map_id, subject key, predicate).
             return "relationship (several objects per subject share one slot key)"
         if not mapping.get("class_uri"):
             return "entity without class_uri"
@@ -323,21 +312,14 @@ class SlotProjectionCompiler:
         return _TEMPLATE_COLUMN.findall(template or "")
 
     @staticmethod
-    def _subject_parts(mapping: dict) -> tuple[str | None, str | None]:
-        """Return ``(subject template, subject id column)`` for either mapping kind."""
-        if SlotProjectionCompiler._is_relationship(mapping):
-            return mapping.get("subject_template"), mapping.get("subject_column")
-        return mapping.get("uri_template"), mapping.get("id_column")
-
-    @staticmethod
     def _key_columns(mapping: dict) -> list:
         """Return the columns forming the source key (``None`` if one is missing).
 
         Every column of a composite subject template, else the subject id column.
         """
         compiler = SlotProjectionCompiler
-        template, id_column = compiler._subject_parts(mapping)
-        columns = compiler._template_columns(template)
+        id_column = mapping.get("id_column")
+        columns = compiler._template_columns(mapping.get("uri_template"))
         if len(columns) <= 1:
             return [id_column or (columns[0] if columns else None)]
         return columns
@@ -358,34 +340,9 @@ class SlotProjectionCompiler:
         return columns
 
     @staticmethod
-    def _relationship_columns(mapping: dict) -> list:
-        compiler = SlotProjectionCompiler
-        return [
-            mapping.get("subject_column"),
-            mapping.get("object_column"),
-            *compiler._template_columns(mapping.get("subject_template")),
-            *compiler._template_columns(mapping.get("object_template")),
-        ]
-
-    @staticmethod
     def _stack_pairs(mapping: dict) -> list[tuple[str, str]]:
         """Return the ``(predicate, object SQL expr)`` pairs of the ``stack()`` call."""
         compiler = SlotProjectionCompiler
-        if compiler._is_relationship(mapping):
-            predicate = mapping.get("predicate")
-            if not predicate:
-                raise ValidationError("Relationship mapping has no predicate")
-            compiler._require_col(mapping.get("object_column"))
-            return [
-                (
-                    predicate,
-                    SparqlTranslator._subject_expr_from_template(
-                        sql_escape(mapping.get("object_template") or ""),
-                        mapping["object_column"],
-                        dialect=DIALECT_SPARK,
-                    ),
-                )
-            ]
         class_uri = mapping.get("class_uri")
         if not class_uri:
             raise ValidationError("Entity mapping has no class_uri")

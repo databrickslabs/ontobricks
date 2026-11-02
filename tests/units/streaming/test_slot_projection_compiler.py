@@ -203,16 +203,6 @@ class TestMapId:
         b = SlotProjectionCompiler.map_id(_entity(table=None, sql_query="SELECT 2"))
         assert a != b
 
-    def test_relationship_and_entity_ids_differ(self):
-        assert SlotProjectionCompiler.map_id(
-            _relationship()
-        ) != SlotProjectionCompiler.map_id(_entity())
-
-    def test_relationship_id_changes_with_predicate(self):
-        assert SlotProjectionCompiler.map_id(
-            _relationship(predicate="http://ex.org/other")
-        ) != SlotProjectionCompiler.map_id(_relationship())
-
 
 class TestSourceKeyExpr:
     def test_single_column(self):
@@ -224,12 +214,6 @@ class TestSourceKeyExpr:
         )
         assert SlotProjectionCompiler.source_key_expr(mapping) == (
             "concat_ws('|', CAST(order_id AS STRING), CAST(line_no AS STRING))"
-        )
-
-    def test_relationship_keys_on_the_subject_template(self):
-        assert (
-            SlotProjectionCompiler.source_key_expr(_relationship())
-            == "CAST(order_id AS STRING)"
         )
 
     def test_unsafe_column_raises(self):
@@ -320,20 +304,6 @@ class TestSlotEventViewSql:
         )
         with pytest.raises(ValidationError):
             _view_sql(mapping)
-
-    def test_relationship_projects_a_single_object_pair(self):
-        sql = _view_sql(_relationship(), source_fqn="main.sales.orders")
-        assert "stack(1, " in sql
-        assert (
-            f"'{PLACED_BY}', CONCAT('http://ex.org/Customer/', TRY_CAST(customer_id AS STRING))"
-            in sql
-        )
-        assert (
-            "CONCAT('http://ex.org/Order/', TRY_CAST(order_id AS STRING)) AS subject"
-            in sql
-        )
-        assert "CAST(order_id AS STRING) AS source_key" in sql
-        assert f"'{SlotProjectionCompiler.map_id(_relationship())}' AS map_id" in sql
 
 
 class TestAutoCdcFlowSql:
@@ -616,11 +586,6 @@ class TestNullKeyGuard:
         assert sql.endswith(
             self.LATERAL_TAIL + "WHERE order_id IS NOT NULL AND line_no IS NOT NULL"
         )
-
-    def test_relationship_guards_the_subject_column(self):
-        sql = _view_sql(_relationship(), source_fqn="main.sales.orders")
-        assert sql.endswith(self.LATERAL_TAIL + "WHERE order_id IS NOT NULL")
-        assert "customer_id IS NOT NULL" not in sql
 
     def test_guard_follows_the_same_columns_as_source_key(self):
         mapping = _entity(
