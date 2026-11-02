@@ -32,6 +32,20 @@ from tests.units.objects.test_build_pipeline_materialize import _DATA, _VIEW, _b
 
 pytestmark = pytest.mark.unit
 
+
+@pytest.fixture(autouse=True)
+def _no_registry(monkeypatch):
+    """Builds here read no real registry (the base run of the previous build is empty).
+
+    A test that patches ``RegistryService.from_context`` itself overrides this.
+    """
+    from back.objects.registry.RegistryService import RegistryService
+
+    registry = MagicMock()
+    registry.load_build_runs.return_value = []
+    monkeypatch.setattr(RegistryService, "from_context", staticmethod(lambda *a, **kw: registry))
+    return registry
+
 _SLOTS = "cat.sch.triplestore_dom_V3_slots"
 _GRAPH = "cat.sch.triplestore_dom_V3_graph"
 _INFERRED = "cat.sch.triplestore_dom_V3_inferred"

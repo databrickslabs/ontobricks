@@ -46,8 +46,10 @@ class TwinBuildRunHistory:
         (``mv`` / ``merge`` / ``ctas`` / ``""``), ``apply_mode``
         (``net_changes`` / ``full_stream`` / ``lakeflow_sync`` / ``none``;
         ``""`` when the apply phase was never reached),
-        ``apply_fallback_reason`` and ``data_table_id`` (the Delta table id the
-        version belongs to, ``""`` when unknown).
+        ``apply_fallback_reason``, ``data_table_id`` (the Delta table id the
+        version belongs to, ``""`` when unknown) and ``source_versions`` (the
+        Delta version of each slot-pipeline source, for the next build's
+        overwrite check).
         """
         from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
 
@@ -70,6 +72,7 @@ class TwinBuildRunHistory:
             "apply_mode": text(pipe, "apply_mode"),
             "apply_fallback_reason": text(pipe, "apply_fallback_reason"),
             "data_table_id": text(pipe, "data_table_id"),
+            "source_versions": TwinBuildRunHistory._source_versions(pipe),
         }
         return {**stats, "materialization": materialization}
 
@@ -251,6 +254,18 @@ class TwinBuildRunHistory:
         if mode == "table":
             return "ctas"
         return "mv" if mode == TwinBuildPostMaterialize.MATERIALIZED_VIEW else ""
+
+    @staticmethod
+    def _source_versions(pipe: Any) -> dict:
+        """``{source table: Delta version}`` the slot pipeline read (``{}`` when none)."""
+        value = getattr(pipe, "source_versions", None)
+        if not isinstance(value, dict):
+            return {}
+        return {
+            str(table): version
+            for table, version in value.items()
+            if TwinBuildRunHistory._version_or_none(version) is not None
+        }
 
     @staticmethod
     def _version_or_none(value: Any) -> int | None:

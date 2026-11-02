@@ -47,12 +47,12 @@ class TwinSlotPipeline:
         return value if value > 0 else _DEFAULT_TIMEOUT_S
 
     @staticmethod
-    def run(pipe: Any, spec: Any) -> None:
+    def run(pipe: Any, spec: Any, *, force_full_refresh: bool = False) -> None:
         """Ensure the pipeline for *spec*, then update it and wait.
 
-        A full refresh runs when the pipeline is new or its stored SQL
+        A full refresh runs when the pipeline is new, its stored SQL
         fingerprint differs (flows were added or removed, so stale slots must
-        go). It always runs as a *triggered* update to ``COMPLETED`` — a
+        go) or *force_full_refresh* asks for one (a rewritten source). It always runs as a *triggered* update to ``COMPLETED`` — a
         continuous one would let ``…_data`` be built over a still-empty
         ``…_slots`` — and the pipeline keeps its previous fingerprint until
         then, so a failed refresh is retried by the next build. Afterwards the
@@ -81,7 +81,7 @@ class TwinSlotPipeline:
 
         existing = runner.find_pipeline_id(name)
         stored = runner.stored_fingerprint(existing) if existing else ""
-        full_refresh = stored != current
+        full_refresh = force_full_refresh or stored != current
         if existing and continuous and not full_refresh and runner.get_state(existing) == "RUNNING":
             pipe.slot_pipeline_id = existing
             logger.info(

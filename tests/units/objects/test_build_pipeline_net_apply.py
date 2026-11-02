@@ -50,6 +50,7 @@ _TRACE_KEYS = {
 _FACT_KEYS = {
     "data_table_version",
     "data_table_id",
+    "source_versions",
     "fingerprint",
     "strategy",
     "apply_mode",
@@ -149,6 +150,7 @@ class TestBuildRunStats:
         assert {key: facts[key] for key in _FACT_KEYS} == {
             "data_table_version": None,
             "data_table_id": "",
+            "source_versions": {},
             "fingerprint": "",
             "strategy": "",
             "apply_mode": "",
@@ -342,6 +344,7 @@ class _CDFWarehouse(_modes._Warehouse):
         stream_error=None,
         count=100,
         data_exists=False,
+        source_history=(),
         **kw,
     ):
         super().__init__(log, count=count, **kw)
@@ -352,6 +355,7 @@ class _CDFWarehouse(_modes._Warehouse):
         self._cdf_error = cdf_error
         self._stream_error = stream_error
         self._data_exists = data_exists
+        self._source_history = list(source_history)
 
     def execute_query(self, sql: str):
         if sql.startswith("SHOW TABLES") and "_data'" in sql:
@@ -360,6 +364,9 @@ class _CDFWarehouse(_modes._Warehouse):
         if sql.startswith("DESCRIBE DETAIL"):
             self._record(sql)
             return [{"id": self._table_id}] if self._table_id else []
+        if sql.startswith("DESCRIBE HISTORY") and _DATA not in sql and "LIMIT 1" not in sql:
+            self._record(sql)
+            return self._source_history
         if sql.startswith("DESCRIBE HISTORY"):
             self._record(sql)
             return [{"version": self._data_version if _DATA in sql else self._version}]
@@ -741,6 +748,96 @@ class TestAFailedProbeKeepsThePreviousSchedule:
 
         registry.load_build_runs.assert_not_called()
         assert pipe.sync_schedule_mode == "incremental"
+
+
+class TestSourceOverwriteDetection:
+    """A source rewritten since the base build forces a full refresh of the slot pipeline."""
+
+    _SOURCE = "main.sales.customers"
+
+    def _build(self, registry, *, recorded=None, history=()):
+        if recorded is not None:
+            run = _run_record(apply_mode="none")
+            run["stats"]["materialization"]["source_versions"] = recorded
+            registry.load_build_runs.return_value = [run]
+        pipe = _modes._pipeline("incremental")
+        pipe.source_versions = {}
+        warehouse = _CDFWarehouse([], version=7, source_history=list(history))
+        log, _, _ = _modes._run(
+            pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current"
+        )
+        starts = [event for event in log if event[0] == "start"]
+        return pipe, starts, warehouse
+
+    @pytest.mark.parametrize(
+        "operation",
+        ["CREATE OR REPLACE TABLE AS SELECT", "TRUNCATE", "RESTORE", "REPLACE TABLE AS SELECT"],
+    )
+    def test_a_rewriting_operation_forces_a_full_refresh(self, registry, operation):
+        pipe, starts, _ = self._build(
+            registry,
+            recorded={self._SOURCE: 5},
+            history=[{"version": 6, "operation": operation}],
+        )
+
+        assert starts == [("start", "pipe-1", True)]
+        assert pipe.mode_decision == ModeDecision(
+            "incremental", "incremental", "source_overwritten"
+        )
+
+    def test_an_overwrite_write_forces_a_full_refresh(self, registry):
+        history = [
+            {"version": 6, "operation": "WRITE", "operationParameters": {"mode": "Overwrite"}}
+        ]
+
+        _, starts, _ = self._build(registry, recorded={self._SOURCE: 5}, history=history)
+
+        assert starts == [("start", "pipe-1", True)]
+
+    def test_row_changes_keep_the_incremental_update(self, registry):
+        pipe, starts, _ = self._build(
+            registry,
+            recorded={self._SOURCE: 5},
+            history=[{"version": 6, "operation": "MERGE"}, {"version": 7, "operation": "DELETE"}],
+        )
+
+        assert starts == [("start", "pipe-1", False)]
+        assert pipe.mode_decision.reason == ""
+
+    def test_a_rewrite_before_the_recorded_version_is_ignored(self, registry):
+        _, starts, _ = self._build(
+            registry,
+            recorded={self._SOURCE: 5},
+            history=[{"version": 4, "operation": "CREATE OR REPLACE TABLE AS SELECT"}],
+        )
+
+        assert starts == [("start", "pipe-1", False)]
+
+    def test_without_recorded_versions_no_history_is_read(self, registry):
+        _, starts, warehouse = self._build(registry)
+
+        assert starts == [("start", "pipe-1", False)]
+        assert not any(
+            s.startswith(f"DESCRIBE HISTORY {self._SOURCE}") and "LIMIT 1" not in s
+            for s in warehouse.calls
+        )
+
+    def test_the_build_records_the_source_versions_it_read(self, registry):
+        pipe, _, _ = self._build(registry)
+
+        assert pipe.source_versions == {self._SOURCE: 7}
+
+    def test_the_versions_are_persisted(self, registry):
+        pipe = _modes._pipeline("incremental")
+        pipe.source_versions = {}
+        del pipe._record_build_run
+
+        _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=7), existing="pipe-1", stored="fp-current"
+        )
+
+        facts = registry.record_build_run.call_args[0][1]["stats"]["materialization"]
+        assert facts["source_versions"] == {self._SOURCE: 7}
 
 
 class TestEmptyDataAfterAFallback:

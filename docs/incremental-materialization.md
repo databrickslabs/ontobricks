@@ -109,6 +109,15 @@ A table owner makes a source ready with `ALTER TABLE <table> SET TBLPROPERTIES
 (delta.enableRowTracking = true, delta.enableDeletionVectors = true)`. A failed probe or a failed slot pipeline / MV build
 is `incremental_failed:<ErrorClass>` and the build continues on the full path.
 
+After the probe, before the slot pipeline update, every source is checked against
+the Delta version the base build recorded for it (`source_versions`): a rewrite
+since then (`CREATE OR REPLACE`, `REPLACE TABLE AS SELECT`, `INSERT OVERWRITE` —
+a `WRITE` in `Overwrite` mode —, `TRUNCATE`, `RESTORE`, read from `DESCRIBE
+HISTORY`) breaks the change feed, so the build runs a **full refresh of the slot
+pipeline in the same mode** and records `mode_fallback_reason = source_overwritten`.
+A history that cannot be read is an `incremental_failed:InfrastructureError`, as
+for the probe.
+
 Two further fallbacks apply after the mode is decided:
 
 - **MERGE fallback** (`strategy = merge`). When an `incremental` request fell to
@@ -212,6 +221,7 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `strategy` | `mv`, `merge`, `ctas` or `""` |
 | `apply_mode`, `apply_fallback_reason` | `net_changes`, `full_stream`, `lakeflow_sync`, `none`; why a net apply was not done |
 | `data_table_version`, `data_table_id`, `fingerprint` | the `_data` version/table id the store matches; the MERGE fingerprint |
+| `source_versions` | the Delta version of each slot-pipeline source the build read (the next build's overwrite check) |
 
 The Knowledge Graph › Runs cockpit shows the effective mode (with the requested
 one and the fallback reason when they differ), the strategy / refresh technique

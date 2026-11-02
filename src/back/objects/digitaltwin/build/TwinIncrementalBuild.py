@@ -45,6 +45,7 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
+from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 
 logger = get_logger(__name__)
@@ -227,7 +228,9 @@ class TwinIncrementalBuild:
             )
         slots = definition["slots_fqn"]
         if slots:
-            TwinSlotPipeline.run(pipe, spec)
+            rewritten = TwinIncrementalBuild._rewritten_sources(pipe, spec)
+            TwinSlotPipeline.run(pipe, spec, force_full_refresh=bool(rewritten))
+            pipe.source_versions = TwinIncrementalBuild._source_versions(pipe, spec)
         TwinIncrementalBuild._apply_views(pipe, definition)
         pipe.slots_table = slots
         logger.info(
@@ -240,6 +243,61 @@ class TwinIncrementalBuild:
             len(spec.batch_mappings),
             pipe.refresh_technique,
         )
+
+    @staticmethod
+    def _rewritten_sources(pipe: Any, spec: Any) -> list:
+        """Sources rewritten since the base run recorded their version (``DESCRIBE HISTORY``).
+
+        An ``INSERT OVERWRITE`` / ``CREATE OR REPLACE`` / ``TRUNCATE`` /
+        ``RESTORE`` breaks the change feed the slot pipeline reads: the build
+        then runs a full refresh of the slot pipeline in the same mode and
+        records ``source_overwritten`` as the mode's reason. A history that
+        cannot be read raises (the incremental build falls back, as for the
+        row-tracking probe).
+        """
+        from back.core.streaming import SourceReadiness
+
+        base = TwinBuildRunHistory.previous_materialization_stats(pipe)
+        recorded = base.get("source_versions")
+        if not isinstance(recorded, dict):
+            return []
+        rewritten = [
+            table
+            for table in spec.source_tables
+            if isinstance(recorded.get(table), int)
+            and SourceReadiness.source_overwritten_since(
+                pipe.source_client, table, recorded[table]
+            )
+        ]
+        if rewritten:
+            decision = pipe.mode_decision
+            pipe.mode_decision = ModeDecision(
+                decision.requested, decision.effective, "source_overwritten"
+            )
+            logger.info(
+                "[DT-BUILD %s] %s rewritten since the last build: full refresh of the slot "
+                "pipeline",
+                pipe.task_id,
+                ", ".join(rewritten),
+            )
+        return rewritten
+
+    @staticmethod
+    def _source_versions(pipe: Any, spec: Any) -> dict:
+        """``{source table: latest Delta version}`` for the next build's overwrite check.
+
+        Best-effort: a table whose history cannot be read is left out (the next
+        build then cannot tell, and does not force a refresh for it).
+        """
+        from back.core.graphdb.delta import ChangeFeedReader
+
+        versions = {}
+        for table in spec.source_tables:
+            try:
+                versions[table] = ChangeFeedReader.latest_version(pipe.source_client, table)
+            except InfrastructureError as exc:
+                logger.debug("[DT-BUILD %s] no version of %s: %s", pipe.task_id, table, exc)
+        return versions
 
     @staticmethod
     def data_definition_for(

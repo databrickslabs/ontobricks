@@ -1,4 +1,4 @@
-"""SourceReadiness: the row-tracking probe on Delta sources."""
+"""SourceReadiness: row-tracking probe, enable statement and overwrite detection."""
 
 from __future__ import annotations
 
@@ -79,3 +79,82 @@ class TestRowTracking:
         with pytest.raises(ValidationError):
             SourceReadiness.row_tracking_enabled(client, name)
         assert client.calls == []
+
+
+class TestEnableSQL:
+    def test_turns_on_row_tracking_and_deletion_vectors(self):
+        assert SourceReadiness.enable_sql(_SRC) == (
+            f"ALTER TABLE {_SRC} SET TBLPROPERTIES "
+            "(delta.enableRowTracking = true, delta.enableDeletionVectors = true)"
+        )
+
+    def test_refuses_an_unsafe_name(self):
+        with pytest.raises(ValidationError):
+            SourceReadiness.enable_sql("a.b.c; --")
+
+
+def _history(*entries):
+    return [
+        {"version": version, "operation": operation, "operationParameters": params}
+        for version, operation, params in entries
+    ]
+
+
+class TestSourceOverwrittenSince:
+    @pytest.mark.parametrize(
+        "operation",
+        [
+            "CREATE OR REPLACE TABLE AS SELECT",
+            "REPLACE TABLE AS SELECT",
+            "TRUNCATE",
+            "RESTORE",
+        ],
+    )
+    def test_a_rewriting_operation_after_the_version_is_an_overwrite(self, operation):
+        client = _Client(history=_history((8, operation, {}), (5, "WRITE", {"mode": "Append"})))
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is True
+
+    def test_an_overwrite_write_counts(self):
+        client = _Client(history=_history((6, "WRITE", {"mode": "Overwrite"})))
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is True
+
+    def test_appends_merges_and_deletes_do_not_count(self):
+        client = _Client(
+            history=_history(
+                (9, "WRITE", {"mode": "Append"}),
+                (8, "MERGE", {}),
+                (7, "DELETE", {}),
+            )
+        )
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is False
+
+    def test_an_overwrite_at_or_before_the_version_is_ignored(self):
+        client = _Client(
+            history=_history((5, "TRUNCATE", {}), (3, "WRITE", {"mode": "Overwrite"}))
+        )
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is False
+
+    @pytest.mark.parametrize(
+        "params",
+        [[("mode", "Overwrite")], '{"mode": "Overwrite"}'],
+        ids=["pairs", "json"],
+    )
+    def test_operation_parameters_may_arrive_as_pairs_or_json(self, params):
+        client = _Client(history=_history((6, "WRITE", params)))
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is True
+
+    def test_the_history_is_read_from_the_table(self):
+        client = _Client()
+
+        SourceReadiness.source_overwritten_since(client, _SRC, 0)
+
+        assert client.calls == [f"DESCRIBE HISTORY {_SRC}"]
+
+    def test_a_failed_history_read_is_an_infrastructure_error(self):
+        with pytest.raises(InfrastructureError, match="history"):
+            SourceReadiness.source_overwritten_since(_Client(fail=True), _SRC, 0)

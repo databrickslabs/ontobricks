@@ -296,6 +296,7 @@ class _BuildPipeline:
         # Persisted under build_runs.stats["materialization"] (build_run_stats).
         self.data_table_version: Optional[int] = None
         self.data_table_id: str = ""
+        self.source_versions: Dict[str, int] = {}
         self.fingerprint: str = ""
         self.strategy: str = ""  # "merge" when TwinMergeFallback built …_data
         self.apply_mode: str = ""
