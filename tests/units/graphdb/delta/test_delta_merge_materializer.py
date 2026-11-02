@@ -159,3 +159,95 @@ class TestApply:
         with pytest.raises(ValidationError):
             DeltaMergeMaterializer.apply(client, "", DATA)
         assert client.statements == []
+
+
+_ALL_PROPERTIES = {
+    "delta.enableRowTracking": "true",
+    "delta.enableDeletionVectors": "true",
+    "delta.enableChangeDataFeed": "true",
+}
+
+
+class DescribingClient(RecordingClient):
+    """Also answers ``SHOW TBLPROPERTIES`` and ``SHOW COLUMNS`` of the merge target."""
+
+    def __init__(self, *, properties=None, columns=("subject", "predicate", "object")):
+        super().__init__()
+        self.queries: list[str] = []
+        self._properties = dict(_ALL_PROPERTIES if properties is None else properties)
+        self._columns = list(columns)
+
+    def execute_query(self, sql):
+        self.queries.append(sql)
+        if sql.startswith("SHOW TBLPROPERTIES"):
+            return [{"key": k, "value": v} for k, v in self._properties.items()]
+        if sql.startswith("SHOW COLUMNS"):
+            return [{"col_name": c} for c in self._columns]
+        return []
+
+
+def _alters(client) -> list:
+    return [s for s in client.statements if s.startswith(f"ALTER TABLE {DATA}")]
+
+
+class TestApplyTouchesOnlyWhatIsMissing:
+    """No metadata commit per build: the table is altered only when it lacks something."""
+
+    def test_a_table_with_every_property_is_not_altered(self):
+        client = DescribingClient()
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA)
+
+        assert _alters(client) == []
+        assert client.queries == [f"SHOW TBLPROPERTIES {DATA}"]
+        assert client.statements[-1].startswith(f"MERGE INTO {DATA}")
+
+    @pytest.mark.parametrize("missing", list(_ALL_PROPERTIES))
+    def test_a_missing_property_is_set(self, missing):
+        properties = {k: v for k, v in _ALL_PROPERTIES.items() if k != missing}
+        client = DescribingClient(properties=properties)
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA)
+
+        assert _alters(client) == [f"ALTER TABLE {DATA} SET TBLPROPERTIES {PROPERTIES}"]
+
+    def test_a_property_set_to_false_is_set(self):
+        properties = {**_ALL_PROPERTIES, "delta.enableChangeDataFeed": "false"}
+        client = DescribingClient(properties=properties)
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA)
+
+        assert len(_alters(client)) == 1
+
+    def test_an_unreadable_table_is_altered_as_before(self):
+        client = RecordingClient()  # no execute_query at all
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA)
+
+        assert _alters(client) == [f"ALTER TABLE {DATA} SET TBLPROPERTIES {PROPERTIES}"]
+
+    def test_a_missing_object_hash_column_is_added_before_the_merge(self):
+        client = DescribingClient()
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA, with_object_hash=True)
+
+        add = f"ALTER TABLE {DATA} ADD COLUMNS (object_hash STRING)"
+        assert _alters(client) == [add]
+        assert client.statements.index(add) < next(
+            i for i, s in enumerate(client.statements) if s.startswith("MERGE INTO")
+        )
+
+    def test_an_existing_object_hash_column_is_kept(self):
+        client = DescribingClient(columns=("subject", "predicate", "object", "object_hash"))
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA, with_object_hash=True)
+
+        assert _alters(client) == []
+
+    def test_without_the_hash_the_columns_are_not_read(self):
+        client = DescribingClient()
+
+        DeltaMergeMaterializer.apply(client, VIEW, DATA)
+
+        assert not any(q.startswith("SHOW COLUMNS") for q in client.queries)
+

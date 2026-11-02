@@ -271,9 +271,9 @@ Behaviour in this release:
 - Neo4j always streams in full (`inferred_not_separable`).
 - The MERGE fallback engages for any slot-pipeline failure in `incremental`
   (every runner message mentions the pipeline); `microbatch` falls back to CTAS.
-  The MERGE skip only fires for all-row-local domains; each MERGE build re-applies
-  the table properties (one metadata commit); an existing MERGE table without
-  `object_hash` fails its first hashed MERGE, which degrades to the CTAS.
+  The MERGE skip only fires for all-row-local domains. A MERGE build sets the table
+  properties only when `SHOW TBLPROPERTIES` lacks one, and adds `object_hash` to an
+  existing MERGE table that lacks it (a domain that became Lakeflow-synced).
 - With no new `_data` version the net apply still purges inferences, optimizes
   and rebuilds the graph cache; the Lakebase graph cache is rebuilt once inside
   the purge.

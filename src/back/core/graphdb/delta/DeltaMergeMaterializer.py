@@ -8,7 +8,7 @@ from typing import Any
 
 from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.graphdb.delta import materialize
-from back.core.helpers import SQLHelpers, validate_table_name
+from back.core.helpers import SQLHelpers, WarehouseStatements, validate_table_name
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -16,6 +16,12 @@ logger = get_logger(__name__)
 # Row tracking + deletion vectors keep a MERGE cheap and let Lakeflow sync the
 # table incrementally; the change data feed is what ``table_changes`` reads.
 _TABLE_PROPERTIES = materialize.CHANGE_FEED_PROPERTIES
+#: The keys of those properties, each expected to read ``true``.
+_PROPERTY_KEYS = (
+    "delta.enableRowTracking",
+    "delta.enableDeletionVectors",
+    "delta.enableChangeDataFeed",
+)
 
 
 class DeltaMergeMaterializer:
@@ -96,8 +102,12 @@ class DeltaMergeMaterializer:
         Every statement is built (and validated) first. Then: drop a stale
         ``…_data`` materialized view or view (best-effort; ``CREATE TABLE``
         cannot replace either), create the table if absent, turn its table
-        properties on (a table left by a CTAS has none), and ``MERGE``. Driver
-        errors become :class:`InfrastructureError`.
+        properties on when ``SHOW TBLPROPERTIES`` lacks one (a table left by a
+        CTAS has none; an unreadable answer counts as lacking), add the
+        ``object_hash`` column when *with_object_hash* finds a table without
+        it (a domain that became Lakeflow-synced), and ``MERGE``. A table that
+        already has everything gets no metadata commit. Driver errors become
+        :class:`InfrastructureError`.
         """
         ensure_sql = DeltaMergeMaterializer.ensure_table_sql(
             data_fqn, with_object_hash=with_object_hash
@@ -106,15 +116,52 @@ class DeltaMergeMaterializer:
             view_fqn, data_fqn, with_object_hash=with_object_hash
         )
         properties_sql = f"ALTER TABLE {data_fqn} SET TBLPROPERTIES {_TABLE_PROPERTIES}"
+        hash_column_sql = f"ALTER TABLE {data_fqn} ADD COLUMNS (object_hash STRING)"
         materialize.drop_relation(client, data_fqn, kind="materialized_view")
         materialize.drop_relation(client, data_fqn, kind="view")
         logger.info("Merging %s into %s", view_fqn, data_fqn)
         try:
-            for sql in (ensure_sql, properties_sql, merge_sql):
-                materialize.run_sql(client, sql)
+            materialize.run_sql(client, ensure_sql)
+            if DeltaMergeMaterializer._lacks_properties(client, data_fqn):
+                materialize.run_sql(client, properties_sql)
+            if with_object_hash and DeltaMergeMaterializer._lacks_object_hash(client, data_fqn):
+                materialize.run_sql(client, hash_column_sql)
+            materialize.run_sql(client, merge_sql)
         except OntoBricksError:
             raise
         except Exception as exc:  # noqa: BLE001 — translated, not swallowed
             raise InfrastructureError(
                 f"Could not merge {view_fqn} into {data_fqn}: {exc}", detail=str(exc)
             ) from exc
+
+    @staticmethod
+    def _lacks_properties(client: Any, data_fqn: str) -> bool:
+        """True unless ``SHOW TBLPROPERTIES`` reads every merge property as ``true``."""
+        try:
+            rows = WarehouseStatements.query(
+                client, f"SHOW TBLPROPERTIES {data_fqn}", f"read the properties of {data_fqn}"
+            )
+        except InfrastructureError as exc:
+            logger.debug("Properties of %s unreadable; setting them: %s", data_fqn, exc)
+            return True
+        values = {
+            str(row.get("key", "")): str(row.get("value", "")).strip().lower()
+            for row in rows
+            if isinstance(row, dict)
+        }
+        return any(values.get(key) != "true" for key in _PROPERTY_KEYS)
+
+    @staticmethod
+    def _lacks_object_hash(client: Any, data_fqn: str) -> bool:
+        """True when ``SHOW COLUMNS`` lists no ``object_hash`` (unreadable: ``False``)."""
+        try:
+            rows = WarehouseStatements.query(
+                client, f"SHOW COLUMNS IN {data_fqn}", f"read the columns of {data_fqn}"
+            )
+        except InfrastructureError as exc:
+            logger.debug("Columns of %s unreadable; not adding object_hash: %s", data_fqn, exc)
+            return False
+        names = {
+            str(row.get("col_name", "")).strip().lower() for row in rows if isinstance(row, dict)
+        }
+        return "object_hash" not in names
