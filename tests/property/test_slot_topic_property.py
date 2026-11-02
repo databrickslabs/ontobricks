@@ -7,8 +7,10 @@ composite key; key-changing updates; NULL keys; blank and tab objects), the
 AUTO CDC fold of the topic variant's slot events equals the fold of the
 change-feed variant's — blank slots included, since both keep them for
 ``_data`` to filter. The topic records come in Debezium's shapes: optionally
-under ``payload``, with column names in any case, ``source.table`` as a full
-or a bare table name, interleaved with records of an unmapped table.
+under ``payload``, with column names in any case (a column may also appear
+earlier under another case: the last one wins, as in the stream job),
+``source.table`` as a full or a bare table name, interleaved with records of
+an unmapped table.
 
 The topic event model encodes the rules of the compiled view; the last class
 checks those rules against the SQL the compiler emits.
@@ -52,7 +54,7 @@ def _field(envelope: dict, name: str):
 
 
 def _lowered(image: dict) -> dict:
-    """``transform_keys(<image>, (k, v) -> lower(k))``."""
+    """The image with lower-cased columns; of case-duplicates the last wins (the stream job's)."""
     return {column.lower(): value for column, value in image.items()}
 
 
@@ -101,10 +103,15 @@ def _fold(events, rnd) -> dict:
     return {slot: value for slot, (_seq, op, value) in latest.items() if op == "UPSERT"}
 
 
-def _recase(image, upper: bool):
-    if image is None or not upper:
+def _recase(image, upper: bool, shadow: bool = False):
+    """*image* with upper-cased columns; *shadow* first lists each column in the other case."""
+    if image is None:
         return image
-    return {column.upper(): value for column, value in image.items()}
+    recased = {column.upper() if upper else column: value for column, value in image.items()}
+    if not shadow:
+        return recased
+    stale = {(column.lower() if upper else column.upper()): "stale" for column in recased}
+    return {**stale, **recased}
 
 
 @st.composite
@@ -117,11 +124,11 @@ def _records(draw, events):
             records.append(
                 {"op": "c", "before": None, "after": noise, "source": {"table": _UNMAPPED}}
             )
-        upper = draw(st.booleans())
+        upper, shadow = draw(st.booleans()), draw(st.booleans())
         record = {
             "op": op,
-            "before": _recase(before, upper),
-            "after": _recase(after, upper),
+            "before": _recase(before, upper, shadow),
+            "after": _recase(after, upper, shadow),
             "source": {"table": draw(st.sampled_from(_TABLE_NAMES))},
         }
         records.append({"payload": record} if draw(st.booleans()) else record)
@@ -155,15 +162,25 @@ class TestTheModelMatchesTheSQL:
     @staticmethod
     def _view(mapping=None) -> str:
         return TopicSlotSource.slot_event_view_sql(
-            mapping or _MAPPINGS[2], view_name="v", topic=_TOPIC
+            mapping or _MAPPINGS[2], view_name="v", topic=_TOPIC, match_leaf=True
         )
 
     def test_envelopes_are_read_under_payload_with_lower_cased_columns(self):
         view = self._view()
 
         assert "lower(coalesce(e.payload.op, e.op)) AS _op" in view
-        assert "transform_keys(coalesce(e.payload.after, e.after), (k, v) -> lower(k))" in view
-        assert "lower(coalesce(e.payload.source.table, e.source.table)) AS _table" in view
+        assert "coalesce(e.payload.after, e.after) AS _after" in view
+        assert "lower(coalesce(e.payload.source.`table`, e.source.`table`)) AS _table" in view
+
+    def test_case_duplicate_columns_keep_the_last_value(self):
+        view = self._view()
+
+        assert (
+            "THEN transform_keys(_after, (k, v) -> lower(k)) "
+            "ELSE aggregate(map_entries(_after), CAST(map() AS MAP<STRING, STRING>), "
+            "(acc, x) -> map_concat(map_filter(acc, (k, v) -> k != lower(x.key)), "
+            "map(lower(x.key), x.value))) END AS _after"
+        ) in view
 
     def test_images_ops_and_ranks_are_derived_as_modelled(self):
         view = self._view()
@@ -197,5 +214,5 @@ class TestTheModelMatchesTheSQL:
     def test_the_offset_sequences_the_events(self):
         view = self._view()
 
-        assert "SELECT offset AS _commit_version" in view
+        assert "SELECT `offset` AS _commit_version" in view
         assert "image.seq_rank AS seq_rank" in view

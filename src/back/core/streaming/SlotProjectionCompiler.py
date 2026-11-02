@@ -10,6 +10,7 @@ join or a ``sql_query`` source stay on the batch path.
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 
 from back.core.errors import ValidationError
 from back.core.helpers import (
@@ -140,8 +141,8 @@ class SlotProjectionCompiler:
         (``REPLACE WHERE``, a partial ``INSERT OVERWRITE``) ends upserted.
         """
         compiler = SlotProjectionCompiler
-        compiler._require_ident(view_name, "view name")
-        compiler._require_fqn(source_fqn, "source table")
+        compiler.require_ident(view_name, "view name")
+        compiler.require_fqn(source_fqn, "source table")
         pairs = compiler._stack_pairs(mapping)
         template, id_column = mapping.get("uri_template"), mapping.get("id_column")
         compiler._require_col(id_column)
@@ -180,9 +181,9 @@ class SlotProjectionCompiler:
         ``SEQUENCE BY STRUCT(a, b)``.
         """
         compiler = SlotProjectionCompiler
-        compiler._require_ident(flow_name, "flow name")
-        compiler._require_ident(view_name, "view name")
-        compiler._require_fqn(target_fqn, "slots table")
+        compiler.require_ident(flow_name, "flow name")
+        compiler.require_ident(view_name, "view name")
+        compiler.require_fqn(target_fqn, "slots table")
         return (
             f"CREATE FLOW {flow_name} AS AUTO CDC INTO {target_fqn}\n"
             f"FROM STREAM({view_name})\n"
@@ -196,7 +197,7 @@ class SlotProjectionCompiler:
     @staticmethod
     def slots_table_sql(target_fqn: str) -> str:
         """Return the streaming-table DDL the AUTO CDC flows write into."""
-        SlotProjectionCompiler._require_fqn(target_fqn, "slots table")
+        SlotProjectionCompiler.require_fqn(target_fqn, "slots table")
         return (
             f"CREATE OR REFRESH STREAMING TABLE {target_fqn}\n"
             "CLUSTER BY (predicate, subject)\n"
@@ -213,13 +214,17 @@ class SlotProjectionCompiler:
         slots_fqn: str,
         source: str = SOURCE_CDF,
         topic: TopicSource | None = None,
+        column_types: Mapping[str, Mapping[str, str]] | None = None,
     ) -> SlotPipelineSpec:
         """Compile every row-local mapping; collect the rest as batch mappings.
 
         *source* ``"cdf"`` (default) reads each source table's change data
         feed; ``"topic"`` reads the realtime domain's Debezium *topic*
-        (:class:`TopicSlotSource`) and needs no row tracking on the sources.
-        The ``_slots`` table and the AUTO CDC flows are the same either way.
+        (:class:`TopicSlotSource`, whose module states the topic's
+        preconditions) and needs no row tracking on the sources. The
+        ``_slots`` table and the AUTO CDC flows are the same either way.
+        *column_types* (``{table: {column: UC type}}``) types the topic's
+        values; the change feed reads typed columns and ignores it.
 
         *entity_mappings* is the ``{class_uri: mapping}`` dict of
         ``extract_r2rml_mappings``. A TriplesMap with several classes shares
@@ -234,73 +239,54 @@ class SlotProjectionCompiler:
         can select them by identity in the translator's ``mappings_filter``.
         """
         compiler = SlotProjectionCompiler
-        view_sql = compiler._view_emitter(entity_mappings, relationship_mappings, source, topic)
-        statements = [compiler.slots_table_sql(slots_fqn)]
-        row_local_ids: list[str] = []
+        row_local = compiler.row_local_mappings(entity_mappings, relationship_mappings)
+        view_sql = compiler._view_emitter(row_local, base_uri, source, topic, column_types)
         batch_mappings: list[dict] = []
-        source_tables: set[str] = set()
         for mapping, original in compiler._candidates(entity_mappings, relationship_mappings):
-            if compiler.classify(mapping) != compiler.ROW_LOCAL:
-                if not any(original is seen for seen in batch_mappings):
-                    batch_mappings.append(original)
-                continue
-            mapping_id = compiler.map_id(mapping)
-            if mapping_id in row_local_ids:
-                continue
+            batch = compiler._batch_reason(mapping) is not None  # classify() logged it
+            if batch and not any(original is seen for seen in batch_mappings):
+                batch_mappings.append(original)
+        map_ids = [compiler.map_id(mapping) for mapping in row_local]
+        statements = [compiler.slots_table_sql(slots_fqn)]
+        for mapping, mapping_id in zip(row_local, map_ids, strict=True):
             view_name = f"slot_events_{mapping_id}"
-            statements.append(view_sql(mapping, base_uri, view_name))
+            statements.append(view_sql(mapping, view_name))
             statements.append(
                 compiler.auto_cdc_flow_sql(
-                    flow_name=f"slot_flow_{mapping_id}",
-                    target_fqn=slots_fqn,
-                    view_name=view_name,
+                    flow_name=f"slot_flow_{mapping_id}", target_fqn=slots_fqn, view_name=view_name
                 )
             )
-            row_local_ids.append(mapping_id)
-            source_tables.add(mapping["table"])
         logger.info(
             "Compiled slot pipeline for %s: %d row-local, %d batch mappings",
             slots_fqn,
-            len(row_local_ids),
+            len(row_local),
             len(batch_mappings),
         )
         return SlotPipelineSpec(
             slots_fqn=slots_fqn,
             statements=statements,
-            row_local_map_ids=row_local_ids,
+            row_local_map_ids=map_ids,
             batch_mappings=batch_mappings,
-            source_tables=sorted(source_tables),
+            source_tables=sorted({mapping["table"] for mapping in row_local}),
             source=source,
             topic=topic,
         )
 
     @staticmethod
-    def _view_emitter(entity_mappings, relationship_mappings, source: str, topic):
-        """``(mapping, base_uri, view_name) -> view SQL`` for *source* (validated here)."""
+    def _view_emitter(row_local: list[dict], base_uri, source, topic, types):
+        """``(mapping, view_name) -> view SQL`` for *source* (validated here)."""
         compiler = SlotProjectionCompiler
         if source == SOURCE_CDF:
             if topic is not None:
                 raise ValidationError("A change-feed slot pipeline takes no topic")
-            return lambda mapping, base_uri, view_name: compiler.slot_event_view_sql(
+            return lambda mapping, view_name: compiler.slot_event_view_sql(
                 mapping, base_uri=base_uri, view_name=view_name, source_fqn=mapping["table"]
             )
         if source != SOURCE_TOPIC:
             raise ValidationError(f"Unknown slot pipeline source {source!r} (cdf or topic)")
-        if not isinstance(topic, TopicSource):
-            raise ValidationError("A topic slot pipeline needs its topic")
-        from back.core.streaming.TopicSlotSource import TopicSlotSource
+        from back.core.streaming.TopicSlotSource import TopicSlotSource  # imports this module
 
-        tables = {
-            mapping["table"]
-            for mapping in compiler.row_local_mappings(entity_mappings, relationship_mappings)
-        }
-        leaves = [table.rsplit(".", 1)[-1].lower() for table in tables]
-        return lambda mapping, base_uri, view_name: TopicSlotSource.slot_event_view_sql(
-            mapping,
-            view_name=view_name,
-            topic=topic,
-            match_leaf=leaves.count(mapping["table"].rsplit(".", 1)[-1].lower()) == 1,
-        )
+        return TopicSlotSource.view_emitter(row_local, topic=topic, column_types=types)
 
     # ------------------------------------------------------------------
     # Pure projection facts (the data behind the SQL, for SlotRowProjector)
@@ -481,12 +467,14 @@ class SlotProjectionCompiler:
             raise ValidationError(f"Unsafe or missing column name: {name!r}")
 
     @staticmethod
-    def _require_ident(name, what: str) -> None:
+    def require_ident(name, what: str) -> None:
+        """Raise :class:`ValidationError` unless *name* is a safe bare identifier."""
         if not SlotProjectionCompiler._is_safe_col(name):
             raise ValidationError(f"Invalid {what}: {name!r}")
 
     @staticmethod
-    def _require_fqn(name, what: str) -> None:
+    def require_fqn(name, what: str) -> None:
+        """Raise :class:`ValidationError` unless *name* is a safe ``catalog.schema.table``."""
         validate_table_name(name)
         if not SlotProjectionCompiler._is_safe_fqn(name):
             raise ValidationError(f"Invalid {what}: {name!r}")

@@ -6,11 +6,15 @@ the source tables' change feed; :class:`SlotPipelineSpec` is its result.
 :class:`SlotPipelineRunner` creates and runs that pipeline,
 :class:`SourceReadiness` probes whether the sources can feed it, and
 :class:`SlotReconciler` checks the slots against the ``_data`` relation.
+In ``realtime`` mode the views read the Debezium topic instead
+(:class:`TopicSlotSource` over a :class:`TopicSource`), typing its values
+with :class:`DebeziumValueText`.
 For the Real-Time-Mode stream, :class:`SlotRowProjector` evaluates the same
 projection in Python, :class:`SlotDiffProcessor` diffs a source row's slots
 against its state and emits :class:`SlotChange` upserts and tombstones.
 """
 
+from back.core.streaming.DebeziumValueText import DebeziumValueText  # noqa: F401
 from back.core.streaming.SlotChange import SlotChange  # noqa: F401
 from back.core.streaming.SlotDiffProcessor import SlotDiffProcessor  # noqa: F401
 from back.core.streaming.SlotPipelineRunner import SlotPipelineRunner  # noqa: F401
@@ -25,6 +29,7 @@ from back.core.streaming.TopicSlotSource import TopicSlotSource  # noqa: F401
 from back.core.streaming.TopicSource import TopicSource  # noqa: F401
 
 __all__ = [
+    "DebeziumValueText",
     "SlotChange",
     "SlotDiffProcessor",
     "SlotPipelineRunner",

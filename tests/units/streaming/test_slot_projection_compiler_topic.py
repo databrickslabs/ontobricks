@@ -57,9 +57,32 @@ class TestTopicSource:
         map_id = SlotProjectionCompiler.map_id(customer)
 
         assert spec.statements[1] == TopicSlotSource.slot_event_view_sql(
-            customer, view_name=f"slot_events_{map_id}", topic=_TOPIC
+            customer, view_name=f"slot_events_{map_id}", topic=_TOPIC, match_leaf=True
         )
         assert "readChangeFeed" not in spec.to_sql()
+
+    def test_column_types_type_the_topic_views_values(self):
+        types = {"MAIN.SALES.CUSTOMERS": {"ID": "int", "name": "string"}}
+        customer = {**_mappings()["http://ex.org/Customer"], "class_uri": "http://ex.org/Customer"}
+        map_id = SlotProjectionCompiler.map_id(customer)
+
+        spec = _compile(source="topic", topic=_TOPIC, column_types=types)
+
+        assert spec.statements[1] == TopicSlotSource.slot_event_view_sql(
+            customer,
+            view_name=f"slot_events_{map_id}",
+            topic=_TOPIC,
+            match_leaf=True,
+            types={"id": "int", "name": "string"},
+        )
+        assert "CASE k WHEN 'id' THEN CAST(try_cast(v AS BIGINT) AS STRING) ELSE v END" in (
+            spec.statements[1]
+        )
+
+    def test_a_change_feed_source_reads_typed_columns_and_ignores_column_types(self):
+        types = {"main.sales.customers": {"id": "int"}}
+
+        assert _compile(column_types=types).statements == _compile().statements
 
     def test_the_slots_table_and_the_auto_cdc_flows_are_unchanged(self):
         cdf, topic = _compile(), _compile(source="topic", topic=_TOPIC)

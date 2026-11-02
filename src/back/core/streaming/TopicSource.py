@@ -2,27 +2,15 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from back.core.errors import ValidationError
 
-_PATTERNS = {
-    # host:port[,host:port…] (IPv6 hosts in brackets).
-    "bootstrap_servers": re.compile(r"[A-Za-z0-9_.\-:,\[\]]{1,1024}"),
-    "topic": re.compile(r"[A-Za-z0-9_.\-]{1,249}"),
-    # Databricks secret scope / key names.
-    "secret_scope": re.compile(r"[A-Za-z0-9_.\-]{1,128}"),
-    "secret_key": re.compile(r"[A-Za-z0-9_.\-]{1,128}"),
-}
-_CHOICES = {
-    "security_protocol": ("SASL_SSL", "SASL_PLAINTEXT", "SSL", "PLAINTEXT"),
-    "sasl_mechanism": ("PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"),
-    # ``kafka``: the secret holds the SASL JAAS line; ``eventhubs``: the
-    # namespace connection string (its Kafka endpoint, ``$ConnectionString`` login).
-    "kind": ("kafka", "eventhubs"),
-}
+#: ``kafka``: the secret holds the SASL JAAS line; ``eventhubs``: the namespace
+#: connection string (its Kafka endpoint, ``$ConnectionString`` login).
+_KINDS = ("kafka", "eventhubs")
+_FIELDS = ("bootstrap_servers", "topic", "secret_scope", "secret_key")
 _PLAIN_LOGIN = "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required"
 
 
@@ -34,28 +22,35 @@ class TopicSource:
     ``secret('<scope>', '<key>')`` and Databricks resolves it when the
     pipeline runs, so no credential is stored or written into the pipeline.
     Every field is validated on construction, because each is interpolated
-    into the pipeline SQL.
+    into the pipeline SQL; the field rules are ``RealtimeSource``'s. The
+    login is the stream job's: ``SASL_SSL`` with the ``PLAIN`` mechanism.
+
+    The connection is part of the pipeline SQL, hence of its fingerprint: a
+    new broker list or topic is a new offset space, so it must replay the
+    topic (a full refresh). Rotate a credential by writing the new value
+    under the same secret scope and key: that changes no SQL.
     """
 
     bootstrap_servers: str
     topic: str
     secret_scope: str
     secret_key: str
-    security_protocol: str = "SASL_SSL"
-    sasl_mechanism: str = "PLAIN"
     kind: str = "kafka"
 
     def __post_init__(self) -> None:
-        for field, pattern in _PATTERNS.items():
-            value = getattr(self, field)
-            if not isinstance(value, str) or pattern.fullmatch(value) is None:
+        # Imported here: ``back.core.graphdb`` is heavy, and this module is
+        # imported (through ``SlotPipelineSpec``) by the stream job's executors.
+        from back.core.graphdb.RealtimeSource import RealtimeSource
+
+        if self.kind not in _KINDS:
+            raise ValidationError(
+                f"Invalid topic source kind: {self.kind!r} (expected one of {', '.join(_KINDS)})"
+            )
+        values = {field: getattr(self, field) for field in _FIELDS}
+        for field, value in values.items():
+            if not isinstance(value, str) or not value or value != value.strip():
                 raise ValidationError(f"Invalid topic source {field}: {value!r}")
-        for field, allowed in _CHOICES.items():
-            if getattr(self, field) not in allowed:
-                raise ValidationError(
-                    f"Invalid topic source {field}: {getattr(self, field)!r} "
-                    f"(expected one of {', '.join(allowed)})"
-                )
+        RealtimeSource.parse({"kind": self.kind, **values})
 
     @classmethod
     def from_realtime_source(cls, config: Mapping) -> TopicSource:
@@ -65,25 +60,20 @@ class TopicSource:
         :class:`ValidationError`.
         """
         kind = str(config.get("kind") or "kafka").strip().lower()
-        if kind not in _CHOICES["kind"]:
+        if kind not in _KINDS:
             raise ValidationError(
                 f"A {kind} realtime source cannot feed the slot pipeline (read_kafka reads "
                 "Kafka and the Event Hubs Kafka endpoint only)"
             )
-        return cls(
-            bootstrap_servers=str(config.get("bootstrap_servers") or "").strip(),
-            topic=str(config.get("topic") or "").strip(),
-            secret_scope=str(config.get("secret_scope") or "").strip(),
-            secret_key=str(config.get("secret_key") or "").strip(),
-            kind=kind,
-        )
+        return cls(**{field: str(config.get(field) or "").strip() for field in _FIELDS}, kind=kind)
 
     def read_kafka_sql(self) -> str:
         """``STREAM read_kafka(...)`` reading the topic from its earliest offset.
 
         ``read_kafka`` needs named arguments; consumer options take the
-        ``kafka.`` prefix. The JAAS config is ``secret()`` itself for ``kafka``
-        and a ``$ConnectionString`` PLAIN login for ``eventhubs``.
+        ``kafka.`` prefix and backticks (a dotted name is a parser error
+        otherwise). The JAAS config is ``secret()`` itself for ``kafka`` and
+        a ``$ConnectionString`` PLAIN login for ``eventhubs``.
         """
         secret = f"secret('{self.secret_scope}', '{self.secret_key}')"
         if self.kind == "eventhubs":
@@ -98,8 +88,8 @@ class TopicSource:
             f"    bootstrapServers => '{self.bootstrap_servers}',\n"
             f"    subscribe => '{self.topic}',\n"
             "    startingOffsets => 'earliest',\n"
-            f"    kafka.security.protocol => '{self.security_protocol}',\n"
-            f"    kafka.sasl.mechanism => '{self.sasl_mechanism}',\n"
-            f"    kafka.sasl.jaas.config => {jaas}\n"
+            "    `kafka.security.protocol` => 'SASL_SSL',\n"
+            "    `kafka.sasl.mechanism` => 'PLAIN',\n"
+            f"    `kafka.sasl.jaas.config` => {jaas}\n"
             "  )"
         )

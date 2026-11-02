@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from back.core.errors import ValidationError
@@ -22,14 +24,13 @@ def _topic(**overrides) -> TopicSource:
 
 
 class TestValidation:
-    def test_a_valid_topic_keeps_its_defaults(self):
-        topic = _topic()
+    def test_a_valid_topic_is_kafka_by_default(self):
+        assert _topic().kind == "kafka"
 
-        assert (topic.kind, topic.security_protocol, topic.sasl_mechanism) == (
-            "kafka",
-            "SASL_SSL",
-            "PLAIN",
-        )
+    def test_the_stream_jobs_fixed_security_settings_are_not_options(self):
+        """The stream job always logs in with SASL_SSL / PLAIN; the slot pipeline matches it."""
+        with pytest.raises(TypeError):
+            _topic(security_protocol="PLAINTEXT")
 
     @pytest.mark.parametrize(
         ("field", "value"),
@@ -38,14 +39,25 @@ class TestValidation:
             ("topic", "a topic"),
             ("secret_scope", "scope'"),
             ("secret_key", ""),
-            ("security_protocol", "TLS"),
-            ("sasl_mechanism", "KERBEROS"),
+            ("topic", " padded"),
+            ("bootstrap_servers", None),
             ("kind", "kinesis"),
+            ("kind", "Kafka"),
         ],
     )
     def test_an_unsafe_or_unknown_value_is_rejected(self, field, value):
         with pytest.raises(ValidationError, match=field):
             _topic(**{field: value})
+
+    def test_the_field_rules_are_the_realtime_sources(self):
+        """One home for the patterns: what ``RealtimeSource.parse`` refuses, a topic refuses."""
+        from back.core.graphdb import RealtimeSource
+
+        bad = "x" * 250
+        with pytest.raises(ValidationError):
+            RealtimeSource.parse({"kind": "kafka", "topic": bad})
+        with pytest.raises(ValidationError, match="topic"):
+            _topic(topic=bad)
 
 
 class TestFromRealtimeSource:
@@ -97,17 +109,29 @@ class TestReadKafkaSQL:
             "    bootstrapServers => 'broker1:9093,broker2:9093',\n"
             "    subscribe => 'dbserver1.sales.customers',\n"
             "    startingOffsets => 'earliest',\n"
-            "    kafka.security.protocol => 'SASL_SSL',\n"
-            "    kafka.sasl.mechanism => 'PLAIN',\n"
-            "    kafka.sasl.jaas.config => secret('kafka-scope', 'jaas')\n"
+            "    `kafka.security.protocol` => 'SASL_SSL',\n"
+            "    `kafka.sasl.mechanism` => 'PLAIN',\n"
+            "    `kafka.sasl.jaas.config` => secret('kafka-scope', 'jaas')\n"
             "  )"
         )
+
+    @pytest.mark.parametrize("kind", ["kafka", "eventhubs"])
+    def test_every_kafka_consumer_option_is_backticked(self, kind):
+        """``read_kafka``: ``kafka.``-prefixed option names need backticks, else a parser error."""
+        sql = _topic(kind=kind).read_kafka_sql()
+        options = re.findall(r"^\s*(\S+) =>", sql, flags=re.MULTILINE)
+
+        assert [o for o in options if "kafka." in o] == [
+            "`kafka.security.protocol`",
+            "`kafka.sasl.mechanism`",
+            "`kafka.sasl.jaas.config`",
+        ]
 
     def test_event_hubs_logs_in_with_the_connection_string(self):
         sql = _topic(kind="eventhubs").read_kafka_sql()
 
         assert (
-            "kafka.sasl.jaas.config => concat('kafkashaded.org.apache.kafka.common.security"
+            "`kafka.sasl.jaas.config` => concat('kafkashaded.org.apache.kafka.common.security"
             '.plain.PlainLoginModule required username="$ConnectionString" password="\', '
             "replace(secret('kafka-scope', 'jaas'), '\"', '\\\\\"'), '\";')"
         ) in sql
@@ -120,5 +144,9 @@ class TestReadKafkaSQL:
         assert "password" not in sql
 
     def test_no_pipeline_configuration_reference_is_emitted(self):
-        """SDP substitutes ``${key}`` from the pipeline configuration; none is needed here."""
+        """The connection stays in the SQL: a new cluster or topic is a new offset space.
+
+        Rotating the credential under the same secret scope / key changes no SQL;
+        only renaming the secret, or a new broker list or topic, does.
+        """
         assert "${" not in _topic(kind="eventhubs").read_kafka_sql()
