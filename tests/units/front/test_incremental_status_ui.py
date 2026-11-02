@@ -49,3 +49,14 @@ def test_both_panels_load_the_status(script):
 def test_a_realtime_stream_line_is_rendered():
     js = SCRIPT.read_text(encoding="utf-8")
     assert "status.realtime" in js and "'Realtime stream'" in js
+
+
+def test_the_last_build_line_shows_the_slots_changed() -> None:
+    js = SCRIPT.read_text(encoding="utf-8")
+    assert "facts.slots_changed" in js and "slotsChangedText" in js
+
+
+def test_the_run_details_show_the_slots_changed_next_to_the_refresh_technique() -> None:
+    js = (REPO_ROOT / "src/front/static/global/js/runs-render.js").read_text(encoding="utf-8")
+    technique = js.index("kv('Refresh Technique'")
+    assert js.index("kv('Slots Changed'", technique) - technique < 120

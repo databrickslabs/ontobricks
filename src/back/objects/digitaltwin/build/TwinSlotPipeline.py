@@ -62,7 +62,8 @@ class TwinSlotPipeline:
 
         Without a full refresh a ``microbatch`` pipeline already running the
         current SQL is left running; any other active pipeline is stopped
-        before the update.
+        before the update. ``pipe.slot_update_id`` / ``pipe.slots_changed``: the first
+        update and the rows it wrote (:meth:`SlotPipelineRunner.update_metrics`).
         """
         from back.core.streaming import SlotPipelineRunner
 
@@ -101,7 +102,7 @@ class TwinSlotPipeline:
         pipe.slot_pipeline_id = pipeline_id
         if runner.get_state(pipeline_id) in _ACTIVE_PIPELINE_STATES:
             runner.stop(pipeline_id)
-        TwinSlotPipeline._update(
+        update_id = TwinSlotPipeline._update(
             pipe,
             runner,
             pipeline_id,
@@ -109,6 +110,8 @@ class TwinSlotPipeline:
             full_refresh=full_refresh,
             until_running=continuous and not full_refresh,
         )
+        pipe.slot_update_id = update_id
+        pipe.slots_changed = runner.update_metrics(pipeline_id, update_id)
         if not full_refresh:
             return
         runner.ensure(**definition, continuous=continuous, fingerprint=current)
@@ -155,8 +158,8 @@ class TwinSlotPipeline:
         until_running: bool,
         cancel_check: Callable[[], bool] | None = None,
         on_state: Callable[[str], None] | None = None,
-    ) -> None:
-        """Start one update of *pipeline_id* and wait for it (``COMPLETED``, or ``RUNNING``)."""
+    ) -> str:
+        """Start one update of *pipeline_id*, wait for it (``COMPLETED``, or ``RUNNING``); its id."""
         update_id = runner.start_update(pipeline_id, full_refresh=full_refresh)
         runner.wait_for_update(
             pipeline_id,
@@ -166,6 +169,7 @@ class TwinSlotPipeline:
             on_state=on_state,
             until_running=until_running,
         )
+        return update_id
 
     @staticmethod
     def _update(
@@ -176,9 +180,9 @@ class TwinSlotPipeline:
         *,
         full_refresh: bool,
         until_running: bool,
-    ) -> None:
-        """:meth:`run_update` with the build's cancel check and progress reports."""
-        TwinSlotPipeline.run_update(
+    ) -> str:
+        """:meth:`run_update` with the build's cancel check and progress reports; the update id."""
+        return TwinSlotPipeline.run_update(
             runner,
             pipeline_id,
             full_refresh=full_refresh,

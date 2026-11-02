@@ -490,6 +490,9 @@ class TestReported:
             TwinIncrementalReadiness, "realtime_facts", staticmethod(lambda d, s: {})
         )
         monkeypatch.setattr(
+            TwinIncrementalReadiness, "lakehouse_rt_facts", staticmethod(lambda d, s, r: {})
+        )
+        monkeypatch.setattr(
             importlib.import_module("back.objects.digitaltwin.build.TwinBuildPostMaterialize")
             .TwinBuildPostMaterialize,
             "serverless_available",

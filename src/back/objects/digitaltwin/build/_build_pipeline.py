@@ -297,6 +297,8 @@ class _BuildPipeline:
         self.data_table_version: Optional[int] = None
         self.data_table_id: str = ""
         self.slot_refresh_facts: Dict[str, Any] = {}
+        self.slot_update_id: str = ""  # the slot pipeline update slots_changed describes
+        self.slots_changed: dict | None = None  # rows that update wrote
         self.realtime_run_id: str = ""  # the stream run a realtime build started
         self.realtime_state: str = ""
         self.slots_seed_version: int | None = None  # the _slots version _live was seeded at

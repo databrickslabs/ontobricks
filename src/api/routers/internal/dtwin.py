@@ -1307,6 +1307,23 @@ async def incremental_status(
     return {"success": True, **result}
 
 
+@router.get(
+    "/incremental/overview",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def incremental_overview(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Domains per effective mode and fallbacks per reason, from each domain's newest main build."""
+    from back.objects.digitaltwin.build import TwinIncrementalStatus
+    from back.objects.registry.RegistryService import RegistryService
+
+    registry = RegistryService.from_context(get_domain(session_mgr), settings)
+    result = await run_blocking(TwinIncrementalStatus.overview, registry)
+    return {"success": True, **result}
+
+
 @router.get("/databricks-build/info")
 async def databricks_build_info(
     session_mgr: SessionManager = Depends(get_session_manager),

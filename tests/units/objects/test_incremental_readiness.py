@@ -49,6 +49,23 @@ class _Client:
         return True
 
 
+@pytest.fixture(autouse=True)
+def lakehouse_config(monkeypatch):
+    """The Lakehouse query warehouse and RT toggle the global config holds (none, off)."""
+    from back.core.helpers import DatabricksHelpers
+
+    config = SimpleNamespace(warehouse_id="", use_sea=False)
+    monkeypatch.setattr(
+        DatabricksHelpers,
+        "resolve_lakehouse_warehouse_id",
+        staticmethod(lambda d, s: config.warehouse_id),
+    )
+    monkeypatch.setattr(
+        DatabricksHelpers, "resolve_lakehouse_use_sea", staticmethod(lambda d, s: config.use_sea)
+    )
+    return config
+
+
 @pytest.fixture
 def two_sources(monkeypatch):
     """The domain's mappings: two row-local entity mappings on two tables."""
@@ -118,7 +135,7 @@ class TestReport:
     def test_mappings_that_do_not_compile_are_reported_not_raised(self, monkeypatch):
         from back.core.errors import ValidationError as _ValidationError
 
-        def broken(domain, settings, client=None):
+        def broken(domain, settings, client, mappings):
             raise _ValidationError("Entity mapping has no class_uri")
 
         monkeypatch.setattr(TwinIncrementalReadiness, "_spec", staticmethod(broken))
@@ -138,6 +155,121 @@ class TestReport:
             TwinIncrementalReadiness.report(
                 _domain(), SimpleNamespace(), _Client(probe_error=RuntimeError("no USE SCHEMA"))
             )
+
+
+_PLACED_BY = "http://ex.org/placedBy"
+
+
+def _join() -> dict:
+    """A table-based entity mapping with a reference predicate (a join)."""
+    return {
+        **_modes._row_local(),
+        "predicates": {_PLACED_BY: {"type": "reference", "parent_map": "#CustomerMap"}},
+    }
+
+
+def _relationship() -> dict:
+    """A table-based relationship mapping (always batch)."""
+    return {
+        "predicate": _PLACED_BY,
+        "table": _ORDERS,
+        "subject_template": "http://ex.org/Order/{order_id}",
+        "object_template": "http://ex.org/Customer/{customer_id}",
+        "subject_column": "order_id",
+        "object_column": "customer_id",
+    }
+
+
+class TestMappingClasses:
+    def test_a_row_local_mapping_is_a_slot_mapping_with_its_map_id(self):
+        from back.core.streaming import SlotProjectionCompiler
+
+        [entry] = TwinIncrementalReadiness.mapping_classes({_modes._CUSTOMER: _modes._row_local()}, [])
+
+        expected_id = SlotProjectionCompiler.map_id(_modes._row_local())
+        assert entry == {
+            "class_uri": _modes._CUSTOMER,
+            "predicate": None,
+            "map_id": expected_id,
+            "kind": "slot",
+            "reason": "",
+        }
+
+    @pytest.mark.parametrize(
+        ("entities", "relationships", "reason"),
+        [
+            ({_modes._CUSTOMER: _join()}, [], "reference predicate (join)"),
+            ({_modes._ORDER: _modes._batch()}, [], "sql_query source"),
+            ({}, [_relationship()], "relationship (several objects per subject share one slot key)"),
+        ],
+        ids=["join", "sql_query", "relationship"],
+    )
+    def test_a_batch_mapping_says_why(self, entities, relationships, reason):
+        [entry] = TwinIncrementalReadiness.mapping_classes(entities, relationships)
+
+        assert (entry["kind"], entry["map_id"], entry["reason"]) == ("batch", None, reason)
+
+    def test_a_relationship_is_named_by_its_predicate(self):
+        [entry] = TwinIncrementalReadiness.mapping_classes({}, [_relationship()])
+
+        assert (entry["class_uri"], entry["predicate"]) == (None, _PLACED_BY)
+
+    def test_the_report_lists_and_counts_them(self, monkeypatch):
+        entities = {_modes._CUSTOMER: _modes._row_local(), _modes._ORDER: _modes._batch()}
+        monkeypatch.setattr(
+            TwinIncrementalBuild,
+            "mappings_for",
+            staticmethod(lambda d: (entities, [_relationship()], "http://ex.org/")),
+        )
+
+        report = TwinIncrementalReadiness.report(_domain(), SimpleNamespace(), _Client({_CUSTOMERS: True}))
+
+        assert [m["kind"] for m in report["mappings"]] == ["slot", "batch", "batch"]
+        assert (report["slot_mappings"], report["batch_mappings"]) == (1, 2)
+
+    def test_mappings_that_do_not_compile_list_nothing_and_count_nothing(self, monkeypatch):
+        def broken(domain, settings, client, mappings):
+            raise ValidationError("Entity mapping has no class_uri")
+
+        monkeypatch.setattr(TwinIncrementalReadiness, "_spec", staticmethod(broken))
+
+        report = TwinIncrementalReadiness.report(_domain(), SimpleNamespace(), _Client())
+
+        assert (report["mappings"], report["slot_mappings"], report["batch_mappings"]) == ([], None, None)
+
+    def test_a_domain_without_r2rml_has_no_mappings(self, monkeypatch):
+        monkeypatch.setattr(TwinIncrementalBuild, "mappings_for", staticmethod(lambda d: None))
+
+        report = TwinIncrementalReadiness.report(_domain(), SimpleNamespace(), _Client())
+
+        assert (report["mappings"], report["slot_mappings"], report["batch_mappings"]) == ([], 0, 0)
+
+
+class TestLakehouseRTFacts:
+    def test_a_lakehouse_domain_reports_the_query_warehouse_and_the_toggle(self, lakehouse_config):
+        lakehouse_config.warehouse_id, lakehouse_config.use_sea = "wh-rt", True
+
+        facts = TwinIncrementalReadiness.lakehouse_rt_facts(_domain(), SimpleNamespace(), "slots_live")
+
+        assert facts == {"query_warehouse_configured": True, "use_sea": True, "fast_path": "slots_live"}
+
+    def test_nothing_configured_is_reported_as_off(self):
+        facts = TwinIncrementalReadiness.lakehouse_rt_facts(_domain(), SimpleNamespace(), "graph")
+
+        assert facts == {"query_warehouse_configured": False, "use_sea": False, "fast_path": "graph"}
+
+    def test_another_engine_has_none(self):
+        domain = _domain()
+        domain.info["graph_backend"] = "lakebase"
+
+        assert TwinIncrementalReadiness.lakehouse_rt_facts(domain, SimpleNamespace(), "graph") is None
+
+    def test_the_report_carries_them_with_its_read_relation(self, two_sources):
+        report = TwinIncrementalReadiness.report(
+            _domain(), SimpleNamespace(), _Client({_CUSTOMERS: True, _ORDERS: True})
+        )
+
+        assert report["lakehouse_rt"]["fast_path"] == report["read_relation"] == "graph"
 
 
 class TestEnableRowTracking:

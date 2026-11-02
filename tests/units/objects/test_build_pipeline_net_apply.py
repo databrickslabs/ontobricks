@@ -62,6 +62,9 @@ _FACT_KEYS = {
     "apply_mode",
     "apply_fallback_reason",
     "batch_mappings",
+    "slots_changed",
+    "slot_update_id",
+    "warehouse_id",
 }
 
 
@@ -167,6 +170,9 @@ class TestBuildRunStats:
             "apply_mode": "",
             "apply_fallback_reason": "",
             "batch_mappings": None,
+            "slots_changed": None,
+            "slot_update_id": "",
+            "warehouse_id": "",
         }
 
     @pytest.mark.parametrize(
@@ -194,6 +200,29 @@ class TestBuildRunStats:
         facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
 
         assert facts["batch_mappings"] == count
+
+    def test_the_slots_changed_counts_are_recorded(self):
+        changed = {"rows_output": 4, "rows_upserted": 3, "rows_deleted": None}
+        pipe = SimpleNamespace(view_table=_VIEW, slots_changed=changed)
+
+        facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
+
+        assert facts["slots_changed"] == changed
+
+    @pytest.mark.parametrize("value", [None, 7, MagicMock()])
+    def test_slots_changed_that_are_not_counts_are_dropped(self, value):
+        pipe = SimpleNamespace(view_table=_VIEW, slots_changed=value)
+
+        facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
+
+        assert facts["slots_changed"] is None
+
+    def test_the_billing_join_keys_are_recorded(self):
+        pipe = SimpleNamespace(view_table=_VIEW, slot_update_id="upd-9", warehouse_id="wh-build")
+
+        facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
+
+        assert (facts["slot_update_id"], facts["warehouse_id"]) == ("upd-9", "wh-build")
 
     @pytest.mark.parametrize("value", [True, "7", 7.0, MagicMock()])
     def test_a_version_that_is_not_an_integer_is_dropped(self, value):

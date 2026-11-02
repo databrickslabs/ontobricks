@@ -1,6 +1,7 @@
 /**
  * Incremental status card: slot pipeline state, the _data / _slots commits and
- * freshness lag, the Lakebase synced table and the last build's strategy.
+ * freshness lag, the Lakebase synced table and the last build's strategy, refresh
+ * technique and slots changed.
  * Fills every [data-incremental-status] container from GET /dtwin/incremental/status;
  * hidden for a full-mode domain or when the status cannot be read.
  */
@@ -36,8 +37,11 @@ function _incrementalLines(status) {
     var last = status.last_build;
     if (last && !last.error) {
         var facts = last.materialization || {};
-        var how = [facts.strategy, facts.apply_mode].filter(Boolean).join(' / ');
+        var how = [facts.strategy, facts.refresh_technique, facts.apply_mode].filter(Boolean).join(' / ');
         var text = (last.status || '?') + (last.build_kind ? ' (' + last.build_kind + ')' : '') + (how ? ' · ' + how : '');
+        // Rows the build's slot pipeline update wrote (runs-render.js formats them).
+        var slots = window.RunsRender ? window.RunsRender.slotsChangedText(facts.slots_changed) : '';
+        if (slots) text += ' · slots changed: ' + slots;
         if (facts.reconcile_drift) text += ' · drift: full refresh on the next build';
         lines.push(['Last build', text, last.finished_at || '']);
     }

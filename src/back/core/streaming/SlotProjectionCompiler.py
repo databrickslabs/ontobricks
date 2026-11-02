@@ -67,7 +67,7 @@ class SlotProjectionCompiler:
         *relationship_mappings* is accepted for signature stability and unused.
         """
         compiler = SlotProjectionCompiler
-        reason = compiler._batch_reason(mapping)
+        reason = compiler.batch_reason(mapping)
         if reason:
             logger.debug(
                 "Mapping %s is batch: %s",
@@ -245,7 +245,7 @@ class SlotProjectionCompiler:
         view_sql = compiler._view_emitter(row_local, base_uri, source, topic, column_types)
         batch_mappings: list[dict] = []
         for mapping, original in compiler._candidates(entity_mappings, relationship_mappings):
-            batch = compiler._batch_reason(mapping) is not None  # classify() logged it
+            batch = compiler.batch_reason(mapping) is not None  # classify() logged it
             if batch and not any(original is seen for seen in batch_mappings):
                 batch_mappings.append(original)
         map_ids = [compiler.map_id(mapping) for mapping in row_local]
@@ -366,21 +366,21 @@ class SlotProjectionCompiler:
         ] + [(mapping, mapping) for mapping in relationship_mappings or []]
 
     @staticmethod
-    def _batch_reason(mapping: dict) -> str | None:
-        """Return why *mapping* is not row-local, or ``None`` when it is."""
+    def batch_reason(mapping: dict) -> str | None:
+        """Return why *mapping* is not row-local (the most specific reason first), or ``None``."""
         compiler = SlotProjectionCompiler
-        table = mapping.get("table")
-        if not (table or "").strip():
-            return "no table"
-        if (mapping.get("sql_query") or "").strip():
-            return "sql_query source"
-        if not compiler._is_safe_fqn(table):
-            return "unsafe table name"
         if compiler._is_relationship(mapping):
             if not mapping.get("predicate"):
                 return "relationship without predicate"
             # Multi-valued objects would collapse under the SCD1 key (map_id, subject key, predicate).
             return "relationship (several objects per subject share one slot key)"
+        if (mapping.get("sql_query") or "").strip():
+            return "sql_query source"
+        table = mapping.get("table")
+        if not (table or "").strip():
+            return "no table"
+        if not compiler._is_safe_fqn(table):
+            return "unsafe table name"
         if not mapping.get("class_uri"):
             return "entity without class_uri"
         predicates = mapping.get("predicates") or {}

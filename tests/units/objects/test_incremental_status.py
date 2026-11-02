@@ -292,3 +292,106 @@ def test_another_mode_reports_no_stream(env):
 
 def test_the_requested_mode_is_reported(env):
     assert _report(_Warehouse(), domain=_domain("microbatch"))["mode_requested"] == "microbatch"
+
+
+def _main_run(version, effective, reason="", *, requested="incremental", kind="session"):
+    return {
+        "version": version,
+        "build_kind": kind,
+        "status": "success",
+        "started_at": "2026-11-02T10:00:00+00:00",
+        "finished_at": "2026-11-02T10:05:00+00:00",
+        "stats": {
+            "materialization": {
+                "materialization_mode_requested": requested,
+                "materialization_mode_effective": effective,
+                "mode_fallback_reason": reason,
+            }
+        },
+    }
+
+
+class _OverviewRegistry:
+    """Lists *domains* and answers each one's newest runs from *runs* (newest first)."""
+
+    def __init__(self, runs, *, ok=True):
+        self.runs, self.ok, self.calls = runs, ok, []
+
+    def list_domain_details_cached(self):
+        if not self.ok:
+            return False, [], "registry down"
+        return True, [{"name": name} for name in self.runs], ""
+
+    def load_build_runs(self, folder, version=None, limit=None):
+        self.calls.append((folder, version, limit))
+        return self.runs[folder]
+
+
+class TestOverview:
+    @pytest.fixture
+    def two_domains(self):
+        return _OverviewRegistry(
+            {
+                "sales": [
+                    _main_run("4", "", kind="scheduled"),
+                    _main_run("4", "microbatch", requested="microbatch"),
+                ],
+                "hr": [_main_run("2", "full", "row_tracking_missing")],
+            }
+        )
+
+    def test_domains_are_counted_per_effective_mode(self, two_domains):
+        overview = TwinIncrementalStatus.overview(two_domains)
+
+        assert overview["domains_per_mode"] == {"microbatch": 1, "full": 1}
+
+    def test_fallbacks_are_counted_per_reason(self, two_domains):
+        overview = TwinIncrementalStatus.overview(two_domains)
+
+        assert overview["fallbacks_by_reason"] == {"row_tracking_missing": 1}
+
+    def test_each_domain_reports_its_newest_main_build(self, two_domains):
+        overview = TwinIncrementalStatus.overview(two_domains)
+
+        assert overview["domains"] == [
+            {
+                "name": "sales",
+                "version": "4",
+                "mode_requested": "microbatch",
+                "mode_effective": "microbatch",
+                "last_build_at": "2026-11-02T10:05:00+00:00",
+                "fallback_reason": "",
+            },
+            {
+                "name": "hr",
+                "version": "2",
+                "mode_requested": "incremental",
+                "mode_effective": "full",
+                "last_build_at": "2026-11-02T10:05:00+00:00",
+                "fallback_reason": "row_tracking_missing",
+            },
+        ]
+
+    def test_every_version_s_newest_runs_are_searched(self, two_domains):
+        TwinIncrementalStatus.overview(two_domains)
+
+        assert two_domains.calls == [("sales", None, 50), ("hr", None, 50)]
+
+    def test_a_domain_without_a_main_build_is_left_out(self):
+        registry = _OverviewRegistry(
+            {
+                "new": [],
+                "pre_091": [{"version": "1", "build_kind": "session", "stats": {}}],
+                "ticks": [_main_run("1", "incremental", kind="scheduled")],
+            }
+        )
+
+        assert TwinIncrementalStatus.overview(registry) == {
+            "domains_per_mode": {},
+            "fallbacks_by_reason": {},
+            "domains": [],
+        }
+
+    def test_a_registry_that_cannot_list_its_domains_raises(self):
+        with pytest.raises(InfrastructureError, match="registry domains"):
+            TwinIncrementalStatus.overview(_OverviewRegistry({}, ok=False))

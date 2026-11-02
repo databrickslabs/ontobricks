@@ -100,7 +100,7 @@ class TwinIncrementalBuild:
         )
 
         pipe.slots_table, pipe.slot_pipeline_id, pipe.refresh_technique = None, "", ""
-        pipe.batch_mappings = None
+        pipe.batch_mappings, pipe.slots_changed, pipe.slot_update_id = None, None, ""
         requested = normalize_materialization_mode(
             GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings)
         )
@@ -456,7 +456,7 @@ class TwinIncrementalBuild:
         pipe.mode_decision = ModeDecision(requested, "full", reason)
         # Message and driver detail, read by TwinMergeFallback.applies.
         pipe.mode_fallback_detail = f"{exc} {exc.detail or ''}".strip()
-        pipe.slots_table, pipe.batch_mappings = None, None
+        pipe.slots_table, pipe.batch_mappings, pipe.slots_changed = None, None, None
         pipe.refresh_technique = ""
         TwinIncrementalBuild._leave(pipe)  # also clears the cached read relation
         pipe.tm.update_progress(

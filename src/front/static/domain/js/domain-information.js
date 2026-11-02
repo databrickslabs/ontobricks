@@ -260,6 +260,41 @@ function _readinessUntracked(report) {
     return (report.sources || []).filter(s => s.row_tracking === false).map(s => s.table);
 }
 
+function _readinessLocalName(uri) {
+    const text = String(uri || '');
+    return text.slice(Math.max(text.lastIndexOf('#'), text.lastIndexOf('/')) + 1) || text;
+}
+
+// Per-mapping freshness class: row-local mappings feed the slot pipeline (and so
+// microbatch); the others stay on _data's batch branch. The batch ones and why are the
+// line's tooltip. Hidden when the mappings do not compile (counts null).
+function _renderReadinessMappings(report) {
+    const line = document.getElementById('materializationReadinessMappings');
+    if (!line) return;
+    const show = report.slot_mappings !== null && report.slot_mappings !== undefined;
+    line.textContent = show
+        ? `Mappings: ${report.slot_mappings} row-local (microbatch-eligible), ${report.batch_mappings} batch-incremental`
+        : '';
+    line.title = (report.mappings || [])
+        .filter(m => m.kind === 'batch')
+        .map(m => `${_readinessLocalName(m.class_uri || m.predicate)}: ${m.reason}`)
+        .join('\n');
+    line.classList.toggle('d-none', !show);
+}
+
+// Lakehouse engine only (lakehouse_rt null elsewhere): the query warehouse and the RT toggle.
+function _renderReadinessLakehouseRT(report) {
+    const line = document.getElementById('materializationReadinessLakehouseRT');
+    if (!line) return;
+    const rt = report.lakehouse_rt;
+    line.textContent = rt
+        ? `Lakehouse//RT: query warehouse ${rt.query_warehouse_configured ? 'set' : 'not set'}`
+          + ` · RT reads ${rt.use_sea ? 'on' : 'off'}`
+          + (rt.fast_path === 'slots_live' ? ' · fast path (live slots)' : '')
+        : '';
+    line.classList.toggle('d-none', !rt);
+}
+
 function renderMaterializationReadiness(report) {
     const box = document.getElementById('materializationReadiness');
     const text = document.getElementById('materializationReadinessText');
@@ -294,6 +329,8 @@ function renderMaterializationReadiness(report) {
             : '';
         realtimeLine.classList.toggle('d-none', !showRealtime);
     }
+    _renderReadinessMappings(report);
+    _renderReadinessLakehouseRT(report);
     button.dataset.tables = JSON.stringify(untracked);
     box.classList.remove('d-none');
 }

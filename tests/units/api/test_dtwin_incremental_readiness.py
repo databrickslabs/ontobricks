@@ -86,6 +86,7 @@ _BUILDER_GATE = f"require_domain_{ROLE_BUILDER}"
         "/dtwin/incremental/readiness",
         "/dtwin/incremental/enable-row-tracking",
         "/dtwin/incremental/status",
+        "/dtwin/incremental/overview",
         "/dtwin/incremental/reconcile",
     ],
 )
@@ -115,6 +116,36 @@ async def test_status_reports_on_the_build_warehouse_with_the_route_store(monkey
     assert seen["get_store"] is dtwin.get_graphdb
     assert seen["client_kwargs"] == {"warehouse_id": "wh-build"}
 
+
+@pytest.mark.asyncio
+async def test_overview_aggregates_the_session_s_registry(monkeypatch, route):
+    from back.objects.digitaltwin.build import TwinIncrementalStatus
+    from back.objects.registry.RegistryService import RegistryService
+
+    dtwin, domain, seen = route
+    registry = object()
+    monkeypatch.setattr(
+        RegistryService,
+        "from_context",
+        classmethod(lambda cls, d, s: seen.update(registry_domain=d) or registry),
+    )
+
+    def overview(reg):
+        seen["registry"] = reg
+        return {"domains_per_mode": {"incremental": 1}, "fallbacks_by_reason": {}, "domains": []}
+
+    monkeypatch.setattr(TwinIncrementalStatus, "overview", staticmethod(overview))
+
+    resp = await dtwin.incremental_overview(session_mgr=object(), settings=object())
+
+    assert resp == {
+        "success": True,
+        "domains_per_mode": {"incremental": 1},
+        "fallbacks_by_reason": {},
+        "domains": [],
+    }
+    assert seen["registry"] is registry and seen["registry_domain"] is domain
+    assert "client_kwargs" not in seen
 
 
 @pytest.mark.asyncio

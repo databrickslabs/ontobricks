@@ -141,6 +141,17 @@ window.RunsRender = (function () {
             + (detail ? '<div class="text-muted">' + detail + '</div>' : '') + '</td>';
     }
 
+    // ``slots_changed``: the rows the build's slot pipeline update wrote, summed
+    // from its flow_progress events (null when no update ran or they were unreadable).
+    function slotsChangedText(changed) {
+        if (!changed || typeof changed !== 'object') return '';
+        const labels = [['rows_output', ' rows'], ['rows_upserted', ' upserted'], ['rows_deleted', ' deleted']];
+        return labels
+            .filter(function (pair) { return changed[pair[0]] !== null && changed[pair[0]] !== undefined; })
+            .map(function (pair) { return (Number(changed[pair[0]]) || 0).toLocaleString() + pair[1]; })
+            .join(', ');
+    }
+
     function materializationDetailsHtml(run) {
         const facts = materializationFacts(run);
         if (!facts) return '';
@@ -153,6 +164,7 @@ window.RunsRender = (function () {
         html += kv('Fallback Reason', text(facts.mode_fallback_reason));
         html += kv('Strategy', text(facts.strategy));
         html += kv('Refresh Technique', text(facts.refresh_technique));
+        html += kv('Slots Changed', text(slotsChangedText(facts.slots_changed)));
         html += kv('Apply Mode', text(facts.apply_mode));
         html += kv('Apply Fallback', text(facts.apply_fallback_reason));
         html += kv('Triples Source', text(facts.triples_source));
@@ -341,6 +353,7 @@ window.RunsRender = (function () {
         versionBadge: versionBadge,
         materializationCell: materializationCell,
         materializationDetailsHtml: materializationDetailsHtml,
+        slotsChangedText: slotsChangedText,
         buildRunCells: buildRunCells,
         analyticsRunCells: analyticsRunCells,
         kv: kv,

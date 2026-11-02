@@ -34,6 +34,7 @@ from back.core.errors import (
     ValidationError,
 )
 from back.core.logging import get_logger
+from back.core.streaming.SlotUpdateMetrics import SlotUpdateMetrics
 
 logger = get_logger(__name__)
 
@@ -387,6 +388,22 @@ class SlotPipelineRunner:
             f"get pipeline {pipeline_id}", lambda w: w.pipelines.get(pipeline_id=pipeline_id)
         )
         return _enum_name(getattr(response, "state", None))
+
+    def update_metrics(self, pipeline_id: str, update_id: str) -> dict | None:
+        """``{rows_output, rows_upserted, rows_deleted}`` the update wrote (:class:`SlotUpdateMetrics`).
+
+        Best effort: any API error is ``None`` (logged at warning), never raised.
+        """
+        try:
+            return self._call(
+                f"list events of {pipeline_id}",
+                lambda w: SlotUpdateMetrics.read(w, pipeline_id, update_id),
+            )
+        except OntoBricksError as exc:
+            logger.warning(
+                "Slot pipeline %s update %s: no row metrics (%s)", pipeline_id, update_id, exc
+            )
+            return None
 
     # ------------------------------------------------------------------
     # Helpers

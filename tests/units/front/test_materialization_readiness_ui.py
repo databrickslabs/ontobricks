@@ -68,3 +68,29 @@ def test_only_a_probed_untracked_source_asks_for_row_tracking() -> None:
     body = js[start : js.index("function renderMaterializationReadiness")]
     assert "s.row_tracking === false" in body
     assert "row_tracking_required === false" in js
+
+
+@pytest.mark.parametrize(
+    "element", ["materializationReadinessMappings", "materializationReadinessLakehouseRT"]
+)
+def test_the_mapping_and_lakehouse_rt_lines_start_hidden(element) -> None:
+    block = _readiness_block()
+    line = block[block.index(f'id="{element}"') - 60 : block.index(f'id="{element}"')]
+    assert "d-none" in line
+
+
+def test_the_mapping_classes_are_counted_with_the_batch_ones_as_a_tooltip() -> None:
+    js = SCRIPT.read_text(encoding="utf-8")
+    start = js.index("function _renderReadinessMappings")
+    body = js[start : js.index("function _renderReadinessLakehouseRT")]
+    assert "row-local (microbatch-eligible)" in body and "batch-incremental" in body
+    assert "m.kind === 'batch'" in body and "line.title" in body
+    assert "innerHTML" not in body
+
+
+def test_the_lakehouse_rt_line_shows_the_warehouse_and_the_toggle() -> None:
+    js = SCRIPT.read_text(encoding="utf-8")
+    start = js.index("function _renderReadinessLakehouseRT")
+    body = js[start : js.index("function renderMaterializationReadiness")]
+    assert "query_warehouse_configured" in body and "use_sea" in body
+    assert "innerHTML" not in body

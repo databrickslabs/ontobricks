@@ -2843,3 +2843,127 @@ Modified files:
 Test result: full suite on `685a58f4` (`uv run --frozen pytest -q -m "not scenario"`,
 readiness-route test deselected): 11441 passed, 341 skipped, 9 deselected;
 architecture suite re-run green after the docstring edit.
+
+================================================================================
+## Design-doc gaps: per-mapping class, slots changed, RT availability, overview
+================================================================================
+
+Context: four items of the incremental-materialization design doc had no code:
+the per-mapping freshness class in the UI ("which mappings are row-local, eligible
+for microbatch, and which are join/aggregate"), "slot counts changed" in the
+build-run trace, Lakehouse//RT availability in the readiness preflight (P1), and
+the KPI "number of domains per mode, and fallback events by reason". All four are
+implemented on the existing collaborators; one small class keeps
+`SlotPipelineRunner` within its 400-line budget.
+
+Changes:
+
+1. src/back/core/streaming/SlotProjectionCompiler.py (G1)
+   `_batch_reason` becomes the public `batch_reason` (both callers updated) and
+   checks the most specific reason first: a relationship, then a `sql_query`
+   source, then the table checks. The classification itself is unchanged; a
+   `sql_query` entity mapping now says `sql_query source` instead of `no table`.
+2. src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py (G1, G3)
+   The report adds `mappings` (`mapping_classes`: one
+   `{class_uri, predicate, map_id, kind, reason}` per class of an entity mapping
+   and per relationship mapping; `kind` `slot` / `batch`, the reason from
+   `SlotProjectionCompiler.batch_reason`), `slot_mappings` / `batch_mappings`
+   counts (`null` with `[]` when the mappings do not compile) and `lakehouse_rt`
+   (`lakehouse_rt_facts`: `query_warehouse_configured`, `use_sea`, `fast_path` =
+   the report's `read_relation`; `null` off the Lakehouse engine). The compile
+   step moved to `_compiled`; `_spec` takes the mappings so they are derived once.
+3. src/back/core/helpers/DatabricksHelpers.py (G3)
+   `resolve_lakehouse_warehouse_id` (`graph_engine_config.lakehouse.warehouse_id`,
+   `""` when unset) extracted from `resolve_delta_warehouse_id`, which now falls
+   back from it to the global warehouse as before.
+4. src/back/core/streaming/SlotUpdateMetrics.py (new), SlotPipelineRunner.py,
+   __init__.py (G2)
+   `SlotPipelineRunner.update_metrics(pipeline_id, update_id)` sums
+   `num_output_rows` / `num_upserted_rows` / `num_deleted_rows` of the update's
+   `flow_progress` events into `{rows_output, rows_upserted, rows_deleted}`
+   (`None` per metric no event carries; any API error is `None` with a warning).
+   `SlotUpdateMetrics` reads the events REST endpoint directly, newest first, at
+   most 20 pages of 250, stopping after the update's events: the SDK's
+   `PipelineEvent` drops `details` and its `filter` cannot select an update.
+   Re-exported from `back.core.streaming`.
+5. src/back/objects/digitaltwin/build/TwinSlotPipeline.py,
+   TwinIncrementalBuild.py, TwinBuildRunHistory.py, _build_pipeline.py (G2)
+   `run_update` / `_update` return the update id; `run` records
+   `pipe.slot_update_id` and `pipe.slots_changed` for the first update it ran
+   (the full refresh of a bootstrap, the triggered update, or the continuous one
+   adopted once running). `TwinIncrementalBuild._apply` resets both and
+   `_fall_back` resets `slots_changed`. `build_run_stats` records
+   `slots_changed` (dict or `None`), `slot_update_id` and the build's
+   `warehouse_id` (the billing join keys). `TwinBuildRunHistory.newest_main_run`
+   picks the newest run that is not a scheduled tick and has materialization facts.
+6. src/back/objects/digitaltwin/build/TwinIncrementalStatus.py,
+   src/api/routers/internal/dtwin.py (G4)
+   `TwinIncrementalStatus.overview(registry)`: every domain of
+   `list_domain_details_cached` with its newest main run among its newest 50 runs
+   of any version → `{domains_per_mode, fallbacks_by_reason, domains}`; a domain
+   without one is left out; an unlistable registry is an `InfrastructureError`.
+   `GET /dtwin/incremental/overview` (builder role, as the status route) runs it on
+   the session's registry. No UI.
+7. src/front/templates/partials/domain/_domain_information.html,
+   src/front/static/domain/js/domain-information.js (G1, G3)
+   Two readiness lines, hidden until filled: "Mappings: n row-local
+   (microbatch-eligible), m batch-incremental" (tooltip: each batch mapping's
+   local name and reason) and, on the Lakehouse engine, "Lakehouse//RT: query
+   warehouse set / not set · RT reads on / off" (plus "fast path (live slots)").
+8. src/front/static/global/js/runs-render.js, src/front/static/query/js/incremental-status.js (G2)
+   Run details show "Slots Changed" after "Refresh Technique"
+   (`RunsRender.slotsChangedText`); the status card's Last build line adds the
+   refresh technique and "slots changed: …".
+9. docs/incremental-materialization.md
+   Readiness (mappings, lakehouse_rt, the row-filter / column-mask sentence and
+   the panel lines), Build-run trace (`slots_changed`, `slot_update_id` /
+   `warehouse_id` rows, the events read and the DBU join sentence), Status (the
+   card line, the overview endpoint). The traceability table and the Live
+   verification paragraphs are untouched.
+10. Tests (unit): tests/units/objects/test_incremental_readiness.py (mapping
+    classes per reason, counts, compile error and no R2RML, lakehouse_rt facts),
+    tests/units/streaming/test_slot_pipeline_runner.py (summing, missing metrics,
+    paging, API error), tests/units/objects/test_build_pipeline_modes.py
+    (slots_changed recorded / bootstrap read once / adopted update / unreadable /
+    left streaming / reset on fallback and on a full build),
+    tests/units/objects/test_build_pipeline_net_apply.py (trace keys),
+    tests/units/objects/test_incremental_status.py (overview: two domains, one
+    fallback, ticks and fact-less runs skipped, registry error),
+    tests/units/api/test_dtwin_incremental_readiness.py (overview route + gate),
+    tests/units/front/test_materialization_readiness_ui.py,
+    tests/units/front/test_incremental_status_ui.py,
+    tests/units/graphdb/delta/test_graph_read_relation.py (stub the new facts).
+
+Modified files:
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/streaming/SlotPipelineRunner.py
+- src/back/core/streaming/SlotUpdateMetrics.py (new)
+- src/back/core/streaming/__init__.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/back/objects/digitaltwin/build/TwinIncrementalStatus.py
+- src/back/objects/digitaltwin/build/TwinSlotPipeline.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/global/js/runs-render.js
+- src/front/static/query/js/incremental-status.js
+- docs/incremental-materialization.md
+- tests/units/objects/test_incremental_readiness.py
+- tests/units/objects/test_incremental_status.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/streaming/test_slot_pipeline_runner.py
+- tests/units/api/test_dtwin_incremental_readiness.py
+- tests/units/front/test_materialization_readiness_ui.py
+- tests/units/front/test_incremental_status_ui.py
+- tests/units/graphdb/delta/test_graph_read_relation.py
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11485 passed, 341 skipped, 9 deselected in 79.90s; architecture suite green;
+baseline.json unchanged (SlotPipelineRunner 392 LOC, TwinIncrementalReadiness
+242, TwinIncrementalStatus 225).

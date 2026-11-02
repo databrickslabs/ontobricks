@@ -50,6 +50,8 @@ _SLOTS = "cat.sch.triplestore_dom_V3_slots"
 _GRAPH = "cat.sch.triplestore_dom_V3_graph"
 _INFERRED = "cat.sch.triplestore_dom_V3_inferred"
 
+_SLOT_METRICS = {"rows_output": 3, "rows_upserted": 2, "rows_deleted": 1}
+
 _RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 _CUSTOMER = "http://ex.org/Customer"
 _ORDER = "http://ex.org/Order"
@@ -146,7 +148,17 @@ class _Script:
     and stores the fingerprint it was given, so a second build sees the first's.
     """
 
-    def __init__(self, log, *, existing=None, stored="", state="IDLE", fail_on=(), error=None):
+    def __init__(
+        self,
+        log,
+        *,
+        existing=None,
+        stored="",
+        state="IDLE",
+        fail_on=(),
+        error=None,
+        metrics=_SLOT_METRICS,
+    ):
         self.log = log
         self.existing = existing
         self.stored = stored
@@ -154,6 +166,9 @@ class _Script:
         self.fail_on = (fail_on,) if isinstance(fail_on, str) else tuple(fail_on or ())
         self.error = error or InfrastructureError("pipeline update FAILED")
         self.instances = 0
+        # What update_metrics answers, and the (pipeline, update) it was asked for.
+        self.metrics = dict(metrics) if isinstance(metrics, dict) else metrics
+        self.metrics_reads: list = []
 
 
 class _FakeRunner(SlotPipelineRunner):
@@ -199,6 +214,10 @@ class _FakeRunner(SlotPipelineRunner):
     def wait_for_update(self, pipeline_id, update_id, **kwargs):
         self._step("wait", update_id, kwargs)
         return "RUNNING" if kwargs.get("until_running") else "COMPLETED"
+
+    def update_metrics(self, pipeline_id, update_id):
+        self.script.metrics_reads.append((pipeline_id, update_id))
+        return self.script.metrics
 
 
 def _pipeline(mode="incremental", *, backend="databricks", entities=None, relationships=()):
@@ -1007,6 +1026,73 @@ class TestTrace:
             "",
             "",
         )
+
+    def test_a_build_records_the_slots_its_update_changed(self):
+        entry = self._entry(_pipeline("incremental"))
+
+        assert entry["stats"]["materialization"]["slots_changed"] == _SLOT_METRICS
+
+    def test_a_build_records_the_update_it_read(self):
+        entry = self._entry(_pipeline("incremental"))
+
+        assert entry["stats"]["materialization"]["slot_update_id"] == "upd-1"
+
+
+class TestSlotsChanged:
+    def test_the_metrics_of_the_completed_update_are_recorded(self):
+        pipe = _pipeline("incremental")
+
+        _, script, _ = _run(pipe)
+
+        assert pipe.slots_changed == _SLOT_METRICS
+        assert script.metrics_reads == [("pipe-1", "upd-1")]
+
+    def test_a_microbatch_bootstrap_records_its_full_refresh_once(self):
+        """The triggered full refresh moved the slots; the continuous switch is not read again."""
+        pipe = _pipeline("microbatch")
+
+        _, script, _ = _run(pipe)
+
+        assert pipe.slots_changed == _SLOT_METRICS
+        assert len(script.metrics_reads) == 1
+
+    def test_an_adopted_continuous_update_records_its_metrics(self):
+        pipe = _pipeline("microbatch")
+
+        _, script, _ = _run(pipe, existing="pipe-1", stored="fp-current")
+
+        assert pipe.slots_changed == _SLOT_METRICS and script.metrics_reads == [("pipe-1", "upd-1")]
+
+    def test_unreadable_metrics_record_none_and_the_build_goes_on(self):
+        pipe = _pipeline("incremental")
+
+        _run(pipe, metrics=None)
+
+        assert pipe.slots_changed is None
+        assert pipe.mode_decision.effective == "incremental" and pipe.tm.failed is False
+
+    def test_a_pipeline_left_streaming_records_none(self):
+        pipe = _pipeline("microbatch")
+
+        _, script, _ = _run(pipe, existing="pipe-7", stored="fp-current", state="RUNNING")
+
+        assert pipe.slots_changed is None and script.metrics_reads == []
+
+    def test_a_fallback_after_the_update_resets_it(self):
+        pipe = _pipeline("incremental")
+        warehouse = _Warehouse([], fail_on=f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}")
+
+        _, script, _ = _run(pipe, warehouse=warehouse)
+
+        assert script.metrics_reads and pipe.slots_changed is None
+
+    def test_a_full_build_resets_a_stale_value(self):
+        pipe = _pipeline(mode=None)
+        pipe.slots_changed, pipe.slot_update_id = dict(_SLOT_METRICS), "upd-old"
+
+        _run(pipe)
+
+        assert (pipe.slots_changed, pipe.slot_update_id) == (None, "")
 
 
 class TestSettings:

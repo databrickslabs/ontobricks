@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
-from back.core.errors import OntoBricksError
+from back.core.errors import InfrastructureError, OntoBricksError
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 
@@ -14,6 +15,9 @@ logger = get_logger(__name__)
 
 #: Relation kinds with a Delta history (``DESCRIBE HISTORY``).
 _VERSIONED_KINDS = frozenset({"mv", "table", "streaming_table"})
+
+#: Newest runs per domain the overview searches for a main build (ticks pile up).
+_OVERVIEW_RUNS_LIMIT = 50
 
 #: The report's sections besides ``mode_requested``.
 _SECTIONS = (
@@ -91,6 +95,52 @@ class TwinIncrementalStatus:
                 else None
             ),
         }
+
+    @staticmethod
+    def overview(registry: Any) -> dict:
+        """``domains_per_mode``, ``fallbacks_by_reason`` and ``domains`` across the registry.
+
+        Every domain *registry* lists (``list_domain_details_cached``) counts
+        with its newest main build run among its newest 50 runs of any version
+        (:meth:`TwinBuildRunHistory.newest_main_run`; scheduled ticks are
+        skipped): ``{name, version, mode_requested, mode_effective,
+        last_build_at, fallback_reason}``. A domain without one (never built,
+        only ticks lately, or its runs unreadable) is left out. ``domains_per_mode`` counts the
+        domains per effective mode, ``fallbacks_by_reason`` the domains whose
+        newest main run fell back, per ``mode_fallback_reason``. Nothing is
+        written; a registry that cannot list its domains raises
+        :class:`InfrastructureError`.
+        """
+        ok, details, message = registry.list_domain_details_cached()
+        if not ok:
+            raise InfrastructureError("Could not list the registry domains", detail=message)
+        domains = []
+        for name in (str(d.get("name") or "") for d in details if isinstance(d, dict)):
+            runs = registry.load_build_runs(name, limit=_OVERVIEW_RUNS_LIMIT) if name else []
+            run = TwinBuildRunHistory.newest_main_run(runs)
+            if run is None:
+                continue
+            facts = TwinBuildRunHistory.facts_of(run) or {}
+            domains.append(
+                {
+                    "name": name,
+                    "version": str(run.get("version") or ""),
+                    "mode_requested": str(facts.get("materialization_mode_requested") or ""),
+                    "mode_effective": str(facts.get("materialization_mode_effective") or ""),
+                    "last_build_at": run.get("finished_at") or run.get("started_at") or "",
+                    "fallback_reason": str(facts.get("mode_fallback_reason") or ""),
+                }
+            )
+        return {
+            "domains_per_mode": TwinIncrementalStatus._tally(domains, "mode_effective"),
+            "fallbacks_by_reason": TwinIncrementalStatus._tally(domains, "fallback_reason"),
+            "domains": domains,
+        }
+
+    @staticmethod
+    def _tally(domains: list, key: str) -> dict:
+        """``{value: number of domains}`` of *key*'s non-empty values."""
+        return dict(Counter(d[key] for d in domains if d[key]))
 
     @staticmethod
     def realtime_stream(domain: Any, settings: Any) -> dict:

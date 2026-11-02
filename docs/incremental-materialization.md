@@ -164,7 +164,24 @@ serverless runs as `incremental` by MERGE, as the build does),
 `row_tracking` flag), `compile_error` (mappings that do not compile, with the
 build's `incremental_failed:ValidationError` decision), `previews` (the slot
 pipeline's Lakeflow channel) and `read_relation` (`slots_live` / `graph`, as in
-[Status](#status)). A topic-fed pipeline reports
+[Status](#status)). `mappings` gives each mapping's freshness class, one entry
+per class of an entity mapping and per relationship mapping, in the slot
+compiler's order: `{class_uri, predicate, map_id, kind, reason}`, where `kind` is
+`slot` for a row-local mapping (it feeds the slot pipeline, so `microbatch`
+streams it; `map_id` is its flow's id) and `batch` for one that `_data`'s batch
+branch recomputes incrementally (`map_id` `null`; `reason` is the compiler's own,
+`SlotProjectionCompiler.batch_reason`: `reference predicate (join)`, `sql_query
+source`, `relationship (several objects per subject share one slot key)`, `no
+table`, ...). `slot_mappings` / `batch_mappings` count them; mappings that do not
+compile give `[]` and `null` counts. The counts are per class, so a TriplesMap
+with two classes counts twice here and once in the trace's `batch_mappings`.
+`lakehouse_rt` (Lakehouse engine only, `null` on the others) is
+`{query_warehouse_configured, use_sea, fast_path}`: whether
+`graph_engine_config.lakehouse.warehouse_id` names a query warehouse, whether "Use
+Lakehouse//RT for queries" is on, and `read_relation` again. Lakehouse//RT is
+offered only for tables without row filters or column masks; `_slots`, `_data`,
+`_graph` and `_inferred` are created by the app without either, so the preflight
+checks nothing for them. A topic-fed pipeline reports
 `row_tracking_required: false` and lists its sources unprobed (`row_tracking:
 null`), which the panel does not flag. It runs the probe on the build warehouse as the
 caller; a probe that fails is an error, not "untracked". `POST
@@ -174,7 +191,11 @@ slot-pipeline sources (any other name is refused before anything runs). It runs
 as the caller, so Unity Catalog decides who may alter which table, and reports
 `{table, success[, error]}` per table. The Domain information panel shows the
 answer under the materialization mode (Readiness line, "Enable row tracking"
-button when a source is untracked; the action needs the builder role).
+button when a source is untracked; the action needs the builder role), a
+"Mappings: n row-local (microbatch-eligible), m batch-incremental" line whose
+tooltip names each batch mapping (class or predicate local name) and its reason,
+and on the Lakehouse engine a "Lakehouse//RT: query warehouse set / not set · RT
+reads on / off" line (with "fast path (live slots)" when reads take the slots).
 
 **Full refresh of the slot pipeline** (`TwinSlotRefreshPlan`). Before every
 slot pipeline update — a main build's and an `incremental` tick's — each source's
@@ -416,10 +437,22 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `graph_relation` | `mv` when the build made `_graph` a materialized view, `view` for the union VIEW |
 | `inferred_listed` | the store lists its inferences in `_inferred` (Neo4j); a later net apply needs a base run with it |
 | `batch_mappings` | how many mappings the slot pipeline left to `_data`'s batch branch (`null` when no incremental build ran); the [Lakehouse//RT fast path](#lakehousert) needs `0` |
+| `slots_changed` | `{rows_output, rows_upserted, rows_deleted}` the build's slot pipeline update wrote: `num_output_rows`, and for the AUTO CDC flows `num_upserted_rows` / `num_deleted_rows`, summed over the update's `flow_progress` events (`SlotPipelineRunner.update_metrics`; a metric no event carries is `null`). The update read is the first one the build ran: the full refresh of a bootstrap, else the triggered update, or the continuous update a `microbatch` build adopts once it runs (its metrics so far). `null` when no update ran (no row-local mapping, a pipeline left streaming, the full path) or its events could not be read |
+| `slot_update_id`, `warehouse_id` | the slot pipeline update `slots_changed` was read from (`""` when none ran) and the build's SQL warehouse |
+
+The events are read from the pipelines REST endpoint
+(`GET /api/2.0/pipelines/<id>/events`, newest first, up to 20 pages of 250) because
+the SDK's `PipelineEvent` drops `details`; a read that fails is a warning and never
+fails the build. The KPI "build DBUs per build" is not computed by the app: the
+trace carries the pipeline id, update id and warehouse id (`slot_pipeline_id`,
+`slot_update_id`, `warehouse_id`, with the run's `started_at` / `finished_at`),
+which join to `system.billing.usage` (`usage_metadata.dlt_pipeline_id` /
+`dlt_update_id`, `usage_metadata.warehouse_id` over the run's window).
 
 The Knowledge Graph › Runs cockpit shows the effective mode (with the requested
 one and the fallback reason when they differ), the strategy / refresh technique
-and the apply mode per run, and a "Materialization" block in the run details.
+and the apply mode per run, and a "Materialization" block in the run details
+(with "Slots Changed" next to the refresh technique).
 The newest successful run with the same graph engine, sync mode and graph name
 whose apply reached the store is the *base* the next build continues from. The
 search (newest 50 runs) ends without a base — and the next build streams in
@@ -448,7 +481,21 @@ its section and leaves the others. A `full` domain is answered without any
 warehouse, pipelines or registry call (every section `null`), so the build
 panels never wake a warehouse for it. The scans run on the build warehouse as the
 caller. The digital twin build panels (Lakebase/Neo4j and Lakehouse) show it as
-a compact "Incremental status" card, hidden for a `full` domain.
+a compact "Incremental status" card, hidden for a `full` domain; its "Last build"
+line gives the strategy, refresh technique and apply mode, then "slots changed:
+n rows, u upserted, d deleted" when the build recorded `slots_changed`.
+
+**Overview.** `GET /dtwin/incremental/overview` (builder role, same gate as the
+status; `TwinIncrementalStatus.overview`) answers the KPI "number of domains per
+mode, and fallback events by reason" for the whole registry, without any warehouse
+or pipelines call: `{domains_per_mode: {<effective mode>: n}, fallbacks_by_reason:
+{<mode_fallback_reason>: n}, domains: [{name, version, mode_requested,
+mode_effective, last_build_at, fallback_reason}]}`. Every domain the registry lists
+(`list_domain_details_cached`) counts with its newest *main* build run among its
+newest 50 runs of any version (`TwinBuildRunHistory.newest_main_run`: scheduled
+ticks and runs without materialization facts are skipped, whatever their status);
+a domain without one is left out. A fallback counts once per domain whose newest
+main run fell back, not once per historical event. There is no UI for it yet.
 
 ## Reconciliation
 

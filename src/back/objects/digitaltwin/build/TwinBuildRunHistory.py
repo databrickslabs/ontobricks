@@ -57,7 +57,9 @@ class TwinBuildRunHistory:
         mappings its slot pipeline left to ``…_data``'s batch branch
         (``batch_mappings``, ``None`` when no incremental build ran; at ``0``
         ``…_data`` is the slots alone, the Lakehouse//RT fast path's
-        condition). A build that reached the
+        condition), its slot update and the rows it wrote (``slot_update_id``,
+        ``slots_changed``: :meth:`TwinSlotPipeline.run`) and its build
+        ``warehouse_id`` (the DBU join keys). A build that reached the
         incremental step adds its ``slot_refresh_facts``
         (:class:`TwinSlotRefreshPlan`: ``source_versions``,
         ``source_table_ids``, ``slot_full_refresh_pending``,
@@ -94,6 +96,9 @@ class TwinBuildRunHistory:
             "batch_mappings": TwinBuildRunHistory._version_or_none(
                 getattr(pipe, "batch_mappings", None)
             ),
+            "slots_changed": TwinBuildRunHistory._slots_changed(pipe),
+            "slot_update_id": text(pipe, "slot_update_id"),
+            "warehouse_id": text(pipe, "warehouse_id"),
             **TwinBuildRunHistory._slot_refresh_facts(pipe),
         }
         return {**stats, "materialization": materialization}
@@ -332,6 +337,26 @@ class TwinBuildRunHistory:
         """The build's ``slot_refresh_facts`` (``{}`` when it did not reach a slot update)."""
         value = getattr(pipe, "slot_refresh_facts", None)
         return dict(value) if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _slots_changed(pipe: Any) -> dict | None:
+        """The build's ``slots_changed`` row counts (``None`` unless a dict)."""
+        value = getattr(pipe, "slots_changed", None)
+        return dict(value) if isinstance(value, dict) else None
+
+    @staticmethod
+    def newest_main_run(runs: Any) -> dict | None:
+        """The newest run of *runs* (newest first) a main build recorded, or ``None``.
+
+        Scheduled ticks (``build_kind == "scheduled"``) and runs without
+        materialization facts (:meth:`facts_of`; pre-0.9.1 builds) are passed
+        over, whatever the run's status.
+        """
+        for run in runs if isinstance(runs, list) else []:
+            facts = TwinBuildRunHistory.facts_of(run)
+            if facts is not None and run.get("build_kind") != "scheduled":
+                return run
+        return None
 
     @staticmethod
     def _version_or_none(value: Any) -> int | None:

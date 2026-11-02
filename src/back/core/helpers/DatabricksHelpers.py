@@ -200,25 +200,19 @@ class DatabricksHelpers:
 
         Resolution order:
 
-        1. ``graph_engine_config.lakehouse.warehouse_id`` (Settings → Back end → Lakehouse)
+        1. ``graph_engine_config.lakehouse.warehouse_id`` (:meth:`resolve_lakehouse_warehouse_id`)
         2. Fallback to :meth:`resolve_warehouse_id` (global warehouse)
         """
-        from back.objects.session import global_config_service
+        return DatabricksHelpers.resolve_lakehouse_warehouse_id(
+            domain, settings
+        ) or DatabricksHelpers.resolve_warehouse_id(domain, settings)
 
-        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
-        registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
-
-        if host and registry_cfg.get("catalog") and registry_cfg.get("schema"):
-            try:
-                wid = global_config_service.get_delta_warehouse_id(
-                    host, token, registry_cfg
-                )
-                if wid:
-                    return wid
-            except Exception as exc:
-                logger.debug("Could not read lakehouse warehouse from engine config: %s", exc)
-
-        return DatabricksHelpers.resolve_warehouse_id(domain, settings)
+    @staticmethod
+    def resolve_lakehouse_warehouse_id(domain, settings) -> str:
+        """``graph_engine_config.lakehouse.warehouse_id`` (Settings → Back end → Lakehouse), ``""`` when unset."""
+        return DatabricksHelpers._resolve_global_setting(
+            domain, settings, "get_delta_warehouse_id"
+        )
 
     @staticmethod
     def resolve_build_warehouse_id(domain, settings) -> str:

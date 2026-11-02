@@ -456,3 +456,78 @@ class TestDevelopmentModeNames:
         [(pipeline_id, spec)] = client.pipelines.updated
         assert pipeline_id == "pipe-dab" and spec["name"] == f"[dev ada] {_NAME}"
         assert client.pipelines.created == []
+
+
+class _FakeEventsAPI:
+    """``w.api_client``: the pipeline events REST endpoint, one scripted page per call."""
+
+    def __init__(self, pages, *, error=None):
+        self.pages = list(pages)
+        self.calls: list[tuple[str, str, dict]] = []
+        self._error = error
+
+    def do(self, method, path, query=None):
+        self.calls.append((method, path, dict(query or {})))
+        if self._error is not None:
+            raise self._error
+        return self.pages.pop(0) if self.pages else {"events": []}
+
+
+def _flow_progress(update_id, **metrics):
+    return {
+        "event_type": "flow_progress",
+        "origin": {"update_id": update_id},
+        "details": {"flow_progress": {"status": "COMPLETED", "metrics": metrics}},
+    }
+
+
+def _metrics_runner(pages, **kw):
+    client = _client()
+    client.api_client = _FakeEventsAPI(pages, **kw)
+    return _runner(client)
+
+
+class TestUpdateMetrics:
+    def test_the_update_s_flow_metrics_are_summed(self):
+        events = [
+            _flow_progress("upd-2", num_output_rows=99),
+            _flow_progress("upd-1", num_output_rows=4, num_upserted_rows=3, num_deleted_rows=1),
+            {"event_type": "update_progress", "origin": {"update_id": "upd-1"}},
+            _flow_progress("upd-1", num_output_rows=6, num_upserted_rows=6, num_deleted_rows=0),
+            _flow_progress("upd-0", num_output_rows=500),
+        ]
+        runner, _ = _metrics_runner([{"events": events}])
+
+        assert runner.update_metrics("pipe-1", "upd-1") == {
+            "rows_output": 10,
+            "rows_upserted": 9,
+            "rows_deleted": 1,
+        }
+
+    def test_a_metric_no_event_carries_is_none(self):
+        runner, _ = _metrics_runner([{"events": [_flow_progress("upd-1", num_output_rows=7)]}])
+
+        assert runner.update_metrics("pipe-1", "upd-1") == {
+            "rows_output": 7,
+            "rows_upserted": None,
+            "rows_deleted": None,
+        }
+
+    def test_the_raw_events_endpoint_is_paged_until_the_update_is_passed(self):
+        runner, client = _metrics_runner(
+            [
+                {"events": [_flow_progress("upd-2", num_output_rows=1)], "next_page_token": "p2"},
+                {"events": [_flow_progress("upd-1", num_output_rows=2)], "next_page_token": "p3"},
+                {"events": [_flow_progress("upd-0", num_output_rows=3)], "next_page_token": "p4"},
+            ]
+        )
+
+        assert runner.update_metrics("pipe-1", "upd-1")["rows_output"] == 2
+        calls = client.api_client.calls
+        assert [c[:2] for c in calls] == [("GET", "/api/2.0/pipelines/pipe-1/events")] * 3
+        assert calls[1][2] == {"max_results": 250, "page_token": "p2"}
+
+    def test_an_api_error_is_none_not_raised(self):
+        runner, _ = _metrics_runner([], error=RuntimeError("PERMISSION_DENIED"))
+
+        assert runner.update_metrics("pipe-1", "upd-1") is None
