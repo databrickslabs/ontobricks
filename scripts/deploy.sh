@@ -662,6 +662,30 @@ if $DRY_RUN; then
     exit 0
 fi
 
+# ── 5b. Adopt slot pipelines the app created before the bundle ─────
+# A slot pipeline the app's runner created (same name, no bundle metadata)
+# would get a twin on the same _slots table from ``bundle deploy``; the
+# renderer lists those in resources/_generated_triple_slots.bind and they are
+# bound to their resource first. A CLI without ``bundle deployment bind``
+# skips the step with a notice.
+_SLOT_BIND_FILE="resources/_generated_triple_slots.bind"
+if [[ -s "$_SLOT_BIND_FILE" ]]; then
+    begin_step "Bind existing slot pipelines"
+    if databricks bundle deployment bind --help >/dev/null 2>&1; then
+        while read -r _key _pipeline_id; do
+            [[ -z "${_key:-}" || -z "${_pipeline_id:-}" ]] && continue
+            if databricks bundle deployment bind "$_key" "$_pipeline_id" \
+                    -t "$TARGET" "${_dab_var_overrides[@]}" --auto-approve; then
+                ok "bound $_key → $_pipeline_id"
+            else
+                warn "could not bind $_key ($_pipeline_id): the deploy may create a second pipeline on the same _slots table"
+            fi
+        done < "$_SLOT_BIND_FILE"
+    else
+        warn "this Databricks CLI has no 'bundle deployment bind': existing slot pipelines are not adopted (upgrade the CLI)"
+    fi
+fi
+
 # ── 6. Deploy bundle ────────────────────────────────────────────────
 begin_step "Deploy bundle (target: $TARGET)"
 databricks bundle deploy -t "$TARGET" "${_dab_var_overrides[@]}" \

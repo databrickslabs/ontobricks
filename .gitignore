@@ -97,6 +97,7 @@ mlartifacts/
 /resources/_generated_instance_target.yml
 # Rendered by scripts/_internal/_render-slot-pipelines.py at deploy time.
 /resources/_generated_triple_slots.yml
+/resources/_generated_triple_slots.bind
 
 # Cookie jars / curl session dumps (may contain live session + CSRF tokens)
 cookies*.txt

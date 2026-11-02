@@ -78,7 +78,9 @@ class _FakePipelines:
         spec = self.specs[pipeline_id]
         return SimpleNamespace(
             state=PipelineState(self.state),
-            spec=SimpleNamespace(configuration=spec.get("configuration")),
+            spec=SimpleNamespace(
+                configuration=spec.get("configuration"), deployment=spec.get("deployment")
+            ),
         )
 
     def start_update(self, pipeline_id, full_refresh=None):
@@ -238,6 +240,20 @@ class TestEnsure:
         pipeline_id = _ensure(runner)
 
         assert runner.stored_fingerprint(pipeline_id) == SlotPipelineRunner.fingerprint(_SQL)
+
+    def test_a_pipeline_the_runner_created_is_not_bundle_managed(self):
+        runner, _ = _runner()
+
+        assert runner.bundle_managed(_ensure(runner)) is False
+
+    def test_a_pipeline_a_bundle_deployed_is_bundle_managed(self):
+        from databricks.sdk.service.pipelines import DeploymentKind
+
+        runner, client = _runner()
+        pipeline_id = _ensure(runner)
+        client.pipelines.specs[pipeline_id]["deployment"] = SimpleNamespace(kind=DeploymentKind.BUNDLE)
+
+        assert runner.bundle_managed(pipeline_id) is True
 
     @pytest.mark.parametrize("name", ["", "../etc", "a name", "x'y"])
     def test_an_unsafe_name_is_refused(self, name):

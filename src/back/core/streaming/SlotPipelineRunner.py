@@ -163,6 +163,15 @@ class SlotPipelineRunner:
         configuration = getattr(spec, "configuration", None) or {}
         return str(configuration.get(self.FINGERPRINT_KEY, "") or "")
 
+    def bundle_managed(self, pipeline_id: str) -> bool:
+        """True when a bundle deployed the pipeline (``spec.deployment.kind == BUNDLE``)."""
+        response = self._call(
+            f"get pipeline {pipeline_id}", lambda w: w.pipelines.get(pipeline_id=pipeline_id)
+        )
+        deployment = getattr(getattr(response, "spec", None), "deployment", None)
+        kind = getattr(deployment, "kind", None)
+        return str(getattr(kind, "value", kind) or "").upper() == "BUNDLE"
+
     def ensure(
         self,
         *,
