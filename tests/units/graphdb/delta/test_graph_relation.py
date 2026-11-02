@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from back.core.graphdb.delta import GraphRelation, MaterializedViewBuilder, materialize
@@ -111,12 +113,12 @@ class TestRefreshAfterWrite:
         assert GraphRelation.refresh_after_write(client, INFERRED) is False
         assert client.statements == []
 
-    def test_a_failing_refresh_never_fails_the_write(self, caplog):
+    def test_a_failing_refresh_never_fails_the_write(self):
         client = _Client({GRAPH: _SHA}, fail_on="REFRESH")
 
-        with caplog.at_level("WARNING"):
+        with patch("back.core.graphdb.delta.GraphRelation.logger") as logger:
             assert GraphRelation.refresh_after_write(client, INFERRED) is False
-        assert "not refreshed after a write" in caplog.text
+        assert "not refreshed after a write" in logger.warning.call_args.args[0]
 
     @pytest.mark.parametrize("written", ["", DATA, "main.ob.some_table"])
     def test_a_table_that_is_no_inferred_companion_runs_nothing(self, written):
