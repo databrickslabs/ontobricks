@@ -246,6 +246,31 @@ class TestExplode:
 
         assert [row["source_key"] for row in rows] == ["2"] and skipped == ["bad_value"]
 
+    @pytest.mark.parametrize(
+        ("value", "spark_type", "error"),
+        [
+            ([1, 2], "int", "TypeError"),
+            ({"a": 1}, "bigint", "TypeError"),
+            (10**30, "timestamp", "OverflowError"),
+            ("9" * 40, "decimal(10,2)", "InvalidOperation"),
+        ],
+        ids=["list-for-int", "object-for-bigint", "huge-timestamp", "decimal-out-of-range"],
+    )
+    def test_a_value_of_the_wrong_shape_or_range_is_skipped_not_raised(
+        self, value, spark_type, error, caplog
+    ):
+        bad = json.dumps({"op": "c", "after": {"id": value, "name": "a"}, "source": {"table": _TABLE}})
+        good = json.dumps({"op": "c", "after": {"id": 2, "name": "b"}, "source": {"table": _TABLE}})
+        skipped: list = []
+
+        with caplog.at_level("WARNING"):
+            rows = TripleStreamEnvelope.explode_records(
+                [(bad, 1), (good, 2)], _projectors(), {_TABLE: {"id": spark_type}}, on_skip=skipped.append
+            )
+
+        assert [row["seq"] for row in rows] == [2] and skipped == ["bad_value"]
+        assert error in caplog.text
+
     def test_a_stock_debezium_bare_table_name_matches_the_mapping_by_leaf(self):
         envelope = {"op": "upsert", "row": {"id": 7, "name": "Ada"}, "before": None, "table": "customers"}
 

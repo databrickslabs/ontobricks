@@ -125,7 +125,10 @@ class TripleStreamEnvelope:
         one bad record cannot stop the stream: unparsable or change-less
         envelopes (``unparsable``), records without a seq (``no_seq``), an
         unmapped or ambiguous table (``unmapped_table``), and a value its
-        column type cannot read (``bad_value``).
+        column type cannot read (``bad_value``: a wrong shape — ``TypeError`` —,
+        an out-of-range number, date or decimal — ``ArithmeticError`` — or an
+        unreadable one — ``ValueError``). A raise here would fail every retry on
+        the same offset.
         """
         skip = on_skip or (lambda reason: None)
         rows: list[dict] = []
@@ -141,8 +144,10 @@ class TripleStreamEnvelope:
                 exploded = TripleStreamEnvelope.explode(
                     envelope, int(seq), projectors_by_table, column_types
                 )
-            except (ValueError, ValidationError) as exc:
-                logger.warning("Skipped a change of %s: %s", envelope["table"], exc)
+            except (ValueError, TypeError, ArithmeticError, ValidationError) as exc:
+                logger.warning(
+                    "Skipped a change of %s (%s): %s", envelope["table"], type(exc).__name__, exc
+                )
                 skip("bad_value")
                 continue
             if not exploded and TripleStreamEnvelope.table_of(
