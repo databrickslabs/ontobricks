@@ -66,15 +66,30 @@ class TestReconcileAfterTick:
         with patch.object(scheduled_build, "logger") as logger:
             drift, seen = _reconcile(monkeypatch, result=result)
 
-        assert drift is True
+        assert drift == {"reconcile_drift": True}
         assert seen["store"].is_synced is True and seen["recompute"] is True
         logger.warning.assert_called_once()
+
+    def test_a_realtime_domain_compares_its_live_table_without_recompute(self, monkeypatch, names):
+        result = {"reconcile_drift": False, "live_drift": True, "live": {"rows": 3}, "pairs": {}}
+
+        with patch.object(scheduled_build, "logger") as logger:
+            facts, seen = _reconcile(monkeypatch, mode="realtime", result=result, sync_state="")
+
+        assert facts == {"live_drift": True}
+        assert seen["recompute"] is False and seen["store"].is_synced is True
+        logger.warning.assert_called_once()
+
+    def test_a_realtime_drift_of_the_view_forces_no_slot_refresh(self, monkeypatch, names):
+        result = {"reconcile_drift": True, "live_drift": False, "pairs": {"view_data": True}}
+
+        assert _reconcile(monkeypatch, mode="realtime", result=result)[0] == {}
 
     def test_a_microbatch_domain_is_not_reconciled(self, monkeypatch, names):
         """Its slots run ahead of ``_data``: no pair can tell drift."""
         drift, seen = _reconcile(monkeypatch, mode="microbatch", result={"reconcile_drift": True})
 
-        assert drift is False and seen == {}
+        assert drift == {} and seen == {}
 
     def test_a_sync_that_did_not_come_online_is_not_compared(self, monkeypatch, names):
         _drift, seen = _reconcile(monkeypatch, sync_state="FAILED")
@@ -82,25 +97,25 @@ class TestReconcileAfterTick:
         assert seen["store"] is None
 
     def test_no_drift(self, monkeypatch, names):
-        assert _reconcile(monkeypatch)[0] is False
+        assert _reconcile(monkeypatch)[0] == {}
 
     def test_a_ctas_table_is_not_reconciled(self, monkeypatch, names):
         """The tick rebuilt ``_data`` by CTAS: it equals the VIEW by construction."""
         drift, seen = _reconcile(monkeypatch, kind="table", result={"reconcile_drift": True})
 
-        assert drift is False and seen == {}
+        assert drift == {} and seen == {}
 
     def test_a_full_domain_is_not_reconciled(self, monkeypatch, names):
         drift, seen = _reconcile(monkeypatch, spec=None, result={"reconcile_drift": True})
 
-        assert drift is False and seen == {}
+        assert drift == {} and seen == {}
 
     def test_an_unsynced_store_is_not_reconciled(self, monkeypatch, names):
         store = SimpleNamespace(is_synced=False)
 
         drift, seen = _reconcile(monkeypatch, store=store, result={"reconcile_drift": True})
 
-        assert drift is False and seen == {}
+        assert drift == {} and seen == {}
 
     @pytest.mark.parametrize(
         "error",
@@ -115,7 +130,7 @@ class TestReconcileAfterTick:
         with patch.object(scheduled_build, "logger") as logger:
             drift, _ = _reconcile(monkeypatch, error=error)
 
-        assert drift is False
+        assert drift == {}
         logger.warning.assert_called_once()
 
 
@@ -129,7 +144,11 @@ class TestTickRecordsDrift:
         monkeypatch.setattr(scheduled_build, "_slot_spec", lambda *a: _SPEC)
         monkeypatch.setattr(scheduled_build, "_write_graph_triples", lambda *a, **k: 4)
         monkeypatch.setattr(scheduled_build, "_persist_domain_metadata", lambda *a: None)
-        monkeypatch.setattr(scheduled_build, "_reconcile_after_tick", lambda *a, **k: drift)
+        monkeypatch.setattr(
+            scheduled_build,
+            "_reconcile_after_tick",
+            lambda *a, **k: {"reconcile_drift": True} if drift else {},
+        )
         src = MagicMock()
         src.create_or_replace_view.return_value = (True, "")
         ctx = SimpleNamespace(

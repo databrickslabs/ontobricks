@@ -47,6 +47,26 @@ class _Client:
         return [{"database": "kg", "tableName": t, "isTemporary": False} for t in self._tables]
 
 
+class _LiveStore:
+    """A Lakebase store of a realtime domain whose ``_live`` table serves *rows* slots."""
+
+    is_synced = False
+
+    def __init__(self, rows=0, error=None):
+        self.rows, self.error = rows, error
+
+    def live_table(self):
+        store = self
+
+        class _Live:
+            def count(self, graph):
+                if store.error is not None:
+                    raise store.error
+                return store.rows
+
+        return _Live()
+
+
 class _SyncedStore:
     """A managed_synced Lakebase store whose synced table has *rows* rows."""
 
@@ -171,10 +191,10 @@ class TestTwinSlotReconciliation:
         client = _Client(tables=["triplestore_sales_v1_slots"])
 
         TwinSlotReconciliation.run(_Domain(), object(), client)
-        assert seen == {"view_fqn": None, "sync_rows": None}
+        assert seen == {"view_fqn": None, "sync_rows": None, "live_rows": None}
 
         TwinSlotReconciliation.run(_Domain(), object(), client, recompute=True)
-        assert seen == {"view_fqn": _VIEW, "sync_rows": None}
+        assert seen == {"view_fqn": _VIEW, "sync_rows": None, "live_rows": None}
 
     def test_a_batch_only_domain_compares_the_view_and_the_synced_table(
         self, monkeypatch, names, mappings
@@ -248,6 +268,37 @@ class TestTwinSlotReconciliation:
         )
 
         assert result["reconcile_drift"] is drift
+
+    def test_a_realtime_domain_counts_its_live_table_and_reports_live_drift_apart(
+        self, monkeypatch, names, mappings
+    ):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        monkeypatch.setattr(
+            GraphDBFactory, "resolve_materialization_mode", staticmethod(lambda d, s: "realtime")
+        )
+        seen = _compare(monkeypatch, {**_COMPARED, "pairs": {"slots_data": False, "live_slots": True}})
+        _compiler(monkeypatch, batch=False)
+
+        result = TwinSlotReconciliation.run(
+            _Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"]),
+            get_store=lambda d, s: _LiveStore(rows=5),
+        )
+
+        assert seen["live_rows"] == 5
+        assert result["live_drift"] is True
+        assert result["reconcile_drift"] is False
+
+    def test_another_mode_counts_no_live_table(self, monkeypatch, names, mappings):
+        seen = _compare(monkeypatch, _COMPARED)
+        _compiler(monkeypatch, batch=False)
+
+        TwinSlotReconciliation.run(
+            _Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"]),
+            get_store=lambda d, s: _LiveStore(rows=5),
+        )
+
+        assert seen["live_rows"] is None
 
     def test_mappings_that_do_not_compile_count_as_batch(self, monkeypatch, names, mappings):
         _compiler(monkeypatch, batch=False, raising=True)

@@ -41,7 +41,8 @@ class TwinSlotReconciliation:
         slots run ahead (``microbatch``). The other pairs compare as of the
         last refresh of ``_data``: a source changed since shows as drift until
         the next build or tick. ``reconcile_drift`` is true when a meaningful
-        pair differs.
+        pair differs; ``live_drift`` when a ``realtime`` domain's ``_live``
+        table and its slots differ (the stream to restart; no slot refresh).
 
         Raises :class:`ValidationError` when the relation names cannot be
         resolved, :class:`InfrastructureError` when there is no warehouse
@@ -72,7 +73,12 @@ class TwinSlotReconciliation:
         batch = has_slots and TwinSlotReconciliation.batch_branches_present(domain, slots_fqn=slots)
         continuous = TwinSlotReconciliation.slots_run_ahead(domain, settings)
         result = SlotReconciler.compare(
-            client, slots if has_slots else None, data, view_fqn=view or None, sync_rows=sync_rows
+            client,
+            slots if has_slots else None,
+            data,
+            view_fqn=view or None,
+            sync_rows=sync_rows,
+            live_rows=TwinSlotReconciliation.live_rows(domain, settings, get_store),
         )
         meaningful = {
             "slots_data": has_slots and not batch and not continuous,
@@ -90,7 +96,35 @@ class TwinSlotReconciliation:
             "drift_meaningful": meaningful["slots_data"],
             "pairs_meaningful": meaningful,
             "reconcile_drift": any(pairs.get(name) and meaningful[name] for name in meaningful),
+            # The stream diverged from the slot pipeline: restart it, no slot refresh.
+            "live_drift": bool(pairs.get("live_slots")),
         }
+
+    @staticmethod
+    def live_rows(domain: Any, settings: Any, get_store: Callable[..., Any] | None) -> int | None:
+        """Slots a ``realtime`` domain's Lakebase ``_live`` table serves, else ``None``.
+
+        Best-effort like :meth:`sync_rows`: an unreachable store is left out.
+        """
+        from back.core.graphdb.GraphDBFactory import (
+            GraphDBFactory,
+            normalize_materialization_mode,
+        )
+        from back.core.helpers import effective_graph_name
+
+        mode = normalize_materialization_mode(
+            GraphDBFactory.resolve_materialization_mode(domain, settings)
+        )
+        if get_store is None or mode != "realtime":
+            return None
+        try:
+            store = get_store(domain, settings)
+            if not hasattr(store, "live_table"):
+                return None
+            return int(store.live_table().count(effective_graph_name(domain)))
+        except Exception as exc:  # noqa: BLE001 — store drivers raise their own errors
+            logger.warning("Slot reconciliation: live table not counted: %s", exc)
+            return None
 
     @staticmethod
     def sync_rows(

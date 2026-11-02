@@ -222,3 +222,33 @@ class TestNullSubjects:
 
         assert result["pairs"] == {"slots_data": False, "view_data": False}
         assert result["view"]["rows"] == 1
+
+
+class TestLivePair:
+    """A realtime domain: the Lakebase ``_live`` slots against the ``_slots`` slots (counts)."""
+
+    def test_the_live_rows_are_compared_with_the_slot_rows(self):
+        client = _Client(
+            totals={_SLOTS: {"n": 3, "h": 1}, _DATA: {"n": 3, "h": 1}},
+            per_map=[{"map_id": "m1", "n": 2, "h": 5}, {"map_id": "m2", "n": 2, "h": 6}],
+        )
+
+        result = SlotReconciler.compare(client, _SLOTS, _DATA, live_rows=4)
+
+        assert result["live"] == {"rows": 4}
+        assert result["pairs"]["live_slots"] is False
+
+    def test_a_different_count_is_live_drift(self):
+        client = _Client(
+            totals={_SLOTS: {"n": 3, "h": 1}, _DATA: {"n": 3, "h": 1}},
+            per_map=[{"map_id": "m1", "n": 3, "h": 5}],
+        )
+
+        assert SlotReconciler.compare(client, _SLOTS, _DATA, live_rows=1)["pairs"]["live_slots"] is True
+
+    def test_without_slots_there_is_no_live_pair(self):
+        client = _Client(totals={_DATA: {"n": 3, "h": 1}})
+
+        result = SlotReconciler.compare(client, None, _DATA, live_rows=4)
+
+        assert "live_slots" not in result["pairs"]

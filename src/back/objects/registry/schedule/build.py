@@ -299,50 +299,66 @@ def _reconcile_after_tick(
     domain_name: str,
     *,
     sync_state: str = "",
-) -> bool:
-    """True when reconciling the tick's ``…_data`` view found drift (warning logged).
+) -> Dict[str, Any]:
+    """The facts reconciling the tick's ``…_data`` view records (warnings logged).
 
-    Only for a Lakeflow-synced store of an ``incremental`` domain (*slot_spec*
-    set; a ``microbatch`` domain's slots run ahead, so no pair could tell)
-    whose ``…_data`` is still the materialized view the tick refreshed in
-    place: a CTAS table equals the VIEW by construction. The batch recompute
-    always runs; the synced table is counted only when its refresh came
-    ``ONLINE`` (*sync_state*). The drift rules are
-    :meth:`TwinSlotReconciliation.run`'s; the next slot update owes a full
-    refresh (``TwinSlotRefreshPlan``). Best-effort: a reconciliation that
-    fails, for any reason, never fails the tick.
+    ``{"reconcile_drift": True}`` for an ``incremental`` domain whose view
+    drifted (the next slot update owes a full refresh, ``TwinSlotRefreshPlan``),
+    ``{"live_drift": True}`` for a ``realtime`` domain whose ``_live`` table
+    and slots differ (the stream to restart), else ``{}``. Only for a
+    Lakeflow-synced store (*slot_spec* set) whose ``…_data`` is still the
+    materialized view the tick refreshed in place: a CTAS table equals the VIEW
+    by construction. A ``microbatch`` domain is not reconciled (its slots run
+    ahead: no pair can tell). An ``incremental`` tick also runs the batch
+    recompute; the synced table is counted only when its refresh came
+    ``ONLINE`` (*sync_state*). Best-effort: a reconciliation that fails, for
+    any reason, never fails the tick.
     """
     from back.core.graphdb.delta import _table_naming, materialize
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory, normalize_materialization_mode
     from back.objects.digitaltwin.build import TwinSlotReconciliation
 
     if slot_spec is None or not _is_managed_synced(store):
-        return False
+        return {}
     try:
-        if TwinSlotReconciliation.slots_run_ahead(domain, settings):
-            return False
+        mode = normalize_materialization_mode(
+            GraphDBFactory.resolve_materialization_mode(domain, settings)
+        )
+        if mode == "microbatch":
+            return {}
         data_table = _table_naming.data_table_fqn(domain, settings)
         if materialize.relation_kind(src, data_table) != "mv":
-            return False
-        online = str(sync_state or "").upper().startswith("ONLINE")
+            return {}
+        counted = mode == "realtime" or str(sync_state or "").upper().startswith("ONLINE")
         result = TwinSlotReconciliation.run(
             domain,
             settings,
             src,
-            get_store=(lambda d, s: store) if online else None,
-            recompute=True,
+            get_store=(lambda d, s: store) if counted else None,
+            recompute=mode != "realtime",
         )
     except Exception as exc:  # noqa: BLE001 — reconciliation is advisory; the tick goes on
         logger.warning("Scheduled build [%s]: reconciliation skipped: %s", domain_name, exc)
-        return False
+        return {}
+    if mode == "realtime":
+        if not result.get("live_drift"):
+            return {}
+        logger.warning(
+            "Scheduled build [%s]: the realtime _live table and the slots differ "
+            "(live %s); restart the stream",
+            domain_name,
+            result.get("live"),
+        )
+        return {"live_drift": True}
     if not result.get("reconcile_drift"):
-        return False
+        return {}
     logger.warning(
         "Scheduled build [%s]: reconciliation found drift (%s); the next slot update "
         "runs as a full refresh",
         domain_name,
         sorted(name for name, differs in (result.get("pairs") or {}).items() if differs),
     )
-    return True
+    return {"reconcile_drift": True}
 
 
 def _tick_facts(ctx: TaskContext) -> Dict[str, Any]:
@@ -357,22 +373,23 @@ def _tick_facts(ctx: TaskContext) -> Dict[str, Any]:
 
 
 def _close_tick_facts(ctx: TaskContext, tick: Dict[str, Any], store, src) -> None:
-    """Reconcile at the end of the tick (drift recorded), then drop empty facts.
+    """Reconcile at the end of the tick (drift / live drift recorded), then drop empty facts.
 
     *tick* is what the tick handed down (``spec``, ``facts``) and got back
     (``sync_state``, the synced table's state after its refresh).
     """
     facts = tick["facts"]
-    if _reconcile_after_tick(
-        store,
-        src,
-        ctx.domain,
-        ctx.settings,
-        tick.get("spec"),
-        ctx.domain_name,
-        sync_state=tick.get("sync_state", ""),
-    ):
-        facts["reconcile_drift"] = True
+    facts.update(
+        _reconcile_after_tick(
+            store,
+            src,
+            ctx.domain,
+            ctx.settings,
+            tick.get("spec"),
+            ctx.domain_name,
+            sync_state=tick.get("sync_state", ""),
+        )
+    )
     if not facts:
         del ctx.scratch["stats"]["materialization"]
 

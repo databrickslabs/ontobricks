@@ -95,6 +95,7 @@ class SlotReconciler:
         *,
         view_fqn: str | None = None,
         sync_rows: int | None = None,
+        live_rows: int | None = None,
     ) -> dict:
         """Totals of both relations, ``drift`` when they differ, and the slots per mapping.
 
@@ -105,7 +106,10 @@ class SlotReconciler:
         ``view_data`` (rows and hash) and ``sync_data`` (rows only); a pair
         whose side was not given is left out. Without *slots_fqn* (a domain
         whose mappings are all batch has no ``_slots``) ``slots`` is ``None``,
-        ``drift`` false and nothing is listed per mapping.
+        ``drift`` false and nothing is listed per mapping. With *live_rows* (a
+        ``realtime`` domain's Lakebase ``_live`` slots) and slots, ``live_slots``
+        compares them with the slot rows (one per mapping and key and
+        predicate, as ``_live`` holds them; counts only).
         """
         data = SlotReconciler.totals(client, data_fqn)
         slots = SlotReconciler.totals(client, slots_fqn) if slots_fqn else None
@@ -127,8 +131,11 @@ class SlotReconciler:
                 result.get("view"),
                 result.get("sync"),
             )
-        result["pairs"] = pairs
         result["by_map_id"] = SlotReconciler.by_map_id(client, slots_fqn) if slots_fqn else []
+        if live_rows is not None and slots is not None:
+            result["live"] = {"rows": int(live_rows)}
+            pairs["live_slots"] = int(live_rows) != sum(m["rows"] for m in result["by_map_id"])
+        result["pairs"] = pairs
         return result
 
     @staticmethod
