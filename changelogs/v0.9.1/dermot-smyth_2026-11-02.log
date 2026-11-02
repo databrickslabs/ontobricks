@@ -300,3 +300,143 @@ tests/units/architecture tests/back/core/digitaltwin -> 2189 passed in 6.57s (sl
 0.85s, test_class_per_file); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10476 passed, 338 skipped, 9 deselected in 54.11s (slowest test 1.06s).
+
+================================================================================
+## Task 8: slot reconciliation, docs guide, DAB template, cockpit badge
+================================================================================
+
+Context: last task of incremental triple materialization. The build pipeline
+now persists how each build materialized its triples, but nothing compared the
+`_slots` streaming table with the `_data` relation, the feature had no guide,
+the slot pipeline had no DAB-side documentation, and the build-run cockpit did
+not show the materialization facts. Implemented by the controller after two
+delegated attempts stopped on a stale plan-mode flag.
+
+Changes:
+
+1. src/back/core/streaming/SlotReconciler.py (new, re-exported from
+   src/back/core/streaming/__init__.py)
+   `SlotReconciler`: `counts_sql` (distinct-triple `count(*)` plus
+   `sum(CAST(xxhash64(subject, predicate, object) AS DECIMAL(38, 0)))`, or the
+   same per `map_id`), `totals`, `by_map_id`, `compare` (`slots`, `data`,
+   `drift`, `by_map_id`). Names go through `WarehouseStatements.require_fqn`;
+   driver errors become `InfrastructureError`; a NULL sum (empty relation) is 0.
+2. src/back/objects/digitaltwin/build/TwinSlotReconciliation.py (new,
+   re-exported from the build package)
+   Resolves the domain's `_slots` / `_data` names, raises `NotFoundError` when
+   the slots table does not exist (no incremental build yet), compiles the
+   domain's mappings to report `batch_branches_present` / `drift_meaningful`
+   (the `_data` MV also holds the batch branches, so drift only means
+   something for all-row-local domains; mappings that do not compile count as
+   batch).
+3. src/api/routers/internal/dtwin.py
+   `POST /dtwin/incremental/reconcile` (builder role): the comparison through
+   `run_blocking`; `OntoBricksError` propagates to the central handler like the
+   other routes of the file.
+4. docs/incremental-materialization.md (moved from documentation/, which is
+   removed per `.cursor/07`): modes table, slot pipeline and `_data` MV,
+   readiness and fallback ladder (resolver reasons, MERGE fallback, net-change
+   apply reasons), what a build does per backend, scheduled builds,
+   Lakehouse//RT (Task 7 text), build-run trace keys, reconciliation, preview
+   enrolment, consolidated known limitations (behaviour / live-unverified
+   checklist), realtime (deferred). Generated TOC (`make docs-toc`).
+   docs/README.md table row, README.md "What's new in 0.9.1" bullet and
+   Documentation link, Help Center catalogue entry
+   (src/api/routers/internal/help.py, slug `incremental-materialization`).
+5. resources/triple_slots.pipeline.yml.example
+   Commented template of the pipeline `SlotPipelineRunner.ensure` creates
+   (serverless, PREVIEW channel, development off, continuous per mode,
+   domain catalog/schema). The `.example` suffix keeps it out of the
+   `resources/*.yml` include of databricks.yml;
+   tests/units/settings/test_bundle_job_resource.py guards that no
+   `triple_slots*.yml` ever appears there. `databricks bundle validate` was
+   not run (no authenticated profile; nothing deployable changed).
+6. src/front/static/global/js/runs-render.js,
+   src/front/static/domain/js/domain-runs.js,
+   src/front/templates/partials/domain/_domain_runs.html
+   Knowledge Graph > Runs gains a Materialization column (effective mode badge
+   with a fallback marker and the reason as tooltip, then strategy / refresh
+   technique and apply mode); the shared run-details modal gains a
+   Materialization block (also reaches Settings > Runs, whose list keeps its
+   own partial). Rows without `stats.materialization` render a dash.
+
+Deviations from the task brief (ruled by the controller):
+- The route lets `OntoBricksError` propagate (file pattern), no `exc.to_http()`.
+- No Sphinx tree exists in this repository; the docs hub table is the index.
+- The DAB file is `.yml.example`, not `.yml` (auto-included otherwise).
+- `by_map_id` is slots-only (`_data` has no `map_id`).
+- The guard test lives in the existing bundle test file.
+
+Tests:
+- tests/units/streaming/test_slot_reconciler.py (new): SQL shape (totals and
+  per map_id), unsafe names refused, drift on rows / on hash only, NULL hash,
+  decimal sums as integers, per-mapping list, InfrastructureError wrapping.
+- tests/units/api/test_dtwin_reconcile.py (new): collaborator result and
+  flags, batch mappings, non-compiling mappings, missing R2RML, missing slots
+  table (NotFoundError), unresolvable names (ValidationError); route returns
+  the comparison and propagates NotFoundError.
+- tests/units/front/test_runs_page.py: Materialization header rendered on
+  /dtwin/, renderer builds the cell and the details block, dash guard,
+  fallback marker, Settings list unchanged.
+- tests/units/settings/test_bundle_job_resource.py: no deployable slot-pipeline
+  resource; the example exists and parses.
+- Covering run: 333 passed; slowest 0.87 s (test_class_per_file).
+
+Modified files:
+- src/back/core/streaming/SlotReconciler.py (new)
+- src/back/core/streaming/__init__.py
+- src/back/objects/digitaltwin/build/TwinSlotReconciliation.py (new)
+- src/back/objects/digitaltwin/build/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/help.py
+- src/front/static/global/js/runs-render.js
+- src/front/static/domain/js/domain-runs.js
+- src/front/templates/partials/domain/_domain_runs.html
+- docs/incremental-materialization.md (moved from documentation/)
+- docs/README.md
+- README.md
+- resources/triple_slots.pipeline.yml.example (new)
+- tests/units/streaming/test_slot_reconciler.py (new)
+- tests/units/api/test_dtwin_reconcile.py (new)
+- tests/units/front/test_runs_page.py
+- tests/units/settings/test_bundle_job_resource.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+
+Test result: `uv run --frozen pytest -q -m "not scenario" --deselect
+tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks`
+-> 10505 passed, 338 skipped, 9 deselected in 54 s; slowest test 1.16 s.
+
+================================================================================
+## Incremental triple materialization — roll-up (Tasks 0-8)
+================================================================================
+
+Context: per-domain materialization modes `full` / `incremental` / `microbatch`
+(`realtime` reserved) for the knowledge-graph build, implemented over
+2026-11-01 (Tasks 0-5, 7: changelogs/v0.9.1/dermot-smyth_2026-11-01.log) and
+2026-11-02 (Tasks 6, 8: this file). Design: docs/incremental-materialization.md.
+
+1. Task 0 — compute the mapped triples once (`_data` is the counted, streamed
+   and synced source) and reset `_inferred` in the main build.
+2. Task 1 — per-domain `materialization_mode` setting, `ModeDecision`,
+   `MaterializationModeResolver` (fallback ladder), UI surfacing.
+3. Task 2 — `SlotProjectionCompiler`: row-local mappings to Lakeflow slot-event
+   SQL and `AUTO CDC … SCD TYPE 1` flows; `SourceReadiness` probes.
+4. Task 3 — translator incremental mode (`TripleSQLAssembler`) and
+   `MaterializedViewBuilder` (`_data` MV, `REFRESH POLICY INCREMENTAL`).
+5. Task 4 — `SlotPipelineRunner` + `TwinIncrementalBuild`: the
+   incremental / microbatch build path with fallbacks, fingerprints and MV reuse.
+6. Task 5 — Lakebase sync follows the mode (`TwinLakebaseSync`, `SyncPlan`,
+   continuous wait, drift handling); scheduled builds probe like the main build.
+7. Task 6 — `ChangeFeedReader`, `DeltaMergeMaterializer`, `TwinNetChangeApply`
+   (net changes into Neo4j / app-managed Lakebase), `TwinMergeFallback` (MERGE
+   without serverless, fingerprint skip), `TwinBuildRunHistory`
+   (`stats.materialization`, base-run selection).
+8. Task 7 — Lakehouse//RT read routing for the Delta engine with a reads-only
+   fallback that keeps the caller's identity.
+9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
+   guide, the DAB template and the cockpit badge.
+
+Final test result (HEAD of Task 8): 10505 passed, 338 skipped, 9 deselected
+(`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
+deselected); architecture suite green; `tests/units/architecture/baseline.json`
+unchanged.
