@@ -82,6 +82,9 @@ class TwinMergeFallback:
         """
         from back.core.graphdb.delta import DeltaMergeMaterializer, _table_naming
 
+        # The domain runs incremental by MERGE, and a failed MERGE (CTAS) keeps
+        # that sync schedule, as a scheduled tick does (promotes).
+        pipe.sync_schedule_mode = "incremental"
         data = _table_naming.data_table_fqn(pipe.domain, pipe.settings)
         if not data:
             return None  # the CTAS path reports the unresolved name
@@ -239,7 +242,6 @@ class TwinMergeFallback:
         decision = pipe.mode_decision
         pipe.data_table, pipe.data_relation_mode = data, "table"
         pipe.mode_decision = ModeDecision(decision.requested, "incremental", decision.reason)
-        pipe.sync_schedule_mode = "incremental"
         pipe.strategy, pipe.fingerprint = "merge", fingerprint
 
     @staticmethod

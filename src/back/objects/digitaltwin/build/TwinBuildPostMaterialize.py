@@ -160,9 +160,7 @@ class TwinBuildPostMaterialize:
         inputs = TwinBuildPostMaterialize._resolver_inputs(domain, settings)
         tracked = False
         if source_tables is not None:
-            gate = MaterializationModeResolver.resolve(
-                requested, sources_row_tracked=True, **inputs
-            )
+            gate = TwinBuildPostMaterialize.gate_decision(domain, settings)
             if gate.effective != "full":
                 readiness = SourceReadiness.check(client, source_tables)
                 tracked = all(readiness.values())
@@ -174,6 +172,25 @@ class TwinBuildPostMaterialize:
                 decision, task_id, informative=source_tables is not None
             )
         return decision
+
+    @staticmethod
+    def gate_decision(domain: Any, settings: Any) -> ModeDecision:
+        """The mode the domain could at best run: its sources counted as row-tracked.
+
+        Serverless and the backend still gate it. :meth:`decide_mode_for` probes
+        only when this is not ``full``; the Lakebase sync schedule starts from it,
+        so a probe that fails keeps the schedule the sources could support.
+        """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.MaterializationModeResolver import (
+            MaterializationModeResolver,
+        )
+
+        return MaterializationModeResolver.resolve(
+            GraphDBFactory.resolve_materialization_mode(domain, settings),
+            sources_row_tracked=True,
+            **TwinBuildPostMaterialize._resolver_inputs(domain, settings),
+        )
 
     @staticmethod
     def _log_downgrade(decision: ModeDecision, task_id: str, *, informative: bool) -> None:

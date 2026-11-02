@@ -884,6 +884,18 @@ class TestMergeInsteadOfCtas:
         assert pipe.sync_schedule_mode == "incremental"
         assert _modes.TwinLakebaseSync.sync_plan(pipe).sync_mode == "triggered"
 
+    def test_a_failed_merge_keeps_the_incremental_schedule(self):
+        """The CTAS stands in for the MERGE; the tick (promotes) still registers TRIGGERED."""
+        pipe = _merge_pipeline(backend="lakebase")
+        pipe.store.sync_table_mode = "triggered"
+
+        _, _, warehouse = _modes._run(pipe, warehouse=_modes._Warehouse([], fail_on="MERGE INTO"))
+
+        assert _ctas(warehouse)
+        assert pipe.mode_decision.effective == "full"
+        assert pipe.sync_schedule_mode == "incremental"
+        assert _modes.TwinLakebaseSync.sync_plan(pipe).sync_mode == "triggered"
+
     def test_a_slot_pipeline_failure_mentioning_serverless_also_merges(self):
         pipe = _merge_pipeline()
         pipe.settings.serverless_pipelines_enabled = True

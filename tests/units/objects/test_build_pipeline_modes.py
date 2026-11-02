@@ -992,6 +992,25 @@ class TestSyncScheduleSurvivesARuntimeFallback:
         assert pipe.mode_decision.effective == "full"
         assert pipe.sync_schedule_mode == "incremental"
 
+    def test_a_failed_probe_keeps_the_schedule_the_sources_could_support(self):
+        """The probe never answered: the gate's mode (sources counted as tracked) holds,
+        as on a scheduled tick, which fails before touching the registration."""
+        pipe = _pipeline("incremental", backend="lakebase")
+        pipe.store.sync_table_mode = "triggered"
+
+        _run(pipe, warehouse=_Warehouse([], fail_on="SHOW TBLPROPERTIES"))
+
+        assert pipe.mode_decision.reason == "incremental_failed:InfrastructureError"
+        assert pipe.sync_schedule_mode == "incremental"
+        assert TwinLakebaseSync.sync_plan(pipe).sync_mode == "triggered"
+
+    def test_a_gated_domain_schedules_a_snapshot_before_any_probe(self):
+        pipe = _pipeline("microbatch", backend="none")
+
+        _run(pipe)
+
+        assert pipe.sync_schedule_mode == "full"
+
     def test_a_full_decision_schedules_a_snapshot(self):
         pipe = _pipeline("incremental", backend="lakebase")
 

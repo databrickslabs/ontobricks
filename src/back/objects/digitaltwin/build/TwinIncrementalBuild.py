@@ -114,6 +114,10 @@ class TwinIncrementalBuild:
         if requested == "full":
             TwinIncrementalBuild._leave(pipe, only_if_slots_exist=True)
             return False
+        # The Lakebase sync schedule follows the resolver, never a runtime fallback
+        # (_fall_back keeps it): the gate first, so a failed probe keeps it too.
+        gate = TwinBuildPostMaterialize.gate_decision(pipe.domain, pipe.settings)
+        pipe.sync_schedule_mode = gate.effective
         try:
             spec = TwinIncrementalBuild.compile_for(
                 pipe.domain,
@@ -125,7 +129,6 @@ class TwinIncrementalBuild:
             pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
                 pipe, source_tables=spec.source_tables
             )
-            # The Lakebase sync schedule follows this decision; _fall_back keeps it.
             pipe.sync_schedule_mode = pipe.mode_decision.effective
             if pipe.mode_decision.effective == "full":
                 TwinIncrementalBuild._leave(pipe)
