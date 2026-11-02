@@ -1837,3 +1837,79 @@ tests/units/streaming tests/units/core tests/units/ontology tests/units/architec
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 11153 passed, 339 skipped, 9 deselected in 60.90s; architecture suite green;
 tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Realtime: the slot pipeline consumes the topic
+================================================================================
+
+Context: Phase 3 design item "the Phase 1 slot pipeline consumes the same topic
+to keep Delta in sync". Until now the slot pipeline read the source tables'
+change data feed in every mode; a realtime domain's `_slots` / `_data` now
+follow the same Debezium topic as the `_live` stream (Implementer B; the build
+wiring and docs are Implementer A's).
+
+Changes:
+
+1. src/back/core/streaming/TopicSource.py (new)
+   Frozen record of the topic a realtime slot pipeline reads:
+   `bootstrap_servers`, `topic`, `secret_scope`, `secret_key`,
+   `security_protocol` (`SASL_SSL`), `sasl_mechanism` (`PLAIN`), `kind`
+   (`kafka`: the secret holds the SASL JAAS line; `eventhubs`: the namespace
+   connection string, `$ConnectionString` login). Every field is validated
+   (it is interpolated into SQL); `from_realtime_source()` builds it from a
+   domain's `realtime_source` (Kinesis refused: no Kafka endpoint);
+   `read_kafka_sql()` emits `STREAM read_kafka(bootstrapServers => …,
+   subscribe => …, startingOffsets => 'earliest', kafka.security.protocol =>
+   …, kafka.sasl.mechanism => …, kafka.sasl.jaas.config => secret('<scope>',
+   '<key>') …)`. Only the secret's names are in the SQL; `secret()` is
+   resolved when the pipeline runs, so `SlotPipelineRunner` passes nothing
+   through the pipeline configuration.
+2. src/back/core/streaming/TopicSlotSource.py (new)
+   The topic slot-event view of a row-local mapping: `from_json(CAST(value
+   AS STRING), <envelope schema>)` (optionally under `payload`, images as
+   lower-cased `MAP<STRING, STRING>`), `source.table` matched by full or —
+   when no other mapped table shares it — leaf name, case-insensitively;
+   `d` deletes the key of `before`, `c` / `u` / `r` upsert `after`, a `u`
+   whose `before` has another key also deletes the old key; objects, NULL
+   and blank handling, the subject and the key follow the change-feed view;
+   deletes rank 0, upserts 1; the Kafka `offset` is `_commit_version`. The
+   view has the change-feed view's columns, so the AUTO CDC flow is reused.
+3. src/back/core/streaming/SlotProjectionCompiler.py
+   `compile(..., source="cdf" | "topic", topic=None)`: `topic` compiles the
+   topic views (a topic is required; a change-feed source takes none; an
+   unknown source is a `ValidationError`); the `_slots` DDL and the AUTO CDC
+   flows are unchanged.
+4. src/back/core/streaming/SlotPipelineSpec.py
+   `source` (`"cdf"` | `"topic"`) and `topic` fields; `needs_row_tracking`
+   is `False` for a topic source (no row-tracking probe on the sources);
+   `source_tables` are still the mapped tables.
+5. src/back/core/streaming/__init__.py
+   Re-exports `TopicSlotSource` and `TopicSource`.
+6. Tests: tests/units/streaming/test_topic_source.py (validation,
+   `from_realtime_source`, pinned `read_kafka` SQL, Event Hubs JAAS),
+   tests/units/streaming/test_topic_slot_source.py (pinned view SQL,
+   composite key, ambiguous leaf, escaping, the change-feed view's columns
+   and stack order), tests/units/streaming/test_slot_projection_compiler_topic.py
+   (source / topic arguments, unchanged slots DDL and flows, spec fields),
+   tests/property/test_slot_topic_property.py (the topic variant's event
+   model folds to the same `_slots` as the change-feed variant for the same
+   history — payload wrapping, column case, table-name forms and an unmapped
+   table's records included — with the model's rules checked against the
+   compiled SQL).
+
+Modified files:
+- src/back/core/streaming/SlotPipelineSpec.py
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/streaming/TopicSlotSource.py (new)
+- src/back/core/streaming/TopicSource.py (new)
+- src/back/core/streaming/__init__.py
+- tests/property/test_slot_topic_property.py (new)
+- tests/units/streaming/test_slot_projection_compiler_topic.py (new)
+- tests/units/streaming/test_topic_slot_source.py (new)
+- tests/units/streaming/test_topic_source.py (new)
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/streaming tests/units/jobs tests/property tests/units/architecture
+-> 435 passed in 11.16s (slowest 0.99s, test_class_per_file; slowest new test
+0.71s, the topic fold property); architecture suite green,
+tests/units/architecture/baseline.json unchanged.
