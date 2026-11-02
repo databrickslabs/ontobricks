@@ -253,5 +253,24 @@ class TestLastBuild:
         assert _report(_Warehouse())["last_build"] == {"error": "registry down"}
 
 
+def test_a_full_domain_is_answered_without_any_probe(env, monkeypatch):
+    """Both build panels ask on page load: a ``full`` domain must not wake a warehouse."""
+    warehouse = _Warehouse()
+    _Runner.error = AssertionError("no pipelines API call for a full domain")
+
+    report = _report(warehouse, store=object(), domain=_domain("full"))
+
+    assert report == {
+        "mode_requested": "full",
+        "slot_pipeline": None,
+        "data": None,
+        "slots": None,
+        "freshness_lag_s": None,
+        "lakebase_sync": None,
+        "last_build": None,
+    }
+    assert warehouse.queries == [] and env.calls == []
+
+
 def test_the_requested_mode_is_reported(env):
     assert _report(_Warehouse(), domain=_domain("microbatch"))["mode_requested"] == "microbatch"

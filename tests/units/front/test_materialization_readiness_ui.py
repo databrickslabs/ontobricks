@@ -45,3 +45,17 @@ def test_table_names_are_rendered_as_text() -> None:
     body = js[start : js.index("async function loadMaterializationReadiness")]
     assert "innerHTML" not in body
     assert "textContent" in body
+
+
+def test_the_enable_action_checks_the_response_status() -> None:
+    js = SCRIPT.read_text(encoding="utf-8")
+    start = js.index("async function enableRowTracking")
+    body = js[start : js.index("function enableVersionSelector")]
+    assert "resp.ok" in body
+
+
+def test_the_compile_error_and_the_merge_fallback_are_shown() -> None:
+    js = SCRIPT.read_text(encoding="utf-8")
+    start = js.index("function renderMaterializationReadiness")
+    body = js[start : js.index("async function loadMaterializationReadiness")]
+    assert "compile_error" in body and "merge_fallback" in body

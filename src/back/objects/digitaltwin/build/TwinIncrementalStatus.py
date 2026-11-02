@@ -15,6 +15,9 @@ logger = get_logger(__name__)
 #: Relation kinds with a Delta history (``DESCRIBE HISTORY``).
 _VERSIONED_KINDS = frozenset({"mv", "table", "streaming_table"})
 
+#: The report's sections besides ``mode_requested``.
+_SECTIONS = ("slot_pipeline", "data", "slots", "freshness_lag_s", "lakebase_sync", "last_build")
+
 
 class TwinIncrementalStatus:
     """Read-only status report of a domain's incremental materialization.
@@ -38,7 +41,9 @@ class TwinIncrementalStatus:
         ``lakebase_sync``, ``last_build``.
 
         ``freshness_lag_s`` is *now* (default: the current UTC time) minus the
-        last ``_data`` commit, ``None`` when that commit is unknown.
+        last ``_data`` commit, ``None`` when that commit is unknown. A ``full``
+        domain (the default; both build panels ask on page load) is answered
+        without any warehouse, pipelines or registry call: every section ``None``.
         """
         from back.core.graphdb.delta import _table_naming
         from back.core.graphdb.GraphDBFactory import (
@@ -46,14 +51,17 @@ class TwinIncrementalStatus:
             normalize_materialization_mode,
         )
 
+        requested = normalize_materialization_mode(
+            GraphDBFactory.resolve_materialization_mode(domain, settings)
+        )
+        if requested == "full":
+            return {"mode_requested": requested, **dict.fromkeys(_SECTIONS)}
         data = TwinIncrementalStatus.relation(client, _table_naming.data_table_fqn(domain, settings))
         slots = TwinIncrementalStatus.relation(
             client, _table_naming.slots_table_fqn(domain, settings)
         )
         return {
-            "mode_requested": normalize_materialization_mode(
-                GraphDBFactory.resolve_materialization_mode(domain, settings)
-            ),
+            "mode_requested": requested,
             "slot_pipeline": TwinIncrementalStatus.slot_pipeline(domain),
             "data": data,
             "slots": slots,

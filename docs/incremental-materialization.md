@@ -113,18 +113,21 @@ is `incremental_failed:<ErrorClass>` and the build continues on the full path.
 
 **Readiness preflight.** `GET /dtwin/incremental/readiness` (builder role,
 `TwinIncrementalReadiness.report`) answers before a build what the requested mode
-would run as: `mode_requested`, `decision` (`effective`, `reason`, the same
-resolver a build uses), `serverless_available`, `sources` (each slot-pipeline
-source table with its `row_tracking` flag) and `previews` (the slot pipeline's
-Lakeflow channel). It runs the probe on the build warehouse as the caller; a
-probe that fails is an error, not "untracked". `POST
+would run as: `mode_requested`, `decision` (`effective`, `reason` — the same
+resolver a build uses — and `merge_fallback`: an `incremental` request without
+serverless runs as `incremental` by MERGE, as the build does),
+`serverless_available`, `sources` (each slot-pipeline source table with its
+`row_tracking` flag), `compile_error` (mappings that do not compile, with the
+build's `incremental_failed:ValidationError` decision) and `previews` (the slot
+pipeline's Lakeflow channel). It runs the probe on the build warehouse as the
+caller; a probe that fails is an error, not "untracked". `POST
 /dtwin/incremental/enable-row-tracking` (builder role) runs the `ALTER TABLE`
 above on the untracked sources, or on a `tables` subset of the domain's own
 slot-pipeline sources (any other name is refused before anything runs). It runs
 as the caller, so Unity Catalog decides who may alter which table, and reports
 `{table, success[, error]}` per table. The Domain information panel shows the
 answer under the materialization mode (Readiness line, "Enable row tracking"
-button for editors when a source is untracked).
+button when a source is untracked; the action needs the builder role).
 
 **Full refresh of the slot pipeline** (`TwinSlotRefreshPlan`). Before every
 slot pipeline update — a main build's and an `incremental` tick's — each source's
@@ -281,7 +284,9 @@ says where an incremental domain stands now, without writing anything:
 | `last_build` | `{status, build_kind, finished_at, materialization}` of the newest build run |
 
 Each section is read on its own: a failing read puts `error` (and `unknown`) in
-its section and leaves the others. The scans run on the build warehouse as the
+its section and leaves the others. A `full` domain is answered without any
+warehouse, pipelines or registry call (every section `null`), so the build
+panels never wake a warehouse for it. The scans run on the build warehouse as the
 caller. The digital twin build panels (Lakebase/Neo4j and Lakehouse) show it as
 a compact "Incremental status" card, hidden for a `full` domain.
 

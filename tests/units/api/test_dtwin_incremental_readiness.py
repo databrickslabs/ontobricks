@@ -6,6 +6,7 @@ import pytest
 
 from back.core.errors import ValidationError
 from back.objects.digitaltwin.build import TwinIncrementalReadiness
+from back.objects.registry import ROLE_BUILDER
 
 pytestmark = pytest.mark.unit
 
@@ -76,16 +77,23 @@ async def test_enable_row_tracking_refuses_a_malformed_list(route, tables):
         )
 
 
-def test_both_routes_are_builder_gated():
+_BUILDER_GATE = f"require_domain_{ROLE_BUILDER}"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/dtwin/incremental/readiness",
+        "/dtwin/incremental/enable-row-tracking",
+        "/dtwin/incremental/status",
+        "/dtwin/incremental/reconcile",
+    ],
+)
+def test_the_incremental_routes_need_the_builder_role(path):
     from api.routers.internal import dtwin
 
-    gated = {
-        route.path: route.dependencies
-        for route in dtwin.router.routes
-        if route.path.endswith(("/incremental/readiness", "/incremental/enable-row-tracking"))
-    }
-    assert set(gated) == {"/dtwin/incremental/readiness", "/dtwin/incremental/enable-row-tracking"}
-    assert all(deps for deps in gated.values())
+    [route] = [r for r in dtwin.router.routes if r.path == path]
+    assert [dep.dependency.__name__ for dep in route.dependencies] == [_BUILDER_GATE]
 
 
 @pytest.mark.asyncio
@@ -107,9 +115,3 @@ async def test_status_reports_on_the_build_warehouse_with_the_route_store(monkey
     assert seen["get_store"] is dtwin.get_graphdb
     assert seen["client_kwargs"] == {"warehouse_id": "wh-build"}
 
-
-def test_the_status_route_is_builder_gated():
-    from api.routers.internal import dtwin
-
-    [status] = [r for r in dtwin.router.routes if r.path == "/dtwin/incremental/status"]
-    assert status.dependencies

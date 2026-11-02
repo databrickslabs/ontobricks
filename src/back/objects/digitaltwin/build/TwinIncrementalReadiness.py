@@ -29,29 +29,50 @@ class TwinIncrementalReadiness:
 
     @staticmethod
     def report(domain: Any, settings: Any, client: Any) -> dict:
-        """``mode_requested``, ``decision``, ``serverless_available``, ``sources``, ``previews``.
+        """``mode_requested``, ``decision``, ``serverless_available``, ``sources``,
+        ``compile_error``, ``previews``.
 
-        A probe that fails raises :class:`InfrastructureError` (an unknown
-        answer is not a "no").
+        ``decision`` is what a build would run: ``effective``, ``reason`` and
+        ``merge_fallback`` — an ``incremental`` request without serverless runs
+        as ``incremental`` by MERGE (:meth:`TwinMergeFallback.promotes`), as
+        the build does. Mappings that do not compile are reported in
+        ``compile_error`` with the build's ``incremental_failed:ValidationError``
+        decision. A probe that fails raises :class:`InfrastructureError` (an
+        unknown answer is not a "no").
         """
         from back.core.graphdb.GraphDBFactory import (
             GraphDBFactory,
             normalize_materialization_mode,
         )
+        from back.core.graphdb.ModeDecision import ModeDecision
         from back.core.streaming import SourceReadiness
+        from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
 
-        tables = TwinIncrementalReadiness.source_tables(domain, settings)
+        requested = normalize_materialization_mode(
+            GraphDBFactory.resolve_materialization_mode(domain, settings)
+        )
+        compile_error = ""
+        try:
+            tables = TwinIncrementalReadiness.source_tables(domain, settings)
+        except ValidationError as exc:
+            tables, compile_error = [], str(exc)
         tracked = SourceReadiness.check(client, tables)
         decision = TwinBuildPostMaterialize.resolve_for(
             domain, settings, sources_row_tracked=all(tracked.values())
         )
+        if compile_error and requested != "full":
+            decision = ModeDecision(requested, "full", "incremental_failed:ValidationError")
+        merge = TwinMergeFallback.promotes(decision)
         return {
-            "mode_requested": normalize_materialization_mode(
-                GraphDBFactory.resolve_materialization_mode(domain, settings)
-            ),
-            "decision": {"effective": decision.effective, "reason": decision.reason},
+            "mode_requested": requested,
+            "decision": {
+                "effective": "incremental" if merge else decision.effective,
+                "reason": decision.reason,
+                "merge_fallback": merge,
+            },
             "serverless_available": TwinBuildPostMaterialize.serverless_available(settings),
             "sources": [{"table": table, "row_tracking": tracked[table]} for table in tables],
+            "compile_error": compile_error,
             "previews": {"slot_pipeline_channel": TwinSlotPipeline.channel(settings)},
         }
 

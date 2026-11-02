@@ -266,8 +266,10 @@ function renderMaterializationReadiness(report) {
     const button = document.getElementById('enableRowTrackingBtn');
     if (!box || !text || !list || !button) return;
     const decision = report.decision || {};
+    const how = decision.merge_fallback ? ' by MERGE' : '';
     const reason = decision.reason ? ` (${decision.reason})` : '';
-    text.textContent = `${report.mode_requested} runs as ${decision.effective}${reason}`;
+    const problem = report.compile_error ? ` — mappings do not compile: ${report.compile_error}` : '';
+    text.textContent = `${report.mode_requested} runs as ${decision.effective}${how}${reason}${problem}`;
     const untracked = _readinessUntracked(report);
     list.replaceChildren(...untracked.map(table => {
         const item = document.createElement('li');
@@ -313,6 +315,9 @@ async function enableRowTracking() {
             body: JSON.stringify({ tables }),
         });
         const data = await resp.json();
+        if (!resp.ok) {
+            throw new Error(data.message || data.detail || `HTTP ${resp.status}`);
+        }
         const rows = (data.tables || []);
         const failed = rows.filter(r => !r.success);
         result.textContent = failed.length
@@ -320,7 +325,7 @@ async function enableRowTracking() {
             : `Row tracking enabled on ${rows.length} table(s).`;
         result.classList.remove('d-none');
     } catch (err) {
-        result.textContent = 'Row tracking could not be enabled.';
+        result.textContent = `Row tracking could not be enabled: ${err.message || err}`;
         result.classList.remove('d-none');
     } finally {
         button.disabled = false;

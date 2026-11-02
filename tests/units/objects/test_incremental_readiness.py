@@ -78,7 +78,12 @@ class TestReport:
         report = TwinIncrementalReadiness.report(_domain(), SimpleNamespace(), client)
 
         assert report["mode_requested"] == "incremental"
-        assert report["decision"] == {"effective": "full", "reason": "row_tracking_missing"}
+        assert report["decision"] == {
+            "effective": "full",
+            "reason": "row_tracking_missing",
+            "merge_fallback": False,
+        }
+        assert report["compile_error"] == ""
         assert report["sources"] == [
             {"table": _CUSTOMERS, "row_tracking": True},
             {"table": _ORDERS, "row_tracking": False},
@@ -91,7 +96,11 @@ class TestReport:
 
         report = TwinIncrementalReadiness.report(_domain("microbatch"), SimpleNamespace(), client)
 
-        assert report["decision"] == {"effective": "microbatch", "reason": ""}
+        assert report["decision"] == {
+            "effective": "microbatch",
+            "reason": "",
+            "merge_fallback": False,
+        }
 
     def test_without_serverless_the_gate_says_why(self, two_sources):
         settings = SimpleNamespace(serverless_pipelines_enabled=False)
@@ -99,7 +108,29 @@ class TestReport:
         report = TwinIncrementalReadiness.report(_domain(), settings, _Client({_CUSTOMERS: True}))
 
         assert report["serverless_available"] is False
-        assert report["decision"]["reason"] == "serverless_unavailable"
+        assert report["decision"] == {
+            "effective": "incremental",
+            "reason": "serverless_unavailable",
+            "merge_fallback": True,
+        }
+
+    def test_mappings_that_do_not_compile_are_reported_not_raised(self, monkeypatch):
+        from back.core.errors import ValidationError as _ValidationError
+
+        def broken(domain, settings):
+            raise _ValidationError("Entity mapping has no class_uri")
+
+        monkeypatch.setattr(TwinIncrementalReadiness, "source_tables", staticmethod(broken))
+
+        report = TwinIncrementalReadiness.report(_domain(), SimpleNamespace(), _Client())
+
+        assert report["compile_error"] == "Entity mapping has no class_uri"
+        assert report["decision"] == {
+            "effective": "full",
+            "reason": "incremental_failed:ValidationError",
+            "merge_fallback": False,
+        }
+        assert report["sources"] == []
 
     def test_a_failed_probe_is_an_infrastructure_error(self, two_sources):
         with pytest.raises(InfrastructureError):
