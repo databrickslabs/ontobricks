@@ -765,6 +765,7 @@ class TestALakehouseTickStreamsNothing:
     """On the Lakehouse engine ``…_data`` is the graph: a tick refreshes it, never streams."""
 
     _GRAPH = _DATA.removesuffix("_data") + "_graph"
+    _INFERRED = _DATA.removesuffix("_data") + "_inferred"
 
     @staticmethod
     def _tick(src, domain, mappings=None, source_tables=None) -> tuple:
@@ -811,6 +812,32 @@ class TestALakehouseTickStreamsNothing:
         assert not _ctas(log)
         data = statements.index(f"REFRESH MATERIALIZED VIEW {_DATA}")
         assert statements.index(f"REFRESH MATERIALIZED VIEW {self._GRAPH}") > data
+        assert statements.count(f"REFRESH MATERIALIZED VIEW {self._GRAPH}") == 1
+
+    def test_the_inferences_of_the_previous_data_are_discarded_first(self, slot_runner):
+        """As the main build's reset: ``…_inferred`` is emptied before ``…_data`` / ``…_graph`` move."""
+        log: list = []
+        mappings = _mappings()
+        src = _mv_warehouse(log, mv_sha=_current_sha("incremental", mappings))
+
+        with patch.object(SourceReadiness, "check", _readiness()):
+            self._tick(src, _lakehouse_domain("incremental"), mappings, _SOURCES)
+
+        statements = _statements(log)
+        truncate = statements.index(f"TRUNCATE TABLE {self._INFERRED}")
+        assert truncate < statements.index(f"REFRESH MATERIALIZED VIEW {_DATA}")
+
+    def test_a_rebuilt_data_refreshes_a_graph_view_once(self):
+        log: list = []
+
+        self._tick(_mv_warehouse(log, mv_sha="a" * 64), _lakehouse_domain())
+
+        statements = _statements(log)
+        assert _ctas(log)
+        assert statements.count(f"REFRESH MATERIALIZED VIEW {self._GRAPH}") == 1
+        assert statements.index(f"TRUNCATE TABLE {self._INFERRED}") < statements.index(
+            f"REFRESH MATERIALIZED VIEW {self._GRAPH}"
+        )
 
     def test_a_lakebase_store_still_streams_in_full(self):
         """Not Lakehouse (and not synced): the drop-and-rebuild of the store stays."""

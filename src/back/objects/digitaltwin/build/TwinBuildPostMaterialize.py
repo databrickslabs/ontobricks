@@ -88,11 +88,7 @@ class TwinBuildPostMaterialize:
             return False
 
         try:
-            materialize.ensure_inferred_table(pipe.source_client, inferred)
-            # Strict on purpose: ``materialize.truncate_table`` swallows errors.
-            materialize.run_sql(
-                pipe.source_client, materialize.build_truncate_sql(inferred)
-            )
+            TwinBuildPostMaterialize.empty_inferred(pipe.source_client, inferred)
             if getattr(pipe, "graph_relation", "") == GraphRelation.MATERIALIZED:
                 # TwinGraphRelation made …_graph an MV: this refresh, the build's only one,
                 # drops the old inferences and brings in the new …_data.
@@ -110,6 +106,19 @@ class TwinBuildPostMaterialize:
             "[DT-BUILD %s] reset %s and refreshed %s", pipe.task_id, inferred, graph
         )
         return True
+
+    @staticmethod
+    def empty_inferred(client: Any, inferred: str) -> None:
+        """Create ``…_inferred`` when absent and empty it; errors raise.
+
+        Strict on purpose (``materialize.truncate_table`` swallows errors): the
+        build's reset and the Lakehouse scheduled tick both discard the
+        inferences of the previous data this way.
+        """
+        from back.core.graphdb.delta import materialize
+
+        materialize.ensure_inferred_table(client, inferred)
+        materialize.run_sql(client, materialize.build_truncate_sql(inferred))
 
     @staticmethod
     def serverless_available(settings: Any) -> bool:

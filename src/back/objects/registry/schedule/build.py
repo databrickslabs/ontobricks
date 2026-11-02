@@ -229,7 +229,7 @@ def _refresh_data_relation(
     *,
     relation: str = "table",
     with_object_hash: bool = True,
-) -> None:
+) -> bool:
     """Bring ``…_data`` up to date for the synced table (or the Lakehouse graph).
 
     The incremental main build's materialized view is refreshed in place when
@@ -237,7 +237,9 @@ def _refresh_data_relation(
     else — a ``full`` or MERGE-promoted domain, no view yet, mappings edited
     since, a missing slot pipeline — is built from the gateway VIEW as the
     main build builds it: a *relation* ``table`` (with *with_object_hash* and
-    row tracking for a synced table) or a Lakehouse ``view``.
+    row tracking for a synced table) or a Lakehouse ``view``. Returns ``True``
+    when the view was kept (``TwinScheduledRefresh`` then refreshed a
+    ``…_graph`` materialized view too), ``False`` after a rebuild.
     """
     from back.core.graphdb.delta import materialize
     from back.objects.digitaltwin.build import TwinScheduledRefresh
@@ -255,10 +257,11 @@ def _refresh_data_relation(
         facts=tick.get("facts"),
     )
     if refreshed:
-        return
+        return True
     materialize.apply_data_relation(
         src, view_table, data_table, mode=relation, with_object_hash=with_object_hash
     )
+    return False
 
 
 def _slot_spec(
@@ -493,18 +496,29 @@ def _refresh_lakehouse_graph(
     As the main build (``TwinIncrementalBuild.skips_graph_stream``), nothing is
     streamed into the store: that would append every asserted triple to
     ``…_inferred``. The mode is decided (and probed) first, so a failed probe
-    writes nothing; ``…_data`` is the incremental view refreshed in place or
-    built from the gateway VIEW (a table, or the domain's pass-through view);
-    a ``…_graph`` materialized view is then refreshed (a VIEW needs nothing).
+    writes nothing. ``…_inferred`` is emptied, as the main build's reset does
+    and as every other tick's store rebuild discards its inferences: they were
+    derived from the previous data. ``…_data`` is then the incremental view
+    refreshed in place (``TwinScheduledRefresh`` refreshes a ``…_graph``
+    materialized view after it) or built from the gateway VIEW (a table, or
+    the domain's pass-through view), after which a ``…_graph`` materialized
+    view is refreshed here — once either way (a VIEW needs nothing).
     """
     from back.core.graphdb.delta import GraphRelation, _table_naming
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
+    from back.core.helpers import WarehouseStatements
+    from back.objects.digitaltwin.build import TwinBuildPostMaterialize
 
     data_table = _table_naming.data_table_fqn(domain, settings)
-    if not data_table:
-        raise ValidationError("Could not resolve the mapped-triples table name")
+    inferred = _table_naming.inferred_table_fqn(domain, settings)
+    graph = _table_naming.graph_view_fqn(domain, settings)
+    if not (data_table and inferred and graph):
+        raise ValidationError("Could not resolve the mapped-triples table names")
     data_mode, _sync_mode = _tick_modes(domain, settings, src, source_tables)
-    _refresh_data_relation(
+    WarehouseStatements.step(
+        f"empty {inferred}", lambda: TwinBuildPostMaterialize.empty_inferred(src, inferred)
+    )
+    kept = _refresh_data_relation(
         src,
         domain,
         settings,
@@ -515,7 +529,8 @@ def _refresh_lakehouse_graph(
         relation=GraphDBFactory.resolve_lakehouse_materialization(domain, settings),
         with_object_hash=False,
     )
-    GraphRelation.refresh(src, _table_naming.graph_view_fqn(domain, settings))
+    if not kept:
+        WarehouseStatements.step(f"refresh {graph}", lambda: GraphRelation.refresh(src, graph))
     return _count_view_triples(src, data_table)
 
 
