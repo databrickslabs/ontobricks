@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 from collections.abc import Callable
 from typing import Any
@@ -120,26 +121,24 @@ class TwinRealtimeJob:
         return str(getattr(value, "value", value) or "UNKNOWN")
 
     def upload_mappings(self, name: str, mappings: tuple) -> str:
-        """Upload ``(entities, relationships, base URI)`` for the job; the workspace file path."""
+        """Upload ``(entities, relationships, base URI)`` next to the checkpoints; the file path.
+
+        The file goes to ``<checkpoint root>/_mappings/<name>.json`` on the
+        checkpoint volume, which the app (WRITE VOLUME) and the job's run-as
+        identity (READ / WRITE VOLUME, for its checkpoints) both reach; a file in
+        the app principal's workspace home would not be readable by the job.
+        """
         entities, relationships, base_uri = mappings
         payload = json.dumps(
             {"entity_mappings": entities, "relationship_mappings": relationships, "base_uri": base_uri},
             default=str,
         ).encode("utf-8")
-        me = self.call("resolve the current user", lambda w: w.current_user.me())
-        folder = f"/Workspace/Users/{getattr(me, 'user_name', '')}/.ontobricks/realtime"
+        root = str(getattr(self._settings, "realtime_checkpoint_root", "") or "").rstrip("/")
+        folder = f"{root}/_mappings"
         path = f"{folder}/{name}.json"
-        self.call(f"create {folder}", lambda w: w.workspace.mkdirs(folder))
+        self.call(f"create {folder}", lambda w: w.files.create_directory(folder))
         self.call(
             f"upload {path}",
-            lambda w: w.workspace.upload(path, payload, format=self._auto_format(), overwrite=True),
+            lambda w: w.files.upload(path, io.BytesIO(payload), overwrite=True),
         )
         return path
-
-    @staticmethod
-    def _auto_format() -> Any:
-        try:
-            from databricks.sdk.service.workspace import ImportFormat
-        except ImportError:  # pragma: no cover — every supported SDK has it
-            return None
-        return ImportFormat.AUTO

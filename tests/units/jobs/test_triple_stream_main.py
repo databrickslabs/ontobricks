@@ -30,7 +30,7 @@ _ARGS = [
     "--bootstrap-servers", "b1:9092,b2:9092", "--topic", "sales.customers",
     "--secret-scope", "ontobricks", "--secret-key", "kafka-jaas",
     "--slots-table", "main.kg.triplestore_sales_V3_slots",
-    "--mappings-json-path", "/Workspace/Users/app/.ontobricks/realtime/sales-v3.json",
+    "--mappings-json-path", "/Volumes/main/ob/rt/_mappings/sales-v3.json",
     "--lakebase-host", "pg.lakebase.io", "--lakebase-db", "graphs",
     "--lakebase-user", "ontobricks_rtm", "--lakebase-secret", "ontobricks/pg-password",
     "--live-table", "ontobricks_graph.sales_v3_live",

@@ -139,23 +139,23 @@ class _Jobs:
         self.cancelled.append(run_id)
 
 
-class _Workspace:
+class _Files:
     def __init__(self):
         self.uploads: dict = {}
         self.folders: list = []
 
-    def mkdirs(self, folder):
+    def create_directory(self, folder):
         self.folders.append(folder)
 
-    def upload(self, path, content, format=None, overwrite=False):
-        self.uploads[path] = json.loads(content)
+    def upload(self, path, contents, overwrite=False):
+        assert overwrite is True
+        self.uploads[path] = json.loads(contents.read())
 
 
 def _client(jobs=None):
     return SimpleNamespace(
         jobs=jobs or _Jobs(),
-        workspace=_Workspace(),
-        current_user=SimpleNamespace(me=lambda: SimpleNamespace(user_name="app-sp")),
+        files=_Files(),
     )
 
 
@@ -207,7 +207,7 @@ class TestStart:
             "secret_scope": "ontobricks",
             "secret_key": "kafka-jaas",
             "slots_table": "main.kg.triplestore_sales_V3_slots",
-            "mappings_json_path": "/Workspace/Users/app-sp/.ontobricks/realtime/ontobricks-rtm-sales-v3.json",
+            "mappings_json_path": "/Volumes/main/ob/registry/realtime/_mappings/ontobricks-rtm-sales-v3.json",
             "lakebase_host": "pg.lakebase.io",
             "lakebase_db": "graphs",
             "lakebase_user": "ontobricks_rtm",
@@ -228,8 +228,9 @@ class TestStart:
         ]
         assert store.live.attached == [("sales_V3", [_SLOT_ROW])]
         assert store.views == ["sales_V3"]
-        uploaded = client.workspace.uploads[
-            "/Workspace/Users/app-sp/.ontobricks/realtime/ontobricks-rtm-sales-v3.json"
+        assert client.files.folders == ["/Volumes/main/ob/registry/realtime/_mappings"]
+        uploaded = client.files.uploads[
+            "/Volumes/main/ob/registry/realtime/_mappings/ontobricks-rtm-sales-v3.json"
         ]
         assert uploaded["base_uri"] == "http://ex.org/" and "C" in uploaded["entity_mappings"]
 
@@ -264,8 +265,9 @@ class TestStart:
             (_domain(source={**_SOURCE, "topic": ""}), {}, "incomplete"),
             (_domain(), {"realtime_lakebase_secret": ""}, "ONTOBRICKS_REALTIME_LAKEBASE_SECRET"),
             (_domain(), {"realtime_checkpoint_root": " "}, "ONTOBRICKS_REALTIME_CHECKPOINT_ROOT"),
+            (_domain(), {"realtime_checkpoint_root": "dbfs:/rtm"}, "volume path"),
         ],
-        ids=["disabled", "draft", "no-topic", "no-sink-secret", "no-checkpoint"],
+        ids=["disabled", "draft", "no-topic", "no-sink-secret", "no-checkpoint", "not-a-volume"],
     )
     def test_a_missing_prerequisite_is_refused_before_any_api_call(self, domain, settings, match):
         def no_client():

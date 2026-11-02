@@ -225,6 +225,10 @@ class TwinRealtimeStream:
         ]
         if missing:
             raise ValidationError(f"Realtime needs {', '.join(missing)}")
+        if not str(settings.realtime_checkpoint_root).strip().startswith("/Volumes/"):
+            raise ValidationError(
+                "ONTOBRICKS_REALTIME_CHECKPOINT_ROOT must be a Unity Catalog volume path (/Volumes/…)"
+            )
         return config
 
     def _store(self, domain: Any) -> Any:
