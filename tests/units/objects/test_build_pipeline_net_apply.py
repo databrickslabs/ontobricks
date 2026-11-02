@@ -706,6 +706,26 @@ class TestNetApplyFallsBackToTheFullStream:
         assert pipe.tm.messages[0].startswith("Full rebuild: ")
 
 
+class TestEmptyDataAfterAFallback:
+    def test_an_empty_graph_records_no_apply_and_no_version(self, registry):
+        """The empty-graph completion never touches the store: no base for the next build."""
+        pipe = _net_pipeline(registry, base_version=None)
+        del pipe._record_build_run
+        del pipe._apply_full_rebuild
+        warehouse = _CDFWarehouse([], version=9, count=0)
+        pipe.source_client = warehouse
+        pipe.store.bulk_load_into_sync = MagicMock(return_value=0)
+
+        with patch("back.core.streaming.SlotPipelineRunner", _modes._FakeRunner):
+            _modes._FakeRunner.script = _modes._Script([])
+            pipe.run()
+
+        facts = registry.record_build_run.call_args[0][1]["stats"]["materialization"]
+        assert (facts["apply_mode"], facts["data_table_version"]) == ("", None)
+        assert facts["apply_fallback_reason"] == "no_previous_version"
+        pipe.store.drop_table.assert_not_called()
+
+
 class TestNetApplyFailures:
     def test_a_failed_write_fails_the_build(self, registry):
         pipe = _net_pipeline(registry)

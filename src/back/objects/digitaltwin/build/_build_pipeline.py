@@ -928,6 +928,7 @@ class _BuildPipeline:
                 },
                 message=empty_msg,
             )
+            self.apply_mode, self.data_table_version, self.data_table_id = "", None, ""
             self._record_build_run("success", message=empty_msg)
             return False
 
