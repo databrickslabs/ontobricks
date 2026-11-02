@@ -52,7 +52,8 @@ class TwinBuildRunHistory:
         ``_slots`` version a started stream was seeded at,
         ``slots_seed_version``; ``TwinRealtimeStream.after_build``) and the
         kind of ``…_graph`` (``graph_relation``: ``view`` / ``mv``,
-        ``TwinGraphRelation``). A build that reached the
+        ``TwinGraphRelation``) and whether the store lists its inferences
+        (``inferred_listed``, Neo4j: ``TwinNetChangeApply``). A build that reached the
         incremental step adds its ``slot_refresh_facts``
         (:class:`TwinSlotRefreshPlan`: ``source_versions``,
         ``source_table_ids``, ``slot_full_refresh_pending``,
@@ -85,6 +86,7 @@ class TwinBuildRunHistory:
                 getattr(pipe, "slots_seed_version", None)
             ),
             "graph_relation": text(pipe, "graph_relation"),
+            "inferred_listed": getattr(pipe, "inferred_listed", False) is True,
             **TwinBuildRunHistory._slot_refresh_facts(pipe),
         }
         return {**stats, "materialization": materialization}

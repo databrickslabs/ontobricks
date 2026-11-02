@@ -20,25 +20,25 @@ The store's inferences are purged, as the full stream (which drops the graph)
 would have discarded them: Lakebase afterwards, on its own
 (``purge_materialized_triples``); Neo4j, which cannot mark a triple as
 inferred, first, from the list its app writers keep in ``…_inferred``
-(:class:`InferredTripleLedger`) — every listed triple that ``…_data`` does not
-assert (``…_inferred EXCEPT …_data``) is deleted, the asserted triples those
-deletes unset are written again, and the list is emptied. A store with neither
-path, no base run on the same relation, an unreadable (or half-read) change
-feed or list, or a changeset above 10 % of the graph hands the build back to
-the full stream, with ``apply_fallback_reason`` set.
+(:class:`TwinListedInferencePurge`). A store with neither path, no base run on
+the same relation (for a listing store: a base run that listed too), an
+unreadable (or half-read) change feed or list, or a changeset above 10 % of the
+graph hands the build back to the full stream, with ``apply_fallback_reason``
+set.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterable, Iterator
-from itertools import groupby, islice
+from itertools import groupby
 from typing import Any
 
 from back.core.errors import InfrastructureError
 from back.core.graphdb.ModeDecision import ModeDecision
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
+from back.objects.digitaltwin.build.TwinListedInferencePurge import TwinListedInferencePurge
 
 logger = get_logger(__name__)
 
@@ -57,10 +57,7 @@ _LAKEBASE_INSERT_BATCH_SIZE = 5000
 
 
 class _ChangeFeedReadError(InfrastructureError):
-    """A warehouse read (the change feed, the listed inferences) failed while its rows were written.
-
-    Not a store write: those keep their own type and fail the build.
-    """
+    """The change feed failed while its net changes were being written (not a store write)."""
 
 
 class TwinNetChangeApply:
@@ -98,6 +95,7 @@ class TwinNetChangeApply:
         t0 = time.time()
         client, data = pipe.source_client, pipe.data_table
         ledger = TwinNetChangeApply._ledger(pipe.store)
+        pipe.inferred_listed = ledger is not None  # recorded: a base run for a listing store
         purges_itself = getattr(pipe.store, "supports_materialized_inference_purge", False) is True
         if ledger is None and not purges_itself:
             return TwinNetChangeApply._fall_back(pipe, "inferred_not_separable")
@@ -116,7 +114,9 @@ class TwinNetChangeApply:
         if since < latest and not TwinNetChangeApply._changeset_fits(pipe, since, latest):
             return False
         pipe.apply_mode = "net_changes"  # before the writes: a failed one leaves no base
-        if ledger is not None and not TwinNetChangeApply._purge_listed(pipe, ledger.inferred_fqn):
+        if ledger is not None and not TwinNetChangeApply._purge_listed(
+            pipe, ledger.inferred_fqn, latest
+        ):
             return False
         if since < latest and not TwinNetChangeApply._apply_window(pipe, since, latest):
             return False
@@ -145,7 +145,10 @@ class TwinNetChangeApply:
         table (or the reverse) restarts the Delta history at version 0, so its
         strategy, and its table id when both runs know one, must match. ``None``
         too when the store reports its graph missing (dropped outside a build);
-        a store without that probe is trusted.
+        a store without that probe is trusted. A store that lists its
+        inferences (``inferred_listed``) needs a base that did too: inferences
+        written before the list existed are not on it, and only the full
+        stream such a build falls back to removes them.
         """
         facts = TwinBuildRunHistory.previous_materialization_stats(pipe)
         version = facts.get("data_table_version")
@@ -158,6 +161,8 @@ class TwinNetChangeApply:
             return None
         if hasattr(pipe.store, "table_exists") and not pipe.store.table_exists(pipe.graph_name):
             return None
+        if getattr(pipe, "inferred_listed", False) is True and facts.get("inferred_listed") is not True:
+            return None  # the base predates the list: inferences written then are not listed
         return version
 
     @staticmethod
@@ -183,94 +188,13 @@ class TwinNetChangeApply:
         return True
 
     @staticmethod
-    def _purge_listed(pipe: Any, inferred: str) -> bool:
-        """Delete the listed inferences ``…_data`` does not assert; ``False`` after a fallback.
-
-        ``…_inferred EXCEPT …_data`` is streamed into ``store.delete_triples``
-        in batches. Neo4j keeps one value per node property, label set and
-        name, so deleting a listed literal also unsets an asserted value of the
-        same key: the ``…_data`` triples on the subject and predicate of a
-        deleted one are written again. The list is then emptied. A list that
-        cannot be read falls back to the full stream (``inferred_unreadable``),
-        which drops the graph, so the deletes already written do no harm.
-        """
-        from back.core.graphdb.delta import materialize
-
-        client, store = pipe.source_client, pipe.store
-        listed = TwinNetChangeApply.listed_inferences_sql(inferred, pipe.data_table)
-        deleted = restored = 0
+    def _purge_listed(pipe: Any, inferred: str, latest: int) -> bool:
+        """:meth:`TwinListedInferencePurge.purge`; ``False`` after a fallback (``inferred_unreadable``)."""
         try:
-            exists = TwinNetChangeApply._listed(client, inferred)
-            if exists:
-                deleted = TwinNetChangeApply._in_batches(
-                    pipe, TwinNetChangeApply._rows(client, listed), store.delete_triples
-                )
-            if deleted:
-                shadowed = TwinNetChangeApply.shadowed_triples_sql(listed, pipe.data_table)
-                restored = TwinNetChangeApply._in_batches(
-                    pipe, TwinNetChangeApply._rows(client, shadowed), store.insert_triples
-                )
-        except _ChangeFeedReadError as exc:
+            TwinListedInferencePurge.purge(pipe, inferred, latest)
+        except TwinListedInferencePurge.Unreadable as exc:
             return TwinNetChangeApply._fall_back(pipe, "inferred_unreadable", exc)
-        if exists:
-            materialize.truncate_table(client, inferred)
-        logger.info(
-            "[DT-BUILD %s] purged %d listed inference(s) from %s, %d asserted triple(s) rewritten",
-            pipe.task_id,
-            deleted,
-            pipe.graph_name,
-            restored,
-        )
         return True
-
-    @staticmethod
-    def listed_inferences_sql(inferred: str, data: str) -> str:
-        """The listed inferences ``…_data`` does not assert: ``<inferred> EXCEPT <data>``."""
-        from back.core.helpers import validate_table_name
-
-        validate_table_name(inferred)
-        validate_table_name(data)
-        return (
-            f"SELECT subject, predicate, object FROM {inferred}\n"
-            "EXCEPT\n"
-            f"SELECT subject, predicate, object FROM {data}"
-        )
-
-    @staticmethod
-    def shadowed_triples_sql(listed_sql: str, data: str) -> str:
-        """The ``…_data`` triples on the subject and predicate of a listed inference (*listed_sql*)."""
-        return (
-            f"SELECT d.subject, d.predicate, d.object FROM {data} d\n"
-            f"LEFT SEMI JOIN ({listed_sql}) x\n"
-            "ON d.subject = x.subject AND d.predicate = x.predicate"
-        )
-
-    @staticmethod
-    def _listed(client: Any, inferred: str) -> bool:
-        """``…_inferred`` exists (a domain that never reasoned has none); a failed probe is a read error."""
-        from back.core.graphdb.delta import materialize
-
-        try:
-            return materialize.relation_exists(client, inferred, strict=True)
-        except InfrastructureError as exc:
-            raise _ChangeFeedReadError(exc.message, detail=exc.detail) from exc
-
-    @staticmethod
-    def _rows(client: Any, sql: str) -> Iterator[dict]:
-        """``client.iter_rows(sql)``, its failures raised as :class:`_ChangeFeedReadError`."""
-        try:
-            yield from client.iter_rows(sql, batch_size=_NEO4J_BATCH_SIZE)
-        except Exception as exc:  # noqa: BLE001 — translated, not swallowed
-            raise _ChangeFeedReadError(f"Could not read {sql!r}: {exc}", detail=str(exc)) from exc
-
-    @staticmethod
-    def _in_batches(pipe: Any, rows: Iterable[dict], write: Callable[..., Any]) -> int:
-        """``write(graph, batch, batch_size=…)`` per batch of *rows*; the number of rows written."""
-        triples, total = TwinNetChangeApply._triples(rows), 0
-        while batch := list(islice(triples, _NEO4J_BATCH_SIZE)):
-            write(pipe.graph_name, batch, batch_size=_NEO4J_BATCH_SIZE)
-            total += len(batch)
-        return total
 
     @staticmethod
     def _apply_window(pipe: Any, since: int, latest: int) -> bool:

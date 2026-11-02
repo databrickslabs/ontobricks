@@ -10,6 +10,7 @@ from back.objects.digitaltwin.build.TwinIncrementalReadiness import TwinIncremen
 from back.objects.digitaltwin.build.TwinIncrementalStatus import TwinIncrementalStatus
 from back.objects.digitaltwin.build.TwinInferredMaterialize import TwinInferredMaterialize
 from back.objects.digitaltwin.build.TwinLakebaseSync import TwinLakebaseSync
+from back.objects.digitaltwin.build.TwinListedInferencePurge import TwinListedInferencePurge
 from back.objects.digitaltwin.build.TwinLakehouseBuild import TwinLakehouseBuild
 from back.objects.digitaltwin.build.TwinMergeFallback import TwinMergeFallback
 from back.objects.digitaltwin.build.TwinNetChangeApply import TwinNetChangeApply
@@ -33,6 +34,7 @@ __all__ = [
     "TwinIncrementalStatus",
     "TwinInferredMaterialize",
     "TwinLakebaseSync",
+    "TwinListedInferencePurge",
     "TwinLakehouseBuild",
     "TwinMergeFallback",
     "TwinNetChangeApply",

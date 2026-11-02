@@ -26,6 +26,7 @@ from back.core.errors import InfrastructureError
 from back.core.graphdb import ModeDecision
 from back.objects.digitaltwin.build import (
     TwinBuildRunHistory,
+    TwinListedInferencePurge,
     TwinMergeFallback,
     TwinNetChangeApply,
     TwinSlotPipeline,
@@ -55,6 +56,7 @@ _FACT_KEYS = {
     "realtime_state",
     "slots_seed_version",
     "graph_relation",
+    "inferred_listed",
     "fingerprint",
     "strategy",
     "apply_mode",
@@ -158,6 +160,7 @@ class TestBuildRunStats:
             "realtime_state": "",
             "slots_seed_version": None,
             "graph_relation": "",
+            "inferred_listed": False,
             "fingerprint": "",
             "strategy": "",
             "apply_mode": "",
@@ -651,8 +654,11 @@ def _neo4j_pipeline(registry, **kw):
     """An incremental Neo4j build whose store lists its inferences in ``…_inferred``."""
     from back.core.graphdb.delta import InferredTripleLedger
 
+    listed_base = kw.pop("listed_base", True)
     pipe = _net_pipeline(registry, backend="neo4j", purge=False, **kw)
     pipe.store.inferred_ledger = InferredTripleLedger(lambda: None, _INFERRED)
+    for run in registry.load_build_runs.return_value or []:
+        run["stats"]["materialization"]["inferred_listed"] = listed_base
     return pipe
 
 
@@ -694,16 +700,16 @@ class TestNeo4jNetApply:
             pipe, warehouse=_ListedWarehouse([], listed=_LISTED, changes=_TWO_CHANGES)
         )
 
-        listed = TwinNetChangeApply.listed_inferences_sql(_INFERRED, _DATA)
+        listed = TwinListedInferencePurge.listed_sql(_INFERRED, 9, _DATA, 9)
         assert listed == (
-            f"SELECT subject, predicate, object FROM {_INFERRED}\n"
+            f"SELECT subject, predicate, object FROM {_INFERRED} VERSION AS OF 9\n"
             "EXCEPT\n"
-            f"SELECT subject, predicate, object FROM {_DATA}"
+            f"SELECT subject, predicate, object FROM {_DATA} VERSION AS OF 9"
         )
         read = warehouse.calls.index(listed)
         feed = [i for i, s in enumerate(warehouse.calls) if "table_changes(" in s]
         assert feed[0] < read < feed[-1]  # after the changeset count, before its stream
-        assert read < warehouse.calls.index(f"TRUNCATE TABLE {_INFERRED}")
+        assert read < warehouse.calls.index(TwinListedInferencePurge.forget_sql(_INFERRED, 9))
 
     def test_a_domain_that_never_listed_an_inference_applies_the_net_changes_only(self, registry):
         pipe = _neo4j_pipeline(registry)
@@ -712,7 +718,7 @@ class TestNeo4jNetApply:
         log, _, warehouse = _modes._run(pipe, warehouse=_ListedWarehouse([], changes=_TWO_CHANGES))
 
         assert [name for name, *_ in writes] == ["delete_triples", "insert_triples"]
-        assert not any("EXCEPT" in s or s.startswith("TRUNCATE") for s in warehouse.calls)
+        assert not any("EXCEPT" in s or s.startswith(f"DELETE FROM {_INFERRED}") for s in warehouse.calls)
         assert not _streamed(log)
 
     def test_the_listed_inferences_are_purged_without_a_new_data_version(self, registry):
@@ -722,6 +728,45 @@ class TestNeo4jNetApply:
         _modes._run(pipe, warehouse=_ListedWarehouse([], version=9, listed=_LISTED))
 
         assert [(name, rows) for name, _, rows, _ in writes] == [("delete_triples", _LISTED)]
+
+    def test_a_base_run_that_did_not_list_streams_in_full(self, registry):
+        """Inferences written before the list existed are not on it: the full stream removes them."""
+        pipe = _neo4j_pipeline(registry, listed_base=False)
+
+        log, _, _ = _modes._run(pipe, warehouse=_ListedWarehouse([], listed=_LISTED, changes=_TWO_CHANGES))
+
+        assert _streamed(log)
+        assert pipe.apply_fallback_reason == "no_previous_version"
+
+    def test_the_run_records_that_its_store_lists_inferences(self, registry):
+        pipe = _neo4j_pipeline(registry)
+        _store_writes(pipe.store, "delete_triples", "insert_triples")
+
+        _modes._run(pipe, warehouse=_ListedWarehouse([], changes=_TWO_CHANGES))
+
+        assert TwinBuildRunHistory.build_run_stats(pipe)["materialization"]["inferred_listed"] is True
+
+    def test_the_rewrite_reads_data_at_the_version_the_net_changes_reach(self, registry):
+        pipe = _neo4j_pipeline(registry)
+        _store_writes(pipe.store, "delete_triples", "insert_triples")
+
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_ListedWarehouse([], listed=_LISTED, shadowed=_SHADOWED, changes=_TWO_CHANGES)
+        )
+
+        [shadowed] = [s for s in warehouse.calls if "LEFT SEMI JOIN" in s]
+        assert shadowed.startswith(
+            f"SELECT d.subject, d.predicate, d.object FROM {_DATA} VERSION AS OF 9 d\n"
+        )
+
+    def test_only_the_rows_read_leave_the_list(self):
+        """A reasoning run listing new triples during the purge keeps them (no TRUNCATE)."""
+        assert TwinListedInferencePurge.forget_sql(_INFERRED, 9) == (
+            f"DELETE FROM {_INFERRED} AS t WHERE EXISTS (\n"
+            f"  SELECT 1 FROM {_INFERRED} VERSION AS OF 9 AS s\n"
+            "  WHERE s.subject <=> t.subject AND s.predicate <=> t.predicate"
+            " AND s.object <=> t.object)"
+        )
 
     def test_an_unreadable_list_falls_back_to_the_full_stream(self, registry):
         pipe = _neo4j_pipeline(registry)
