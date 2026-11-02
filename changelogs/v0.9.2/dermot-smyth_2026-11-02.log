@@ -514,7 +514,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the design-traceability round): 10687 passed, 339 skipped, 9 deselected
+Final test result (after the design-gaps review fixes): 10764 passed, 339 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -1003,4 +1003,148 @@ tests/units/architecture tests/external
 test_class_per_file); slot fold property tests 0.29s / 0.23s; full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10687 passed, 339 skipped, 9 deselected in 55.67s (slowest test 1.04s);
+architecture suite green; tests/units/architecture/baseline.json unchanged.
+
+
+================================================================================
+## Fix: design-gaps review
+================================================================================
+
+Context: The review of the design-traceability round found no Critical and five
+Important findings: the source-overwrite check could be skipped (its versions came
+from the store base, which a scheduled tick ends), lost (a failed full refresh
+recorded no versions; versions were read after the update) or bypassed by the tick;
+several rewrites went undetected and the history read was unbounded; the external
+EXPLAIN check never ran in CI; the drift remedy was incomplete (a MERGE build
+cleared it, batch-only domains were never reconciled, `_data` was not recomputed);
+and the status endpoint probed everything for `full` domains on every page load.
+Plus minors on the UI, the preflight, the gates, the facts, the tick and the
+property test.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py (`mappings_for`),
+   TwinIncrementalReadiness.py, TwinSlotReconciliation.py,
+   src/back/objects/registry/schedule/build.py (7b77cd54)
+   One mapping derivation for the readiness preflight, the reconciliation and the
+   scheduled tick. The tick's base URI default was `http://example.org/` where the
+   build's is `DEFAULT_BASE_URI`; a domain without an ontology base URI now gets
+   the same mappings on both paths.
+2. src/back/core/streaming/SourceReadiness.py (1d46d2d1)
+   I2: `CREATE OR REPLACE TABLE`, `REPLACE TABLE`, `CLONE` / `SHALLOW CLONE` /
+   `DEEP CLONE` and a `Complete`-mode `STREAMING UPDATE` count as rewrites;
+   `DESCRIBE HISTORY` is limited to the versions since the recorded one; a newest
+   version below it (DROP + CREATE) is a rewrite; no new version reads nothing; a
+   window above 10000 versions counts as a rewrite.
+3. src/back/objects/digitaltwin/build/TwinSlotRefreshPlan.py (new, re-exported),
+   TwinBuildRunHistory.py, TwinIncrementalBuild.py, TwinScheduledRefresh.py,
+   _build_pipeline.py, src/back/objects/registry/schedule/build.py (deea846e)
+   I1 + I4a + I4c: every slot update — a build's and an incremental tick's — is
+   planned by `TwinSlotRefreshPlan`: a full refresh when a source was rewritten
+   (another table id, a restarted history, a rewrite in its history) since the
+   versions the last completed update recorded (the newest run that has them, not
+   the store base), or while one is owed. Versions and table ids are read before
+   the update and recorded only once it and the `_data` refresh completed;
+   `slot_full_refresh_pending` stays true until then and a run whose update did
+   not complete carries the previous versions forward, so the next build or tick
+   retries. A drift owes a full slot refresh and `REFRESH MATERIALIZED VIEW … FULL`
+   (batch-only domains: the view refresh); MERGE and full builds record no slot
+   facts and pass the debt on. `slot_full_refresh_reason` replaces overwriting
+   `mode_fallback_reason` with `source_overwritten`. The tick records the same
+   facts (attached to its run's stats before the update, so a failed tick leaves
+   the refresh pending) and rebuilds by CTAS when a source history is unreadable.
+   `TwinBuildRunHistory.recent_runs` reads the 50-run window once per build;
+   `reconcile_drift_pending` is gone. TwinIncrementalBuild 401 -> 374 lines.
+4. src/back/core/streaming/SlotReconciler.py, TwinSlotReconciliation.py,
+   src/api/routers/internal/dtwin.py, src/back/objects/registry/schedule/build.py
+   (0dfff0fb)
+   I4b + minors: a domain without `_slots` compares the gateway VIEW and the synced
+   table alone (`slots_present: false`; 404 only with nothing to compare); the
+   on-demand VIEW scan is opt-in (`?recompute=true`), the tick always runs it; the
+   tick no longer reconciles `microbatch` domains, counts the synced table only when
+   its refresh came `ONLINE`, and catches any exception.
+5. src/back/objects/digitaltwin/build/TwinIncrementalStatus.py,
+   TwinIncrementalReadiness.py, src/front/static/domain/js/domain-information.js
+   (b96ec2ab)
+   I5: a `full` domain's status is answered without any warehouse, pipelines or
+   registry call. The preflight reports the MERGE promotion (`merge_fallback`,
+   `TwinMergeFallback.promotes`) and mappings that do not compile (`compile_error`,
+   the build's `incremental_failed:ValidationError`) instead of a bare 400; the
+   enable action checks `resp.ok`. The gate tests assert `ROLE_BUILDER` on every
+   incremental route; the docs say builders.
+6. tests/external/test_mv_incremental_plan.py, .github/workflows/nightly.yml
+   (a06bccf6)
+   I3: the external EXPLAIN check also takes `DATABRICKS_HOST` /
+   `DATABRICKS_TOKEN` / `DATABRICKS_SQL_WAREHOUSE_ID` (the nightly
+   `external-smoke` credentials) and creates its schema; the job sets
+   `ONTOBRICKS_EXTERNAL_WAREHOUSE=1` and `ONTOBRICKS_EXTERNAL_SCHEMA` (repository
+   variable `ONTOBRICKS_INT_EXTERNAL_SCHEMA`, default `main.ontobricks_it`).
+7. src/back/core/streaming/SlotProjectionCompiler.py,
+   tests/property/test_slot_fold.py (moved from tests/units/streaming/) (4449e07e)
+   Deletes rank 0 like pre-images (`CASE WHEN _change_type IN
+   ('update_preimage','delete') THEN 0 ELSE 1 END AS seq_rank`): a key a commit
+   deletes and inserts again ends upserted (before, both ranked 1). The property
+   test generates such replaces and NULL-key rows. The new slot SQL changes the
+   pipeline fingerprint: the next build of each incremental domain runs one full
+   refresh, and ticks rebuild `_data` by CTAS until that build.
+8. docs/incremental-materialization.md
+   The full-refresh rules (sticky, before/after versions, table ids, the bounded
+   history), the trace-key table (`source_versions`, `source_table_ids`,
+   `slot_full_refresh_pending`, `slot_full_refresh_reason`, `reconcile_drift`),
+   reconciliation without slots and the opt-in recompute, the tick rules, the
+   status early return, the preflight fields, the slot ordering, and both
+   credential paths of the Verification section.
+
+Known limitations (follow-ups):
+- Live-unverified as before: EXPLAIN output, `information_schema` table types,
+  `DESCRIBE HISTORY` / `DESCRIBE DETAIL` on MVs and streaming tables, and the
+  `CLONE` / `STREAMING UPDATE` operation names and their `outputMode` parameter.
+- A source with more than 10000 commits between two slot updates is fully
+  refreshed every time (conservative; the change feed itself would still work).
+- The nightly schema default `main.ontobricks_it` must exist or be creatable by
+  the integration token; otherwise set the repository variable.
+
+Modified files:
+- .github/workflows/nightly.yml
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+- docs/incremental-materialization.md
+- src/api/routers/internal/dtwin.py
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/streaming/SlotReconciler.py
+- src/back/core/streaming/SourceReadiness.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/back/objects/digitaltwin/build/TwinIncrementalStatus.py
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/digitaltwin/build/TwinSlotReconciliation.py
+- src/back/objects/digitaltwin/build/TwinSlotRefreshPlan.py (new)
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- src/front/static/domain/js/domain-information.js
+- tests/external/test_mv_incremental_plan.py
+- tests/property/test_slot_fold.py (moved from tests/units/streaming/test_slot_fold_property.py)
+- tests/units/api/test_dtwin_incremental_readiness.py
+- tests/units/api/test_dtwin_reconcile.py
+- tests/units/front/test_materialization_readiness_ui.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/objects/test_incremental_readiness.py
+- tests/units/objects/test_incremental_status.py
+- tests/units/objects/test_mappings_for.py (new)
+- tests/units/objects/test_slot_refresh_plan.py (new)
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- tests/units/registry/test_scheduled_build_reconcile.py
+- tests/units/streaming/test_slot_projection_compiler.py
+- tests/units/streaming/test_slot_reconciler.py
+- tests/units/streaming/test_source_readiness.py
+
+Tests: uv run --frozen pytest -q --durations=1 tests/units/objects tests/units/streaming
+tests/units/graphdb tests/units/api/test_dtwin_reconcile.py
+tests/units/api/test_dtwin_incremental_readiness.py tests/units/registry tests/units/front
+tests/units/architecture tests/property tests/external
+-> 4047 passed, 1 skipped (the external EXPLAIN check) in 28.90s (slowest 1.21s,
+test_class_per_file); slot fold properties 0.32s / 0.29s; full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10764 passed, 339 skipped, 9 deselected in 59.01s (slowest test 1.12s);
 architecture suite green; tests/units/architecture/baseline.json unchanged.
