@@ -16,7 +16,7 @@ materialized store.  The SQL read surface is shared via
 
 from __future__ import annotations
 
-from back.core.graphdb.VirtualBackend import VirtualBackend
+from back.core.graphdb.interfaces.VirtualBackend import VirtualBackend
 from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
 
 

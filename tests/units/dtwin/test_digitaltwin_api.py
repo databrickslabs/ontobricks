@@ -16,7 +16,7 @@ from api.routers.digitaltwin import (
     _extract_local_id,
     _expand_uri_aliases,
 )
-from back.core.graphdb import GraphBackend
+from back.core.graphdb.interfaces import GraphBackend
 from back.objects.digitaltwin import DigitalTwin
 
 

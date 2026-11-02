@@ -78,7 +78,7 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 │  OntoBricks (FastAPI)                           │
 │                                                 │
 │  GraphDBFactory.create(engine="lakebase")       │
-│    └─ LakebaseFlatStore                          │
+│    └─ FlatStore                          │
 │              │                                  │
 │              │  COPY FROM STDIN / INSERT         │
 │              ▼                                  │
@@ -338,7 +338,7 @@ layout used by `managed_synced` is created: a `*_sync` bulk-data table, a
 R2RML view (SQL Warehouse)
     │  iter_rows batches
     ▼
-LakebaseFlatStore.bulk_load_into_sync
+FlatStore.bulk_load_into_sync
     │  COPY FROM STDIN → g_<domain>_v<n>_sync  (app-owned)
     ▼
 g_<domain>_v<n>  (UNION VIEW over _sync + __app)
@@ -426,7 +426,7 @@ together.
 
 #### 6.3 — Drop cascade (both modes)
 
-`LakebaseFlatStore.drop_table(name)` removes all three objects in order:
+`FlatStore.drop_table(name)` removes all three objects in order:
 1. `DROP VIEW IF EXISTS g_<domain>_v<n>` (UNION view)
 2. `DROP TABLE IF EXISTS g_<domain>_v<n>__app` (companion)
 3. `app_managed`: `DROP TABLE IF EXISTS g_<domain>_v<n>_sync` (sync table)
@@ -609,7 +609,7 @@ This section describes what the Lakebase engine does during a **Build** for the
 | 3 | `SyncedTableManager.ensure(...)` — idempotent `create_synced_database_table` call | `Database instance is not found` — project created via wrong API; `Not authorized` — SP missing `CAN_USE` on instance |
 | 4 | Create companion table `g_<domain>_vN__app` in Postgres | SP missing `CREATE` on graph schema |
 | 5 | `SyncedTableManager.trigger_and_wait(...)` — fires Lakeflow snapshot, waits for completion | Timeout — increase `sync_timeout_s`; pipeline stuck — check Lakeflow pipeline status in Databricks UI |
-| 6 | `LakebaseFlatStore.ensure_synced_union_view(name)` — creates the UNION view | `"<view>" is not a view` — an old table with the same name exists (auto-dropped since v0.4.1); `_sync table not found` — Lakeflow didn't materialise the table yet |
+| 6 | `FlatStore.ensure_synced_union_view(name)` — creates the UNION view | `"<view>" is not a view` — an old table with the same name exists (auto-dropped since v0.4.1); `_sync table not found` — Lakeflow didn't materialise the table yet |
 | 7 | `TRUNCATE` companion (full rebuild only) | |
 
 Build logs are streamed to the UI and to the application log. Look for lines tagged
@@ -1014,7 +1014,7 @@ get_graphdb(domain, settings)          # engine=None → auto-resolve
            ├─ _resolve_graph_engine()          →  "lakebase" | "neo4j"
            └─ GraphDBFactory.create(domain, settings, engine="neo4j")
                   │
-                  └─ _create_neo4j(domain, settings)  →  Neo4jStore(...)
+                  └─ _create_neo4j(domain, settings)  →  Store(...)
 ```
 
 #### Key files
@@ -1227,7 +1227,7 @@ any caller reaches into a backend package directly.
 
 Each is a small facade that delegates to your backend package's internals. The
 method surface is engine-specific — look at the Delta, Lakebase and Neo4j impls
-(`DeltaGraphBuilder`, `LakebaseProvisioner`, `Neo4jHealthProbe`, …) for the
+(`DeltaGraphBuilder`, `Provisioner`, `HealthProbe`, …) for the
 shape. A capability the engine does not need simply has no impl and the factory
 accessor returns `None` for that engine.
 
@@ -1271,7 +1271,7 @@ Key decisions:
 
 2. **Graph model**: If your engine uses typed node/relationship tables, set
    `supports_graph_model = True` and implement `get_graph_schema()`. If it uses
-   a flat triple table (like the shipped `LakebaseFlatStore`), leave it `False`.
+   a flat triple table (like the shipped `FlatStore`), leave it `False`.
 
 3. **Reasoning translator**: Return the appropriate `SWRL*Translator` from
    `get_query_translator()`. For SQL engines, the default `SWRLSQLTranslator`
@@ -1411,8 +1411,8 @@ The built-in Lakebase Postgres engine is the reference implementation:
 ```
 graphdb/lakebase/
 ├── __init__.py           ← re-exports
-├── LakebaseBase.py       ← GraphBackend subclass (connection pool, capabilities)
-├── LakebaseFlatStore.py  ← Flat triple table (subject, predicate, object) on Postgres
+├── Base.py       ← GraphBackend subclass (connection pool, capabilities)
+├── FlatStore.py  ← Flat triple table (subject, predicate, object) on Postgres
 ├── SyncedTableManager.py ← Lakeflow synced-table orchestration (managed_synced mode)
 └── models.py             ← Internal dataclasses
 ```
@@ -1532,7 +1532,7 @@ without ever materializing the full triple set inside the FastAPI process.
 
 #### Write side (app → Lakebase Postgres)
 
-`LakebaseFlatStore` exposes two streaming bulk paths used by the pipeline:
+`FlatStore` exposes two streaming bulk paths used by the pipeline:
 
 - `bulk_insert_iter(table, triple_iter, batch_size=5000)` — per batch:
   `CREATE TEMP TABLE _ob_copy_stage … ON COMMIT DROP`, `COPY FROM STDIN`
@@ -1636,7 +1636,7 @@ ingest in synced mode:
    See ``_sync_uc_schema.ensure_uc_schema_for_synced_table_fqn``.
 3. `SyncedTableManager.ensure(...)` -- idempotent
    `WorkspaceClient.database.create_synced_database_table` call.
-4. `LakebaseFlatStore.ensure_synced_companion(name)` — companion table only
+4. `FlatStore.ensure_synced_companion(name)` — companion table only
    (must run before Lakeflow materializes the ``_sync`` table).
 5. `SyncedTableManager.trigger_and_wait(...)` — calls `trigger_refresh`
    (`pipelines.start_update` with ``full_refresh=True``), then waits on the
@@ -1650,7 +1650,7 @@ ingest in synced mode:
    rejects deletion, it registers the replacement under the first available
    ``_b`` / ``_c`` / ``_d`` fallback suffix and returns that actual name to the
    remaining build steps.
-6. `LakebaseFlatStore.ensure_synced_union_view(name)` — union view after the ``_sync`` table
+6. `FlatStore.ensure_synced_union_view(name)` — union view after the ``_sync`` table
    exists in Postgres (``CREATE OR REPLACE VIEW`` references the synced table).
 7. On full rebuild, `TRUNCATE` the companion so reasoning + cohort start
    from a clean slate.
@@ -1665,7 +1665,7 @@ The scheduler mirrors this logic via `_apply_synced_pipeline` in
 
 #### Read paths
 
-`LakebaseFlatStore` separates the resolvers:
+`FlatStore` separates the resolvers:
 
 - `_writable_table_id(name)` -- companion in synced mode, legacy phy in
   app-managed mode (used by `insert_triples`, COPY insert, COPY delete,
@@ -1678,7 +1678,7 @@ The scheduler mirrors this logic via `_apply_synced_pipeline` in
 
 #### Lifecycle
 
-`LakebaseFlatStore.drop_table(name)` cascades in synced mode:
+`FlatStore.drop_table(name)` cascades in synced mode:
 1. `DROP VIEW IF EXISTS` for the union view.
 2. `DROP TABLE IF EXISTS` for the companion.
 3. `SyncedTableManager.delete(uc_name, purge_data=True)` to remove the
@@ -1851,8 +1851,8 @@ Implementations:
 
 - `GraphBackend.get_entity_metadata`
 - `DeltaMaterializedStore.table_exists`
-- `LakebaseFlatStore.table_exists`
-- `LakebaseFlatStore.find_subjects_by_patterns`
+- `FlatStore.table_exists`
+- `FlatStore.find_subjects_by_patterns`
 
 #### 5. Bidirectional adjacency
 
@@ -2106,8 +2106,8 @@ are passed as parameters, and result limits are pushed into Cypher.
 
 Implementation:
 
-- `src/back/core/graphdb/neo4j/Neo4jWriteOps.py`
-- `src/back/core/graphdb/neo4j/Neo4jReadOps.py`
+- `src/back/core/graphdb/neo4j/WriteOps.py`
+- `src/back/core/graphdb/neo4j/ReadOps.py`
 
 #### 14. Connection and transfer efficiency
 

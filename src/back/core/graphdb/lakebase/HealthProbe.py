@@ -10,10 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from back.core.graphdb.GraphHealthProbe import GraphHealthProbe
+from back.core.graphdb.interfaces.GraphHealthProbe import GraphHealthProbe
 
 
-class LakebaseHealthProbe(GraphHealthProbe):
+class HealthProbe(GraphHealthProbe):
     """Postgres-backed health probes for a Lakebase domain."""
 
     def psycopg(self) -> Any:

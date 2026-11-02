@@ -576,7 +576,7 @@ class GraphEngineSettings:
         *,
         connection_name: str = "",
     ):
-        """Build a :class:`Neo4jConnection` from a named Settings profile."""
+        """Build a :class:`Connection` from a named Settings profile."""
         from back.objects.domain.settings.graphengine.GraphEngineNeo4jSettings import (
             GraphEngineNeo4jSettings,
         )

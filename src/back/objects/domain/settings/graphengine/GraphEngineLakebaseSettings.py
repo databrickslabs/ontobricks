@@ -1052,7 +1052,7 @@ class GraphEngineLakebaseSettings:
     ) -> Dict[str, Any]:
         """Ensure *user_email* has a Postgres OAuth role and DATABRICKS_SUPERUSER membership.
 
-        Mirrors the logic of ``LakebaseGraphProvisioner._ensure_superuser_role``
+        Mirrors the logic of ``InstanceProvisioner._ensure_superuser_role``
         but operates on the currently configured graph Lakebase branch.
         Idempotent — re-granting an existing superuser is a no-op.
         """

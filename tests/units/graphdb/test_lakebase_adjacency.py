@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("psycopg")
 
-from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+from back.core.graphdb.lakebase.FlatStore import FlatStore
 from back.core.graphdb.lakebase import _adjacency_ddl
 from back.core.graphdb.props import (
     known_missing_props,
@@ -40,7 +40,7 @@ def _cursor_ctx(mock_cur):
 
 
 def test_lakebase_adjacency_table_ids(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     assert store.adjacency_table_ids("G_V1") == ("g_v1_adj_out", "g_v1_adj_in")
     assert store.entity_search_table_id("G_V1") == "g_v1_entity_search"
     assert store.entity_search_asserted_table_id("G_V1") == (
@@ -56,7 +56,7 @@ def test_lakebase_rebuild_adjacency_runs_ddl_and_rebuild_sql(auth):
     setup_cur = MagicMock()
     tx_cur = MagicMock()
     analyze_cur = MagicMock()
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     props = store.props_table_id("G_V1")
     remember_missing_props(props)
 
@@ -122,7 +122,7 @@ def test_lakebase_rebuild_adjacency_is_atomic_on_insert_failure(auth):
         None,  # TRUNCATE in
         RuntimeError("boom on second insert"),  # INSERT in
     ]
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
 
     @contextmanager
     def _tx_cm():
@@ -152,7 +152,7 @@ def test_lakebase_rebuild_adjacency_is_atomic_on_insert_failure(auth):
 
 
 def test_expand_entity_neighbors_uses_adjacency_tables_when_ready(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "table_exists", return_value=True), patch.object(
         store, "execute_query", return_value=[]
     ) as mock_query:
@@ -165,7 +165,7 @@ def test_expand_entity_neighbors_uses_adjacency_tables_when_ready(auth):
 
 
 def test_expand_and_fetch_subgraph_uses_adjacency_tables_when_ready(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     rows = [
         {
             "subject": "s",
@@ -191,7 +191,7 @@ def test_expand_and_fetch_subgraph_uses_adjacency_tables_when_ready(auth):
 
 
 def test_expand_and_fetch_subgraph_depth_zero_spo_is_plain_select(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "table_exists", return_value=False), patch.object(
         store, "execute_query", return_value=[]
     ) as mock_query:
@@ -204,7 +204,7 @@ def test_expand_and_fetch_subgraph_depth_zero_spo_is_plain_select(auth):
 
 
 def test_expand_and_fetch_subgraph_falls_back_to_spo_when_adj_missing(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "table_exists", return_value=False), patch.object(
         store, "execute_query", return_value=[]
     ) as mock_query:
@@ -219,7 +219,7 @@ def test_expand_and_fetch_subgraph_falls_back_to_spo_when_adj_missing(auth):
 
 
 def test_expand_and_fetch_subgraph_retries_spo_when_props_missing(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "table_exists", return_value=True), patch.object(
         store,
         "execute_query",
@@ -234,7 +234,7 @@ def test_expand_and_fetch_subgraph_retries_spo_when_props_missing(auth):
 
 
 def test_expand_and_fetch_subgraph_skips_props_when_known_missing(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "table_exists", return_value=True), patch.object(
         store,
         "execute_query",
@@ -256,7 +256,7 @@ def test_expand_and_fetch_subgraph_skips_props_when_known_missing(auth):
 
 
 def test_expand_and_fetch_subgraph_propagates_unrelated_props_failure(auth):
-    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    store = FlatStore(auth, schema="ontobricks_graph")
     with patch.object(store, "table_exists", return_value=True), patch.object(
         store, "execute_query", side_effect=RuntimeError("permission denied")
     ):

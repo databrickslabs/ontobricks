@@ -1,7 +1,7 @@
 """Lakebase implementation of the :class:`GraphProvisioner` capability.
 
 Thin facade over the Lakebase provisioning / schema / synced-table internals
-(``LakebaseBase`` validation + schema helpers, ``LakebaseGraphProvisioner``
+(``Base`` validation + schema helpers, ``InstanceProvisioner``
 instance provisioning, ``SyncedTableManager`` control-plane ops). Settings/API
 callers obtain it from :meth:`GraphDBFactory.get_provisioner` so no module
 outside ``back/core/graphdb/`` imports ``lakebase.*`` directly.
@@ -11,16 +11,16 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from back.core.graphdb.GraphProvisioner import GraphProvisioner
+from back.core.graphdb.interfaces.GraphProvisioner import GraphProvisioner
 
 
-class LakebaseProvisioner(GraphProvisioner):
+class Provisioner(GraphProvisioner):
     """Schema / instance / synced-table provisioning for a Lakebase domain."""
 
     # -- Config / schema validation (no connection) --------------------
     def validate_engine_config(self, config: Dict[str, Any]) -> Tuple[bool, str]:
         """Validate the nested ``lakebase`` engine-config keys."""
-        from back.core.graphdb.lakebase.LakebaseBase import (
+        from back.core.graphdb.lakebase.Base import (
             validate_engine_config_keys,
         )
 
@@ -28,19 +28,19 @@ class LakebaseProvisioner(GraphProvisioner):
 
     def default_schema(self) -> str:
         """Default Postgres graph schema name."""
-        from back.core.graphdb.lakebase.LakebaseBase import default_schema
+        from back.core.graphdb.lakebase.Base import default_schema
 
         return default_schema()
 
     def validate_graph_schema(self, name: str) -> str:
         """Validate / normalize a Postgres graph schema name."""
-        from back.core.graphdb.lakebase.LakebaseBase import validate_graph_schema
+        from back.core.graphdb.lakebase.Base import validate_graph_schema
 
         return validate_graph_schema(name)
 
     def resolve_postgres_database_override(self, config: Dict[str, Any]) -> str:
         """Resolve the configured Postgres database override (or empty)."""
-        from back.core.graphdb.lakebase.LakebaseBase import (
+        from back.core.graphdb.lakebase.Base import (
             resolve_postgres_database_override,
         )
 
@@ -48,12 +48,12 @@ class LakebaseProvisioner(GraphProvisioner):
 
     # -- Instance provisioning -----------------------------------------
     def default_branch(self) -> str:
-        from back.core.graphdb.lakebase.LakebaseGraphProvisioner import DEFAULT_BRANCH
+        from back.core.graphdb.lakebase.InstanceProvisioner import DEFAULT_BRANCH
 
         return DEFAULT_BRANCH
 
     def default_capacity(self) -> str:
-        from back.core.graphdb.lakebase.LakebaseGraphProvisioner import (
+        from back.core.graphdb.lakebase.InstanceProvisioner import (
             DEFAULT_CAPACITY,
         )
 
@@ -63,7 +63,7 @@ class LakebaseProvisioner(GraphProvisioner):
         self, *, grant_uc: bool, grant_app_permissions: bool
     ) -> List[Any]:
         """Task steps for a Lakebase provisioning run."""
-        from back.core.graphdb.lakebase.LakebaseGraphProvisioner import (
+        from back.core.graphdb.lakebase.InstanceProvisioner import (
             provision_steps,
         )
 
@@ -73,11 +73,11 @@ class LakebaseProvisioner(GraphProvisioner):
 
     def run_provision(self, **kwargs: Any) -> None:
         """Run a Lakebase graph-DB provisioning job (blocking in its thread)."""
-        from back.core.graphdb.lakebase.LakebaseGraphProvisioner import (
-            LakebaseGraphProvisioner,
+        from back.core.graphdb.lakebase.InstanceProvisioner import (
+            InstanceProvisioner,
         )
 
-        LakebaseGraphProvisioner(**kwargs).run()
+        InstanceProvisioner(**kwargs).run()
 
     # -- Synced-table control plane ------------------------------------
     def delete_synced_table(self, full_name: str, *, purge_data: bool = True) -> None:

@@ -167,12 +167,12 @@ def _norm(triples: List[Dict[str, str]]) -> set:
 
 class TestRoundTripParity:
     def test_write_then_read_reproduces_triples(self):
-        from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps
-        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+        from back.core.graphdb.neo4j.WriteOps import WriteOps
+        from back.core.graphdb.neo4j.ReadOps import ReadOps
 
         fake = FakeGraph()
-        w = Neo4jWriteOps(fake)   # ops call conn.run — FakeGraph.run satisfies it
-        r = Neo4jReadOps(fake)
+        w = WriteOps(fake)   # ops call conn.run — FakeGraph.run satisfies it
+        r = ReadOps(fake)
 
         original = _insurbricks_triples()
         w.create_table("InsurBricks_V1")
@@ -183,12 +183,12 @@ class TestRoundTripParity:
         assert _norm(read_back) == _norm(original)
 
     def test_count_matches_triple_count(self):
-        from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps
-        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+        from back.core.graphdb.neo4j.WriteOps import WriteOps
+        from back.core.graphdb.neo4j.ReadOps import ReadOps
 
         fake = FakeGraph()
-        w = Neo4jWriteOps(fake)
-        r = Neo4jReadOps(fake)
+        w = WriteOps(fake)
+        r = ReadOps(fake)
         original = _insurbricks_triples()
         w.insert_triples("InsurBricks_V1", original)
         # Both the reconstructed triple list AND the aggregate count_triples
@@ -198,12 +198,12 @@ class TestRoundTripParity:
         assert r.count_triples("InsurBricks_V1") == len(original)
 
     def test_get_triples_for_subjects_scopes_correctly(self):
-        from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps
-        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+        from back.core.graphdb.neo4j.WriteOps import WriteOps
+        from back.core.graphdb.neo4j.ReadOps import ReadOps
 
         fake = FakeGraph()
-        w = Neo4jWriteOps(fake)
-        r = Neo4jReadOps(fake)
+        w = WriteOps(fake)
+        r = ReadOps(fake)
         w.insert_triples("InsurBricks_V1", _insurbricks_triples())
 
         cust = f"{NS}Customer/CUST-1007"
@@ -220,9 +220,9 @@ class TestRoundTripParity:
 
 
 def test_get_triples_page_for_subjects_is_distinct_sorted_and_exact_total():
-    from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+    from back.core.graphdb.neo4j.ReadOps import ReadOps
 
-    r = Neo4jReadOps(FakeGraph())
+    r = ReadOps(FakeGraph())
     r.get_triples_for_subjects = lambda _table, _subjects: [  # type: ignore[method-assign]
         {"subject": "s2", "predicate": "p1", "object": "o1"},
         {"subject": "s1", "predicate": "p2", "object": "o1"},
@@ -248,7 +248,7 @@ def test_get_triples_page_for_subjects_is_distinct_sorted_and_exact_total():
 
 
 def test_neo4j_store_delegates_get_triples_page_for_subjects():
-    from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+    from back.core.graphdb.neo4j.Store import Store
 
     class _Reads:
         def __init__(self) -> None:
@@ -258,7 +258,7 @@ def test_neo4j_store_delegates_get_triples_page_for_subjects():
             self.args = (table_name, subjects, limit, offset)
             return {"rows": [{"subject": "s", "predicate": "p", "object": "o"}], "total": 1}
 
-    store = object.__new__(Neo4jStore)
+    store = object.__new__(Store)
     store._reads = _Reads()  # type: ignore[attr-defined]
 
     got = store.get_triples_page_for_subjects("g", ["s"], limit=10, offset=3)
@@ -268,9 +268,9 @@ def test_neo4j_store_delegates_get_triples_page_for_subjects():
 
 
 def test_get_triples_page_for_subjects_empty_subjects_short_circuits():
-    from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+    from back.core.graphdb.neo4j.ReadOps import ReadOps
 
-    r = Neo4jReadOps(FakeGraph())
+    r = ReadOps(FakeGraph())
 
     def _must_not_fetch(_table, _subjects):
         raise AssertionError("get_triples_for_subjects must not be called for empty subjects")

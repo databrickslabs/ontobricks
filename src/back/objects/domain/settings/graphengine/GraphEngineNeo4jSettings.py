@@ -317,7 +317,7 @@ class GraphEngineNeo4jSettings:
         *,
         connection_name: str = "",
     ):
-        """Build a :class:`Neo4jConnection` from a named Settings profile.
+        """Build a :class:`Connection` from a named Settings profile.
 
         Shared by the Neo4j admin endpoints (objects list, health, drop).
         Returns ``(conn, profile)`` or raises the mapped error.

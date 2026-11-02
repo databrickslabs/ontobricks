@@ -24,7 +24,7 @@ import json
 from typing import Any, Dict
 
 from back.core.graphdb.constants import RDFS_LABEL
-from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
+from back.core.graphdb.neo4j.Connection import Connection
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -33,10 +33,10 @@ SCHEMA_LABEL = "__GraphSchema"
 _NAME_KEY = "name"
 
 
-class Neo4jSchemaMap:
+class SchemaMap:
     """Load/merge/save the URI↔identifier reverse maps for one graph."""
 
-    def __init__(self, connection: Neo4jConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._conn = connection
 
     # ------------------------------------------------------------------

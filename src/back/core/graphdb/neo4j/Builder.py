@@ -1,7 +1,7 @@
 """Neo4j implementation of the :class:`GraphBuilder` capability.
 
 Thin facade over the pure RDF-triple ↔ property-graph naming helpers
-(``graph_model`` + ``Neo4jWriteOps.sanitise_label``) so callers outside
+(``graph_model`` + ``WriteOps.sanitise_label``) so callers outside
 ``back/core/graphdb/`` derive Neo4j-safe labels / identifiers without importing
 ``neo4j.*`` directly. No driver is touched here — these are deterministic,
 side-effect-free string transforms.
@@ -9,15 +9,15 @@ side-effect-free string transforms.
 
 from __future__ import annotations
 
-from back.core.graphdb.GraphBuilder import GraphBuilder
+from back.core.graphdb.interfaces.GraphBuilder import GraphBuilder
 
 
-class Neo4jGraphBuilder(GraphBuilder):
+class Builder(GraphBuilder):
     """Property-graph naming helpers for a Neo4j domain."""
 
     def sanitise_label(self, name: str) -> str:
         """Neo4j marker/node label for a graph (table) name."""
-        from back.core.graphdb.neo4j.Neo4jWriteOps import sanitise_label
+        from back.core.graphdb.neo4j.WriteOps import sanitise_label
 
         return sanitise_label(name)
 

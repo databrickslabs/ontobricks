@@ -13,7 +13,7 @@ that marker.
 **Contract preservation:** reads still return the flat
 ``{subject, predicate, object}`` shapes the SQL backends return — triples are
 *reconstructed* from the graph using reverse maps persisted by
-:class:`Neo4jSchemaMap` (label→class URI, reltype→predicate URI,
+:class:`SchemaMap` (label→class URI, reltype→predicate URI,
 prop-key→predicate URI). So the KG view / GraphQL / reasoning layers see no
 behavioural change, while traversal/reasoning now run as native relationship
 patterns. The forward transform lives in the driver-free
@@ -22,16 +22,16 @@ patterns. The forward transform lives in the driver-free
 Implementation is split across three services (extracted during the PR
 #47 review — Benoit 2026-06-18 "la classe est trop grosse"):
 
-- :class:`Neo4jConnection` — driver lifecycle, auth resolution (username
+- :class:`Connection` — driver lifecycle, auth resolution (username
   always explicit; password resolved live from a Databricks secret
   scope/key via the Secrets REST API, with a legacy env-var/local-dev
   path kept for pre-existing Apps-resource deployments), and the single
-  :meth:`Neo4jConnection.run` execution path that emits one INFO log line
+  :meth:`Connection.run` execution path that emits one INFO log line
   per Cypher statement.
-- :class:`Neo4jWriteOps` — schema (constraint create/drop), typed bulk writes
+- :class:`WriteOps` — schema (constraint create/drop), typed bulk writes
   (``UNWIND`` + ``MERGE`` nodes/labels/props then batched relationship MERGE),
   deletes, cohort wipes, and reverse-schema-map persistence.
-- :class:`Neo4jReadOps` — the 16+ named-query methods of the
+- :class:`ReadOps` — the 16+ named-query methods of the
   ``TripleStoreBackend`` contract: SPO reconstruction, statistics, entity
   lookup, pagination, KG-filter primitives (``find_seed_subjects`` /
   ``bfs_traversal`` / ``expand_entity_neighbors``), reasoning helpers
@@ -51,41 +51,41 @@ full SWRL → Cypher translation lands in a follow-up PR.
 
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
-from back.core.graphdb.neo4j.Neo4jConnection import (
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.neo4j.Connection import (
     DEFAULT_AUTH_METHOD,
     DEFAULT_DATABASE,
     NEO4J_PASSWORD_ENV,
-    Neo4jConnection,
+    Connection,
     SUPPORTED_AUTH_METHODS,
     _normalise_cypher_for_log,  # noqa: F401  — re-exported for legacy callers/tests
     is_neo4j_password_from_secret,
     resolve_neo4j_database,
 )
-from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
-from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps, sanitise_label
+from back.core.graphdb.neo4j.ReadOps import ReadOps
+from back.core.graphdb.neo4j.WriteOps import WriteOps, sanitise_label
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_GRAPH_NAME
 
 logger = get_logger(__name__)
 
-# Re-exported so callers that did ``from Neo4jStore import is_neo4j_password_from_secret``
+# Re-exported so callers that did ``from Store import is_neo4j_password_from_secret``
 # (SettingsService, home.py) keep working without churn.
 __all__ = [
     "DEFAULT_AUTH_METHOD",
     "DEFAULT_DATABASE",
     "NEO4J_PASSWORD_ENV",
-    "Neo4jStore",
+    "Store",
     "SUPPORTED_AUTH_METHODS",
     "is_neo4j_password_from_secret",
 ]
 
 
-class Neo4jStore(MaterializedGraphBackend):
+class Store(MaterializedGraphBackend):
     """Neo4j (Bolt / Cypher) graph database backend — typed property-graph model.
 
-    Public façade composing :class:`Neo4jConnection`, :class:`Neo4jWriteOps`,
-    and :class:`Neo4jReadOps`. Implements both the ``TripleStoreBackend``
+    Public façade composing :class:`Connection`, :class:`WriteOps`,
+    and :class:`ReadOps`. Implements both the ``TripleStoreBackend``
     and ``MaterializedGraphBackend`` contracts.
 
     Parameters
@@ -139,14 +139,14 @@ class Neo4jStore(MaterializedGraphBackend):
         uri = str(cfg.get("uri") or "").strip()
         if not uri:
             raise ValueError(
-                "Neo4jStore: engine_config['uri'] is required "
+                "Store: engine_config['uri'] is required "
                 "(e.g. 'neo4j+s://<aura-id>.databases.neo4j.io')"
             )
         database = resolve_neo4j_database(cfg)
         auth_method = str(cfg.get("auth_method") or DEFAULT_AUTH_METHOD).strip()
         if auth_method not in SUPPORTED_AUTH_METHODS:
             raise ValueError(
-                "Neo4jStore: unsupported auth_method %r (allowed: %s)"
+                "Store: unsupported auth_method %r (allowed: %s)"
                 % (auth_method, ", ".join(SUPPORTED_AUTH_METHODS))
             )
         encrypted = bool(cfg.get("encrypted", True))
@@ -158,15 +158,15 @@ class Neo4jStore(MaterializedGraphBackend):
         self._auth_method = auth_method
         self._encrypted = encrypted
 
-        self._connection = Neo4jConnection(
+        self._connection = Connection(
             uri=uri,
             database=database,
             auth_method=auth_method,
             engine_config=self.engine_config,
             encrypted=encrypted,
         )
-        self._writes = Neo4jWriteOps(self._connection)
-        self._reads = Neo4jReadOps(self._connection)
+        self._writes = WriteOps(self._connection)
+        self._reads = ReadOps(self._connection)
 
     # ======================================================================
     #  GraphBackend — capability flags
@@ -181,7 +181,7 @@ class Neo4jStore(MaterializedGraphBackend):
         # Typed property-graph model: nodes keyed on full URI (Strategy A),
         # rdf:type → labels, rdfs:label → name, literal predicates → node
         # properties, URI-object predicates → real relationships. Reads
-        # reconstruct SPO from the graph (Neo4jReadOps + Neo4jSchemaMap).
+        # reconstruct SPO from the graph (ReadOps + SchemaMap).
         return True
 
     @property
@@ -189,7 +189,7 @@ class Neo4jStore(MaterializedGraphBackend):
         return "cypher"
 
     # ======================================================================
-    #  Connection — delegates to Neo4jConnection
+    #  Connection — delegates to Connection
     # ======================================================================
 
     def get_connection(self) -> Any:
@@ -212,7 +212,7 @@ class Neo4jStore(MaterializedGraphBackend):
     def _run(self, cypher: str, **params: Any) -> List[Dict[str, Any]]:
         """Back-compat passthrough — tests mock ``store._run``.
 
-        The split moved actual execution to :meth:`Neo4jConnection.run`.
+        The split moved actual execution to :meth:`Connection.run`.
         New code in this module calls ``self._connection.run`` directly
         (via the WriteOps / ReadOps helpers) so mocking happens at the
         connection layer. This passthrough preserves the public API
@@ -223,11 +223,11 @@ class Neo4jStore(MaterializedGraphBackend):
 
     @staticmethod
     def _is_deployed_app() -> bool:
-        """Back-compat delegate to :meth:`Neo4jConnection._is_deployed_app`."""
-        return Neo4jConnection._is_deployed_app()
+        """Back-compat delegate to :meth:`Connection._is_deployed_app`."""
+        return Connection._is_deployed_app()
 
     def _resolve_auth(self) -> Tuple[str, str]:
-        """Back-compat delegate to :meth:`Neo4jConnection._resolve_auth`."""
+        """Back-compat delegate to :meth:`Connection._resolve_auth`."""
         return self._connection._resolve_auth()
 
     # ======================================================================
@@ -276,7 +276,7 @@ class Neo4jStore(MaterializedGraphBackend):
         return SWRLFlatCypherTranslator(node_label=self.get_node_table(table_name))
 
     # ======================================================================
-    #  TripleStoreBackend — write delegators (→ Neo4jWriteOps)
+    #  TripleStoreBackend — write delegators (→ WriteOps)
     # ======================================================================
 
     def create_table(self, table_name: str) -> None:
@@ -320,7 +320,7 @@ class Neo4jStore(MaterializedGraphBackend):
         # Deliberate: no raw Cypher entry point. All writes go through
         # the build pipeline after ontology validation (C2 safeguard).
         raise NotImplementedError(
-            "Neo4jStore does not expose raw Cypher execution. "
+            "Store does not expose raw Cypher execution. "
             "Use the named query methods on TripleStoreBackend instead."
         )
 
@@ -340,7 +340,7 @@ class Neo4jStore(MaterializedGraphBackend):
         return [dict(record) for record in self._conn.run(query)]
 
     # ======================================================================
-    #  TripleStoreBackend — read delegators (→ Neo4jReadOps)
+    #  TripleStoreBackend — read delegators (→ ReadOps)
     # ======================================================================
 
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:

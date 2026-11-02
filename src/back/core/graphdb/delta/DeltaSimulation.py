@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from back.core.graphdb.GraphSimulation import GraphSimulation
+from back.core.graphdb.interfaces.GraphSimulation import GraphSimulation
 
 
 class DeltaSimulation(GraphSimulation):

@@ -253,13 +253,13 @@ def _names(engine: str, *, graph_name="sales_graph", engine_cfg=None, schema="ob
         )
         stack.enter_context(
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_lakebase_graph_schema",
+                "back.core.graphdb.lakebase.FlatStore.resolve_lakebase_graph_schema",
                 return_value=schema,
             )
         )
         stack.enter_context(
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_sync_uc_fallback_catalog",
+                "back.core.graphdb.lakebase.FlatStore.resolve_sync_uc_fallback_catalog",
                 return_value=fallback_catalog,
             )
         )
@@ -467,13 +467,13 @@ def _existence(engine, *, graph_store, view_store, engine_cfg=None,
         )
         stack.enter_context(
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_lakebase_graph_schema",
+                "back.core.graphdb.lakebase.FlatStore.resolve_lakebase_graph_schema",
                 return_value="cfg_schema",
             )
         )
         stack.enter_context(
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_sync_uc_fallback_catalog",
+                "back.core.graphdb.lakebase.FlatStore.resolve_sync_uc_fallback_catalog",
                 return_value="main",
             )
         )
@@ -643,7 +643,7 @@ class TestLakebaseExistence:
 # ---------------------------------------------------------------------------
 
 
-class Neo4jStore:
+class Store:
     def __init__(self, *, exists=True, count=5, exc=None, close_exc=None):
         self._database = "neo_db"
         self._exists = exists
@@ -668,7 +668,7 @@ class Neo4jStore:
 
 class TestNeo4jExistence:
     async def test_existing_graph_reports_count_marker_and_closes(self):
-        store = Neo4jStore(count=7)
+        store = Store(count=7)
         with _existence("neo4j", graph_store=store, view_store=None, graph_name="my-graph"):
             result = await TwinStoreCache(_domain()).fetch_digital_twin_existence(None)
 
@@ -683,7 +683,7 @@ class TestNeo4jExistence:
 
     async def test_configured_database_wins_over_connection_default(self):
         dom = _domain(info={"neo4j_database": "configured"})
-        with _existence("neo4j", graph_store=Neo4jStore(exists=False), view_store=None):
+        with _existence("neo4j", graph_store=Store(exists=False), view_store=None):
             result = await TwinStoreCache(dom).fetch_digital_twin_existence(None)
 
         assert result["neo4j_database"] == "configured"
@@ -697,7 +697,7 @@ class TestNeo4jExistence:
         assert result["neo4j_graph_exists"] is None
 
     async def test_probe_failure_is_reported_and_store_still_closed(self):
-        store = Neo4jStore(exc=RuntimeError("bolt down"), close_exc=RuntimeError("x"))
+        store = Store(exc=RuntimeError("bolt down"), close_exc=RuntimeError("x"))
         with _existence("neo4j", graph_store=store, view_store=None):
             result = await TwinStoreCache(_domain()).fetch_digital_twin_existence(None)
 

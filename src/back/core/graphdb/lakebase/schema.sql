@@ -1,5 +1,5 @@
 -- Reference DDL for one OntoBricks flat triple table on Lakebase Postgres.
--- Replace <schema> and <table> with validated identifiers (see LakebaseFlatStore).
+-- Replace <schema> and <table> with validated identifiers (see FlatStore).
 -- Requires the pgcrypto extension for digest().
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

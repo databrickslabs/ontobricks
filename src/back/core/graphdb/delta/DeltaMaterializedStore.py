@@ -17,7 +17,7 @@ import concurrent.futures
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
 from back.core.graphdb.props import forget_missing_props

@@ -19,9 +19,9 @@ from back.objects.domain.settings.SettingsService import SettingsService
 pytestmark = pytest.mark.unit
 
 _ss = importlib.import_module("back.objects.domain.settings.SettingsService")
-_neo_conn_mod = importlib.import_module("back.core.graphdb.neo4j.Neo4jConnection")
-_read_ops_mod = importlib.import_module("back.core.graphdb.neo4j.Neo4jReadOps")
-_write_ops_mod = importlib.import_module("back.core.graphdb.neo4j.Neo4jWriteOps")
+_neo_conn_mod = importlib.import_module("back.core.graphdb.neo4j.Connection")
+_read_ops_mod = importlib.import_module("back.core.graphdb.neo4j.ReadOps")
+_write_ops_mod = importlib.import_module("back.core.graphdb.neo4j.WriteOps")
 _client_mod = importlib.import_module("back.core.databricks.DatabricksClient")
 
 REG = {"catalog": "cat", "schema": "sch", "volume": "vol"}
@@ -57,7 +57,7 @@ def ctx():
 
 
 def _fake_neo4j_connection(rows=None, verify_exc=None, run_exc=None, close_exc=None):
-    """Build a Neo4jConnection class double that records its constructor kwargs."""
+    """Build a Connection class double that records its constructor kwargs."""
     created = []
 
     def _factory(**kwargs):
@@ -220,7 +220,7 @@ class TestNeo4jTestResult:
         neo = _fake_neo4j_connection(rows=[{"probe": 1}])
         draft = _conn_profile("Draft", uri="bolt://draft:7687")
         with patch.object(SettingsService, "_resolve_context") as resolve, patch.object(
-            _neo_conn_mod, "Neo4jConnection", neo
+            _neo_conn_mod, "Connection", neo
         ):
             out = SettingsService.graph_engine_neo4j_test_result(
                 MagicMock(), MagicMock(), draft=draft
@@ -243,7 +243,7 @@ class TestNeo4jTestResult:
             _conn_profile("A"), _conn_profile("B")
         )
         neo = _fake_neo4j_connection(rows=[])
-        with patch.object(_neo_conn_mod, "Neo4jConnection", neo):
+        with patch.object(_neo_conn_mod, "Connection", neo):
             out = SettingsService.graph_engine_neo4j_test_result(
                 MagicMock(), MagicMock(), connection_name="B"
             )
@@ -302,7 +302,7 @@ class TestNeo4jTestResult:
     )
     def test_constructor_errors_are_categorised(self, ctor_exc, category):
         with patch.object(
-            _neo_conn_mod, "Neo4jConnection", MagicMock(side_effect=ctor_exc)
+            _neo_conn_mod, "Connection", MagicMock(side_effect=ctor_exc)
         ):
             out = SettingsService.graph_engine_neo4j_test_result(
                 MagicMock(), MagicMock(), draft=_conn_profile("D")
@@ -323,7 +323,7 @@ class TestNeo4jTestResult:
         self, probe_exc, category, expected
     ):
         neo = _fake_neo4j_connection(verify_exc=probe_exc, close_exc=RuntimeError("x"))
-        with patch.object(_neo_conn_mod, "Neo4jConnection", neo):
+        with patch.object(_neo_conn_mod, "Connection", neo):
             out = SettingsService.graph_engine_neo4j_test_result(
                 MagicMock(), MagicMock(), draft=_conn_profile("D")
             )
@@ -423,7 +423,7 @@ class TestNeo4jConnectionFromConfig:
             _conn_profile("Only", encrypted=False, auth_method="")
         )
         neo = _fake_neo4j_connection()
-        with patch.object(_neo_conn_mod, "Neo4jConnection", neo):
+        with patch.object(_neo_conn_mod, "Connection", neo):
             conn, gcfg = SettingsService._neo4j_connection_from_config(
                 MagicMock(), MagicMock()
             )
@@ -470,7 +470,7 @@ class TestNeo4jDatabasesAndLabels:
     def test_configured_database_prepended_when_absent_from_server(self):
         conn = _plain_conn(database="custom", close_exc=RuntimeError("x"))
         with _patch_conn_builder(conn), patch.object(
-            _read_ops_mod, "Neo4jReadOps"
+            _read_ops_mod, "ReadOps"
         ) as ops:
             ops.return_value.list_databases.return_value = ["neo4j", "system"]
             out = SettingsService.graph_engine_neo4j_databases_result(
@@ -487,7 +487,7 @@ class TestNeo4jDatabasesAndLabels:
     def test_configured_database_not_duplicated(self):
         conn = _plain_conn(database="neo4j")
         with _patch_conn_builder(conn, {}), patch.object(
-            _read_ops_mod, "Neo4jReadOps"
+            _read_ops_mod, "ReadOps"
         ) as ops:
             ops.return_value.list_databases.return_value = ["neo4j"]
             out = SettingsService.graph_engine_neo4j_databases_result(
@@ -499,7 +499,7 @@ class TestNeo4jDatabasesAndLabels:
     def test_connection_closed_even_when_listing_fails(self):
         conn = _plain_conn()
         with _patch_conn_builder(conn), patch.object(
-            _read_ops_mod, "Neo4jReadOps"
+            _read_ops_mod, "ReadOps"
         ) as ops:
             ops.return_value.list_databases.side_effect = RuntimeError("down")
             with pytest.raises(RuntimeError):
@@ -512,7 +512,7 @@ class TestNeo4jDatabasesAndLabels:
         conn = _plain_conn(database="g", close_exc=RuntimeError("x"))
         graphs = [{"label": "Sales_v1", "nodes": 3}]
         with _patch_conn_builder(conn), patch.object(
-            _read_ops_mod, "Neo4jReadOps"
+            _read_ops_mod, "ReadOps"
         ) as ops:
             ops.return_value.list_labels.return_value = graphs
             out = SettingsService.graph_engine_neo4j_labels_result(
@@ -567,7 +567,7 @@ class TestNeo4jDropLabel:
     def test_drops_label_and_returns_sanitised_name(self):
         conn = _plain_conn(close_exc=RuntimeError("x"))
         with _patch_conn_builder(conn), patch.object(
-            _write_ops_mod, "Neo4jWriteOps"
+            _write_ops_mod, "WriteOps"
         ) as ops:
             out = SettingsService.graph_engine_neo4j_drop_label_result(
                 " 1sales-v2 ", MagicMock(), MagicMock(), connection_name="Prod"
@@ -580,7 +580,7 @@ class TestNeo4jDropLabel:
     def test_connection_closed_when_drop_fails(self):
         conn = _plain_conn()
         with _patch_conn_builder(conn), patch.object(
-            _write_ops_mod, "Neo4jWriteOps"
+            _write_ops_mod, "WriteOps"
         ) as ops:
             ops.return_value.drop_table.side_effect = RuntimeError("locked")
             with pytest.raises(RuntimeError):

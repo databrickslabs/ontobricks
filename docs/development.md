@@ -546,7 +546,7 @@ Databricks workspace.
 
 | Test File | Module Under Test | What Is Verified |
 |-----------|-------------------|------------------|
-| `test_lakebase_flat_store.py` | `back.core.graphdb.lakebase.LakebaseFlatStore` | Table lifecycle, `insert_triples` (small + bulk paths via `bulk_insert_iter`), `query_triples`, `count_triples`, `delete_triples`, `bulk_delete_iter`, named queries (BFS, transitive closure, symmetric expansion), capability flags |
+| `test_lakebase_flat_store.py` | `back.core.graphdb.lakebase.FlatStore` | Table lifecycle, `insert_triples` (small + bulk paths via `bulk_insert_iter`), `query_triples`, `count_triples`, `delete_triples`, `bulk_delete_iter`, named queries (BFS, transitive closure, symmetric expansion), capability flags |
 | `test_synced_table_manager.py` | `back.core.graphdb.lakebase.SyncedTableManager` | Idempotent `ensure`, `_build_synced_table_payload`, refresh trigger, polling, race-handling on `ALREADY_EXISTS`, deletion |
 | `test_graphdb_factory.py` | `back.core.graphdb.GraphDBFactory` | Default engine resolution (`lakebase`), `engine_config` propagation, unknown-engine handling |
 
@@ -618,7 +618,7 @@ open htmlcov/index.html
 | `back/core/w3c/owl/OntologyGenerator.py` | 50% | Advanced OWL features (annotations, complex axioms) less covered |
 | `back/core/w3c/sparql/SparqlTranslator.py` | 41% | Large module; advanced translation paths need Databricks |
 | Routes (`front/routes/`, `api/routers/internal/`) | 11-40% | Route handlers require full app context for deeper testing |
-| `back/core/graphdb/lakebase/LakebaseFlatStore.py` | ~80% | Triple CRUD, bulk paths and named queries covered with mocked psycopg |
+| `back/core/graphdb/lakebase/FlatStore.py` | ~80% | Triple CRUD, bulk paths and named queries covered with mocked psycopg |
 | `back/core/graphdb/lakebase/SyncedTableManager.py` | ~85% | `ensure` idempotency, refresh trigger, polling and delete fully tested with mocked Databricks SDK |
 
 Modules with 0% coverage (`back/core/w3c/rdfs`, `back/core/sqlwizard`, `back/core/databricks/unity_catalog/MetadataService.py`) are either not yet tested or depend entirely on external services.

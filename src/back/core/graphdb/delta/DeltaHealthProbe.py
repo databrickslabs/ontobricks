@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from back.core.graphdb.GraphHealthProbe import GraphHealthProbe
+from back.core.graphdb.interfaces.GraphHealthProbe import GraphHealthProbe
 
 
 class DeltaHealthProbe(GraphHealthProbe):

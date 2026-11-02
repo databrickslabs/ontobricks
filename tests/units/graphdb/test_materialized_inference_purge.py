@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.core.graphdb.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
 from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
-from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+from back.core.graphdb.lakebase.FlatStore import FlatStore
 
 pytestmark = pytest.mark.unit
 
@@ -18,7 +18,7 @@ def test_base_backend_reports_source_safe_purge_as_unsupported():
 
 def test_companion_backends_report_source_safe_purge_as_supported():
     assert DeltaMaterializedStore.supports_materialized_inference_purge is True
-    assert LakebaseFlatStore.supports_materialized_inference_purge is True
+    assert FlatStore.supports_materialized_inference_purge is True
 
 
 def test_base_backend_rejects_generated_purge():
@@ -96,7 +96,7 @@ def test_delta_purge_surfaces_adjacency_rebuild_failure():
 
 
 def test_lakebase_counts_and_truncates_only_app_companion():
-    store = object.__new__(LakebaseFlatStore)
+    store = object.__new__(FlatStore)
     store._sync_mode = "app_managed"
     store.count_triples = MagicMock(return_value=9)
     store.rebuild_adjacency = MagicMock()
@@ -109,7 +109,7 @@ def test_lakebase_counts_and_truncates_only_app_companion():
     with (
         patch.object(store, "companion_phy", return_value="g_sales_v3__app"),
         patch(
-            "back.core.graphdb.lakebase.LakebaseFlatStore."
+            "back.core.graphdb.lakebase.FlatStore."
             "_companion_ddl.truncate_companion"
         ) as truncate,
     ):
@@ -121,7 +121,7 @@ def test_lakebase_counts_and_truncates_only_app_companion():
 
 
 def test_lakebase_purge_skips_rebuild_when_search_cache_disabled():
-    store = object.__new__(LakebaseFlatStore)
+    store = object.__new__(FlatStore)
     store._sync_mode = "app_managed"
     store._domain = SimpleNamespace(info={"graph_cache_enabled": False})
     store.count_triples = MagicMock(return_value=9)
@@ -135,7 +135,7 @@ def test_lakebase_purge_skips_rebuild_when_search_cache_disabled():
     with (
         patch.object(store, "companion_phy", return_value="g_sales_v3__app"),
         patch(
-            "back.core.graphdb.lakebase.LakebaseFlatStore."
+            "back.core.graphdb.lakebase.FlatStore."
             "_companion_ddl.truncate_companion"
         ),
     ):
@@ -145,7 +145,7 @@ def test_lakebase_purge_skips_rebuild_when_search_cache_disabled():
 
 
 def test_lakebase_purge_surfaces_adjacency_rebuild_failure():
-    store = object.__new__(LakebaseFlatStore)
+    store = object.__new__(FlatStore)
     store._sync_mode = "app_managed"
     store.count_triples = MagicMock(return_value=9)
     store.rebuild_adjacency = MagicMock(side_effect=RuntimeError("adjacency failed"))
@@ -158,7 +158,7 @@ def test_lakebase_purge_surfaces_adjacency_rebuild_failure():
     with (
         patch.object(store, "companion_phy", return_value="g_sales_v3__app"),
         patch(
-            "back.core.graphdb.lakebase.LakebaseFlatStore."
+            "back.core.graphdb.lakebase.FlatStore."
             "_companion_ddl.truncate_companion"
         ),
     ):

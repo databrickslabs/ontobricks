@@ -1,7 +1,7 @@
 """Lakebase triple store pinned to standalone simulation sandbox tables.
 
 A simulation copies a slice of the live graph into ``<graph>__sim_<id>``
-and reasons over it. This store reuses every :class:`LakebaseFlatStore`
+and reasons over it. This store reuses every :class:`FlatStore`
 read/write path but resolves *every* table name to the sandbox itself (no
 ``_sync`` / ``__app`` / union-view trio) and refuses any name that is not a
 sandbox table, so a simulation can never write to the live graph.
@@ -14,8 +14,8 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from back.core.errors import ValidationError
 from back.core.graphdb.lakebase import _companion_ddl
-from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
-from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+from back.core.graphdb.lakebase.Base import Base
+from back.core.graphdb.lakebase.FlatStore import FlatStore
 from back.core.helpers import validate_table_name
 from back.core.logging import get_logger
 
@@ -24,8 +24,8 @@ logger = get_logger(__name__)
 _SAFE_RELATION = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
-class LakebaseSimulationStore(LakebaseFlatStore):
-    """:class:`LakebaseFlatStore` restricted to ``__sim_`` sandbox tables."""
+class SimulationStore(FlatStore):
+    """:class:`FlatStore` restricted to ``__sim_`` sandbox tables."""
 
     supports_materialized_inference_purge = False
     supports_adjacency = False
@@ -33,7 +33,7 @@ class LakebaseSimulationStore(LakebaseFlatStore):
     supports_props = False
 
     @classmethod
-    def from_store(cls, store: LakebaseFlatStore) -> "LakebaseSimulationStore":
+    def from_store(cls, store: FlatStore) -> "SimulationStore":
         """Build a sandbox store sharing *store*'s connection identity."""
         return cls(store._auth, store._schema, store._database_override)
 
@@ -46,7 +46,7 @@ class LakebaseSimulationStore(LakebaseFlatStore):
     def sandbox_table_id(name: str) -> str:
         """Return the physical sandbox table for *name* or raise ValidationError."""
         validate_table_name(name)
-        phy = LakebaseBase.physical_table_id(name)
+        phy = Base.physical_table_id(name)
         if not _companion_ddl.is_sim_phy(phy):
             raise ValidationError(
                 "Simulation store can only target simulation sandbox tables",

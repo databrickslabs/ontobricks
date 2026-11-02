@@ -592,7 +592,7 @@ class TwinStoreCache:
             # this previously reported "Neo4j backend unavailable" even though
             # the connection (Settings → Neo4j → Test/Health) works.
             store = get_graphdb(domain, settings)
-            if store is None or store.__class__.__name__ != "Neo4jStore":
+            if store is None or store.__class__.__name__ != "Store":
                 result["neo4j_check_error"] = (
                     "Neo4j backend unavailable (check the connection in Settings → Neo4j)."
                 )

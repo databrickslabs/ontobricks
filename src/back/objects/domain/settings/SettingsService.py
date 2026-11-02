@@ -853,7 +853,7 @@ class SettingsService:
         *,
         connection_name: str = "",
     ):
-        """Build a :class:`Neo4jConnection` from a named Settings profile."""
+        """Build a :class:`Connection` from a named Settings profile."""
         from back.objects.domain.settings.graphengine.GraphEngineSettings import GraphEngineSettings
 
         return GraphEngineSettings._neo4j_connection_from_config(session_mgr, settings, connection_name=connection_name)

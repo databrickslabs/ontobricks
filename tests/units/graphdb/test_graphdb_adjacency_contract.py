@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.constants import RDF_TYPE
 from back.core.graphdb.props import (
     known_missing_props,
@@ -467,7 +467,7 @@ def test_get_triples_page_for_subjects_ignores_placeholder_row():
 def test_get_triples_page_for_subjects_empty_subjects_short_circuits():
     store = FakeStore()
     store.supports_props = True
-    with patch("back.core.graphdb.GraphBackend.props_page_sql") as sql_builder:
+    with patch("back.core.graphdb.interfaces.GraphBackend.props_page_sql") as sql_builder:
         got = store.get_triples_page_for_subjects("g", [], limit=10, offset=0)
     assert got == {"rows": [], "total": 0}
     sql_builder.assert_not_called()

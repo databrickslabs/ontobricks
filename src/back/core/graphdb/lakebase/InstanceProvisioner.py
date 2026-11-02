@@ -103,7 +103,7 @@ def provision_steps(
     return steps
 
 
-class LakebaseGraphProvisioner:
+class InstanceProvisioner:
     """Drive the instance -> database -> schema -> grants flow.
 
     Parameters

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from back.core.graphdb.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
 from back.core.graphdb.entity_search import is_missing_relation_error
 
 

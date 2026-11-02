@@ -2,7 +2,7 @@
 
 Regression: a simulation marked ``ready`` in the registry can lose its physical
 Lakebase sandbox table (the graph was rebuilt / re-synced after the run).
-``LakebaseSimulationUnion.ensure`` used to run ``CREATE OR REPLACE VIEW ... FROM
+``SimulationUnion.ensure`` used to run ``CREATE OR REPLACE VIEW ... FROM
 <sandbox>`` blindly, so the missing table surfaced as an opaque ``UndefinedTable``
 -> 502 that the Explorer mislabelled as "gateway time limit". It must now probe
 first and raise a clear :class:`ValidationError` (400).
@@ -17,7 +17,7 @@ import pytest
 pytest.importorskip("psycopg")
 
 from back.core.errors import ValidationError
-from back.core.graphdb.lakebase.LakebaseSimulationUnion import LakebaseSimulationUnion
+from back.core.graphdb.lakebase.SimulationUnion import SimulationUnion
 
 pytestmark = pytest.mark.unit
 
@@ -58,7 +58,7 @@ def _created_view(cur: _FakeCursor) -> bool:
 
 def test_ensure_raises_clear_error_when_sandbox_missing():
     cur = _FakeCursor(sandbox_present=False)
-    union = LakebaseSimulationUnion(_FakeStore(cur))
+    union = SimulationUnion(_FakeStore(cur))
 
     with pytest.raises(ValidationError, match="[Rr]e-run the simulation"):
         union.ensure(_VIEW, _LIVE, _SANDBOX)
@@ -69,7 +69,7 @@ def test_ensure_raises_clear_error_when_sandbox_missing():
 
 def test_ensure_builds_view_when_sandbox_present():
     cur = _FakeCursor(sandbox_present=True)
-    union = LakebaseSimulationUnion(_FakeStore(cur))
+    union = SimulationUnion(_FakeStore(cur))
 
     view_id = union.ensure(_VIEW, _LIVE, _SANDBOX)
 

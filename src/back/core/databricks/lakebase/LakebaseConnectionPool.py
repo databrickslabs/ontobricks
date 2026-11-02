@@ -20,7 +20,7 @@ the bespoke behaviour the two duplicated pools used to have:
 
 Consumers wrap the raised :class:`LakebaseConnectionError` into their own
 domain error by passing an ``error_factory`` (the registry uses ``StoreError``,
-the graph engine uses ``LakebaseGraphPoolError``).
+the graph engine uses ``PoolError``).
 """
 
 from __future__ import annotations

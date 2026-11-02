@@ -266,17 +266,17 @@ class TestSimulationFacade:
             sim.sandbox_relation(row["id"])
         reg.rows[row["id"]]["status"] = "ready"
         monkeypatch.setattr(sim_mod, "effective_graph_name", lambda d: "G_HR_v1")
-        from back.core.graphdb.lakebase.LakebaseSimulationStore import (
-            LakebaseSimulationStore,
+        from back.core.graphdb.lakebase.SimulationStore import (
+            SimulationStore,
         )
 
         name = sim.sandbox_relation(row["id"])
-        assert name == LakebaseSimulationStore.sandbox_table_name("G_HR_v1", row["id"])
+        assert name == SimulationStore.sandbox_table_name("G_HR_v1", row["id"])
 
     def test_explorer_relation_unions_live_and_sandbox(self, monkeypatch):
         from back.core.graphdb.lakebase import _companion_ddl
-        from back.core.graphdb.lakebase.LakebaseSimulationStore import (
-            LakebaseSimulationStore,
+        from back.core.graphdb.lakebase.SimulationStore import (
+            SimulationStore,
         )
 
         reg = _Registry()
@@ -307,7 +307,7 @@ class TestSimulationFacade:
         store = Store()
         view = sim.explorer_relation(row["id"], store=store)
         expect = _companion_ddl.sim_union_phy("G_HR_v1", row["id"])
-        sandbox = LakebaseSimulationStore.sandbox_table_name("G_HR_v1", row["id"])
+        sandbox = SimulationStore.sandbox_table_name("G_HR_v1", row["id"])
         assert view == expect
         create_view_sql = next((s for s in seen if "UNION ALL" in s), "")
         assert create_view_sql, f"no union view DDL in {seen!r}"

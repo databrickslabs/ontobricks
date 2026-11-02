@@ -222,7 +222,7 @@ LIMIT 100
 4. **R2RML Analyzer** - Load TriplesMap definitions, build mappings
 5. **SPARQL→SQL Translator** - Match patterns to mappings, generate SQL
 6. **Generated Spark SQL** - Query with JOINs and UNION ALL
-7. **Triple Store Backend Dispatch** - The single `GraphDBFactory` returns the active engine — a Delta-backed store (`DeltaMaterializedStore`) or the Lakebase engine (`LakebaseFlatStore`). Both subclass `GraphBackend` and expose the same `(subject, predicate, object)` contract.
+7. **Triple Store Backend Dispatch** - The single `GraphDBFactory` returns the active engine — a Delta-backed store (`DeltaMaterializedStore`) or the Lakebase engine (`FlatStore`). Both subclass `GraphBackend` and expose the same `(subject, predicate, object)` contract.
 8. **RDF-style Results** - Uniform (subject, predicate, object) triples from both backends
 9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and data cluster detection (Louvain/Label Propagation/Greedy Modularity)
 
@@ -464,7 +464,7 @@ src/
 │   │   │   ├── GraphDBFactory.py       # Engine factory (auto / lakebase / delta / view)
 │   │   │   ├── constants.py            # RDF_TYPE, RDFS_LABEL
 │   │   │   ├── delta/                  # DeltaMaterializedStore (SQL Warehouse engine)
-│   │   │   ├── lakebase/               # LakebaseFlatStore, LakebaseBase, SyncedTableManager
+│   │   │   ├── lakebase/               # FlatStore, Base, SyncedTableManager
 │   │   │   └── _starter_kit/           # ExampleStore template for new engines
 │   │   │
 │   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SWRL + SPARQL rules + Decision tables)
@@ -1148,17 +1148,17 @@ Full detail: [`docs/graphdb-integration.md` § Adjacency index objects](backend.
 
 ### Backend Abstraction
 
-The Delta, Lakebase, and Neo4j paths each implement the single `GraphBackend` base (`src/back/core/graphdb/GraphBackend.py`) — `DeltaMaterializedStore`, `LakebaseFlatStore`, and `Neo4jStore` respectively. The base exposes the same surface for:
+The Delta, Lakebase, and Neo4j paths each implement the single `GraphBackend` base (`src/back/core/graphdb/GraphBackend.py`) — `DeltaMaterializedStore`, `FlatStore`, and `Store` respectively. The base exposes the same surface for:
 
 - Table lifecycle: `create_table`, `drop_table`, `table_exists`
 - Triple operations: `insert_triples`, `query_triples`, `count_triples`
 - Named queries: `get_aggregate_stats`, `find_subjects_by_type`, `bfs_traversal`, …
 
-The single `GraphDBFactory` returns the per-domain engine — Delta (`databricks`), Lakebase Postgres (`lakebase`), Neo4j (`neo4j`), or the raw read-only `view` store. Capability flags on `GraphBackend` (`supports_cypher`, `is_cypher_backend`, `query_dialect`) let SQL and Cypher engines coexist: SQL engines inherit the recursive-CTE named-query defaults, while `Neo4jStore` reports `supports_cypher = True`. Additional engines (Memgraph, Gremlin, …) can be added without rewiring the reasoning layer.
+The single `GraphDBFactory` returns the per-domain engine — Delta (`databricks`), Lakebase Postgres (`lakebase`), Neo4j (`neo4j`), or the raw read-only `view` store. Capability flags on `GraphBackend` (`supports_cypher`, `is_cypher_backend`, `query_dialect`) let SQL and Cypher engines coexist: SQL engines inherit the recursive-CTE named-query defaults, while `Store` reports `supports_cypher = True`. Additional engines (Memgraph, Gremlin, …) can be added without rewiring the reasoning layer.
 
 ### Lakebase Graph DB Architecture
 
-Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/`databricks` store and Neo4j). The implementation lives in `src/back/core/graphdb/lakebase/` (`LakebaseFlatStore`, `LakebaseBase`, `SyncedTableManager`).
+Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/`databricks` store and Neo4j). The implementation lives in `src/back/core/graphdb/lakebase/` (`FlatStore`, `Base`, `SyncedTableManager`).
 
 **Storage model** — per graph version, a three-object layout inside a configurable Postgres schema (default `ontobricks_graph`) on the App-bound Lakebase database: bulk `_sync`, writable `__app`, reader-facing union view `g_<dom>_v<n>`. Connection comes from the same OAuth/M2M credential the registry hybrid backend uses. See [Backend capability and object lifecycle](#backend-capability-and-object-lifecycle).
 
@@ -1169,7 +1169,7 @@ Lakebase Postgres is one of three shipped Graph DB engines (alongside the Delta/
 
 ### Neo4j Graph DB Architecture
 
-Neo4j is a Cypher-native engine for domains whose `graph_backend` is `neo4j`. The implementation lives in `src/back/core/graphdb/neo4j/` and is split into a thin `Neo4jStore` façade over three services: `Neo4jConnection` (Bolt driver lifecycle + auth), `Neo4jWriteOps` (schema constraints and `UNWIND`/`MERGE` bulk writes), and `Neo4jReadOps` (statistics, entity lookup, KG-filter primitives, and reasoning helpers). Triples are stored as `(:<store_label> {subject, predicate, object})` nodes, one label per logical store so Neo4j 5+ single-label `CREATE CONSTRAINT` applies.
+Neo4j is a Cypher-native engine for domains whose `graph_backend` is `neo4j`. The implementation lives in `src/back/core/graphdb/neo4j/` and is split into a thin `Store` façade over three services: `Connection` (Bolt driver lifecycle + auth), `WriteOps` (schema constraints and `UNWIND`/`MERGE` bulk writes), and `ReadOps` (statistics, entity lookup, KG-filter primitives, and reasoning helpers). Triples are stored as `(:<store_label> {subject, predicate, object})` nodes, one label per logical store so Neo4j 5+ single-label `CREATE CONSTRAINT` applies.
 
 Connection settings are configured under **Settings → Back end → Neo4j**. The Bolt password is resolved from the `NEO4J_PASSWORD` env var (a Databricks Apps secret resource) in the deployed app, falling back to the persisted `engine_config` only in local development; there is no raw-Cypher entry point (`execute_query` raises `NotImplementedError`) — all writes enter through `insert_triples` after ontology validation in the build pipeline. `neo4j>=5` ships as a core dependency (`pyproject.toml`).
 
@@ -1261,7 +1261,7 @@ Where atoms are class assertions (`Person(?x)`) or property assertions (`worksIn
 - **Violation detection**: Finds instances where the antecedent holds but the consequent does not (generates `NOT EXISTS` subqueries)
 - **Materialization**: Inserts inferred consequent triples into the store (generates `INSERT` statements)
 
-**Backend dispatch**: The two SQL backends — `DeltaMaterializedStore` (Spark SQL on the SQL Warehouse) and `LakebaseFlatStore` (Postgres SQL) — use `SWRLSQLTranslator`. The `Neo4jStore` engine reports `supports_cypher = True` and returns a `SWRLFlatCypherTranslator`, but that translator is currently scaffolded — full SWRL → Cypher reasoning lands in a follow-up; on Neo4j the SWRL materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct translator be selected per engine without touching `SWRLEngine`.
+**Backend dispatch**: The two SQL backends — `DeltaMaterializedStore` (Spark SQL on the SQL Warehouse) and `FlatStore` (Postgres SQL) — use `SWRLSQLTranslator`. The `Store` engine reports `supports_cypher = True` and returns a `SWRLFlatCypherTranslator`, but that translator is currently scaffolded — full SWRL → Cypher reasoning lands in a follow-up; on Neo4j the SWRL materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct translator be selected per engine without touching `SWRLEngine`.
 
 **URI resolution**: The engine builds a lowercase-name → URI map from the ontology, normalizing property URIs to the data namespace used by R2RML so that SWRL atom names match the predicates stored in the triple store.
 
@@ -1361,7 +1361,7 @@ domains redirect to Domain, other backends show a disabled page.
 
 ### Isolation guarantees
 
-`LakebaseSimulationStore` (a `LakebaseFlatStore` subclass) resolves every
+`SimulationStore` (a `FlatStore` subclass) resolves every
 table name to the sandbox itself — no `_sync` / `__app` / union-view trio — and
 raises `ValidationError` for any name without the `__sim_` marker, on reads,
 writes, DDL and generated SQL (`_sql_relation`). Purge, synced bulk load and
@@ -1404,7 +1404,7 @@ editor shows that catalog in a third column.
 | `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging |
 | `src/back/objects/simulation/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
 | `src/back/objects/simulation/Sandbox.py` | Sandbox lifecycle and patch semantics |
-| `src/back/core/graphdb/lakebase/LakebaseSimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
+| `src/back/core/graphdb/lakebase/SimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
 | `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
 | `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
@@ -2953,7 +2953,7 @@ triple-store backend (`GraphDBFactory.create(...)`):
 | Layer | Storage | Native engine | SPARQL path | Cypher path |
 |---|---|---|---|---|
 | Delta engine (`DeltaMaterializedStore`) | Delta view in Unity Catalog | **Spark SQL** (Databricks SQL Warehouse) | SPARQL → Spark SQL via R2RML | n/a |
-| Lakebase engine (`LakebaseFlatStore`) | Lakebase Postgres flat table | **Postgres SQL** | SPARQL → engine SQL | Reserved for future Cypher engines |
+| Lakebase engine (`FlatStore`) | Lakebase Postgres flat table | **Postgres SQL** | SPARQL → engine SQL | Reserved for future Cypher engines |
 
 The selection is made in `back/core/graphdb/GraphDBFactory.py`. Both engines
 share the single `GraphBackend` contract: the Delta view is the
@@ -3322,7 +3322,7 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 - Graph DB factory — `src/back/core/graphdb/GraphDBFactory.py`
 - GraphDB backend — `src/back/core/graphdb/GraphBackend.py`
 - Delta engine — `src/back/core/graphdb/delta/DeltaMaterializedStore.py`
-- GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{LakebaseBase,LakebaseFlatStore,SyncedTableManager}.py`
+- GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{Base,FlatStore,SyncedTableManager}.py`
 - Reasoning — `src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`
 - Graph Chat — `src/agents/agent_dtwin_chat/{engine,tools}.py`

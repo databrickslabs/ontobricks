@@ -142,3 +142,41 @@ Updated the JS-string assertions in `tests/units/front/test_kg_graph_source.py`
 and `tests/units/front/test_explorer_simulation_select.py` (new
 `test_explorer_open_defaults_to_live_inferred`).
 `uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**.
+
+---
+
+# Drop redundant Lakebase/Neo4j prefixes from backend classes/modules
+
+## Context
+Inside `src/back/core/graphdb/lakebase/` and `…/neo4j/` every class/module
+repeated the backend name already carried by the package path (`LakebaseFlatStore`,
+`Neo4jStore`, …). Stripped the prefix so the package path is the only namespace.
+Delta is intentionally out of scope for this pass (not requested).
+
+## Changes
+1. `git mv` + class rename for 18 modules:
+   - lakebase: `LakebaseBase→Base`, `LakebaseFlatStore→FlatStore`,
+     `LakebaseHealthProbe→HealthProbe`, `LakebaseProvisioner→Provisioner`,
+     `LakebaseGraphProvisioner→InstanceProvisioner` (the provisioning engine —
+     distinct from the `GraphProvisioner` ABC facade), `LakebaseGraphBuilder→Builder`,
+     `LakebaseSimulation→Simulation`, `LakebaseSimulationStore→SimulationStore`,
+     `LakebaseSimulationUnion→SimulationUnion`, plus `LakebaseGraphPoolError→PoolError`
+     in `pool.py`.
+   - neo4j: `Neo4jStore→Store`, `Neo4jConnection→Connection`, `Neo4jReadOps→ReadOps`,
+     `Neo4jWriteOps→WriteOps`, `Neo4jSchemaMap→SchemaMap`, `Neo4jHealthProbe→HealthProbe`,
+     `Neo4jProvisioner→Provisioner`, `Neo4jSimulation→Simulation`,
+     `Neo4jGraphBuilder→Builder`.
+   - Where a stripped name would collide with a root ABC (`GraphBuilder`,
+     `GraphProvisioner`), a distinct name was chosen (`Builder`, `InstanceProvisioner`).
+2. Rewrote all references (imports, `__all__`, `patch(...)` targets, docstrings)
+   across `src/`, `tests/`, `docs/`, `baseline.json`, and the `.mmd` diagrams.
+   Module functions keeping a backend name on purpose (`is_neo4j_password_from_secret`,
+   `resolve_lakebase_graph_schema`, `get_lakebase_graph_pool`) were left untouched.
+3. Where a single module imports both the lakebase and neo4j impl of a
+   now-identically-named capability (`Builder`/`HealthProbe`/`Provisioner`/
+   `Simulation`), imports are aliased (`… as LakebaseBuilder` / `… as Neo4jBuilder`).
+   The factory keeps them in mutually-exclusive `if` branches, so no alias needed there.
+
+## Tests
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
+(explicit `PYTEST_EXIT=0`; architecture import-boundary + ratchet baseline updated).

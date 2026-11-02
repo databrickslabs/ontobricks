@@ -100,9 +100,9 @@ class TestLakebaseStatementTimeoutReset:
     (a bulk write/DDL) and cancels it mid-flight."""
 
     def _store(self, cur):
-        from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+        from back.core.graphdb.lakebase.FlatStore import FlatStore
 
-        store = object.__new__(LakebaseFlatStore)
+        store = object.__new__(FlatStore)
         store._schema = "s"
         conn = MagicMock()
         conn.__enter__ = Mock(return_value=conn)

@@ -9,8 +9,8 @@ import pytest
 
 from back.core.errors import ValidationError
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
-from back.core.graphdb.GraphBackend import GraphBackend
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.search_cache import CACHE_BACKEND_MESSAGE, CACHE_MISSING_MESSAGE
 
 pytestmark = pytest.mark.unit

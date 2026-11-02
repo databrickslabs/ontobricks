@@ -7,7 +7,7 @@ directly. A graphless domain has none and the factory returns ``None``.
 This is a **capability marker**: the concrete probe surface is engine-specific
 (Delta probes Unity-Catalog tables / permissions on a SQL warehouse; Lakebase
 probes a Postgres schema over psycopg), so the methods live on the concrete
-implementations (:class:`DeltaHealthProbe`, :class:`LakebaseHealthProbe`).
+implementations (:class:`DeltaHealthProbe`, :class:`HealthProbe`).
 """
 
 from __future__ import annotations

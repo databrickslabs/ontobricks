@@ -1,8 +1,8 @@
 """Pure RDF-triple ↔ property-graph transform for the Neo4j backend.
 
 This module holds the *logic* of the typed-node model with **no Neo4j
-dependency** so it is fully unit-testable without a driver. :class:`Neo4jWriteOps`
-and :class:`Neo4jReadOps` execute what these functions produce.
+dependency** so it is fully unit-testable without a driver. :class:`WriteOps`
+and :class:`ReadOps` execute what these functions produce.
 
 Model (confirmed with Benoit 2026-07-28 — Strategy A):
 
@@ -22,7 +22,7 @@ Every node also carries:
 
 Reverse mappings (label→class URI, reltype→predicate URI) are needed to
 reconstruct exact SPO triples on read; they are persisted by
-:class:`Neo4jSchemaMap`. This module only *derives* the forward names.
+:class:`SchemaMap`. This module only *derives* the forward names.
 """
 
 from typing import Dict, List

@@ -15,12 +15,12 @@ from back.core.graphdb.engine_config import (
     resolve_lakehouse_warehouse_id,
     resolve_neo4j_connection,
 )
-from back.core.graphdb.lakebase.LakebaseBase import (
+from back.core.graphdb.lakebase.Base import (
     normalize_sync_table_mode,
     resolve_postgres_database_override,
     validate_engine_config_keys,
 )
-from back.core.graphdb.neo4j.Neo4jConnection import resolve_neo4j_database
+from back.core.graphdb.neo4j.Connection import resolve_neo4j_database
 
 
 class TestNormalizeGraphEngineConfig:

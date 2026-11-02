@@ -1,7 +1,7 @@
 """Neo4j read-side queries over the **typed property-graph** model.
 
 Implements the named-query methods of the ``GraphBackend`` contract against
-the property graph written by :class:`Neo4jWriteOps`: nodes keyed on ``uri``
+the property graph written by :class:`WriteOps`: nodes keyed on ``uri``
 carry a graph **marker label**, class labels (from ``rdf:type``), a ``name``
 property (from ``rdfs:label``), literal properties, and outgoing relationships.
 
@@ -9,7 +9,7 @@ property (from ``rdfs:label``), literal properties, and outgoing relationships.
 ``{subject, predicate, object}`` / entity shapes the SQL backends return — the
 triples are *reconstructed* from the graph. Reverse mappings (label→class URI,
 reltype→predicate URI, property-key→predicate URI) come from
-:class:`Neo4jSchemaMap`.
+:class:`SchemaMap`.
 
 Traversal/reasoning (``bfs_traversal``, ``transitive_closure``,
 ``shortest_path``, ``expand_entity_neighbors``) now use **native relationship
@@ -20,9 +20,9 @@ triple nodes.
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
-from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
-from back.core.graphdb.neo4j.Neo4jSchemaMap import Neo4jSchemaMap
-from back.core.graphdb.neo4j.Neo4jWriteOps import sanitise_label
+from back.core.graphdb.neo4j.Connection import Connection
+from back.core.graphdb.neo4j.SchemaMap import SchemaMap
+from back.core.graphdb.neo4j.WriteOps import sanitise_label
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,12 +32,12 @@ _MARKER_INTERNAL_PROPS = {"uri"}
 _SCHEMA_LABEL = "__GraphSchema"
 
 
-class Neo4jReadOps:
+class ReadOps:
     """Read queries against the typed property-graph Neo4j backend."""
 
-    def __init__(self, connection: Neo4jConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._conn = connection
-        self._schema = Neo4jSchemaMap(connection)
+        self._schema = SchemaMap(connection)
 
     # ------------------------------------------------------------------
     #  SPO reconstruction core
@@ -85,7 +85,7 @@ class Neo4jReadOps:
             for key, value in props.items():
                 if key in _MARKER_INTERNAL_PROPS:
                     continue
-                pred = Neo4jSchemaMap.predicate_for_property(prop_map, key)
+                pred = SchemaMap.predicate_for_property(prop_map, key)
                 triples.append(
                     {"subject": uri, "predicate": pred, "object": str(value)}
                 )
@@ -246,7 +246,7 @@ class Neo4jReadOps:
             f"RETURN key, count(*) AS cnt"
         )
         for r in prop_rows or []:
-            pred = Neo4jSchemaMap.predicate_for_property(prop_map, r["key"])
+            pred = SchemaMap.predicate_for_property(prop_map, r["key"])
             counts[pred] = counts.get(pred, 0) + int(r["cnt"])
 
         rel_rows = self._conn.run(
@@ -418,7 +418,7 @@ class Neo4jReadOps:
         if int(row.get("n_classes") or 0) > 0:
             preds.append(RDF_TYPE)
         for k in row.get("keys") or []:
-            preds.append(Neo4jSchemaMap.predicate_for_property(prop_map, k))
+            preds.append(SchemaMap.predicate_for_property(prop_map, k))
         for rt in row.get("reltypes") or []:
             if rt:
                 preds.append(reltype_map.get(rt, rt))
@@ -747,7 +747,7 @@ class Neo4jReadOps:
         """List every materialised graph (marker label) with node/edge counts.
 
         A "graph" is a node label backed by a ``node_<label>_uri`` uniqueness
-        constraint (created by :meth:`Neo4jWriteOps.create_table`). Returns one
+        constraint (created by :meth:`WriteOps.create_table`). Returns one
         row per graph: ``{label, nodes, edges}``. Powers the Settings → Neo4j
         → Objects admin tab (list + delete), parity with Lakebase objects.
         """

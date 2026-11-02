@@ -25,7 +25,7 @@ from back.core.graphdb.adjacency import expand_and_fetch_sql
 from back.core.errors import InfrastructureError
 from back.core.graphdb.lakebase import _adjacency_ddl
 from back.core.graphdb.lakebase import _companion_ddl
-from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+from back.core.graphdb.lakebase.Base import Base
 from back.core.graphdb.lakebase.SyncedTableManager import (
     DEFAULT_TIMEOUT_S as _SYNC_DEFAULT_TIMEOUT_S,
 )
@@ -99,7 +99,7 @@ def _reraise_lakebase_index_limit(
     ) from exc
 
 
-class LakebaseFlatStore(LakebaseBase):
+class FlatStore(Base):
     """Flat-model triple store on Lakebase Postgres.
 
     In ``app_managed`` mode, one physical table per logical graph name lives
@@ -1266,7 +1266,7 @@ def resolve_lakebase_graph_schema(
     Falls back to *config_schema* (validated) when the registry triplet has no
     schema or resolution fails.
     """
-    from back.core.graphdb.lakebase.LakebaseBase import (
+    from back.core.graphdb.lakebase.Base import (
         DEFAULT_GRAPH_SCHEMA,
         validate_graph_schema,
     )
@@ -1328,7 +1328,7 @@ def resolve_sync_uc_fallback_catalog(
     3. ``domain.delta["catalog"]`` — per-domain Delta triple-store catalog
        (often a personal or workspace-default catalog).
 
-    ``LakebaseFlatStore.synced_uc_name`` still prefers ``graph_engine_config.sync_uc_catalog``
+    ``FlatStore.synced_uc_name`` still prefers ``graph_engine_config.sync_uc_catalog``
     when set; this helper supplies *fallback_catalog* only.
     """
     import os

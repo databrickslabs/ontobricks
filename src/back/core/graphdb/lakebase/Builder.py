@@ -1,7 +1,7 @@
 """Lakebase implementation of the :class:`GraphBuilder` capability.
 
 Thin facade over the Lakebase build / sync internals (``_companion_ddl``,
-``_sync_uc_schema``, ``LakebaseFlatStore`` resolution helpers, ``LakebaseBase``
+``_sync_uc_schema``, ``FlatStore`` resolution helpers, ``Base``
 naming). All backend logic stays in those modules; this class only groups the
 operations the triple-store build / Lakeflow synced-table pipeline needs behind
 the engine-agnostic builder capability so no caller outside
@@ -16,10 +16,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from back.core.graphdb.GraphBuilder import GraphBuilder
+from back.core.graphdb.interfaces.GraphBuilder import GraphBuilder
 
 
-class LakebaseGraphBuilder(GraphBuilder):
+class Builder(GraphBuilder):
     """Lakeflow synced-table build / naming helpers for a Lakebase domain."""
 
     def __init__(self, domain: Any, settings: Any = None) -> None:
@@ -60,7 +60,7 @@ class LakebaseGraphBuilder(GraphBuilder):
         self, delta_cfg: Optional[Dict[str, Any]] = None
     ) -> str:
         """Fallback UC catalog for the synced table when none is configured."""
-        from back.core.graphdb.lakebase.LakebaseFlatStore import (
+        from back.core.graphdb.lakebase.FlatStore import (
             resolve_sync_uc_fallback_catalog,
         )
 
@@ -68,7 +68,7 @@ class LakebaseGraphBuilder(GraphBuilder):
 
     def resolve_graph_schema(self, config_schema: str) -> str:
         """Resolve the effective Postgres graph schema for this domain."""
-        from back.core.graphdb.lakebase.LakebaseFlatStore import (
+        from back.core.graphdb.lakebase.FlatStore import (
             resolve_lakebase_graph_schema,
         )
 
@@ -78,9 +78,9 @@ class LakebaseGraphBuilder(GraphBuilder):
 
     def physical_table_id(self, graph_name: str) -> str:
         """Postgres physical table name for a logical graph name."""
-        from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+        from back.core.graphdb.lakebase.Base import Base
 
-        return LakebaseBase.physical_table_id(graph_name)
+        return Base.physical_table_id(graph_name)
 
     def synced_phy(self, graph_name: str) -> str:
         """Physical name of the Lakeflow-synced bulk table for a graph."""
@@ -90,7 +90,7 @@ class LakebaseGraphBuilder(GraphBuilder):
 
     def is_index_row_size_error(self, exc: BaseException) -> bool:
         """True when *exc* is a Postgres btree index-row-size overflow."""
-        from back.core.graphdb.lakebase.LakebaseFlatStore import (
+        from back.core.graphdb.lakebase.FlatStore import (
             _is_index_row_size_error,
         )
 

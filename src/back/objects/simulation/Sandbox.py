@@ -18,7 +18,7 @@ class _LakebaseSandbox:
     """Seed, patch and read a standalone sandbox copy of a live graph slice.
 
     The live store is only read (``copy_subjects_from``); every write goes
-    through a :class:`LakebaseSimulationStore`, which refuses non-sandbox
+    through a :class:`SimulationStore`, which refuses non-sandbox
     targets.
     """
 

@@ -10,7 +10,7 @@ import pytest
 from back.core.errors import ValidationError
 from back.objects.digitaltwin.constants import RDF_TYPE
 from back.core.graphdb.lakebase import _companion_ddl
-from back.core.graphdb.lakebase.LakebaseSimulationStore import LakebaseSimulationStore
+from back.core.graphdb.lakebase.SimulationStore import SimulationStore
 from back.objects.simulation import (
     Diff,
     Patch,
@@ -58,8 +58,8 @@ class TestSimPhy:
         assert inferred == "mydomain_v3__smu_sabc"
 
     def test_simulation_union_drop_all_drops_overlay_view(self):
-        from back.core.graphdb.lakebase.LakebaseSimulationUnion import (
-            LakebaseSimulationUnion,
+        from back.core.graphdb.lakebase.SimulationUnion import (
+            SimulationUnion,
         )
 
         cur = _Cursor()
@@ -69,7 +69,7 @@ class TestSimPhy:
             def _cursor(self):
                 yield cur
 
-        LakebaseSimulationUnion(Store()).drop_all("G_V1", "s1")
+        SimulationUnion(Store()).drop_all("G_V1", "s1")
         sqls = [c[0] for c in cur.calls]
         inferred = _companion_ddl.sim_union_phy("G_V1", "s1")
         assert any(inferred in s for s in sqls)
@@ -89,8 +89,8 @@ class TestSimPhy:
         assert "FROM g__sim_s1 s" in sql
 
     def test_sandbox_name_matches_physical_resolution(self):
-        name = LakebaseSimulationStore.sandbox_table_name("Dom_V1", "s1")
-        assert LakebaseSimulationStore.sandbox_table_id(name) == name
+        name = SimulationStore.sandbox_table_name("Dom_V1", "s1")
+        assert SimulationStore.sandbox_table_id(name) == name
 
 
 # -- store write guard ----------------------------------------------------
@@ -106,7 +106,7 @@ class _Cursor:
 
 
 def _sim_store():
-    store = object.__new__(LakebaseSimulationStore)
+    store = object.__new__(SimulationStore)
     store._schema = "graphs"
     cur = _Cursor()
 
@@ -572,7 +572,7 @@ class TestSandboxLifecycle:
         import back.core.graphdb.lakebase as lakebase
         from back.core.graphdb import GraphDBFactory
 
-        monkeypatch.setattr(lakebase, "LakebaseSimulationUnion", Union)
+        monkeypatch.setattr(lakebase, "SimulationUnion", Union)
         sandbox = object.__new__(Sandbox)
         sandbox._sim = GraphDBFactory.get_simulation("lakebase")
         sandbox._live = object()

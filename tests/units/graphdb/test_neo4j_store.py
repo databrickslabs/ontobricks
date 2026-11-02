@@ -1,4 +1,4 @@
-"""Tests for the Neo4j graph DB backend (Neo4jStore).
+"""Tests for the Neo4j graph DB backend (Store).
 
 The neo4j driver is mocked — no live connection required. We exercise:
 - Capability flags
@@ -19,7 +19,7 @@ pytestmark = pytest.mark.unit
 
 # ---------------------------------------------------------------------------
 #  Skip the whole module when the neo4j driver isn't installed in the test
-#  environment — Neo4jStore.__init__ raises ImportError in that case and the
+#  environment — Store.__init__ raises ImportError in that case and the
 #  module-under-test imports `neo4j` at import time.
 # ---------------------------------------------------------------------------
 
@@ -72,16 +72,16 @@ def _secret_config(**overrides: Any) -> Dict[str, Any]:
 
 
 def _store(**overrides: Any):
-    """Construct a Neo4jStore with the underlying connection's `run` mocked.
+    """Construct a Store with the underlying connection's `run` mocked.
 
     Post-split (PR #47 Benoit review) the actual Cypher execution lives on
-    :class:`Neo4jConnection`, not on the Store. Mocking ``s._connection.run``
+    :class:`Connection`, not on the Store. Mocking ``s._connection.run``
     intercepts every Cypher call regardless of whether the read/write op
     helpers or the Store façade is the entry point.
     """
-    from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+    from back.core.graphdb.neo4j.Store import Store
 
-    s = Neo4jStore(db_name="testset", engine_config=_basic_config(**overrides))
+    s = Store(db_name="testset", engine_config=_basic_config(**overrides))
     s._connection.run = MagicMock(return_value=[])  # type: ignore[assignment]
     # Legacy alias: tests that still reference ``s._run`` go through the
     # façade's delegator, which now points at the mocked connection.
@@ -113,34 +113,34 @@ class TestCapabilityFlags:
 
 class TestConstruction:
     def test_valid_config(self):
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
-        store = Neo4jStore(db_name="dom_V1", engine_config=_basic_config())
+        store = Store(db_name="dom_V1", engine_config=_basic_config())
         assert store.db_name == "dom_V1"
         assert store._uri == "neo4j+s://b4810af7.databases.neo4j.io"
         assert store._database == "neo4j"
         assert store._auth_method == "basic"
 
     def test_missing_uri_raises(self):
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
         cfg = _basic_config()
         cfg["uri"] = ""
         with pytest.raises(ValueError, match="uri"):
-            Neo4jStore(engine_config=cfg)
+            Store(engine_config=cfg)
 
     def test_unsupported_auth_method_raises(self):
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
         with pytest.raises(ValueError, match="auth_method"):
-            Neo4jStore(engine_config=_basic_config(auth_method="kerberos"))
+            Store(engine_config=_basic_config(auth_method="kerberos"))
 
     def test_database_defaults_to_neo4j(self):
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
         cfg = _basic_config()
         cfg["database"] = ""
-        store = Neo4jStore(engine_config=cfg)
+        store = Store(engine_config=cfg)
         assert store._database == "neo4j"
 
 
@@ -297,7 +297,7 @@ class TestFactoryDispatch:
             engine_config=_connections_config(),
         )
         assert store is not None
-        assert store.__class__.__name__ == "Neo4jStore"
+        assert store.__class__.__name__ == "Store"
         assert store.db_name == "dom_V1"
 
     def test_factory_returns_none_on_missing_uri(self):
@@ -411,13 +411,13 @@ class TestPasswordSourcing:
     """
 
     def test_helper_reports_secret_when_env_var_set(self, monkeypatch):
-        from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
+        from back.core.graphdb.neo4j.Store import is_neo4j_password_from_secret
 
         monkeypatch.setenv("NEO4J_PASSWORD", "from-secret")
         assert is_neo4j_password_from_secret() is True
 
     def test_helper_reports_no_secret_when_env_var_blank(self, monkeypatch):
-        from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
+        from back.core.graphdb.neo4j.Store import is_neo4j_password_from_secret
 
         monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
         assert is_neo4j_password_from_secret() is False
@@ -470,16 +470,16 @@ class TestPasswordSourcing:
 
 class TestDatabricksSecretAuth:
     def setup_method(self, _method):
-        from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
+        from back.core.graphdb.neo4j.Connection import Connection
 
-        # The value cache is class-level (shared across Neo4jConnection
+        # The value cache is class-level (shared across Connection
         # instances) — clear it so tests don't leak cached secrets.
-        Neo4jConnection._secret_value_cache.clear()
+        Connection._secret_value_cache.clear()
 
     def _secret_store(self, **overrides: Any):
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
-        return Neo4jStore(db_name="testset", engine_config=_secret_config(**overrides))
+        return Store(db_name="testset", engine_config=_secret_config(**overrides))
 
     def test_resolve_auth_fetches_from_secrets_api(self):
         with patch("back.core.databricks.DatabricksAuth.DatabricksAuth") as MockAuth, \
@@ -543,7 +543,7 @@ class TestCypherLogging:
     """
 
     def test_normalise_collapses_whitespace(self):
-        from back.core.graphdb.neo4j.Neo4jStore import _normalise_cypher_for_log
+        from back.core.graphdb.neo4j.Store import _normalise_cypher_for_log
 
         flat = _normalise_cypher_for_log(
             "MATCH (t:`X`)\n  WHERE t.predicate = $rdf_type\n   RETURN t"
@@ -551,7 +551,7 @@ class TestCypherLogging:
         assert flat == "MATCH (t:`X`) WHERE t.predicate = $rdf_type RETURN t"
 
     def test_normalise_truncates_long_cypher(self):
-        from back.core.graphdb.neo4j.Neo4jStore import _normalise_cypher_for_log
+        from back.core.graphdb.neo4j.Store import _normalise_cypher_for_log
 
         long = "MATCH (t:`X`) RETURN t " + ("x" * 4000)
         out = _normalise_cypher_for_log(long)
@@ -560,11 +560,11 @@ class TestCypherLogging:
 
     def test_run_emits_info_log_with_cypher_and_metrics(self, caplog):
         """The real `_run` (no MagicMock) emits a single INFO line per call."""
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
         # Build a store without the MagicMock helper so `_run` runs for real,
         # then stub `get_connection` to return a fake driver capturing the call.
-        s = Neo4jStore(db_name="testset", engine_config=_basic_config())
+        s = Store(db_name="testset", engine_config=_basic_config())
 
         class _FakeResult:
             def __iter__(self):
@@ -585,18 +585,18 @@ class TestCypherLogging:
         s._driver = _FakeDriver()
 
         import logging
-        # The Cypher INFO log is emitted from Neo4jConnection.run (post-split,
+        # The Cypher INFO log is emitted from Connection.run (post-split,
         # PR #47 Benoit review). The Store façade now delegates via _run.
         # NOTE: `get_logger` (back.core.logging.LogManager) rewrites the
         # ``back.`` prefix → ``ontobricks.`` so the real logger name is
-        # ``ontobricks.core.graphdb.neo4j.Neo4jConnection``.
+        # ``ontobricks.core.graphdb.neo4j.Connection``.
         # LogManager.setup() sets propagate=False on the ontobricks tree, so
         # attach caplog's handler directly (same pattern as TaskManager tests).
         # Replicate that propagate=False here: unit tests don't run
         # LogManager.setup(), so the logger still propagates to the root, where
         # pytest's caplog handler also lives — leaving propagation on would
         # double-capture the single emitted record (once on target, once on root).
-        target = logging.getLogger("ontobricks.core.graphdb.neo4j.Neo4jConnection")
+        target = logging.getLogger("ontobricks.core.graphdb.neo4j.Connection")
         prev_propagate = target.propagate
         target.propagate = False
         target.addHandler(caplog.handler)

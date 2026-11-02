@@ -93,7 +93,7 @@ class GraphBackend(ABC):
         """Return the table name that contains only synced (non-materialized) triples.
 
         For backends that separate synced bulk data from app-written/inferred data
-        (e.g. LakebaseFlatStore with its ``_sync`` / ``__app`` companion layout),
+        (e.g. FlatStore with its ``_sync`` / ``__app`` companion layout),
         this returns the synced-only side so callers can query without materialised
         triples.  The default returns *table_name* unchanged (no distinction).
         """
@@ -158,7 +158,7 @@ class GraphBackend(ABC):
         """Return the count of inferred/app-written triples for *table_name*.
 
         Backends that separate bulk-synced data from reasoning output
-        (e.g. :class:`LakebaseFlatStore`) override this to query only the
+        (e.g. :class:`FlatStore`) override this to query only the
         writable companion table.  The default returns 0 (no distinction
         between synced and inferred triples in this backend).
         """

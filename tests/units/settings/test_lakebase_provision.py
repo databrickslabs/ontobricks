@@ -1,6 +1,6 @@
 """Unit tests for the in-app Lakebase graph DB provisioner.
 
-Covers the :class:`LakebaseGraphProvisioner` step sequence (with the
+Covers the :class:`InstanceProvisioner` step sequence (with the
 Databricks control-plane API and psycopg mocked) and the admin gating of
 ``SettingsService.graph_engine_lakebase_provision_result``.
 """
@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.task_manager import get_task_manager
-from back.core.graphdb.lakebase.LakebaseGraphProvisioner import (
-    LakebaseGraphProvisioner,
+from back.core.graphdb.lakebase.InstanceProvisioner import (
+    InstanceProvisioner,
     provision_steps,
 )
 
@@ -187,7 +187,7 @@ def _make_provisioner(api, sql_log, *, grant_uc=False, **overrides):
         pg_user="app-sp",
     )
     kwargs.update(overrides)
-    prov = LakebaseGraphProvisioner(**kwargs)
+    prov = InstanceProvisioner(**kwargs)
     prov._api = lambda: api  # bypass WorkspaceClient construction
 
     fake_psycopg = MagicMock()
@@ -321,7 +321,7 @@ class TestProvisioner:
         prov, _, _ = _make_provisioner(api, [])
 
         with patch(
-            "back.core.graphdb.lakebase.LakebaseGraphProvisioner.time.sleep",
+            "back.core.graphdb.lakebase.InstanceProvisioner.time.sleep",
             return_value=None,
         ):
             prov._resolve_project_path(api)
@@ -507,7 +507,7 @@ class TestProvisionService:
              ), \
              patch.object(ss, "global_config_service", gcs), \
              patch(
-                 "back.core.graphdb.lakebase.LakebaseGraphProvisioner.LakebaseGraphProvisioner"
+                 "back.core.graphdb.lakebase.InstanceProvisioner.InstanceProvisioner"
              ) as prov_cls:
             prov_cls.return_value.run.return_value = None
             out = SettingsService.graph_engine_lakebase_provision_result(

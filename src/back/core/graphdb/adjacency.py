@@ -90,7 +90,7 @@ def seeded_bfs_sql(
     Mirrors :func:`expand_and_fetch_sql`'s per-level CTE/anti-join shape but
     returns every discovered ``(entity, min_lvl)`` pair instead of joining a
     payload relation — the contract
-    :meth:`~back.core.graphdb.GraphBackend.GraphBackend.bfs_traversal`
+    :meth:`~back.core.graphdb.interfaces.GraphBackend.GraphBackend.bfs_traversal`
     callers expect. Unbounded by design: MCP find has no entity/triple caps
     today (only output-triple pagination happens after this query), and this
     function must not introduce a new limit that changes result sets.

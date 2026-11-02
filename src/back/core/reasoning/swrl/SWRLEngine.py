@@ -15,7 +15,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
-from back.core.graphdb.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult

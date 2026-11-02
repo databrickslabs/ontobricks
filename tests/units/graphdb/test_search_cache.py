@@ -22,7 +22,7 @@ from back.core.graphdb.search_cache import (
     resolve_search_cache_mode,
     search_cache_usage,
 )
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 
 pytestmark = pytest.mark.unit
 

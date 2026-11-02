@@ -1,7 +1,7 @@
 """Tests for the Neo4j admin inventory methods (P5 Settings → Neo4j tabs).
 
-``Neo4jReadOps.list_labels`` (Objects tab: graphs + node/edge counts) and
-``Neo4jReadOps.list_databases`` (P4 DB selector) are exercised against a mocked
+``ReadOps.list_labels`` (Objects tab: graphs + node/edge counts) and
+``ReadOps.list_databases`` (P4 DB selector) are exercised against a mocked
 connection whose ``run`` is routed per-Cypher, so no live Neo4j is needed.
 """
 
@@ -14,12 +14,12 @@ pytestmark = pytest.mark.unit
 
 
 def _readops(router):
-    """Neo4jReadOps whose connection.run dispatches through *router(cypher, params)*."""
-    from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+    """ReadOps whose connection.run dispatches through *router(cypher, params)*."""
+    from back.core.graphdb.neo4j.ReadOps import ReadOps
 
     conn = MagicMock()
     conn.run = MagicMock(side_effect=lambda cypher, **params: router(cypher, params))
-    return Neo4jReadOps(conn), conn
+    return ReadOps(conn), conn
 
 
 class TestListLabels:

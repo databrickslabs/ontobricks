@@ -126,7 +126,7 @@ class GraphDBFactory:
         *,
         engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
-        """Instantiate :class:`Neo4jStore` against a named Settings connection.
+        """Instantiate :class:`Store` against a named Settings connection.
 
         Resolves ``domain.info.neo4j_connection`` against
         ``engine_config.connections`` (or a nested graph_engine_config root).
@@ -143,7 +143,7 @@ class GraphDBFactory:
                 resolve_neo4j_connection,
             )
             from back.core.graphdb.neo4j import NEO4J_AVAILABLE
-            from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+            from back.core.graphdb.neo4j.Store import Store
             from shared.config.constants import DEFAULT_GRAPH_NAME
         except ImportError as e:
             logger.warning("Neo4j graph engine requires the 'neo4j' driver: %s", e)
@@ -159,7 +159,7 @@ class GraphDBFactory:
         conn_name = str(info.get("neo4j_connection") or "").strip()
         if not conn_name:
             logger.warning(
-                "Neo4jStore: domain has no neo4j_connection — pick one in "
+                "Store: domain has no neo4j_connection — pick one in "
                 "Domain → General → Knowledge Graph"
             )
             return None
@@ -177,7 +177,7 @@ class GraphDBFactory:
             profile = resolve_neo4j_connection({"neo4j": root_or_section}, conn_name)
         if not profile:
             logger.warning(
-                "Neo4jStore: connection %r not found in Settings → Neo4j",
+                "Store: connection %r not found in Settings → Neo4j",
                 conn_name,
             )
             return None
@@ -187,12 +187,12 @@ class GraphDBFactory:
         version = getattr(domain, "current_version", "1") or "1"
         db_name = "%s_V%s" % (base_name, version)
         try:
-            return Neo4jStore(db_name=db_name, engine_config=cfg)
+            return Store(db_name=db_name, engine_config=cfg)
         except (ValueError, NotImplementedError) as exc:
-            logger.warning("Neo4jStore configuration error: %s", exc)
+            logger.warning("Store configuration error: %s", exc)
             return None
         except Exception as e:  # noqa: BLE001
-            logger.exception("Failed to create Neo4jStore: %s", e)
+            logger.exception("Failed to create Store: %s", e)
             return None
 
     def _create_auto(
@@ -411,7 +411,7 @@ class GraphDBFactory:
         *,
         engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
-        """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance.
+        """Instantiate :class:`FlatStore` on the bound Lakebase instance.
 
         Authorization note (2026-09-26-domain-obo-graph-access-design): Lakebase
         connects as the app service principal (``PGUSER``) — there is no user
@@ -421,12 +421,12 @@ class GraphDBFactory:
         """
         try:
             from back.core.graphdb.lakebase import LAKEBASE_AVAILABLE
-            from back.core.graphdb.lakebase.LakebaseBase import (
+            from back.core.graphdb.lakebase.Base import (
                 normalize_sync_table_mode,
                 resolve_postgres_database_override,
             )
-            from back.core.graphdb.lakebase.LakebaseFlatStore import (
-                LakebaseFlatStore,
+            from back.core.graphdb.lakebase.FlatStore import (
+                FlatStore,
                 SYNC_MODE_APP,
                 SYNC_MODE_MANAGED,
                 resolve_lakebase_graph_schema,
@@ -516,7 +516,7 @@ class GraphDBFactory:
                 sync_mode = SYNC_MODE_APP
 
         try:
-            store = LakebaseFlatStore(
+            store = FlatStore(
                 auth,
                 schema=schema,
                 database_override=database_override,
@@ -616,15 +616,15 @@ class GraphDBFactory:
 
             return DeltaGraphBuilder(domain, settings, client=client)
         if resolved == "lakebase":
-            from back.core.graphdb.lakebase.LakebaseGraphBuilder import (
-                LakebaseGraphBuilder,
+            from back.core.graphdb.lakebase.Builder import (
+                Builder,
             )
 
-            return LakebaseGraphBuilder(domain, settings)
+            return Builder(domain, settings)
         if resolved == "neo4j":
-            from back.core.graphdb.neo4j.Neo4jGraphBuilder import Neo4jGraphBuilder
+            from back.core.graphdb.neo4j.Builder import Builder
 
-            return Neo4jGraphBuilder()
+            return Builder()
         return None
 
     @classmethod
@@ -656,15 +656,15 @@ class GraphDBFactory:
 
             return DeltaHealthProbe(domain, settings)
         if resolved == "lakebase":
-            from back.core.graphdb.lakebase.LakebaseHealthProbe import (
-                LakebaseHealthProbe,
+            from back.core.graphdb.lakebase.HealthProbe import (
+                HealthProbe,
             )
 
-            return LakebaseHealthProbe()
+            return HealthProbe()
         if resolved == "neo4j":
-            from back.core.graphdb.neo4j.Neo4jHealthProbe import Neo4jHealthProbe
+            from back.core.graphdb.neo4j.HealthProbe import HealthProbe
 
-            return Neo4jHealthProbe()
+            return HealthProbe()
         return None
 
     @classmethod
@@ -678,15 +678,15 @@ class GraphDBFactory:
         """Vend the :class:`GraphProvisioner` for a domain (or ``None``)."""
         resolved = engine or cls._builder_engine(domain, settings)
         if resolved == "lakebase":
-            from back.core.graphdb.lakebase.LakebaseProvisioner import (
-                LakebaseProvisioner,
+            from back.core.graphdb.lakebase.Provisioner import (
+                Provisioner,
             )
 
-            return LakebaseProvisioner()
+            return Provisioner()
         if resolved == "neo4j":
-            from back.core.graphdb.neo4j.Neo4jProvisioner import Neo4jProvisioner
+            from back.core.graphdb.neo4j.Provisioner import Provisioner
 
-            return Neo4jProvisioner()
+            return Provisioner()
         return None
 
     @classmethod
@@ -697,17 +697,17 @@ class GraphDBFactory:
         simulation layer to pick the sandbox implementation without importing a
         backend package.
         """
-        from back.core.graphdb.lakebase import LakebaseFlatStore
+        from back.core.graphdb.lakebase import FlatStore
 
-        if LakebaseFlatStore is not None and isinstance(store, LakebaseFlatStore):
+        if FlatStore is not None and isinstance(store, FlatStore):
             return "lakebase"
         from back.core.graphdb.delta.DeltaReadStore import DeltaReadStore
 
         if isinstance(store, DeltaReadStore):
             return "delta"
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
-        if isinstance(store, Neo4jStore):
+        if isinstance(store, Store):
             return "neo4j"
         return ""
 
@@ -719,19 +719,19 @@ class GraphDBFactory:
         and the domain graph-backend key ``databricks`` (≡ Delta).
         """
         if kind == "lakebase":
-            from back.core.graphdb.lakebase.LakebaseSimulation import (
-                LakebaseSimulation,
+            from back.core.graphdb.lakebase.Simulation import (
+                Simulation,
             )
 
-            return LakebaseSimulation()
+            return Simulation()
         if kind in ("delta", "databricks"):
             from back.core.graphdb.delta.DeltaSimulation import DeltaSimulation
 
             return DeltaSimulation()
         if kind == "neo4j":
-            from back.core.graphdb.neo4j.Neo4jSimulation import Neo4jSimulation
+            from back.core.graphdb.neo4j.Simulation import Simulation
 
-            return Neo4jSimulation()
+            return Simulation()
         return None
 
     @classmethod

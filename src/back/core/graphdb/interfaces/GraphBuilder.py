@@ -10,7 +10,7 @@ This is a **capability marker**: the concrete method surface is engine-specific
 (Delta materializes Unity-Catalog relations and drives the triple-store build
 pipeline; Lakebase drives the Lakeflow synced-table pipeline), so the methods
 live on the concrete implementations (:class:`DeltaGraphBuilder`,
-:class:`LakebaseGraphBuilder`). Callers obtain the right builder from the factory
+:class:`Builder`). Callers obtain the right builder from the factory
 and use the operations that backend exposes.
 """
 

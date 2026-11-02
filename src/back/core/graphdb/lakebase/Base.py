@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from back.core.errors import InfrastructureError
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -153,7 +153,7 @@ def _require_psycopg():
     return _rq()
 
 
-class LakebaseBase(MaterializedGraphBackend):
+class Base(MaterializedGraphBackend):
     """Connection flags + naming shared by Lakebase graph stores."""
 
     def __init__(

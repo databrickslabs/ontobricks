@@ -9,7 +9,7 @@ classDiagram
     class ValidationError
     class InfrastructureError
     class OperationCancelledError
-    class LakebaseGraphPoolError
+    class PoolError
     class StoreError
 
     Exception    <|-- OntoBricksError
@@ -19,7 +19,7 @@ classDiagram
     OntoBricksError <|-- ValidationError
     OntoBricksError <|-- InfrastructureError
     OntoBricksError <|-- OperationCancelledError
-    RuntimeError <|-- LakebaseGraphPoolError
+    RuntimeError <|-- PoolError
     RuntimeError <|-- StoreError
 
     %% ─── Storage / Backend Hierarchy (two hats over a shared read root) ─────────
@@ -54,17 +54,17 @@ classDiagram
     class DeltaViewStore {
         +pass-through view
     }
-    class LakebaseBase {
+    class Base {
         +physical_table_id()
         +get_node_table()
         +get_query_translator()
     }
-    class LakebaseFlatStore {
+    class FlatStore {
         +sync_mode()
         +is_synced()
         +sync_uc_catalog()
     }
-    class Neo4jStore {
+    class Store {
         +get_connection()
     }
     class ExampleStore {
@@ -75,14 +75,14 @@ classDiagram
     ABC                      <|-- GraphBackend
     GraphBackend             <|-- MaterializedGraphBackend
     GraphBackend             <|-- VirtualBackend
-    MaterializedGraphBackend <|-- LakebaseBase
+    MaterializedGraphBackend <|-- Base
     MaterializedGraphBackend <|-- DeltaMaterializedStore
-    MaterializedGraphBackend <|-- Neo4jStore
+    MaterializedGraphBackend <|-- Store
     MaterializedGraphBackend <|-- ExampleStore
     VirtualBackend           <|-- DeltaViewStore
     DeltaReadStore           <|-- DeltaMaterializedStore
     DeltaReadStore           <|-- DeltaViewStore
-    LakebaseBase             <|-- LakebaseFlatStore
+    Base             <|-- FlatStore
 
     %% ─── Graph DB Capabilities (factory-vended, per backend) ────────────────────
     class GraphBuilder { <<ABC>> }
@@ -102,16 +102,16 @@ classDiagram
     }
 
     GraphBuilder     <|-- DeltaGraphBuilder
-    GraphBuilder     <|-- LakebaseGraphBuilder
-    GraphBuilder     <|-- Neo4jGraphBuilder
+    GraphBuilder     <|-- Builder
+    GraphBuilder     <|-- Builder
     GraphHealthProbe <|-- DeltaHealthProbe
-    GraphHealthProbe <|-- LakebaseHealthProbe
-    GraphHealthProbe <|-- Neo4jHealthProbe
-    GraphProvisioner <|-- LakebaseProvisioner
-    GraphProvisioner <|-- Neo4jProvisioner
-    GraphSimulation  <|-- LakebaseSimulation
+    GraphHealthProbe <|-- HealthProbe
+    GraphHealthProbe <|-- HealthProbe
+    GraphProvisioner <|-- Provisioner
+    GraphProvisioner <|-- Provisioner
+    GraphSimulation  <|-- Simulation
     GraphSimulation  <|-- DeltaSimulation
-    GraphSimulation  <|-- Neo4jSimulation
+    GraphSimulation  <|-- Simulation
     GraphDBFactory ..> GraphBuilder : vends
     GraphDBFactory ..> GraphHealthProbe : vends
     GraphDBFactory ..> GraphProvisioner : vends

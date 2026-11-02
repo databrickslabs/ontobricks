@@ -7,11 +7,11 @@ table lifecycle, triple ingestion, companion (adjacency / entity-search /
 props) materialization, inference purge, and remote sync.
 
 Read-only pass-through engines (e.g. a Delta ``view``) use
-:class:`back.core.graphdb.VirtualBackend.VirtualBackend` instead, which exposes
+:class:`back.core.graphdb.interfaces.VirtualBackend.VirtualBackend` instead, which exposes
 no write surface.
 
-Every concrete materialized engine (``LakebaseFlatStore``,
-``DeltaMaterializedStore``, ``Neo4jStore``) subclasses this hat, guaranteeing a
+Every concrete materialized engine (``FlatStore``,
+``DeltaMaterializedStore``, ``Store``) subclasses this hat, guaranteeing a
 uniform write contract so the factory can add or drop a backend without the
 rest of the codebase caring which engine is active.
 """
@@ -19,7 +19,7 @@ rest of the codebase caring which engine is active.
 from abc import abstractmethod
 from typing import Callable, Dict, List, Optional
 
-from back.core.graphdb.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
 
 
 class MaterializedGraphBackend(GraphBackend):

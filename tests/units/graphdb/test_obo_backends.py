@@ -178,7 +178,7 @@ def test_lakebase_backend_never_consults_obo(monkeypatch, obo_spy):
             return_value=MagicMock(catalog="c", schema="s", volume="v"),
         ),
         patch(
-            "back.core.graphdb.lakebase.LakebaseFlatStore.LakebaseFlatStore",
+            "back.core.graphdb.lakebase.FlatStore.FlatStore",
         ) as mock_lb,
     ):
         mock_lb.return_value = MagicMock()
@@ -225,7 +225,7 @@ def test_neo4j_backend_never_consults_obo(monkeypatch, obo_spy):
     )
 
     assert store is not None
-    assert store.__class__.__name__ == "Neo4jStore"
+    assert store.__class__.__name__ == "Store"
     # Database comes from the named profile, not from any OBO identity…
     assert store._database == "insurbricks"
     # …and the Neo4j path never looked at the request identity.

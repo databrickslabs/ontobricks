@@ -1,4 +1,4 @@
-"""Tests for the typed property-graph write path (Neo4jWriteOps).
+"""Tests for the typed property-graph write path (WriteOps).
 
 The neo4j driver is mocked — we assert on the Cypher emitted through the
 connection. Verifies that inserts MERGE nodes on uri, set labels/properties,
@@ -29,12 +29,12 @@ RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
 
 def _writeops():
-    """Neo4jWriteOps wired to a mocked connection that records every call."""
-    from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps
+    """WriteOps wired to a mocked connection that records every call."""
+    from back.core.graphdb.neo4j.WriteOps import WriteOps
 
     conn = MagicMock()
     conn.run = MagicMock(return_value=[])
-    w = Neo4jWriteOps(conn)
+    w = WriteOps(conn)
     return w, conn
 
 
@@ -66,7 +66,7 @@ class TestCreateDrop:
         cy = " ".join(_all_cypher(conn))
         assert "DROP CONSTRAINT" in cy
         assert "MATCH (n:`InsurBricks_V1`) DETACH DELETE n" in cy
-        # schema map drop also fires (via Neo4jSchemaMap)
+        # schema map drop also fires (via SchemaMap)
         assert "__GraphSchema" in cy
 
 

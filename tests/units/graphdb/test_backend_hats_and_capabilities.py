@@ -22,9 +22,9 @@ import pytest
 pytest.importorskip("psycopg")
 pytest.importorskip("neo4j")
 
-from back.core.graphdb.GraphBackend import GraphBackend
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
-from back.core.graphdb.VirtualBackend import VirtualBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.interfaces.VirtualBackend import VirtualBackend
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.graphdb.delta.DeltaMaterializedStore import DeltaMaterializedStore
 from back.core.graphdb.delta.DeltaViewStore import DeltaViewStore
@@ -110,15 +110,15 @@ class TestClassifyStore:
         assert GraphDBFactory.classify_store(DeltaViewStore(MagicMock())) == "delta"
 
     def test_lakebase_classifies_as_lakebase(self):
-        from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+        from back.core.graphdb.lakebase.FlatStore import FlatStore
 
-        store = object.__new__(LakebaseFlatStore)  # isinstance only, no ctor deps
+        store = object.__new__(FlatStore)  # isinstance only, no ctor deps
         assert GraphDBFactory.classify_store(store) == "lakebase"
 
     def test_neo4j_classifies_as_neo4j(self):
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
-        store = object.__new__(Neo4jStore)
+        store = object.__new__(Store)
         assert GraphDBFactory.classify_store(store) == "neo4j"
 
     def test_unknown_store_classifies_as_empty(self):
@@ -128,25 +128,25 @@ class TestClassifyStore:
 class TestGetBuilder:
     def test_explicit_engine_selects_impl(self):
         from back.core.graphdb.delta.DeltaGraphBuilder import DeltaGraphBuilder
-        from back.core.graphdb.lakebase.LakebaseGraphBuilder import LakebaseGraphBuilder
-        from back.core.graphdb.neo4j.Neo4jGraphBuilder import Neo4jGraphBuilder
+        from back.core.graphdb.lakebase.Builder import Builder as LakebaseBuilder
+        from back.core.graphdb.neo4j.Builder import Builder as Neo4jBuilder
 
         d = _domain("lakebase")
         assert isinstance(GraphDBFactory.get_builder(d, engine="delta"), DeltaGraphBuilder)
         assert isinstance(
-            GraphDBFactory.get_builder(d, engine="lakebase"), LakebaseGraphBuilder
+            GraphDBFactory.get_builder(d, engine="lakebase"), LakebaseBuilder
         )
-        assert isinstance(GraphDBFactory.get_builder(d, engine="neo4j"), Neo4jGraphBuilder)
+        assert isinstance(GraphDBFactory.get_builder(d, engine="neo4j"), Neo4jBuilder)
 
     def test_auto_resolution_from_domain_backend(self):
         from back.core.graphdb.delta.DeltaGraphBuilder import DeltaGraphBuilder
-        from back.core.graphdb.lakebase.LakebaseGraphBuilder import LakebaseGraphBuilder
+        from back.core.graphdb.lakebase.Builder import Builder
 
         assert isinstance(
             GraphDBFactory.get_builder(_domain("databricks")), DeltaGraphBuilder
         )
         assert isinstance(
-            GraphDBFactory.get_builder(_domain("lakebase")), LakebaseGraphBuilder
+            GraphDBFactory.get_builder(_domain("lakebase")), Builder
         )
         # Neo4j has no auto builder engine — analytics forces Delta explicitly.
         assert GraphDBFactory.get_builder(_domain("neo4j")) is None
@@ -158,8 +158,8 @@ class TestGetBuilder:
 class TestGetHealthProbe:
     def test_explicit_engine_selects_impl(self):
         from back.core.graphdb.delta.DeltaHealthProbe import DeltaHealthProbe
-        from back.core.graphdb.lakebase.LakebaseHealthProbe import LakebaseHealthProbe
-        from back.core.graphdb.neo4j.Neo4jHealthProbe import Neo4jHealthProbe
+        from back.core.graphdb.lakebase.HealthProbe import HealthProbe as LakebaseHealthProbe
+        from back.core.graphdb.neo4j.HealthProbe import HealthProbe as Neo4jHealthProbe
 
         d = _domain("lakebase")
         assert isinstance(
@@ -174,21 +174,21 @@ class TestGetHealthProbe:
 
     def test_auto_resolution_from_domain_backend(self):
         from back.core.graphdb.delta.DeltaHealthProbe import DeltaHealthProbe
-        from back.core.graphdb.lakebase.LakebaseHealthProbe import LakebaseHealthProbe
+        from back.core.graphdb.lakebase.HealthProbe import HealthProbe
 
         assert isinstance(
             GraphDBFactory.get_health_probe(_domain("databricks")), DeltaHealthProbe
         )
         assert isinstance(
-            GraphDBFactory.get_health_probe(_domain("lakebase")), LakebaseHealthProbe
+            GraphDBFactory.get_health_probe(_domain("lakebase")), HealthProbe
         )
         assert GraphDBFactory.get_health_probe(_domain("neo4j")) is None
 
 
 class TestGetProvisioner:
     def test_explicit_engine_selects_impl(self):
-        from back.core.graphdb.lakebase.LakebaseProvisioner import LakebaseProvisioner
-        from back.core.graphdb.neo4j.Neo4jProvisioner import Neo4jProvisioner
+        from back.core.graphdb.lakebase.Provisioner import Provisioner as LakebaseProvisioner
+        from back.core.graphdb.neo4j.Provisioner import Provisioner as Neo4jProvisioner
 
         d = _domain("lakebase")
         assert isinstance(
@@ -202,10 +202,10 @@ class TestGetProvisioner:
         assert GraphDBFactory.get_provisioner(_domain("databricks"), engine="delta") is None
 
     def test_auto_resolution_from_domain_backend(self):
-        from back.core.graphdb.lakebase.LakebaseProvisioner import LakebaseProvisioner
+        from back.core.graphdb.lakebase.Provisioner import Provisioner
 
         assert isinstance(
-            GraphDBFactory.get_provisioner(_domain("lakebase")), LakebaseProvisioner
+            GraphDBFactory.get_provisioner(_domain("lakebase")), Provisioner
         )
         # databricks -> delta engine, which has no provisioner
         assert GraphDBFactory.get_provisioner(_domain("databricks")) is None
@@ -214,9 +214,9 @@ class TestGetProvisioner:
 
 class TestGetSimulation:
     def test_each_kind_selects_impl(self):
-        from back.core.graphdb.lakebase.LakebaseSimulation import LakebaseSimulation
+        from back.core.graphdb.lakebase.Simulation import Simulation as LakebaseSimulation
         from back.core.graphdb.delta.DeltaSimulation import DeltaSimulation
-        from back.core.graphdb.neo4j.Neo4jSimulation import Neo4jSimulation
+        from back.core.graphdb.neo4j.Simulation import Simulation as Neo4jSimulation
 
         assert isinstance(GraphDBFactory.get_simulation("lakebase"), LakebaseSimulation)
         assert isinstance(GraphDBFactory.get_simulation("delta"), DeltaSimulation)

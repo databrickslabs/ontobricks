@@ -10,7 +10,7 @@ Every node also carries a reserved **marker label** — the sanitised graph/tabl
 name — so a whole domain graph is one ``MATCH (n:<graph_label>)`` away for
 counting, dropping, and isolation. The forward transform is pure
 (:mod:`back.core.graphdb.neo4j.graph_model`); the reverse maps needed to reconstruct exact SPO
-triples on read are persisted by :class:`Neo4jSchemaMap`.
+triples on read are persisted by :class:`SchemaMap`.
 
 Public method signatures are unchanged from the flat-triple version so the
 ``MaterializedGraphBackend`` contract and all callers keep working.
@@ -18,9 +18,9 @@ Public method signatures are unchanged from the flat-triple version so the
 
 from typing import Any, Callable, Dict, List, Optional
 
-from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
+from back.core.graphdb.neo4j.Connection import Connection
 from back.core.graphdb.neo4j.graph_model import plan_writes
-from back.core.graphdb.neo4j.Neo4jSchemaMap import Neo4jSchemaMap
+from back.core.graphdb.neo4j.SchemaMap import SchemaMap
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,8 +30,8 @@ def sanitise_label(table_name: str) -> str:
     """Neo4j labels are case-sensitive identifiers; sanitise to ``[A-Za-z0-9_]``.
 
     Also used for the per-graph **marker label** applied to every node of a
-    graph. Retained (and re-exported) for :class:`Neo4jReadOps` /
-    :class:`Neo4jStore`, which key their queries on the same marker.
+    graph. Retained (and re-exported) for :class:`ReadOps` /
+    :class:`Store`, which key their queries on the same marker.
     """
     cleaned = "".join(c if c.isalnum() or c == "_" else "_" for c in table_name)
     if cleaned and cleaned[0].isdigit():
@@ -39,12 +39,12 @@ def sanitise_label(table_name: str) -> str:
     return cleaned or "_"
 
 
-class Neo4jWriteOps:
+class WriteOps:
     """Schema + CRUD writes for the typed property-graph Neo4j backend."""
 
-    def __init__(self, connection: Neo4jConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._conn = connection
-        self._schema = Neo4jSchemaMap(connection)
+        self._schema = SchemaMap(connection)
 
     # ----------------------------------------------------------------------
     #  Schema (constraint lifecycle)

@@ -11,19 +11,10 @@ interfaces over the shared read root :class:`GraphBackend`:
 
 Engines are pluggable under ``back/core/graphdb/<engine>/`` — the default is
 Lakebase Postgres (``lakebase``), with a Databricks Delta engine (``delta``)
-and a raw read-only view store (``view``).  See ``_starter_kit/`` for a
-copy-paste template.
+and a raw read-only view store (``view``).  The backend contract (hats +
+capabilities) lives in :mod:`back.core.graphdb.interfaces`.
 """
 
-from back.core.graphdb.GraphBackend import GraphBackend  # noqa: F401
-from back.core.graphdb.MaterializedGraphBackend import (  # noqa: F401
-    MaterializedGraphBackend,
-)
-from back.core.graphdb.VirtualBackend import VirtualBackend  # noqa: F401
-from back.core.graphdb.GraphBuilder import GraphBuilder  # noqa: F401
-from back.core.graphdb.GraphHealthProbe import GraphHealthProbe  # noqa: F401
-from back.core.graphdb.GraphProvisioner import GraphProvisioner  # noqa: F401
-from back.core.graphdb.GraphSimulation import GraphSimulation  # noqa: F401
 from back.core.graphdb.GraphDBFactory import GraphDBFactory  # noqa: F401
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL  # noqa: F401
 
@@ -31,13 +22,6 @@ get_graphdb = GraphDBFactory.get_graphdb
 GRAPHDB_AVAILABLE = GraphDBFactory.LAKEBASE_AVAILABLE
 
 __all__ = [
-    "GraphBackend",
-    "MaterializedGraphBackend",
-    "VirtualBackend",
-    "GraphBuilder",
-    "GraphHealthProbe",
-    "GraphProvisioner",
-    "GraphSimulation",
     "GraphDBFactory",
     "GRAPHDB_AVAILABLE",
     "get_graphdb",

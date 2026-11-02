@@ -4,8 +4,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from back.core.graphdb.GraphDBFactory import GraphDBFactory, _get_factory_singleton
-from back.core.graphdb.GraphBackend import GraphBackend
-from back.core.graphdb.MaterializedGraphBackend import MaterializedGraphBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 
 
 def _concrete_backend():
@@ -132,7 +132,7 @@ class TestGraphDBFactory:
                 ),
             ),
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.LakebaseFlatStore",
+                "back.core.graphdb.lakebase.FlatStore.FlatStore",
             ) as mock_lb,
         ):
             mock_lb.return_value = MagicMock()
@@ -171,7 +171,7 @@ class TestGraphDBFactory:
                 ),
             ),
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.LakebaseFlatStore",
+                "back.core.graphdb.lakebase.FlatStore.FlatStore",
             ) as mock_lb,
         ):
             mock_lb.return_value = MagicMock()
@@ -216,7 +216,7 @@ class TestGraphDBFactory:
                 ),
             ),
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.LakebaseFlatStore",
+                "back.core.graphdb.lakebase.FlatStore.FlatStore",
             ) as mock_lb,
         ):
             mock_lb.return_value = MagicMock()
@@ -258,7 +258,7 @@ class TestGraphDBFactory:
                 ),
             ),
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.LakebaseFlatStore",
+                "back.core.graphdb.lakebase.FlatStore.FlatStore",
             ) as mock_lb,
         ):
             mock_lb.return_value = MagicMock()
@@ -291,7 +291,7 @@ class TestGraphDBFactory:
             patch("back.core.graphdb.lakebase.LAKEBASE_AVAILABLE", True),
             patch("back.core.databricks.get_lakebase_auth", return_value=mock_auth),
             patch(
-                "back.core.graphdb.lakebase.LakebaseFlatStore.LakebaseFlatStore",
+                "back.core.graphdb.lakebase.FlatStore.FlatStore",
             ) as mock_lb,
         ):
             mock_lb.return_value = MagicMock()

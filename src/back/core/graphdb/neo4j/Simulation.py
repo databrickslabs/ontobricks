@@ -8,16 +8,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from back.core.graphdb.GraphSimulation import GraphSimulation
+from back.core.graphdb.interfaces.GraphSimulation import GraphSimulation
 
 
-class Neo4jSimulation(GraphSimulation):
+class Simulation(GraphSimulation):
     """Marker-label-isolated sandbox for a Neo4j domain."""
 
     def simulation_store(self, live_store: Any) -> Any:
         return live_store
 
     def is_native_store(self, live_store: Any) -> bool:
-        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+        from back.core.graphdb.neo4j.Store import Store
 
-        return isinstance(live_store, Neo4jStore)
+        return isinstance(live_store, Store)

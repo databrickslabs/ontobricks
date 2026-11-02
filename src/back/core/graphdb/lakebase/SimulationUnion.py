@@ -6,7 +6,7 @@ from typing import Any
 
 from back.core.errors import ValidationError
 from back.core.graphdb.lakebase import _companion_ddl
-from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+from back.core.graphdb.lakebase.Base import Base
 from back.core.helpers import validate_table_name
 
 _SANDBOX_MISSING_MESSAGE = (
@@ -15,7 +15,7 @@ _SANDBOX_MISSING_MESSAGE = (
 )
 
 
-class LakebaseSimulationUnion:
+class SimulationUnion:
     """Create and drop the read-only live∪sandbox view Explorer queries."""
 
     def __init__(self, store: Any) -> None:
@@ -25,9 +25,9 @@ class LakebaseSimulationUnion:
         validate_table_name(view)
         validate_table_name(live_table)
         validate_table_name(sandbox_table)
-        view_id = LakebaseBase.physical_table_id(view)
-        live_id = LakebaseBase.physical_table_id(live_table)
-        sandbox_id = LakebaseBase.physical_table_id(sandbox_table)
+        view_id = Base.physical_table_id(view)
+        live_id = Base.physical_table_id(live_table)
+        sandbox_id = Base.physical_table_id(sandbox_table)
         with self._store._cursor() as cur:
             # A sim marked "ready" in the registry can still have lost its
             # physical sandbox table (e.g. the graph was rebuilt/re-synced).
