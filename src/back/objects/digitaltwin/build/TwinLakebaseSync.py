@@ -33,7 +33,7 @@ snapshot.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from back.core.errors import InfrastructureError, OperationCancelledError
 from back.core.logging import get_logger
@@ -195,7 +195,7 @@ class TwinLakebaseSync:
         data_is_mv: bool,
         cancel_check: Any = None,
         on_state_change: Any = None,
-        before_delete: Optional[Callable[[str], None]] = None,
+        before_delete: Callable[[str], None] | None = None,
     ) -> tuple[str, SyncPlan]:
         """``mgr.trigger_and_wait`` with the MV change-feed fallback; returns the state and the plan synced.
 

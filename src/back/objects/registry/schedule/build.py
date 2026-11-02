@@ -222,7 +222,7 @@ def _tick_sync_plan(
     view_table: str,
     data_table: str,
     sync_mode: str,
-    mappings: Optional[Dict[str, Any]],
+    mappings: dict[str, Any] | None,
     kept: bool,
 ) -> Any:
     """The tick's :class:`SyncPlan`, decided as the main build decides it.
