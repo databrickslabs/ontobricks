@@ -6,6 +6,9 @@ the source tables' change feed; :class:`SlotPipelineSpec` is its result.
 :class:`SlotPipelineRunner` creates and runs that pipeline,
 :class:`SourceReadiness` probes whether the sources can feed it, and
 :class:`SlotReconciler` checks the slots against the ``_data`` relation.
+For the Real-Time-Mode stream, :class:`SlotRowProjector` evaluates the same
+projection in Python, :class:`SlotDiffProcessor` diffs a source row's slots
+against its state and emits :class:`SlotChange` upserts and tombstones.
 """
 
 from back.core.streaming.SlotPipelineRunner import SlotPipelineRunner  # noqa: F401
@@ -13,13 +16,19 @@ from back.core.streaming.SlotPipelineSpec import SlotPipelineSpec  # noqa: F401
 from back.core.streaming.SlotProjectionCompiler import (  # noqa: F401
     SlotProjectionCompiler,
 )
+from back.core.streaming.SlotChange import SlotChange  # noqa: F401
+from back.core.streaming.SlotDiffProcessor import SlotDiffProcessor  # noqa: F401
 from back.core.streaming.SlotReconciler import SlotReconciler  # noqa: F401
+from back.core.streaming.SlotRowProjector import SlotRowProjector  # noqa: F401
 from back.core.streaming.SourceReadiness import SourceReadiness  # noqa: F401
 
 __all__ = [
+    "SlotChange",
+    "SlotDiffProcessor",
     "SlotPipelineRunner",
     "SlotPipelineSpec",
     "SlotProjectionCompiler",
     "SlotReconciler",
+    "SlotRowProjector",
     "SourceReadiness",
 ]

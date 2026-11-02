@@ -28,6 +28,10 @@ logger = get_logger(__name__)
 # Same placeholder grammar as ``SparqlQueryRunner.extract_r2rml_mappings``.
 _TEMPLATE_COLUMN = re.compile(r'\{"?([^"{}]+)"?\}')
 
+# The predicates the translator's ``stack()`` emits besides the mapped ones.
+_RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+_RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
+
 
 class SlotProjectionCompiler:
     """Static compiler from mapping dicts to slot-event SQL.
@@ -104,7 +108,7 @@ class SlotProjectionCompiler:
         template order.
         """
         compiler = SlotProjectionCompiler
-        columns = compiler._key_columns(mapping)
+        columns = compiler.key_columns(mapping)
         for column in columns:
             compiler._require_col(column)
         casts = [f"CAST({column} AS STRING)" for column in columns]
@@ -142,7 +146,7 @@ class SlotProjectionCompiler:
         compiler._require_col(id_column)
         source_key = compiler.source_key_expr(mapping)  # validates the key columns
         not_null = " AND ".join(
-            f"{column} IS NOT NULL" for column in compiler._key_columns(mapping)
+            f"{column} IS NOT NULL" for column in compiler.key_columns(mapping)
         )
         subject_expr = SparqlTranslator._subject_expr_from_template(
             sql_escape(template or ""), id_column, dialect=DIALECT_SPARK
@@ -226,11 +230,7 @@ class SlotProjectionCompiler:
         row_local_ids: list[str] = []
         batch_mappings: list[dict] = []
         source_tables: set[str] = set()
-        candidates = [
-            ({**mapping, "class_uri": class_uri}, mapping)
-            for class_uri, mapping in (entity_mappings or {}).items()
-        ] + [(mapping, mapping) for mapping in relationship_mappings or []]
-        for mapping, original in candidates:
+        for mapping, original in compiler._candidates(entity_mappings, relationship_mappings):
             if compiler.classify(mapping) != compiler.ROW_LOCAL:
                 if not any(original is seen for seen in batch_mappings):
                     batch_mappings.append(original)
@@ -271,8 +271,79 @@ class SlotProjectionCompiler:
         )
 
     # ------------------------------------------------------------------
+    # Pure projection facts (the data behind the SQL, for SlotRowProjector)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def row_local_mappings(entity_mappings: dict, relationship_mappings: list) -> list[dict]:
+        """The class-tagged row-local mappings :meth:`compile` emits a view for, in its order.
+
+        The same enumeration and classification as :meth:`compile` (one
+        ``{**mapping, "class_uri": class_uri}`` per class, relationships are
+        batch), one mapping per ``map_id``.
+        """
+        compiler = SlotProjectionCompiler
+        selected: list[dict] = []
+        seen: set[str] = set()
+        for mapping, _original in compiler._candidates(entity_mappings, relationship_mappings):
+            if compiler.classify(mapping) != compiler.ROW_LOCAL:
+                continue
+            mapping_id = compiler.map_id(mapping)
+            if mapping_id not in seen:
+                seen.add(mapping_id)
+                selected.append(mapping)
+        return selected
+
+    @staticmethod
+    def slot_sources(mapping: dict) -> list[tuple[str, str | None, str | None]]:
+        """``(predicate, literal, column)`` per ``stack()`` pair of :meth:`_stack_pairs`.
+
+        The data behind each pair: ``rdf:type`` is the class literal, the
+        label and attribute predicates read a column (an object is
+        ``COALESCE(TRY_CAST(<column> AS STRING), '')``). Same order and the
+        same rule as the translator: a predicate on the label column is not
+        repeated.
+        """
+        compiler = SlotProjectionCompiler
+        class_uri = mapping.get("class_uri")
+        if not class_uri:
+            raise ValidationError("Entity mapping has no class_uri")
+        for column in compiler._entity_columns(mapping):
+            compiler._require_col(column)
+        label_column = mapping.get("label_column") or ""
+        sources: list[tuple[str, str | None, str | None]] = [(_RDF_TYPE, class_uri, None)]
+        if label_column:
+            sources.append((_RDFS_LABEL, None, label_column))
+        for predicate, info in (mapping.get("predicates") or {}).items():
+            if info.get("type") == "column" and info.get("column") != label_column:
+                sources.append((predicate, None, info["column"]))
+        return sources
+
+    @staticmethod
+    def subject_parts(mapping: dict) -> tuple[str, str]:
+        """``(prefix, id_column)`` of the subject expression of :meth:`slot_event_view_sql`.
+
+        The subject is ``CONCAT('<prefix>', TRY_CAST(<id_column> AS STRING))``,
+        where the prefix is the template up to its first placeholder (the
+        translator's rule; a template without one has no prefix).
+        """
+        template = mapping.get("uri_template") or ""
+        prefix = template.split("{")[0] if "{" in template else ""
+        return prefix, mapping.get("id_column")
+
+    # ------------------------------------------------------------------
     # Mapping shape helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _candidates(
+        entity_mappings: dict, relationship_mappings: list
+    ) -> list[tuple[dict, dict]]:
+        """``(mapping, original)`` per class of each entity mapping, then per relationship."""
+        return [
+            ({**mapping, "class_uri": class_uri}, mapping)
+            for class_uri, mapping in (entity_mappings or {}).items()
+        ] + [(mapping, mapping) for mapping in relationship_mappings or []]
 
     @staticmethod
     def _batch_reason(mapping: dict) -> str | None:
@@ -315,7 +386,7 @@ class SlotProjectionCompiler:
         return _TEMPLATE_COLUMN.findall(template or "")
 
     @staticmethod
-    def _key_columns(mapping: dict) -> list:
+    def key_columns(mapping: dict) -> list:
         """Return the columns forming the source key (``None`` if one is missing).
 
         Every column of a composite subject template, else the subject id column.
