@@ -162,22 +162,18 @@ def _apply_synced_pipeline(
         task_log_prefix=f"Scheduled build [{domain_name}]",
     )
     from back.core.graphdb.delta import _table_naming, materialize
-    from back.objects.digitaltwin.build import TwinBuildPostMaterialize, TwinLakebaseSync
+    from back.objects.digitaltwin.build import TwinLakebaseSync
 
     data_table = _table_naming.data_table_fqn(domain, settings) if domain is not None else ""
     if data_table:
         materialize.apply_data_relation(
             src, view_table, data_table, mode="table", with_object_hash=True
         )
-    # The domain's mode, decided with the same row-tracking probe the main build
-    # runs: a tick on another schedule would recreate the synced table (drift).
-    mode = TwinBuildPostMaterialize.decide_mode_for(
-        domain, settings, src, source_tables=source_tables
-    )
+    _, sync_mode = _tick_modes(domain, settings, src, source_tables)
     plan = TwinLakebaseSync.sync_plan_for(
         view_table=view_table,
         data_table=data_table,
-        mode_effective=mode.effective,
+        mode_effective=sync_mode,
         configured_sync_table_mode=store.sync_table_mode,
     )
     mgr.ensure(
@@ -203,6 +199,26 @@ def _apply_synced_pipeline(
                 domain_name,
                 exc,
             )
+
+
+def _tick_modes(
+    domain: Any, settings: Any, src: Any, source_tables: Optional[List[str]]
+) -> tuple[str, str]:
+    """``(data_mode, sync_mode)`` of a tick, decided as the main build decides them.
+
+    Same resolver and same row-tracking probe (``decide_mode_for``): a tick on
+    another schedule than the main build would recreate the synced table
+    (drift). *data_mode* is the resolver's effective mode; *sync_mode* is
+    ``incremental`` for a decision the main build promotes to a MERGE
+    (``TwinMergeFallback.promotes``), else the same. A failed probe raises.
+    """
+    from back.objects.digitaltwin.build import TwinBuildPostMaterialize, TwinMergeFallback
+
+    decision = TwinBuildPostMaterialize.decide_mode_for(
+        domain, settings, src, source_tables=source_tables
+    )
+    promoted = TwinMergeFallback.promotes(decision)
+    return decision.effective, "incremental" if promoted else decision.effective
 
 
 def _slot_source_tables(

@@ -806,6 +806,25 @@ class TestMergeAppliesTo:
         assert TwinMergeFallback.applies(self._pipe(decision, detail)) is False
 
 
+class TestMergePromotes:
+    """The predicate the main build and the scheduled tick share."""
+
+    def test_a_serverless_unavailable_incremental_request_is_promoted(self):
+        decision = ModeDecision("incremental", "full", "serverless_unavailable")
+
+        assert TwinMergeFallback.promotes(decision) is True
+
+    def test_a_runtime_failure_needs_its_detail(self):
+        decision = ModeDecision("incremental", "full", "incremental_failed:InfrastructureError")
+
+        assert TwinMergeFallback.promotes(decision) is False
+        assert TwinMergeFallback.promotes(decision, "Slot pipeline update FAILED") is True
+
+    @pytest.mark.parametrize("decision", [None, "incremental", ModeDecision("full", "full", "")])
+    def test_anything_else_is_not(self, decision):
+        assert TwinMergeFallback.promotes(decision) is False
+
+
 class TestMergeInsteadOfCtas:
     def test_without_serverless_the_data_table_is_merged_not_replaced(self):
         pipe = _merge_pipeline()

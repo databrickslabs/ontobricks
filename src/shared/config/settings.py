@@ -4,9 +4,12 @@ Used across the codebase (HTML routes, objects, external ``api`` package, FastAP
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import AliasChoices, ConfigDict, Field
+from pydantic import AliasChoices, ConfigDict, Field, field_validator
 from functools import lru_cache
 import os
+
+#: Lakeflow release channels a slot pipeline may run on.
+SLOT_PIPELINE_CHANNELS = ("PREVIEW", "CURRENT")
 
 
 def _get_default_session_dir() -> str:
@@ -197,6 +200,40 @@ class Settings(BaseSettings):
             "analytics_job_max_depth",
         ),
     )
+
+    # Whether the workspace can run serverless Lakeflow pipelines, which the
+    # ``incremental`` / ``microbatch`` materialization modes need (slot
+    # pipeline + materialized view). Off: an ``incremental`` domain keeps
+    # ``…_data`` up to date by MERGE and a ``microbatch`` one runs ``full``.
+    serverless_pipelines_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_SERVERLESS_PIPELINES_ENABLED",
+            "serverless_pipelines_enabled",
+        ),
+    )
+
+    # Lakeflow channel of the per-domain slot pipelines. Incremental
+    # materialized-view refreshes (Enzyme) need ``PREVIEW`` at the time of
+    # writing; ``CURRENT`` once they are generally available.
+    slot_pipeline_channel: str = Field(
+        default="PREVIEW",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_SLOT_PIPELINE_CHANNEL",
+            "slot_pipeline_channel",
+        ),
+    )
+
+    @field_validator("slot_pipeline_channel")
+    @classmethod
+    def _known_slot_pipeline_channel(cls, value: str) -> str:
+        """Upper-cased channel; anything but ``PREVIEW`` / ``CURRENT`` is refused."""
+        channel = (value or "").strip().upper()
+        if channel not in SLOT_PIPELINE_CHANNELS:
+            raise ValueError(
+                f"slot_pipeline_channel must be one of {', '.join(SLOT_PIPELINE_CHANNELS)}"
+            )
+        return channel
 
     model_config = ConfigDict(
         env_prefix="",

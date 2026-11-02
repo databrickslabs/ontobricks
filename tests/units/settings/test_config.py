@@ -110,6 +110,31 @@ class TestSettings:
         assert s.secret_key == "my-secret"
         assert s.databricks_host == "https://custom.databricks.com"
 
+    def test_the_incremental_pipeline_settings_default_to_serverless_on_preview(self, monkeypatch):
+        monkeypatch.delenv("ONTOBRICKS_SERVERLESS_PIPELINES_ENABLED", raising=False)
+        monkeypatch.delenv("ONTOBRICKS_SLOT_PIPELINE_CHANNEL", raising=False)
+        from shared.config.settings import Settings
+
+        s = Settings(_env_file=None)
+        assert (s.serverless_pipelines_enabled, s.slot_pipeline_channel) == (True, "PREVIEW")
+
+    def test_the_incremental_pipeline_settings_come_from_the_environment(self, monkeypatch):
+        monkeypatch.setenv("ONTOBRICKS_SERVERLESS_PIPELINES_ENABLED", "false")
+        monkeypatch.setenv("ONTOBRICKS_SLOT_PIPELINE_CHANNEL", " current ")
+        from shared.config.settings import Settings
+
+        s = Settings(_env_file=None)
+        assert (s.serverless_pipelines_enabled, s.slot_pipeline_channel) == (False, "CURRENT")
+
+    def test_an_unknown_slot_pipeline_channel_is_refused(self, monkeypatch):
+        import pydantic
+
+        monkeypatch.setenv("ONTOBRICKS_SLOT_PIPELINE_CHANNEL", "BETA")
+        from shared.config.settings import Settings
+
+        with pytest.raises(pydantic.ValidationError, match="slot_pipeline_channel"):
+            Settings(_env_file=None)
+
     def test_get_settings_returns_settings(self):
         from shared.config.settings import get_settings
 

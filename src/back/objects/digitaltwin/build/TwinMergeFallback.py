@@ -44,23 +44,32 @@ class TwinMergeFallback:
 
     @staticmethod
     def applies(pipe: Any) -> bool:
+        """True when the running build's decision is promoted (:meth:`promotes`)."""
+        return TwinMergeFallback.promotes(
+            getattr(pipe, "mode_decision", None),
+            str(getattr(pipe, "mode_fallback_detail", "") or ""),
+        )
+
+    @staticmethod
+    def promotes(decision: Any, detail: str = "") -> bool:
         """True when an ``incremental`` request fell back to ``full`` for want of serverless.
 
         That is the resolver's ``serverless_unavailable``, or an infrastructure
-        failure of the incremental build whose message or detail mentions
+        failure of the incremental build whose message or *detail* mentions
         serverless or pipelines. ``microbatch`` needs a continuous pipeline,
-        which a MERGE cannot stand in for.
+        which a MERGE cannot stand in for. Such a decision runs as
+        ``incremental`` by MERGE; the scheduled tick asks the same question so
+        it registers the Lakebase synced table on the same schedule.
         """
-        decision = getattr(pipe, "mode_decision", None)
         if not isinstance(decision, ModeDecision):
             return False
         if decision.requested != "incremental" or decision.effective != "full":
             return False
         if decision.reason == MaterializationModeResolver.REASON_SERVERLESS_UNAVAILABLE:
             return True
-        detail = str(getattr(pipe, "mode_fallback_detail", "") or "").lower()
+        text = (detail or "").lower()
         return decision.reason.startswith(_INFRASTRUCTURE_FALLBACK) and (
-            "serverless" in detail or "pipeline" in detail
+            "serverless" in text or "pipeline" in text
         )
 
     @staticmethod

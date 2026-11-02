@@ -47,7 +47,8 @@ pre-images and `NULL` objects. An `AUTO CDC … KEYS (map_id, source_key, predic
 … STORED AS SCD TYPE 1` flow folds them into `triplestore_<domain>_V<n>_slots`.
 Join, aggregate and `sql_query` mappings stay batch: their SQL becomes the batch
 branch of the `_data` MV. The pipeline is serverless, on the `PREVIEW` channel by
-default (`settings.slot_pipeline_channel`), never in development mode, and is
+default (`settings.slot_pipeline_channel`, environment variable
+`ONTOBRICKS_SLOT_PIPELINE_CHANNEL`: `PREVIEW` or `CURRENT`), never in development mode, and is
 always reused across builds; it carries a fingerprint of its SQL
 (`ontobricks.slot_sql_sha256`) that decides between an incremental update
 (unchanged mapping) and a full refresh (changed mapping).
@@ -73,7 +74,8 @@ reason is the first downgrade's:
 
 1. `realtime` → `microbatch` — `realtime_not_available` (always, in this release).
 2. `incremental` / `microbatch` → `full` — `serverless_unavailable` when
-   `settings.serverless_pipelines_enabled` is off, or `backend_not_eligible` when
+   `settings.serverless_pipelines_enabled` is off (environment variable
+   `ONTOBRICKS_SERVERLESS_PIPELINES_ENABLED`, default on), or `backend_not_eligible` when
    the domain's graph backend is not one of `databricks`, `lakebase`, `neo4j`.
 3. `microbatch` → `incremental` — `row_tracking_missing`.
 4. `incremental` → `full` — `row_tracking_missing`.
@@ -139,9 +141,10 @@ release (`inferred_not_separable`).
 
 A scheduled tick (`registry/schedule/build.py`) resolves the domain's mode with the
 same resolver and the same row-tracking probe as the main build
-(`TwinBuildPostMaterialize.decide_mode_for`), so a tick and a main build register
-the Lakebase synced table on the same source and schedule and never alternate
-between triggered/continuous and snapshot. The tick itself still materializes
+(`TwinBuildPostMaterialize.decide_mode_for`), and counts a decision the main build
+promotes to the MERGE fallback (`TwinMergeFallback.promotes`) as `incremental`, so a
+tick and a main build register the Lakebase synced table on the same source and
+schedule and never alternate between triggered/continuous and snapshot. The tick itself still materializes
 `_data` as a table from the gateway VIEW.
 
 ## Lakehouse//RT

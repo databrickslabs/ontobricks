@@ -215,10 +215,18 @@ class TestScheduledSyncFollowsTheDomainMode:
     def test_the_configured_cap_still_applies(self):
         assert self._sync_mode("microbatch", cap="triggered") == "triggered"
 
-    def test_without_serverless_pipelines_an_incremental_domain_is_full(self):
+    def test_without_serverless_pipelines_an_incremental_domain_syncs_like_its_merge_build(self):
+        """The main build keeps such a domain incremental by MERGE (triggered): a
+        snapshot tick would delete and recreate the synced table every time."""
         settings = SimpleNamespace(serverless_pipelines_enabled=False)
 
-        assert self._sync_mode("incremental", settings=settings) == "snapshot"
+        assert self._sync_mode("incremental", settings=settings) == "triggered"
+
+    def test_without_serverless_pipelines_a_microbatch_domain_is_full(self):
+        """MERGE never stands in for a continuous pipeline."""
+        settings = SimpleNamespace(serverless_pipelines_enabled=False)
+
+        assert self._sync_mode("microbatch", settings=settings) == "snapshot"
 
     def test_a_failed_probe_fails_the_sync_step(self):
         log: list = []

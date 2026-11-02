@@ -577,6 +577,13 @@ the workspace token (locally) or the SP token (in Apps).
 | `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` | Source nodes sampled for the betweenness/closeness estimates. Dominant cost of the job — the intermediate search holds one row per (pivot, reachable node). `0` skips both metrics; a value at or above the node count makes them exact. | `64` |
 | `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` | How many levels the pivot breadth-first search may explore. A runaway guard, not a tuning knob: the search stops as soon as it runs out of frontier, so headroom costs nothing on a shallow graph. Hitting the cap withholds betweenness and closeness rather than reporting truncated values, so raise this if the Analytics page reports them as unavailable. | `32` |
 
+#### Incremental Materialization
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ONTOBRICKS_SERVERLESS_PIPELINES_ENABLED` | Whether the workspace can run serverless Lakeflow pipelines, which the `incremental` / `microbatch` materialization modes need. `false`: `incremental` domains keep `…_data` up to date by MERGE and `microbatch` domains build in `full` mode. See [Incremental materialization](incremental-materialization.md). | `true` |
+| `ONTOBRICKS_SLOT_PIPELINE_CHANNEL` | Lakeflow channel of the per-domain slot pipelines: `PREVIEW` (needed for incremental materialized-view refreshes at the time of writing) or `CURRENT`. Any other value stops the app at start-up. | `PREVIEW` |
+
 #### Databricks Runtime Detection
 
 | Variable | Description | Set By |
