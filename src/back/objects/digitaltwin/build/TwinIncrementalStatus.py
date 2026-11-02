@@ -98,43 +98,53 @@ class TwinIncrementalStatus:
 
     @staticmethod
     def overview(registry: Any) -> dict:
-        """``domains_per_mode``, ``fallbacks_by_reason`` and ``domains`` across the registry.
+        """``domains_per_mode``, ``fallbacks_by_reason``, ``domains`` and ``domains_skipped``.
 
         Every domain *registry* lists (``list_domain_details_cached``) counts
         with its newest main build run among its newest 50 runs of any version
-        (:meth:`TwinBuildRunHistory.newest_main_run`; scheduled ticks are
-        skipped): ``{name, version, mode_requested, mode_effective,
-        last_build_at, fallback_reason}``. A domain without one (never built,
-        only ticks lately, or its runs unreadable) is left out. ``domains_per_mode`` counts the
-        domains per effective mode, ``fallbacks_by_reason`` the domains whose
-        newest main run fell back, per ``mode_fallback_reason``. Nothing is
+        (:meth:`TwinBuildRunHistory.newest_main_run`: scheduled ticks are
+        skipped, status and version are not looked at): ``{name, version,
+        mode_requested, mode_effective, strategy, last_build_at,
+        fallback_reason}`` (``strategy`` — ``mv`` / ``merge`` / ``ctas`` — tells
+        a MERGE-maintained ``incremental`` from an MV one; ``""`` when not
+        recorded). A domain without one (never built, only ticks lately, or its
+        runs unreadable: the store answers ``[]`` on an error) is left out and
+        counted in ``domains_skipped``. ``domains_per_mode`` counts the domains
+        per effective mode, ``fallbacks_by_reason`` the domains whose newest
+        main run fell back, per ``mode_fallback_reason``. One
+        ``load_build_runs`` per domain: an admin KPI, not a hot path. Nothing is
         written; a registry that cannot list its domains raises
         :class:`InfrastructureError`.
         """
         ok, details, message = registry.list_domain_details_cached()
         if not ok:
             raise InfrastructureError("Could not list the registry domains", detail=message)
+        names = [str(d.get("name") or "") for d in details if isinstance(d, dict)]
         domains = []
-        for name in (str(d.get("name") or "") for d in details if isinstance(d, dict)):
+        for name in names:
             runs = registry.load_build_runs(name, limit=_OVERVIEW_RUNS_LIMIT) if name else []
             run = TwinBuildRunHistory.newest_main_run(runs)
-            if run is None:
-                continue
-            facts = TwinBuildRunHistory.facts_of(run) or {}
-            domains.append(
-                {
-                    "name": name,
-                    "version": str(run.get("version") or ""),
-                    "mode_requested": str(facts.get("materialization_mode_requested") or ""),
-                    "mode_effective": str(facts.get("materialization_mode_effective") or ""),
-                    "last_build_at": run.get("finished_at") or run.get("started_at") or "",
-                    "fallback_reason": str(facts.get("mode_fallback_reason") or ""),
-                }
-            )
+            if run is not None:
+                domains.append(TwinIncrementalStatus._overview_row(name, run))
         return {
             "domains_per_mode": TwinIncrementalStatus._tally(domains, "mode_effective"),
             "fallbacks_by_reason": TwinIncrementalStatus._tally(domains, "fallback_reason"),
             "domains": domains,
+            "domains_skipped": len(names) - len(domains),
+        }
+
+    @staticmethod
+    def _overview_row(name: str, run: dict) -> dict:
+        """One :meth:`overview` domain row from the domain's newest main *run*."""
+        facts = TwinBuildRunHistory.facts_of(run) or {}
+        return {
+            "name": name,
+            "version": str(run.get("version") or ""),
+            "mode_requested": str(facts.get("materialization_mode_requested") or ""),
+            "mode_effective": str(facts.get("materialization_mode_effective") or ""),
+            "strategy": str(facts.get("strategy") or ""),
+            "last_build_at": run.get("finished_at") or run.get("started_at") or "",
+            "fallback_reason": str(facts.get("mode_fallback_reason") or ""),
         }
 
     @staticmethod

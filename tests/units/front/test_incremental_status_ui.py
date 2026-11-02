@@ -60,3 +60,10 @@ def test_the_run_details_show_the_slots_changed_next_to_the_refresh_technique() 
     js = (REPO_ROOT / "src/front/static/global/js/runs-render.js").read_text(encoding="utf-8")
     technique = js.index("kv('Refresh Technique'")
     assert js.index("kv('Slots Changed'", technique) - technique < 120
+
+
+def test_a_full_refresh_s_slot_counts_are_labelled_as_such() -> None:
+    js = (REPO_ROOT / "src/front/static/global/js/runs-render.js").read_text(encoding="utf-8")
+    start = js.index("function slotsChangedText")
+    body = js[start : js.index("function materializationDetailsHtml")]
+    assert "changed.full_refresh" in body and "(full refresh)" in body

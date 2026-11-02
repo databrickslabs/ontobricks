@@ -1030,22 +1030,39 @@ class TestTrace:
     def test_a_build_records_the_slots_its_update_changed(self):
         entry = self._entry(_pipeline("incremental"))
 
-        assert entry["stats"]["materialization"]["slots_changed"] == _SLOT_METRICS
+        assert entry["stats"]["materialization"]["slots_changed"] == {
+            **_SLOT_METRICS,
+            "full_refresh": True,
+        }
 
     def test_a_build_records_the_update_it_read(self):
         entry = self._entry(_pipeline("incremental"))
 
         assert entry["stats"]["materialization"]["slot_update_id"] == "upd-1"
 
+    def test_a_failed_slot_update_keeps_its_id_in_the_trace(self):
+        """The update ran (and spent DBUs) even though the build fell back."""
+        entry = self._entry(_pipeline("microbatch"), fail_on="wait")
+
+        assert entry["stats"]["materialization"]["slot_update_id"] == "upd-1"
+
 
 class TestSlotsChanged:
-    def test_the_metrics_of_the_completed_update_are_recorded(self):
+    def test_a_new_pipeline_s_full_refresh_is_flagged(self):
+        """A bootstrap reports the whole table, not churn."""
         pipe = _pipeline("incremental")
 
         _, script, _ = _run(pipe)
 
-        assert pipe.slots_changed == _SLOT_METRICS
+        assert pipe.slots_changed == {**_SLOT_METRICS, "full_refresh": True}
         assert script.metrics_reads == [("pipe-1", "upd-1")]
+
+    def test_an_incremental_update_is_not_flagged_as_a_full_refresh(self):
+        pipe = _pipeline("incremental")
+
+        _run(pipe, existing="pipe-1", stored="fp-current")
+
+        assert pipe.slots_changed == {**_SLOT_METRICS, "full_refresh": False}
 
     def test_a_microbatch_bootstrap_records_its_full_refresh_once(self):
         """The triggered full refresh moved the slots; the continuous switch is not read again."""
@@ -1053,7 +1070,7 @@ class TestSlotsChanged:
 
         _, script, _ = _run(pipe)
 
-        assert pipe.slots_changed == _SLOT_METRICS
+        assert pipe.slots_changed["full_refresh"] is True
         assert len(script.metrics_reads) == 1
 
     def test_an_adopted_continuous_update_records_its_metrics(self):
@@ -1061,7 +1078,8 @@ class TestSlotsChanged:
 
         _, script, _ = _run(pipe, existing="pipe-1", stored="fp-current")
 
-        assert pipe.slots_changed == _SLOT_METRICS and script.metrics_reads == [("pipe-1", "upd-1")]
+        assert pipe.slots_changed == {**_SLOT_METRICS, "full_refresh": False}
+        assert script.metrics_reads == [("pipe-1", "upd-1")]
 
     def test_unreadable_metrics_record_none_and_the_build_goes_on(self):
         pipe = _pipeline("incremental")
@@ -1085,6 +1103,13 @@ class TestSlotsChanged:
         _, script, _ = _run(pipe, warehouse=warehouse)
 
         assert script.metrics_reads and pipe.slots_changed is None
+
+    def test_the_update_id_is_recorded_before_the_wait(self):
+        pipe = _pipeline("incremental")
+
+        _, script, _ = _run(pipe, fail_on="wait")
+
+        assert pipe.slot_update_id == "upd-1" and script.metrics_reads == []
 
     def test_a_full_build_resets_a_stale_value(self):
         pipe = _pipeline(mode=None)

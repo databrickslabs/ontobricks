@@ -294,7 +294,9 @@ def test_the_requested_mode_is_reported(env):
     assert _report(_Warehouse(), domain=_domain("microbatch"))["mode_requested"] == "microbatch"
 
 
-def _main_run(version, effective, reason="", *, requested="incremental", kind="session"):
+def _main_run(
+    version, effective, reason="", *, requested="incremental", kind="session", strategy="mv"
+):
     return {
         "version": version,
         "build_kind": kind,
@@ -306,6 +308,7 @@ def _main_run(version, effective, reason="", *, requested="incremental", kind="s
                 "materialization_mode_requested": requested,
                 "materialization_mode_effective": effective,
                 "mode_fallback_reason": reason,
+                "strategy": strategy,
             }
         },
     }
@@ -336,7 +339,7 @@ class TestOverview:
                     _main_run("4", "", kind="scheduled"),
                     _main_run("4", "microbatch", requested="microbatch"),
                 ],
-                "hr": [_main_run("2", "full", "row_tracking_missing")],
+                "hr": [_main_run("2", "full", "row_tracking_missing", strategy="ctas")],
             }
         )
 
@@ -359,6 +362,7 @@ class TestOverview:
                 "version": "4",
                 "mode_requested": "microbatch",
                 "mode_effective": "microbatch",
+                "strategy": "mv",
                 "last_build_at": "2026-11-02T10:05:00+00:00",
                 "fallback_reason": "",
             },
@@ -367,6 +371,7 @@ class TestOverview:
                 "version": "2",
                 "mode_requested": "incremental",
                 "mode_effective": "full",
+                "strategy": "ctas",
                 "last_build_at": "2026-11-02T10:05:00+00:00",
                 "fallback_reason": "row_tracking_missing",
             },
@@ -390,7 +395,27 @@ class TestOverview:
             "domains_per_mode": {},
             "fallbacks_by_reason": {},
             "domains": [],
+            "domains_skipped": 3,
         }
+
+    def test_no_domain_is_skipped_when_every_one_has_a_main_build(self, two_domains):
+        assert TwinIncrementalStatus.overview(two_domains)["domains_skipped"] == 0
+
+    def test_a_merge_maintained_domain_shows_its_strategy(self):
+        """An ``incremental`` request without serverless runs as ``incremental`` by MERGE."""
+        run = _main_run("1", "incremental", "serverless_unavailable", strategy="merge")
+
+        [row] = TwinIncrementalStatus.overview(_OverviewRegistry({"ops": [run]}))["domains"]
+
+        assert (row["mode_effective"], row["strategy"]) == ("incremental", "merge")
+
+    def test_a_run_without_a_strategy_reports_it_empty(self):
+        run = _main_run("1", "full")
+        del run["stats"]["materialization"]["strategy"]
+
+        [row] = TwinIncrementalStatus.overview(_OverviewRegistry({"ops": [run]}))["domains"]
+
+        assert row["strategy"] == ""
 
     def test_a_registry_that_cannot_list_its_domains_raises(self):
         with pytest.raises(InfrastructureError, match="registry domains"):

@@ -62,8 +62,8 @@ class TwinSlotPipeline:
 
         Without a full refresh a ``microbatch`` pipeline already running the
         current SQL is left running; any other active pipeline is stopped
-        before the update. ``pipe.slot_update_id`` / ``pipe.slots_changed``: the first
-        update and the rows it wrote (:meth:`SlotPipelineRunner.update_metrics`).
+        before the update. The first update records the trace facts
+        (:meth:`_first_update`).
         """
         from back.core.streaming import SlotPipelineRunner
 
@@ -102,7 +102,7 @@ class TwinSlotPipeline:
         pipe.slot_pipeline_id = pipeline_id
         if runner.get_state(pipeline_id) in _ACTIVE_PIPELINE_STATES:
             runner.stop(pipeline_id)
-        update_id = TwinSlotPipeline._update(
+        TwinSlotPipeline._first_update(
             pipe,
             runner,
             pipeline_id,
@@ -110,8 +110,6 @@ class TwinSlotPipeline:
             full_refresh=full_refresh,
             until_running=continuous and not full_refresh,
         )
-        pipe.slot_update_id = update_id
-        pipe.slots_changed = runner.update_metrics(pipeline_id, update_id)
         if not full_refresh:
             return
         runner.ensure(**definition, continuous=continuous, fingerprint=current)
@@ -158,9 +156,15 @@ class TwinSlotPipeline:
         until_running: bool,
         cancel_check: Callable[[], bool] | None = None,
         on_state: Callable[[str], None] | None = None,
+        on_started: Callable[[str], None] | None = None,
     ) -> str:
-        """Start one update of *pipeline_id*, wait for it (``COMPLETED``, or ``RUNNING``); its id."""
+        """Start one update of *pipeline_id*, wait for it (``COMPLETED``, or ``RUNNING``); its id.
+
+        *on_started* gets the update id as soon as the update started, before the wait.
+        """
         update_id = runner.start_update(pipeline_id, full_refresh=full_refresh)
+        if on_started is not None:
+            on_started(update_id)
         runner.wait_for_update(
             pipeline_id,
             update_id,
@@ -180,6 +184,7 @@ class TwinSlotPipeline:
         *,
         full_refresh: bool,
         until_running: bool,
+        on_started: Callable[[str], None] | None = None,
     ) -> str:
         """:meth:`run_update` with the build's cancel check and progress reports; the update id."""
         return TwinSlotPipeline.run_update(
@@ -191,6 +196,38 @@ class TwinSlotPipeline:
             on_state=lambda state: pipe.tm.update_progress(
                 pipe.task_id, 28, f"Slot pipeline {name}: {state.lower()}"
             ),
+            on_started=on_started,
+        )
+
+    @staticmethod
+    def _first_update(
+        pipe: Any,
+        runner: Any,
+        pipeline_id: str,
+        name: str,
+        *,
+        full_refresh: bool,
+        until_running: bool,
+    ) -> None:
+        """The update that refreshes ``…_slots``, with its trace facts.
+
+        ``pipe.slot_update_id`` is set as soon as the update started, so a
+        failed update keeps it (its DBUs were spent). ``pipe.slots_changed`` is
+        :meth:`SlotPipelineRunner.update_metrics` plus ``full_refresh`` (a full
+        refresh reports the whole table, not churn); ``None`` without metrics.
+        """
+        update_id = TwinSlotPipeline._update(
+            pipe,
+            runner,
+            pipeline_id,
+            name,
+            full_refresh=full_refresh,
+            until_running=until_running,
+            on_started=lambda started: setattr(pipe, "slot_update_id", started),
+        )
+        metrics = runner.update_metrics(pipeline_id, update_id)
+        pipe.slots_changed = (
+            {**metrics, "full_refresh": full_refresh} if isinstance(metrics, dict) else None
         )
 
     @staticmethod

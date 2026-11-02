@@ -531,3 +531,80 @@ class TestUpdateMetrics:
         runner, _ = _metrics_runner([], error=RuntimeError("PERMISSION_DENIED"))
 
         assert runner.update_metrics("pipe-1", "upd-1") is None
+
+    def test_the_live_auto_cdc_shape_counts_its_one_running_event(self):
+        """Live (2026-11-02): QUEUED / STARTING / COMPLETED carry no metrics, the first
+        RUNNING an empty dict, the second the upserted / deleted counts."""
+
+        def status(name, metrics):
+            return {
+                "event_type": "flow_progress",
+                "origin": {"update_id": "upd-1"},
+                "details": {"flow_progress": {"status": name, "metrics": metrics}},
+            }
+
+        running = {"backlog_bytes": 0, "num_upserted_rows": 9, "num_deleted_rows": 0}
+        events = [
+            status("COMPLETED", None),
+            status("RUNNING", running),
+            status("RUNNING", {}),
+            status("STARTING", None),
+            status("QUEUED", None),
+        ]
+        runner, _ = _metrics_runner([{"events": events}])
+
+        assert runner.update_metrics("pipe-1", "upd-1") == {
+            "rows_output": None,
+            "rows_upserted": 9,
+            "rows_deleted": 0,
+        }
+
+    def test_an_event_without_an_update_id_does_not_end_the_update(self):
+        user_action = {"event_type": "user_action", "origin": {"pipeline_id": "pipe-1"}}
+        events = [
+            _flow_progress("upd-1", num_output_rows=5),
+            user_action,
+            _flow_progress("upd-1", num_output_rows=7),
+        ]
+        runner, _ = _metrics_runner([{"events": events}])
+
+        assert runner.update_metrics("pipe-1", "upd-1")["rows_output"] == 12
+
+    def test_no_metric_at_all_is_none(self):
+        events = [
+            {"event_type": "flow_progress", "origin": {"update_id": "upd-1"}, "details": {}},
+            _flow_progress("upd-1"),
+        ]
+        runner, _ = _metrics_runner([{"events": events}])
+
+        assert runner.update_metrics("pipe-1", "upd-1") is None
+
+    def test_digit_string_counts_are_read_and_booleans_ignored(self):
+        events = [_flow_progress("upd-1", num_upserted_rows="9", num_deleted_rows=True)]
+        runner, _ = _metrics_runner([{"events": events}])
+
+        assert runner.update_metrics("pipe-1", "upd-1") == {
+            "rows_output": None,
+            "rows_upserted": 9,
+            "rows_deleted": None,
+        }
+
+    def test_the_page_cap_inside_the_update_is_none_not_a_partial_sum(self):
+        pages = [
+            {"events": [_flow_progress("upd-1", num_output_rows=1)], "next_page_token": f"p{i}"}
+            for i in range(30)
+        ]
+        runner, client = _metrics_runner(pages)
+
+        assert runner.update_metrics("pipe-1", "upd-1") is None
+        assert len(client.api_client.calls) == 20
+
+    def test_the_page_cap_before_the_update_is_none(self):
+        pages = [
+            {"events": [_flow_progress("upd-9", num_output_rows=1)], "next_page_token": f"p{i}"}
+            for i in range(30)
+        ]
+        runner, client = _metrics_runner(pages)
+
+        assert runner.update_metrics("pipe-1", "upd-1") is None
+        assert len(client.api_client.calls) == 20

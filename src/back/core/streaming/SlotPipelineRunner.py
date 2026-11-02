@@ -392,7 +392,8 @@ class SlotPipelineRunner:
     def update_metrics(self, pipeline_id: str, update_id: str) -> dict | None:
         """``{rows_output, rows_upserted, rows_deleted}`` the update wrote (:class:`SlotUpdateMetrics`).
 
-        Best effort: any API error is ``None`` (logged at warning), never raised.
+        ``None`` when no metric was found. Best effort: any API error is
+        ``None`` too (logged at warning), never raised.
         """
         try:
             return self._call(

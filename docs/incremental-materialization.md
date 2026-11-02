@@ -442,13 +442,16 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `graph_relation` | `mv` when the build made `_graph` a materialized view, `view` for the union VIEW |
 | `inferred_listed` | the store lists its inferences in `_inferred` (Neo4j); a later net apply needs a base run with it |
 | `batch_mappings` | how many mappings the slot pipeline left to `_data`'s batch branch (`null` when no incremental build ran); the [Lakehouse//RT fast path](#lakehousert) needs `0` |
-| `slots_changed` | `{rows_output, rows_upserted, rows_deleted}` the build's slot pipeline update wrote: `num_output_rows`, and for the AUTO CDC flows `num_upserted_rows` / `num_deleted_rows`, summed over the update's `flow_progress` events (`SlotPipelineRunner.update_metrics`; a metric no event carries is `null`). The update read is the first one the build ran: the full refresh of a bootstrap, else the triggered update, or the continuous update a `microbatch` build adopts once it runs (its metrics so far). `null` when no update ran (no row-local mapping, a pipeline left streaming, the full path) or its events could not be read |
-| `slot_update_id`, `warehouse_id` | the slot pipeline update `slots_changed` was read from (`""` when none ran) and the build's SQL warehouse |
+| `slots_changed` | `{rows_output, rows_upserted, rows_deleted, full_refresh}` the build's slot pipeline update wrote: `num_output_rows`, `num_upserted_rows` and `num_deleted_rows` summed over the update's `flow_progress` events (`SlotPipelineRunner.update_metrics`; a metric no event carries is `null`; counts may arrive as digit strings). Verified live: the AUTO CDC slot flows carry `num_upserted_rows` / `num_deleted_rows` on one `RUNNING` event (`QUEUED` / `STARTING` / `COMPLETED` carry none, so nothing is counted twice) and no `num_output_rows`, so `rows_output` is `null` for them; a changed source row re-upserts every slot of that row (a one-row update reported 3 upserts for its 3 slots). The update read is the first one the build ran: the full refresh of a bootstrap, else the triggered update, or the continuous update a `microbatch` build adopts once it runs (its metrics so far). `full_refresh` is `true` for a full refresh, which reports the whole table (a bootstrap: 9 upserts for 9 slot rows), not churn. `null` when no update ran (no row-local mapping, a pipeline left streaming, the full path), no event carried a metric, or the update's events could not be read to their end |
+| `slot_update_id`, `warehouse_id` | the slot pipeline update `slots_changed` describes (`""` when none ran), recorded as soon as it starts so a failed update keeps it, and the build's SQL warehouse |
 
 The events are read from the pipelines REST endpoint
 (`GET /api/2.0/pipelines/<id>/events`, newest first, up to 20 pages of 250) because
-the SDK's `PipelineEvent` drops `details`; a read that fails is a warning and never
-fails the build. The KPI "build DBUs per build" is not computed by the app: the
+the SDK's `PipelineEvent` drops `details`. Reading stops at the first event of
+another update after the update's own (events without an update id, such as user
+actions, are skipped); 20 pages without reaching that end record `null` (with a
+warning when the update's events had begun) rather than a partial sum. A read that
+fails is a warning and never fails the build. The KPI "build DBUs per build" is not computed by the app: the
 trace carries the pipeline id, update id and warehouse id (`slot_pipeline_id`,
 `slot_update_id`, `warehouse_id`, with the run's `started_at` / `finished_at`),
 which join to `system.billing.usage` (`usage_metadata.dlt_pipeline_id` /
@@ -488,19 +491,29 @@ panels never wake a warehouse for it. The scans run on the build warehouse as th
 caller. The digital twin build panels (Lakebase/Neo4j and Lakehouse) show it as
 a compact "Incremental status" card, hidden for a `full` domain; its "Last build"
 line gives the strategy, refresh technique and apply mode, then "slots changed:
-n rows, u upserted, d deleted" when the build recorded `slots_changed`.
+n rows, u upserted, d deleted" (with "(full refresh)" for a full refresh) when the
+build recorded `slots_changed`.
 
-**Overview.** `GET /dtwin/incremental/overview` (builder role, same gate as the
-status; `TwinIncrementalStatus.overview`) answers the KPI "number of domains per
-mode, and fallback events by reason" for the whole registry, without any warehouse
-or pipelines call: `{domains_per_mode: {<effective mode>: n}, fallbacks_by_reason:
-{<mode_fallback_reason>: n}, domains: [{name, version, mode_requested,
-mode_effective, last_build_at, fallback_reason}]}`. Every domain the registry lists
-(`list_domain_details_cached`) counts with its newest *main* build run among its
-newest 50 runs of any version (`TwinBuildRunHistory.newest_main_run`: scheduled
-ticks and runs without materialization facts are skipped, whatever their status);
-a domain without one is left out. A fallback counts once per domain whose newest
-main run fell back, not once per historical event. There is no UI for it yet.
+**Overview.** `GET /dtwin/incremental/overview` (`TwinIncrementalStatus.overview`)
+answers the KPI "number of domains per mode, and fallback events by reason" for the
+whole registry, without any warehouse or pipelines call. It is an app-level ops KPI
+over every domain, so it needs the app **admin** role (a builder of the loaded
+domain is refused). It returns `{domains_per_mode: {<effective mode>: n},
+fallbacks_by_reason: {<mode_fallback_reason>: n}, domains: [{name, version,
+mode_requested, mode_effective, strategy, last_build_at, fallback_reason}],
+domains_skipped: n}`. Every domain the registry lists (`list_domain_details_cached`)
+counts with its newest *main* build run among its newest 50 runs of any version
+(`TwinBuildRunHistory.newest_main_run`: scheduled ticks and runs without
+materialization facts are skipped); the newest main run decides whatever its status
+and version, so a failed run or a rebuild of an older version can set a domain's
+mode. `strategy` (`mv` / `merge` / `ctas`, `""` when not recorded) tells an
+`incremental` maintained by MERGE from one maintained by the materialized view. A
+domain without a main run — never built, only ticks lately, or its runs unreadable
+(the registry store answers `[]` on an error) — is left out and counted in
+`domains_skipped`, the signal that the counts are partial. The cost is one
+`load_build_runs(limit=50)` per domain (one registry query each): an admin KPI, not
+a hot path. A fallback counts once per domain whose newest main run fell back, not
+once per historical event. There is no UI for it yet.
 
 ## Reconciliation
 
@@ -677,12 +690,14 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ✅ | ✅ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation)); `_graph` is an MV on the Lakehouse engine — the design wants the MV so Lakehouse//RT can read it, and only that engine's readers read `_graph`; Lakebase / Neo4j (every `realtime` domain among them) keep the VIEW their sync and stream read. Live: `EXPLAIN` incremental-eligible (`tests/external/test_mv_incremental_plan.py`, nightly), post-mutation refresh `GROUP_AGGREGATE` |
 | 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | ○ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
 | 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ✅ | ○ | the design offers either; from `_data` (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode`. An MV as a triggered/continuous synced-table source is a private preview the workspace does not have |
-| 1 P0 | Build-run trace: mode, refresh technique, fallback reason | ✅ | ○ | `stats.materialization`; cockpit column, details and status card |
+| 1 P0 | Build-run trace: mode, refresh technique, fallback reason, slot counts changed | ✅ | ✅ | `stats.materialization`; cockpit column, details and status card; `slots_changed` from the update's `flow_progress` metrics (`SlotUpdateMetrics`), with `slot_update_id` / `warehouse_id` for the DBU join on `system.billing.usage`. Live: a bootstrap reported 9 upserted slots against 9 slot rows, a one-row source update 3 (every slot of the row) — one RUNNING event carries the totals, no double count |
+| 1 exp. | Per-mapping freshness class: the UI shows which mappings are row-local (`microbatch`-eligible) and which are batch-incremental | ✅ | ○ | readiness `mappings` (`kind` = `slot` / `batch` with the compiler's reason) + counts; "Mappings: n row-local, m batch-incremental" line on the readiness card |
 | 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | ○ | `TwinNetChangeApply`; Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`); the MV change feed needs external metadata (private preview) — until then the apply falls back to a full stream as designed, the MERGE-table feed works |
 | 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | ○ | `DeltaMergeMaterializer`, `TwinMergeFallback` |
 | 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh. Live: the continuous pipeline lands a source change in `_slots` after 8.1 s median / 11.9 s max (n = 8) |
 | 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | ○ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline |
 | 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ✅ | query warehouse + "Use Lakehouse//RT"; `DeltaFlatStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Live: the app's `use_sea` client on the RT warehouse `realtime` runs the fingerprint probe and every store read shape over the relation; recursive CTEs are refused there and take the build-warehouse fallback; point reads p50 216 ms through the SEA from a laptop |
+| 2 P1 | Lakehouse//RT offered only where available, and only for tables without row filters / column masks | ✅ | ○ | readiness `lakehouse_rt` facts (query warehouse configured, RT reads on, fast path) + card line; `_slots` / `_data` / `_graph` / `_inferred` are app-created without filters or masks, so nothing to check |
 | 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | ○ | `ContinuousSyncWait`; Postgres union view |
 | 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ○ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace |
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh. Live: `drift: false`, identical counts and `xxhash64` sums after bootstrap and after mutations |
@@ -692,6 +707,7 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ✅ | ○ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time. The topic-fed pipeline SQL validates in Lakeflow; cluster sizing and run-as grants need a classic-compute workspace with a topic |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
 | Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; **`microbatch` through Lakehouse//RT 14.0 s p50 / 22.9 s p95 (n = 10) — the ≤ 30 s p95 KPI is met ✅**; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; `incremental` source → `_data` 82 s; `realtime` p99 < 1 s ○ — needs a topic and classic compute, which this workspace cannot offer (the sink's share, Lakebase upsert p99 218 ms, is measured) |
+| Verif. | KPIs: domains per mode, fallback events by reason, build DBUs | ✅ | ○ | `GET /dtwin/incremental/overview` (admin): `domains_per_mode`, `fallbacks_by_reason`, per-domain rows; DBUs are not computed by the app — the trace's pipeline id, `slot_update_id` and `warehouse_id` join to `system.billing.usage` |
 
 ## Known limitations
 

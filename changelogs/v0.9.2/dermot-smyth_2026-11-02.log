@@ -2963,7 +2963,7 @@ Modified files:
 - tests/units/graphdb/delta/test_graph_read_relation.py
 - changelogs/v0.9.2/dermot-smyth_2026-11-02.log
 
-Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+Test result: `uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks`
 -> 11485 passed, 341 skipped, 9 deselected in 79.90s; architecture suite green;
 baseline.json unchanged (SlotPipelineRunner 392 LOC, TwinIncrementalReadiness
 242, TwinIncrementalStatus 225).
@@ -3020,3 +3020,87 @@ Modified files:
 
 Test result: `uv run --frozen pytest -q tests/units/graphdb/delta/test_read_warehouse_routing.py`
 44 passed; full suite re-run recorded in the roll-up.
+
+================================================================================
+## Fix: design-doc gap review
+================================================================================
+
+Context: the review of `f7c3c21b` requested changes (1 P1, 8 P2). The
+controller's live spike (2026-11-02) settled the event shape: an AUTO CDC slot
+flow carries `num_upserted_rows` / `num_deleted_rows` on exactly one RUNNING
+`flow_progress` event and no `num_output_rows` (no double count), a changed
+source row re-upserts every slot of that row, and a bootstrap reports the whole
+table — hence the new `full_refresh` flag.
+
+Changes:
+
+1. src/api/routers/internal/dtwin.py (P1-1)
+   `GET /dtwin/incremental/overview` is gated `require(ROLE_ADMIN)` (app scope): a
+   registry-wide KPI must not answer a builder of the loaded domain.
+2. src/back/core/streaming/SlotUpdateMetrics.py (P2-2, P2-3)
+   Reading stops only at an event of *another* update (events without an update
+   id are skipped); 20 pages without reaching the end are `None` (warning when the
+   update's events had begun), never a partial sum. `read` returns `None` when no
+   event carries any metric, and accepts digit-string counts (booleans still
+   ignored). The docstring records the live shape.
+3. src/back/objects/digitaltwin/build/TwinSlotPipeline.py (P2-4, P2-5)
+   `run_update` / `_update` take `on_started`; the new `_first_update` records
+   `pipe.slot_update_id` as soon as the update started (a failed update keeps its
+   billing key) and `pipe.slots_changed` = metrics + `full_refresh`.
+   src/back/core/streaming/SlotPipelineRunner.py: docstring (`None` without metrics).
+4. src/back/objects/digitaltwin/build/TwinIncrementalStatus.py (P2-6)
+   The overview adds `domains_skipped` (domains without a readable main run) and
+   each row's `strategy`; the row builder is `_overview_row`. The docstring states
+   the O(domains) cost and that the newest main run ignores status and version.
+5. src/back/core/streaming/SlotProjectionCompiler.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py (P2-7)
+   `_candidates` is the public `candidates`, the one enumeration `compile`,
+   `row_local_mappings` and `mapping_classes` share (`_class` removed).
+6. src/back/core/helpers/DatabricksHelpers.py (P2-8)
+   `resolve_lakehouse_warehouse_id` renamed `resolve_lakehouse_query_warehouse_id`
+   (it shared its name with `engine_config.resolve_lakehouse_warehouse_id(cfg)`);
+   caller and test fixture updated.
+7. src/front/static/global/js/runs-render.js
+   `slotsChangedText` appends "(full refresh)" for a full refresh's counts.
+8. docs/incremental-materialization.md
+   Build-run trace: the `slots_changed` row carries the live shape and
+   `full_refresh`, `slot_update_id` is recorded at start, the event reading's stop
+   and cap rules. Status: the card's "(full refresh)", and the Overview paragraph
+   (admin gate, `strategy`, `domains_skipped`, the per-domain cost, status/version).
+9. changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+   The gap-round section now ends with a `Test result:` line (P2-8); this section.
+10. Tests (unit): tests/units/streaming/test_slot_pipeline_runner.py (live shape,
+    an id-less event inside the update, no metric → None, digit strings and
+    booleans, page cap inside and before the update);
+    tests/units/objects/test_build_pipeline_modes.py (`full_refresh` true / false,
+    the id kept when the wait fails, on the pipe and in the trace);
+    tests/units/objects/test_incremental_status.py (`domains_skipped`, `strategy`);
+    tests/units/objects/test_incremental_readiness.py (coupling: the `slot`
+    entries' map ids equal the compiled spec's `row_local_map_ids`);
+    tests/units/api/test_dtwin_incremental_readiness.py (admin gate name; a domain
+    builder or domain admin is refused, an app admin passes);
+    tests/units/front/test_incremental_status_ui.py.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/back/core/streaming/SlotUpdateMetrics.py
+- src/back/core/streaming/SlotPipelineRunner.py
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/digitaltwin/build/TwinSlotPipeline.py
+- src/back/objects/digitaltwin/build/TwinIncrementalStatus.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/front/static/global/js/runs-render.js
+- docs/incremental-materialization.md
+- tests/units/streaming/test_slot_pipeline_runner.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_incremental_status.py
+- tests/units/objects/test_incremental_readiness.py
+- tests/units/api/test_dtwin_incremental_readiness.py
+- tests/units/front/test_incremental_status_ui.py
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: `uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks`
+-> 11503 passed, 341 skipped, 9 deselected in 74.41s; architecture suite green;
+baseline.json unchanged (SlotUpdateMetrics 79 LOC, SlotPipelineRunner 393,
+TwinIncrementalReadiness 239, TwinIncrementalStatus 235).

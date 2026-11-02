@@ -96,7 +96,8 @@ class TwinIncrementalReadiness:
     def mapping_classes(entity_mappings: Any, relationship_mappings: Any) -> list:
         """One ``{class_uri, predicate, map_id, kind, reason}`` per mapping the slot compiler sees.
 
-        In :meth:`SlotProjectionCompiler.compile`'s order: each class of an
+        Over :meth:`SlotProjectionCompiler.candidates`, the enumeration
+        :meth:`SlotProjectionCompiler.compile` classifies: each class of an
         entity mapping (``class_uri``), then each relationship mapping
         (``predicate``). ``kind`` is ``slot`` for a row-local mapping (its
         ``map_id``; ``reason`` ``""``) — the one a ``microbatch`` pipeline
@@ -108,19 +109,24 @@ class TwinIncrementalReadiness:
         from back.core.streaming import SlotProjectionCompiler
 
         classes = []
-        for class_uri, mapping in (entity_mappings or {}).items():
-            tagged = {**mapping, "class_uri": class_uri}
-            reason = SlotProjectionCompiler.batch_reason(tagged)
-            map_id = None if reason else SlotProjectionCompiler.map_id(tagged)
-            classes.append(TwinIncrementalReadiness._class(class_uri, None, map_id, reason))
-        for mapping in relationship_mappings or []:
+        for mapping, _original in SlotProjectionCompiler.candidates(
+            entity_mappings, relationship_mappings
+        ):
             reason = SlotProjectionCompiler.batch_reason(mapping)
-            classes.append(TwinIncrementalReadiness._class(None, mapping.get("predicate"), None, reason))
+            classes.append(
+                {
+                    "class_uri": mapping.get("class_uri"),
+                    "predicate": mapping.get("predicate"),
+                    "map_id": None if reason else SlotProjectionCompiler.map_id(mapping),
+                    "kind": "batch" if reason else "slot",
+                    "reason": reason or "",
+                }
+            )
         return classes
 
     @staticmethod
     def lakehouse_rt_facts(domain: Any, settings: Any, read_relation: str) -> dict | None:
-        """``query_warehouse_configured``, ``use_sea`` and ``fast_path`` of a Lakehouse-engine domain.
+        """``query_warehouse_configured``, ``use_sea``, ``fast_path`` of a Lakehouse-engine domain.
 
         Whether ``graph_engine_config.lakehouse.warehouse_id`` names a query
         warehouse, whether "Use Lakehouse//RT for queries" is on, and
@@ -134,7 +140,7 @@ class TwinIncrementalReadiness:
             return None
         return {
             "query_warehouse_configured": bool(
-                DatabricksHelpers.resolve_lakehouse_warehouse_id(domain, settings)
+                DatabricksHelpers.resolve_lakehouse_query_warehouse_id(domain, settings)
             ),
             "use_sea": bool(DatabricksHelpers.resolve_lakehouse_use_sea(domain, settings)),
             "fast_path": read_relation,
@@ -221,9 +227,11 @@ class TwinIncrementalReadiness:
                     mappings=TwinIncrementalReadiness.mapping_classes(mappings[0], mappings[1]),
                 )
         except ValidationError as exc:
-            return {**facts, "compile_error": str(exc), "slot_mappings": None, "batch_mappings": None}
+            facts["compile_error"] = str(exc)
+            return {**facts, "slot_mappings": None, "batch_mappings": None}
         kinds = [entry["kind"] for entry in facts["mappings"]]
-        return {**facts, "slot_mappings": kinds.count("slot"), "batch_mappings": kinds.count("batch")}
+        facts.update(slot_mappings=kinds.count("slot"), batch_mappings=kinds.count("batch"))
+        return facts
 
     @staticmethod
     def _spec(domain: Any, settings: Any, client: Any, mappings: tuple | None) -> Any:
@@ -235,17 +243,6 @@ class TwinIncrementalReadiness:
         return TwinIncrementalBuild.compile_for(
             domain, settings, entity_mappings, relationship_mappings, base_uri=base_uri, client=client
         )
-
-    @staticmethod
-    def _class(class_uri: Any, predicate: Any, map_id: Any, reason: Any) -> dict:
-        """One :meth:`mapping_classes` entry: ``slot`` without a batch *reason*, else ``batch``."""
-        return {
-            "class_uri": class_uri,
-            "predicate": predicate,
-            "map_id": map_id,
-            "kind": "batch" if reason else "slot",
-            "reason": reason or "",
-        }
 
     @staticmethod
     def _enable(client: Any, table: str) -> dict:

@@ -244,7 +244,7 @@ class SlotProjectionCompiler:
         row_local = compiler.row_local_mappings(entity_mappings, relationship_mappings)
         view_sql = compiler._view_emitter(row_local, base_uri, source, topic, column_types)
         batch_mappings: list[dict] = []
-        for mapping, original in compiler._candidates(entity_mappings, relationship_mappings):
+        for mapping, original in compiler.candidates(entity_mappings, relationship_mappings):
             batch = compiler.batch_reason(mapping) is not None  # classify() logged it
             if batch and not any(original is seen for seen in batch_mappings):
                 batch_mappings.append(original)
@@ -305,7 +305,7 @@ class SlotProjectionCompiler:
         compiler = SlotProjectionCompiler
         selected: list[dict] = []
         seen: set[str] = set()
-        for mapping, _original in compiler._candidates(entity_mappings, relationship_mappings):
+        for mapping, _original in compiler.candidates(entity_mappings, relationship_mappings):
             if compiler.classify(mapping) != compiler.ROW_LOCAL:
                 continue
             mapping_id = compiler.map_id(mapping)
@@ -356,10 +356,15 @@ class SlotProjectionCompiler:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _candidates(
+    def candidates(
         entity_mappings: dict, relationship_mappings: list
     ) -> list[tuple[dict, dict]]:
-        """``(mapping, original)`` per class of each entity mapping, then per relationship."""
+        """``(mapping, original)`` per class of each entity mapping, then per relationship.
+
+        The one enumeration :meth:`compile`, :meth:`row_local_mappings` and the
+        readiness preflight's per-mapping classes share (an entity mapping is
+        classified as ``{**mapping, "class_uri": class_uri}``).
+        """
         return [
             ({**mapping, "class_uri": class_uri}, mapping)
             for class_uri, mapping in (entity_mappings or {}).items()

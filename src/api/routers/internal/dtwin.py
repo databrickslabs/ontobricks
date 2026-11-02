@@ -18,7 +18,7 @@ from back.core.errors import (
 )
 from api.routers.internal._guards import require
 from api.routers.internal._graph_access import assert_domain_graph_read
-from back.objects.registry import ROLE_BUILDER
+from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
@@ -1309,13 +1309,16 @@ async def incremental_status(
 
 @router.get(
     "/incremental/overview",
-    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+    dependencies=[Depends(require(ROLE_ADMIN))],
 )
 async def incremental_overview(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Domains per effective mode and fallbacks per reason, from each domain's newest main build."""
+    """Domains per effective mode and fallbacks per reason, from each domain's newest main build.
+
+    An app-level ops KPI over every registry domain: app admins only.
+    """
     from back.objects.digitaltwin.build import TwinIncrementalStatus
     from back.objects.registry.RegistryService import RegistryService
 

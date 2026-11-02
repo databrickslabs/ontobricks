@@ -200,16 +200,21 @@ class DatabricksHelpers:
 
         Resolution order:
 
-        1. ``graph_engine_config.lakehouse.warehouse_id`` (:meth:`resolve_lakehouse_warehouse_id`)
+        1. ``graph_engine_config.lakehouse.warehouse_id``
+           (:meth:`resolve_lakehouse_query_warehouse_id`)
         2. Fallback to :meth:`resolve_warehouse_id` (global warehouse)
         """
-        return DatabricksHelpers.resolve_lakehouse_warehouse_id(
+        return DatabricksHelpers.resolve_lakehouse_query_warehouse_id(
             domain, settings
         ) or DatabricksHelpers.resolve_warehouse_id(domain, settings)
 
     @staticmethod
-    def resolve_lakehouse_warehouse_id(domain, settings) -> str:
-        """``graph_engine_config.lakehouse.warehouse_id`` (Settings → Back end → Lakehouse), ``""`` when unset."""
+    def resolve_lakehouse_query_warehouse_id(domain, settings) -> str:
+        """The Lakehouse query warehouse, ``""`` when unset.
+
+        ``graph_engine_config.lakehouse.warehouse_id`` (Settings → Back end →
+        Lakehouse); unlike :meth:`resolve_delta_warehouse_id`, no fallback.
+        """
         return DatabricksHelpers._resolve_global_setting(
             domain, settings, "get_delta_warehouse_id"
         )

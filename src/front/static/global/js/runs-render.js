@@ -143,13 +143,15 @@ window.RunsRender = (function () {
 
     // ``slots_changed``: the rows the build's slot pipeline update wrote, summed
     // from its flow_progress events (null when no update ran or they were unreadable).
+    // A full refresh (``full_refresh``) reports the whole table, not churn.
     function slotsChangedText(changed) {
         if (!changed || typeof changed !== 'object') return '';
         const labels = [['rows_output', ' rows'], ['rows_upserted', ' upserted'], ['rows_deleted', ' deleted']];
-        return labels
+        const counts = labels
             .filter(function (pair) { return changed[pair[0]] !== null && changed[pair[0]] !== undefined; })
             .map(function (pair) { return (Number(changed[pair[0]]) || 0).toLocaleString() + pair[1]; })
             .join(', ');
+        return counts && changed.full_refresh ? counts + ' (full refresh)' : counts;
     }
 
     function materializationDetailsHtml(run) {

@@ -57,7 +57,7 @@ def lakehouse_config(monkeypatch):
     config = SimpleNamespace(warehouse_id="", use_sea=False)
     monkeypatch.setattr(
         DatabricksHelpers,
-        "resolve_lakehouse_warehouse_id",
+        "resolve_lakehouse_query_warehouse_id",
         staticmethod(lambda d, s: config.warehouse_id),
     )
     monkeypatch.setattr(
@@ -208,6 +208,24 @@ class TestMappingClasses:
         [entry] = TwinIncrementalReadiness.mapping_classes(entities, relationships)
 
         assert (entry["kind"], entry["map_id"], entry["reason"]) == ("batch", None, reason)
+
+    def test_the_slot_entries_are_exactly_the_mappings_the_pipeline_streams(self):
+        """``slot`` in the panel means streamed: the compiled spec's row-local map ids."""
+        orders = {**_modes._row_local(), "table": _ORDERS, "uri_template": "http://ex.org/Order/{id}"}
+        entities = {
+            _modes._CUSTOMER: _modes._row_local(),
+            _modes._ORDER: orders,
+            "http://ex.org/Query": _modes._batch(),
+            "http://ex.org/Joined": _join(),
+        }
+        spec = TwinIncrementalBuild.compile_for(
+            _domain(), SimpleNamespace(), entities, [_relationship()], base_uri="http://ex.org/"
+        )
+
+        classes = TwinIncrementalReadiness.mapping_classes(entities, [_relationship()])
+
+        assert [m["map_id"] for m in classes if m["kind"] == "slot"] == spec.row_local_map_ids
+        assert sum(m["kind"] == "batch" for m in classes) == len(spec.batch_mappings) == 3
 
     def test_a_relationship_is_named_by_its_predicate(self):
         [entry] = TwinIncrementalReadiness.mapping_classes({}, [_relationship()])

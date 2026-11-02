@@ -6,7 +6,7 @@ import pytest
 
 from back.core.errors import ValidationError
 from back.objects.digitaltwin.build import TwinIncrementalReadiness
-from back.objects.registry import ROLE_BUILDER
+from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER
 
 pytestmark = pytest.mark.unit
 
@@ -86,7 +86,6 @@ _BUILDER_GATE = f"require_domain_{ROLE_BUILDER}"
         "/dtwin/incremental/readiness",
         "/dtwin/incremental/enable-row-tracking",
         "/dtwin/incremental/status",
-        "/dtwin/incremental/overview",
         "/dtwin/incremental/reconcile",
     ],
 )
@@ -95,6 +94,44 @@ def test_the_incremental_routes_need_the_builder_role(path):
 
     [route] = [r for r in dtwin.router.routes if r.path == path]
     assert [dep.dependency.__name__ for dep in route.dependencies] == [_BUILDER_GATE]
+
+
+def _overview_gate():
+    from api.routers.internal import dtwin
+
+    [route] = [r for r in dtwin.router.routes if r.path == "/dtwin/incremental/overview"]
+    [dependency] = route.dependencies
+    return dependency.dependency
+
+
+def test_the_overview_needs_the_app_admin_role():
+    """A registry-wide KPI: the loaded domain's builder role is not enough."""
+    assert _overview_gate().__name__ == f"require_app_{ROLE_ADMIN}"
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        {"user_role": "app_user", "user_domain_role": ROLE_BUILDER},
+        {"user_role": "app_user", "user_domain_role": ROLE_ADMIN},
+    ],
+    ids=["domain-builder", "domain-admin"],
+)
+def test_a_domain_role_does_not_open_the_overview(state):
+    from types import SimpleNamespace
+
+    from back.core.errors import AuthorizationError
+
+    with pytest.raises(AuthorizationError):
+        _overview_gate()(SimpleNamespace(state=SimpleNamespace(**state)))
+
+
+def test_an_app_admin_opens_the_overview():
+    from types import SimpleNamespace
+
+    request = SimpleNamespace(state=SimpleNamespace(user_role=ROLE_ADMIN, user_domain_role=""))
+
+    assert _overview_gate()(request) == ROLE_ADMIN
 
 
 @pytest.mark.asyncio
