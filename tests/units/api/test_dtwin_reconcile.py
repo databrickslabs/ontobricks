@@ -12,6 +12,7 @@ pytestmark = pytest.mark.unit
 
 _SLOTS = "main.kg.triplestore_sales_V1_slots"
 _DATA = "main.kg.triplestore_sales_V1_data"
+_VIEW = "main.kg.triplestore_sales_V1"
 _COMPARED = {
     "slots": {"rows": 3, "hash": 7},
     "data": {"rows": 3, "hash": 7},
@@ -46,12 +47,31 @@ class _Client:
         return [{"database": "kg", "tableName": t, "isTemporary": False} for t in self._tables]
 
 
+class _SyncedStore:
+    """A managed_synced Lakebase store whose synced table has *rows* rows."""
+
+    is_synced = True
+
+    def __init__(self, rows=0, error=None):
+        self.rows, self.error, self.counted = rows, error, []
+
+    def synced_table_name(self, graph_name):
+        return f"{graph_name}_sync"
+
+    def count_triples(self, table_name):
+        self.counted.append(table_name)
+        if self.error is not None:
+            raise self.error
+        return self.rows
+
+
 @pytest.fixture
 def names(monkeypatch):
     from back.core.graphdb.delta import _table_naming
 
     monkeypatch.setattr(_table_naming, "slots_table_fqn", lambda d, s=None: _SLOTS)
     monkeypatch.setattr(_table_naming, "data_table_fqn", lambda d, s=None: _DATA)
+    monkeypatch.setattr(_table_naming, "view_fqn", lambda d, s=None: _VIEW)
 
 
 @pytest.fixture(autouse=True)
@@ -91,9 +111,17 @@ def _compiler(monkeypatch, *, batch: bool, raising: bool = False):
 
 
 def _compare(monkeypatch, result):
+    """Fake ``SlotReconciler.compare``; returns the keywords it was called with."""
     from back.core.streaming import SlotReconciler
 
-    monkeypatch.setattr(SlotReconciler, "compare", lambda client, s, d: dict(result))
+    seen: dict = {}
+
+    def compare(client, slots, data, **kwargs):
+        seen.update(kwargs)
+        return dict(result)
+
+    monkeypatch.setattr(SlotReconciler, "compare", staticmethod(compare))
+    return seen
 
 
 class TestTwinSlotReconciliation:
@@ -136,6 +164,68 @@ class TestTwinSlotReconciliation:
         assert result["batch_branches_present"] is False
         assert result["slots_run_ahead"] is True
         assert result["drift_meaningful"] is False
+
+    def test_the_gateway_view_is_the_batch_recompute(self, monkeypatch, names, mappings):
+        seen = _compare(monkeypatch, _COMPARED)
+        _compiler(monkeypatch, batch=True)
+
+        TwinSlotReconciliation.run(_Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"]))
+
+        assert seen == {"view_fqn": _VIEW, "sync_rows": None}
+
+    def test_a_synced_store_contributes_its_synced_table_rows(self, monkeypatch, names, mappings):
+        seen = _compare(monkeypatch, _COMPARED)
+        _compiler(monkeypatch, batch=False)
+        store = _SyncedStore(rows=3)
+        domain = _Domain()
+        domain.info, domain.current_version = {"name": "sales"}, 1
+
+        TwinSlotReconciliation.run(
+            domain, object(), _Client(tables=["triplestore_sales_v1_slots"]),
+            get_store=lambda d, s: store,
+        )
+
+        assert seen["sync_rows"] == 3
+        assert store.counted == ["sales_V1_sync"]
+
+    def test_an_unreadable_synced_table_is_left_out(self, monkeypatch, names, mappings):
+        seen = _compare(monkeypatch, _COMPARED)
+        _compiler(monkeypatch, batch=False)
+
+        TwinSlotReconciliation.run(
+            _Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"]),
+            get_store=lambda d, s: _SyncedStore(error=RuntimeError("pool exhausted")),
+        )
+
+        assert seen["sync_rows"] is None
+
+    @pytest.mark.parametrize(
+        ("mode", "batch", "pairs", "drift"),
+        [
+            ("incremental", True, {"slots_data": True, "view_data": False}, False),
+            ("incremental", True, {"slots_data": False, "view_data": True}, True),
+            ("incremental", False, {"slots_data": True}, True),
+            ("incremental", True, {"slots_data": False, "sync_data": True}, True),
+            ("microbatch", False, {"slots_data": True, "view_data": True, "sync_data": True}, False),
+        ],
+        ids=["batch-slots", "view", "row-local-slots", "sync", "microbatch-runs-ahead"],
+    )
+    def test_reconcile_drift_counts_only_the_meaningful_pairs(
+        self, monkeypatch, names, mappings, mode, batch, pairs, drift
+    ):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        monkeypatch.setattr(
+            GraphDBFactory, "resolve_materialization_mode", staticmethod(lambda d, s: mode)
+        )
+        _compare(monkeypatch, {**_COMPARED, "pairs": pairs})
+        _compiler(monkeypatch, batch=batch)
+
+        result = TwinSlotReconciliation.run(
+            _Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"])
+        )
+
+        assert result["reconcile_drift"] is drift
 
     def test_mappings_that_do_not_compile_count_as_batch(self, monkeypatch, names, mappings):
         _compiler(monkeypatch, batch=False, raising=True)
@@ -202,8 +292,8 @@ class TestReconcileRoute:
     async def test_the_route_returns_the_comparison(self, monkeypatch, route):
         dtwin, domain, seen = route
 
-        def run(d, s, client):
-            seen.update(domain=d, client=client)
+        def run(d, s, client, **kwargs):
+            seen.update(domain=d, client=client, kwargs=kwargs)
             return {**_COMPARED, "batch_branches_present": False, "drift_meaningful": True}
 
         monkeypatch.setattr(TwinSlotReconciliation, "run", staticmethod(run))
@@ -214,13 +304,14 @@ class TestReconcileRoute:
         assert resp["drift"] is False
         assert resp["drift_meaningful"] is True
         assert seen["domain"] is domain and seen["client"] == "client"
+        assert seen["kwargs"] == {"get_store": dtwin.get_graphdb}
 
     @pytest.mark.asyncio
     async def test_the_scans_run_on_the_build_warehouse_as_the_caller(self, monkeypatch, route):
         """``warehouse_id`` swaps the warehouse and keeps the OBO identity;
         ``for_write`` would drop it (the Task 7 lesson)."""
         dtwin, _domain, seen = route
-        monkeypatch.setattr(TwinSlotReconciliation, "run", staticmethod(lambda d, s, c: dict(_COMPARED)))
+        monkeypatch.setattr(TwinSlotReconciliation, "run", staticmethod(lambda d, s, c, **kw: dict(_COMPARED)))
 
         await dtwin.reconcile_incremental_slots(session_mgr=object(), settings=object())
 
@@ -230,7 +321,7 @@ class TestReconcileRoute:
     async def test_a_missing_slots_table_propagates_as_not_found(self, monkeypatch, route):
         dtwin, _domain, _seen = route
 
-        def run(d, s, client):
+        def run(d, s, client, **kwargs):
             raise NotFoundError("Slots table main.kg.x_slots does not exist")
 
         monkeypatch.setattr(TwinSlotReconciliation, "run", staticmethod(run))

@@ -130,8 +130,9 @@ class TwinBuildRunHistory:
         empty or skipped builds) and failures before the apply phase
         (``apply_mode == ""``) are passed over. Anything else ends the search
         with ``{}``: a failure that may have half-written the store, a run
-        without materialization facts (a scheduled tick, an older build) or a
-        build of the same graph in another sync mode, which rewrote it.
+        without materialization facts (an older build), a scheduled tick (it
+        rewrote the store; its only facts are reconciliation's) or a build of
+        the same graph in another sync mode, which rewrote it.
         Best-effort: any error reads as ``{}`` (debug log), i.e. "no base".
         """
         try:
@@ -161,9 +162,8 @@ class TwinBuildRunHistory:
         delta = GraphDBFactory._resolve_graph_backend(pipe.domain) == "databricks"
         accepted = _DELTA_BASE_APPLY_MODES if delta else _BASE_APPLY_MODES
         for run in runs:
-            stats = run.get("stats") if isinstance(run, dict) else None
-            facts = stats.get("materialization") if isinstance(stats, dict) else None
-            if not isinstance(facts, dict):
+            facts = TwinBuildRunHistory._facts(run)
+            if facts is None or run.get("build_kind") == "scheduled":
                 return {}
             if run.get("status") != "success":
                 if facts.get("apply_mode") == "":
@@ -175,6 +175,44 @@ class TwinBuildRunHistory:
             if same_graph and facts.get("apply_mode") in accepted:
                 return dict(facts)
         return {}
+
+    @staticmethod
+    def reconcile_drift_pending(pipe: Any) -> bool:
+        """True when a scheduled tick found drift that no build has refreshed since.
+
+        Over the newest runs of this folder + version: a run whose
+        ``materialization.reconcile_drift`` is true means pending; a successful
+        build that ran the slot pipeline (effective mode ``incremental`` or
+        ``microbatch``) before reaching one means consumed. Best-effort: any
+        error reads as ``False`` (debug log).
+        """
+        try:
+            from back.objects.registry.RegistryService import RegistryService
+
+            folder, version = TwinBuildRunHistory.build_run_key(pipe)
+            if not (folder and version):
+                return False
+            runs = RegistryService.from_context(pipe.domain, pipe.settings).load_build_runs(
+                folder, version=version, limit=_PREVIOUS_RUNS_LIMIT
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort read; nothing pending
+            logger.debug("[DT-BUILD %s] could not read the build runs: %s", pipe.task_id, exc)
+            return False
+        for run in runs if isinstance(runs, list) else []:
+            facts = TwinBuildRunHistory._facts(run) or {}
+            if facts.get("reconcile_drift") is True:
+                return True
+            refreshed = facts.get("materialization_mode_effective") in ("incremental", "microbatch")
+            if run.get("status") == "success" and refreshed:
+                return False
+        return False
+
+    @staticmethod
+    def _facts(run: Any) -> dict | None:
+        """``stats["materialization"]`` of a persisted *run*, ``None`` when it has none."""
+        stats = run.get("stats") if isinstance(run, dict) else None
+        facts = stats.get("materialization") if isinstance(stats, dict) else None
+        return facts if isinstance(facts, dict) else None
 
     @staticmethod
     def persist_last_build_to_registry(pipe: Any) -> None:

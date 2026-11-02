@@ -1187,7 +1187,9 @@ async def reconcile_incremental_slots(
 
     domain = get_domain(session_mgr)
     client = _build_warehouse_client(domain, settings)
-    result = await run_blocking(TwinSlotReconciliation.run, domain, settings, client)
+    result = await run_blocking(
+        TwinSlotReconciliation.run, domain, settings, client, get_store=get_graphdb
+    )
     return {"success": True, **result}
 
 

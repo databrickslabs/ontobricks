@@ -296,6 +296,18 @@ class TestPreviousMaterializationStats:
 
         assert _previous(registry, [scheduled, _run_record(version=4)]) == {}
 
+    def test_a_scheduled_tick_that_recorded_drift_still_leaves_no_base(self, registry):
+        """The tick rewrote the store: its ``reconcile_drift`` facts must not make it skippable."""
+        scheduled = {
+            "status": "success",
+            "build_kind": "scheduled",
+            "graph_engine": "",
+            "sync_mode": "",
+            "stats": {"materialization": {"reconcile_drift": True}},
+        }
+
+        assert _previous(registry, [scheduled, _run_record(version=4)]) == {}
+
     def test_no_runs_no_base(self, registry):
         assert _previous(registry, []) == {}
 
@@ -318,6 +330,50 @@ class TestPreviousMaterializationStats:
 
         assert TwinBuildRunHistory.previous_materialization_stats(pipe) == {}
         registry.load_build_runs.assert_not_called()
+
+
+def _drift_pending(registry, runs) -> bool:
+    registry.load_build_runs.return_value = runs
+    pipe = _bare_pipeline()
+    pipe.domain_snap = _snap()
+    return TwinBuildRunHistory.reconcile_drift_pending(pipe)
+
+
+def _tick(*, drift: bool) -> dict:
+    facts = {"reconcile_drift": True} if drift else {}
+    return {"status": "success", "build_kind": "scheduled", "stats": {"materialization": facts}}
+
+
+def _build(mode: str = "incremental", status: str = "success") -> dict:
+    run = _run_record(status=status)
+    run["stats"]["materialization"]["materialization_mode_effective"] = mode
+    return run
+
+
+class TestReconcileDriftPending:
+    def test_a_tick_that_found_drift_is_pending(self, registry):
+        assert _drift_pending(registry, [_tick(drift=True), _build()]) is True
+
+    def test_an_incremental_build_since_the_drift_consumed_it(self, registry):
+        assert _drift_pending(registry, [_build(), _tick(drift=True)]) is False
+
+    @pytest.mark.parametrize(
+        "newer",
+        [_build(mode="full"), _build(status="error"), _tick(drift=False)],
+        ids=["full-build", "failed-build", "clean-tick"],
+    )
+    def test_a_run_that_did_not_refresh_the_slots_keeps_it_pending(self, registry, newer):
+        assert _drift_pending(registry, [newer, _tick(drift=True)]) is True
+
+    def test_no_drift_recorded(self, registry):
+        assert _drift_pending(registry, [_tick(drift=False), _build()]) is False
+
+    def test_a_registry_failure_reads_as_none_pending(self, registry):
+        registry.load_build_runs.side_effect = RuntimeError("registry down")
+        pipe = _bare_pipeline()
+        pipe.domain_snap = _snap()
+
+        assert TwinBuildRunHistory.reconcile_drift_pending(pipe) is False
 
 
 # ----------------------------------------------------------------------
@@ -838,6 +894,29 @@ class TestSourceOverwriteDetection:
 
         facts = registry.record_build_run.call_args[0][1]["stats"]["materialization"]
         assert facts["source_versions"] == {self._SOURCE: 7}
+
+
+class TestReconcileDriftForcesAFullRefresh:
+    """A drift found by a scheduled tick makes the next build fully refresh the slot pipeline."""
+
+    def _starts(self, registry, runs):
+        registry.load_build_runs.return_value = runs
+        pipe = _modes._pipeline("incremental")
+        pipe.source_versions = {}
+        log, _, _ = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=7), existing="pipe-1", stored="fp-current"
+        )
+        return [event for event in log if event[0] == "start"]
+
+    def test_a_pending_drift_forces_a_full_refresh(self, registry):
+        with patch("back.objects.digitaltwin.build.TwinIncrementalBuild.logger") as logger:
+            starts = self._starts(registry, [_tick(drift=True)])
+
+        assert starts == [("start", "pipe-1", True)]
+        assert any("reconcil" in str(c.args[0]) for c in logger.info.call_args_list)
+
+    def test_a_consumed_drift_keeps_the_incremental_update(self, registry):
+        assert self._starts(registry, [_build(), _tick(drift=True)]) == [("start", "pipe-1", False)]
 
 
 class TestEmptyDataAfterAFallback:

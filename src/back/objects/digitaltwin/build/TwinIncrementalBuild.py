@@ -229,7 +229,14 @@ class TwinIncrementalBuild:
         slots = definition["slots_fqn"]
         if slots:
             rewritten = TwinIncrementalBuild._rewritten_sources(pipe, spec)
-            TwinSlotPipeline.run(pipe, spec, force_full_refresh=bool(rewritten))
+            drifted = TwinBuildRunHistory.reconcile_drift_pending(pipe)
+            if drifted:
+                logger.info(
+                    "[DT-BUILD %s] a scheduled reconciliation found drift: full refresh of "
+                    "the slot pipeline",
+                    pipe.task_id,
+                )
+            TwinSlotPipeline.run(pipe, spec, force_full_refresh=bool(rewritten) or drifted)
             pipe.source_versions = TwinIncrementalBuild._source_versions(pipe, spec)
         TwinIncrementalBuild._apply_views(pipe, definition)
         pipe.slots_table = slots

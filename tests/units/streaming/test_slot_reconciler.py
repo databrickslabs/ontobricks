@@ -131,3 +131,49 @@ class TestCompare:
 
         with pytest.raises(InfrastructureError, match="no row returned"):
             SlotReconciler.compare(client, _SLOTS, _DATA)
+
+
+_VIEW = "main.kg.triplestore_sales_V1"
+
+
+class TestComparePairs:
+    """The batch recompute (gateway VIEW) and the Lakebase synced table against ``_data``."""
+
+    def test_without_the_extra_sides_only_the_slots_pair_is_compared(self):
+        client = _Client(totals={_SLOTS: {"n": 3, "h": 42}, _DATA: {"n": 2, "h": 42}})
+
+        result = SlotReconciler.compare(client, _SLOTS, _DATA)
+
+        assert result["pairs"] == {"slots_data": True}
+        assert "view" not in result and "sync" not in result
+
+    def test_the_gateway_view_is_counted_like_the_data_and_compared_with_it(self):
+        client = _Client(
+            totals={
+                _SLOTS: {"n": 3, "h": 42},
+                _DATA: {"n": 3, "h": 42},
+                _VIEW: {"n": 3, "h": 41},
+            }
+        )
+
+        result = SlotReconciler.compare(client, _SLOTS, _DATA, view_fqn=_VIEW)
+
+        assert result["view"] == {"rows": 3, "hash": 41}
+        assert result["pairs"] == {"slots_data": False, "view_data": True}
+        assert SlotReconciler.counts_sql(_VIEW) in client.calls
+
+    def test_the_synced_table_row_count_is_compared_with_the_data_rows(self):
+        client = _Client(totals={_SLOTS: {"n": 3, "h": 42}, _DATA: {"n": 3, "h": 42}})
+
+        result = SlotReconciler.compare(client, _SLOTS, _DATA, sync_rows=2)
+
+        assert result["sync"] == {"rows": 2}
+        assert result["pairs"] == {"slots_data": False, "sync_data": True}
+
+    def test_matching_sides_are_no_drift_on_any_pair(self):
+        totals = {"n": 3, "h": 42}
+        client = _Client(totals={_SLOTS: totals, _DATA: totals, _VIEW: totals})
+
+        result = SlotReconciler.compare(client, _SLOTS, _DATA, view_fqn=_VIEW, sync_rows=3)
+
+        assert result["pairs"] == {"slots_data": False, "view_data": False, "sync_data": False}

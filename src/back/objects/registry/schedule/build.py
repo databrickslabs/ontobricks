@@ -287,6 +287,46 @@ def _slot_spec(
     return spec
 
 
+def _reconcile_after_tick(
+    store, src, domain: Any, settings: Any, slot_spec: Any, domain_name: str
+) -> bool:
+    """True when reconciling the tick's ``…_data`` view found drift (warning logged).
+
+    Only for a Lakeflow-synced store of an incremental / microbatch domain
+    (*slot_spec* set) whose ``…_data`` is still the materialized view the
+    tick refreshed in place: a CTAS table equals the VIEW by construction.
+    The drift rules are :meth:`TwinSlotReconciliation.run`'s
+    (``reconcile_drift``); the next incremental build reads the recorded flag
+    and fully refreshes the slot pipeline. Best-effort: a reconciliation that
+    fails never fails the tick.
+    """
+    from back.core.errors import OntoBricksError
+    from back.core.graphdb.delta import _table_naming, materialize
+    from back.objects.digitaltwin.build import TwinSlotReconciliation
+
+    if slot_spec is None or not _is_managed_synced(store):
+        return False
+    try:
+        data_table = _table_naming.data_table_fqn(domain, settings)
+        if materialize.relation_kind(src, data_table) != "mv":
+            return False
+        result = TwinSlotReconciliation.run(
+            domain, settings, src, get_store=lambda d, s: store
+        )
+    except OntoBricksError as exc:
+        logger.warning("Scheduled build [%s]: reconciliation skipped: %s", domain_name, exc)
+        return False
+    if not result.get("reconcile_drift"):
+        return False
+    logger.warning(
+        "Scheduled build [%s]: reconciliation found drift (%s); the next build fully "
+        "refreshes the slot pipeline",
+        domain_name,
+        sorted(name for name, differs in (result.get("pairs") or {}).items() if differs),
+    )
+    return True
+
+
 def _count_view_triples(src, view_table: str) -> int:
     """Return the server-side triple count for *view_table*.
 
@@ -471,6 +511,9 @@ def run(ctx: TaskContext) -> RunOutcome:
             "spec": slot_spec,
         },
     )
+
+    if _reconcile_after_tick(store, src, domain, ctx.settings, slot_spec, domain_name):
+        ctx.scratch["stats"]["materialization"] = {"reconcile_drift": True}
 
     ctx.progress(95, "Saving domain metadata...")
     _persist_domain_metadata(

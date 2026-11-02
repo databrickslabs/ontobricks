@@ -81,27 +81,46 @@ class SlotReconciler:
         ]
 
     @staticmethod
-    def compare(client: Any, slots_fqn: str, data_fqn: str) -> dict:
-        """Totals of both relations, ``drift`` when they differ, and the slots per mapping."""
+    def compare(
+        client: Any,
+        slots_fqn: str,
+        data_fqn: str,
+        *,
+        view_fqn: str | None = None,
+        sync_rows: int | None = None,
+    ) -> dict:
+        """Totals of both relations, ``drift`` when they differ, and the slots per mapping.
+
+        With *view_fqn* — the gateway VIEW, i.e. a batch recompute of every
+        triple from the sources — its totals are counted the same way; with
+        *sync_rows* (the row count of the Lakebase synced table) that count is
+        added. ``pairs`` says per pair whether it differs: ``slots_data``,
+        ``view_data`` (rows and hash) and ``sync_data`` (rows only); a pair
+        whose side was not given is left out.
+        """
         slots = SlotReconciler.totals(client, slots_fqn)
         data = SlotReconciler.totals(client, data_fqn)
-        drift = slots != data
-        if drift:
+        result: dict = {"slots": slots, "data": data, "drift": slots != data}
+        pairs = {"slots_data": result["drift"]}
+        if view_fqn:
+            result["view"] = SlotReconciler.totals(client, view_fqn)
+            pairs["view_data"] = result["view"] != data
+        if sync_rows is not None:
+            result["sync"] = {"rows": int(sync_rows)}
+            pairs["sync_data"] = int(sync_rows) != data["rows"]
+        if any(pairs.values()):
             logger.info(
-                "Slot reconciliation: %s has %d rows / hash %s, %s has %d rows / hash %s",
-                slots_fqn,
-                slots["rows"],
-                slots["hash"],
+                "Slot reconciliation of %s: drift %s (data %s, slots %s, view %s, sync %s)",
                 data_fqn,
-                data["rows"],
-                data["hash"],
+                sorted(name for name, differs in pairs.items() if differs),
+                data,
+                slots,
+                result.get("view"),
+                result.get("sync"),
             )
-        return {
-            "slots": slots,
-            "data": data,
-            "drift": drift,
-            "by_map_id": SlotReconciler.by_map_id(client, slots_fqn),
-        }
+        result["pairs"] = pairs
+        result["by_map_id"] = SlotReconciler.by_map_id(client, slots_fqn)
+        return result
 
     @staticmethod
     def _int(value: Any) -> int:
