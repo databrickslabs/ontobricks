@@ -43,6 +43,11 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+if __package__ in (None, ""):  # run as a script (spark_python_task): make ``src`` importable
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from jobs.triple_stream.SparkColumnText import SparkColumnText  # noqa: E402
+
 logger = logging.getLogger("ontobricks.jobs.triple_stream.main")
 
 #: ``src`` on the cluster (the bundle syncs the repo as workspace files).
@@ -174,10 +179,20 @@ class TripleStreamJob:
 
     @staticmethod
     def record_columns(kind: str) -> tuple[str, str]:
-        """``(value, seq)`` SQL expressions over the connector's columns."""
+        """``(value, seq)`` SQL expressions over the connector's columns.
+
+        Kafka (and Event Hubs' Kafka endpoint): the partition offset, exact per
+        key on a topic keyed by the source row key. Kinesis sequence numbers
+        are decimal strings longer than a BIGINT: the seq is the arrival
+        millisecond times 10^6 plus the sequence number's last six digits, so
+        two records of one shard in the same millisecond keep their order.
+        """
         if kind == "kinesis":
-            # Kinesis sequence numbers do not fit a BIGINT: order by arrival time.
-            return "CAST(data AS STRING)", "CAST(unix_millis(approximateArrivalTimestamp) AS BIGINT)"
+            return (
+                "CAST(data AS STRING)",
+                "unix_millis(approximateArrivalTimestamp) * 1000000 "
+                "+ CAST(right(sequenceNumber, 6) AS BIGINT)",
+            )
         return "CAST(value AS STRING)", "offset"
 
     # ------------------------------------------------------------------
@@ -186,10 +201,11 @@ class TripleStreamJob:
 
     @staticmethod
     def parse_envelope(value: Any) -> dict | None:
-        """``{"op", "row", "table"}`` of a change envelope; ``None`` when it carries no change.
+        """``{"op", "row", "before", "table"}`` of a change envelope; ``None`` without a change.
 
-        A delete reads its key from ``before``, any other operation from
-        ``after``; a ``payload`` wrapper (Debezium with schemas) is unwrapped.
+        A delete's ``row`` is its ``before`` image, any other operation's its
+        ``after`` image (``before`` then is the pre-image of an update, or
+        ``None``); a ``payload`` wrapper (Debezium with schemas) is unwrapped.
         Unparsable JSON, a Kafka tombstone (``null`` value), an unknown
         operation or a missing image is skipped.
         """
@@ -206,48 +222,71 @@ class TripleStreamJob:
         op = str(record.get("op") or "").lower()
         source = record.get("source") if isinstance(record.get("source"), Mapping) else {}
         table = str(source.get("table") or "").strip().lower()
+        before = record.get("before") if isinstance(record.get("before"), Mapping) else None
         if op in _DELETE_OPS:
-            row, kind = record.get("before"), "delete"
+            row, kind, before = before, "delete", None
         elif op in _UPSERT_OPS:
             row, kind = record.get("after"), "upsert"
         else:
             return None
         if not table or not isinstance(row, Mapping):
             return None
-        return {"op": kind, "row": dict(row), "table": table}
+        return {"op": kind, "row": dict(row), "before": before, "table": table}
 
     @staticmethod
-    def explode(envelope: Mapping, seq: int, projectors_by_table: Mapping) -> list[dict]:
+    def explode(
+        envelope: Mapping,
+        seq: int,
+        projectors_by_table: Mapping,
+        column_types: Mapping | None = None,
+    ) -> list[dict]:
         """One adapter input row per mapping of the envelope's table (``ENVELOPE_FIELDS``).
 
-        A row whose key is NULL for a mapping yields nothing for it, like the
-        slot-event view's ``WHERE <key> IS NOT NULL``.
+        Every value is first turned into the text ``CAST(… AS STRING)`` gives
+        it (:class:`SparkColumnText`, typed by *column_types* — the source
+        table's ``{column: spark type}``), so the adapter only sees strings,
+        exactly like the slot SQL. An update that changes a mapping's key also
+        tombstones the old key (``delete`` from the pre-image), as the AUTO CDC
+        fold does through the pre-image. A key that is NULL for a mapping
+        yields nothing for it, like the slot-event view's ``WHERE <key> IS NOT NULL``.
         """
-        row_json = json.dumps(envelope["row"], sort_keys=True, default=str)
+        types = (column_types or {}).get(envelope["table"], {})
+        row = SparkColumnText.row(envelope["row"], types)
+        before = SparkColumnText.row(envelope["before"], types) if envelope.get("before") else None
         rows = []
         for projector in projectors_by_table.get(envelope["table"], ()):
-            key = projector.source_key(envelope["row"])
-            if key is None:
-                continue
-            rows.append(
-                {
-                    "map_id": projector.map_id,
-                    "source_key": key,
-                    "op": envelope["op"],
-                    "seq": int(seq),
-                    "row_json": row_json,
-                }
-            )
+            key = projector.source_key(row)
+            old = projector.source_key(before) if before is not None else None
+            if envelope["op"] == "upsert" and old is not None and old != key:
+                rows.append(TripleStreamJob._input_row(projector, old, "delete", seq, before))
+            if key is not None:
+                rows.append(TripleStreamJob._input_row(projector, key, envelope["op"], seq, row))
         return rows
 
     @staticmethod
-    def explode_records(records: Iterable[tuple[Any, Any]], projectors_by_table: Mapping) -> list[dict]:
+    def _input_row(projector: Any, key: str, op: str, seq: int, row: Mapping) -> dict:
+        return {
+            "map_id": projector.map_id,
+            "source_key": key,
+            "op": op,
+            "seq": int(seq),
+            "row_json": json.dumps(row, sort_keys=True),
+        }
+
+    @staticmethod
+    def explode_records(
+        records: Iterable[tuple[Any, Any]],
+        projectors_by_table: Mapping,
+        column_types: Mapping | None = None,
+    ) -> list[dict]:
         """:meth:`explode` every ``(value, seq)`` record that parses."""
         rows: list[dict] = []
         for value, seq in records:
             envelope = TripleStreamJob.parse_envelope(value)
             if envelope is not None and seq is not None:
-                rows.extend(TripleStreamJob.explode(envelope, int(seq), projectors_by_table))
+                rows.extend(
+                    TripleStreamJob.explode(envelope, int(seq), projectors_by_table, column_types)
+                )
         return rows
 
     # ------------------------------------------------------------------
@@ -333,6 +372,22 @@ class TripleStreamJob:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def time_mode(state_ttl_hours: int) -> str:
+        """``transformWithState`` time mode: TTL needs ``ProcessingTime``, none keeps ``None``."""
+        return "ProcessingTime" if state_ttl_hours > 0 else "None"
+
+    @staticmethod
+    def column_types(spark: Any, projectors_by_table: Mapping) -> dict:
+        """``{table: {column: spark type}}`` of every source table, from Unity Catalog."""
+        return {
+            table: {
+                field.name.lower(): field.dataType.simpleString()
+                for field in spark.table(table).schema.fields
+            }
+            for table in projectors_by_table
+        }
+
+    @staticmethod
     def with_trigger(spark: Any, writer: Any, args: argparse.Namespace) -> tuple[Any, str]:
         """*writer* with the Real-Time Mode trigger, or the micro-batch fallback; and which."""
         if args.real_time_mode:
@@ -378,12 +433,14 @@ class TripleStreamJob:
         )
         envelope_schema = "map_id STRING, source_key STRING, op STRING, seq BIGINT, row_json STRING"
 
+        column_types = TripleStreamJob.column_types(spark, by_table)
+
         def _explode(batches):
             import pandas as pd
 
             for batch in batches:
                 rows = TripleStreamJob.explode_records(
-                    zip(batch["value"], batch["seq"], strict=True), by_table
+                    zip(batch["value"], batch["seq"], strict=True), by_table, column_types
                 )
                 yield pd.DataFrame(rows, columns=["map_id", "source_key", "op", "seq", "row_json"])
 
@@ -396,7 +453,7 @@ class TripleStreamJob:
                 SlotDiffStatefulProcessor(projectors, state_ttl_ms=ttl_ms),
                 outputStructType=OUTPUT_SCHEMA,
                 outputMode="append",
-                timeMode="None",
+                timeMode=TripleStreamJob.time_mode(args.state_ttl_hours),
                 initialState=initial,
             )
         )

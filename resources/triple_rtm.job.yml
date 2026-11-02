@@ -49,11 +49,18 @@ resources:
               first_on_demand: 1
             spark_conf:
               spark.databricks.streaming.realTimeMode.enabled: "true"
+              # SparkColumnText prints timestamps in UTC, as the slot SQL reads them here.
+              spark.sql.session.timeZone: "UTC"
 
       tasks:
         - task_key: stream
           job_cluster_key: rtm
+          # The app wheel (artifact ``ontobricks_wheel`` in databricks.yml) brings
+          # the code the driver and the executors import (``back.*``,
+          # ``jobs.triple_stream.*``) and its dependencies; the driver runs
+          # main.py from the synced workspace files of the same deploy.
           libraries:
+            - whl: ../dist/*.whl
             - pypi:
                 package: "psycopg[binary]>=3.1"
           spark_python_task:

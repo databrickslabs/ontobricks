@@ -333,3 +333,19 @@ class TestTheRealtimeStreamJob:
 
     def test_failures_mail_the_deployer_like_the_analytics_job(self, rtm_job, job):
         assert rtm_job["email_notifications"] == job["email_notifications"]
+
+
+class TestTheRealtimeJobEnvironment:
+    def test_the_cluster_installs_the_app_wheel(self, rtm_job):
+        libraries = rtm_job["tasks"][0]["libraries"]
+        assert {"whl": "../dist/*.whl"} in libraries
+
+    def test_the_bundle_builds_that_wheel_with_the_job_code(self):
+        bundle = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
+        assert bundle["artifacts"]["ontobricks_wheel"]["type"] == "whl"
+        packages = (REPO_ROOT / "pyproject.toml").read_text()
+        assert '"src/jobs"' in packages and '"src/back"' in packages
+
+    def test_the_session_time_zone_is_utc(self, rtm_job):
+        conf = rtm_job["job_clusters"][0]["new_cluster"]["spark_conf"]
+        assert conf["spark.sql.session.timeZone"] == "UTC"

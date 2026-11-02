@@ -52,6 +52,17 @@ bundle:
 include:
   - resources/*.yml
 
+# The app as a wheel (``src/back``, ``src/jobs``… and every dependency in
+# pyproject.toml), installed on the realtime stream job cluster
+# (resources/triple_rtm.job.yml): the job's import closure is the app
+# (SlotRowProjector -> SlotProjectionCompiler -> the SPARQL translator), and the
+# executors unpickle the stream's functions by module reference.
+artifacts:
+  ontobricks_wheel:
+    type: whl
+    build: uv build --wheel --out-dir dist
+    path: .
+
 workspace:
   # Sandbox path — distinct from any other ``ontobricks*`` bundle so
   # we cannot share/clobber sync state with the production apps.

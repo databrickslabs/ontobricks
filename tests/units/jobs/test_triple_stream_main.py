@@ -111,6 +111,18 @@ class TestSourceOptions:
     def test_the_kafka_offset_is_the_seq(self, kind, seq):
         assert TripleStreamJob.record_columns(kind) == ("CAST(value AS STRING)", seq)
 
+    def test_the_kinesis_seq_orders_records_within_a_millisecond(self):
+        _value, seq = TripleStreamJob.record_columns("kinesis")
+
+        assert seq == (
+            "unix_millis(approximateArrivalTimestamp) * 1000000 "
+            "+ CAST(right(sequenceNumber, 6) AS BIGINT)"
+        )
+
+    @pytest.mark.parametrize(("hours", "mode"), [(0, "None"), (24, "ProcessingTime")])
+    def test_a_state_ttl_needs_the_processing_time_mode(self, hours, mode):
+        assert TripleStreamJob.time_mode(hours) == mode
+
 
 class TestEnvelopes:
     def _envelope(self, **record) -> str:
@@ -119,14 +131,21 @@ class TestEnvelopes:
     def test_an_insert_reads_the_after_image(self):
         envelope = TripleStreamJob.parse_envelope(self._envelope(op="c", after={"id": 1, "name": "a"}))
 
-        assert envelope == {"op": "upsert", "row": {"id": 1, "name": "a"}, "table": _TABLE}
+        assert envelope == {"op": "upsert", "row": {"id": 1, "name": "a"}, "before": None, "table": _TABLE}
+
+    def test_an_update_keeps_its_pre_image(self):
+        envelope = TripleStreamJob.parse_envelope(
+            self._envelope(op="u", before={"id": 1}, after={"id": 2})
+        )
+
+        assert envelope["row"] == {"id": 2} and envelope["before"] == {"id": 1}
 
     def test_a_delete_reads_the_before_image(self):
         envelope = TripleStreamJob.parse_envelope(
             self._envelope(op="d", before={"id": 1}, after=None)
         )
 
-        assert envelope == {"op": "delete", "row": {"id": 1}, "table": _TABLE}
+        assert envelope == {"op": "delete", "row": {"id": 1}, "before": None, "table": _TABLE}
 
     def test_a_debezium_payload_wrapper_is_unwrapped(self):
         wrapped = json.dumps(
@@ -158,8 +177,37 @@ class TestExplode:
         [row] = TripleStreamJob.explode(envelope, 42, _projectors())
 
         assert row["source_key"] == "7" and row["op"] == "upsert" and row["seq"] == 42
-        assert json.loads(row["row_json"]) == {"id": 7, "name": "Ada"}
+        assert json.loads(row["row_json"]) == {"id": "7", "name": "Ada"}
         assert row["map_id"] == _projectors()[_TABLE][0].map_id
+
+    def test_every_value_reaches_the_adapter_as_spark_text(self):
+        envelope = {"op": "upsert", "row": {"id": 7, "name": 3.5}, "before": None, "table": _TABLE}
+        types = {_TABLE: {"id": "int", "name": "double"}}
+
+        [row] = TripleStreamJob.explode(envelope, 1, _projectors(), types)
+
+        assert json.loads(row["row_json"]) == {"id": "7", "name": "3.5"}
+
+    def test_an_update_that_changes_the_key_tombstones_the_old_key(self):
+        envelope = {
+            "op": "upsert",
+            "row": {"id": 8, "name": "Ada"},
+            "before": {"id": 7, "name": "Ada"},
+            "table": _TABLE,
+        }
+
+        rows = TripleStreamJob.explode(envelope, 42, _projectors())
+
+        assert [(r["source_key"], r["op"], r["seq"]) for r in rows] == [
+            ("7", "delete", 42),
+            ("8", "upsert", 42),
+        ]
+        assert json.loads(rows[0]["row_json"]) == {"id": "7", "name": "Ada"}
+
+    def test_an_update_that_keeps_the_key_is_one_upsert(self):
+        envelope = {"op": "upsert", "row": {"id": 7, "name": "B"}, "before": {"id": 7, "name": "A"}, "table": _TABLE}
+
+        assert [r["op"] for r in TripleStreamJob.explode(envelope, 1, _projectors())] == ["upsert"]
 
     def test_a_null_key_yields_nothing(self):
         envelope = {"op": "upsert", "row": {"id": None, "name": "x"}, "table": _TABLE}
