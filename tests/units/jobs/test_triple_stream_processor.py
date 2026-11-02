@@ -8,6 +8,7 @@ stand in for the Spark state store.
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from back.core.streaming import SlotChange, SlotRowProjector
@@ -44,11 +45,11 @@ class _FakeMapState:
     def iterator(self):
         return iter(list(self.data.items()))
 
-    def updateValue(self, key, value):  # noqa: N802 — pyspark API
+    def updateValue(self, key, value):
         self.updates += 1
         self.data[tuple(key)] = tuple(value)
 
-    def removeKey(self, key):  # noqa: N802 — pyspark API
+    def removeKey(self, key):
         self.removals += 1
         self.data.pop(tuple(key), None)
 
@@ -58,7 +59,7 @@ class _FakeHandle:
         self.calls: list = []
         self.state = _FakeMapState()
 
-    def getMapState(self, name, key_schema, value_schema, **kwargs):  # noqa: N802 — pyspark API
+    def getMapState(self, name, key_schema, value_schema, **kwargs):
         self.calls.append((name, key_schema, value_schema, kwargs))
         return self.state
 
@@ -156,6 +157,23 @@ class TestHandleInputRows:
         assert {(r["predicate"], r["deleted"]) for r in rows} == {(_LABEL, True), (_RDF_TYPE, True)}
         assert handle.state.data[(_LABEL,)] == (None, None, 4)
 
+    def test_an_evicted_key_still_tombstones_its_slots_on_delete(self):
+        """The TTL emptied the MapState: the delete must still reach ``_live``."""
+        proc, handle = _processor()
+        list(
+            proc.handleInputRows(
+                _KEY, iter([_envelope("upsert", 3, {"id": 1, "name": "Ann"})]), None
+            )
+        )
+        handle.state.data.clear()  # TTL eviction
+
+        rows = list(proc.handleInputRows(_KEY, iter([_envelope("delete", 4)]), None))
+
+        assert {(r["predicate"], r["deleted"]) for r in rows} == {
+            (_LABEL, True),
+            (_RDF_TYPE, True),
+        }
+
     def test_a_stale_row_writes_no_state_and_yields_nothing(self):
         proc, handle = _processor()
         list(
@@ -189,7 +207,7 @@ class _RowLike(tuple):
         obj._fields = dict(fields)
         return obj
 
-    def asDict(self):  # noqa: N802 — pyspark API
+    def asDict(self):
         return dict(self._fields)
 
     def __getitem__(self, item):

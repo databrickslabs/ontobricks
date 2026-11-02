@@ -7,18 +7,23 @@ key's slots in a ``MapState`` (predicate -> ``subject, object, seq``), applies
 the pure :class:`SlotDiffProcessor` and yields one output row per
 :class:`SlotChange` (:data:`OUTPUT_SCHEMA`). ``handleInitialState`` seeds the
 state from the ``…_slots`` snapshot; state eviction is the caller's
-``state_ttl_ms`` (``ttlDurationMs`` on the ``MapState``).
+``state_ttl_ms`` (``ttlDurationMs`` on the ``MapState``). The TTL must exceed
+the maximum event lateness; without one the state keeps a watermark per
+predicate of every key it saw (see :class:`SlotDiffProcessor`). The envelope's
+row must be string-valued: the job casts every source column to STRING in
+Spark before ``to_json`` (see :class:`SlotRowProjector`).
 
-The module runs on the cluster but stays importable without ``pyspark``: the
-Spark types are imported in a guarded block and the schemas fall back to DDL
-strings, which ``transformWithState`` and ``getMapState`` accept as well. All
-logic lives in ``back.core.streaming``, which is pure Python.
+The module stays importable without ``pyspark``: the Spark types are imported
+in a guarded block and the schemas fall back to DDL strings, which
+``transformWithState`` and ``getMapState`` accept as well. The logic lives in
+``back.core.streaming``, which imports the application package (the slot
+compiler pulls in the SPARQL translator and the domain objects), so the job
+needs the OntoBricks app package installed on the cluster.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 from collections.abc import Iterable, Iterator, Mapping
 from typing import Any
 
@@ -41,8 +46,6 @@ except ImportError:
     StatefulProcessor = object
     StructField = StructType = None
     _SPARK_TYPES = {}
-
-logger = logging.getLogger("ontobricks.jobs.triple_stream")
 
 #: Fields of an input (envelope) row, in order.
 ENVELOPE_FIELDS = ("map_id", "source_key", "op", "seq", "row_json")
@@ -95,9 +98,7 @@ class SlotDiffStatefulProcessor(StatefulProcessor):
             self.STATE_NAME, STATE_KEY_SCHEMA, STATE_VALUE_SCHEMA, **ttl
         )
 
-    def handleInitialState(
-        self, key: Any, initialState: Any, timerValues: Any = None
-    ) -> None:  # noqa: N802,N803 — pyspark API
+    def handleInitialState(self, key: Any, initialState: Any, timerValues: Any = None) -> None:
         """Seed the key's state from ``…_slots`` snapshot rows (a Row, rows, or a frame)."""
         map_id, source_key = tuple(key)
         records = [
@@ -110,7 +111,7 @@ class SlotDiffStatefulProcessor(StatefulProcessor):
 
     def handleInputRows(
         self, key: Any, rows: Iterable[Any], timerValues: Any = None
-    ) -> Iterator[Any]:  # noqa: N802,N803 — pyspark API
+    ) -> Iterator[Any]:
         """Apply the key's envelope rows in ``seq`` order; yield one row per slot change."""
         map_id, source_key = tuple(key)
         before = self._load()
@@ -140,7 +141,12 @@ class SlotDiffStatefulProcessor(StatefulProcessor):
         }
 
     def _store(self, before: Mapping, after: Mapping) -> None:
-        """Write only what changed: removed predicates, then new or updated ones."""
+        """Write the new state back: remove dropped predicates, update the changed entries.
+
+        An applied event stamps its ``seq`` on every entry (that is the
+        ordering guard), so after one every entry is rewritten; a stale batch
+        writes nothing.
+        """
         for predicate in before:
             if predicate not in after:
                 self._slots.removeKey((predicate,))
