@@ -242,6 +242,140 @@ class TestScheduledSyncFollowsTheDomainMode:
         mgr.ensure.assert_not_called()
 
 
+_MV_SHA = "a" * 64
+
+
+@pytest.fixture
+def slot_runner(monkeypatch):
+    """The scripted slot pipeline runner of the modes tests; no WorkspaceClient, ever."""
+    from tests.units.objects import test_build_pipeline_modes as _modes
+
+    script = _modes._Script([], existing="pipe-1")
+    monkeypatch.setattr(
+        "back.core.streaming.SlotPipelineRunner",
+        type("_BoundRunner", (_modes._FakeRunner,), {"script": script}),
+    )
+    attempts: list = []
+    monkeypatch.setattr(
+        "databricks.sdk.WorkspaceClient", lambda *a, **kw: attempts.append(a) or MagicMock()
+    )
+    yield script
+    assert attempts == [], "unit tests must not build a WorkspaceClient"
+
+
+def _mv_warehouse(log: list, *, mv_sha: str = _MV_SHA):
+    """A warehouse whose ``_data`` already is the incremental build's materialized view."""
+    src = _warehouse(log)
+
+    def _query(sql):
+        log.append(("query", sql))
+        if sql.startswith("SHOW TBLPROPERTIES") and "ontobricks.mv_sql_sha256" in sql:
+            return [{"key": "ontobricks.mv_sql_sha256", "value": mv_sha}]
+        return []
+
+    src.execute_query.side_effect = _query
+    return src
+
+
+def _statements(log) -> list:
+    return [event[1] for event in log if event[0] == "sql"]
+
+
+class TestScheduledTickKeepsTheIncrementalView:
+    """A tick refreshes the MV a main build left instead of replacing it by a CTAS."""
+
+    @staticmethod
+    def _tick(mode, src, log, *, source_tables=_SOURCES, settings=None):
+        store, _ = _store(log, sync_table_mode="continuous")
+        with patch.object(SourceReadiness, "check", _readiness()):
+            _apply(
+                store, src, domain=_domain(mode), settings=settings, source_tables=source_tables
+            )
+
+    def test_an_incremental_tick_updates_the_slots_then_refreshes_the_view(self, slot_runner):
+        log: list = []
+
+        self._tick("incremental", _mv_warehouse(log), log)
+
+        statements = _statements(log)
+        assert not any(s.startswith("CREATE OR REPLACE TABLE") for s in statements)
+        assert not any(s.startswith("DROP") for s in statements)
+        assert f"REFRESH MATERIALIZED VIEW {_DATA}" in statements
+        steps = [event[0] for event in slot_runner.log]
+        assert steps == ["find", "start", "wait"]
+        assert slot_runner.log[1] == ("start", "pipe-1", False)
+        assert slot_runner.log[2][2]["until_running"] is False
+        [(_, _, kwargs)] = _ensures(log)
+        assert kwargs["sync_mode"] == "triggered"
+
+    def test_a_microbatch_tick_only_refreshes_the_view(self, slot_runner):
+        log: list = []
+
+        self._tick("microbatch", _mv_warehouse(log), log)
+
+        assert f"REFRESH MATERIALIZED VIEW {_DATA}" in _statements(log)
+        assert slot_runner.log == []
+
+    def test_an_incremental_view_without_row_local_mappings_needs_no_slot_update(
+        self, slot_runner
+    ):
+        log: list = []
+
+        self._tick("incremental", _mv_warehouse(log), log, source_tables=[])
+
+        assert f"REFRESH MATERIALIZED VIEW {_DATA}" in _statements(log)
+        assert slot_runner.log == []
+
+    def test_a_missing_slot_pipeline_falls_back_to_the_ctas(self, slot_runner):
+        slot_runner.existing = None
+        log: list = []
+
+        self._tick("incremental", _mv_warehouse(log), log)
+
+        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+
+    def test_a_data_table_that_is_not_a_view_is_rebuilt_by_ctas(self, slot_runner):
+        log: list = []
+
+        self._tick("incremental", _mv_warehouse(log, mv_sha=""), log)
+
+        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+        assert slot_runner.log == []
+
+    def test_a_full_domain_keeps_the_ctas(self, slot_runner):
+        log: list = []
+
+        self._tick(None, _mv_warehouse(log), log)
+
+        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+        assert not any(s.startswith("REFRESH") for s in _statements(log))
+
+    def test_a_merge_promoted_domain_keeps_the_ctas(self, slot_runner):
+        log: list = []
+        settings = SimpleNamespace(serverless_pipelines_enabled=False)
+
+        self._tick("incremental", _mv_warehouse(log), log, settings=settings)
+
+        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+        assert slot_runner.log == []
+
+    def test_a_failed_probe_drops_nothing(self, slot_runner):
+        log: list = []
+        store, mgr = _store(log)
+        failing = MagicMock(side_effect=InfrastructureError("SHOW TBLPROPERTIES failed"))
+
+        with patch.object(SourceReadiness, "check", failing), pytest.raises(InfrastructureError):
+            _apply(
+                store,
+                _mv_warehouse(log),
+                domain=_domain("incremental"),
+                source_tables=_SOURCES,
+            )
+
+        assert _statements(log) == []
+        mgr.ensure.assert_not_called()
+
+
 class TestDecideModeFor:
     """The probe-and-resolve core shared by the main build and the scheduled mirror."""
 

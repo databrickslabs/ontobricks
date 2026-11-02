@@ -4,10 +4,11 @@ Regenerates the Triple-Store VIEW from the domain's R2RML mappings and
 repopulates the graph store. Scheduled builds are always full rebuilds:
 the persisted ``drop_existing`` option is kept for backward
 compatibility with older schedule configs but no longer changes
-behaviour. In Lakebase ``managed_synced`` mode the build materializes
-``…_data`` and registers the Lakeflow synced table on it with the schedule
-the domain's materialization mode asks for, as the main build does
-(``TwinLakebaseSync``).
+behaviour. In Lakebase ``managed_synced`` mode the build brings ``…_data`` up
+to date — the incremental main build's materialized view is refreshed in
+place (``TwinScheduledRefresh``), anything else is rebuilt by CTAS — and
+registers the Lakeflow synced table on it with the schedule the domain's
+materialization mode asks for, as the main build does (``TwinLakebaseSync``).
 """
 
 from __future__ import annotations
@@ -161,15 +162,14 @@ def _apply_synced_pipeline(
         synced_uc,
         task_log_prefix=f"Scheduled build [{domain_name}]",
     )
-    from back.core.graphdb.delta import _table_naming, materialize
+    from back.core.graphdb.delta import _table_naming
     from back.objects.digitaltwin.build import TwinLakebaseSync
 
     data_table = _table_naming.data_table_fqn(domain, settings) if domain is not None else ""
+    # Decided (and probed) before anything is written: a failed probe drops nothing.
+    data_mode, sync_mode = _tick_modes(domain, settings, src, source_tables)
     if data_table:
-        materialize.apply_data_relation(
-            src, view_table, data_table, mode="table", with_object_hash=True
-        )
-    _, sync_mode = _tick_modes(domain, settings, src, source_tables)
+        _refresh_data_relation(src, domain, view_table, data_table, data_mode, source_tables)
     plan = TwinLakebaseSync.sync_plan_for(
         view_table=view_table,
         data_table=data_table,
@@ -219,6 +219,34 @@ def _tick_modes(
     )
     promoted = TwinMergeFallback.promotes(decision)
     return decision.effective, "incremental" if promoted else decision.effective
+
+
+def _refresh_data_relation(
+    src: Any,
+    domain: Any,
+    view_table: str,
+    data_table: str,
+    data_mode: str,
+    source_tables: Optional[List[str]],
+) -> None:
+    """Bring ``…_data`` up to date for the synced table.
+
+    The incremental main build's materialized view is refreshed in place
+    (``TwinScheduledRefresh``); anything else — a ``full`` or MERGE-promoted
+    domain, no view yet, a missing slot pipeline — is the CTAS from the gateway
+    VIEW (``object_hash`` and row tracking on), as before.
+    """
+    from back.core.graphdb.delta import materialize
+    from back.objects.digitaltwin.build import TwinScheduledRefresh
+
+    slots_expected = bool(source_tables)
+    if TwinScheduledRefresh.refresh(
+        src, domain, data_table, data_mode, slots_expected=slots_expected
+    ):
+        return
+    materialize.apply_data_relation(
+        src, view_table, data_table, mode="table", with_object_hash=True
+    )
 
 
 def _slot_source_tables(

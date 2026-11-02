@@ -149,8 +149,15 @@ same resolver and the same row-tracking probe as the main build
 (`TwinBuildPostMaterialize.decide_mode_for`), and counts a decision the main build
 promotes to the MERGE fallback (`TwinMergeFallback.promotes`) as `incremental`, so a
 tick and a main build register the Lakebase synced table on the same source and
-schedule and never alternate between triggered/continuous and snapshot. The tick itself still materializes
-`_data` as a table from the gateway VIEW.
+schedule and never alternate between triggered/continuous and snapshot.
+
+The tick decides (and probes) before it writes anything, so a failed probe drops
+nothing. When `_data` already is the incremental main build's materialized view the
+tick refreshes it in place instead of replacing it: `incremental` runs one triggered
+update of the slot pipeline, then `REFRESH MATERIALIZED VIEW`; `microbatch` only
+refreshes (its continuous pipeline keeps `_slots` current). A `full` or
+MERGE-promoted domain, a `_data` that is not our MV, or a missing slot pipeline get
+the CTAS from the gateway VIEW, as before.
 
 ## Lakehouse//RT
 

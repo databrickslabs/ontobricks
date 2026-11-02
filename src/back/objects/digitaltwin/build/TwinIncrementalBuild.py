@@ -372,16 +372,36 @@ class TwinIncrementalBuild:
         full_refresh: bool,
         until_running: bool,
     ) -> None:
-        """Start one update and wait for it (``COMPLETED``, or ``RUNNING``)."""
+        """:meth:`run_update` with the build's cancel check and progress reports."""
+        TwinIncrementalBuild.run_update(
+            runner,
+            pipeline_id,
+            full_refresh=full_refresh,
+            until_running=until_running,
+            cancel_check=pipe._is_cancelled,
+            on_state=lambda state: pipe.tm.update_progress(
+                pipe.task_id, 28, f"Slot pipeline {name}: {state.lower()}"
+            ),
+        )
+
+    @staticmethod
+    def run_update(
+        runner: Any,
+        pipeline_id: str,
+        *,
+        full_refresh: bool,
+        until_running: bool,
+        cancel_check: Callable[[], bool] | None = None,
+        on_state: Callable[[str], None] | None = None,
+    ) -> None:
+        """Start one update of *pipeline_id* and wait for it (``COMPLETED``, or ``RUNNING``)."""
         update_id = runner.start_update(pipeline_id, full_refresh=full_refresh)
         runner.wait_for_update(
             pipeline_id,
             update_id,
             timeout_s=TwinIncrementalBuild.slot_pipeline_timeout_s(),
-            cancel_check=pipe._is_cancelled,
-            on_state=lambda state: pipe.tm.update_progress(
-                pipe.task_id, 28, f"Slot pipeline {name}: {state.lower()}"
-            ),
+            cancel_check=cancel_check,
+            on_state=on_state,
             until_running=until_running,
         )
 
@@ -420,7 +440,7 @@ class TwinIncrementalBuild:
         else:
             TwinIncrementalBuild._create_views(pipe, data, graph, inferred, slots, batch_sql)
         pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
-        TwinIncrementalBuild._warehouse(
+        TwinIncrementalBuild.warehouse_step(
             f"refresh {data}",
             lambda: materialize.run_sql(client, MaterializedViewBuilder.refresh_sql(data)),
         )
@@ -436,7 +456,7 @@ class TwinIncrementalBuild:
 
         client = pipe.source_client
         pipe.tm.update_progress(pipe.task_id, 30, f"Creating materialized view {data}...")
-        TwinIncrementalBuild._warehouse(
+        TwinIncrementalBuild.warehouse_step(
             f"create the materialized view {data}",
             lambda: MaterializedViewBuilder.apply(
                 client,
@@ -475,7 +495,7 @@ class TwinIncrementalBuild:
         )
 
     @staticmethod
-    def _warehouse(what: str, statement: Callable[[], Any]) -> Any:
+    def warehouse_step(what: str, statement: Callable[[], Any]) -> Any:
         """Run a warehouse step; driver errors become :class:`InfrastructureError`.
 
         The SQL connector raises its own exception types, which the fallback
