@@ -88,6 +88,14 @@ class RealtimeSource:
 
     @staticmethod
     def topic_available(domain: Any, settings: Any) -> bool:
-        """The resolver's ``realtime_topic_available``: a complete config and the setting on."""
+        """The resolver's ``realtime_topic_available``.
+
+        A complete config, ``settings.realtime_enabled`` on, and a Lakebase
+        graph backend: the stream serves through the Lakebase ``_live`` table.
+        """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
         enabled = getattr(settings, "realtime_enabled", False) is True
-        return enabled and RealtimeSource.is_complete(RealtimeSource.of(domain))
+        if not enabled or GraphDBFactory._resolve_graph_backend(domain) != "lakebase":
+            return False
+        return RealtimeSource.is_complete(RealtimeSource.of(domain))

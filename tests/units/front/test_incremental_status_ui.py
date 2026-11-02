@@ -44,3 +44,8 @@ def test_the_script_reads_the_status_endpoint_and_renders_text():
 def test_both_panels_load_the_status(script):
     js = (REPO_ROOT / "src/front/static" / script).read_text(encoding="utf-8")
     assert "loadIncrementalStatus()" in js
+
+
+def test_a_realtime_stream_line_is_rendered():
+    js = SCRIPT.read_text(encoding="utf-8")
+    assert "status.realtime" in js and "'Realtime stream'" in js

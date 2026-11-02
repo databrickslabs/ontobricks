@@ -79,8 +79,18 @@ class TwinIncrementalBuild:
         """Build ``…_data`` incrementally; ``False`` means "take the full path".
 
         Re-decides the mode once the mappings are compiled, because only then
-        are the source tables known for the row-tracking probe.
+        are the source tables known for the row-tracking probe. An effective
+        ``realtime`` build then starts its stream job; any other one stops a
+        stream a previous build left (``TwinRealtimeStream.after_build``).
         """
+        from back.objects.digitaltwin.build.TwinRealtimeStream import TwinRealtimeStream
+
+        applied = TwinIncrementalBuild._apply(pipe)
+        TwinRealtimeStream.after_build(pipe)
+        return applied
+
+    @staticmethod
+    def _apply(pipe: Any) -> bool:
         from back.core.graphdb.GraphDBFactory import (
             GraphDBFactory,
             normalize_materialization_mode,

@@ -46,8 +46,10 @@ class TwinBuildRunHistory:
         (``mv`` / ``merge`` / ``ctas`` / ``""``), ``apply_mode``
         (``net_changes`` / ``full_stream`` / ``lakeflow_sync`` / ``none``;
         ``""`` when the apply phase was never reached),
-        ``apply_fallback_reason`` and ``data_table_id`` (the Delta table id the
-        version belongs to, ``""`` when unknown). A build that reached the
+        ``apply_fallback_reason``, ``data_table_id`` (the Delta table id the
+        version belongs to, ``""`` when unknown) and the realtime stream run it
+        started or stopped (``realtime_run_id``, ``realtime_state``,
+        ``TwinRealtimeStream.after_build``). A build that reached the
         incremental step adds its ``slot_refresh_facts``
         (:class:`TwinSlotRefreshPlan`: ``source_versions``,
         ``source_table_ids``, ``slot_full_refresh_pending``,
@@ -74,6 +76,8 @@ class TwinBuildRunHistory:
             "apply_mode": text(pipe, "apply_mode"),
             "apply_fallback_reason": text(pipe, "apply_fallback_reason"),
             "data_table_id": text(pipe, "data_table_id"),
+            "realtime_run_id": text(pipe, "realtime_run_id"),
+            "realtime_state": text(pipe, "realtime_state"),
             **TwinBuildRunHistory._slot_refresh_facts(pipe),
         }
         return {**stats, "materialization": materialization}

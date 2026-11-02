@@ -1256,6 +1256,38 @@ async def enable_incremental_row_tracking(
     return {"success": True, **result}
 
 
+@router.post(
+    "/incremental/realtime/start",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def start_realtime_stream(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Start (or reuse) the realtime stream job of the domain's published version."""
+    from back.objects.digitaltwin.build import TwinRealtimeStream
+
+    domain = get_domain(session_mgr)
+    result = await run_blocking(TwinRealtimeStream(settings).start, domain)
+    return {"success": True, **result}
+
+
+@router.post(
+    "/incremental/realtime/stop",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def stop_realtime_stream(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Cancel the domain version's realtime stream run, if one is active."""
+    from back.objects.digitaltwin.build import TwinRealtimeStream
+
+    domain = get_domain(session_mgr)
+    result = await run_blocking(TwinRealtimeStream(settings).stop, domain)
+    return {"success": True, **result}
+
+
 @router.get(
     "/incremental/status",
     dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],

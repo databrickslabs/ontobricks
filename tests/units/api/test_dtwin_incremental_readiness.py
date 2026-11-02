@@ -115,3 +115,30 @@ async def test_status_reports_on_the_build_warehouse_with_the_route_store(monkey
     assert seen["get_store"] is dtwin.get_graphdb
     assert seen["client_kwargs"] == {"warehouse_id": "wh-build"}
 
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["start", "stop"])
+async def test_the_realtime_routes_delegate_to_the_stream(monkeypatch, route, action):
+    from back.objects.digitaltwin.build import TwinRealtimeStream
+
+    dtwin, domain, seen = route
+    monkeypatch.setattr(
+        TwinRealtimeStream,
+        action,
+        lambda self, d: seen.update(domain=d) or {"run_id": 7, "state": "PENDING"},
+    )
+    handler = getattr(dtwin, f"{action}_realtime_stream")
+
+    resp = await handler(session_mgr=object(), settings=object())
+
+    assert resp == {"success": True, "run_id": 7, "state": "PENDING"}
+    assert seen["domain"] is domain
+
+
+@pytest.mark.parametrize("action", ["start", "stop"])
+def test_the_realtime_routes_need_the_builder_role(action):
+    from api.routers.internal import dtwin
+
+    [route] = [r for r in dtwin.router.routes if r.path == f"/dtwin/incremental/realtime/{action}"]
+    assert [dep.dependency.__name__ for dep in route.dependencies] == [_BUILDER_GATE]

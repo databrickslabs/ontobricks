@@ -29,6 +29,10 @@ function _incrementalLines(status) {
     if (status.lakebase_sync) {
         lines.push(['Synced table', status.lakebase_sync.state || 'UNKNOWN', status.lakebase_sync.synced_table || '']);
     }
+    if (status.realtime) {
+        lines.push(['Realtime stream', status.realtime.state || 'unknown',
+            status.realtime.run_id ? 'run ' + status.realtime.run_id : '']);
+    }
     var last = status.last_build;
     if (last && !last.error) {
         var facts = last.materialization || {};

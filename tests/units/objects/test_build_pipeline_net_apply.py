@@ -51,6 +51,8 @@ _TRACE_KEYS = {
 _FACT_KEYS = {
     "data_table_version",
     "data_table_id",
+    "realtime_run_id",
+    "realtime_state",
     "fingerprint",
     "strategy",
     "apply_mode",
@@ -150,6 +152,8 @@ class TestBuildRunStats:
         assert {key: facts[key] for key in _FACT_KEYS} == {
             "data_table_version": None,
             "data_table_id": "",
+            "realtime_run_id": "",
+            "realtime_state": "",
             "fingerprint": "",
             "strategy": "",
             "apply_mode": "",

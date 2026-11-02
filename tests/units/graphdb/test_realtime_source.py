@@ -88,5 +88,11 @@ class TestTopicAvailable:
         assert not RealtimeSource.topic_available(domain, SimpleNamespace(realtime_enabled=False))
         assert not RealtimeSource.topic_available(domain, SimpleNamespace())
 
+    @pytest.mark.parametrize("backend", ["databricks", "neo4j"])
+    def test_only_a_lakebase_domain_can_serve_the_stream(self, backend):
+        domain = SimpleNamespace(info={"realtime_source": _COMPLETE, "graph_backend": backend})
+
+        assert not RealtimeSource.topic_available(domain, SimpleNamespace(realtime_enabled=True))
+
     def test_a_domain_without_info(self):
         assert not RealtimeSource.topic_available(SimpleNamespace(), SimpleNamespace(realtime_enabled=True))

@@ -268,8 +268,25 @@ def test_a_full_domain_is_answered_without_any_probe(env, monkeypatch):
         "freshness_lag_s": None,
         "lakebase_sync": None,
         "last_build": None,
+        "realtime": None,
     }
     assert warehouse.queries == [] and env.calls == []
+
+
+def test_a_realtime_domain_reports_its_stream(env, monkeypatch):
+    from back.objects.digitaltwin.build import TwinRealtimeStream
+
+    monkeypatch.setattr(
+        TwinRealtimeStream, "status", lambda self, domain: {"run_id": 9, "state": "RUNNING"}
+    )
+
+    report = _report(_Warehouse(), domain=_domain("realtime"))
+
+    assert report["realtime"] == {"run_id": 9, "state": "RUNNING"}
+
+
+def test_another_mode_reports_no_stream(env):
+    assert _report(_Warehouse(), domain=_domain("microbatch"))["realtime"] is None
 
 
 def test_the_requested_mode_is_reported(env):

@@ -16,7 +16,15 @@ logger = get_logger(__name__)
 _VERSIONED_KINDS = frozenset({"mv", "table", "streaming_table"})
 
 #: The report's sections besides ``mode_requested``.
-_SECTIONS = ("slot_pipeline", "data", "slots", "freshness_lag_s", "lakebase_sync", "last_build")
+_SECTIONS = (
+    "slot_pipeline",
+    "data",
+    "slots",
+    "freshness_lag_s",
+    "lakebase_sync",
+    "last_build",
+    "realtime",
+)
 
 
 class TwinIncrementalStatus:
@@ -38,7 +46,7 @@ class TwinIncrementalStatus:
         now: datetime | None = None,
     ) -> dict:
         """``mode_requested``, ``slot_pipeline``, ``data``, ``slots``, ``freshness_lag_s``,
-        ``lakebase_sync``, ``last_build``.
+        ``lakebase_sync``, ``last_build``, ``realtime`` (a ``realtime`` domain's stream run).
 
         ``freshness_lag_s`` is *now* (default: the current UTC time) minus the
         last ``_data`` commit, ``None`` when that commit is unknown. A ``full``
@@ -68,7 +76,19 @@ class TwinIncrementalStatus:
             "freshness_lag_s": TwinIncrementalStatus._lag_s(data.get("committed_at"), now),
             "lakebase_sync": TwinIncrementalStatus.lakebase_sync(domain, settings, get_store),
             "last_build": TwinIncrementalStatus.last_build(domain, settings),
+            "realtime": (
+                TwinIncrementalStatus.realtime_stream(domain, settings)
+                if requested == "realtime"
+                else None
+            ),
         }
+
+    @staticmethod
+    def realtime_stream(domain: Any, settings: Any) -> dict:
+        """``{run_id, state}`` of the domain version's stream job (``TwinRealtimeStream.status``)."""
+        from back.objects.digitaltwin.build.TwinRealtimeStream import TwinRealtimeStream
+
+        return TwinRealtimeStream(settings).status(domain)
 
     @staticmethod
     def relation(client: Any, fqn: str) -> dict:

@@ -297,6 +297,8 @@ class _BuildPipeline:
         self.data_table_version: Optional[int] = None
         self.data_table_id: str = ""
         self.slot_refresh_facts: Dict[str, Any] = {}
+        self.realtime_run_id: str = ""  # the stream run a realtime build started
+        self.realtime_state: str = ""
         self.fingerprint: str = ""
         self.strategy: str = ""  # "merge" when TwinMergeFallback built …_data
         self.apply_mode: str = ""
