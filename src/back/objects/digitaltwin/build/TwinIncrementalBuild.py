@@ -226,7 +226,12 @@ class TwinIncrementalBuild:
 
     @staticmethod
     def compile_for(
-        domain: Any, settings: Any, entity_mappings: Any, relationship_mappings: Any, *, base_uri: str
+        domain: Any,
+        settings: Any,
+        entity_mappings: Any,
+        relationship_mappings: Any,
+        *,
+        base_uri: str,
     ):
         """The slot pipeline spec of the mappings, writing *domain*'s ``…_slots`` table.
 
@@ -250,15 +255,19 @@ class TwinIncrementalBuild:
 
     @staticmethod
     def _build(pipe: Any, spec: Any) -> None:
-        batch_sql = TwinIncrementalBuild._batch_branch_sql(pipe, spec)
-        slots = spec.slots_fqn if spec.row_local_map_ids else None
+        mode = pipe.mode_decision.effective
+        definition = TwinIncrementalBuild.data_definition_for(
+            spec, pipe.entity_mappings, pipe.relationship_mappings, mode
+        )
+        if definition["refresh_clause"]:
+            logger.info(
+                "[DT-BUILD %s] microbatch data view refreshes with %s",
+                pipe.task_id,
+                definition["refresh_clause"],
+            )
+        slots = definition["slots_fqn"]
         if slots:
             TwinIncrementalBuild._run_slot_pipeline(pipe, spec)
-        definition = {
-            "slots_fqn": slots,
-            "batch_branch_sql": batch_sql,
-            "refresh_clause": TwinIncrementalBuild._refresh_clause(pipe, spec),
-        }
         TwinIncrementalBuild._apply_views(pipe, definition)
         pipe.slots_table = slots
         logger.info(
@@ -273,23 +282,36 @@ class TwinIncrementalBuild:
         )
 
     @staticmethod
-    def _refresh_clause(pipe: Any, spec: Any) -> str:
-        """How a ``microbatch`` ``…_data`` refreshes between builds (``""`` otherwise).
+    def data_definition_for(
+        spec: Any, entity_mappings: Any, relationship_mappings: Any, mode: str
+    ) -> dict:
+        """The :meth:`MaterializedViewBuilder.data_mv_sql` keywords of ``…_data`` for *mode*.
 
-        Its continuous pipeline keeps ``…_slots`` current, but only a refresh
-        moves the view: ``TRIGGER ON UPDATE`` for at most ten sources, else
-        every 15 minutes (:meth:`MaterializedViewBuilder.microbatch_refresh_clause`).
+        ``slots_fqn`` when a mapping is row-local, ``batch_branch_sql`` for the
+        batch mappings (``None`` without), and ``refresh_clause``: a
+        ``microbatch`` view refreshes between builds — its continuous pipeline
+        keeps ``…_slots`` current, but only a refresh moves the view —
+        ``TRIGGER ON UPDATE`` for at most ten sources, else every 15 minutes
+        (:meth:`MaterializedViewBuilder.microbatch_refresh_clause`). Shared by
+        the main build and the scheduled tick's staleness check.
         """
         from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
 
-        if pipe.mode_decision.effective != "microbatch":
-            return ""
-        clause = MaterializedViewBuilder.microbatch_refresh_clause(spec.mv_source_count())
-        logger.info("[DT-BUILD %s] microbatch data view refreshes with %s", pipe.task_id, clause)
-        return clause
+        clause = ""
+        if mode == "microbatch":
+            clause = MaterializedViewBuilder.microbatch_refresh_clause(spec.mv_source_count())
+        return {
+            "slots_fqn": spec.slots_fqn if spec.row_local_map_ids else None,
+            "batch_branch_sql": TwinIncrementalBuild._batch_branch_sql(
+                spec, entity_mappings, relationship_mappings
+            ),
+            "refresh_clause": clause,
+        }
 
     @staticmethod
-    def _batch_branch_sql(pipe: Any, spec: Any) -> str | None:
+    def _batch_branch_sql(
+        spec: Any, entity_mappings: Any, relationship_mappings: Any
+    ) -> str | None:
         """Translator SQL for the batch mappings only; ``None`` when there are none.
 
         The translator is not called at all without batch mappings: a filter
@@ -302,9 +324,9 @@ class TwinIncrementalBuild:
             return None
         result = sparql.translate_sparql_to_spark(
             _BATCH_SPARQL,
-            pipe.entity_mappings,
+            entity_mappings,
             None,
-            pipe.relationship_mappings,
+            relationship_mappings,
             dialect="spark",
             incremental=True,
             mappings_filter=lambda m: any(m is b for b in batch),

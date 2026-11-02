@@ -169,7 +169,11 @@ The tick decides (and probes) before it writes anything, so a failed probe drops
 nothing. When `_data` already is the incremental main build's materialized view the
 tick refreshes it in place instead of replacing it: `incremental` runs one triggered
 update of the slot pipeline, then `REFRESH MATERIALIZED VIEW`; `microbatch` only
-refreshes (its continuous pipeline keeps `_slots` current). A `full` or
+refreshes (its continuous pipeline keeps `_slots` current). It does so only while
+the view still has the current definition: the tick recompiles the mappings and
+compares the MV definition fingerprint and the slot pipeline's SQL fingerprint, so
+mappings edited since the last main build are picked up by the CTAS (the next main
+build recreates the view) instead of being silently ignored. A `full` or
 MERGE-promoted domain, a `_data` that is not our MV, or a missing slot pipeline get
 the CTAS from the gateway VIEW, as before.
 

@@ -120,6 +120,7 @@ def _apply_synced_pipeline(
     domain: Any = None,
     settings: Any = None,
     source_tables: Optional[List[str]] = None,
+    mappings: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Trigger the Lakeflow synced-table refresh for *graph_name*.
 
@@ -132,8 +133,10 @@ def _apply_synced_pipeline(
     *source_tables* exactly like the main build), so the main build's
     registration is reused, not recreated. *source_tables* ``None`` means the
     sources are unknown: nothing is probed and they count as untracked.
-    Without a *domain* the ``…_data`` name cannot be resolved and the gateway
-    VIEW stays the source.
+    *mappings* (``entity_mappings``, ``relationship_mappings``, ``base_uri``)
+    let an incremental ``…_data`` view be checked against the current
+    definition before it is refreshed in place. Without a *domain* the
+    ``…_data`` name cannot be resolved and the gateway VIEW stays the source.
     """
     from back.core.graphdb.lakebase.LakebaseFlatStore import (
         resolve_sync_uc_fallback_catalog,
@@ -169,7 +172,7 @@ def _apply_synced_pipeline(
     # Decided (and probed) before anything is written: a failed probe drops nothing.
     data_mode, sync_mode = _tick_modes(domain, settings, src, source_tables)
     if data_table:
-        _refresh_data_relation(src, domain, view_table, data_table, data_mode, source_tables)
+        _refresh_data_relation(src, domain, settings, view_table, data_table, data_mode, mappings)
     plan = TwinLakebaseSync.sync_plan_for(
         view_table=view_table,
         data_table=data_table,
@@ -224,25 +227,27 @@ def _tick_modes(
 def _refresh_data_relation(
     src: Any,
     domain: Any,
+    settings: Any,
     view_table: str,
     data_table: str,
     data_mode: str,
-    source_tables: Optional[List[str]],
+    mappings: Optional[Dict[str, Any]],
 ) -> None:
     """Bring ``…_data`` up to date for the synced table.
 
-    The incremental main build's materialized view is refreshed in place
-    (``TwinScheduledRefresh``); anything else — a ``full`` or MERGE-promoted
-    domain, no view yet, a missing slot pipeline — is the CTAS from the gateway
-    VIEW (``object_hash`` and row tracking on), as before.
+    The incremental main build's materialized view is refreshed in place when
+    it still has the current definition (``TwinScheduledRefresh``); anything
+    else — a ``full`` or MERGE-promoted domain, no view yet, mappings edited
+    since, a missing slot pipeline — is the CTAS from the gateway VIEW
+    (``object_hash`` and row tracking on), as before.
     """
     from back.core.graphdb.delta import materialize
     from back.objects.digitaltwin.build import TwinScheduledRefresh
 
-    slots_expected = bool(source_tables)
-    if TwinScheduledRefresh.refresh(
-        src, domain, data_table, data_mode, slots_expected=slots_expected
-    ):
+    refreshed = TwinScheduledRefresh.refresh(
+        src, domain, settings, data_table, data_mode, **(mappings or {})
+    )
+    if refreshed:
         return
     materialize.apply_data_relation(
         src, view_table, data_table, mode="table", with_object_hash=True
@@ -301,6 +306,7 @@ def _write_graph_triples(
     domain: Any = None,
     settings: Any = None,
     source_tables: Optional[List[str]] = None,
+    mappings: Optional[Dict[str, Any]] = None,
 ) -> int:
     """Write triples to the graph store. Returns the triple count.
 
@@ -321,6 +327,7 @@ def _write_graph_triples(
             domain=domain,
             settings=settings,
             source_tables=source_tables,
+            mappings=mappings,
         )
         try:
             return _count_view_triples(src, view_table)
@@ -457,6 +464,11 @@ def run(ctx: TaskContext) -> RunOutcome:
         source_tables=_slot_source_tables(
             domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name
         ),
+        mappings={
+            "entity_mappings": ent_mappings,
+            "relationship_mappings": rel_mappings,
+            "base_uri": base_uri,
+        },
     )
 
     ctx.progress(95, "Saving domain metadata...")

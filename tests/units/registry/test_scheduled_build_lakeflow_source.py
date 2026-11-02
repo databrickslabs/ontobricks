@@ -63,7 +63,7 @@ def _warehouse(log: list):
     return src
 
 
-def _apply(store, src, *, domain=None, settings=None, source_tables=None):
+def _apply(store, src, *, domain=None, settings=None, source_tables=None, mappings=None):
     with patch(
         "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_sync_uc_fallback_catalog",
         return_value="cat",
@@ -81,6 +81,7 @@ def _apply(store, src, *, domain=None, settings=None, source_tables=None):
             domain=domain,
             settings=settings,
             source_tables=source_tables,
+            mappings=mappings,
         )
 
 
@@ -242,15 +243,15 @@ class TestScheduledSyncFollowsTheDomainMode:
         mgr.ensure.assert_not_called()
 
 
-_MV_SHA = "a" * 64
-
-
 @pytest.fixture
 def slot_runner(monkeypatch):
-    """The scripted slot pipeline runner of the modes tests; no WorkspaceClient, ever."""
+    """The scripted slot pipeline runner of the modes tests; no WorkspaceClient, ever.
+
+    The pipeline exists and its stored SQL fingerprint is the current one.
+    """
     from tests.units.objects import test_build_pipeline_modes as _modes
 
-    script = _modes._Script([], existing="pipe-1")
+    script = _modes._Script([], existing="pipe-1", stored="fp-current")
     monkeypatch.setattr(
         "back.core.streaming.SlotPipelineRunner",
         type("_BoundRunner", (_modes._FakeRunner,), {"script": script}),
@@ -263,8 +264,33 @@ def slot_runner(monkeypatch):
     assert attempts == [], "unit tests must not build a WorkspaceClient"
 
 
-def _mv_warehouse(log: list, *, mv_sha: str = _MV_SHA):
-    """A warehouse whose ``_data`` already is the incremental build's materialized view."""
+def _mappings(*, batch: bool = True, row_local: bool = True) -> dict:
+    """What the tick hands down: the domain's mappings as a build derives them."""
+    from tests.units.objects import test_build_pipeline_modes as _modes
+
+    entities = {}
+    if row_local:
+        entities[_modes._CUSTOMER] = _modes._row_local()
+    if batch:
+        entities[_modes._ORDER] = _modes._batch()
+    return {"entity_mappings": entities, "relationship_mappings": [], "base_uri": "http://ex.org/"}
+
+
+def _current_sha(mode: str, mappings: dict) -> str:
+    """The ``ontobricks.mv_sql_sha256`` a main build would give ``_data`` for *mappings*."""
+    from back.core.graphdb.delta import MaterializedViewBuilder
+    from back.objects.digitaltwin.build import TwinIncrementalBuild
+
+    ent, rels = mappings["entity_mappings"], mappings["relationship_mappings"]
+    spec = TwinIncrementalBuild.compile_for(
+        _domain(mode), None, ent, rels, base_uri=mappings["base_uri"]
+    )
+    definition = TwinIncrementalBuild.data_definition_for(spec, ent, rels, mode)
+    return MaterializedViewBuilder.data_mv_sha(**definition)
+
+
+def _mv_warehouse(log: list, *, mv_sha: str):
+    """A warehouse whose ``_data`` already is a materialized view with *mv_sha*."""
     src = _warehouse(log)
 
     def _query(sql):
@@ -281,28 +307,40 @@ def _statements(log) -> list:
     return [event[1] for event in log if event[0] == "sql"]
 
 
+def _ctas(log) -> bool:
+    return any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+
+
 class TestScheduledTickKeepsTheIncrementalView:
-    """A tick refreshes the MV a main build left instead of replacing it by a CTAS."""
+    """A tick refreshes the MV a main build left instead of replacing it by a CTAS,
+    as long as that view still has the domain's current definition."""
 
     @staticmethod
-    def _tick(mode, src, log, *, source_tables=_SOURCES, settings=None):
+    def _tick(mode, log, *, mappings=None, stored_for=None, settings=None, source_tables=_SOURCES):
+        """Tick a *mode* domain whose ``_data`` MV was built for *stored_for* mappings."""
+        mappings = _mappings() if mappings is None else mappings
+        stored = _current_sha(mode or "incremental", stored_for or mappings)
         store, _ = _store(log, sync_table_mode="continuous")
         with patch.object(SourceReadiness, "check", _readiness()):
             _apply(
-                store, src, domain=_domain(mode), settings=settings, source_tables=source_tables
+                store,
+                _mv_warehouse(log, mv_sha=stored),
+                domain=_domain(mode),
+                settings=settings,
+                source_tables=source_tables,
+                mappings=mappings,
             )
 
     def test_an_incremental_tick_updates_the_slots_then_refreshes_the_view(self, slot_runner):
         log: list = []
 
-        self._tick("incremental", _mv_warehouse(log), log)
+        self._tick("incremental", log)
 
         statements = _statements(log)
         assert not any(s.startswith("CREATE OR REPLACE TABLE") for s in statements)
         assert not any(s.startswith("DROP") for s in statements)
         assert f"REFRESH MATERIALIZED VIEW {_DATA}" in statements
-        steps = [event[0] for event in slot_runner.log]
-        assert steps == ["find", "start", "wait"]
+        assert [event[0] for event in slot_runner.log] == ["find", "start", "wait"]
         assert slot_runner.log[1] == ("start", "pipe-1", False)
         assert slot_runner.log[2][2]["until_running"] is False
         [(_, _, kwargs)] = _ensures(log)
@@ -311,52 +349,101 @@ class TestScheduledTickKeepsTheIncrementalView:
     def test_a_microbatch_tick_only_refreshes_the_view(self, slot_runner):
         log: list = []
 
-        self._tick("microbatch", _mv_warehouse(log), log)
+        self._tick("microbatch", log)
 
         assert f"REFRESH MATERIALIZED VIEW {_DATA}" in _statements(log)
-        assert slot_runner.log == []
+        assert [event[0] for event in slot_runner.log] == ["find"]  # its SQL is checked
 
     def test_an_incremental_view_without_row_local_mappings_needs_no_slot_update(
         self, slot_runner
     ):
         log: list = []
 
-        self._tick("incremental", _mv_warehouse(log), log, source_tables=[])
+        self._tick("incremental", log, mappings=_mappings(row_local=False), source_tables=[])
 
         assert f"REFRESH MATERIALIZED VIEW {_DATA}" in _statements(log)
         assert slot_runner.log == []
+
+    def test_a_changed_batch_mapping_rebuilds_by_ctas(self, slot_runner):
+        """The view was built before a batch mapping was added: refreshing it would
+        silently keep the old definition."""
+        log: list = []
+
+        self._tick("incremental", log, stored_for=_mappings(batch=False))
+
+        assert _ctas(log)
+        assert not any(s.startswith("REFRESH") for s in _statements(log))
+        assert slot_runner.log == []
+
+    def test_a_changed_slot_pipeline_sql_rebuilds_by_ctas(self, slot_runner):
+        slot_runner.stored = "fp-old"
+        log: list = []
+
+        self._tick("incremental", log)
+
+        assert _ctas(log)
+        assert [event[0] for event in slot_runner.log] == ["find"]
+
+    def test_a_definition_change_is_logged(self, slot_runner):
+        log: list = []
+
+        with patch("back.objects.digitaltwin.build.TwinScheduledRefresh.logger") as logger:
+            self._tick("incremental", log, stored_for=_mappings(batch=False))
+
+        call = logger.info.call_args
+        assert "definition" in (call.args[0] % call.args[1:])
+
+    def test_unknown_mappings_rebuild_by_ctas(self, slot_runner):
+        log: list = []
+        store, _ = _store(log)
+        with patch.object(SourceReadiness, "check", _readiness()):
+            _apply(
+                store,
+                _mv_warehouse(log, mv_sha=_current_sha("incremental", _mappings())),
+                domain=_domain("incremental"),
+                source_tables=_SOURCES,
+            )
+
+        assert _ctas(log)
 
     def test_a_missing_slot_pipeline_falls_back_to_the_ctas(self, slot_runner):
         slot_runner.existing = None
         log: list = []
 
-        self._tick("incremental", _mv_warehouse(log), log)
+        self._tick("incremental", log)
 
-        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+        assert _ctas(log)
 
     def test_a_data_table_that_is_not_a_view_is_rebuilt_by_ctas(self, slot_runner):
         log: list = []
+        store, _ = _store(log)
+        with patch.object(SourceReadiness, "check", _readiness()):
+            _apply(
+                store,
+                _mv_warehouse(log, mv_sha=""),
+                domain=_domain("incremental"),
+                source_tables=_SOURCES,
+                mappings=_mappings(),
+            )
 
-        self._tick("incremental", _mv_warehouse(log, mv_sha=""), log)
-
-        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+        assert _ctas(log)
         assert slot_runner.log == []
 
     def test_a_full_domain_keeps_the_ctas(self, slot_runner):
         log: list = []
 
-        self._tick(None, _mv_warehouse(log), log)
+        self._tick(None, log)
 
-        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+        assert _ctas(log)
         assert not any(s.startswith("REFRESH") for s in _statements(log))
 
     def test_a_merge_promoted_domain_keeps_the_ctas(self, slot_runner):
         log: list = []
         settings = SimpleNamespace(serverless_pipelines_enabled=False)
 
-        self._tick("incremental", _mv_warehouse(log), log, settings=settings)
+        self._tick("incremental", log, settings=settings)
 
-        assert any(s.startswith(f"CREATE OR REPLACE TABLE {_DATA}") for s in _statements(log))
+        assert _ctas(log)
         assert slot_runner.log == []
 
     def test_a_failed_probe_drops_nothing(self, slot_runner):
@@ -367,9 +454,10 @@ class TestScheduledTickKeepsTheIncrementalView:
         with patch.object(SourceReadiness, "check", failing), pytest.raises(InfrastructureError):
             _apply(
                 store,
-                _mv_warehouse(log),
+                _mv_warehouse(log, mv_sha=_current_sha("incremental", _mappings())),
                 domain=_domain("incremental"),
                 source_tables=_SOURCES,
+                mappings=_mappings(),
             )
 
         assert _statements(log) == []
