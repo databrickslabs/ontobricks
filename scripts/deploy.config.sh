@@ -104,6 +104,9 @@ fi
 export INSTANCE_ID="${INSTANCE_ID:-$DEFAULT_INSTANCE_ID}"
 export APP_NAME="${APP_NAME:-$DEFAULT_APP_NAME}"
 export MCP_APP_NAME="${MCP_APP_NAME:-$DEFAULT_MCP_APP_NAME}"
+# MCP app service-principal client id for UI identity swap (#208).
+# Looked up from the existing MCP app in deploy.sh before yaml render.
+export MCP_SP_CLIENT_ID="${MCP_SP_CLIENT_ID:-}"
 export APP_RESOURCE_KEY="${APP_RESOURCE_KEY:-$DEFAULT_APP_RESOURCE_KEY}"
 export MCP_APP_RESOURCE_KEY="${MCP_APP_RESOURCE_KEY:-$DEFAULT_MCP_APP_RESOURCE_KEY}"
 

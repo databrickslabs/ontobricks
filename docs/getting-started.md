@@ -24,7 +24,8 @@ By the end of this guide you will have OntoBricks running locally and connected 
 
 Before you begin, ensure you have:
 
-- **Python 3.11+** installed on your system (`requires-python` in `pyproject.toml`)
+- **Python 3.11+** for the app venv (`requires-python` in `pyproject.toml`).
+  `uv` provisions this even if `PATH` `python3` is Apple 3.9.
 - **Databricks workspace** access (Databricks Apps must be enabled)
 - **Personal Access Token** from Databricks (local dev) or service-principal auth (Databricks Apps)
 - **SQL Warehouse** in the workspace (you will need its ID for local dev)
@@ -63,8 +64,8 @@ scripts/setup.sh
 ```
 
 The setup script will:
-1. Check your Python version
-2. Install uv package manager (if not present)
+1. Install uv (if not present)
+2. Run the local preflight (uv may provision CPython ≥ 3.11)
 3. Create a virtual environment
 4. Install all dependencies
 5. Create a `.env` template file

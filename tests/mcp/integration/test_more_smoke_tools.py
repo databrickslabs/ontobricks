@@ -393,7 +393,17 @@ class TestGetEntityContext:
 
     async def test_get_entity_context_no_domain_selected(self, patched_mcp):
         patched_mcp.add_default_registry()
-        # No select_domain called → tool must return guidance text
+        # Two published domains: the unique-domain fallback must not guess.
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/domains",
+            json={
+                "domains": [
+                    {"name": "sales", "active": True},
+                    {"name": "finance", "active": True},
+                ]
+            },
+        )
         result = await patched_mcp.call(
             "get_entity_context",
             entity_uri="http://x/Customer/CUST001",

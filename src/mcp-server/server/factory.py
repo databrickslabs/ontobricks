@@ -90,8 +90,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             "the target. get_entity_context(follow_bridges=True) only PEEKS at "
             "the target graph; it does NOT switch the session, so subsequent "
             "tools stay on the origin domain.\n\n"
-            "Always select a domain before entity/triple/GraphQL queries. "
-            "If the user's question maps clearly to one domain, select it automatically."
+            "Always resolve a domain before entity/triple/GraphQL queries: "
+            "call select_domain when the MCP session is reused, or pass "
+            "domain_name on each domain-scoped tool when the client opens a "
+            "new session per call (Databricks Playground). "
+            "If the user's question maps clearly to one domain, pick it automatically."
         ),
     )
 

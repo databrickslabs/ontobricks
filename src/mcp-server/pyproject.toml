@@ -2,7 +2,7 @@
 name = "mcp-ontobricks"
 version = "1.0.0"
 description = "OntoBricks MCP Server — Knowledge graph tools for Databricks Playground"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
     # fastmcp>=3.4.10: post-transform component authorization was skipped on
@@ -46,6 +46,11 @@ constraint-dependencies = [
     "urllib3>=2.8.0",
     # anyio 4.14.2: TLSStream IDNA 2003 spoofing + process-pool stderr stall.
     "anyio>=4.14.2",
+    # authlib>=1.9.1: empty HMAC key JWS/JWT forgery (GHSA-8m4g-j4wp-wgcg)
+    # plus the 1.9.0 JAR/SSRF / nonce / audience / alg-confusion series.
+    "authlib>=1.9.1",
+    # dnspython>=2.9.0: from_wire_parser() excessive CPU (GHSA-45c3-73f7-pv4m).
+    "dnspython>=2.9.0",
 ]
 
 [project.scripts]

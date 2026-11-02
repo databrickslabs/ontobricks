@@ -1743,6 +1743,10 @@ domain chooses which of them to publish, from its [MCP tab](#mcp-tab).
 
 ### Using in Databricks Playground
 
+Playground opens a new MCP session per tool call, so `select_domain` does not
+stick. Pass `domain_name` on graph tools, set `MCP_DEFAULT_DOMAIN` on the MCP
+app, or publish a single MCP domain. See [docs/mcp.md](mcp.md).
+
 1. Deploy the MCP server as `mcp-ontobricks` (see [Deployment Guide](deployment.md))
 2. In your Databricks workspace, navigate to **Playground**
 3. Select **mcp-ontobricks** from the MCP Servers list
@@ -2916,7 +2920,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Entity Discovery**: `list_entity_types` and `describe_entity` provide human-readable text descriptions with BFS traversal. `describe_entity` accepts optional `cache` (true = require companions, false = live SPO).
 - **GraphQL via MCP**: `get_graphql_schema` and `query_graphql` tools let LLM agents introspect and query the typed GraphQL API.
 - **Per-Domain MCP Policy**: Each domain picks, in **Domain → General → MCP**, which of the eight domain-scoped tools it publishes and how its ontology attachments (Datasets, Bridges, Actions, Virtual attributes) are surfaced — **Preferred** (the hint becomes a directive instruction), **Normal**, or **Disabled** (withheld from every MCP *and* external REST response). The four registry-level tools stay always-on, since they run before a domain is resolved. An unconfigured domain behaves exactly as before.
-- **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. Note that the *selected domain* itself remains process-global in the MCP proxy (a pre-existing limitation), so the policy is reliable for one concurrent client per process.
+- **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. The selected domain is isolated per MCP session id; clients that do not reuse a session (Playground) must pass `domain_name` or set `MCP_DEFAULT_DOMAIN`.
 - **Databricks Playground**: Deployed as `mcp-ontobricks`, auto-discoverable by LLM agents in the Databricks Playground.
 - **Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client.
 
@@ -2939,7 +2943,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **CSRF Protection**: Double-submit cookie pattern for all state-changing requests; `X-CSRF-Token` header auto-attached by the frontend fetch wrapper.
 - **Secure Cookies**: Session cookies use `secure=True` and `samesite=lax` in Databricks Apps deployments (HTTPS-only).
 - **On-Behalf-Of (OBO) Unity Catalog access**: In Databricks Apps, every non-build UC data read runs as the **signed-in user**, not the app service principal — SPARQL/GraphQL Delta reads, Graph Explorer, mapping preview & UC browse, Class Actions (`EXECUTE`), and virtual-attribute compute all use the caller's forwarded token (`x-forwarded-access-token`). UC governance is therefore enforced per user. The path is **fail-closed**: a UC read with no forwarded user token is denied rather than silently run as the SP. Build (view/triplestore materialisation) stays on the control-plane service principal. Local dev is unaffected (OBO is a no-op outside App mode).
-- **Per-domain graph gating (Lakebase / Neo4j)**: Reads against backends that carry no UC identity (Lakebase Postgres, Neo4j) require **Team membership** on the loaded domain — at least the **Viewer** role — enforced by `assert_domain_graph_read` on every graph read endpoint; App admins bypass. The MCP server forwards the end-user identity so the same OBO + Team rules apply to MCP-driven reads.
+- **Per-domain graph gating (Lakebase / Neo4j)**: Reads against backends that carry no UC identity (Lakebase Postgres, Neo4j) require **Team membership** on the loaded domain — at least the **Viewer** role — enforced by `assert_domain_graph_read` on every graph read endpoint; App admins bypass. The MCP server forwards the end-user identity on acting headers (not `x-forwarded-*`, which the UI Apps proxy overwrites from the MCP service principal) so the same OBO + Team rules apply to MCP-driven reads.
 
 ### Observability
 - **Structured JSON Logging**: Set `LOG_FORMAT=json` for machine-readable log lines with `ts`, `level`, `logger`, `module`, `func`, `line`, `msg` fields.

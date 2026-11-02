@@ -476,6 +476,25 @@ fi
 
 # ── 3. Render app.yaml from template ────────────────────────────────
 begin_step "Render app.yaml"
+# MCP SP client id for UI acting-identity trust (#208). The app exists on
+# redeploy; first-ever create leaves this empty until the next deploy.
+if [[ -z "${MCP_SP_CLIENT_ID:-}" ]]; then
+    MCP_SP_CLIENT_ID="$(databricks apps get "$MCP_APP_NAME" -o json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+print((d.get('service_principal_client_id') or '').strip())
+" 2>/dev/null || true)"
+    export MCP_SP_CLIENT_ID
+fi
+export MCP_SP_CLIENT_ID="${MCP_SP_CLIENT_ID:-}"
+if [[ -n "$MCP_SP_CLIENT_ID" ]]; then
+    info "MCP_SP_CLIENT_ID=${MCP_SP_CLIENT_ID}"
+else
+    info "MCP_SP_CLIENT_ID unset (MCP app not found yet) — identity forwarding waits until the next deploy"
+fi
 if $RENDER_APP_YAML; then
     python3 scripts/_internal/_render-app-yaml.py \
         || die "app.yaml render failed — check scripts/_internal/_render-app-yaml.py and the APP_* values in ${CONFIG_FILE}."

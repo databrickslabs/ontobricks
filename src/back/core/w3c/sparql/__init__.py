@@ -8,6 +8,7 @@ from back.core.w3c.sparql.QuerySafety import require_read_only_sparql
 from back.core.w3c.sparql.SparqlQueryRunner import SparqlQueryRunner
 from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
 from back.core.w3c.sparql.TripleSQLAssembler import TripleSQLAssembler
+from back.core.w3c.sparql.SparqlValueFilterSql import SparqlValueFilterSql
 
 
 def execute_local_query(query, rdf_content, limit):
@@ -52,4 +53,5 @@ __all__ = [
     "SparqlQueryRunner",
     "SparqlTranslator",
     "TripleSQLAssembler",
+    "SparqlValueFilterSql",
 ]

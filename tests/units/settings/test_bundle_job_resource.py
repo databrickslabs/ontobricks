@@ -202,6 +202,14 @@ class TestAppPermissionsInBundle:
             assert "CAN_USE" in levels, f"{key} missing CAN_USE"
             assert any(p.get("group_name") == "users" for p in perms)
 
+    def test_each_app_declares_user_api_scopes_for_obo(self):
+        data = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
+        apps = data["resources"]["apps"]
+        needed = {"sql", "iam.current-user:read", "iam.access-control:read"}
+        for key in ("ontobricks_dev_app", "mcp_ontobricks_app"):
+            scopes = set(apps[key].get("user_api_scopes") or [])
+            assert needed <= scopes, f"{key} missing user_api_scopes {needed - scopes}"
+
 
 class TestAnalyticsJobPermissionBootstrap:
     """The app SP must get CAN_MANAGE_RUN on the analytics job at deploy time.

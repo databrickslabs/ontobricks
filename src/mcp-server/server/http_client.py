@@ -32,10 +32,12 @@ _OAUTH_TOKEN_TTL = 3000  # refresh well before the typical 3600 s expiry
 # ── End-user identity forwarding (OBO) ────────────────────────────────────
 # The MCP server authenticates to the main app with its own M2M principal, but
 # data-plane (UC / graph) routes must resolve the *end user* so OBO + Team
-# gating apply. ``SessionScopeMiddleware`` captures the inbound
-# ``x-forwarded-*`` headers per tool call and binds them here; every outbound
-# ``_get`` / ``_post`` merges them alongside the M2M ``Authorization`` so the
-# main app can fail-closed when the user identity is absent.
+# gating apply. ``SessionScopeMiddleware`` captures the inbound Apps
+# ``x-forwarded-*`` headers per tool call. Outbound calls send them as
+# ``x-ontobricks-acting-*`` (not ``x-forwarded-*``): the UI Apps proxy
+# overwrites the latter from the M2M bearer (issue #208).
+_ACTING_EMAIL = "x-ontobricks-acting-email"
+_ACTING_TOKEN = "x-ontobricks-acting-token"
 _FWD: "contextvars.ContextVar[dict]" = contextvars.ContextVar(
     "mcp_fwd_identity", default={}
 )
@@ -56,9 +58,9 @@ def set_forwarded_identity(email: str = "", user_token: str = "") -> None:
     """Bind the end-user identity to forward to the main app (per request)."""
     fwd: dict = {}
     if email:
-        fwd["x-forwarded-email"] = email
+        fwd[_ACTING_EMAIL] = email
     if user_token:
-        fwd["x-forwarded-access-token"] = user_token
+        fwd[_ACTING_TOKEN] = user_token
     _FWD.set(fwd)
 
 
@@ -71,8 +73,8 @@ def _merged_headers(mode: str | None = None) -> dict:
     """M2M auth headers merged with the forwarded end-user identity.
 
     Resolved through the module object so tests can monkeypatch
-    ``_get_auth_headers``. Forwarded ``x-forwarded-*`` headers never override
-    the M2M ``Authorization`` (they occupy distinct header names).
+    ``_get_auth_headers``. Acting identity headers never override the M2M
+    ``Authorization`` (they occupy distinct header names).
     """
     m = mode if mode is not None else _current_mode
     headers = dict(_get_auth_headers(m))

@@ -324,6 +324,38 @@ async def test_tool_refuses_before_any_domain_is_selected(mcp_env) -> None:
     assert "No domain selected" in await tools["list_entity_types"]()
 
 
+async def test_get_status_accepts_domain_name_without_select(mcp_env) -> None:
+    """Issue #209: Playground opens a new session per call — pass domain_name."""
+    tools, _ = mcp_env
+    text = await tools["get_status"](domain_name="finance")
+    assert "No domain selected" not in text
+    assert "Domain: finance" in text
+
+
+async def test_get_status_uses_mcp_default_domain_env(mcp_env, monkeypatch) -> None:
+    tools, _ = mcp_env
+    monkeypatch.setenv("MCP_DEFAULT_DOMAIN", "finance")
+    text = await tools["get_status"]()
+    assert "Domain: finance" in text
+
+
+async def test_get_status_auto_picks_the_only_published_domain(mcp_env) -> None:
+    tools, state = mcp_env
+    state["domains"] = [
+        {"name": "finance", "description": "Fin", "mcp_policy": _HIDES_NOTHING},
+    ]
+    text = await tools["get_status"]()
+    assert "Domain: finance" in text
+
+
+async def test_query_graphql_policy_applies_when_passing_domain_name(mcp_env) -> None:
+    tools, _ = mcp_env
+    message = await tools["query_graphql"](query="{ a }", domain_name="customer360")
+    assert "query_graphql" in message
+    assert "customer360" in message
+    assert "MCP policy" in message
+
+
 async def test_refusal_names_the_tool_and_the_domain(mcp_env) -> None:
     tools, _ = mcp_env
     await _select(tools, "customer360")
