@@ -397,12 +397,17 @@ serves them) keep the freshness of their last rebuild, and a rebuild reads `_gra
 `_data` themselves, never the slots (it follows a refreshed `_data`). Data-quality and
 SHACL reads keep the views too. The remaining difference from `_graph` is the grants:
 the reader needs `SELECT` on `_slots` and `_inferred` themselves, not only on `_graph`
-(the build grants nothing on these relations; grant them on the schema). RT is not yet
-verified live — neither the reads nor the fingerprint probe (`SHOW TBLPROPERTIES` on
-the RT warehouse; a refusal keeps the views, with a warning every 30 s). Each reference
-to the relation re-reads the slots with a `DISTINCT`, so measure a domain's heavy reads
-(unfiltered counts, dumps, deep traversals) on its RT warehouse before turning the
-toggle on.
+(the build grants nothing on these relations; grant them on the schema). Verified live on
+a Lakehouse//RT warehouse ([Live verification](#known-limitations)): the fingerprint probe
+runs there (a refusal would keep the views, with a warning every 30 s), every read shape
+the store emits runs over the relation, and a source commit is queryable through RT
+14 s median / 23 s p95 after it. What RT does **not** run is a recursive CTE
+(`[UNSUPPORTED_FEATURE] Recursive CTEs is not supported in Lakehouse//RT`): the BFS and
+transitive-closure templates therefore take the build-warehouse fallback below on every
+call (`last_read_route = "build-fallback"`), at the views' freshness, so a domain whose
+reads are mostly traversals gains little from the toggle. Each reference to the relation
+re-reads the slots with a `DISTINCT`, so measure a domain's heavy reads (unfiltered
+counts, dumps) on its RT warehouse before turning the toggle on.
 
 Graph reads go to the query warehouse (`graph_engine_config.lakehouse.warehouse_id`
 plus "Use Lakehouse//RT for queries"). A heavy traversal can trip an RT guardrail
@@ -677,7 +682,7 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | ○ | `DeltaMergeMaterializer`, `TwinMergeFallback` |
 | 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh. Live: the continuous pipeline lands a source change in `_slots` after 8.1 s median / 11.9 s max (n = 8) |
 | 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | ○ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline |
-| 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ○ | query warehouse + "Use Lakehouse//RT"; `DeltaFlatStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Lakehouse//RT is enabled on the workspace but an RT warehouse is created in the UI only — none exists yet |
+| 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ✅ | query warehouse + "Use Lakehouse//RT"; `DeltaFlatStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Live: the app's `use_sea` client on the RT warehouse `realtime` runs the fingerprint probe and every store read shape over the relation; recursive CTEs are refused there and take the build-warehouse fallback; point reads p50 216 ms through the SEA from a laptop |
 | 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | ○ | `ContinuousSyncWait`; Postgres union view |
 | 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ○ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace |
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh. Live: `drift: false`, identical counts and `xxhash64` sums after bootstrap and after mutations |
@@ -686,7 +691,7 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them. Live: DDL, `seq` guard, tombstone, purge, detach on `ontobricks-int`; sink upsert p50 105 ms / p99 218 ms |
 | 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ✅ | ○ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time. The topic-fed pipeline SQL validates in Lakeflow; cluster sizing and run-as grants need a classic-compute workspace with a topic |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
-| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; `incremental` source → `_data` 82 s; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; the RT read over `_slots` adds query latency only, but no RT warehouse exists to measure it; `realtime` p99 needs a topic and classic compute (not on this workspace) |
+| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; **`microbatch` through Lakehouse//RT 14.0 s p50 / 22.9 s p95 (n = 10) — the ≤ 30 s p95 KPI is met ✅**; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; `incremental` source → `_data` 82 s; `realtime` p99 < 1 s ○ — needs a topic and classic compute, which this workspace cannot offer (the sink's share, Lakebase upsert p99 218 ms, is measured) |
 
 ## Known limitations
 
@@ -828,9 +833,24 @@ afterwards):
   change-feed pipeline on one fixture table, eight single-row updates spaced apart, the slots table
   polled every second from the build warehouse): source commit → new label in `_slots` after
   **8.1 s median, 11.9 s max, 3.1 s min** (n = 8). This is what the [fast path](#lakehousert)
-  reads — a Lakehouse//RT warehouse adds its own query latency (milliseconds) on top, so the
-  design's ≤ 30 s p95 holds at the pipeline's cadence; the RT read itself is still unmeasured
-  (no RT warehouse on the workspace, see below).
+  reads; the next bullet measures the same path through a Lakehouse//RT warehouse.
+- **Continuous (`microbatch`) freshness through Lakehouse//RT** (same day, after the user created
+  the RT warehouse `realtime` — serverless, Large; the API lists it with `warehouse_type: null` —
+  a third continuous run on one fixture table plus a one-row `_inferred` table, ten single-row
+  updates, the inline relation polled every second through the app's own
+  `DatabricksClient(use_sea=True)` on the RT warehouse): source commit → visible through the
+  relation after **14.0 s median, 22.9 s p95 / max, 9.5 s min** (n = 10; samples 22.9, 9.8, 15.8,
+  14.6, 16.2, 13.5, 15.2, 10.4, 9.5, 10.7). **The design's `microbatch` KPI (≤ 30 s p95 via
+  Lakehouse//RT) is met.** On the same warehouse: the fingerprint probe (`SHOW TBLPROPERTIES`)
+  matches `GraphReadRelation.microbatch_data_sha`; unaliased `FROM (…)`, `FROM (…) t`, a self
+  join, the asserted-only form, the `subject IN (SELECT …)` seed, and direct reads of the
+  streaming table and the MV all run; the inferred triple is visible through the relation and
+  its count is `_data` + `_inferred`; point reads of the relation from a laptop through the
+  Statement Execution API: p50 216 ms, p95 404 ms, max 541 ms (n = 20, HTTP round trip
+  included). Refused: recursive CTEs (`UNSUPPORTED_FEATURE … SQLSTATE: 0A000`) — the message
+  carries the `lakehouse//rt` marker, so the store's BFS / transitive closure fall back to the
+  build warehouse (pinned with the verbatim message in
+  `tests/units/graphdb/delta/test_read_warehouse_routing.py`).
 - **Found and fixed**: switching the pipeline to continuous starts an update by itself, so the
   explicit `start_update` of the microbatch bootstrap was refused (`An active update … already
   exists`) — the runner now adopts that update.
@@ -851,10 +871,11 @@ supported in the workspace"), and on serverless job compute the slim closure imp
 (`rate` source → `foreachBatch`, with or without `transformWithState`) aborts the Python client
 with SIGABRT before producing output (Databricks trace IDs 7474660131088429/…/584058328432402 and
 …/77296344132098). The Real-Time-Mode path needs classic DBR 19 compute by design, so this is an
-environment limit, not a code path that was exercised and failed. A Lakehouse//RT warehouse was
-enabled on the workspace but none exists yet: RT warehouses are created in the UI
-(Compute → SQL Warehouses → Create → Real-Time; the public API has no selector), after which
-`scripts/measure_freshness.py --read-warehouse-id <rt>` measures the microbatch read path.
+environment limit, not a code path that was exercised and failed. (Lakehouse//RT itself is no
+longer blocked: RT warehouses are created in the UI — Compute → SQL Warehouses → Create →
+Real-Time; the SDK's warehouse types are still `CLASSIC` / `PRO` only and the API lists an RT
+warehouse with `warehouse_type: null` — and the measurements above were taken once one existed;
+`scripts/measure_freshness.py --read-warehouse-id <rt>` repeats them against a deployed domain.)
 
 Live-unverified (workspace spike checklist):
 

@@ -111,6 +111,31 @@ class TestGuardrailFallback:
 
         assert store.last_read_route == "build-fallback"
 
+    def test_rt_refusing_a_recursive_cte_falls_back_to_the_build_warehouse(self, monkeypatch):
+        # Verbatim refusal observed on a Lakehouse//RT warehouse (2026-11-02): the
+        # BFS / transitive-closure templates are recursive CTEs, so this is the
+        # error a traversal gets there.
+        refusal = InfrastructureError(
+            "[UNSUPPORTED_FEATURE] Recursive CTEs is not supported in Lakehouse//RT. "
+            "Please change your query or use a Serverless SQL Warehouse instead. "
+            "SQLSTATE: 0A000"
+        )
+        query_client = _FakeClient(exc=refusal)
+        build_client = _FakeClient(result=[{"n": 1}])
+        _install_factory(monkeypatch, build_client)
+        store = _store(query_client)
+        walk = (
+            "WITH RECURSIVE walk(subject, depth) AS (SELECT subject, 0 FROM cat.sch.t_graph "
+            "UNION ALL SELECT t.object, w.depth + 1 FROM walk w JOIN cat.sch.t_graph t "
+            "ON t.subject = w.subject WHERE w.depth < 2) SELECT count(*) AS n FROM walk"
+        )
+
+        rows = store.execute_query(walk)
+
+        assert rows == [{"n": 1}]
+        assert build_client.queries == [walk]
+        assert store.last_read_route == "build-fallback"
+
     @pytest.mark.parametrize("marker", RT_FALLBACK_MARKERS)
     def test_every_marker_triggers_the_fallback(self, monkeypatch, marker):
         query_client = _FakeClient(exc=RuntimeError(f"Boom: {marker.upper()} reached"))
