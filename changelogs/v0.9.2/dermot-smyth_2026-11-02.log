@@ -2488,8 +2488,10 @@ Observed (2026-11-02):
   selector (UI: Compute → SQL Warehouses → Create → Real-Time). Once one
   exists, `scripts/measure_freshness.py --read-warehouse-id <id>` measures the
   microbatch read path.
-- The closure the stream job ships must include `back/core/databricks` (the
-  helpers import it); the DAB job's slim-closure list already does.
+- The stream job's source closure must include `back/core/databricks` (the
+  helpers import it): the DAB job puts the whole synced `src/` on `PYTHONPATH`
+  and installs `databricks-sql-connector`, so it does; a hand-built subset of
+  the source must copy that directory too.
 
 Modified files:
 - docs/incremental-materialization.md
