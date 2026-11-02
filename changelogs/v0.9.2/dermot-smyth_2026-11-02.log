@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the design-gaps review fixes): 10764 passed, 339 skipped, 9 deselected
+Final test result (after the design-gaps re-review fixes): 10770 passed, 339 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -1154,4 +1154,79 @@ tests/units/architecture tests/property tests/external
 test_class_per_file); slot fold properties 0.32s / 0.29s; full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10764 passed, 339 skipped, 9 deselected in 59.01s (slowest test 1.12s);
+architecture suite green; tests/units/architecture/baseline.json unchanged.
+
+
+================================================================================
+## Fix: design-gaps re-review
+================================================================================
+
+Context: The re-review confirmed the five Important findings and the minors of
+the previous round, and found one new Important finding (NULL-subject rows made
+reconciliation drift forever), three minors (a transient history failure dropped
+the tick's view for a CTAS, the bounded history read could miss a version, an
+empty facts dict was traced), the nightly EXPLAIN step still non-blocking, and a
+missing upgrade note.
+
+Changes:
+
+1. src/back/core/streaming/SlotReconciler.py (b41b5e18)
+   N1: the gateway VIEW (and a batch branch) keeps the NULL-subject triple a NULL
+   source key produces, the slot view drops the row; every reconciliation then
+   showed `view_data` drift and the drift's full refresh never cleared it. The
+   reconciler counts and hashes only rows with a subject and a non-blank object
+   (`_RECONCILED_TRIPLES`, reconciler only; the MV and VIEW SQL are unchanged).
+   Regression test: a VIEW with one NULL-subject row and matching slots is no drift
+   (SQLite-backed). The synced table, whose key cannot hold a NULL subject, is still
+   compared with those rows.
+2. src/back/core/streaming/SourceReadiness.py (7cc29e37)
+   N3: the bounded `DESCRIBE HISTORY` reads one row more (`LIMIT versions since + 1`,
+   so a commit landing between the version read and the history read stays covered);
+   a history whose oldest returned version is above `since + 1` (log retention) or
+   that is empty counts as a rewrite.
+3. src/back/objects/digitaltwin/build/TwinScheduledRefresh.py,
+   src/back/objects/registry/schedule/build.py (71c95af7)
+   N2: a source history the tick cannot read leaves `_data` as it is for that tick
+   (nothing refreshed, dropped or recorded; warning) instead of a CTAS every later
+   tick would repeat until a manual build. N4: a tick that fails before any fact was
+   recorded no longer traces an empty `materialization` dict (`_trace_stats`).
+4. .github/workflows/nightly.yml, docs/incremental-materialization.md (52c91680)
+   The external smoke probe stays non-blocking without the EXPLAIN test; the
+   EXPLAIN check is its own step (run when the integration secrets are set) that
+   writes a step summary, annotates a failure and fails the job, so the nightly
+   regression issue is opened. The integration credentials move to the job env.
+   Docs: the blocking step, the NULL-subject exclusion, the history coverage rule,
+   the tick's unreadable-history rule, and an upgrade note — after upgrading, run
+   one build per `incremental` / `microbatch` domain (the slot SQL fingerprint
+   changed with the delete rank: that build does one full refresh, ticks CTAS
+   `_data` until then).
+
+Known limitations (follow-ups):
+- If Lakeflow syncs NULL-subject rows of `_data` (it should refuse a NULL key),
+  `sync_data` would differ by those rows; live-unverified.
+- The conservative history rules (more than 10000 versions; a history cut by log
+  retention) force a full refresh rather than risk a missed rewrite.
+
+Modified files:
+- .github/workflows/nightly.yml
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+- docs/incremental-materialization.md
+- src/back/core/streaming/SlotReconciler.py
+- src/back/core/streaming/SourceReadiness.py
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/registry/schedule/build.py
+- tests/units/objects/test_slot_refresh_plan.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- tests/units/registry/test_scheduled_build_reconcile.py
+- tests/units/streaming/test_slot_reconciler.py
+- tests/units/streaming/test_source_readiness.py
+
+Tests: uv run --frozen pytest -q --durations=1 tests/units/objects tests/units/streaming
+tests/units/graphdb tests/units/api/test_dtwin_reconcile.py
+tests/units/api/test_dtwin_incremental_readiness.py tests/units/registry tests/units/front
+tests/units/architecture tests/property tests/external
+-> 4053 passed, 1 skipped (the external EXPLAIN check) in 28.09s (slowest 1.20s,
+test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10770 passed, 339 skipped, 9 deselected in 57.28s (slowest test 1.06s);
 architecture suite green; tests/units/architecture/baseline.json unchanged.
