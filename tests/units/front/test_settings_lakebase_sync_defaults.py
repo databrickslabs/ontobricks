@@ -56,6 +56,7 @@ def test_continuous_describes_the_continuous_pipeline_and_the_view_refresh() -> 
     option = block[start : block.index("</option>", start)]
     assert "continuous slot pipeline" in option
     assert "refreshes" in option
+    assert "every 15 minutes" in option  # more than ten sources: the scheduled refresh
     assert "as they land" not in option
 
 

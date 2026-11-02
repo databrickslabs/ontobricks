@@ -447,7 +447,7 @@
                                             <select class="form-select form-select-sm" id="lakebaseSyncTableMode" aria-describedby="lakebaseSyncTableModeHelp">
                                                 <option value="snapshot" selected>Snapshot — full refresh on each Knowledge Graph build</option>
                                                 <option value="triggered">Triggered — incremental domains sync row changes on each build</option>
-                                                <option value="continuous">Continuous — microbatch domains: continuous slot pipeline, the _data view refreshes when its sources change</option>
+                                                <option value="continuous">Continuous — microbatch domains: continuous slot pipeline, the _data view refreshes when its sources change (every 15 minutes above ten sources)</option>
                                             </select>
                                             <div id="lakebaseSyncTableModeHelp" class="form-text small mt-1 mb-0 text-muted">
                                                 The most frequent schedule a domain may use: Full domains always take a snapshot, incremental domains at most Triggered, microbatch domains up to Continuous.

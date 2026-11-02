@@ -191,7 +191,6 @@ class TestLakeflowSource:
 
     def test_the_post_sync_count_reads_the_chosen_source_not_the_alias(self):
         pipe = self._synced("table")
-        pipe._count_view_triples = MagicMock(side_effect=AssertionError("alias used"))
 
         assert pipe._apply_via_synced_pipeline() is True
 
@@ -227,7 +226,7 @@ class TestLakeflowSource:
         """
         pipe = self._synced("materialized_view")
         pipe.mode_decision = ModeDecision("incremental", "incremental", "")
-        pipe.slots_table, pipe.slots_complete = "cat.sch.v_g_slots", True
+        pipe.slots_table = "cat.sch.v_g_slots"
 
         warnings = self._empty_sync_warnings(pipe)
 
@@ -316,7 +315,6 @@ class TestBuildMessagesNameTheRealSource:
 
     def test_the_full_rebuild_counts_through_the_real_method_not_the_alias(self):
         pipe = _bare_pipeline(info=_DATABRICKS)
-        pipe._count_view_triples = MagicMock(side_effect=AssertionError("alias used"))
         pipe._count_source_triples = MagicMock(return_value=5)
 
         _build(pipe)

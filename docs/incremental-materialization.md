@@ -231,7 +231,7 @@ union of the slots and the batch branches, so the response carries
 `slots_run_ahead` (a `microbatch` domain, whose continuous pipeline keeps
 moving `_slots` between builds); `drift` is meaningful
 (`drift_meaningful: true`) only when both are false. A domain without a slots table answers 404; an unreadable
-catalog or a missing warehouse client answers 502/503, not 404.
+catalog or a missing warehouse client answers 502, not 404.
 
 ## Preview enrolment
 
@@ -284,6 +284,10 @@ Behaviour in this release:
   registration costs up to four synced-table GETs per build.
 - The Lakehouse//RT fallback runs as the caller, who therefore needs CAN_USE on
   the build warehouse.
+- Follow-up: `SlotProjectionCompiler` keeps its relationship branches
+  (`map_id`, `_stack_pairs`, `_relationship_columns`, `_subject_parts`), unreachable
+  since relationship mappings classify as batch; delete them, or re-enable
+  relationships with an object-keyed slot.
 - The standalone Delta build (`/dtwin/databricks-build/start`,
   `DeltaTripleStoreBuildPipeline`) does not know the materialization modes: it
   rebuilds `_data` by CTAS, which drops an incremental domain's materialized view
@@ -299,8 +303,13 @@ Live-unverified (workspace spike checklist):
   table source.
 - `ImportFormat.AUTO` for the pipeline notebook; the stop→start race of a
   continuous pipeline.
-- `TRIGGER ON UPDATE` with the `_slots` streaming table as upstream (the reference
-  lists Delta tables and managed views as supported sources).
+- A build's `REFRESH MATERIALIZED VIEW` while a `TRIGGER ON UPDATE` or scheduled
+  refresh of the same view is running.
+- A foreign or shared (Delta Sharing) source table counted toward the ten upstream
+  sources of `TRIGGER ON UPDATE`.
+- The scheduled tick's CTAS on a MERGE-promoted domain keeps row tracking only (no
+  explicit `delta.enableChangeDataFeed`) until the next main build's MERGE turns it
+  back on; a triggered Lakebase sync reading it in between.
 
 ## Realtime (deferred)
 
