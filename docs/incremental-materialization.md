@@ -35,10 +35,13 @@ The Lakebase schedule is the mode's schedule capped by
 `graph_engine_config.lakebase.sync_table_mode` (snapshot < triggered < continuous):
 the default `snapshot` keeps every domain on snapshots until an operator raises the
 cap. The schedule follows the resolver's decision, not a runtime fallback: when the
-slot pipeline or the MV fails during a build and `_data` is rebuilt by CTAS (row
-tracking and `object_hash` on), the synced table keeps its triggered/continuous
-registration instead of being deleted and recreated as a snapshot (and back on the
-next good build); `materialization_mode_effective` still reports `full`. The synced
+slot pipeline, the row-tracking probe, the MV or the MERGE fails during a build and
+`_data` is rebuilt by CTAS (row tracking and `object_hash` on), the synced table
+keeps its triggered/continuous registration instead of being deleted and recreated
+as a snapshot (and back on the next good build); `materialization_mode_effective`
+still reports `full`. The one reverse case — a domain whose sources are genuinely
+untracked (registered as a snapshot) and whose probe fails — registers triggered
+once and returns to snapshot on the next good build. The synced
 table is always registered on `_data` (never on `_slots`); a pass-through `_data`
 view falls back to the gateway VIEW as a snapshot.
 
@@ -307,9 +310,11 @@ Live-unverified (workspace spike checklist):
   refresh of the same view is running.
 - A foreign or shared (Delta Sharing) source table counted toward the ten upstream
   sources of `TRIGGER ON UPDATE`.
-- The scheduled tick's CTAS on a MERGE-promoted domain keeps row tracking only (no
-  explicit `delta.enableChangeDataFeed`) until the next main build's MERGE turns it
-  back on; a triggered Lakebase sync reading it in between.
+- A CTAS `_data` that keeps a triggered/continuous registration — the scheduled
+  tick's CTAS on a MERGE-promoted domain, or a main build whose probe or MERGE
+  failed — carries row tracking only (no explicit `delta.enableChangeDataFeed`)
+  until the next MERGE or MV build; the Lakebase sync reading it in between relies
+  on row-tracking-derived change data.
 
 ## Realtime (deferred)
 

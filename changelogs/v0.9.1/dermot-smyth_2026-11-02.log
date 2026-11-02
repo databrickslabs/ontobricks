@@ -609,10 +609,11 @@ Changes:
 
 Known limitations:
 - Most real domains (sql_query / join mappings) get the 15-minute schedule.
-- A failed row-tracking probe still resolves the sync schedule to snapshot (the
-  probe decides the mode, so there is no resolver decision to keep).
+- A failed row-tracking probe or a failed MERGE kept the schedule only from the
+  residual round on (see "Fix: final review residuals" below).
 - A scheduled tick on a MERGE-promoted domain rebuilds `_data` by CTAS.
-- TwinIncrementalBuild is 458 lines (soft budget 400; hard 800).
+- TwinIncrementalBuild grew past the soft class budget (400); see the residual
+  round for the final size and the follow-up.
 
 Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-02.log
@@ -707,6 +708,19 @@ Changes:
    (unchanged definition refreshes in place; changed batch mapping or slot SQL,
    unknown mappings -> CTAS; the change is logged),
    tests/units/front/test_settings_lakebase_sync_defaults.py.
+
+Known limitations (follow-ups):
+- Reverse case of the kept schedule: a domain whose sources are genuinely
+  untracked (registered as a snapshot) and whose probe fails registers the
+  synced table as triggered once; the next good build returns it to snapshot.
+- TwinIncrementalBuild is 483 lines (soft budget 400; hard 800): an Extract
+  Class of the slot-pipeline steps (find/ensure/update/stop, channel, timeout)
+  would bring it near 300.
+- The row-local relationship emitter branches in SlotProjectionCompiler are
+  unreachable from `compile` (relationships are batch) and still tested; about
+  85 lines to delete with their tests.
+- The scheduled tick compiles the slot spec twice (source tables, then the
+  currency check); cheap, pure CPU.
 
 Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-02.log
