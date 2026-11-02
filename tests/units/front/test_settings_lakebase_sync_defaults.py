@@ -49,6 +49,16 @@ def test_schedule_offers_snapshot_triggered_and_continuous_in_that_order() -> No
     assert "selected" in block[snapshot:triggered]
 
 
+def test_continuous_describes_the_continuous_pipeline_and_the_view_refresh() -> None:
+    """Rows reach Lakebase only once the ``_data`` view refreshes, not as they land."""
+    block = _schedule_select_html()
+    start = block.index('value="continuous"')
+    option = block[start : block.index("</option>", start)]
+    assert "continuous slot pipeline" in option
+    assert "refreshes" in option
+    assert "as they land" not in option
+
+
 def test_schedule_help_explains_the_cap_and_the_change_feed() -> None:
     html = SETTINGS_TEMPLATE.read_text(encoding="utf-8")
     start = html.index('id="lakebaseSyncTableModeHelp"')

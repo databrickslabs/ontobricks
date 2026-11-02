@@ -28,7 +28,7 @@ Settings) and defaults to `full`, so existing domains behave as before.
 |---|---|---|---|---|
 | `full` | none | Delta table rewritten by CTAS (or a pass-through view on the Lakehouse engine) | snapshot | Default; small graphs, sources without row tracking, any backend |
 | `incremental` | Lakeflow SDP pipeline, **triggered** once per build | materialized view, `REFRESH POLICY INCREMENTAL` (Enzyme) | triggered | Sources tracked, freshness = one build |
-| `microbatch` | the same pipeline run **continuously** (a triggered bootstrap first) | the same materialized view | continuous | Sources tracked, seconds-to-minutes freshness between builds |
+| `microbatch` | the same pipeline run **continuously** (a triggered bootstrap first) | the same materialized view, refreshing itself between builds: `TRIGGER ON UPDATE` (at most ten sources) or every 15 minutes | continuous | Sources tracked, minutes freshness between builds |
 | `realtime` | reserved | — | — | Not built in this release; resolves to `microbatch` (`realtime_not_available`) |
 
 The Lakebase schedule is the mode's schedule capped by
@@ -66,9 +66,17 @@ In `incremental` and `microbatch` the `_data` relation is
 (_slots WHERE object IS NOT NULL AND TRIM(object) != '' UNION ALL <batch branches>)
 GROUP BY …` — `GROUP BY` instead of `DISTINCT`, no `stack()`, blank objects (unset
 attributes) dropped from the slots branch, row tracking on,
-`pipelines.channel = preview`. The MV
-definition is hashed; a build whose definition did not change refreshes the MV
-instead of replacing it. The refresh technique Enzyme chose is read from the
+`pipelines.channel = preview`. In `microbatch` the view also refreshes itself
+between builds (the continuous pipeline only keeps `_slots` current): with
+`TRIGGER ON UPDATE` when it reads at most ten relations (`_slots` plus the tables of
+table-based batch mappings — the limit of the
+[CREATE MATERIALIZED VIEW reference](https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-materialized-view)),
+otherwise, or when a `sql_query` / join hides the sources, with
+`SCHEDULE CRON '0 0/15 * * * ?' AT TIME ZONE 'UTC'` (every 15 minutes; `SCHEDULE
+EVERY` only takes hours, days or weeks). `incremental` and the MERGE table get no
+clause. The MV definition, clause included, is hashed; a build whose definition
+did not change refreshes the MV instead of replacing it, and switching between
+`incremental` and `microbatch` replaces it. The refresh technique Enzyme chose is read from the
 pipeline event log and recorded in the build-run trace (`refresh_technique`).
 
 ## Readiness and the fallback ladder
@@ -241,8 +249,10 @@ Behaviour in this release:
   entity, so most real mappings classify as batch; the slot pipeline engages only
   for table-based mappings and `incremental` is then the `_data` MV over the batch
   branch. Follow-up: treat single-table `SELECT … FROM t` queries as row-local.
-- On the Lakehouse engine `microbatch` gives no `_data` freshness between builds:
-  the MV has no `SCHEDULE`/`TRIGGER`, it refreshes when a build runs.
+- `microbatch` freshness between builds is the `_data` view's own refresh: on every
+  source update (at most once a minute) for at most ten sources, otherwise every 15
+  minutes — and every domain with a `sql_query` or join mapping (most real ones,
+  see above) gets the 15-minute schedule.
 - Neo4j always streams in full (`inferred_not_separable`).
 - The MERGE fallback engages for any slot-pipeline failure in `incremental`
   (every runner message mentions the pipeline); `microbatch` falls back to CTAS.
@@ -274,6 +284,8 @@ Live-unverified (workspace spike checklist):
   table source.
 - `ImportFormat.AUTO` for the pipeline notebook; the stop→start race of a
   continuous pipeline.
+- `TRIGGER ON UPDATE` with the `_slots` streaming table as upstream (the reference
+  lists Delta tables and managed views as supported sources).
 
 ## Realtime (deferred)
 

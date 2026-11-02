@@ -223,6 +223,78 @@ class TestDataMvAbsorbsTheSlotShape:
         assert sql.endswith("GROUP BY subject, predicate, object")
 
 
+_TRIGGER = "TRIGGER ON UPDATE"
+_EVERY_15_MINUTES = "SCHEDULE CRON '0 0/15 * * * ?' AT TIME ZONE 'UTC'"
+
+
+class TestMicrobatchRefreshClause:
+    """A microbatch ``_data`` MV refreshes between builds (CREATE MATERIALIZED VIEW grammar)."""
+
+    @pytest.mark.parametrize("count", [1, 10])
+    def test_up_to_ten_sources_refresh_on_update(self, count):
+        assert MaterializedViewBuilder.microbatch_refresh_clause(count) == _TRIGGER
+
+    @pytest.mark.parametrize("count", [11, 40, None], ids=["11", "40", "unknown"])
+    def test_more_or_unknown_sources_refresh_every_fifteen_minutes(self, count):
+        assert MaterializedViewBuilder.microbatch_refresh_clause(count) == _EVERY_15_MINUTES
+
+    @pytest.mark.parametrize("clause", [_TRIGGER, _EVERY_15_MINUTES])
+    def test_the_clause_sits_between_the_properties_and_the_query(self, clause):
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, refresh_clause=clause)
+
+        header, body = sql.split("AS SELECT", 1)
+        assert header.rstrip("\n").endswith(f")\n  {clause}")
+        assert "GROUP BY subject, predicate, object" in body
+
+    def test_the_clause_is_part_of_the_definition_fingerprint(self):
+        plain = MaterializedViewBuilder.data_mv_sha(slots_fqn=SLOTS)
+        triggered = MaterializedViewBuilder.data_mv_sha(slots_fqn=SLOTS, refresh_clause=_TRIGGER)
+        scheduled = MaterializedViewBuilder.data_mv_sha(
+            slots_fqn=SLOTS, refresh_clause=_EVERY_15_MINUTES
+        )
+
+        assert len({plain, triggered, scheduled}) == 3
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, refresh_clause=_TRIGGER)
+        assert f"'ontobricks.mv_sql_sha256' = '{triggered}'" in sql
+
+    def test_without_a_clause_the_statement_and_fingerprint_are_unchanged(self):
+        body = (
+            "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
+            "FROM (\n"
+            f"  SELECT subject, predicate, object FROM {SLOTS}\n"
+            "  WHERE object IS NOT NULL AND TRIM(object) != ''\n"
+            ") t\n"
+            "GROUP BY subject, predicate, object"
+        )
+
+        assert MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS) == _data_mv(body)
+
+    def test_any_other_clause_is_refused(self):
+        with pytest.raises(ValidationError):
+            MaterializedViewBuilder.data_mv_sql(
+                DATA, slots_fqn=SLOTS, refresh_clause="SCHEDULE EVERY 15 MINUTES"
+            )
+
+    def test_apply_creates_the_view_with_the_clause(self):
+        client = RecordingClient()
+
+        MaterializedViewBuilder.apply(
+            client,
+            data_fqn=DATA,
+            graph_fqn=GRAPH,
+            inferred_fqn=INFERRED,
+            slots_fqn=SLOTS,
+            batch_branch_sql=None,
+            drop_existing_table=False,
+            refresh_clause=_TRIGGER,
+        )
+
+        create = next(
+            s for s in client.statements if s.startswith("CREATE OR REPLACE MATERIALIZED")
+        )
+        assert f"\n  {_TRIGGER}\n" in create
+
+
 class TestGraphMvSql:
     def test_exact_statement(self):
         assert MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED) == (

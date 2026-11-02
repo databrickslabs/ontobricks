@@ -397,6 +397,38 @@ class TestMicrobatch:
         assert pipe.data_relation_mode == "materialized_view"
 
 
+class TestMicrobatchViewRefreshesBetweenBuilds:
+    """``microbatch`` freshness: its ``_data`` MV refreshes on its own between builds."""
+
+    @staticmethod
+    def _data_mv(warehouse) -> str:
+        return next(
+            s for s in warehouse.calls
+            if s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}")
+        )
+
+    def test_a_slots_only_view_refreshes_on_update(self):
+        pipe = _pipeline("microbatch", entities={_CUSTOMER: _row_local()})
+
+        _, _, warehouse = _run(pipe)
+
+        assert "\n  TRIGGER ON UPDATE\n" in self._data_mv(warehouse)
+
+    def test_a_view_with_sql_query_sources_refreshes_every_fifteen_minutes(self):
+        """The tables behind a ``sql_query`` are unknown: they could be more than ten."""
+        pipe = _pipeline("microbatch")
+
+        _, _, warehouse = _run(pipe)
+
+        assert "SCHEDULE CRON '0 0/15 * * * ?' AT TIME ZONE 'UTC'" in self._data_mv(warehouse)
+
+    def test_an_incremental_view_has_no_refresh_clause(self):
+        _, _, warehouse = _run(_pipeline("incremental"))
+
+        data_mv = self._data_mv(warehouse)
+        assert "TRIGGER ON UPDATE" not in data_mv and "SCHEDULE" not in data_mv
+
+
 class TestSlotPipelineUpdates:
     def test_a_new_pipeline_gets_a_full_refresh(self):
         log, _, _ = _run(_pipeline("incremental"))

@@ -559,6 +559,45 @@ class TestSlotPipelineSpec:
         assert spec.statements == [] and spec.batch_mappings == []
 
 
+class TestMvSourceCount:
+    """How many relations the ``_data`` MV reads (``TRIGGER ON UPDATE`` allows ten)."""
+
+    _TABLE_BATCH = {"table": "c.s.orders", "sql_query": None, "predicates": {}}
+
+    def test_the_slots_table_counts_once_with_row_local_mappings(self):
+        spec = SlotPipelineSpec(slots_fqn="c.s.t_slots", row_local_map_ids=["map_a", "map_b"])
+
+        assert spec.mv_source_count() == 1
+
+    def test_no_row_local_mapping_reads_no_slots(self):
+        spec = SlotPipelineSpec(slots_fqn="c.s.t_slots", batch_mappings=[self._TABLE_BATCH])
+
+        assert spec.mv_source_count() == 1
+
+    def test_table_batch_mappings_count_their_distinct_tables(self):
+        other = {**self._TABLE_BATCH, "table": "c.s.lines"}
+        spec = SlotPipelineSpec(
+            slots_fqn="c.s.t_slots",
+            row_local_map_ids=["map_a"],
+            batch_mappings=[self._TABLE_BATCH, dict(self._TABLE_BATCH), other],
+        )
+
+        assert spec.mv_source_count() == 3
+
+    @pytest.mark.parametrize(
+        "mapping",
+        [
+            {"table": None, "sql_query": "SELECT * FROM a JOIN b"},
+            {"table": "c.s.orders", "predicates": {"p": {"type": "reference"}}},
+        ],
+        ids=["sql_query", "join"],
+    )
+    def test_a_query_or_a_join_makes_the_count_unknown(self, mapping):
+        spec = SlotPipelineSpec(slots_fqn="c.s.t_slots", batch_mappings=[mapping])
+
+        assert spec.mv_source_count() is None
+
+
 class TestNullKeyGuard:
     """The view drops rows whose key is NULL: they cannot form a subject URI."""
 

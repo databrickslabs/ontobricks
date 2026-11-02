@@ -25,6 +25,18 @@ _MV_HEADER = (
     "'delta.enableRowTracking' = 'true'{extra})\n"
 )
 
+#: Refresh clauses of a ``microbatch`` data MV (CREATE MATERIALIZED VIEW reference,
+#: https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-materialized-view).
+#: ``TRIGGER ON UPDATE`` refreshes when an upstream source changes (at most once a
+#: minute) and accepts no more than ten upstream sources. ``SCHEDULE EVERY`` only
+#: takes hours, days or weeks, so a 15-minute schedule is a Quartz cron
+#: (``seconds minutes hours day-of-month month day-of-week``); ``AT TIME ZONE`` is
+#: given because creating it fails when the session has no time zone.
+TRIGGER_ON_UPDATE = "TRIGGER ON UPDATE"
+SCHEDULE_EVERY_15_MINUTES = "SCHEDULE CRON '0 0/15 * * * ?' AT TIME ZONE 'UTC'"
+TRIGGER_ON_UPDATE_MAX_SOURCES = 10
+_REFRESH_CLAUSES = ("", TRIGGER_ON_UPDATE, SCHEDULE_EVERY_15_MINUTES)
+
 #: Table property holding the fingerprint of the data MV definition.
 MV_SHA_PROPERTY = "ontobricks.mv_sql_sha256"
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
@@ -54,6 +66,7 @@ class MaterializedViewBuilder:
         slots_fqn: str | None = None,
         batch_branch_sql: str | None = None,
         refresh_policy: str = "INCREMENTAL",
+        refresh_clause: str = "",
     ) -> str:
         """``CREATE OR REPLACE MATERIALIZED VIEW`` for ``_data``.
 
@@ -85,12 +98,19 @@ class MaterializedViewBuilder:
         The ``ontobricks.mv_sql_sha256`` table property records
         :meth:`data_mv_sha` so a later build can tell an unchanged definition
         (see :meth:`existing_mv_sha`) and refresh instead of replacing.
+
+        *refresh_clause* (:meth:`microbatch_refresh_clause`, ``""`` for none)
+        goes on its own line between the table properties and ``AS``; it is
+        part of the fingerprint, so switching mode replaces the view.
         """
         validate_table_name(data_fqn)
         policy = MaterializedViewBuilder._policy(refresh_policy)
+        clause = MaterializedViewBuilder._clause(refresh_clause)
         body = MaterializedViewBuilder._data_mv_body(slots_fqn, batch_branch_sql)
-        extra = f", '{MV_SHA_PROPERTY}' = '{MaterializedViewBuilder._sha(policy, body)}'"
-        return _MV_HEADER.format(fqn=data_fqn, policy=policy, extra=extra) + body
+        sha = MaterializedViewBuilder._sha(policy, body, clause)
+        extra = f", '{MV_SHA_PROPERTY}' = '{sha}'"
+        header = _MV_HEADER.format(fqn=data_fqn, policy=policy, extra=extra)
+        return header + (f"  {clause}\n" if clause else "") + body
 
     @staticmethod
     def data_mv_sha(
@@ -98,16 +118,30 @@ class MaterializedViewBuilder:
         slots_fqn: str | None = None,
         batch_branch_sql: str | None = None,
         refresh_policy: str = "INCREMENTAL",
+        refresh_clause: str = "",
     ) -> str:
-        """SHA-256 of the data MV definition: header template, policy and ``AS SELECT`` body.
+        """SHA-256 of the data MV definition: header template, policy, clause and body.
 
         The target name is not part of it. The header template (CLUSTER BY,
-        table properties) and the refresh policy are, so changing either
-        replaces existing views on their next build.
+        table properties), the refresh policy and the refresh clause are, so
+        changing any of them replaces existing views on their next build.
         """
         policy = MaterializedViewBuilder._policy(refresh_policy)
+        clause = MaterializedViewBuilder._clause(refresh_clause)
         body = MaterializedViewBuilder._data_mv_body(slots_fqn, batch_branch_sql)
-        return MaterializedViewBuilder._sha(policy, body)
+        return MaterializedViewBuilder._sha(policy, body, clause)
+
+    @staticmethod
+    def microbatch_refresh_clause(source_count: int | None) -> str:
+        """How a ``microbatch`` data MV refreshes between builds.
+
+        ``TRIGGER ON UPDATE`` when it reads at most
+        :data:`TRIGGER_ON_UPDATE_MAX_SOURCES` relations, otherwise (or when the
+        count is unknown) every 15 minutes (:data:`SCHEDULE_EVERY_15_MINUTES`).
+        """
+        if source_count is not None and source_count <= TRIGGER_ON_UPDATE_MAX_SOURCES:
+            return TRIGGER_ON_UPDATE
+        return SCHEDULE_EVERY_15_MINUTES
 
     @staticmethod
     def existing_mv_sha(client: Any, fqn: str) -> str:
@@ -184,6 +218,7 @@ class MaterializedViewBuilder:
         drop_existing_table: bool,
         refresh_policy: str = "INCREMENTAL",
         with_graph_mv: bool = False,
+        refresh_clause: str = "",
     ) -> dict:
         """Create or replace the ``_data`` materialized view and the ``_graph`` relation.
 
@@ -222,6 +257,7 @@ class MaterializedViewBuilder:
             slots_fqn=slots_fqn,
             batch_branch_sql=batch_branch_sql,
             refresh_policy=refresh_policy,
+            refresh_clause=refresh_clause,
         )
         if with_graph_mv:
             graph_sql = MaterializedViewBuilder.graph_mv_sql(
@@ -294,8 +330,18 @@ class MaterializedViewBuilder:
         )
 
     @staticmethod
-    def _sha(policy: str, body: str) -> str:
-        return hashlib.sha256(f"{_MV_HEADER}\n{policy}\n{body}".encode()).hexdigest()
+    def _sha(policy: str, body: str, clause: str = "") -> str:
+        """Fingerprint input: without a clause exactly what it was before clauses existed."""
+        text = f"{_MV_HEADER}\n{policy}\n{body}" + (f"\n{clause}" if clause else "")
+        return hashlib.sha256(text.encode()).hexdigest()
+
+    @staticmethod
+    def _clause(refresh_clause: str) -> str:
+        """*refresh_clause* when it is one of ours (it is inlined), else ValidationError."""
+        clause = (refresh_clause or "").strip()
+        if clause not in _REFRESH_CLAUSES:
+            raise ValidationError(f"Unsupported materialized view refresh clause {clause!r}")
+        return clause
 
     @staticmethod
     def _policy(refresh_policy: str) -> str:

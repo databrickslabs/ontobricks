@@ -251,7 +251,12 @@ class TwinIncrementalBuild:
         slots = spec.slots_fqn if spec.row_local_map_ids else None
         if slots:
             TwinIncrementalBuild._run_slot_pipeline(pipe, spec)
-        TwinIncrementalBuild._apply_views(pipe, slots, batch_sql)
+        definition = {
+            "slots_fqn": slots,
+            "batch_branch_sql": batch_sql,
+            "refresh_clause": TwinIncrementalBuild._refresh_clause(pipe, spec),
+        }
+        TwinIncrementalBuild._apply_views(pipe, definition)
         pipe.slots_table = slots
         logger.info(
             "[DT-BUILD %s] %s build of %s done: %d row-local, %d batch mapping(s), "
@@ -263,6 +268,22 @@ class TwinIncrementalBuild:
             len(spec.batch_mappings),
             pipe.refresh_technique,
         )
+
+    @staticmethod
+    def _refresh_clause(pipe: Any, spec: Any) -> str:
+        """How a ``microbatch`` ``…_data`` refreshes between builds (``""`` otherwise).
+
+        Its continuous pipeline keeps ``…_slots`` current, but only a refresh
+        moves the view: ``TRIGGER ON UPDATE`` for at most ten sources, else
+        every 15 minutes (:meth:`MaterializedViewBuilder.microbatch_refresh_clause`).
+        """
+        from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
+
+        if pipe.mode_decision.effective != "microbatch":
+            return ""
+        clause = MaterializedViewBuilder.microbatch_refresh_clause(spec.mv_source_count())
+        logger.info("[DT-BUILD %s] microbatch data view refreshes with %s", pipe.task_id, clause)
+        return clause
 
     @staticmethod
     def _batch_branch_sql(pipe: Any, spec: Any) -> str | None:
@@ -406,8 +427,11 @@ class TwinIncrementalBuild:
         )
 
     @staticmethod
-    def _apply_views(pipe: Any, slots: str | None, batch_sql: str | None) -> None:
+    def _apply_views(pipe: Any, definition: dict) -> None:
         """Step d: the ``…_data`` materialized view, a synchronous refresh, its technique.
+
+        *definition* holds the :meth:`MaterializedViewBuilder.data_mv_sql` keywords
+        (``slots_fqn``, ``batch_branch_sql``, ``refresh_clause``).
 
         ``CREATE OR REPLACE`` would recompute the view from scratch, so it only
         runs when the stored definition fingerprint (``ontobricks.mv_sql_sha256``)
@@ -430,7 +454,7 @@ class TwinIncrementalBuild:
         if not (data and graph and inferred):
             raise ValidationError("Could not resolve the incremental table names")
         client = pipe.source_client
-        current = MaterializedViewBuilder.data_mv_sha(slots_fqn=slots, batch_branch_sql=batch_sql)
+        current = MaterializedViewBuilder.data_mv_sha(**definition)
         if MaterializedViewBuilder.existing_mv_sha(client, data) == current:
             logger.info(
                 "[DT-BUILD %s] %s definition unchanged; refreshing it in place",
@@ -438,7 +462,7 @@ class TwinIncrementalBuild:
                 data,
             )
         else:
-            TwinIncrementalBuild._create_views(pipe, data, graph, inferred, slots, batch_sql)
+            TwinIncrementalBuild._create_views(pipe, data, graph, inferred, definition)
         pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
         TwinIncrementalBuild.warehouse_step(
             f"refresh {data}",
@@ -449,9 +473,7 @@ class TwinIncrementalBuild:
         pipe.data_relation_mode = TwinBuildPostMaterialize.MATERIALIZED_VIEW
 
     @staticmethod
-    def _create_views(
-        pipe: Any, data: str, graph: str, inferred: str, slots: str | None, batch_sql: str | None
-    ) -> None:
+    def _create_views(pipe: Any, data: str, graph: str, inferred: str, definition: dict) -> None:
         from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
 
         client = pipe.source_client
@@ -463,10 +485,9 @@ class TwinIncrementalBuild:
                 data_fqn=data,
                 graph_fqn=graph,
                 inferred_fqn=inferred,
-                slots_fqn=slots,
-                batch_branch_sql=batch_sql,
                 drop_existing_table=True,
                 with_graph_mv=False,
+                **definition,
             ),
         )
 

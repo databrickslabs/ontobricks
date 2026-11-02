@@ -22,3 +22,22 @@ class SlotPipelineSpec:
     def to_sql(self) -> str:
         """Return the statements joined with ``;`` and a blank line."""
         return ";\n\n".join(self.statements)
+
+    def mv_source_count(self) -> int | None:
+        """Relations the ``_data`` MV reads: ``…_slots`` and the batch mappings' tables.
+
+        ``…_slots`` counts when a mapping is row-local. ``None`` when a batch
+        mapping reads a ``sql_query`` or joins another table (a non-column
+        predicate): its sources are not known.
+        """
+        tables = {self.slots_fqn} if self.row_local_map_ids else set()
+        for mapping in self.batch_mappings:
+            table = (mapping.get("table") or "").strip()
+            joins = any(
+                not isinstance(info, dict) or info.get("type") != "column"
+                for info in (mapping.get("predicates") or {}).values()
+            )
+            if not table or (mapping.get("sql_query") or "").strip() or joins:
+                return None
+            tables.add(table)
+        return len(tables)
