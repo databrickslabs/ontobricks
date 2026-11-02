@@ -155,7 +155,7 @@ class TestTheSlotPipelineReadsTheTopic:
 
     def test_every_compile_of_the_domain_gives_the_same_slot_sql(self):
         """Build, scheduled tick, readiness and DAB renderer all go through ``compile_for``."""
-        from back.objects.digitaltwin.build import TwinIncrementalBuild
+        from back.objects.digitaltwin.build import TwinIncrementalBuild, TwinSlotFeed
 
         pipe = realtime_pipeline()
 
@@ -169,7 +169,7 @@ class TestTheSlotPipelineReadsTheTopic:
         )
 
         assert spec.to_sql() == _slot_sql(log)
-        assert TwinIncrementalBuild.feed_tables(spec) == []
+        assert TwinSlotFeed.feed_tables(spec) == []
 
     def test_the_scheduled_tick_probes_no_table_for_a_topic_fed_pipeline(self):
         from back.objects.digitaltwin.build import TwinIncrementalBuild

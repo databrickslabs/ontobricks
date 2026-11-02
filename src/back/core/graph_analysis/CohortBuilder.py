@@ -642,7 +642,7 @@ class CohortBuilder:
         triples = self._build_cohort_triples(rule, result)
         inserted = 0
         if triples:
-            from back.core.graphdb.delta.InferredTripleLedger import InferredTripleLedger
+            from back.core.graphdb.delta import InferredTripleLedger
             InferredTripleLedger.record_for(self._store, triples)  # Neo4j lists them first
             inserted = int(self._store.insert_triples(self._graph_name, triples))
         if (

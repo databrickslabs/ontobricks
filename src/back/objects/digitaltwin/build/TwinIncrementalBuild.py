@@ -32,7 +32,6 @@ cancel is never swallowed.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from back.core.errors import (
@@ -43,12 +42,14 @@ from back.core.errors import (
 )
 from back.core.graphdb.GraphDBFactory import CONTINUOUS_MATERIALIZATION_MODES
 from back.core.graphdb.ModeDecision import ModeDecision
+from back.core.helpers import WarehouseStatements
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 from back.objects.digitaltwin.build.TwinGraphRelation import TwinGraphRelation
+from back.objects.digitaltwin.build.TwinSlotFeed import TwinSlotFeed
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 from back.objects.digitaltwin.build.TwinSlotRefreshPlan import (
     REASON_RECONCILE_DRIFT,
@@ -120,7 +121,7 @@ class TwinIncrementalBuild:
             )
             try:
                 pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
-                    pipe, source_tables=TwinIncrementalBuild.feed_tables(spec)
+                    pipe, source_tables=TwinSlotFeed.feed_tables(spec)
                 )
             except InfrastructureError:
                 TwinIncrementalBuild._keep_schedule_without_probe(pipe, gate.effective)
@@ -242,95 +243,28 @@ class TwinIncrementalBuild:
 
         Shared by the main build, the MERGE fingerprint, the scheduled tick,
         the readiness preflight and the DAB renderer, so all of them see the
-        same row-local / batch split, the same source (:meth:`slot_topic`) and
-        therefore the same SQL fingerprint. A topic-fed pipeline types the
-        Debezium values with the source tables' column types, read on *client*
-        once per compile (:meth:`column_types_for`); without a client (the DAB
-        renderer, which renders no SQL) the values keep their text. Raises
-        :class:`ValidationError` when the slots table name cannot be resolved
-        or a mapping cannot be compiled, :class:`InfrastructureError` when a
-        source table cannot be described.
+        same row-local / batch split, the same feed (:class:`TwinSlotFeed`:
+        the change data feed or a ``realtime`` topic, typed on *client*) and
+        therefore the same SQL fingerprint. Raises :class:`ValidationError`
+        when the slots table name cannot be resolved or a mapping cannot be
+        compiled, :class:`InfrastructureError` when a source table of a
+        topic-fed pipeline cannot be described.
         """
         from back.core.graphdb.delta import _table_naming
         from back.core.streaming import SlotProjectionCompiler
-        from back.core.streaming.SlotPipelineSpec import SOURCE_CDF, SOURCE_TOPIC
 
         slots_fqn = _table_naming.slots_table_fqn(domain, settings)
         if not slots_fqn:
             raise ValidationError("Could not resolve the slots table name")
-        topic = TwinIncrementalBuild.slot_topic(domain, settings)
-        types = None
-        if topic is not None and client is not None:
-            row_local = SlotProjectionCompiler.row_local_mappings(
-                entity_mappings or {}, relationship_mappings or []
-            )
-            types = TwinIncrementalBuild.column_types_for(
-                client, {m.get("table") for m in row_local if m.get("table")}
-            )
+        entity_mappings, relationship_mappings = entity_mappings or {}, relationship_mappings or []
+        row_local = SlotProjectionCompiler.row_local_mappings(entity_mappings, relationship_mappings)
         return SlotProjectionCompiler.compile(
-            entity_mappings or {},
-            relationship_mappings or [],
+            entity_mappings,
+            relationship_mappings,
             base_uri=base_uri or "",
             slots_fqn=slots_fqn,
-            source=SOURCE_CDF if topic is None else SOURCE_TOPIC,
-            topic=topic,
-            column_types=types,
+            **TwinSlotFeed.compile_kwargs(domain, settings, row_local, client),
         )
-
-    @staticmethod
-    def column_types_for(client: Any, tables: Any) -> dict:
-        """``{table: {column: type}}`` of *tables* from ``DESCRIBE TABLE``.
-
-        The type strings ``spark.table(t).schema`` gives the stream job
-        (``int``, ``decimal(10,2)``, ``timestamp``…); the column list ends at
-        the first ``#`` section. A table that cannot be described raises
-        :class:`InfrastructureError`: compiling without its types would change
-        the SQL fingerprint, i.e. replay the topic.
-        """
-        from back.core.helpers import WarehouseStatements, validate_table_name
-
-        types: dict = {}
-        for table in sorted(tables):
-            validate_table_name(table)
-            rows = WarehouseStatements.query(client, f"DESCRIBE TABLE {table}", f"describe {table}")
-            columns: dict = {}
-            for row in rows or []:
-                name = str((row or {}).get("col_name") or "").strip()
-                if not name or name.startswith("#"):
-                    break
-                columns[name.lower()] = str(row.get("data_type") or "").strip().lower()
-            types[table] = columns
-        return types
-
-    @staticmethod
-    def slot_topic(domain: Any, settings: Any):
-        """The topic a ``realtime`` domain's slot pipeline reads; ``None``: the change data feed.
-
-        A domain whose best mode is ``realtime`` (its topic available,
-        serverless, a Lakebase backend: :meth:`TwinBuildPostMaterialize.gate_decision`)
-        reads the Debezium topic its stream job reads, so ``…_slots`` / ``…_data``
-        and ``_live`` follow the same changes — except a Kinesis stream, which
-        ``read_kafka`` cannot read: that slot pipeline keeps the change feed.
-        """
-        from back.core.graphdb import RealtimeSource
-        from back.core.streaming import TopicSource
-
-        if TwinBuildPostMaterialize.gate_decision(domain, settings).effective != "realtime":
-            return None
-        config = RealtimeSource.of(domain)
-        if config.get("kind") == "kinesis":
-            return None
-        return TopicSource.from_realtime_source(config)
-
-    @staticmethod
-    def feed_tables(spec: Any) -> list:
-        """The sources whose change data feed the slot pipeline reads; none for a topic-fed one.
-
-        Their row tracking is probed and their history checked for rewrites
-        (:class:`TwinSlotRefreshPlan`); a topic-fed pipeline needs neither (a
-        full refresh replays the topic).
-        """
-        return list(spec.source_tables) if spec.needs_row_tracking else []
 
     @staticmethod
     def _build(pipe: Any, spec: Any) -> None:
@@ -348,7 +282,7 @@ class TwinIncrementalBuild:
         plan = TwinSlotRefreshPlan.plan(
             pipe.source_client,
             TwinBuildRunHistory.recent_runs(pipe),
-            TwinIncrementalBuild.feed_tables(spec) if slots else (),
+            TwinSlotFeed.feed_tables(spec) if slots else (),
         )
         pipe.slot_refresh_facts = dict(plan["before"])
         if slots:
@@ -465,7 +399,7 @@ class TwinIncrementalBuild:
                 data,
             )
         pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
-        TwinIncrementalBuild.warehouse_step(
+        WarehouseStatements.step(
             f"refresh {data}",
             lambda: materialize.run_sql(
                 client, MaterializedViewBuilder.refresh_sql(data, full=full_refresh)
@@ -484,7 +418,7 @@ class TwinIncrementalBuild:
 
         client = pipe.source_client
         pipe.tm.update_progress(pipe.task_id, 30, f"Creating materialized view {data}...")
-        TwinIncrementalBuild.warehouse_step(
+        WarehouseStatements.step(
             f"create the materialized view {data}",
             lambda: MaterializedViewBuilder.apply(
                 client,
@@ -521,17 +455,3 @@ class TwinIncrementalBuild:
         pipe.tm.update_progress(
             pipe.task_id, 30, "Incremental build unavailable; running a full rebuild..."
         )
-
-    @staticmethod
-    def warehouse_step(what: str, statement: Callable[[], Any]) -> Any:
-        """Run a warehouse step; driver errors become :class:`InfrastructureError`.
-
-        The SQL connector raises its own exception types, which the fallback
-        (``except OntoBricksError``) would otherwise miss and fail the build.
-        """
-        try:
-            return statement()
-        except OntoBricksError:
-            raise
-        except Exception as exc:  # noqa: BLE001 — translated, not swallowed
-            raise InfrastructureError(f"Could not {what}: {exc}", detail=str(exc)) from exc

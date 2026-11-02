@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from back.core.errors import InfrastructureError, ValidationError
+from back.core.helpers import WarehouseStatements
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
+from back.objects.digitaltwin.build.TwinSlotFeed import TwinSlotFeed
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 
 logger = get_logger(__name__)
@@ -57,7 +59,7 @@ class TwinIncrementalReadiness:
         try:
             spec = TwinIncrementalReadiness._spec(domain, settings, client)
             if spec is not None:
-                tables, probed = list(spec.source_tables), TwinIncrementalBuild.feed_tables(spec)
+                tables, probed = list(spec.source_tables), TwinSlotFeed.feed_tables(spec)
                 required = spec.needs_row_tracking
         except ValidationError as exc:
             compile_error = str(exc)
@@ -153,7 +155,7 @@ class TwinIncrementalReadiness:
 
         sql = SourceReadiness.enable_sql(table)
         try:
-            TwinIncrementalBuild.warehouse_step(
+            WarehouseStatements.step(
                 f"enable row tracking on {table}", lambda: materialize.run_sql(client, sql)
             )
         except InfrastructureError as exc:

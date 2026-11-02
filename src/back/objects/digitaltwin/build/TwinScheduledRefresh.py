@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from back.core.errors import InfrastructureError, OntoBricksError
+from back.core.helpers import WarehouseStatements
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
+from back.objects.digitaltwin.build.TwinSlotFeed import TwinSlotFeed
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 from back.objects.digitaltwin.build.TwinSlotRefreshPlan import (
     REASON_RECONCILE_DRIFT,
@@ -100,14 +102,14 @@ class TwinScheduledRefresh:
         ):
             return False
         full = plan["reason"] == REASON_RECONCILE_DRIFT
-        TwinIncrementalBuild.warehouse_step(
+        WarehouseStatements.step(
             f"refresh {data_fqn}",
             lambda: materialize.run_sql(
                 client, MaterializedViewBuilder.refresh_sql(data_fqn, full=full)
             ),
         )
         graph_fqn = _table_naming.graph_view_fqn(domain, settings)
-        TwinIncrementalBuild.warehouse_step(
+        WarehouseStatements.step(
             f"refresh {graph_fqn}", lambda: GraphRelation.refresh(client, graph_fqn)
         )
         facts.update(plan["after"])
@@ -125,7 +127,7 @@ class TwinScheduledRefresh:
         return TwinSlotRefreshPlan.plan(
             client,
             TwinBuildRunHistory.recent_runs_for(domain, settings),
-            TwinIncrementalBuild.feed_tables(spec),
+            TwinSlotFeed.feed_tables(spec),
         )
 
     @staticmethod

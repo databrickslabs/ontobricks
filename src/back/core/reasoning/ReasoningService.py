@@ -522,7 +522,7 @@ class ReasoningService:
         if not triples:
             return 0
 
-        from back.core.graphdb.delta.InferredTripleLedger import InferredTripleLedger
+        from back.core.graphdb.delta import InferredTripleLedger
 
         InferredTripleLedger.record_for(self._store, triples)
         count = self._store.insert_triples(table_name, triples)

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from back.objects.digitaltwin.build import TwinIncrementalBuild
+from back.objects.digitaltwin.build import TwinIncrementalBuild, TwinSlotFeed
 from tests.units.objects import test_build_pipeline_modes as _modes
 
 pytestmark = pytest.mark.unit
@@ -149,7 +149,7 @@ class TestCollect:
 
         monkeypatch.setattr(TwinIncrementalBuild, "compile_for", staticmethod(spy))
         monkeypatch.setattr(
-            TwinIncrementalBuild, "slot_topic", staticmethod(lambda domain, settings: _TOPIC)
+            TwinSlotFeed, "topic", staticmethod(lambda domain, settings: _TOPIC)
         )
 
         resources = _collect(renderer, _Registry({"sales": "3"}), {"sales": "realtime"})

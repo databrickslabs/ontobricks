@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
@@ -33,3 +34,17 @@ class WarehouseStatements:
             raise
         except Exception as exc:  # noqa: BLE001 — translated, not swallowed
             raise InfrastructureError(f"Could not {what}", detail=str(exc)) from exc
+
+    @staticmethod
+    def step(what: str, statement: Callable[[], Any]) -> Any:
+        """Run a warehouse step; driver errors become :class:`InfrastructureError`.
+
+        The SQL connector raises its own exception types, which a caller's
+        fallback (``except OntoBricksError``) would otherwise miss.
+        """
+        try:
+            return statement()
+        except OntoBricksError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — translated, not swallowed
+            raise InfrastructureError(f"Could not {what}: {exc}", detail=str(exc)) from exc

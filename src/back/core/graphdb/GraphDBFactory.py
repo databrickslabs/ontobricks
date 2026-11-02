@@ -205,7 +205,7 @@ class GraphDBFactory:
         base_name = info.get("name", DEFAULT_GRAPH_NAME)
         version = getattr(domain, "current_version", "1") or "1"
         db_name = "%s_V%s" % (base_name, version)
-        from back.core.graphdb.delta.InferredTripleLedger import InferredTripleLedger
+        from back.core.graphdb.delta import InferredTripleLedger
 
         try:
             return Neo4jStore(

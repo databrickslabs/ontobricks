@@ -305,13 +305,13 @@ def _probed_tables(slot_spec: Any) -> list[str] | None:
 
     ``None`` (sources unknown, counted as untracked) without a compiled spec;
     none for a topic-fed realtime pipeline, which reads no change feed
-    (``TwinIncrementalBuild.feed_tables``).
+    (``TwinSlotFeed.feed_tables``).
     """
     if slot_spec is None:
         return None
-    from back.objects.digitaltwin.build import TwinIncrementalBuild
+    from back.objects.digitaltwin.build import TwinSlotFeed
 
-    return TwinIncrementalBuild.feed_tables(slot_spec)
+    return TwinSlotFeed.feed_tables(slot_spec)
 
 
 def _reconcile_after_tick(

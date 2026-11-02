@@ -146,7 +146,7 @@ Row tracking is probed with `SHOW TBLPROPERTIES <table> ('delta.enableRowTrackin
 on every source table of the compiled slot pipeline (`SourceReadiness.check`);
 a domain whose mappings are all batch has no source tables and counts as tracked,
 and so does a `realtime` slot pipeline fed by its topic (`spec.needs_row_tracking`
-false, `TwinIncrementalBuild.feed_tables`): it reads no change feed, so neither the
+false, `TwinSlotFeed.feed_tables`): it reads no change feed, so neither the
 build, the tick nor the preflight probes its sources.
 A table owner makes a source ready with `ALTER TABLE <table> SET TBLPROPERTIES
 (delta.enableRowTracking = true, delta.enableDeletionVectors = true)`. A failed probe or a failed slot pipeline / MV build
@@ -527,7 +527,7 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
 | 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ◐ | `jobs/triple_stream` (`main.py`, `processor.py`); the Spark / connector / RTM wiring is live-unverified |
 | 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them |
-| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinIncrementalBuild.slot_topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time; cluster sizing, run-as grants and the topic-fed SDP pipeline are live-unverified |
+| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time; cluster sizing, run-as grants and the topic-fed SDP pipeline are live-unverified |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
 | Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ◐ | `scripts/measure_freshness.py` + `tests/external/test_freshness_slo.py`, nightly non-blocking step ([Verification](#verification)); not yet run on the integration workspace |
 
@@ -805,7 +805,7 @@ stream job instead of the source tables' change data feed, so `_slots` / `_data`
 the MERGE fingerprint, the readiness preflight and the DAB renderer share, hence one
 SQL fingerprint — calls `SlotProjectionCompiler.compile(..., source="topic",
 topic=TopicSource.from_realtime_source(...), column_types={table: {column: type}})`
-whenever the domain's best mode is `realtime` (`TwinIncrementalBuild.slot_topic`);
+whenever the domain's best mode is `realtime` (`TwinSlotFeed.topic`);
 the column types come from `DESCRIBE TABLE` of each row-local source, read once per
 compile on the build's or the tick's warehouse (a source that cannot be described is
 an `InfrastructureError`, not other SQL). A **Kinesis** stream, which `read_kafka`

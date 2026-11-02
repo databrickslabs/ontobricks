@@ -50,10 +50,10 @@ class TwinGraphRelation:
         errors raise :class:`InfrastructureError` (the build falls back).
         """
         from back.core.graphdb.delta import GraphRelation
-        from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
+        from back.core.helpers import WarehouseStatements
 
         client = pipe.source_client
-        step = TwinIncrementalBuild.warehouse_step
+        step = WarehouseStatements.step
         if not TwinGraphRelation.materialized(pipe):
             if not created and GraphRelation.is_materialized(client, graph):
                 step(
