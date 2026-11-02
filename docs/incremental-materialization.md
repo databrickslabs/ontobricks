@@ -705,6 +705,27 @@ afterwards):
   explicit `start_update` of the microbatch bootstrap was refused (`An active update … already
   exists`) — the runner now adopts that update.
 
+Live realtime serving leg (2026-11-02, Lakebase instance `ontobricks-int`, scratch schema dropped
+afterwards): the generated `_live` DDL ran as emitted (primary key, the three partial
+`WHERE NOT deleted` indexes, `autovacuum_vacuum_scale_factor=0.02` /
+`autovacuum_analyze_scale_factor=0.01`, the serving comment); `LiveSink` upserts behaved as
+designed — a newer `seq` replaced the row, a stale `seq` was rejected, a tombstone marked the
+row deleted — `purge_live_tombstones_sql` removed it and detaching cleared the serving comment.
+Single-row upsert latency from a laptop over TLS: p50 105 ms, p99 218 ms (the sink's share of the
+sub-second budget; a cluster in-region sits well below that).
+
+Attempted and blocked on the workspace (2026-11-02): the `transformWithState` processor + `LiveSink`
+harness could not run there — classic job clusters are refused ("Only serverless compute is
+supported in the workspace"), and on serverless job compute the slim closure imports fine
+(`back.core.streaming`, `jobs.triple_stream.processor`, `psycopg`) but any streaming query start
+(`rate` source → `foreachBatch`, with or without `transformWithState`) aborts the Python client
+with SIGABRT before producing output (Databricks trace IDs 7474660131088429/…/584058328432402 and
+…/77296344132098). The Real-Time-Mode path needs classic DBR 19 compute by design, so this is an
+environment limit, not a code path that was exercised and failed. A Lakehouse//RT warehouse was
+enabled on the workspace but none exists yet: RT warehouses are created in the UI
+(Compute → SQL Warehouses → Create → Real-Time; the public API has no selector), after which
+`scripts/measure_freshness.py --read-warehouse-id <rt>` measures the microbatch read path.
+
 Live-unverified (workspace spike checklist):
 
 - The MV change data feed and time travel once external metadata is enabled

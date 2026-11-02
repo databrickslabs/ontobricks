@@ -2446,3 +2446,51 @@ Modified files:
 
 Test result: full suite 11378 passed, 341 skipped, 9 deselected; architecture suite green;
 `baseline.json` unchanged.
+
+================================================================================
+## Live realtime serving leg on Lakebase (ontobricks-int)
+================================================================================
+
+Context: the Phase 3 serving side (`_live` table, sink, purge) exercised against
+the real Lakebase instance of the integration workspace, in a scratch schema
+dropped afterwards (no code change; the measurements are recorded in the
+guide's "Live verification").
+
+Observed (2026-11-02):
+- `live_table_ddl` + `live_grants_sql` + `live_serving_sql`: table, PK, three
+  partial indexes, autovacuum settings and the serving comment as emitted.
+- `LiveSink` (open / per-row upsert / close): newer `seq` wins, stale `seq`
+  rejected by the `WHERE EXCLUDED.seq > live.seq` guard, tombstone recorded;
+  `purge_live_tombstones_sql(…, 0)` removed it; detach cleared the comment.
+- Per-upsert latency laptop → Lakebase (TLS): p50 105 ms, p99 218 ms.
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+================================================================================
+## Live verification attempts blocked by the workspace (recorded)
+================================================================================
+
+Context: the Phase 3 stream (`transformWithState` + Lakebase sink) and the
+Lakehouse//RT read path were attempted on fevm-ontobricks-int after the user
+enabled Lakehouse//RT there.
+
+Observed (2026-11-02):
+- Classic job clusters are refused ("Only serverless compute is supported in
+  the workspace"); Real-Time Mode needs classic compute by design.
+- Serverless job compute: the slim closure imports (`back.core.streaming`,
+  `jobs.triple_stream.processor`, `psycopg`, `databricks-sql-connector`), but
+  every streaming query start (rate source → foreachBatch, with or without
+  transformWithState) aborts the Python client with SIGABRT and no output
+  (trace IDs 7474660131088429/…/584058328432402, …/77296344132098).
+- No Lakehouse//RT warehouse exists yet; the public warehouses API has no RT
+  selector (UI: Compute → SQL Warehouses → Create → Real-Time). Once one
+  exists, `scripts/measure_freshness.py --read-warehouse-id <id>` measures the
+  microbatch read path.
+- The closure the stream job ships must include `back/core/databricks` (the
+  helpers import it); the DAB job's slim-closure list already does.
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
