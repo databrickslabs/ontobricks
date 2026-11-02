@@ -29,6 +29,7 @@
 
 ### What's new in 0.9.1
 
+- **Incremental triple materialization**: per-domain `full` / `incremental` / `microbatch` modes — a Lakeflow slot pipeline over the sources' change feed, an Enzyme-refreshed `_data` materialized view, Lakebase sync schedules that follow the mode, net-change apply for Neo4j / app-managed Lakebase and a MERGE fallback without serverless; every fallback is recorded in the build-run trace. See [docs/incremental-materialization.md](docs/incremental-materialization.md).
 - **Viewer search and Graph Chat**: Viewers can search / expand Explorer and chat over the graph; load and node-action writes stay blocked.
 - **SWRL builtins**: `swrlb:` filters apply on inference **and** materialization (Lakebase `TRY_CAST` included).
 - **Auto-Map Metric Views**: the agent emits `MEASURE(...)` + `GROUP BY` and rejects table-style `SELECT *`.
@@ -228,7 +229,7 @@ by the Databricks CLI.
 - **[Documentation hub](docs/README.md)** — start here
 - **[Value proposition](docs/product.md)** — the business case &amp; go-to-market
 - **[User Guide](docs/user-guide.md)** · **[Feature inventory](docs/user-guide.md#feature-inventory)** · **[Architecture](docs/architecture.md)** · **[API](docs/api.md)**
-- **[MCP](docs/mcp.md)** · **[Graph DB](docs/backend.md)** · **[Import / Export](docs/advanced_features.md#registry-import-and-export)**
+- **[MCP](docs/mcp.md)** · **[Graph DB](docs/backend.md)** · **[Incremental materialization](docs/incremental-materialization.md)** · **[Import / Export](docs/advanced_features.md#registry-import-and-export)**
 - **[Developing OntoBricks](docs/development.md)** — build, test, contribute
 
 Product overview, screenshots and videos:

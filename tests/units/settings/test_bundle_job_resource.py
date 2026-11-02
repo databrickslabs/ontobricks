@@ -236,3 +236,26 @@ class TestAnalyticsJobPermissionBootstrap:
         deploy = (REPO_ROOT / "scripts/deploy.sh").read_text()
         assert "scripts/bootstrap/app-permissions.sh" in deploy
         assert 'app-permissions.sh "$APP_NAME" "$MCP_APP_NAME"' in deploy
+
+
+class TestSlotPipelineTemplateIsNotAutoIncluded:
+    """``databricks.yml`` includes ``resources/*.yml``. The slot-pipeline
+    template documents what ``SlotPipelineRunner`` creates at runtime and
+    must never be deployed as a static pipeline, so it carries an ``.example``
+    suffix that the glob does not match."""
+
+    def test_no_deployable_slot_pipeline_resource_exists(self):
+        assert not (REPO_ROOT / "resources/triple_slots.pipeline.yml").exists()
+        assert all(
+            "triple_slots" not in path.name
+            for path in (REPO_ROOT / "resources").glob("*.yml")
+        )
+
+    def test_the_example_exists_and_parses_as_yaml(self):
+        path = REPO_ROOT / "resources/triple_slots.pipeline.yml.example"
+        assert path.exists()
+        text = path.read_text()
+        yaml.safe_load(text)  # comments only: must not raise
+        assert "SlotPipelineRunner" in text
+        assert "channel: PREVIEW" in text
+        assert "serverless: true" in text

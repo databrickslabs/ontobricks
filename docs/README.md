@@ -70,6 +70,7 @@ Each domain picks a graph engine (Lakebase, Lakehouse / Delta, Neo4j, or none).
 | Guide | What you'll find |
 |-------|------------------|
 | [Graph backends](backend.md) | [Lakebase graph store](backend.md#lakebase-graph-store) (Postgres schema, write modes, bootstrap), [Neo4j backend](backend.md#neo4j-backend) (Aura / Community / Enterprise), [engine integration](backend.md#engine-integration) (backend contract, UC layout, [query optimizations](backend.md#graph-query-optimizations)) |
+| [Incremental materialization](incremental-materialization.md) | Per-domain `full` / `incremental` / `microbatch` modes, the [readiness and fallback ladder](incremental-materialization.md#readiness-and-the-fallback-ladder), the slot pipeline and `_data` materialized view, [what a build does per backend](incremental-materialization.md#what-a-build-does-per-backend), [build-run trace](incremental-materialization.md#build-run-trace), [reconciliation](incremental-materialization.md#reconciliation), [preview enrolment](incremental-materialization.md#preview-enrolment) and [known limitations](incremental-materialization.md#known-limitations) |
 | [Architecture](architecture.md) | System design, standards, agents, OntoViz, [Lakehouse UC objects](architecture.md#lakehouse-unity-catalog-objects), [data access engine map](architecture.md#data-access-engine-map) |
 | [API](api.md) | External REST & GraphQL, internal REST |
 

@@ -74,6 +74,11 @@ _DOC_CATEGORIES: List[Dict] = [
         "docs": [
             {"slug": "backend", "file": "backend.md", "title": "Graph backends"},
             {
+                "slug": "incremental-materialization",
+                "file": "incremental-materialization.md",
+                "title": "Incremental materialization",
+            },
+            {
                 "slug": "architecture",
                 "file": "architecture.md",
                 "title": "Architecture",
