@@ -33,7 +33,8 @@ function _renderRunsTable() {
     _runsCache.forEach(function (run, idx) {
         const row = document.createElement('tr');
         row.innerHTML = RunsRender.buildRunCells(run, idx, {
-            handler: 'showRunDetails'
+            handler: 'showRunDetails',
+            materialization: true
         });
         tbody.appendChild(row);
     });

@@ -408,3 +408,49 @@ class TestHistoryTabRemoved:
             "atab-btn-health",
             "atab-btn-insights",
         ]
+
+
+_SETTINGS_PARTIAL = Path("src/front/templates/partials/settings/_settings_runs.html")
+
+
+class TestMaterializationColumn:
+    """The cockpit lists what each build persisted about its materialization
+    mode (``stats.materialization``); the details modal shows the whole block.
+    Older rows carry no facts and must render as a dash, not as ``undefined``."""
+
+    def test_the_cockpit_table_has_a_materialization_header(self, client):
+        html = _html(client, "/dtwin/")
+        tags = _tags(html)
+        assert _find(tags, id_="runsMaterializationHeader") is not None
+
+    def test_the_cockpit_asks_the_shared_renderer_for_the_cell(self):
+        src = _js()
+        assert "materialization: true" in src
+
+    def test_the_shared_renderer_builds_the_cell_and_the_details_block(self):
+        src = _shared_js()
+        assert "function materializationCell(run)" in src
+        assert "function materializationDetailsHtml(run)" in src
+        assert "materializationCell: materializationCell" in src
+        assert "o.materialization ? materializationCell(run)" in src
+        assert "html += materializationDetailsHtml(run);" in src
+
+    def test_rows_without_facts_render_a_dash(self):
+        """The guard reads ``stats.materialization`` and dashes the cell when it
+        is absent, so pre-0.9.1 rows and scheduled ticks never show
+        ``undefined``."""
+        src = _shared_js()
+        assert "stats && stats.materialization" in src
+        assert "if (!facts) return '<td class=\"text-center\"><span class=\"text-muted\">&mdash;</span></td>';" in src
+
+    def test_the_badge_marks_a_fallback_with_the_reason(self):
+        src = _shared_js()
+        assert "requested !== effective" in src
+        assert "mode_fallback_reason" in src
+
+    def test_the_settings_runs_list_stays_unchanged(self):
+        """Settings → Runs keeps its own partial without the column; it gets
+        the Materialization block through the shared details modal only."""
+        settings = _SETTINGS_PARTIAL.read_text(encoding="utf-8")
+        assert "runsMaterializationHeader" not in settings
+        assert "Materialization" not in settings

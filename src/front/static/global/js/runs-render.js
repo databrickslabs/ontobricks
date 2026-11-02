@@ -107,7 +107,65 @@ window.RunsRender = (function () {
         return esc((Number(v) || 0).toLocaleString());
     }
 
-    // opts: { domain: bool, handler: string }
+    // ``stats.materialization`` is what the build persisted about its
+    // materialization mode (see docs/incremental-materialization.md). Older
+    // rows have none and render as a dash.
+    function materializationFacts(run) {
+        const stats = run && run.stats;
+        const facts = stats && stats.materialization;
+        return facts && typeof facts === 'object' ? facts : null;
+    }
+
+    function modeBadge(facts) {
+        const effective = facts.materialization_mode_effective || '';
+        const requested = facts.materialization_mode_requested || '';
+        if (!effective) return '<span class="text-muted">&mdash;</span>';
+        const fellBack = requested && requested !== effective;
+        const title = fellBack
+            ? 'Requested ' + requested + ' — ' + (facts.mode_fallback_reason || 'fell back')
+            : 'Materialization mode';
+        const cls = effective === 'full' ? 'bg-secondary' : 'bg-primary';
+        return '<span class="badge ' + cls + '" title="' + esc(title) + '">' + esc(effective)
+            + (fellBack ? ' <i class="bi bi-arrow-down-short"></i>' : '') + '</span>';
+    }
+
+    // One compact cell: mode (with a fallback marker), then the _data strategy
+    // or Enzyme refresh technique, then how the store was brought up to date.
+    function materializationCell(run) {
+        const facts = materializationFacts(run);
+        if (!facts) return '<td class="text-center"><span class="text-muted">&mdash;</span></td>';
+        const detail = [facts.refresh_technique || facts.strategy, facts.apply_mode]
+            .filter(function (v) { return v && v !== 'none'; })
+            .map(esc).join(' · ');
+        return '<td class="text-center small">' + modeBadge(facts)
+            + (detail ? '<div class="text-muted">' + detail + '</div>' : '') + '</td>';
+    }
+
+    function materializationDetailsHtml(run) {
+        const facts = materializationFacts(run);
+        if (!facts) return '';
+        const dash = '<span class="text-muted">&mdash;</span>';
+        const text = function (v) { return v ? esc(v) : dash; };
+        let html = '<h6 class="mt-3 mb-2"><i class="bi bi-layers me-1"></i>Materialization</h6>';
+        html += '<div class="row g-2 mb-3">';
+        html += kv('Mode', modeBadge(facts));
+        html += kv('Requested', text(facts.materialization_mode_requested));
+        html += kv('Fallback Reason', text(facts.mode_fallback_reason));
+        html += kv('Strategy', text(facts.strategy));
+        html += kv('Refresh Technique', text(facts.refresh_technique));
+        html += kv('Apply Mode', text(facts.apply_mode));
+        html += kv('Apply Fallback', text(facts.apply_fallback_reason));
+        html += kv('Triples Source', text(facts.triples_source));
+        html += kv('Sync Source', text(facts.sync_source));
+        html += kv('Sync Schedule', text(facts.sync_mode_effective));
+        html += kv('Slots Table', text(facts.slots_table));
+        html += kv('Slot Pipeline', text(facts.slot_pipeline_id));
+        html += kv('Data Table Version', facts.data_table_version == null ? dash : esc(facts.data_table_version));
+        html += '</div>';
+        return html;
+    }
+
+    // opts: { domain: bool, handler: string, materialization: bool }
     function buildRunCells(run, idx, opts) {
         const o = opts || {};
         return '<td class="text-end text-muted small">' + esc(run.id || (idx + 1)) + '</td>'
@@ -115,6 +173,7 @@ window.RunsRender = (function () {
             + '<td class="small">' + fmtTs(run.started_at) + '</td>'
             + '<td class="text-center">' + versionBadge(run.version) + '</td>'
             + '<td class="text-center">' + buildStatusBadge(run.status) + '</td>'
+            + (o.materialization ? materializationCell(run) : '')
             + '<td class="text-end">' + num(run.triple_count) + '</td>'
             + detailsCell(o.handler || 'showRunDetails', idx, 'View run details');
     }
@@ -211,6 +270,8 @@ window.RunsRender = (function () {
         html += kv('Task ID', '<span class="font-monospace small">' + esc(run.task_id || '—') + '</span>');
         html += '</div>';
 
+        html += materializationDetailsHtml(run);
+
         html += '<h6 class="mt-2 mb-2"><i class="bi bi-stopwatch me-1"></i>Phase Timings</h6>';
         html += phaseTable(run.phase_times);
 
@@ -278,6 +339,8 @@ window.RunsRender = (function () {
         localName: localName,
         analyticsScope: analyticsScope,
         versionBadge: versionBadge,
+        materializationCell: materializationCell,
+        materializationDetailsHtml: materializationDetailsHtml,
         buildRunCells: buildRunCells,
         analyticsRunCells: analyticsRunCells,
         kv: kv,
