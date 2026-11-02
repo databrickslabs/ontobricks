@@ -898,6 +898,21 @@ class TestTrace:
         assert entry["slots_table"] == _SLOTS
         assert entry["triples_source"] == _DATA
 
+    def test_a_build_records_its_batch_mapping_count(self):
+        entry = self._entry(_pipeline("microbatch"))
+
+        assert entry["stats"]["materialization"]["batch_mappings"] == 1
+
+    def test_a_row_local_only_build_records_no_batch_mappings(self):
+        entry = self._entry(_pipeline("microbatch", entities={_CUSTOMER: _row_local()}))
+
+        assert entry["stats"]["materialization"]["batch_mappings"] == 0
+
+    def test_a_fallback_records_no_batch_mapping_count(self):
+        entry = self._entry(_pipeline("microbatch"), fail_on="wait")
+
+        assert entry["stats"]["materialization"]["batch_mappings"] is None
+
     def test_a_fallback_is_traced_with_its_reason(self):
         entry = self._entry(_pipeline("microbatch"), fail_on="wait")
 

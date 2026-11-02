@@ -13,6 +13,7 @@ from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.graphdb.delta.DeltaBase import create_databricks_client
 from back.core.graphdb.delta.DeltaOverviewStats import DeltaOverviewStats
+from back.core.graphdb.delta.GraphReadRelation import GraphReadRelation
 from back.core.graphdb.delta.GraphRelation import GraphRelation
 from back.core.graphdb.entity_search import (
     is_missing_relation_error,
@@ -119,8 +120,8 @@ class DeltaFlatStore(GraphDBBackend):
         return data or graph or ""
 
     def _sql_relation(self, table_name: str) -> str:
-        """Map Lakebase-style logical names to UC ``…_graph`` / ``…_data`` FQNs."""
-        if "." in table_name and table_name.count(".") == 2:
+        """Map logical names to UC ``…_graph`` / ``…_data``; FQNs and inline relations pass."""
+        if table_name.count(".") == 2 or GraphReadRelation.is_inline(table_name):
             return table_name
         resolved = self._readable_table_fqn()
         if resolved:
@@ -197,6 +198,7 @@ class DeltaFlatStore(GraphDBBackend):
         )
 
     def rebuild_adjacency(self, table_name: str) -> None:
+        table_name = GraphReadRelation.physical(table_name, self._domain, self._settings)
         relation = self._sql_relation(table_name)
         adj_out, adj_in = self.adjacency_table_ids(table_name)
         search = self.entity_search_table_id(table_name)

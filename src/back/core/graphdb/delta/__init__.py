@@ -8,6 +8,9 @@ from back.core.graphdb.delta.DeltaMergeMaterializer import (  # noqa: F401
 from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (  # noqa: F401
     DeltaTripleStoreBuildPipeline,
 )
+from back.core.graphdb.delta.GraphReadRelation import (  # noqa: F401
+    GraphReadRelation,
+)
 from back.core.graphdb.delta.GraphRelation import GraphRelation  # noqa: F401
 from back.core.graphdb.delta.InferredTripleLedger import (  # noqa: F401
     InferredTripleLedger,
@@ -24,6 +27,7 @@ __all__ = [
     "DeltaFlatStore",
     "DeltaMergeMaterializer",
     "DeltaTripleStoreBuildPipeline",
+    "GraphReadRelation",
     "GraphRelation",
     "InferredTripleLedger",
     "MaterializedViewBuilder",

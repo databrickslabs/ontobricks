@@ -53,7 +53,10 @@ class TwinBuildRunHistory:
         ``slots_seed_version``; ``TwinRealtimeStream.after_build``) and the
         kind of ``…_graph`` (``graph_relation``: ``view`` / ``mv``,
         ``TwinGraphRelation``) and whether the store lists its inferences
-        (``inferred_listed``, Neo4j: ``TwinNetChangeApply``). A build that reached the
+        (``inferred_listed``, Neo4j: ``TwinNetChangeApply``) and how many batch
+        mappings its slot pipeline left to ``…_data``'s batch branch
+        (``batch_mappings``, ``None`` when no incremental build ran:
+        ``GraphReadRelation`` reads the live slots only at ``0``). A build that reached the
         incremental step adds its ``slot_refresh_facts``
         (:class:`TwinSlotRefreshPlan`: ``source_versions``,
         ``source_table_ids``, ``slot_full_refresh_pending``,
@@ -87,6 +90,9 @@ class TwinBuildRunHistory:
             ),
             "graph_relation": text(pipe, "graph_relation"),
             "inferred_listed": getattr(pipe, "inferred_listed", False) is True,
+            "batch_mappings": TwinBuildRunHistory._version_or_none(
+                getattr(pipe, "batch_mappings", None)
+            ),
             **TwinBuildRunHistory._slot_refresh_facts(pipe),
         }
         return {**stats, "materialization": materialization}
@@ -177,6 +183,25 @@ class TwinBuildRunHistory:
         return TwinBuildRunHistory._load_runs(
             lambda: (domain, settings, TwinBuildRunHistory.run_key_of(domain)), "-"
         )
+
+    @staticmethod
+    def last_success_facts(domain: Any, settings: Any) -> dict | None:
+        """``stats["materialization"]`` of *domain*'s newest successful build, ``None`` without one.
+
+        Over :meth:`recent_runs_for` (newest first); scheduled ticks (their
+        facts are reconciliation's only), failures and runs that recorded no
+        effective mode are passed over.
+        """
+        for run in TwinBuildRunHistory.recent_runs_for(domain, settings):
+            facts = TwinBuildRunHistory.facts_of(run)
+            if (
+                facts
+                and facts.get("materialization_mode_effective")
+                and run.get("status") == "success"
+                and run.get("build_kind") != "scheduled"
+            ):
+                return facts
+        return None
 
     @staticmethod
     def _load_runs(context: Any, task_id: Any) -> list:
@@ -328,5 +353,6 @@ class TwinBuildRunHistory:
 
     @staticmethod
     def _version_or_none(value: Any) -> int | None:
+        """*value* when it is an ``int`` (a version or a count), else ``None``."""
         return value if isinstance(value, int) and not isinstance(value, bool) else None
 

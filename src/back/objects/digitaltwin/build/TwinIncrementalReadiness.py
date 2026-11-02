@@ -32,7 +32,8 @@ class TwinIncrementalReadiness:
     @staticmethod
     def report(domain: Any, settings: Any, client: Any) -> dict:
         """``mode_requested``, ``decision``, ``serverless_available``, ``sources``,
-        ``row_tracking_required``, ``compile_error``, ``realtime``, ``previews``.
+        ``row_tracking_required``, ``compile_error``, ``realtime``, ``previews``,
+        ``read_relation``.
 
         ``decision`` is what a build would run: ``effective``, ``reason`` and
         ``merge_fallback`` — an ``incremental`` request without serverless runs
@@ -43,7 +44,10 @@ class TwinIncrementalReadiness:
         feed: ``row_tracking_required`` is false and its sources are listed
         unprobed (``row_tracking: None``). A probe that fails raises
         :class:`InfrastructureError` (an unknown answer is not a "no").
+        ``read_relation`` is what Lakehouse graph reads take now
+        (``GraphReadRelation``: ``graph`` or ``slots_live``).
         """
+        from back.core.graphdb.delta import GraphReadRelation
         from back.core.graphdb.GraphDBFactory import (
             GraphDBFactory,
             normalize_materialization_mode,
@@ -83,6 +87,7 @@ class TwinIncrementalReadiness:
             "compile_error": compile_error,
             "realtime": TwinIncrementalReadiness.realtime_facts(domain, settings),
             "previews": {"slot_pipeline_channel": TwinSlotPipeline.channel(settings)},
+            "read_relation": GraphReadRelation.decide(domain, settings, client=client),
         }
 
     @staticmethod

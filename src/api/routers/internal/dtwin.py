@@ -76,9 +76,10 @@ def _graph_query_table(
     store=None,
     *,
     include_inferred: bool = True,
+    physical: bool = False,
 ) -> str:
     return TwinGraphAccess.graph_query_table(
-        domain, settings, store, include_inferred=include_inferred
+        domain, settings, store, include_inferred=include_inferred, physical=physical
     )
 
 
@@ -428,7 +429,7 @@ async def compute_graph_metrics(
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
-        graph_name = _graph_query_table(domain, settings, store)
+        graph_name = _graph_query_table(domain, settings, store, physical=True)
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
@@ -1123,7 +1124,7 @@ async def sync_info(
             "pending": True,
             "count": 0,
             "view_table": effective_view_table(domain),
-            "graph_name": effective_graph_query_table(domain, settings),
+            "graph_name": effective_graph_query_table(domain, settings, physical=True),
             "reason": "Checking graph status…",
         }
 

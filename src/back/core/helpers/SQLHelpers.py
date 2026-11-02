@@ -190,11 +190,15 @@ class SQLHelpers:
         *,
         include_inferred: bool = True,
         store=None,
+        physical: bool = False,
     ) -> str:
-        """Physical table/view for graph read queries (Explorer, filter, stats, …).
+        """Relation graph read queries interpolate as ``FROM {relation}`` (Explorer, filter, stats, …).
 
-        * **databricks** — union VIEW ``…_graph`` (``_data`` ∪ ``_inferred``) when
-          *include_inferred* is true; otherwise the materialized ``…_data`` TABLE.
+        * **databricks** — ``…_graph`` (``_data`` ∪ ``_inferred``) when
+          *include_inferred* is true, otherwise ``…_data``; a ``microbatch``
+          domain on the Lakehouse//RT fast path gets the inline subquery over
+          ``…_slots`` (∪ ``…_inferred``) instead (``GraphReadRelation``), unless
+          *physical* asks for the table name (catalog probes, display).
         * **lakebase** — union view (``Domain_V<n>``) when *include_inferred* is true,
           otherwise the synced bulk table via *store.synced_table_name*.
         """
@@ -203,6 +207,13 @@ class SQLHelpers:
 
         backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
         if backend == "databricks":
+            from back.core.graphdb.delta.GraphReadRelation import GraphReadRelation
+
+            live = "" if physical else GraphReadRelation.read_relation(
+                domain, settings, include_inferred=include_inferred
+            )
+            if live:
+                return live
             if include_inferred:
                 from back.core.graphdb.delta import _table_naming
 

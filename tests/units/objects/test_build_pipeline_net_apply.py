@@ -61,6 +61,7 @@ _FACT_KEYS = {
     "strategy",
     "apply_mode",
     "apply_fallback_reason",
+    "batch_mappings",
 }
 
 
@@ -165,6 +166,7 @@ class TestBuildRunStats:
             "strategy": "",
             "apply_mode": "",
             "apply_fallback_reason": "",
+            "batch_mappings": None,
         }
 
     @pytest.mark.parametrize(
@@ -184,6 +186,14 @@ class TestBuildRunStats:
         facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
 
         assert facts["strategy"] == strategy
+
+    @pytest.mark.parametrize("count", [0, 2])
+    def test_the_batch_mapping_count_is_recorded(self, count):
+        pipe = SimpleNamespace(view_table=_VIEW, batch_mappings=count)
+
+        facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
+
+        assert facts["batch_mappings"] == count
 
     @pytest.mark.parametrize("value", [True, "7", 7.0, MagicMock()])
     def test_a_version_that_is_not_an_integer_is_dropped(self, value):

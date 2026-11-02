@@ -26,13 +26,19 @@ class TwinGraphAccess:
         store=None,
         *,
         include_inferred: bool = True,
+        physical: bool = False,
     ) -> str:
-        """Resolve the physical graph table for read queries (Lakebase or Delta)."""
+        """Resolve the graph relation for read queries (Lakebase or Delta).
+
+        *physical* names the table even when Delta reads take the inline
+        live-slots relation (``effective_graph_query_table``).
+        """
         return effective_graph_query_table(
             domain,
             settings,
             include_inferred=include_inferred,
             store=store,
+            physical=physical,
         )
 
     @staticmethod

@@ -262,6 +262,7 @@ def test_a_full_domain_is_answered_without_any_probe(env, monkeypatch):
 
     assert report == {
         "mode_requested": "full",
+        "read_relation": "graph",
         "slot_pipeline": None,
         "data": None,
         "slots": None,

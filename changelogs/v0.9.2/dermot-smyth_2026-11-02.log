@@ -2496,3 +2496,105 @@ Observed (2026-11-02):
 Modified files:
 - docs/incremental-materialization.md
 - changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+================================================================================
+## Microbatch Lakehouse//RT fast path: reads `_slots` ∪ `_inferred` directly
+================================================================================
+
+Context: the design has the Delta engine on a Lakehouse//RT warehouse read
+`_graph` / `_slots` directly so that `microbatch` freshness equals the slot
+pipeline's commit cadence. Every Lakehouse read went to `_graph`, the
+`TRIGGER ON UPDATE` materialized view chained after `_data`, measured live at
+217–383 s behind the pipeline. A `microbatch` domain without batch mappings now
+reads the slots inline when it is read through Lakehouse//RT.
+
+Changes:
+
+1. src/back/core/graphdb/delta/GraphReadRelation.py (new), src/back/core/graphdb/delta/__init__.py
+   `GraphReadRelation` decides a domain's read relation: `slots_live` only when
+   the domain is on the Lakehouse engine, "Use Lakehouse//RT for queries" is on
+   (`resolve_lakehouse_use_sea`), its last successful build (scheduled ticks and
+   failures passed over; the requested mode without one) ran `microbatch` with
+   a `slots_table` and `batch_mappings == 0`, `_slots` exists and `_data` still
+   is the materialized view (`information_schema.tables`, build warehouse);
+   anything else, or any failing lookup, is `graph`. A `full` / `incremental`
+   request or another engine is answered without any read. Decisions are cached
+   per slots table (one per domain version) for 30 s (`TTL_S`). The inline
+   relation is `(SELECT subject, predicate, object FROM <slots> WHERE object IS
+   NOT NULL AND TRIM(object) != '' UNION SELECT subject, predicate, object FROM
+   <inferred>)` (`NON_BLANK_OBJECT_SQL`; `SELECT DISTINCT` over the slots alone
+   for asserted-only reads), built only from names that pass `SAFE_SQL_IDENT`;
+   `physical` maps it back to `_graph` / `_data`. Re-exported from the package.
+2. src/back/core/helpers/SQLHelpers.py
+   `effective_graph_query_table` returns the inline relation for `slots_live`
+   (Lakehouse engine) and takes `physical=True` for callers that need the
+   table name.
+3. src/back/core/graphdb/delta/DeltaFlatStore.py, src/back/core/graphdb/entity_search.py
+   `_sql_relation` passes an inline relation through (reads render
+   `FROM (…)` and alias it as their templates do, `FROM (…) t`); a cache
+   rebuild maps it back to `_graph` (`rebuild_adjacency`);
+   `is_asserted_only_relation` recognises the slots-only relation. The RT
+   guardrail fallback retries the same inline SQL on the build warehouse;
+   `last_read_route` is unchanged. Class at 791 LOC.
+4. src/back/objects/digitaltwin/cache/TwinStoreCache.py, src/api/routers/digitaltwin.py,
+   src/api/routers/internal/dtwin.py, src/back/objects/digitaltwin/TwinGraphAccess.py
+   Status probes (`table_exists` / `get_status`), existence checks, display
+   names and the analytics run's graph name ask for the physical name
+   (`physical=True`, forwarded by `TwinGraphAccess.graph_query_table` and the
+   route wrapper); read routes keep the default.
+5. src/back/objects/digitaltwin/node/NodeContextService.py
+   A bridge target's relation is accepted when it is a plain FQN or the inline
+   relation (`_readable_relation`; the baselined `_resolve_bridges` did not grow).
+6. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py, TwinBuildRunHistory.py
+   A build records `batch_mappings` (the spec's batch mapping count; `None`
+   when no incremental build ran or it fell back) in
+   `stats.materialization`; `TwinBuildRunHistory.last_success_facts` reads the
+   newest successful main build's facts.
+7. src/back/objects/digitaltwin/build/TwinIncrementalStatus.py, TwinIncrementalReadiness.py
+   Both reports carry `read_relation` (`graph` | `slots_live`); a `full`
+   domain's status still makes no warehouse, pipelines or registry call.
+8. tests/units/graphdb/delta/test_graph_read_relation.py (new) — decision
+   matrix (RT off, incremental, full, other engine, ran-as-incremental, batch
+   mappings, missing fact, no slots, no build, missing slots table, `_data` no
+   longer the view, failing read, default build-warehouse probe), TTL reuse /
+   expiry / per-version key, pinned SQL of both relations, `physical`,
+   unsafe names, `effective_graph_query_table` for both outcomes and
+   `physical`, DeltaFlatStore reads (`FROM (…) WHERE`, aliased `FROM (…) t`),
+   the RT fallback with the subquery, the cache rebuild on `_graph`, the
+   asserted-only check, the bridge guard, `read_relation` in status /
+   readiness, `last_success_facts`. Updated: test_build_pipeline_modes.py
+   (batch count 1 / 0 / None), test_build_pipeline_net_apply.py (fact key set),
+   test_incremental_status.py (full report), test_v090_graph_access_twin_helpers.py
+   (`physical` forwarded).
+9. docs/incremental-materialization.md — Lakehouse//RT section (the fast path,
+   its conditions, the relation, what keeps `_graph`), Modes table microbatch
+   row, `_graph` relation, readiness preflight, build-run trace
+   (`batch_mappings`), Status (`read_relation`), the microbatch SLO row.
+
+Modified files:
+- src/back/core/graphdb/delta/GraphReadRelation.py
+- src/back/core/graphdb/delta/__init__.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/entity_search.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/objects/digitaltwin/cache/TwinStoreCache.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinIncrementalStatus.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- tests/units/graphdb/delta/test_graph_read_relation.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/objects/test_incremental_status.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11419 passed, 341 skipped, 9 deselected in 93.36s (new file: 35 tests in
+1.9 s); architecture suite green; tests/units/architecture/baseline.json
+unchanged.

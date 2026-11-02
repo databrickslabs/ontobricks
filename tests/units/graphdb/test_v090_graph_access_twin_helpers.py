@@ -26,14 +26,27 @@ class TestTwinGraphAccess:
     def test_graph_query_table_forwards_store_and_inferred_flag(self, monkeypatch):
         seen = {}
 
-        def fake(domain, settings, *, include_inferred, store):
-            seen.update(domain=domain, settings=settings, inf=include_inferred, store=store)
+        def fake(domain, settings, *, include_inferred, store, physical):
+            seen.update(
+                domain=domain, settings=settings, inf=include_inferred, store=store, phys=physical
+            )
             return "cat.sch.g_data"
 
         monkeypatch.setattr(sys.modules[TwinGraphAccess.__module__], "effective_graph_query_table", fake)
         out = TwinGraphAccess.graph_query_table("d", "s", "st", include_inferred=False)
         assert out == "cat.sch.g_data"
-        assert seen == {"domain": "d", "settings": "s", "inf": False, "store": "st"}
+        assert seen == {"domain": "d", "settings": "s", "inf": False, "store": "st", "phys": False}
+
+    def test_graph_query_table_forwards_physical(self, monkeypatch):
+        seen = {}
+
+        def fake(domain, settings, *, include_inferred, store, physical):
+            seen["phys"] = physical
+            return "cat.sch.g_graph"
+
+        monkeypatch.setattr(sys.modules[TwinGraphAccess.__module__], "effective_graph_query_table", fake)
+        TwinGraphAccess.graph_query_table("d", "s", physical=True)
+        assert seen == {"phys": True}
 
     def test_dataquality_table_requires_view(self):
         with pytest.raises(ValidationError, match="VIEW is not available"):

@@ -45,15 +45,18 @@ class TwinIncrementalStatus:
         get_store: Callable[..., Any] | None = None,
         now: datetime | None = None,
     ) -> dict:
-        """``mode_requested``, ``slot_pipeline``, ``data``, ``slots``, ``freshness_lag_s``,
-        ``lakebase_sync``, ``last_build``, ``realtime`` (a ``realtime`` domain's stream run).
+        """``mode_requested``, ``read_relation``, ``slot_pipeline``, ``data``, ``slots``,
+        ``freshness_lag_s``, ``lakebase_sync``, ``last_build``, ``realtime`` (a
+        ``realtime`` domain's stream run).
 
+        ``read_relation`` is what Lakehouse graph reads take (``GraphReadRelation``):
+        ``graph`` (``…_graph``) or ``slots_live`` (the Lakehouse//RT fast path).
         ``freshness_lag_s`` is *now* (default: the current UTC time) minus the
         last ``_data`` commit, ``None`` when that commit is unknown. A ``full``
         domain (the default; both build panels ask on page load) is answered
         without any warehouse, pipelines or registry call: every section ``None``.
         """
-        from back.core.graphdb.delta import _table_naming
+        from back.core.graphdb.delta import GraphReadRelation, _table_naming
         from back.core.graphdb.GraphDBFactory import (
             GraphDBFactory,
             normalize_materialization_mode,
@@ -62,14 +65,20 @@ class TwinIncrementalStatus:
         requested = normalize_materialization_mode(
             GraphDBFactory.resolve_materialization_mode(domain, settings)
         )
+        read_relation = GraphReadRelation.decide(domain, settings, client=client)
         if requested == "full":
-            return {"mode_requested": requested, **dict.fromkeys(_SECTIONS)}
+            return {
+                "mode_requested": requested,
+                "read_relation": read_relation,
+                **dict.fromkeys(_SECTIONS),
+            }
         data = TwinIncrementalStatus.relation(client, _table_naming.data_table_fqn(domain, settings))
         slots = TwinIncrementalStatus.relation(
             client, _table_naming.slots_table_fqn(domain, settings)
         )
         return {
             "mode_requested": requested,
+            "read_relation": read_relation,
             "slot_pipeline": TwinIncrementalStatus.slot_pipeline(domain),
             "data": data,
             "slots": slots,

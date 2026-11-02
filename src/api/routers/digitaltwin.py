@@ -504,7 +504,9 @@ async def dt_status(
             reason="Graph backend not configured",
         )
 
-    query_table = effective_graph_query_table(domain, settings, store=graph_store)
+    query_table = effective_graph_query_table(
+        domain, settings, store=graph_store, physical=True
+    )
 
     try:
         if not graph_store.table_exists(query_table):

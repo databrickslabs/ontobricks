@@ -100,6 +100,7 @@ class TwinIncrementalBuild:
         )
 
         pipe.slots_table, pipe.slot_pipeline_id, pipe.refresh_technique = None, "", ""
+        pipe.batch_mappings = None
         requested = normalize_materialization_mode(
             GraphDBFactory.resolve_materialization_mode(pipe.domain, pipe.settings)
         )
@@ -292,6 +293,7 @@ class TwinIncrementalBuild:
         )
         pipe.slot_refresh_facts = dict(plan["after"])
         pipe.slots_table = slots
+        pipe.batch_mappings = len(spec.batch_mappings)
         logger.info(
             "[DT-BUILD %s] %s build of %s done: %d row-local, %d batch mapping(s), "
             "refresh technique %s",
@@ -449,7 +451,7 @@ class TwinIncrementalBuild:
         pipe.mode_decision = ModeDecision(requested, "full", reason)
         # Message and driver detail, read by TwinMergeFallback.applies.
         pipe.mode_fallback_detail = f"{exc} {exc.detail or ''}".strip()
-        pipe.slots_table = None
+        pipe.slots_table, pipe.batch_mappings = None, None
         pipe.refresh_technique = ""
         TwinIncrementalBuild._leave(pipe)
         pipe.tm.update_progress(

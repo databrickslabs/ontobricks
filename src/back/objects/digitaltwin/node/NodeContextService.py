@@ -738,6 +738,13 @@ class NodeContextService:
         return dataset_out, fetch_error
 
     @staticmethod
+    def _readable_relation(relation: str) -> bool:
+        """A plain ``catalog.schema.table`` name, or the inline live-slots relation."""
+        from back.core.graphdb.delta import GraphReadRelation
+
+        return GraphReadRelation.is_inline(relation) or bool(_SAFE_SQL_IDENT.match(relation))
+
+    @staticmethod
     async def _resolve_bridges(
         *,
         matched_cls: Dict[str, Any],
@@ -794,7 +801,7 @@ class NodeContextService:
                             target_dom, settings, store=target_store
                         )
                         if target_table:
-                            if not _SAFE_SQL_IDENT.match(target_table):
+                            if not NodeContextService._readable_relation(target_table):
                                 logger.warning(
                                     "nodes/context: invalid target_table %r for bridge %s — skipping",
                                     target_table,

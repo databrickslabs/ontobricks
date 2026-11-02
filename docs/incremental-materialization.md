@@ -32,7 +32,7 @@ Settings) and defaults to `full`, so existing domains behave as before.
 |---|---|---|---|---|---|
 | `full` | none | Delta table rewritten by CTAS (or a pass-through view on the Lakehouse engine) | union VIEW | snapshot | Default; small graphs, sources without row tracking, any backend |
 | `incremental` | Lakeflow SDP pipeline, **triggered** once per build | materialized view, `REFRESH POLICY INCREMENTAL` (Enzyme) | materialized view over `_data ∪ _inferred` on the Lakehouse engine, union VIEW on Lakebase / Neo4j ([below](#the-_graph-relation)) | triggered | Sources tracked, freshness = one build |
-| `microbatch` | the same pipeline run **continuously** (a triggered bootstrap first) | the same materialized view, refreshing itself between builds: `TRIGGER ON UPDATE` (at most ten sources) or every 15 minutes | the same, `TRIGGER ON UPDATE` (it refreshes when `_data` does) | continuous | Sources tracked, minutes freshness between builds |
+| `microbatch` | the same pipeline run **continuously** (a triggered bootstrap first) | the same materialized view, refreshing itself between builds: `TRIGGER ON UPDATE` (at most ten sources) or every 15 minutes | the same, `TRIGGER ON UPDATE` (it refreshes when `_data` does); Lakehouse//RT reads of a domain without batch mappings skip it and read `_slots ∪ _inferred` directly ([fast path](#lakehousert)) | continuous | Sources tracked, minutes freshness between builds (pipeline cadence on the Lakehouse//RT fast path) |
 | `realtime` | the `microbatch` pipeline fed by the domain's Kafka-compatible topic instead of the change feed, plus a Real-Time Mode stream job from that topic into Lakebase `_live` | the `microbatch` view | union VIEW (realtime is Lakebase-only) | continuous (and `_live` read live by the union view) | Lakebase domains with a change-event topic, seconds freshness; needs `ONTOBRICKS_REALTIME_ENABLED` and the domain's `realtime_source` ([Realtime](#realtime)) |
 
 The Lakebase schedule is the mode's schedule capped by
@@ -102,7 +102,8 @@ pipeline event log and recorded in the build-run trace (`refresh_technique`).
 
 `_graph` is the union of `_data` and `_inferred` that graph queries read
 (`DeltaFlatStore` reads `_graph` whenever it exists, `_data` only for asserted-only
-reads). On the **Lakehouse engine** an `incremental` / `microbatch` build makes it
+reads; a `microbatch` domain on the [Lakehouse//RT fast path](#lakehousert) reads the
+slots instead). On the **Lakehouse engine** an `incremental` / `microbatch` build makes it
 a materialized view too, so Lakehouse//RT can read it (RT reads no plain views):
 `CREATE OR REPLACE MATERIALIZED VIEW <graph> … REFRESH POLICY INCREMENTAL` over
 `SELECT subject, predicate, object FROM _data UNION ALL SELECT … FROM _inferred`,
@@ -161,8 +162,9 @@ resolver a build uses — and `merge_fallback`: an `incremental` request without
 serverless runs as `incremental` by MERGE, as the build does),
 `serverless_available`, `sources` (each slot-pipeline source table with its
 `row_tracking` flag), `compile_error` (mappings that do not compile, with the
-build's `incremental_failed:ValidationError` decision) and `previews` (the slot
-pipeline's Lakeflow channel). A topic-fed pipeline reports
+build's `incremental_failed:ValidationError` decision), `previews` (the slot
+pipeline's Lakeflow channel) and `read_relation` (`slots_live` / `graph`, as in
+[Status](#status)). A topic-fed pipeline reports
 `row_tracking_required: false` and lists its sources unprobed (`row_tracking:
 null`), which the panel does not flag. It runs the probe on the build warehouse as the
 caller; a probe that fails is an error, not "untracked". `POST
@@ -313,12 +315,58 @@ ON UPDATE` refreshes, each at most once a minute, so in `microbatch` `_graph` ca
 trail `_data` by up to a minute more. An inferred triple is in `_graph` once its
 write returns (the write waits for the refresh).
 
+**Fast path (`microbatch`).** Measured live, that chain shows a change minutes after
+the continuous slot pipeline committed it to `_slots` (217–383 s, [Known
+limitations](#known-limitations) › Live verification). A `microbatch` domain read
+through Lakehouse//RT therefore skips both views and reads the slots, so a change is
+visible at the pipeline's commit cadence (seconds): `effective_graph_query_table`
+returns the inline relation
+
+```sql
+(SELECT subject, predicate, object FROM <_slots> WHERE object IS NOT NULL AND TRIM(object) != ''
+ UNION SELECT subject, predicate, object FROM <_inferred>)
+```
+
+(one line; `(SELECT DISTINCT subject, predicate, object FROM <_slots> WHERE …)` for an
+asserted-only read). The slots branch is `_data`'s, and `UNION` deduplicates as its
+`GROUP BY` does. The relation carries no alias: every read interpolates it as
+`FROM {relation}` and the store's templates alias it themselves (`FROM {relation} t`;
+Spark names an unaliased subquery). `GraphReadRelation.decide` takes the fast path
+(`read_relation = slots_live`) only when all of these hold:
+
+- the domain is on the Lakehouse engine and "Use Lakehouse//RT for queries" is on
+  (`graph_engine_config.lakehouse.use_sea`, `resolve_lakehouse_use_sea`);
+- the last successful build — scheduled ticks and failures are passed over, within the
+  newest 50 runs — ran as `microbatch` (`materialization_mode_effective`; without such a
+  build the requested mode, which then has no facts to pass the next check) and recorded
+  a slots table (`slots_table`) and `batch_mappings = 0`: with a join, aggregate,
+  `sql_query` or relationship mapping `_data` holds more than the slots, and a build that
+  predates the fact counts as having batch mappings;
+- `_slots` exists and `_data` still is the build's materialized view (looked up in
+  `information_schema.tables` on the build warehouse) — a scheduled tick that rebuilt
+  `_data` by CTAS after a mapping change leaves the slots on the old mappings.
+
+Anything else, or any lookup that fails, is `read_relation = graph`: reads take `_graph`
+as before. The decision is cached per slots table (one per domain version) for 30 s
+(`GraphReadRelation.TTL_S`), so a read costs no registry or catalog round-trip; a mode
+switch or a new build is seen within that time. `_graph` stays the materialized view
+for everything that is not a read query: catalog probes, the status badge and display
+names ask `effective_graph_query_table(…, physical=True)` (`table_exists`, `get_status`,
+the analytics run's graph name), a graph-index cache rebuild maps the relation back to
+`_graph` (`GraphReadRelation.physical`), and the synced table, the tick and the
+reconciliation never see it; writes go to `_inferred` as always. Reads answered from the graph-index
+companions (`_entity_search`, `_adj_*`, `_props`, when the search cache serves them) keep
+the freshness of their last rebuild. Two differences from `_graph`: a triple both mapped
+and inferred is one row (`_graph`'s `UNION ALL` keeps two), and the reader needs
+`SELECT` on `_slots` and `_inferred` themselves, not only on `_graph`.
+
 Graph reads go to the query warehouse (`graph_engine_config.lakehouse.warehouse_id`
 plus "Use Lakehouse//RT for queries"). A heavy traversal can trip an RT guardrail
 (2-minute runtime, 300 GB shuffle, statement timeout — see the Lakehouse//RT
 documentation for the current values) and `DeltaFlatStore.execute_query` retries
 that SELECT/WITH once on the build warehouse, as the same caller (same OBO token),
-under the graph statement timeout. Writes, other errors and a build warehouse
+under the graph statement timeout — the same SQL, so a fast-path read reads the slots
+there too. Writes, other errors and a build warehouse
 equal to the query warehouse are not retried. `last_read_route` (`"query"` or
 `"build-fallback"`) tells which path answered.
 
@@ -344,6 +392,7 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `realtime_run_id`, `realtime_state` | the stream job run a `realtime` build started (or a later build stopped), its state (`PENDING`, `RUNNING`, `CANCELLING`, `failed:<Error>`); `""` otherwise |
 | `graph_relation` | `mv` when the build made `_graph` a materialized view, `view` for the union VIEW |
 | `inferred_listed` | the store lists its inferences in `_inferred` (Neo4j); a later net apply needs a base run with it |
+| `batch_mappings` | how many mappings the slot pipeline left to `_data`'s batch branch (`null` when no incremental build ran); the [Lakehouse//RT fast path](#lakehousert) needs `0` |
 
 The Knowledge Graph › Runs cockpit shows the effective mode (with the requested
 one and the fallback reason when they differ), the strategy / refresh technique
@@ -364,6 +413,7 @@ says where an incremental domain stands now, without writing anything:
 | Field | Source |
 |---|---|
 | `mode_requested` | The domain's materialization mode |
+| `read_relation` | What Lakehouse graph reads take now: `slots_live` ([Lakehouse//RT fast path](#lakehousert)) or `graph` (also for a `full` domain and every other engine, answered without a lookup) |
 | `slot_pipeline` | `{name, id, state}` of this version's slot pipeline (`SlotPipelineRunner.get_state`; `absent` without one) |
 | `data`, `slots` | `{table, kind, version, committed_at}`: kind `mv` / `table` / `streaming_table` / `view` / `absent` from `information_schema.tables`, last commit from `DESCRIBE HISTORY … LIMIT 1` |
 | `freshness_lag_s` | Now minus the last `_data` commit (`null` when unknown) |
@@ -505,7 +555,7 @@ usage error (exit status 2, nothing written).
 
 | Mode | SLO |
 |---|---|
-| `microbatch` | `graph` ≤ 30 s p95 (Lakehouse//RT), `sync` ≤ 60 s p95 (Lakebase) — with the chained `TRIGGER ON UPDATE` of `_data` and `_graph` (each at most once a minute) the `graph` path can miss it by design ([Lakehouse//RT](#lakehousert)) |
+| `microbatch` | `graph` ≤ 30 s p95 (Lakehouse//RT), `sync` ≤ 60 s p95 (Lakebase) — the `graph` path polls `_graph` itself, whose chained `TRIGGER ON UPDATE` refreshes (each at most once a minute) can miss it by design; graph reads on the [fast path](#lakehousert) read `_slots` at the pipeline's cadence instead |
 | `realtime` | `live` ≤ 1 s p99, `sync` ≤ 60 s p95 |
 | every mode | no drift in `view_data`, `sync_data`, `live_slots` |
 
