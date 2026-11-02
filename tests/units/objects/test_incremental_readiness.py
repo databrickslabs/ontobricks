@@ -118,7 +118,7 @@ class TestReport:
     def test_mappings_that_do_not_compile_are_reported_not_raised(self, monkeypatch):
         from back.core.errors import ValidationError as _ValidationError
 
-        def broken(domain, settings):
+        def broken(domain, settings, client=None):
             raise _ValidationError("Entity mapping has no class_uri")
 
         monkeypatch.setattr(TwinIncrementalReadiness, "_spec", staticmethod(broken))
@@ -260,7 +260,7 @@ class TestRealtimeFacts:
             {"table": _CUSTOMERS, "row_tracking": None},
             {"table": _ORDERS, "row_tracking": None},
         ]
-        assert client.queries == []
+        assert not any("enableRowTracking" in sql for sql in client.queries)
 
     def test_a_kinesis_stream_keeps_the_change_feed_and_its_probe(self, two_sources):
         client = _Client({_CUSTOMERS: True, _ORDERS: False})

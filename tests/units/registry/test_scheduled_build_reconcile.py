@@ -141,7 +141,7 @@ class TestTickRecordsDrift:
             "_generate_sql_from_r2rml",
             lambda d, n: ("SELECT 1", "cat.sch.triplestore_dom_V3", "g", "http://ex/", [], []),
         )
-        monkeypatch.setattr(scheduled_build, "_slot_spec", lambda *a: _SPEC)
+        monkeypatch.setattr(scheduled_build, "_slot_spec", lambda *a, **kw: _SPEC)
         monkeypatch.setattr(scheduled_build, "_write_graph_triples", lambda *a, **k: 4)
         monkeypatch.setattr(scheduled_build, "_persist_domain_metadata", lambda *a: None)
         monkeypatch.setattr(

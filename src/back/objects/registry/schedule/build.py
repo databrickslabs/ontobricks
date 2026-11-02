@@ -258,16 +258,24 @@ def _refresh_data_relation(
 
 
 def _slot_spec(
-    domain: Any, settings: Any, ent: Any, rels: Any, base_uri: str, domain_name: str
+    domain: Any,
+    settings: Any,
+    ent: Any,
+    rels: Any,
+    base_uri: str,
+    domain_name: str,
+    client: Any = None,
 ) -> Any:
     """The slot pipeline spec of the mappings, compiled once per tick.
 
     Its ``source_tables`` are what the row-tracking probe reads (the same list
     the main build probes, ``TwinIncrementalBuild.compile_for``), and
-    ``TwinScheduledRefresh`` checks the ``…_data`` view against it. ``None`` —
-    sources unknown, counted as untracked — without a domain or settings, for
-    a ``full`` domain (nothing to probe), and when the mappings do not compile:
-    a scheduled tick never fails on the probe.
+    ``TwinScheduledRefresh`` checks the ``…_data`` view against it; a
+    topic-fed spec reads its sources' column types on *client*, as the main
+    build does, so both give the same SQL. ``None`` — sources unknown, counted
+    as untracked — without a domain or settings, for a ``full`` domain
+    (nothing to probe), and when the mappings do not compile: a scheduled tick
+    never fails on the probe.
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
@@ -278,7 +286,9 @@ def _slot_spec(
     from back.objects.digitaltwin.build import TwinIncrementalBuild
 
     try:
-        spec = TwinIncrementalBuild.compile_for(domain, settings, ent, rels, base_uri=base_uri)
+        spec = TwinIncrementalBuild.compile_for(
+            domain, settings, ent, rels, base_uri=base_uri, client=client
+        )
     except ValidationError as exc:
         logger.warning(
             "Scheduled build [%s]: the mappings do not compile into a slot pipeline; "
@@ -610,7 +620,9 @@ def run(ctx: TaskContext) -> RunOutcome:
     if not store:
         raise InfrastructureError("Could not initialize graph backend")
 
-    slot_spec = _slot_spec(domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name)
+    slot_spec = _slot_spec(
+        domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name, client=src
+    )
     tick = {
         "entity_mappings": ent_mappings,
         "relationship_mappings": rel_mappings,

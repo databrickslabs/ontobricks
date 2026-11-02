@@ -133,7 +133,7 @@ class TestTheSlotPipelineReadsTheTopic:
 
         _, _, warehouse = _modes._run(pipe, existing="pipe-1", stored="fp-current")
 
-        assert not any("main.sales." in s and s.startswith("DESCRIBE") for s in warehouse.calls)
+        assert not any("main.sales." in s and s.startswith("DESCRIBE HISTORY") for s in warehouse.calls)
         assert pipe.slot_refresh_facts["source_versions"] == {}
 
     @pytest.mark.parametrize(
@@ -193,3 +193,62 @@ def test_a_realtime_request_is_never_merged():
     reason = MaterializationModeResolver.REASON_SERVERLESS_UNAVAILABLE
 
     assert TwinMergeFallback.promotes(ModeDecision("realtime", "full", reason)) is False
+
+
+class _Described(_modes._Warehouse):
+    """The modes warehouse, answering ``DESCRIBE TABLE`` with *columns* (or *describe_error*)."""
+
+    def __init__(self, log, *, columns=None, describe_error=None, **kw):
+        super().__init__(log, **kw)
+        self._columns, self._describe_error = columns or {}, describe_error
+
+    def execute_query(self, sql: str):
+        if sql.startswith("DESCRIBE TABLE"):
+            self._record(sql)
+            if self._describe_error is not None:
+                raise self._describe_error
+            return [
+                *({"col_name": name, "data_type": kind} for name, kind in self._columns.items()),
+                {"col_name": "", "data_type": ""},
+                {"col_name": "# Clustering Information", "data_type": ""},
+                {"col_name": "id", "data_type": "int"},
+            ]
+        return super().execute_query(sql)
+
+
+class TestTheTopicIsTypedWithTheSourceColumns:
+    def test_the_build_compiles_with_each_source_s_column_types(self, monkeypatch):
+        from back.core.streaming import SlotProjectionCompiler
+
+        seen: list = []
+        compile_ = SlotProjectionCompiler.compile
+        monkeypatch.setattr(
+            SlotProjectionCompiler,
+            "compile",
+            staticmethod(lambda *a, **kw: seen.append(kw.get("column_types")) or compile_(*a, **kw)),
+        )
+        pipe = realtime_pipeline(entities={_modes._CUSTOMER: _modes._row_local()})
+        warehouse = _Described([], columns={"ID": "bigint", "name": "string"})
+
+        _, _, warehouse = _modes._run(pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current")
+
+        assert seen == [{"main.sales.customers": {"id": "bigint", "name": "string"}}]
+        assert [s for s in warehouse.calls if s.startswith("DESCRIBE TABLE")] == [
+            "DESCRIBE TABLE main.sales.customers"
+        ]
+
+    def test_a_source_that_cannot_be_described_falls_back_without_replaying_the_topic(self):
+        pipe = realtime_pipeline()
+        warehouse = _Described([], describe_error=RuntimeError("PERMISSION_DENIED"))
+
+        _modes._run(pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current")
+
+        assert pipe.mode_decision.reason == "incremental_failed:InfrastructureError"
+
+    def test_a_change_feed_pipeline_describes_nothing(self):
+        pipe = realtime_pipeline(enabled=False)
+        warehouse = _Described([], columns={"id": "int"})
+
+        _, _, warehouse = _modes._run(pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current")
+
+        assert not any(s.startswith("DESCRIBE TABLE") for s in warehouse.calls)

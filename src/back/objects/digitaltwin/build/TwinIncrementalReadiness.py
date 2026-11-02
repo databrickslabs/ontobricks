@@ -55,7 +55,7 @@ class TwinIncrementalReadiness:
         )
         compile_error, tables, probed, required = "", [], [], True
         try:
-            spec = TwinIncrementalReadiness._spec(domain, settings)
+            spec = TwinIncrementalReadiness._spec(domain, settings, client)
             if spec is not None:
                 tables, probed = list(spec.source_tables), TwinIncrementalBuild.feed_tables(spec)
                 required = spec.needs_row_tracking
@@ -116,7 +116,7 @@ class TwinIncrementalReadiness:
         """
         from back.core.streaming import SourceReadiness
 
-        sources = TwinIncrementalReadiness.source_tables(domain, settings)
+        sources = TwinIncrementalReadiness.source_tables(domain, settings, client)
         if tables is None:
             targets = [t for t, ok in SourceReadiness.check(client, sources).items() if not ok]
         else:
@@ -130,20 +130,20 @@ class TwinIncrementalReadiness:
         return {"tables": [TwinIncrementalReadiness._enable(client, t) for t in targets]}
 
     @staticmethod
-    def source_tables(domain: Any, settings: Any) -> list:
+    def source_tables(domain: Any, settings: Any, client: Any = None) -> list:
         """The slot pipeline's source tables for the domain's current mappings (``[]`` without)."""
-        spec = TwinIncrementalReadiness._spec(domain, settings)
+        spec = TwinIncrementalReadiness._spec(domain, settings, client)
         return [] if spec is None else list(spec.source_tables)
 
     @staticmethod
-    def _spec(domain: Any, settings: Any) -> Any:
-        """The domain's slot pipeline spec as a build compiles it; ``None`` without mappings."""
+    def _spec(domain: Any, settings: Any, client: Any = None) -> Any:
+        """The domain's slot pipeline spec as a build compiles it on *client*; ``None`` without mappings."""
         mappings = TwinIncrementalBuild.mappings_for(domain)
         if mappings is None:
             return None
         entity_mappings, relationship_mappings, base_uri = mappings
         return TwinIncrementalBuild.compile_for(
-            domain, settings, entity_mappings, relationship_mappings, base_uri=base_uri
+            domain, settings, entity_mappings, relationship_mappings, base_uri=base_uri, client=client
         )
 
     @staticmethod

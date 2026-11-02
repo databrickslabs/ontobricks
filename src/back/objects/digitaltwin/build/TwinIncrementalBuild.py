@@ -116,6 +116,7 @@ class TwinIncrementalBuild:
                 pipe.entity_mappings,
                 pipe.relationship_mappings,
                 base_uri=getattr(pipe, "base_uri", ""),
+                client=pipe.source_client,
             )
             try:
                 pipe.mode_decision = TwinBuildPostMaterialize.decide_mode(
@@ -235,15 +236,20 @@ class TwinIncrementalBuild:
         relationship_mappings: Any,
         *,
         base_uri: str,
+        client: Any = None,
     ):
         """The slot pipeline spec of the mappings, writing *domain*'s ``…_slots`` table.
 
         Shared by the main build, the MERGE fingerprint, the scheduled tick,
         the readiness preflight and the DAB renderer, so all of them see the
         same row-local / batch split, the same source (:meth:`slot_topic`) and
-        therefore the same SQL fingerprint. Raises :class:`ValidationError`
-        when the slots table name cannot be resolved or a mapping cannot be
-        compiled.
+        therefore the same SQL fingerprint. A topic-fed pipeline types the
+        Debezium values with the source tables' column types, read on *client*
+        once per compile (:meth:`column_types_for`); without a client (the DAB
+        renderer, which renders no SQL) the values keep their text. Raises
+        :class:`ValidationError` when the slots table name cannot be resolved
+        or a mapping cannot be compiled, :class:`InfrastructureError` when a
+        source table cannot be described.
         """
         from back.core.graphdb.delta import _table_naming
         from back.core.streaming import SlotProjectionCompiler
@@ -253,6 +259,14 @@ class TwinIncrementalBuild:
         if not slots_fqn:
             raise ValidationError("Could not resolve the slots table name")
         topic = TwinIncrementalBuild.slot_topic(domain, settings)
+        types = None
+        if topic is not None and client is not None:
+            row_local = SlotProjectionCompiler.row_local_mappings(
+                entity_mappings or {}, relationship_mappings or []
+            )
+            types = TwinIncrementalBuild.column_types_for(
+                client, {m.get("table") for m in row_local if m.get("table")}
+            )
         return SlotProjectionCompiler.compile(
             entity_mappings or {},
             relationship_mappings or [],
@@ -260,7 +274,33 @@ class TwinIncrementalBuild:
             slots_fqn=slots_fqn,
             source=SOURCE_CDF if topic is None else SOURCE_TOPIC,
             topic=topic,
+            column_types=types,
         )
+
+    @staticmethod
+    def column_types_for(client: Any, tables: Any) -> dict:
+        """``{table: {column: type}}`` of *tables* from ``DESCRIBE TABLE``.
+
+        The type strings ``spark.table(t).schema`` gives the stream job
+        (``int``, ``decimal(10,2)``, ``timestamp``…); the column list ends at
+        the first ``#`` section. A table that cannot be described raises
+        :class:`InfrastructureError`: compiling without its types would change
+        the SQL fingerprint, i.e. replay the topic.
+        """
+        from back.core.helpers import WarehouseStatements, validate_table_name
+
+        types: dict = {}
+        for table in sorted(tables):
+            validate_table_name(table)
+            rows = WarehouseStatements.query(client, f"DESCRIBE TABLE {table}", f"describe {table}")
+            columns: dict = {}
+            for row in rows or []:
+                name = str((row or {}).get("col_name") or "").strip()
+                if not name or name.startswith("#"):
+                    break
+                columns[name.lower()] = str(row.get("data_type") or "").strip().lower()
+            types[table] = columns
+        return types
 
     @staticmethod
     def slot_topic(domain: Any, settings: Any):
