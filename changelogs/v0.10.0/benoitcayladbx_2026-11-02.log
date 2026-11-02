@@ -232,3 +232,65 @@ uniform capability file set across the three backend folders. Spec:
 ## Tests
 `uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
 (explicit `EXIT=0`). Architecture import-boundary + size-budget + ratchet all green.
+
+---
+
+# Decompose the GraphBackend god-class into focused mixins
+
+## Context
+`interfaces/GraphBackend.py` had grown to 1170 LOC — the single largest class in
+the graph DB layer and well over the 800-LOC architecture budget. It mixed the
+core read contract (abstract methods + capability flags + connection/schema/sync
+hooks) with a huge pile of concrete default-SQL implementations (stats,
+entity/preview lookup, traversal/reasoning, companion probing). Split the
+default implementations into four cohesive mixins so the root class carries only
+the contract, with zero behavioural change (every subclass inherits the exact
+same methods by composition).
+
+## Changes
+1. `src/back/core/graphdb/interfaces/ReadStatsMixin.py` — new. `ReadStatsMixin`:
+   `get_inferred_triple_count`, `_distinct_count_expr`, `get_aggregate_stats`,
+   `get_type_distribution`, `query_triples_for_analysis`,
+   `_filter_analysis_triples_in_python`, `get_predicate_distribution`.
+2. `src/back/core/graphdb/interfaces/EntityQueryMixin.py` — new.
+   `EntityQueryMixin`: `find_subjects_by_type`, `resolve_subject_by_id`,
+   `get_entity_metadata`, `get_triples_for_subjects`,
+   `get_triples_page_for_subjects`, `get_predicates_for_type`,
+   `paginated_triples`, `paginated_count`, `find_seed_subjects`,
+   `find_preview_seeds`, `find_subjects_by_patterns`.
+3. `src/back/core/graphdb/interfaces/TraversalMixin.py` — new. `TraversalMixin`:
+   `bfs_traversal`, `transitive_closure`, `symmetric_expand`, `shortest_path`,
+   `delete_cohort_triples`, `expand_entity_neighbors`.
+4. `src/back/core/graphdb/interfaces/SearchCacheMixin.py` — new.
+   `SearchCacheMixin`: `search_cache_mode`, `_companion_tables_exist`,
+   `set_search_cache_mode`, `_raise_if_force_on_missing`, `_props_table_for_read`,
+   `adjacency_table_ids`, `rebuild_adjacency`, `adjacency_ready`,
+   `entity_search_table_id`, `entity_search_asserted_table_id`, `props_table_id`,
+   `entity_search_ready`.
+5. `src/back/core/graphdb/interfaces/GraphBackend.py` — reduced to the read
+   contract; now `class GraphBackend(ReadStatsMixin, EntityQueryMixin,
+   TraversalMixin, SearchCacheMixin, ABC)`. Keeps the abstract methods, SQL
+   helpers (`_sql_escape`/`_sql_relation`/`sql_table_reference`/`sql_flavor`),
+   capability flags, schema/sync hooks, and `get_query_translator`. Class drops
+   out of the oversized-classes baseline entirely.
+6. The mixins are implementation detail (not exported by `interfaces/__init__.py`,
+   `Mixin` suffix, "implementation detail" docstrings). Files are named after
+   their class to satisfy the one-class-per-file architecture rule
+   (`test_class_per_file`), which overrides the underscore-private file naming.
+7. `tests/units/graphdb/test_graphdb_adjacency_contract.py` — patch target for
+   `props_page_sql` moved to the `EntityQueryMixin` module.
+8. `tests/units/architecture/baseline.json` — ratchet removed the stale
+   `GraphBackend` oversized entry (shrink-only).
+
+## Modified files
+- `src/back/core/graphdb/interfaces/GraphBackend.py`
+- `src/back/core/graphdb/interfaces/ReadStatsMixin.py` (new)
+- `src/back/core/graphdb/interfaces/EntityQueryMixin.py` (new)
+- `src/back/core/graphdb/interfaces/TraversalMixin.py` (new)
+- `src/back/core/graphdb/interfaces/SearchCacheMixin.py` (new)
+- `tests/units/graphdb/test_graphdb_adjacency_contract.py`
+- `tests/units/architecture/baseline.json`
+
+## Tests
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
+(explicit `EXIT=0`). Architecture class-per-file + size-budget + ratchet green.

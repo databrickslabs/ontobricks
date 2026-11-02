@@ -57,7 +57,6 @@
   "oversized_classes": {
     "back/core/external/pitfalls/runner.py::OntologyPatternToolkit": 1194,
     "back/core/graph_analysis/CohortBuilder.py::CohortBuilder": 1192,
-    "back/core/graphdb/interfaces/GraphBackend.py::GraphBackend": 1170,
     "back/core/graphdb/lakebase/FlatStore.py::FlatStore": 1148,
     "back/core/graphdb/lakebase/InstanceProvisioner.py::InstanceProvisioner": 811,
     "back/core/graphdb/lakebase/SyncedTableManager.py::SyncedTableManager": 814,
