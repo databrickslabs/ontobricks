@@ -125,7 +125,9 @@ def _apply_synced_pipeline(
     sources are unknown: nothing is probed and they count as untracked.
     *mappings* (``entity_mappings``, ``relationship_mappings`` and the
     compiled ``spec``) let an incremental ``…_data`` view be checked against
-    the current definition before it is refreshed in place. Without a *domain* the
+    the current definition before it is refreshed in place; its ``facts``
+    receive the slot refresh plan's facts and ``sync_state`` the synced
+    table's state after its refresh. Without a *domain* the
     ``…_data`` name cannot be resolved and the gateway VIEW stays the source.
     """
     from back.core.graphdb.lakebase.LakebaseFlatStore import (
@@ -176,6 +178,8 @@ def _apply_synced_pipeline(
     )
     store.ensure_synced_companion(graph_name)
     state = mgr.trigger_and_wait(synced_uc, timeout_s=store.sync_timeout_s)
+    if mappings is not None:
+        mappings["sync_state"] = state
     logger.info(
         "Scheduled build [%s]: synced table %s state=%s",
         domain_name,
@@ -287,39 +291,54 @@ def _slot_spec(
 
 
 def _reconcile_after_tick(
-    store, src, domain: Any, settings: Any, slot_spec: Any, domain_name: str
+    store,
+    src,
+    domain: Any,
+    settings: Any,
+    slot_spec: Any,
+    domain_name: str,
+    *,
+    sync_state: str = "",
 ) -> bool:
     """True when reconciling the tick's ``…_data`` view found drift (warning logged).
 
-    Only for a Lakeflow-synced store of an incremental / microbatch domain
-    (*slot_spec* set) whose ``…_data`` is still the materialized view the
-    tick refreshed in place: a CTAS table equals the VIEW by construction.
-    The drift rules are :meth:`TwinSlotReconciliation.run`'s
-    (``reconcile_drift``); the next incremental build reads the recorded flag
-    and fully refreshes the slot pipeline. Best-effort: a reconciliation that
-    fails never fails the tick.
+    Only for a Lakeflow-synced store of an ``incremental`` domain (*slot_spec*
+    set; a ``microbatch`` domain's slots run ahead, so no pair could tell)
+    whose ``…_data`` is still the materialized view the tick refreshed in
+    place: a CTAS table equals the VIEW by construction. The batch recompute
+    always runs; the synced table is counted only when its refresh came
+    ``ONLINE`` (*sync_state*). The drift rules are
+    :meth:`TwinSlotReconciliation.run`'s; the next slot update owes a full
+    refresh (``TwinSlotRefreshPlan``). Best-effort: a reconciliation that
+    fails, for any reason, never fails the tick.
     """
-    from back.core.errors import OntoBricksError
     from back.core.graphdb.delta import _table_naming, materialize
     from back.objects.digitaltwin.build import TwinSlotReconciliation
 
     if slot_spec is None or not _is_managed_synced(store):
         return False
     try:
+        if TwinSlotReconciliation.slots_run_ahead(domain, settings):
+            return False
         data_table = _table_naming.data_table_fqn(domain, settings)
         if materialize.relation_kind(src, data_table) != "mv":
             return False
+        online = str(sync_state or "").upper().startswith("ONLINE")
         result = TwinSlotReconciliation.run(
-            domain, settings, src, get_store=lambda d, s: store
+            domain,
+            settings,
+            src,
+            get_store=(lambda d, s: store) if online else None,
+            recompute=True,
         )
-    except OntoBricksError as exc:
+    except Exception as exc:  # noqa: BLE001 — reconciliation is advisory; the tick goes on
         logger.warning("Scheduled build [%s]: reconciliation skipped: %s", domain_name, exc)
         return False
     if not result.get("reconcile_drift"):
         return False
     logger.warning(
-        "Scheduled build [%s]: reconciliation found drift (%s); the next build fully "
-        "refreshes the slot pipeline",
+        "Scheduled build [%s]: reconciliation found drift (%s); the next slot update "
+        "runs as a full refresh",
         domain_name,
         sorted(name for name, differs in (result.get("pairs") or {}).items() if differs),
     )
@@ -337,9 +356,22 @@ def _tick_facts(ctx: TaskContext) -> Dict[str, Any]:
     return facts
 
 
-def _close_tick_facts(ctx: TaskContext, facts: Dict[str, Any], store, src, slot_spec) -> None:
-    """Reconcile at the end of the tick (drift recorded), then drop empty facts."""
-    if _reconcile_after_tick(store, src, ctx.domain, ctx.settings, slot_spec, ctx.domain_name):
+def _close_tick_facts(ctx: TaskContext, tick: Dict[str, Any], store, src) -> None:
+    """Reconcile at the end of the tick (drift recorded), then drop empty facts.
+
+    *tick* is what the tick handed down (``spec``, ``facts``) and got back
+    (``sync_state``, the synced table's state after its refresh).
+    """
+    facts = tick["facts"]
+    if _reconcile_after_tick(
+        store,
+        src,
+        ctx.domain,
+        ctx.settings,
+        tick.get("spec"),
+        ctx.domain_name,
+        sync_state=tick.get("sync_state", ""),
+    ):
         facts["reconcile_drift"] = True
     if not facts:
         del ctx.scratch["stats"]["materialization"]
@@ -513,7 +545,12 @@ def run(ctx: TaskContext) -> RunOutcome:
         raise InfrastructureError("Could not initialize graph backend")
 
     slot_spec = _slot_spec(domain, ctx.settings, ent_mappings, rel_mappings, base_uri, domain_name)
-    facts = _tick_facts(ctx)
+    tick = {
+        "entity_mappings": ent_mappings,
+        "relationship_mappings": rel_mappings,
+        "spec": slot_spec,
+        "facts": _tick_facts(ctx),
+    }
     triple_count = _write_graph_triples(
         store,
         src,
@@ -524,15 +561,9 @@ def run(ctx: TaskContext) -> RunOutcome:
         domain=domain,
         settings=ctx.settings,
         source_tables=list(slot_spec.source_tables) if slot_spec is not None else None,
-        mappings={
-            "entity_mappings": ent_mappings,
-            "relationship_mappings": rel_mappings,
-            "spec": slot_spec,
-            "facts": facts,
-        },
+        mappings=tick,
     )
-
-    _close_tick_facts(ctx, facts, store, src, slot_spec)
+    _close_tick_facts(ctx, tick, store, src)
 
     ctx.progress(95, "Saving domain metadata...")
     _persist_domain_metadata(

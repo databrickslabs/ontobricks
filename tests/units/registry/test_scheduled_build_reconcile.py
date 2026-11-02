@@ -25,12 +25,22 @@ def names(monkeypatch):
     monkeypatch.setattr(_table_naming, "data_table_fqn", lambda d, s=None: _DATA)
 
 
-def _reconcile(monkeypatch, *, kind="mv", result=None, error=None, store=None, spec=_SPEC):
+def _reconcile(
+    monkeypatch,
+    *,
+    kind="mv",
+    result=None,
+    error=None,
+    store=None,
+    spec=_SPEC,
+    mode="incremental",
+    sync_state="ONLINE",
+):
     seen: dict = {}
     monkeypatch.setattr(materialize, "relation_kind", lambda client, fqn: kind)
 
-    def run(domain, settings, client, *, get_store):
-        seen["store"] = get_store(domain, settings)
+    def run(domain, settings, client, *, get_store, recompute):
+        seen.update(store=get_store(domain, settings) if get_store else None, recompute=recompute)
         if error is not None:
             raise error
         return result or {"reconcile_drift": False, "pairs": {}}
@@ -38,7 +48,13 @@ def _reconcile(monkeypatch, *, kind="mv", result=None, error=None, store=None, s
     monkeypatch.setattr(TwinSlotReconciliation, "run", staticmethod(run))
     synced = store if store is not None else SimpleNamespace(is_synced=True)
     drift = scheduled_build._reconcile_after_tick(
-        synced, object(), SimpleNamespace(), SimpleNamespace(), spec, "dom"
+        synced,
+        object(),
+        SimpleNamespace(info={"materialization_mode": mode}),
+        SimpleNamespace(),
+        spec,
+        "dom",
+        sync_state=sync_state,
     )
     return drift, seen
 
@@ -51,8 +67,19 @@ class TestReconcileAfterTick:
             drift, seen = _reconcile(monkeypatch, result=result)
 
         assert drift is True
-        assert seen["store"].is_synced is True
+        assert seen["store"].is_synced is True and seen["recompute"] is True
         logger.warning.assert_called_once()
+
+    def test_a_microbatch_domain_is_not_reconciled(self, monkeypatch, names):
+        """Its slots run ahead of ``_data``: no pair can tell drift."""
+        drift, seen = _reconcile(monkeypatch, mode="microbatch", result={"reconcile_drift": True})
+
+        assert drift is False and seen == {}
+
+    def test_a_sync_that_did_not_come_online_is_not_compared(self, monkeypatch, names):
+        _drift, seen = _reconcile(monkeypatch, sync_state="FAILED")
+
+        assert seen["store"] is None
 
     def test_no_drift(self, monkeypatch, names):
         assert _reconcile(monkeypatch)[0] is False
@@ -77,8 +104,12 @@ class TestReconcileAfterTick:
 
     @pytest.mark.parametrize(
         "error",
-        [NotFoundError("no slots table"), InfrastructureError("warehouse down")],
-        ids=["no-slots", "warehouse"],
+        [
+            NotFoundError("no slots table"),
+            InfrastructureError("warehouse down"),
+            RuntimeError("driver bug"),
+        ],
+        ids=["no-slots", "warehouse", "unexpected"],
     )
     def test_a_failed_reconciliation_never_fails_the_tick(self, monkeypatch, names, error):
         with patch.object(scheduled_build, "logger") as logger:
@@ -98,7 +129,7 @@ class TestTickRecordsDrift:
         monkeypatch.setattr(scheduled_build, "_slot_spec", lambda *a: _SPEC)
         monkeypatch.setattr(scheduled_build, "_write_graph_triples", lambda *a, **k: 4)
         monkeypatch.setattr(scheduled_build, "_persist_domain_metadata", lambda *a: None)
-        monkeypatch.setattr(scheduled_build, "_reconcile_after_tick", lambda *a: drift)
+        monkeypatch.setattr(scheduled_build, "_reconcile_after_tick", lambda *a, **k: drift)
         src = MagicMock()
         src.create_or_replace_view.return_value = (True, "")
         ctx = SimpleNamespace(

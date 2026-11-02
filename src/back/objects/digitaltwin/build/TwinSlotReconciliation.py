@@ -22,24 +22,32 @@ class TwinSlotReconciliation:
 
     @staticmethod
     def run(
-        domain: Any, settings: Any, client: Any, *, get_store: Callable[..., Any] | None = None
+        domain: Any,
+        settings: Any,
+        client: Any,
+        *,
+        get_store: Callable[..., Any] | None = None,
+        recompute: bool = False,
     ) -> dict:
         """Compare the domain's slots, gateway VIEW and synced table with its ``_data``.
 
-        The gateway VIEW recomputes every triple from the sources (the batch
-        recompute); *get_store* opens the graph store, whose Lakebase synced
-        table is counted when it is ``managed_synced``. ``pairs_meaningful``
-        says which pairs can tell drift: ``slots_data`` only without batch
-        branches, and no pair while the slots run ahead (``microbatch``).
-        Both other pairs compare as of the last refresh of ``_data``: a source
-        changed since shows as drift until the next build or tick.
-        ``reconcile_drift`` is true when a meaningful pair differs.
+        *recompute* adds the gateway VIEW — every triple recomputed from the
+        sources (the batch recompute, a full read of them); *get_store* opens
+        the graph store, whose Lakebase synced table is counted when it is
+        ``managed_synced``. A domain without ``_slots`` (all mappings batch, or
+        no incremental build yet) compares those two alone.
+        ``pairs_meaningful`` says which pairs can tell drift: ``slots_data``
+        only with slots and without batch branches, and no pair while the
+        slots run ahead (``microbatch``). The other pairs compare as of the
+        last refresh of ``_data``: a source changed since shows as drift until
+        the next build or tick. ``reconcile_drift`` is true when a meaningful
+        pair differs.
 
         Raises :class:`ValidationError` when the relation names cannot be
         resolved, :class:`InfrastructureError` when there is no warehouse
         client or the catalog cannot be read (an unknown answer is not a
-        "no"), and :class:`NotFoundError` when the catalog lists no slots
-        table (the domain never ran an incremental or microbatch build).
+        "no"), and :class:`NotFoundError` when there is no slots table and
+        nothing else to compare.
         """
         from back.core.graphdb.delta import _table_naming, materialize
         from back.core.streaming import SlotReconciler
@@ -52,21 +60,22 @@ class TwinSlotReconciliation:
         data = _table_naming.data_table_fqn(domain, settings)
         if not slots or not data:
             raise ValidationError("The triple-store tables of this domain are not fully qualified")
-        if not materialize.relation_exists(client, slots, strict=True):
+        has_slots = materialize.relation_exists(client, slots, strict=True)
+        view = _table_naming.view_fqn(domain, settings) if recompute else ""
+        sync_rows = TwinSlotReconciliation.sync_rows(domain, settings, get_store)
+        if not has_slots and not view and sync_rows is None:
             raise NotFoundError(
-                f"Slots table {slots} does not exist: no incremental build has run for this domain"
+                f"Slots table {slots} does not exist (no incremental build with row-local "
+                "mappings has run) and there is nothing else to compare: ask for the batch "
+                "recompute (recompute=true)"
             )
-        batch = TwinSlotReconciliation.batch_branches_present(domain, slots_fqn=slots)
+        batch = has_slots and TwinSlotReconciliation.batch_branches_present(domain, slots_fqn=slots)
         continuous = TwinSlotReconciliation.slots_run_ahead(domain, settings)
         result = SlotReconciler.compare(
-            client,
-            slots,
-            data,
-            view_fqn=_table_naming.view_fqn(domain, settings) or None,
-            sync_rows=TwinSlotReconciliation.sync_rows(domain, settings, get_store),
+            client, slots if has_slots else None, data, view_fqn=view or None, sync_rows=sync_rows
         )
         meaningful = {
-            "slots_data": not batch and not continuous,
+            "slots_data": has_slots and not batch and not continuous,
             "view_data": not continuous,
             "sync_data": not continuous,
         }
@@ -75,6 +84,7 @@ class TwinSlotReconciliation:
             **result,
             "slots_table": slots,
             "data_table": data,
+            "slots_present": has_slots,
             "batch_branches_present": batch,
             "slots_run_ahead": continuous,
             "drift_meaningful": meaningful["slots_data"],

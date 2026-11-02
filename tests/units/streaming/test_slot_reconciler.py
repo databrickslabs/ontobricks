@@ -177,3 +177,17 @@ class TestComparePairs:
         result = SlotReconciler.compare(client, _SLOTS, _DATA, view_fqn=_VIEW, sync_rows=3)
 
         assert result["pairs"] == {"slots_data": False, "view_data": False, "sync_data": False}
+
+
+class TestCompareWithoutSlots:
+    """A batch-only domain has no ``_slots``: only the VIEW and the synced table are compared."""
+
+    def test_the_view_and_the_sync_pairs_alone(self):
+        client = _Client(totals={_DATA: {"n": 3, "h": 42}, _VIEW: {"n": 3, "h": 40}})
+
+        result = SlotReconciler.compare(client, None, _DATA, view_fqn=_VIEW, sync_rows=3)
+
+        assert result["pairs"] == {"view_data": True, "sync_data": False}
+        assert result["slots"] is None and result["drift"] is False
+        assert result["by_map_id"] == []
+        assert not any("GROUP BY map_id" in sql for sql in client.calls)

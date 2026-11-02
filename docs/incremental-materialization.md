@@ -304,19 +304,24 @@ the sides differ):
 
 - `view_data`: the **batch recompute** — the gateway VIEW (every triple
   recomputed from the sources), counted and hashed exactly like `_data`. It
-  scans the whole VIEW, so it costs a full read of the sources.
+  scans the whole VIEW, a full read of the sources, so on demand it only runs
+  with `?recompute=true`.
 - `sync_data`: the row count of the Lakebase synced table (`managed_synced`
   stores only; counts, no hash). A store that cannot be counted is left out.
 
+A domain without `_slots` (every mapping batch) compares these two alone
+(`slots_present: false`); with nothing to compare it answers 404.
 `pairs_meaningful` says which pairs can tell drift: `slots_data` as above, the
 other two whenever the slots do not run ahead. Both compare as of the last
 refresh of `_data`, so a source changed since shows as drift until the next
 build or tick. `reconcile_drift` is true when a meaningful pair differs.
 
-**After a scheduled tick.** A tick of a Lakeflow-synced incremental or
-microbatch domain whose `_data` is still the materialized view it refreshed in
-place (a CTAS table equals the VIEW by construction) reconciles at the end,
-right after the synced-table refresh. Drift is logged at warning and recorded
+**After a scheduled tick.** A tick of a Lakeflow-synced `incremental` domain
+whose `_data` is still the materialized view it refreshed in place (a CTAS table
+equals the VIEW by construction) reconciles at the end, right after the
+synced-table refresh, with the batch recompute; the synced table is counted only
+when its refresh came `ONLINE`. A `microbatch` domain is not reconciled (its
+slots run ahead: no pair can tell). Drift is logged at warning and recorded
 as `stats.materialization.reconcile_drift = true` on the tick's build run (a
 scheduled run still ends the base-run search: the tick rewrote the store). The
 next build or `incremental` tick that updates the slots owes a full refresh

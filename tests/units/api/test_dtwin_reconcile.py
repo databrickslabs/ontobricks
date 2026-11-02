@@ -165,13 +165,35 @@ class TestTwinSlotReconciliation:
         assert result["slots_run_ahead"] is True
         assert result["drift_meaningful"] is False
 
-    def test_the_gateway_view_is_the_batch_recompute(self, monkeypatch, names, mappings):
+    def test_the_gateway_view_is_scanned_only_on_request(self, monkeypatch, names, mappings):
         seen = _compare(monkeypatch, _COMPARED)
         _compiler(monkeypatch, batch=True)
+        client = _Client(tables=["triplestore_sales_v1_slots"])
 
-        TwinSlotReconciliation.run(_Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"]))
+        TwinSlotReconciliation.run(_Domain(), object(), client)
+        assert seen == {"view_fqn": None, "sync_rows": None}
 
+        TwinSlotReconciliation.run(_Domain(), object(), client, recompute=True)
         assert seen == {"view_fqn": _VIEW, "sync_rows": None}
+
+    def test_a_batch_only_domain_compares_the_view_and_the_synced_table(
+        self, monkeypatch, names, mappings
+    ):
+        seen: dict = {}
+        from back.core.streaming import SlotReconciler
+
+        def compare(client, slots, data, **kwargs):
+            seen.update(slots=slots, **kwargs)
+            return {"slots": None, "data": {}, "drift": False, "pairs": {"view_data": True}}
+
+        monkeypatch.setattr(SlotReconciler, "compare", staticmethod(compare))
+
+        result = TwinSlotReconciliation.run(_Domain(), object(), _Client(tables=[]), recompute=True)
+
+        assert seen["slots"] is None and seen["view_fqn"] == _VIEW
+        assert result["slots_present"] is False
+        assert result["reconcile_drift"] is True
+        assert result["pairs_meaningful"]["slots_data"] is False
 
     def test_a_synced_store_contributes_its_synced_table_rows(self, monkeypatch, names, mappings):
         seen = _compare(monkeypatch, _COMPARED)
@@ -222,7 +244,7 @@ class TestTwinSlotReconciliation:
         _compiler(monkeypatch, batch=batch)
 
         result = TwinSlotReconciliation.run(
-            _Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"])
+            _Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"]), recompute=True
         )
 
         assert result["reconcile_drift"] is drift
@@ -246,8 +268,8 @@ class TestTwinSlotReconciliation:
 
         assert seen["base_uri"] == DEFAULT_BASE_URI
 
-    def test_a_missing_slots_table_is_not_found(self, names):
-        with pytest.raises(NotFoundError, match="no incremental build"):
+    def test_a_missing_slots_table_with_nothing_else_to_compare_is_not_found(self, names):
+        with pytest.raises(NotFoundError, match="recompute=true"):
             TwinSlotReconciliation.run(_Domain(), object(), _Client(tables=[]))
 
     def test_a_catalog_that_cannot_be_read_is_not_a_missing_table(self, names):
@@ -304,7 +326,21 @@ class TestReconcileRoute:
         assert resp["drift"] is False
         assert resp["drift_meaningful"] is True
         assert seen["domain"] is domain and seen["client"] == "client"
-        assert seen["kwargs"] == {"get_store": dtwin.get_graphdb}
+        assert seen["kwargs"] == {"get_store": dtwin.get_graphdb, "recompute": False}
+
+    @pytest.mark.asyncio
+    async def test_the_batch_recompute_is_opt_in(self, monkeypatch, route):
+        dtwin, _domain, seen = route
+
+        def run(d, s, client, **kwargs):
+            seen["kwargs"] = kwargs
+            return dict(_COMPARED)
+
+        monkeypatch.setattr(TwinSlotReconciliation, "run", staticmethod(run))
+
+        await dtwin.reconcile_incremental_slots(recompute=True, session_mgr=object(), settings=object())
+
+        assert seen["kwargs"]["recompute"] is True
 
     @pytest.mark.asyncio
     async def test_the_scans_run_on_the_build_warehouse_as_the_caller(self, monkeypatch, route):

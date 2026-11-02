@@ -1174,21 +1174,28 @@ async def sync_info(
     dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
 )
 async def reconcile_incremental_slots(
+    recompute: bool = False,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Compare the domain's ``…_slots`` streaming table with ``…_data`` (drift check).
+    """Compare the domain's ``…_slots``, synced table and (``?recompute=true``) VIEW with ``…_data``.
 
     The scans run on the build warehouse (a Lakehouse//RT query warehouse
     would hit its guardrails) as the caller: ``warehouse_id`` keeps the OBO
-    token, ``for_write`` would not.
+    token, ``for_write`` would not. The batch recompute reads every source,
+    so it only runs on request.
     """
     from back.objects.digitaltwin.build import TwinSlotReconciliation
 
     domain = get_domain(session_mgr)
     client = _build_warehouse_client(domain, settings)
     result = await run_blocking(
-        TwinSlotReconciliation.run, domain, settings, client, get_store=get_graphdb
+        TwinSlotReconciliation.run,
+        domain,
+        settings,
+        client,
+        get_store=get_graphdb,
+        recompute=recompute,
     )
     return {"success": True, **result}
 

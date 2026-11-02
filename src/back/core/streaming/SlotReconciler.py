@@ -83,7 +83,7 @@ class SlotReconciler:
     @staticmethod
     def compare(
         client: Any,
-        slots_fqn: str,
+        slots_fqn: str | None,
         data_fqn: str,
         *,
         view_fqn: str | None = None,
@@ -96,12 +96,14 @@ class SlotReconciler:
         *sync_rows* (the row count of the Lakebase synced table) that count is
         added. ``pairs`` says per pair whether it differs: ``slots_data``,
         ``view_data`` (rows and hash) and ``sync_data`` (rows only); a pair
-        whose side was not given is left out.
+        whose side was not given is left out. Without *slots_fqn* (a domain
+        whose mappings are all batch has no ``_slots``) ``slots`` is ``None``,
+        ``drift`` false and nothing is listed per mapping.
         """
-        slots = SlotReconciler.totals(client, slots_fqn)
         data = SlotReconciler.totals(client, data_fqn)
-        result: dict = {"slots": slots, "data": data, "drift": slots != data}
-        pairs = {"slots_data": result["drift"]}
+        slots = SlotReconciler.totals(client, slots_fqn) if slots_fqn else None
+        result: dict = {"slots": slots, "data": data, "drift": slots is not None and slots != data}
+        pairs = {"slots_data": result["drift"]} if slots is not None else {}
         if view_fqn:
             result["view"] = SlotReconciler.totals(client, view_fqn)
             pairs["view_data"] = result["view"] != data
@@ -119,7 +121,7 @@ class SlotReconciler:
                 result.get("sync"),
             )
         result["pairs"] = pairs
-        result["by_map_id"] = SlotReconciler.by_map_id(client, slots_fqn)
+        result["by_map_id"] = SlotReconciler.by_map_id(client, slots_fqn) if slots_fqn else []
         return result
 
     @staticmethod
