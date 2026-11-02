@@ -273,6 +273,38 @@ def relation_exists(client: Any, fqn: str, *, strict: bool = False) -> bool:
     )
 
 
+#: ``information_schema.tables.table_type`` of the kinds a build tells apart.
+_RELATION_KINDS = {
+    "MATERIALIZED_VIEW": "mv",
+    "VIEW": "view",
+    "STREAMING_TABLE": "streaming_table",
+}
+
+
+def relation_kind(client: Any, fqn: str) -> str:
+    """``mv``, ``view``, ``streaming_table``, ``table`` or ``absent`` for *fqn*.
+
+    Read from the catalog's ``information_schema.tables`` (names lower-cased,
+    as Unity Catalog stores them); any other table type is ``table``. An
+    unknown answer is not "absent": a failing lookup raises
+    :class:`InfrastructureError`, an unusable name :class:`ValidationError`.
+    """
+    WarehouseStatements.require_fqn(fqn, what="relation name")
+    if fqn.count(".") != 2:
+        raise ValidationError(f"Not a catalog.schema.table name: {fqn!r}")
+    catalog, schema, leaf = fqn.split(".")
+    rows = WarehouseStatements.query(
+        client,
+        f"SELECT table_type FROM {catalog}.information_schema.tables "
+        f"WHERE table_schema = '{schema.lower()}' AND table_name = '{leaf.lower()}'",
+        f"look up {fqn} in the catalog",
+    )
+    if not rows:
+        return "absent"
+    row = rows[0] if isinstance(rows[0], dict) else {}
+    return _RELATION_KINDS.get(str(row.get("table_type", "")).upper(), "table")
+
+
 def apply_data_relation(
     client: Any,
     view_fqn: str,

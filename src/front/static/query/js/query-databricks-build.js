@@ -227,6 +227,7 @@ async function loadDatabricksBuildInfo() {
 
         const r = data.readiness || {};
         dbxBuildReady = !!r.mapping_valid;
+        if (typeof loadIncrementalStatus === 'function') loadIncrementalStatus();
         const readinessCard = document.getElementById('dbxBuildReadinessCard');
         if (readinessCard) {
             readinessCard.innerHTML =

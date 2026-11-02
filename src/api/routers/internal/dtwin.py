@@ -1247,6 +1247,25 @@ async def enable_incremental_row_tracking(
     return {"success": True, **result}
 
 
+@router.get(
+    "/incremental/status",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def incremental_status(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Slot pipeline state, ``…_data`` / ``…_slots`` commits, synced table, last build."""
+    from back.objects.digitaltwin.build import TwinIncrementalStatus
+
+    domain = get_domain(session_mgr)
+    client = _build_warehouse_client(domain, settings)
+    result = await run_blocking(
+        TwinIncrementalStatus.report, domain, settings, client, get_store=get_graphdb
+    )
+    return {"success": True, **result}
+
+
 @router.get("/databricks-build/info")
 async def databricks_build_info(
     session_mgr: SessionManager = Depends(get_session_manager),

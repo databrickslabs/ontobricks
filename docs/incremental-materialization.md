@@ -16,6 +16,7 @@ Settings) and defaults to `full`, so existing domains behave as before.
 - [Scheduled builds](#scheduled-builds)
 - [Lakehouse//RT](#lakehousert)
 - [Build-run trace](#build-run-trace)
+- [Status](#status)
 - [Reconciliation](#reconciliation)
 - [Preview enrolment](#preview-enrolment)
 - [Verification](#verification)
@@ -249,6 +250,25 @@ full — at a run that touched the store without recording these facts (a
 scheduled tick, a pre-0.9.1 build), at a failed run whose apply had started, or
 at a run of the same graph under another sync mode; failed runs that never
 reached the store and Lakebase skip runs are passed over.
+
+## Status
+
+`GET /dtwin/incremental/status` (builder role, `TwinIncrementalStatus.report`)
+says where an incremental domain stands now, without writing anything:
+
+| Field | Source |
+|---|---|
+| `mode_requested` | The domain's materialization mode |
+| `slot_pipeline` | `{name, id, state}` of this version's slot pipeline (`SlotPipelineRunner.get_state`; `absent` without one) |
+| `data`, `slots` | `{table, kind, version, committed_at}`: kind `mv` / `table` / `streaming_table` / `view` / `absent` from `information_schema.tables`, last commit from `DESCRIBE HISTORY … LIMIT 1` |
+| `freshness_lag_s` | Now minus the last `_data` commit (`null` when unknown) |
+| `lakebase_sync` | `{synced_table, state, message}` of a `managed_synced` store (`null` otherwise) |
+| `last_build` | `{status, build_kind, finished_at, materialization}` of the newest build run |
+
+Each section is read on its own: a failing read puts `error` (and `unknown`) in
+its section and leaves the others. The scans run on the build warehouse as the
+caller. The digital twin build panels (Lakebase/Neo4j and Lakehouse) show it as
+a compact "Incremental status" card, hidden for a `full` domain.
 
 ## Reconciliation
 

@@ -149,6 +149,38 @@ class TestLatestVersion:
         assert client.queries == []
 
 
+class TestLastCommit:
+    def test_version_and_timestamp_of_the_newest_commit(self):
+        from datetime import datetime, timezone
+
+        stamp = datetime(2026, 11, 2, 1, 2, 3, tzinfo=timezone.utc)
+        client = _Client(rows=[{"version": 7, "timestamp": stamp}])
+
+        assert ChangeFeedReader.last_commit(client, DATA) == {
+            "version": 7,
+            "committed_at": "2026-11-02T01:02:03+00:00",
+        }
+        assert client.queries == [f"DESCRIBE HISTORY {DATA} LIMIT 1"]
+
+    def test_a_naive_timestamp_reads_as_utc(self):
+        from datetime import datetime
+
+        client = _Client(rows=[{"version": 1, "timestamp": datetime(2026, 11, 2, 1, 2, 3)}])
+
+        assert ChangeFeedReader.last_commit(client, DATA)["committed_at"] == (
+            "2026-11-02T01:02:03+00:00"
+        )
+
+    def test_a_text_timestamp_is_kept(self):
+        client = _Client(rows=[{"version": 1, "timestamp": "2026-11-02 01:02:03.5"}])
+
+        assert ChangeFeedReader.last_commit(client, DATA)["committed_at"] == "2026-11-02 01:02:03.5"
+
+    def test_no_history_is_an_infrastructure_error(self):
+        with pytest.raises(InfrastructureError):
+            ChangeFeedReader.last_commit(_Client(rows=[]), DATA)
+
+
 class TestIterNetChanges:
     def test_streams_the_net_changes_query(self):
         rows = [{"subject": "s", "predicate": "p", "object": "o", "op": "delete"}]

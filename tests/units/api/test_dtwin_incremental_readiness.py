@@ -86,3 +86,30 @@ def test_both_routes_are_builder_gated():
     }
     assert set(gated) == {"/dtwin/incremental/readiness", "/dtwin/incremental/enable-row-tracking"}
     assert all(deps for deps in gated.values())
+
+
+@pytest.mark.asyncio
+async def test_status_reports_on_the_build_warehouse_with_the_route_store(monkeypatch, route):
+    from back.objects.digitaltwin.build import TwinIncrementalStatus
+
+    dtwin, domain, seen = route
+
+    def report(d, s, client, *, get_store):
+        seen.update(domain=d, client=client, get_store=get_store)
+        return {"mode_requested": "incremental", "slot_pipeline": {"state": "absent"}}
+
+    monkeypatch.setattr(TwinIncrementalStatus, "report", staticmethod(report))
+
+    resp = await dtwin.incremental_status(session_mgr=object(), settings=object())
+
+    assert resp["success"] is True and resp["slot_pipeline"] == {"state": "absent"}
+    assert seen["domain"] is domain and seen["client"] == "client"
+    assert seen["get_store"] is dtwin.get_graphdb
+    assert seen["client_kwargs"] == {"warehouse_id": "wh-build"}
+
+
+def test_the_status_route_is_builder_gated():
+    from api.routers.internal import dtwin
+
+    [status] = [r for r in dtwin.router.routes if r.path == "/dtwin/incremental/status"]
+    assert status.dependencies

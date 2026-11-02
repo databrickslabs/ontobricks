@@ -590,6 +590,7 @@ async function initSyncSection() {
 
         await checkAndResumeSyncTask();
         await checkAndResumeAdjacencyRefreshTask();
+        if (typeof loadIncrementalStatus === 'function') loadIncrementalStatus();
     } finally {
         if (overlay) overlay.classList.add('d-none');
     }

@@ -80,17 +80,31 @@ class TwinBuildRunHistory:
     def build_run_key(pipe: Any) -> tuple[str, str]:
         """``(folder, version)`` of the build-run trace.
 
-        The folder is the UC domain folder, else the sanitised domain name; the
-        version is the build's ``current_version`` (``""`` when unknown).
+        :meth:`run_key_of` the build's domain; the build's snapshot version
+        wins over the live domain's.
+        """
+        return TwinBuildRunHistory.run_key_of(
+            pipe.domain, domain_name=pipe.domain_name, snapshot=pipe.domain_snap
+        )
+
+    @staticmethod
+    def run_key_of(
+        domain: Any, *, domain_name: str | None = None, snapshot: Any = None
+    ) -> tuple[str, str]:
+        """``(folder, version)`` of *domain*'s build runs.
+
+        The folder is the UC domain folder, else the sanitised domain name
+        (*domain_name*, by default the domain's own); the version is
+        *snapshot*'s ``current_version``, else the domain's (``""`` when unknown).
         """
         from back.objects.session import sanitize_domain_folder
 
-        folder = getattr(pipe.domain, "uc_domain_folder", "") or (
-            sanitize_domain_folder(pipe.domain_name)
-        )
+        if domain_name is None:
+            domain_name = (getattr(domain, "info", None) or {}).get("name", "")
+        folder = getattr(domain, "uc_domain_folder", "") or sanitize_domain_folder(domain_name)
         version = (
-            getattr(pipe.domain_snap, "current_version", None)
-            or getattr(pipe.domain, "current_version", None)
+            getattr(snapshot, "current_version", None)
+            or getattr(domain, "current_version", None)
             or ""
         )
         return folder, str(version)

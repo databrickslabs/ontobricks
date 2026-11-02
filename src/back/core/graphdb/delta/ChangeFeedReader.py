@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime, timezone
 from typing import Any
 
 from back.core.errors import InfrastructureError, OntoBricksError, ValidationError
@@ -36,14 +37,27 @@ class ChangeFeedReader:
     @staticmethod
     def latest_version(client: Any, fqn: str) -> int:
         """The newest Delta version of *fqn* (``DESCRIBE HISTORY … LIMIT 1``)."""
+        return ChangeFeedReader.last_commit(client, fqn)["version"]
+
+    @staticmethod
+    def last_commit(client: Any, fqn: str) -> dict:
+        """``{"version", "committed_at"}`` of the newest commit of *fqn*.
+
+        ``committed_at`` is ISO 8601: a driver ``datetime`` is formatted (a
+        naive one is UTC, the warehouse's zone), text is kept as returned.
+        No history row is an :class:`InfrastructureError`.
+        """
         WarehouseStatements.require_fqn(fqn)
         rows = WarehouseStatements.query(
             client, f"DESCRIBE HISTORY {fqn} LIMIT 1", f"read the history of {fqn}"
         )
-        version = rows[0].get("version") if rows and isinstance(rows[0], dict) else None
-        if version is None:
+        row = rows[0] if rows and isinstance(rows[0], dict) else {}
+        if row.get("version") is None:
             raise InfrastructureError(f"Could not read the history of {fqn}: no version")
-        return int(version)
+        stamp = row.get("timestamp")
+        if isinstance(stamp, datetime):
+            stamp = (stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)).isoformat()
+        return {"version": int(row["version"]), "committed_at": str(stamp) if stamp else None}
 
     @staticmethod
     def table_id(client: Any, fqn: str) -> str:
