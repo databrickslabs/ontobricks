@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the round A2 review fixes): 11358 passed, 341 skipped, 9 deselected
+Final test result (after the round A2 re-review fixes): 11369 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -2287,5 +2287,56 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 11358 passed, 341 skipped, 9 deselected in 69.49s (slowest 1.26s,
+test_class_per_file); architecture suite green before each commit;
+tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Fix: round A2 re-review
+================================================================================
+
+Context: the re-review of the round A2 fixes confirmed them and raised four
+Minors, closed here.
+
+Changes:
+
+1. src/back/objects/registry/schedule/build.py
+   An in-place Lakehouse tick refreshed a `_graph` MV twice
+   (`TwinScheduledRefresh`, then the Lakehouse path). `_refresh_data_relation`
+   now returns whether it kept the view; the Lakehouse path refreshes `_graph`
+   only after a rebuild, inside `WarehouseStatements.step` (exactly one
+   refresh either way).
+2. src/back/objects/registry/schedule/build.py,
+   src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+   The Lakehouse tick empties `_inferred` before `_data` / `_graph` move, with
+   the build reset's statements (`TwinBuildPostMaterialize.empty_inferred`,
+   now shared), as every other tick discards its store's inferences of the
+   previous data. Docs: the traceability row of the `_inferred` reset and the
+   scheduled-builds section say so.
+3. src/back/core/graphdb/delta/GraphRelation.py, docs/incremental-materialization.md
+   `refresh_after_write`'s docstring says its callers wait (not "background
+   tasks"); Known limitations: `POST /cohorts/materialize` and
+   `DELETE /reasoning/inferred` answer only after the `_graph` refresh, which
+   may exceed a proxy timeout on a large graph (run reasoning as a
+   background task).
+4. scripts/measure_freshness.py, docs/incremental-materialization.md
+   A numeric value column takes a negative marker near the bottom of its
+   type's range (integer `-2 000 000 000 - k`, smallint `-32 000 - k`, double
+   `-9 900 000 - k`, decimal `-(10^(p-s) - 1) + k` with at least six integer
+   digits), which no real value holds; the value column type is checked
+   before anything is written; `--subject` / `--predicate` hold the match to
+   the row's triple; a run without a `data` or `graph` path warns.
+
+Modified files:
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/core/graphdb/delta/GraphRelation.py
+- scripts/measure_freshness.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- tests/units/scripts/test_measure_freshness.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11369 passed, 341 skipped, 9 deselected in 69.95s (slowest 1.21s,
 test_class_per_file); architecture suite green before each commit;
 tests/units/architecture/baseline.json unchanged.
