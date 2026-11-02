@@ -224,7 +224,9 @@ class SlotProjectionCompiler:
         preconditions) and needs no row tracking on the sources. The
         ``_slots`` table and the AUTO CDC flows are the same either way.
         *column_types* (``{table: {column: UC type}}``) types the topic's
-        values; the change feed reads typed columns and ignores it.
+        values (a mapped column it has no type for is warned about; ``None``
+        types nothing, silently); the change feed reads typed columns and
+        ignores it.
 
         *entity_mappings* is the ``{class_uri: mapping}`` dict of
         ``extract_r2rml_mappings``. A TriplesMap with several classes shares

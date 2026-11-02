@@ -82,10 +82,11 @@ class TopicSlotSource:
         """``(mapping, view_name) -> view SQL`` over *topic* for the row-local *mappings*.
 
         *column_types* is ``{table: {column: UC type}}`` of the source tables
-        (case-insensitive). Warns, once per table, about mapped columns
-        without a type (their Debezium text is kept) and about a leaf name
-        two mapped tables share (only full ``source.table`` names match it,
-        and stock Debezium sends bare names).
+        (case-insensitive); ``None`` types nothing on purpose (a caller that
+        renders no SQL, e.g. the DAB renderer). Warns, once per table, about
+        mapped columns a given *column_types* has no type for (their Debezium
+        text is kept) and about a leaf name two mapped tables share (only full
+        ``source.table`` names match it, and stock Debezium sends bare names).
         """
         if not isinstance(topic, TopicSource):
             raise ValidationError("A topic slot pipeline needs its topic")
@@ -99,7 +100,8 @@ class TopicSlotSource:
             columns.update(TopicSlotSource._mapped_columns(mapping))
         leaves = [table.rsplit(".", 1)[-1] for table in by_table]
         for table, columns in sorted(by_table.items()):
-            TopicSlotSource._warn(table, columns, types.get(table, {}), leaves)
+            typed = None if column_types is None else types.get(table, {})
+            TopicSlotSource._warn(table, columns, typed, leaves)
 
         def emit(mapping: dict, view_name: str) -> str:
             table = mapping["table"].lower()
@@ -239,8 +241,10 @@ class TopicSlotSource:
         return {column.lower() for column in columns}
 
     @staticmethod
-    def _warn(table: str, columns: set[str], types: Mapping[str, str], leaves: list[str]) -> None:
-        untyped = sorted(columns - set(types))
+    def _warn(
+        table: str, columns: set[str], types: Mapping[str, str] | None, leaves: list[str]
+    ) -> None:
+        untyped = [] if types is None else sorted(columns - set(types))
         if untyped:
             logger.warning(
                 "Topic slot views of %s: no column type for %s; their Debezium text is kept, "

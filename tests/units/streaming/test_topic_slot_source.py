@@ -249,10 +249,16 @@ class TestViewEmitter:
         assert len(warnings) == 1
         assert "main.sales.customers" in warnings[0] and "age, name" in warnings[0]
 
-    def test_no_column_types_at_all_warns_for_every_mapped_column(self, logs):
-        TopicSlotSource.view_emitter([_customer()], topic=_TOPIC, column_types=None)
+    def test_empty_column_types_warn_for_every_mapped_column(self, logs):
+        TopicSlotSource.view_emitter([_customer()], topic=_TOPIC, column_types={})
 
         assert "age, id, name" in self._warnings(logs)[0]
+
+    def test_no_column_types_types_nothing_and_warns_about_nothing(self, logs):
+        """The DAB renderer compiles without a warehouse: untyped on purpose."""
+        TopicSlotSource.view_emitter([_customer()], topic=_TOPIC, column_types=None)
+
+        assert self._warnings(logs) == []
 
     def test_fully_typed_mappings_compile_silently(self, logs):
         TopicSlotSource.view_emitter(

@@ -152,10 +152,16 @@ class TestCollect:
             TwinSlotFeed, "topic", staticmethod(lambda domain, settings: _TOPIC)
         )
 
-        resources = _collect(renderer, _Registry({"sales": "3"}), {"sales": "realtime"})
+        from unittest.mock import patch
+
+        with patch("back.core.streaming.TopicSlotSource.logger") as topic_logger:
+            resources = _collect(renderer, _Registry({"sales": "3"}), {"sales": "realtime"})
 
         assert resources["ontobricks_slots_sales_v3"]["continuous"] is True
         assert [spec.source for spec in specs] == ["topic"]
+        assert not any(
+            "no column type" in call.args[0] for call in topic_logger.warning.call_args_list
+        ), "the renderer compiles untyped on purpose: no warning"
 
     def test_a_new_pipeline_gets_no_fingerprint_an_existing_one_keeps_its_own(self, renderer, mappings):
         runner = _Runner({"ontobricks-slots-sales-v3": "fp-deployed"})

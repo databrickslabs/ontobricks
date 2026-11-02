@@ -262,6 +262,18 @@ class TestRealtimeFacts:
         ]
         assert not any("enableRowTracking" in sql for sql in client.queries)
 
+    def test_a_topic_fed_domain_s_sources_are_never_altered(self, two_sources):
+        settings = SimpleNamespace(realtime_enabled=True)
+        client = _Client({_CUSTOMERS: False, _ORDERS: False})
+
+        result = TwinIncrementalReadiness.enable_row_tracking(self._topic_domain(), settings, client)
+
+        assert result == {"tables": []} and client.statements == []
+        with pytest.raises(ValidationError, match="Not a source table"):
+            TwinIncrementalReadiness.enable_row_tracking(
+                self._topic_domain(), settings, client, tables=[_CUSTOMERS]
+            )
+
     def test_a_kinesis_stream_keeps_the_change_feed_and_its_probe(self, two_sources):
         client = _Client({_CUSTOMERS: True, _ORDERS: False})
 

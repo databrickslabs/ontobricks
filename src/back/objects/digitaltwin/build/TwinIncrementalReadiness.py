@@ -112,8 +112,9 @@ class TwinIncrementalReadiness:
     ) -> dict:
         """Turn row tracking on for the untracked sources (or the listed *tables*).
 
-        *tables* must all be source tables of the domain's slot pipeline
-        (compared case-insensitively), else :class:`ValidationError`. Each table
+        *tables* must all be sources whose row tracking the domain's slot
+        pipeline needs (:meth:`source_tables`; none for a topic-fed one),
+        compared case-insensitively, else :class:`ValidationError`. Each table
         is altered on its own; the result lists ``{table, success[, error]}``.
         """
         from back.core.streaming import SourceReadiness
@@ -133,9 +134,13 @@ class TwinIncrementalReadiness:
 
     @staticmethod
     def source_tables(domain: Any, settings: Any, client: Any = None) -> list:
-        """The slot pipeline's source tables for the domain's current mappings (``[]`` without)."""
+        """The sources whose row tracking the domain's slot pipeline needs (``[]`` without mappings).
+
+        Every source of a change-feed pipeline, none of a topic-fed one
+        (:meth:`TwinSlotFeed.feed_tables`): its sources are never altered.
+        """
         spec = TwinIncrementalReadiness._spec(domain, settings, client)
-        return [] if spec is None else list(spec.source_tables)
+        return [] if spec is None else TwinSlotFeed.feed_tables(spec)
 
     @staticmethod
     def _spec(domain: Any, settings: Any, client: Any = None) -> Any:
