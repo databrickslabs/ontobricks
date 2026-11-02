@@ -521,7 +521,8 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the Phase 3 re-review fixes, realtime): 11153 passed, 339 skipped, 9 deselected
+Final test result (after round A2: `_graph` MV, Neo4j net apply, topic-fed realtime pipeline,
+freshness harness): 11329 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -2025,3 +2026,155 @@ uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_rout
 of commit 8860c0b7 (the shared worktree also holds Implementer A's uncommitted
 build / registry edits, whose own tests fail there meanwhile). Architecture
 suite green; tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## `_graph` MV, Neo4j net apply, topic-fed realtime pipeline, freshness harness
+================================================================================
+
+Context: round A2 of incremental triple materialization closes four design items
+that were still deviations or deferred: `_graph` as a materialized view
+Lakehouse//RT can read (Phase 1 P0), net changes for Neo4j (Phase 1 P1), the
+realtime slot pipeline consuming the Debezium topic (Phase 3; Implementer B's
+compiler, wired here), and the freshness / drift KPIs (design "measure"
+section). It continues a stopped implementer's uncommitted `_graph` work.
+
+Changes:
+
+1. src/back/core/graphdb/delta/GraphRelation.py (new),
+   src/back/objects/digitaltwin/build/TwinGraphRelation.py (new)
+   `GraphRelation`: `…_graph` as the union VIEW or a materialized view
+   (`ensure_materialized` drops the VIEW first, `replace_with_view` the MV,
+   `refresh` / `refresh_materialized`), and `refresh_after_write(client,
+   written_fqn)`: the one hook every `…_inferred` writer calls (`REFRESH …
+   ASYNC` when `…_graph` is an MV, nothing for a VIEW or another table,
+   never raises). `TwinGraphRelation`: an incremental / microbatch build on
+   the Lakehouse engine makes `…_graph` an MV (`REFRESH POLICY INCREMENTAL`,
+   row tracking on `…_inferred`, its own fingerprint, `TRIGGER ON UPDATE`
+   when `…_data` refreshes itself), keeps it while its definition holds and
+   refreshes it right after `…_data`; Lakebase / Neo4j (whose readers use
+   their store; `realtime` is Lakebase-only) keep the VIEW and replace a
+   leftover MV. `graph_relation` (`mv` / `view`) is in the build-run trace.
+2. src/back/core/graphdb/delta/MaterializedViewBuilder.py
+   `graph_mv_sql` carries the definition fingerprint and an optional refresh
+   clause (`graph_mv_sha`); `refresh_sql(..., wait=False)` adds `ASYNC`;
+   `apply(..., graph_refresh_clause=)`.
+3. src/back/core/graphdb/delta/DeltaFlatStore.py,
+   src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py,
+   src/back/objects/digitaltwin/build/TwinScheduledRefresh.py,
+   src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/digitaltwin/build/TwinBuildRunHistory.py,
+   src/back/objects/digitaltwin/build/_build_pipeline.py
+   Store inserts (reasoning, cohorts, raw `materialize_to_delta` into a
+   companion) and the inferred purge refresh a graph MV; the build's
+   inferred reset refreshes it synchronously instead of recreating the VIEW;
+   the scheduled tick refreshes it after the in-place `…_data` refresh; the
+   standalone Delta build (CTAS `…_data`) and the full path replace it by the
+   VIEW.
+4. src/back/core/graphdb/delta/InferredTripleLedger.py (new),
+   src/back/core/graphdb/GraphDBFactory.py, src/back/core/graphdb/neo4j/Neo4jStore.py,
+   src/back/core/reasoning/ReasoningService.py, src/back/core/graph_analysis/CohortBuilder.py
+   A Neo4j store gets an `InferredTripleLedger` (domains that are not
+   `full`): reasoning and cohort writers list every batch in the Delta
+   `…_inferred` table before writing it to Neo4j (a failed listing writes
+   nothing).
+5. src/back/objects/digitaltwin/build/TwinNetChangeApply.py
+   For a store with a ledger the purge runs before the net changes: every
+   listed triple `…_data` does not assert (`<inferred> EXCEPT <data>`,
+   streamed through `iter_rows` into `delete_triples` in batches of 500) is
+   deleted, the `…_data` triples on the same subject and predicate are
+   written again (Neo4j keeps one value per property, label set and name),
+   and the list is emptied. Neo4j leaves the full stream;
+   `inferred_not_separable` stays for a store with neither purge path; an
+   unreadable list falls back as `inferred_unreadable`.
+6. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py,
+   src/back/objects/digitaltwin/build/TwinScheduledRefresh.py,
+   src/back/objects/registry/schedule/build.py,
+   src/front/static/domain/js/domain-information.js
+   `compile_for` picks the slot source once for the build, the tick, the MERGE
+   fingerprint, the preflight and the DAB renderer: `source="topic"` with
+   `TopicSource.from_realtime_source(...)` when the domain's best mode is
+   `realtime` (`slot_topic`; Kinesis keeps the change feed), and the source
+   tables' `column_types` from `DESCRIBE TABLE` (once per compile, on the
+   build's or tick's warehouse; an undescribable source is an
+   `InfrastructureError`, not other SQL). `feed_tables(spec)` is empty for a
+   topic-fed pipeline, so the build, the tick and the preflight probe no row
+   tracking and the slot refresh plan reads no source history; the preflight
+   reports `row_tracking_required: false` with the sources unprobed, which
+   the domain panel no longer flags. The MERGE fallback needs no change: it
+   never applies to a `realtime` request (pinned by a test).
+7. scripts/measure_freshness.py (new), tests/external/test_freshness_slo.py (new),
+   .github/workflows/nightly.yml
+   `FreshnessProbe` updates one source row N times (default 5, spaced) and
+   times each change until it is visible in `…_data` / `…_graph` (warehouse,
+   optionally the Lakehouse//RT one) and the Lakebase synced table / `_live`;
+   p50 / p95 / p99 per path, reconciliation with the batch recompute, the
+   synced table and `_live`, the row restored, the mode's SLOs checked
+   (`microbatch` `_graph` <= 30 s p95 and Lakebase <= 60 s p95, `realtime`
+   `_live` <= 1 s p99, no drift). The external test asserts them for a
+   configured domain; the nightly `external-smoke` job runs it as a
+   non-blocking step with a step summary (timeout 25 minutes).
+8. docs/incremental-materialization.md, README.md
+   Modes table (`_graph` column), "The `_graph` relation", Lakehouse//RT,
+   net-change apply (the Neo4j EXCEPT rule), the realtime slot pipeline on
+   the topic with its preconditions, Verification (the harness), Design
+   traceability (`_data` / `_graph` MVs and the P1 net changes ✅, the KPI
+   row), Known limitations.
+
+Deviations:
+- `_graph` is a materialized view on the Lakehouse engine only: Lakebase and
+  Neo4j domains (and so every `realtime` domain) keep the union VIEW, which no
+  reader of theirs queries; an MV there would copy `…_data` for nothing.
+- The Neo4j purge also rewrites the asserted triples a deleted listed literal
+  unset (not in the brief; needed for equality with a full stream).
+- The freshness harness has not been run against a workspace yet.
+
+Modified files:
+- src/back/core/graphdb/delta/GraphRelation.py (new)
+- src/back/core/graphdb/delta/InferredTripleLedger.py (new)
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/graphdb/delta/__init__.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/back/objects/digitaltwin/build/TwinGraphRelation.py (new)
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/back/objects/digitaltwin/build/TwinNetChangeApply.py
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- src/front/static/domain/js/domain-information.js
+- scripts/measure_freshness.py (new)
+- .github/workflows/nightly.yml
+- tests/external/test_freshness_slo.py (new)
+- tests/units/graphdb/delta/test_graph_relation.py (new)
+- tests/units/graphdb/delta/test_inferred_triple_ledger.py (new)
+- tests/units/scripts/test_measure_freshness.py (new)
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/graphdb/test_materialized_inference_purge.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/objects/test_incremental_readiness.py
+- tests/units/objects/test_realtime_build.py
+- tests/units/front/test_materialization_readiness_ui.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- tests/units/registry/test_scheduled_build_reconcile.py
+- tests/units/settings/test_render_slot_pipelines.py
+- docs/incremental-materialization.md
+- README.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11329 passed, 341 skipped, 9 deselected in 93.99s (slowest 1.37s,
+test_class_per_file); architecture suite green;
+tests/units/architecture/baseline.json unchanged.
