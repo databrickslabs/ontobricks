@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after Phase 3, realtime): 11054 passed, 339 skipped, 9 deselected
+Final test result (after the Phase 3 review fixes, realtime): 11111 passed, 339 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -1556,3 +1556,183 @@ tests/units/architecture (readiness-route test deselected)
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 11054 passed, 339 skipped, 9 deselected in 60.86s (slowest test 1.12s), B's files included;
 architecture suite green; tests/units/architecture/baseline.json unchanged.
+
+## Fix: Phase 3 review
+================================================================================
+
+Context: Review of Phase 3 (realtime): four Critical findings (the stream ran
+in a mode Real-Time Mode refuses, batched its upserts, left a frozen `_live` in
+the graph, and its slot pipelines could not be adopted by DAB), ten Important
+ones (seeding, purge, identities, sizing, runtime, the import closure, cloud
+coupling, one stream per domain, poison envelopes, docs) and minors. B's core
+files (SlotChange, SlotRowProjector, SlotDiffProcessor, processor.py) are
+untouched.
+
+Changes:
+
+1. src/jobs/triple_stream/main.py, LiveSink.py (new) (C1, C2)
+   `transformWithState` and the sink run in update output mode, the only one
+   Real-Time Mode runs; the real-time trigger and `.start()` sit inside the
+   fallback, so a runtime that refuses either falls back to `processingTime`
+   with the conf reset. The sink is a `foreach` writer (`LiveSink`) that
+   upserts each change as it arrives (`INSERT … VALUES … ON CONFLICT … WHERE
+   EXCLUDED.seq > live.seq`, autocommit) instead of staging a batch.
+2. src/jobs/triple_stream/TripleStreamEnvelope.py (new), main.py (I9, minors)
+   Extract Class: envelope parse / explode moved out of the job. An envelope
+   that does not parse, has no seq, names an unmapped table or holds a value
+   that does not decode is skipped and counted per reason. A bare Debezium
+   table name matches the mapped table of that leaf name when unique. The job
+   uses the repo logger and warns that Kinesis is experimental.
+3. src/back/core/graphdb/lakebase/_companion_ddl.py, LakebaseLiveTable.py (C3, I1, I3c)
+   `_live` is in the union view only while served (table comment
+   `ontobricks:live:serving`). `attach` truncates, seeds from the `_slots`
+   snapshot (`seed_rows`: blank objects dropped, `SNAPSHOT_SEQ`) and serves;
+   `detach` truncates and stops serving. `ensure` grants the stream role USAGE
+   on the schema and SELECT, INSERT, UPDATE on `_live`. The purge raises
+   `ValidationError` on a bad argument.
+4. src/back/objects/digitaltwin/build/TwinLiveServing.py, TwinRealtimeJob.py (new),
+   TwinRealtimeStream.py, __init__.py (C3, I1, I2, I8, minors)
+   `start` cancels a run of the same domain at another version, reuses a run of
+   this version, else creates, grants, seeds and serves `_live` (warehouse read
+   of `_slots`) before `run_now`. `stop` cancels and retires `_live`; a
+   non-realtime build on a Lakebase store with a served `_live` does the same.
+   `after_tick` retires a served `_live` whose stream no longer runs and
+   otherwise purges tombstones older than max(24, TTL) hours. The TTL
+   (`state_ttl_hours`, default 72) is a job parameter. `resolve_job_id` tries
+   `jobs.list(name=…)` first; `_ACTIVE_STATES` is gone.
+5. src/back/objects/registry/schedule/build.py (I2)
+   The scheduled tick of a realtime domain on Lakebase calls `after_tick`
+   (best-effort) and records its facts.
+6. src/back/core/graphdb/RealtimeSource.py, TwinIncrementalReadiness.py,
+   domain-information.js (minors)
+   `state_ttl_hours` is a validated config field; Kinesis is marked
+   experimental; the readiness facts include `backend_eligible` and
+   `experimental`.
+7. src/back/core/helpers/TripleProjectionSql.py (new), SlotProjectionCompiler.py,
+   SparqlTranslator.py, back/core/__init__.py, shared/config/__init__.py,
+   back/core/errors/__init__.py, shared/config/constants.py, w3c/owl/* (I6)
+   The stream job's import closure is cut loose from the app: the projection
+   SQL the translator and the compiler share moved into `TripleProjectionSql`
+   (the compiler no longer imports the translator and rdflib); `back.core` and
+   `shared.config` re-export nothing (no caller used them); `ErrorResponse`
+   (pydantic) is imported from its module by the API layer only;
+   `ONTOBRICKS_NS` (rdflib) moved from the shared constants to
+   `back.core.w3c.owl.iri`. A subprocess test asserts that `back.core.streaming`
+   and the job import no `back.objects`, api, front, agents, fastapi, starlette,
+   neo4j, rdflib or pydantic.
+8. databricks.yml, pyproject.toml, resources/triple_rtm.job.yml (I6)
+   No app wheel: the cluster imports the synced `src` through `PYTHONPATH` and
+   installs only `psycopg` and `databricks-sql-connector` (DBR 19 does not ship
+   it); the runtime's pyarrow is never pinned. The `ontobricks_wheel` artifact
+   and `src/jobs` in the wheel packages are gone.
+9. src/back/objects/digitaltwin/build/TwinRealtimeJob.py, TwinRealtimeStream.py (I3b)
+   The mappings go to `<checkpoint root>/_mappings/<run>.json` on the
+   checkpoint volume (Files API), which the job's run-as identity (the deployer)
+   can read; the checkpoint root must be a `/Volumes/` path.
+10. resources/triple_rtm.job.yml, databricks.yml, _ensure-instance-target.sh (C3, I4, I7)
+    The task retries three times a minute apart. `spark.sql.shuffle.partitions`
+    comes from `var.realtime_shuffle_partitions` (default 4) and Arrow batches
+    hold 100 records; two workers by default (task slots >= topic partitions +
+    shuffle partitions). The job is cloud-neutral: no `aws_attributes`, no node
+    type default; the AWS targets (dev, dev-lakebase, the generated
+    dev-lakebase-<id>) set i3.xlarge and on-demand workers.
+11. scripts/deploy.sh, scripts/_internal/_select-spark-version.py (new) (I5)
+    `deploy.sh` passes the workspace's newest DBR 19 (LTS first, ML / GPU /
+    Photon / ARM skipped) as `realtime_spark_version`; a failed lookup keeps the
+    bundle default (17.3 LTS, commented to bump to the 19 LTS key).
+12. scripts/bootstrap/app-permissions.sh (I3a)
+    The job grant is a `_grant_job_run` function, applied to the graph analytics
+    job and to the realtime stream job (CAN_MANAGE_RUN for both app principals).
+13. scripts/_internal/_render-slot-pipelines.py, SlotPipelineRunner.py,
+    scripts/deploy.sh, .gitignore (C4, minor)
+    The renderer lists each rendered slot pipeline that exists outside any bundle
+    (`SlotPipelineRunner.bundle_managed`) in `_generated_triple_slots.bind`;
+    `deploy.sh` binds each (`bundle deployment bind … --auto-approve`) before
+    `bundle deploy`, skipping with a notice on a CLI without the subcommand. A
+    version whose mappings no longer compile keeps its previous resource
+    (logged), so a compile error never plans a deletion. A skipped render
+    removes a stale bind list.
+14. src/front/routes/domain.py, _domain_information.html (minor)
+    The route supplies the realtime source and `RealtimeSource.kind_options`
+    (Kinesis labelled experimental); the template keeps no `{% set %}` or
+    inline kind list.
+15. docs/incremental-materialization.md, README.md (I10)
+    Traceability (serving ✅, DAB adoption), the update-mode `foreach` writer and
+    why not the native `postgresql` sink (no `seq` guard), seeding / serving /
+    retire / purge, updated slots showing old and new until the sync, why the
+    slot pipeline reads the CDF and not the topic, the RTM slot rule, Arrow
+    batches, the DBR 19 rationale, no wheel, identities and grants, the bind
+    step, Kinesis experimental, the TTL default and the live-unverified list.
+16. tests
+    New closure, runtime picker, bind-list, compile-failure, bundle-managed,
+    kind-option, AWS-override, retry and sizing tests; the property test's
+    baseline is the seeded `_live`; existing tests follow the moved helpers and
+    the volume upload.
+
+Modified files:
+- .gitignore
+- README.md
+- databricks.yml
+- docs/incremental-materialization.md
+- pyproject.toml
+- resources/triple_rtm.job.yml
+- scripts/_internal/_ensure-instance-target.sh
+- scripts/_internal/_render-slot-pipelines.py
+- scripts/_internal/_select-spark-version.py (new)
+- scripts/bootstrap/app-permissions.sh
+- scripts/deploy.sh
+- src/back/core/__init__.py
+- src/back/core/errors/__init__.py
+- src/back/core/graphdb/RealtimeSource.py
+- src/back/core/graphdb/lakebase/LakebaseLiveTable.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/helpers/TripleProjectionSql.py (new)
+- src/back/core/helpers/__init__.py
+- src/back/core/streaming/SlotPipelineRunner.py
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/owl/iri.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py
+- src/back/objects/digitaltwin/build/TwinLiveServing.py (new)
+- src/back/objects/digitaltwin/build/TwinRealtimeJob.py (new)
+- src/back/objects/digitaltwin/build/TwinRealtimeStream.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/registry/schedule/build.py
+- src/front/routes/domain.py
+- src/front/static/domain/js/domain-information.js
+- src/front/templates/partials/domain/_domain_information.html
+- src/jobs/triple_stream/LiveSink.py (new)
+- src/jobs/triple_stream/TripleStreamEnvelope.py (new)
+- src/jobs/triple_stream/main.py
+- src/shared/config/__init__.py
+- src/shared/config/constants.py
+- tests/back/core/errors/test_errors.py
+- tests/property/test_slot_diff_property.py
+- tests/units/core/test_errors.py
+- tests/units/core/test_try_cast_policy.py
+- tests/units/domain/test_domain_service.py
+- tests/units/domain/test_domain_session.py
+- tests/units/front/test_materialization_mode_ui.py
+- tests/units/graphdb/test_lakebase_live_table.py
+- tests/units/graphdb/test_realtime_source.py
+- tests/units/jobs/test_triple_stream_closure.py (new)
+- tests/units/jobs/test_triple_stream_main.py
+- tests/units/objects/test_incremental_readiness.py
+- tests/units/objects/test_realtime_stream.py
+- tests/units/ontology/test_sparql_service.py
+- tests/units/settings/test_bundle_job_resource.py
+- tests/units/settings/test_config.py
+- tests/units/settings/test_render_slot_pipelines.py
+- tests/units/settings/test_select_spark_version.py (new)
+- tests/units/streaming/test_slot_pipeline_runner.py
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/objects tests/units/registry
+tests/units/graphdb tests/units/settings tests/units/api tests/units/front tests/units/jobs
+tests/units/streaming tests/units/core tests/units/ontology tests/units/architecture
+(readiness-route test deselected)
+-> 8122 passed, 12 skipped in 46.24s (slowest 1.50s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11111 passed, 339 skipped, 9 deselected in 64.09s; architecture suite green;
+tests/units/architecture/baseline.json unchanged.
