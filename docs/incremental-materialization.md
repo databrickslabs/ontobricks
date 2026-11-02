@@ -284,9 +284,12 @@ Behaviour in this release:
   current version's pipeline is stopped.
 - The first build after upgrading re-registers every managed-synced table on
   `_data` instead of the VIEW (one full resync). `SyncedTableManager.trigger_refresh`
-  still starts updates with `full_refresh=True`. The drift check ignores a ghost
-  `_b` fallback registration; a delete→create race is handled by polling; a
-  registration costs up to four synced-table GETs per build.
+  still starts updates with `full_refresh=True`. The drift check covers every name
+  `ensure` reuses, ghost-state fallbacks (`_b` / `_c` / `_d`) included, but a
+  fallback registration left from an earlier ghost period is not deleted once the
+  primary name works again; an unreadable registration spec is kept and logged at
+  warning; a delete→create race is handled by polling; a registration costs up to
+  four synced-table GETs per build.
 - The Lakehouse//RT fallback runs as the caller, who therefore needs CAN_USE on
   the build warehouse.
 - The standalone Delta build (`/dtwin/databricks-build/start`,

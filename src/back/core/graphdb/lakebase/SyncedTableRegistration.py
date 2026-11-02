@@ -9,7 +9,10 @@ The registration comes back from ``SyncedTableManager.get`` as an SDK
 ``SyncedDatabaseTable`` (``spec.scheduling_policy`` is an enum) or, on the REST
 fallback, as a ``_DictNamespace`` (a plain string). A field the response does
 not carry counts as unchanged: a spec that cannot be read never deletes
-anything.
+anything (and is logged at warning). The drift check covers every name
+``ensure`` reuses, ghost-state fallbacks (``…_b`` / ``_c`` / ``_d``) included; a
+fallback registration left from an earlier ghost period is not deleted once the
+primary name works again.
 """
 
 from __future__ import annotations
@@ -70,6 +73,8 @@ class SyncedTableRegistration:
         *before_delete* (called with *name*) runs only on that path, right
         before the delete.
         """
+        if synced is not None:
+            SyncedTableRegistration._warn_if_unreadable(name, synced)
         drift = SyncedTableRegistration.drift(synced, source_table_full_name, sync_mode)
         if not drift:
             return synced
@@ -78,6 +83,24 @@ class SyncedTableRegistration:
             before_delete(name)
         mgr.delete(name, purge_data=True)
         return None
+
+    @staticmethod
+    def _warn_if_unreadable(name: str, synced: Any) -> None:
+        """Say which part of an existing registration's spec could not be read."""
+        unreadable = [
+            field
+            for field, value in (
+                ("source table", SyncedTableRegistration.source_table(synced)),
+                ("scheduling policy", SyncedTableRegistration.scheduling_policy(synced)),
+            )
+            if not value
+        ]
+        if unreadable:
+            logger.warning(
+                "Synced table %s: registered %s unreadable; keeping the registration as is",
+                name,
+                " and ".join(unreadable),
+            )
 
     @staticmethod
     def _relation_key(name: str) -> str:

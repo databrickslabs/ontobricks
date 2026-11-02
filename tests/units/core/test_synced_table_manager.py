@@ -789,6 +789,30 @@ class TestSyncedTableRegistration:
         assert kept is synced
         mgr.delete.assert_not_called()
 
+    @pytest.mark.parametrize("synced", [SimpleNamespace(), MagicMock()], ids=["no-spec", "mock"])
+    def test_an_unreadable_spec_is_kept_with_a_warning(self, synced):
+        mgr = MagicMock()
+
+        with patch("back.core.graphdb.lakebase.SyncedTableRegistration.logger") as logger:
+            kept = SyncedTableRegistration.discard_if_drifted(
+                mgr, "cat.sch.tab", synced, "cat.sch.t", "triggered"
+            )
+
+        assert kept is synced
+        mgr.delete.assert_not_called()
+        logger.warning.assert_called_once()
+        call = logger.warning.call_args
+        assert "unreadable" in call.args[0] % call.args[1:]
+
+    def test_a_missing_registration_is_not_a_warning(self):
+        with patch("back.core.graphdb.lakebase.SyncedTableRegistration.logger") as logger:
+            kept = SyncedTableRegistration.discard_if_drifted(
+                MagicMock(), "cat.sch.tab", None, "cat.sch.t", "triggered"
+            )
+
+        assert kept is None
+        logger.warning.assert_not_called()
+
     def test_discard_deletes_a_drifted_registration_with_its_data(self):
         mgr = MagicMock()
         synced = _synced(source="cat.sch.t", policy="SNAPSHOT")
