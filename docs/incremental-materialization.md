@@ -585,6 +585,10 @@ Also after upgrading:
 
 Behaviour in this release:
 
+- A Lakehouse tick that cannot read a source's history empties `_inferred` but refreshes
+  neither `_data` nor `_graph`, so a `_graph` materialized view serves the pre-tick union
+  (old `_data` plus old inferences) until its next refresh — the next tick or any inferred
+  write. No wrong data is written; a three-state refresh result would close the gap.
 - `augment_mappings_from_config` assigns a `sql_query` to every configured
   entity, so most real mappings classify as batch; the slot pipeline engages only
   for table-based mappings and `incremental` is then the `_data` MV over the batch

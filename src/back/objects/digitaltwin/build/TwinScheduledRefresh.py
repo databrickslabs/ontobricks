@@ -58,8 +58,11 @@ class TwinScheduledRefresh:
         *spec* is the tick's compiled slot spec of those mappings (``None``:
         they did not compile). A source history that cannot be read (often
         transient) keeps the view as it is for this tick — ``True``, nothing
-        refreshed, nothing dropped, nothing recorded — rather than replace it
-        by a CTAS every later tick would repeat.
+        refreshed, no relation dropped, nothing recorded — rather than replace
+        it by a CTAS every later tick would repeat. On the Lakehouse engine the
+        tick has already emptied ``_inferred`` by then, so a ``_graph``
+        materialized view keeps serving the pre-tick union until its next
+        refresh (the next tick, or any inferred write).
 
         An ``incremental`` tick decides its slot update the way a build does
         (:class:`TwinSlotRefreshPlan`: a full refresh after a source rewrite or
@@ -91,7 +94,7 @@ class TwinScheduledRefresh:
         except InfrastructureError as exc:
             logger.warning(
                 "Scheduled build: a source history is unreadable (%s); %s is left as it is "
-                "this tick (nothing dropped)",
+                "this tick (no relation dropped; a _graph view is refreshed next time)",
                 exc,
                 data_fqn,
             )
