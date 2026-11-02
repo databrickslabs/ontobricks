@@ -51,11 +51,12 @@ class SlotProjectionCompiler:
         An entity mapping is row-local when it has a ``class_uri``, reads a
         ``table`` (no ``sql_query``), its subject template has at least one
         column, every predicate is a plain column (a ``reference`` predicate
-        is a join) and all identifiers are safe to interpolate. A relationship
-        mapping is row-local only when it has a ``predicate``, a ``table`` (no
-        ``sql_query``) and plain subject and object columns. Everything else
-        is ``"batch"``; the reason is logged at debug level. A row-local
-        mapping never makes the emitters raise.
+        is a join) and all identifiers are safe to interpolate. Relationship
+        mappings are always ``"batch"``: the slot key is ``(map_id, source_key,
+        predicate)``, so a subject with several objects of one predicate would
+        collapse onto a single slot. Everything else is ``"batch"`` too; the
+        reason is logged at debug level. A row-local mapping never makes the
+        emitters raise.
 
         *relationship_mappings* is accepted for signature stability and unused.
         """
@@ -294,16 +295,17 @@ class SlotProjectionCompiler:
         if compiler._is_relationship(mapping):
             if not mapping.get("predicate"):
                 return "relationship without predicate"
-            columns = compiler._relationship_columns(mapping)
-        else:
-            if not mapping.get("class_uri"):
-                return "entity without class_uri"
-            predicates = mapping.get("predicates") or {}
-            if any(info.get("type") != "column" for info in predicates.values()):
-                return "reference predicate (join)"
-            if not compiler._template_columns(mapping.get("uri_template")):
-                return "subject template has no column"
-            columns = compiler._entity_columns(mapping)
+            # The slot key is (map_id, subject key, predicate): a subject with
+            # several objects would keep only one of them under SCD TYPE 1.
+            return "relationship (several objects per subject share one slot key)"
+        if not mapping.get("class_uri"):
+            return "entity without class_uri"
+        predicates = mapping.get("predicates") or {}
+        if any(info.get("type") != "column" for info in predicates.values()):
+            return "reference predicate (join)"
+        if not compiler._template_columns(mapping.get("uri_template")):
+            return "subject template has no column"
+        columns = compiler._entity_columns(mapping)
         if not all(compiler._is_safe_col(column) for column in columns):
             return "unsafe or missing column name"
         return None

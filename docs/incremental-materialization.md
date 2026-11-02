@@ -44,14 +44,18 @@ view falls back to the gateway VIEW as a snapshot.
 
 ### What the slot pipeline does
 
-Row-local mappings (one source table, no join, no `sql_query`) are compiled by
+Row-local entity mappings (one source table, no join, no `sql_query`) are compiled by
 `SlotProjectionCompiler` into *slot events*: one row per
 `(map_id, source_key, predicate)` read from the source table's change feed
 (`STREAM … WITH (readChangeFeed = true)`), with `op = DELETE` for deleted rows,
 pre-images and `NULL` objects. An `AUTO CDC … KEYS (map_id, source_key, predicate)
 … STORED AS SCD TYPE 1` flow folds them into `triplestore_<domain>_V<n>_slots`.
 Join, aggregate and `sql_query` mappings stay batch: their SQL becomes the batch
-branch of the `_data` MV. The pipeline is serverless, on the `PREVIEW` channel by
+branch of the `_data` MV. Relationship mappings always stay batch: under that slot
+key a subject with several objects of one predicate would keep only one of them.
+For the same reason a row-local entity mapping needs a **unique id column** (the
+columns of its subject URI template): source rows that share a key collapse onto
+one slot. The pipeline is serverless, on the `PREVIEW` channel by
 default (`settings.slot_pipeline_channel`, environment variable
 `ONTOBRICKS_SLOT_PIPELINE_CHANNEL`: `PREVIEW` or `CURRENT`), never in development mode, and is
 always reused across builds; it carries a fingerprint of its SQL

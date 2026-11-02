@@ -125,8 +125,10 @@ class TestClassify:
     def test_unsafe_identifier_falls_back_to_batch(self, overrides):
         assert SlotProjectionCompiler.classify(_entity(**overrides)) == "batch"
 
-    def test_table_based_relationship_is_row_local(self):
-        assert SlotProjectionCompiler.classify(_relationship()) == "row_local"
+    def test_table_based_relationship_is_batch(self):
+        """Slot key (map_id, subject key, predicate): several objects of one subject
+        would collapse onto one slot under SCD TYPE 1."""
+        assert SlotProjectionCompiler.classify(_relationship()) == "batch"
 
     def test_extractor_shaped_relationship_is_batch(self):
         assert SlotProjectionCompiler.classify(_extractor_relationship()) == "batch"
@@ -489,17 +491,14 @@ class TestCompile:
         assert f"'{RDF_TYPE}', 'http://ex.org/Person'" in joined
         assert "class_uri" not in shared
 
-    def test_row_local_relationship_is_compiled(self):
-        spec = self._compile({}, [_relationship()])
-        rel_id = SlotProjectionCompiler.map_id(_relationship())
-        assert spec.row_local_map_ids == [rel_id]
-        assert spec.source_tables == ["main.sales.orders"]
-        assert spec.batch_mappings == []
+    def test_a_table_based_relationship_stays_on_the_batch_branch(self):
+        rel = _relationship()
 
-    def test_duplicate_relationship_is_compiled_once(self):
-        spec = self._compile({}, [_relationship(), _relationship()])
-        assert len(spec.row_local_map_ids) == 1
-        assert len(spec.statements) == 3
+        spec = self._compile({}, [rel])
+
+        assert spec.row_local_map_ids == []
+        assert spec.source_tables == []
+        assert spec.batch_mappings == [rel]
 
     def test_source_tables_are_unique_and_sorted(self):
         other = _entity(table="main.sales.accounts", class_uri="http://ex.org/Account")
@@ -738,6 +737,5 @@ class TestClassifyAgreesWithEmitters:
             _entity(),
             _entity(label_column=""),
             _entity(uri_template="http://ex.org/Line/{a}/{b}", id_column="a"),
-            _relationship(),
         ]
         assert all(SlotProjectionCompiler.classify(m) == "row_local" for m in row_local)
