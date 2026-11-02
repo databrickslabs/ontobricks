@@ -13,7 +13,7 @@ pytestmark = pytest.mark.unit
 
 _SLOTS = "main.kg.triplestore_sales_V1_slots"
 _DATA = "main.kg.triplestore_sales_V1_data"
-_FILTER = "WHERE object IS NOT NULL AND TRIM(object) != ''"
+_FILTER = "WHERE subject IS NOT NULL AND object IS NOT NULL AND TRIM(object) != ''"
 _HASH = "sum(CAST(xxhash64(subject, predicate, object) AS DECIMAL(38, 0))) AS h"
 
 
@@ -191,3 +191,34 @@ class TestCompareWithoutSlots:
         assert result["slots"] is None and result["drift"] is False
         assert result["by_map_id"] == []
         assert not any("GROUP BY map_id" in sql for sql in client.calls)
+
+
+class TestNullSubjects:
+    """NULL-subject rows (from NULL source keys) are left out on every side."""
+
+    def test_the_gateway_view_row_with_a_null_subject_is_no_drift(self):
+        """The VIEW keeps the NULL-subject triple, the slot view drops its row: both agree."""
+        import sqlite3
+
+        db = sqlite3.connect(":memory:")
+        db.create_function("xxhash64", 3, lambda s, p, o: hash((s, p, o)) & 0xFFFFFFFF)
+        for table in ("slots", "data", "view"):
+            db.execute(f"CREATE TABLE {table} (map_id TEXT, subject TEXT, predicate TEXT, object TEXT)")
+        triple = ("map_c", "urn:c/1", "urn:p", "a")
+        for table in ("slots", "data", "view"):
+            db.execute(f"INSERT INTO {table} VALUES (?, ?, ?, ?)", triple)
+        db.execute("INSERT INTO view VALUES (NULL, NULL, 'urn:p', 'b')")
+
+        class _SQLite:
+            def execute_query(self, sql):
+                sql = sql.replace("main.kg.", "").replace("DECIMAL(38, 0)", "INTEGER")
+                cursor = db.execute(sql.replace("TRIM(object)", "trim(object)"))
+                names = [d[0] for d in cursor.description]
+                return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+        result = SlotReconciler.compare(
+            _SQLite(), "main.kg.slots", "main.kg.data", view_fqn="main.kg.view"
+        )
+
+        assert result["pairs"] == {"slots_data": False, "view_data": False}
+        assert result["view"]["rows"] == 1

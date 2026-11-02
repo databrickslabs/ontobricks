@@ -302,7 +302,9 @@ a compact "Incremental status" card, hidden for a `full` domain.
 `POST /dtwin/incremental/reconcile` (builder role) compares the domain's `_slots`
 streaming table with its `_data` relation the way the MV reads the slots:
 distinct-triple row counts and `sum(xxhash64(subject, predicate, object))` of
-both, blank objects left out, `drift` when they differ, and the slot counts per
+both, blank objects and NULL-subject rows left out (a NULL source key gives the
+gateway VIEW a NULL-subject triple the slot view drops: garbage, not drift; the MV
+and VIEW keep it), `drift` when they differ, and the slot counts per
 `map_id`. The scans run on the build warehouse as the caller. `_data` is the
 union of the slots and the batch branches, so the response carries
 `batch_branches_present` (derived from the domain's *current* mappings) and

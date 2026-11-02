@@ -18,6 +18,12 @@ logger = get_logger(__name__)
 #: and ANSI mode raises ``ARITHMETIC_OVERFLOW`` instead of wrapping.
 _TRIPLE_HASH_SUM = "sum(CAST(xxhash64(subject, predicate, object) AS DECIMAL(38, 0))) AS h"
 
+#: The triples reconciled, on every side: non-blank objects (as the MV reads
+#: the slots) and a subject. A NULL source key gives the gateway VIEW (and a
+#: batch branch) a NULL-subject triple the slot view drops; such garbage rows
+#: would otherwise show as drift forever. The MV and VIEW SQL keep them.
+_RECONCILED_TRIPLES = "WHERE subject IS NOT NULL AND " + NON_BLANK_OBJECT_SQL.removeprefix("WHERE ")
+
 
 class SlotReconciler:
     """Row counts and triple hashes of ``_slots`` versus ``_data``.
@@ -32,7 +38,8 @@ class SlotReconciler:
     Both sides are counted the way the MV reads the slots: distinct triples
     (two slots may project the same triple; the MV groups them) with blank
     objects left out (the MV's slots branch filters ``NULL`` / ``''`` objects,
-    which unset attributes produce; ``_slots`` keeps them as upserts).
+    which unset attributes produce; ``_slots`` keeps them as upserts), and
+    without NULL-subject rows (:data:`_RECONCILED_TRIPLES`).
     ``by_map_id`` is slots-only: ``_data`` carries no ``map_id``. The only I/O
     is ``client.execute_query``; driver errors and unreadable answers become
     :class:`InfrastructureError`, an unsafe name :class:`ValidationError`.
@@ -45,11 +52,11 @@ class SlotReconciler:
         if group_by_map_id:
             return (
                 f"SELECT map_id, count(*) AS n, {_TRIPLE_HASH_SUM} "
-                f"FROM {fqn} {NON_BLANK_OBJECT_SQL} GROUP BY map_id ORDER BY map_id"
+                f"FROM {fqn} {_RECONCILED_TRIPLES} GROUP BY map_id ORDER BY map_id"
             )
         return (
             f"SELECT count(*) AS n, {_TRIPLE_HASH_SUM} "
-            f"FROM (SELECT DISTINCT subject, predicate, object FROM {fqn} {NON_BLANK_OBJECT_SQL})"
+            f"FROM (SELECT DISTINCT subject, predicate, object FROM {fqn} {_RECONCILED_TRIPLES})"
         )
 
     @staticmethod
