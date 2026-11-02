@@ -108,16 +108,18 @@ a materialized view too, so Lakehouse//RT can read it (RT reads no plain views):
 `SELECT subject, predicate, object FROM _data UNION ALL SELECT … FROM _inferred`,
 row tracking on `_inferred`, its own definition fingerprint
 (`ontobricks.mv_sql_sha256`, which also tells it from the VIEW) and, when `_data`
-refreshes itself (`microbatch`), `TRIGGER ON UPDATE`. A build whose definition did
+refreshes itself (`microbatch`), `TRIGGER ON UPDATE` (the CREATE MATERIALIZED VIEW
+reference accepts materialized views as upstreams). A build whose definition did
 not change keeps it (`GraphRelation.ensure_materialized`, dropping a union VIEW
-first) and refreshes it synchronously right after `_data`
-(`TwinGraphRelation.after_data`); a scheduled tick that refreshes `_data` in place
-refreshes it next. Every write to `_inferred` — the store's app writes (reasoning,
-cohorts), the inferred purge, `ReasoningService.materialize_to_delta` into the
-companion — runs `REFRESH MATERIALIZED VIEW … ASYNC` through one method,
-`GraphRelation.refresh_after_write` (best-effort: a failed refresh is logged and the
-next write, build or trigger catches up); the build's inferred reset refreshes it
-synchronously. A union VIEW needs none of this and is left alone. `full`, the MERGE
+first, `TwinGraphRelation.after_data`); the build's inferred reset, which follows the
+`_data` refresh, refreshes it — once per build. A scheduled tick that refreshes
+`_data` in place refreshes it next. Every write to `_inferred` — the store's app
+writes (reasoning, cohorts), the inferred purge, `ReasoningService.materialize_to_delta`
+into the companion — runs a synchronous `REFRESH MATERIALIZED VIEW` through one
+method, `GraphRelation.refresh_after_write`, before it returns, so the graph caches the
+writers rebuild next (adjacency, entity search, properties) read the new union
+(best-effort: a failed refresh is logged and the next write, build or trigger catches
+up). A union VIEW needs none of this and is left alone. `full`, the MERGE
 fallback, the standalone Delta build and the other engines (whose readers use their
 own store) keep the union VIEW; a switch drops the other kind first, as for
 `_data`. The build-run trace records which one it is (`graph_relation`: `mv` /
@@ -231,15 +233,22 @@ Two further fallbacks apply after the mode is decided:
   property, `rdf:type` a label), so its app writers — reasoning and cohorts —
   list every batch in the Delta `_inferred` table *before* writing it to Neo4j
   (`InferredTripleLedger`, kept for a domain that is not `full`). Before the net
-  changes the build deletes from Neo4j every listed triple that `_data` does not
-  assert, `SELECT subject, predicate, object FROM <inferred> EXCEPT SELECT subject,
-  predicate, object FROM <data>`, streamed in batches of 500 into
-  `delete_triples` — a triple both inferred and mapped stays. Neo4j keeps one value
-  per property key, label set and name, so deleting a listed literal also unsets an
-  asserted value of the same key: the `_data` triples on the subject and predicate
-  of a deleted one are written again (`LEFT SEMI JOIN`), then `_inferred` is
-  emptied and the net changes applied. A listed triple whose Neo4j write failed is
-  harmless (its delete removes nothing).
+  changes the build (`TwinListedInferencePurge`) deletes from Neo4j every listed
+  triple that `_data` does not assert, `SELECT subject, predicate, object FROM
+  <inferred> VERSION AS OF <v> EXCEPT SELECT subject, predicate, object FROM <data>
+  VERSION AS OF <latest>`, streamed in batches of 500 into `delete_triples` — a
+  triple both inferred and mapped stays. Both relations are read at pinned versions:
+  `_inferred` at its version read up front, `_data` at the version the net changes go
+  up to. Neo4j keeps one value per property key, label set and name, so deleting a
+  listed literal also unsets an asserted value of the same key: the `_data` triples
+  on the subject and predicate of a deleted one are written again (`LEFT SEMI JOIN`),
+  then only the rows of `_inferred` version `<v>` leave the list (`DELETE … WHERE
+  EXISTS (… VERSION AS OF <v> …)`, not a `TRUNCATE`: a reasoning run listing during
+  the purge keeps its rows) and the net changes are applied. A listed triple whose
+  Neo4j write failed is harmless (its delete removes nothing). Such a store records
+  `inferred_listed` in the trace and only continues from a base run that did: the
+  inferences of an earlier build were never listed, so the first build after the
+  upgrade streams in full (`no_previous_version`).
 
 ## What a build does per backend
 
@@ -280,7 +289,10 @@ nothing. When `_data` already is the incremental main build's materialized view 
 tick refreshes it in place instead of replacing it: `incremental` runs one triggered
 update of the slot pipeline, then `REFRESH MATERIALIZED VIEW`; `microbatch` only
 refreshes (its continuous pipeline keeps `_slots` current). A `_graph` materialized
-view is refreshed right after it. It does so only while
+view is refreshed right after it. On the **Lakehouse engine**, whose graph is `_data`,
+the tick does the same and streams nothing into the store (as the main build); any
+other `_data` there is rebuilt from the gateway VIEW the way the main build builds it
+(a table, or the domain's pass-through view). It refreshes in place only while
 the view still has the current definition: the tick recompiles the mappings and
 compares the MV definition fingerprint and the slot pipeline's SQL fingerprint, so
 mappings edited since the last main build are picked up by the CTAS (the next main
@@ -295,8 +307,10 @@ In the incremental and microbatch modes `_data` and, on the Lakehouse engine,
 managed tables, materialized views and streaming tables, not plain views): graph
 queries read `_graph`, so RT serves the union of mapped and inferred triples. A
 source change reaches it with `_data`'s refresh (the build, the tick, or
-`TRIGGER ON UPDATE` in `microbatch`); an inferred triple lags only until the
-`REFRESH … ASYNC` its write starts completes.
+`TRIGGER ON UPDATE` in `microbatch`) and `_graph`'s after it: two chained `TRIGGER
+ON UPDATE` refreshes, each at most once a minute, so in `microbatch` `_graph` can
+trail `_data` by up to a minute more. An inferred triple is in `_graph` once its
+write returns (the write waits for the refresh).
 
 Graph reads go to the query warehouse (`graph_engine_config.lakehouse.warehouse_id`
 plus "Use Lakehouse//RT for queries"). A heavy traversal can trip an RT guardrail
@@ -328,6 +342,7 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `live_drift` | a realtime tick found `_live` and the slots apart (tick runs only; restart the stream) |
 | `realtime_run_id`, `realtime_state` | the stream job run a `realtime` build started (or a later build stopped), its state (`PENDING`, `RUNNING`, `CANCELLING`, `failed:<Error>`); `""` otherwise |
 | `graph_relation` | `mv` when the build made `_graph` a materialized view, `view` for the union VIEW |
+| `inferred_listed` | the store lists its inferences in `_inferred` (Neo4j); a later net apply needs a base run with it |
 
 The Knowledge Graph › Runs cockpit shows the effective mode (with the requested
 one and the fallback reason when they differ), the strategy / refresh technique
@@ -463,19 +478,26 @@ Without those variables the test is skipped, so the unit run stays offline.
 **Freshness and drift.** `scripts/measure_freshness.py` (`FreshnessProbe`) measures
 the design's KPIs on a domain that already runs in its mode. It updates one row of a
 source table `--changes` times (default 5, `--spacing` 10 s apart), each time to a
-new marker value of a column the domain maps as a plain literal, and polls every
-configured path until the marker is the object of a triple there: `data` / `graph`
-(`_data` / `_graph` on the warehouse; `--read-warehouse-id` is the Lakehouse//RT
-query warehouse) and `sync` / `live` (the Lakebase synced table and `_live`, with
-`--pg-dsn`). It reports p50 / p95 / p99 per path (a change not seen within
-`--timeout`, default 120 s, counts as never seen), reconciles `_data` with the batch
-recompute (the gateway VIEW), the synced table and `_live` (`SlotReconciler.compare`;
-`slots_data` is reported but not judged, since batch mappings feed `_data` too),
-restores the row and checks the SLOs of `--mode`:
+new marker value of a column the domain maps as a plain literal (a text column takes
+a text marker, a numeric one a number written through `CAST` and expected as `CAST(…
+AS STRING)` prints it), and polls every path — each on its own thread (one Postgres
+connection per Lakebase path), timed from the write — until the marker is the object
+of a triple there: `data` / `graph` (`_data` / `_graph` on the warehouse;
+`--read-warehouse-id` is the Lakehouse//RT query warehouse) and `sync` / `live` (the
+Lakebase synced table and `_live`, with `--pg-dsn`). `--paths` defaults to `data,graph`,
+plus `live` in `realtime` and `sync` when `--sync-table` is set; a Lakebase path
+without its DSN and table is a usage error. It reports p50 / p95 / p99 per path (a
+change not seen within `--timeout`, default 120 s, counts as never seen); once the
+last change is seen it reconciles `_data` with the batch recompute (the gateway VIEW),
+the synced table and `_live` (`SlotReconciler.compare`; `slots_data` is reported but
+not judged, since batch mappings feed `_data` too), then restores the row and checks
+the SLOs of `--mode`. Only a fixture table is updated: its name must match
+`--allow-pattern` (default `*ob_it_*,*fixture*`), and a key that names no row is a
+usage error (exit status 2, nothing written).
 
 | Mode | SLO |
 |---|---|
-| `microbatch` | `graph` ≤ 30 s p95 (Lakehouse//RT), `sync` ≤ 60 s p95 (Lakebase) |
+| `microbatch` | `graph` ≤ 30 s p95 (Lakehouse//RT), `sync` ≤ 60 s p95 (Lakebase) — with the chained `TRIGGER ON UPDATE` of `_data` and `_graph` (each at most once a minute) the `graph` path can miss it by design ([Lakehouse//RT](#lakehousert)) |
 | `realtime` | `live` ≤ 1 s p99, `sync` ≤ 60 s p95 |
 | every mode | no drift in `view_data`, `sync_data`, `live_slots` |
 
@@ -498,8 +520,12 @@ asserts the SLOs; it is skipped without `ONTOBRICKS_EXTERNAL_WAREHOUSE=1`, the
 credentials and the domain (`ONTOBRICKS_FRESHNESS_STEM`, `_SOURCE_TABLE`,
 `_KEY_COLUMN`, `_KEY_VALUE`, `_VALUE_COLUMN`). The nightly `external-smoke` job runs it
 as a **non-blocking** step (`continue-on-error`, a warning annotation and a step
-summary with the report) when the repository variables `ONTOBRICKS_INT_FRESHNESS_*`
-name an integration domain.
+summary with the report) when the repository variables name an integration domain:
+`ONTOBRICKS_INT_FRESHNESS_STEM`, `_MODE` (default `microbatch`), `_SOURCE_TABLE`,
+`_KEY_COLUMN`, `_KEY_VALUE`, `_VALUE_COLUMN`, `_ALLOW_PATTERN`, `_SYNC_TABLE` and
+`_LIVE_TABLE`, plus `ONTOBRICKS_INT_RT_WAREHOUSE_ID` (the Lakehouse//RT query
+warehouse) and the repository **secret** `ONTOBRICKS_INT_LAKEBASE_DSN` (the Lakebase
+libpq DSN for `sync` / `live`). An empty variable reads as unset.
 
 ## Design traceability
 
@@ -512,7 +538,7 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples; the MERGE *skip* (no source change) keeps it |
 | 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | SCD1 physical deletes stand in for a `deleted` column |
 | 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource; development targets set `presets: {name_prefix: "", pipelines_development: false}` and the runner also finds a `[dev <user>] ` name |
-| 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ✅ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation): the Lakehouse engine, the only one whose readers read `_graph`; Lakebase / Neo4j keep the VIEW); `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
+| 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ◐ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation)); deviation: `_graph` is an MV on the Lakehouse engine only (the only one whose readers read it), Lakebase / Neo4j — every `realtime` domain among them — keep the VIEW; `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
 | 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
 | 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ◐ | from `_data` only (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode` |
 | 1 P0 | Build-run trace: mode, refresh technique, fallback reason | ✅ | `stats.materialization`; cockpit column, details and status card |
@@ -539,6 +565,16 @@ with pre-images, `seq_rank` 0), so its fingerprint changed: that first build run
 full refresh of the slot pipeline, and until it has run the scheduled ticks rebuild
 `_data` by CTAS (the slot pipeline no longer runs the current SQL).
 
+Also after upgrading:
+
+- **Lakehouse domains with a schedule.** Earlier scheduled ticks on the Lakehouse
+  engine appended every asserted triple to `_inferred` (and created a stray
+  `<Name>_V<n>` table in the warehouse's default schema); a tick no longer does. Run
+  one main build, whose inferred reset empties `_inferred`, and drop the stray table.
+- **Neo4j domains** that are not `full`, MERGE-promoted ones included, stream in full
+  once (`no_previous_version`): their earlier inferences were never listed, so a net
+  apply could not purge them.
+
 Behaviour in this release:
 
 - `augment_mappings_from_config` assigns a `sql_query` to every configured
@@ -553,7 +589,21 @@ Behaviour in this release:
   whose builds keep streaming in full (e.g. `changeset_too_large`) accumulates
   listed triples until one does (harmless: deleting an absent triple removes
   nothing). An inferred literal that overwrote a mapped value of the same key
-  leaves Neo4j showing the inferred value until the purge, as before.
+  leaves Neo4j showing the inferred value until the purge, as before. Residuals of
+  the purge, from the property-graph model (`Neo4jWriteOps.delete_triples`):
+  - predicates map to property keys and relationship types by **local name**, so
+    deleting a listed triple also removes a mapped one of another predicate URI with
+    the same local name; only same-predicate triples are written again;
+  - a node left with only its marker label, no relationship and no name is swept
+    (deleted) — a node whose only class came from an inference;
+  - a **multi-valued** literal (several objects of one predicate) is one property:
+    deleting one listed value unsets the key, and the rewrite restores one asserted
+    value (Neo4j keeps one per key in any case);
+  - a reasoning run that lists a triple identical to one being purged, while the
+    purge runs, loses that listing (the list is cleared by triple values).
+- A write to `_inferred` on the Lakehouse engine (reasoning, cohorts, the purge)
+  waits for the synchronous `_graph` refresh: the writer takes as long as the refresh,
+  and readers see the old union until it completes.
 - The MERGE fallback engages for any slot-pipeline failure in `incremental`
   (every runner message mentions the pipeline); `microbatch` falls back to CTAS.
   The MERGE skip only fires for all-row-local domains. A MERGE build sets the table
@@ -596,8 +646,10 @@ Live-unverified (workspace spike checklist):
 - `ImportFormat.AUTO` for the pipeline notebook; the stop→start race of a
   continuous pipeline.
 - A build's `REFRESH MATERIALIZED VIEW` while a `TRIGGER ON UPDATE` or scheduled
-  refresh of the same view is running; `REFRESH MATERIALIZED VIEW … ASYNC` and a
-  `TRIGGER ON UPDATE` `_graph` MV whose upstream is the `_data` MV.
+  refresh of the same view is running.
+- The Neo4j purge's time-travel reads (`VERSION AS OF` on the `_data` MV and on
+  `_inferred`) and its `DELETE … WHERE EXISTS` over a time-travel copy of the same
+  table.
 - A foreign or shared (Delta Sharing) source table counted toward the ten upstream
   sources of `TRIGGER ON UPDATE`.
 - A CTAS `_data` that keeps a triggered/continuous registration — the scheduled
