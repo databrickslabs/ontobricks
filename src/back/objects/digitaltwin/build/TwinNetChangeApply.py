@@ -16,18 +16,23 @@ and writes only the net deletes, then the net inserts:
   ``<graph>_sync``, the asserted table (never the ``__app`` companion);
 * Neo4j: ``delete_triples`` / ``insert_triples``.
 
-Afterwards the store's inferences are purged, as the full stream (which drops
-the graph) would have discarded them. A store that cannot purge them alone, no
-base run on the same relation, an unreadable (or half-read) change feed or a
-changeset above 10 % of the graph hands the build back to the full stream, with
-``apply_fallback_reason`` set.
+The store's inferences are purged, as the full stream (which drops the graph)
+would have discarded them: Lakebase afterwards, on its own
+(``purge_materialized_triples``); Neo4j, which cannot mark a triple as
+inferred, first, from the list its app writers keep in ``…_inferred``
+(:class:`InferredTripleLedger`) — every listed triple that ``…_data`` does not
+assert (``…_inferred EXCEPT …_data``) is deleted, the asserted triples those
+deletes unset are written again, and the list is emptied. A store with neither
+path, no base run on the same relation, an unreadable (or half-read) change
+feed or list, or a changeset above 10 % of the graph hands the build back to
+the full stream, with ``apply_fallback_reason`` set.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterable, Iterator
-from itertools import groupby
+from itertools import groupby, islice
 from typing import Any
 
 from back.core.errors import InfrastructureError
@@ -52,7 +57,10 @@ _LAKEBASE_INSERT_BATCH_SIZE = 5000
 
 
 class _ChangeFeedReadError(InfrastructureError):
-    """The change feed failed while its net changes were being written (not a store write)."""
+    """A warehouse read (the change feed, the listed inferences) failed while its rows were written.
+
+    Not a store write: those keep their own type and fail the build.
+    """
 
 
 class TwinNetChangeApply:
@@ -89,7 +97,9 @@ class TwinNetChangeApply:
 
         t0 = time.time()
         client, data = pipe.source_client, pipe.data_table
-        if getattr(pipe.store, "supports_materialized_inference_purge", False) is not True:
+        ledger = TwinNetChangeApply._ledger(pipe.store)
+        purges_itself = getattr(pipe.store, "supports_materialized_inference_purge", False) is True
+        if ledger is None and not purges_itself:
             return TwinNetChangeApply._fall_back(pipe, "inferred_not_separable")
         try:
             latest = ChangeFeedReader.latest_version(client, data)
@@ -103,10 +113,14 @@ class TwinNetChangeApply:
         if since > latest:
             return TwinNetChangeApply._fall_back(pipe, "cdf_unavailable")
         pipe.triple_count = pipe._count_source_triples()
+        if since < latest and not TwinNetChangeApply._changeset_fits(pipe, since, latest):
+            return False
+        pipe.apply_mode = "net_changes"  # before the writes: a failed one leaves no base
+        if ledger is not None and not TwinNetChangeApply._purge_listed(pipe, ledger.inferred_fqn):
+            return False
         if since < latest and not TwinNetChangeApply._apply_window(pipe, since, latest):
             return False
-        pipe.apply_mode = "net_changes"
-        TwinNetChangeApply._finish(pipe)
+        TwinNetChangeApply._finish(pipe, purge=ledger is None)
         pipe._log_phase("net_apply", t0)
         logger.info(
             "[DT-BUILD %s] applied the net changes of %s v%d..v%d to %s (%d triples)",
@@ -147,13 +161,16 @@ class TwinNetChangeApply:
         return version
 
     @staticmethod
-    def _apply_window(pipe: Any, since: int, latest: int) -> bool:
-        """Write the net changes of ``(since, latest]``; ``False`` after a fallback.
+    def _ledger(store: Any) -> Any:
+        """The store's :class:`InferredTripleLedger` (Neo4j), ``None`` for a store without one."""
+        from back.core.graphdb.delta import InferredTripleLedger
 
-        Refuses a changeset above :data:`MAX_CHANGESET_RATIO`. A change feed
-        that fails half-way falls back too: the full stream drops the graph, so
-        the deletes already written do no harm.
-        """
+        ledger = getattr(store, "inferred_ledger", None)
+        return ledger if isinstance(ledger, InferredTripleLedger) else None
+
+    @staticmethod
+    def _changeset_fits(pipe: Any, since: int, latest: int) -> bool:
+        """The changeset of ``(since, latest]`` is within :data:`MAX_CHANGESET_RATIO`; else a fallback."""
         from back.core.graphdb.delta import ChangeFeedReader
 
         client, data = pipe.source_client, pipe.data_table
@@ -163,7 +180,108 @@ class TwinNetChangeApply:
             return TwinNetChangeApply._fall_back(pipe, "cdf_unavailable", exc)
         if ratio > MAX_CHANGESET_RATIO:
             return TwinNetChangeApply._fall_back(pipe, "changeset_too_large")
-        pipe.apply_mode = "net_changes"  # before the writes: a failed one leaves no base
+        return True
+
+    @staticmethod
+    def _purge_listed(pipe: Any, inferred: str) -> bool:
+        """Delete the listed inferences ``…_data`` does not assert; ``False`` after a fallback.
+
+        ``…_inferred EXCEPT …_data`` is streamed into ``store.delete_triples``
+        in batches. Neo4j keeps one value per node property, label set and
+        name, so deleting a listed literal also unsets an asserted value of the
+        same key: the ``…_data`` triples on the subject and predicate of a
+        deleted one are written again. The list is then emptied. A list that
+        cannot be read falls back to the full stream (``inferred_unreadable``),
+        which drops the graph, so the deletes already written do no harm.
+        """
+        from back.core.graphdb.delta import materialize
+
+        client, store = pipe.source_client, pipe.store
+        listed = TwinNetChangeApply.listed_inferences_sql(inferred, pipe.data_table)
+        deleted = restored = 0
+        try:
+            exists = TwinNetChangeApply._listed(client, inferred)
+            if exists:
+                deleted = TwinNetChangeApply._in_batches(
+                    pipe, TwinNetChangeApply._rows(client, listed), store.delete_triples
+                )
+            if deleted:
+                shadowed = TwinNetChangeApply.shadowed_triples_sql(listed, pipe.data_table)
+                restored = TwinNetChangeApply._in_batches(
+                    pipe, TwinNetChangeApply._rows(client, shadowed), store.insert_triples
+                )
+        except _ChangeFeedReadError as exc:
+            return TwinNetChangeApply._fall_back(pipe, "inferred_unreadable", exc)
+        if exists:
+            materialize.truncate_table(client, inferred)
+        logger.info(
+            "[DT-BUILD %s] purged %d listed inference(s) from %s, %d asserted triple(s) rewritten",
+            pipe.task_id,
+            deleted,
+            pipe.graph_name,
+            restored,
+        )
+        return True
+
+    @staticmethod
+    def listed_inferences_sql(inferred: str, data: str) -> str:
+        """The listed inferences ``…_data`` does not assert: ``<inferred> EXCEPT <data>``."""
+        from back.core.helpers import validate_table_name
+
+        validate_table_name(inferred)
+        validate_table_name(data)
+        return (
+            f"SELECT subject, predicate, object FROM {inferred}\n"
+            "EXCEPT\n"
+            f"SELECT subject, predicate, object FROM {data}"
+        )
+
+    @staticmethod
+    def shadowed_triples_sql(listed_sql: str, data: str) -> str:
+        """The ``…_data`` triples on the subject and predicate of a listed inference (*listed_sql*)."""
+        return (
+            f"SELECT d.subject, d.predicate, d.object FROM {data} d\n"
+            f"LEFT SEMI JOIN ({listed_sql}) x\n"
+            "ON d.subject = x.subject AND d.predicate = x.predicate"
+        )
+
+    @staticmethod
+    def _listed(client: Any, inferred: str) -> bool:
+        """``…_inferred`` exists (a domain that never reasoned has none); a failed probe is a read error."""
+        from back.core.graphdb.delta import materialize
+
+        try:
+            return materialize.relation_exists(client, inferred, strict=True)
+        except InfrastructureError as exc:
+            raise _ChangeFeedReadError(exc.message, detail=exc.detail) from exc
+
+    @staticmethod
+    def _rows(client: Any, sql: str) -> Iterator[dict]:
+        """``client.iter_rows(sql)``, its failures raised as :class:`_ChangeFeedReadError`."""
+        try:
+            yield from client.iter_rows(sql, batch_size=_NEO4J_BATCH_SIZE)
+        except Exception as exc:  # noqa: BLE001 — translated, not swallowed
+            raise _ChangeFeedReadError(f"Could not read {sql!r}: {exc}", detail=str(exc)) from exc
+
+    @staticmethod
+    def _in_batches(pipe: Any, rows: Iterable[dict], write: Callable[..., Any]) -> int:
+        """``write(graph, batch, batch_size=…)`` per batch of *rows*; the number of rows written."""
+        triples, total = TwinNetChangeApply._triples(rows), 0
+        while batch := list(islice(triples, _NEO4J_BATCH_SIZE)):
+            write(pipe.graph_name, batch, batch_size=_NEO4J_BATCH_SIZE)
+            total += len(batch)
+        return total
+
+    @staticmethod
+    def _apply_window(pipe: Any, since: int, latest: int) -> bool:
+        """Write the net changes of ``(since, latest]``; ``False`` after a fallback.
+
+        A change feed that fails half-way falls back: the full stream drops the
+        graph, so the deletes already written do no harm.
+        """
+        from back.core.graphdb.delta import ChangeFeedReader
+
+        client, data = pipe.source_client, pipe.data_table
         pipe.tm.update_progress(
             pipe.task_id, 50, f"Applying the net changes of {data} since v{since}..."
         )
@@ -215,9 +333,10 @@ class TwinNetChangeApply:
             )
 
     @staticmethod
-    def _finish(pipe: Any) -> None:
-        """Purge the inferences (which also rebuilds the graph cache), then optimize."""
-        pipe.store.purge_materialized_triples(pipe.graph_name)
+    def _finish(pipe: Any, *, purge: bool) -> None:
+        """Optimize; with *purge*, the store purges its inferences first (and rebuilds its graph cache)."""
+        if purge:
+            pipe.store.purge_materialized_triples(pipe.graph_name)
         pipe.store.optimize_table(pipe.graph_name)
 
     @staticmethod

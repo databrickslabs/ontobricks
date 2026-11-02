@@ -131,8 +131,12 @@ class Neo4jStore(GraphDBBackend):
         self,
         db_name: str = DEFAULT_GRAPH_NAME,
         engine_config: Optional[Dict[str, Any]] = None,
+        inferred_ledger: Any = None,
     ) -> None:
         self.db_name = db_name
+        # InferredTripleLedger: where the app writers list the inferred triples
+        # they write here (no Neo4j triple can be marked as inferred).
+        self.inferred_ledger = inferred_ledger
         self.engine_config: Dict[str, Any] = engine_config or {}
         cfg = self.engine_config
 

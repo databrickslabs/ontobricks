@@ -506,6 +506,8 @@ class ReasoningService:
     def materialize_inferred(self, result: ReasoningResult) -> int:
         """Insert inferred triples into the triplestore.
 
+        A store that keeps a ledger (Neo4j) has them listed first
+        (:class:`InferredTripleLedger`), so a net-change build can purge them.
         Returns the number of triples inserted.
         """
         if self._store is None or not result.inferred_triples:
@@ -520,6 +522,9 @@ class ReasoningService:
         if not triples:
             return 0
 
+        from back.core.graphdb.delta.InferredTripleLedger import InferredTripleLedger
+
+        InferredTripleLedger.record_for(self._store, triples)
         count = self._store.insert_triples(table_name, triples)
         if count > 0:
             optimize_fn = getattr(self._store, "optimize_inferred_companion", None)

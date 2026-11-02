@@ -205,8 +205,14 @@ class GraphDBFactory:
         base_name = info.get("name", DEFAULT_GRAPH_NAME)
         version = getattr(domain, "current_version", "1") or "1"
         db_name = "%s_V%s" % (base_name, version)
+        from back.core.graphdb.delta.InferredTripleLedger import InferredTripleLedger
+
         try:
-            return Neo4jStore(db_name=db_name, engine_config=cfg)
+            return Neo4jStore(
+                db_name=db_name,
+                engine_config=cfg,
+                inferred_ledger=InferredTripleLedger.for_domain(domain, settings),
+            )
         except (ValueError, NotImplementedError) as exc:
             logger.warning("Neo4jStore configuration error: %s", exc)
             return None

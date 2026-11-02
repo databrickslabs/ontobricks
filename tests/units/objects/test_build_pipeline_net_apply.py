@@ -606,8 +606,58 @@ class TestLakebaseNetApply:
         assert not _streamed(log)
 
 
+_INFERRED = "cat.sch.triplestore_dom_V3_inferred"
+_LISTED = [
+    {"subject": "http://ex.org/c1", "predicate": "http://ex.org/status", "object": "VIP"},
+]
+_SHADOWED = [
+    {"subject": "http://ex.org/c1", "predicate": "http://ex.org/status", "object": "regular"},
+]
+
+
+class _ListedWarehouse(_CDFWarehouse):
+    """The CDF warehouse, plus the Neo4j inference list ``…_inferred``.
+
+    ``SHOW TABLES`` finds it when *listed* is not ``None``; the ``EXCEPT`` read
+    yields *listed* (or raises *list_error*) and the semi-join *shadowed*.
+    """
+
+    def __init__(self, log, *, listed=None, shadowed=(), list_error=None, **kw):
+        super().__init__(log, **kw)
+        self._listed, self._shadowed, self._list_error = listed, list(shadowed), list_error
+
+    def execute_query(self, sql: str):
+        if sql.startswith("SHOW TABLES") and "_inferred'" in sql:
+            self._record(sql)
+            return [] if self._listed is None else [{"tableName": "triplestore_dom_v3_inferred"}]
+        return super().execute_query(sql)
+
+    def iter_rows(self, sql: str, batch_size: int = 5000):
+        if "LEFT SEMI JOIN" in sql:
+            self._record(sql)
+            return iter(self._shadowed)
+        if "\nEXCEPT\n" in sql:
+            self._record(sql)
+            return self._list()
+        return super().iter_rows(sql, batch_size)
+
+    def _list(self):
+        if self._list_error is not None:
+            raise self._list_error
+        yield from self._listed or []
+
+
+def _neo4j_pipeline(registry, **kw):
+    """An incremental Neo4j build whose store lists its inferences in ``…_inferred``."""
+    from back.core.graphdb.delta import InferredTripleLedger
+
+    pipe = _net_pipeline(registry, backend="neo4j", purge=False, **kw)
+    pipe.store.inferred_ledger = InferredTripleLedger(lambda: None, _INFERRED)
+    return pipe
+
+
 class TestNeo4jNetApply:
-    def test_without_separable_inferences_the_graph_is_streamed(self, registry):
+    def test_a_store_with_neither_purge_path_is_streamed(self, registry):
         pipe = _net_pipeline(registry, backend="neo4j", purge=False)
 
         log, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
@@ -617,18 +667,73 @@ class TestNeo4jNetApply:
         assert not any("table_changes(" in s for s in warehouse.calls)
         pipe.store.delete_triples.assert_not_called()
 
-    def test_a_store_that_purges_inferences_gets_deletes_then_inserts_in_lists(self, registry):
-        pipe = _net_pipeline(registry, backend="neo4j", purge=True)
+    def test_the_listed_inferences_go_first_then_the_net_changes(self, registry):
+        pipe = _neo4j_pipeline(registry)
+        writes = _store_writes(pipe.store, "delete_triples", "insert_triples")
+        warehouse = _ListedWarehouse([], listed=_LISTED, shadowed=_SHADOWED, changes=_TWO_CHANGES)
+
+        log, _, warehouse = _modes._run(pipe, warehouse=warehouse)
+
+        assert [(name, rows) for name, _, rows, _ in writes] == [
+            ("delete_triples", _LISTED),
+            ("insert_triples", _SHADOWED),
+            ("delete_triples", [{"subject": "http://ex.org/old", "predicate": "http://ex.org/p", "object": "o"}]),
+            ("insert_triples", [{"subject": "http://ex.org/new", "predicate": "http://ex.org/p", "object": "o"}]),
+        ]
+        assert {size for *_, size in writes} == {500}
+        assert not _streamed(log)
+        assert (pipe.apply_mode, pipe.apply_fallback_reason) == ("net_changes", "")
+        pipe.store.purge_materialized_triples.assert_not_called()
+        pipe.store.optimize_table.assert_called_once_with("G_V3")
+
+    def test_the_list_is_read_as_inferred_except_data_and_then_emptied(self, registry):
+        pipe = _neo4j_pipeline(registry)
+        _store_writes(pipe.store, "delete_triples", "insert_triples")
+
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_ListedWarehouse([], listed=_LISTED, changes=_TWO_CHANGES)
+        )
+
+        listed = TwinNetChangeApply.listed_inferences_sql(_INFERRED, _DATA)
+        assert listed == (
+            f"SELECT subject, predicate, object FROM {_INFERRED}\n"
+            "EXCEPT\n"
+            f"SELECT subject, predicate, object FROM {_DATA}"
+        )
+        read = warehouse.calls.index(listed)
+        feed = [i for i, s in enumerate(warehouse.calls) if "table_changes(" in s]
+        assert feed[0] < read < feed[-1]  # after the changeset count, before its stream
+        assert read < warehouse.calls.index(f"TRUNCATE TABLE {_INFERRED}")
+
+    def test_a_domain_that_never_listed_an_inference_applies_the_net_changes_only(self, registry):
+        pipe = _neo4j_pipeline(registry)
         writes = _store_writes(pipe.store, "delete_triples", "insert_triples")
 
-        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], changes=_TWO_CHANGES))
+        log, _, warehouse = _modes._run(pipe, warehouse=_ListedWarehouse([], changes=_TWO_CHANGES))
 
-        assert [(name, size) for name, _, _, size in writes] == [
-            ("delete_triples", 500),
-            ("insert_triples", 500),
-        ]
+        assert [name for name, *_ in writes] == ["delete_triples", "insert_triples"]
+        assert not any("EXCEPT" in s or s.startswith("TRUNCATE") for s in warehouse.calls)
         assert not _streamed(log)
-        pipe.store.purge_materialized_triples.assert_called_once_with("G_V3")
+
+    def test_the_listed_inferences_are_purged_without_a_new_data_version(self, registry):
+        pipe = _neo4j_pipeline(registry, base_version=9)
+        writes = _store_writes(pipe.store, "delete_triples", "insert_triples")
+
+        _modes._run(pipe, warehouse=_ListedWarehouse([], version=9, listed=_LISTED))
+
+        assert [(name, rows) for name, _, rows, _ in writes] == [("delete_triples", _LISTED)]
+
+    def test_an_unreadable_list_falls_back_to_the_full_stream(self, registry):
+        pipe = _neo4j_pipeline(registry)
+        warehouse = _ListedWarehouse(
+            [], listed=[], list_error=RuntimeError("warehouse gone"), changes=_TWO_CHANGES
+        )
+
+        log, _, _ = _modes._run(pipe, warehouse=warehouse)
+
+        assert _streamed(log)
+        assert pipe.apply_fallback_reason == "inferred_unreadable"
+        pipe.store.delete_triples.assert_not_called()
 
 
 class TestNetApplyFallsBackToTheFullStream:
