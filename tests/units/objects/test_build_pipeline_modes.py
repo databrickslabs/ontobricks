@@ -25,6 +25,7 @@ from back.objects.digitaltwin.build import (
     TwinBuildPostMaterialize,
     TwinIncrementalBuild,
     TwinLakebaseSync,
+    TwinSlotPipeline,
 )
 from tests.units.dtwin import test_build_pipeline_streaming as _streaming
 from tests.units.objects.test_build_pipeline_materialize import _DATA, _VIEW, _bare_pipeline
@@ -688,7 +689,7 @@ class TestLeftoverPipelinesAreStopped:
     def test_a_failed_stop_does_not_fail_the_build(self):
         pipe = _pipeline("incremental")
 
-        with patch("back.objects.digitaltwin.build.TwinIncrementalBuild.logger") as logger:
+        with patch("back.objects.digitaltwin.build.TwinSlotPipeline.logger") as logger:
             log, _, warehouse = _run(
                 pipe,
                 existing="pipe-1",
@@ -824,12 +825,12 @@ class TestSettings:
         else:
             monkeypatch.setenv("DTWIN_SLOT_PIPELINE_TIMEOUT_S", raw)
 
-        assert TwinIncrementalBuild.slot_pipeline_timeout_s() == expected
+        assert TwinSlotPipeline.timeout_s() == expected
 
     def test_the_channel_defaults_to_preview(self):
-        assert TwinIncrementalBuild.slot_pipeline_channel(SimpleNamespace()) == "PREVIEW"
+        assert TwinSlotPipeline.channel(SimpleNamespace()) == "PREVIEW"
         assert (
-            TwinIncrementalBuild.slot_pipeline_channel(
+            TwinSlotPipeline.channel(
                 SimpleNamespace(slot_pipeline_channel="CURRENT")
             )
             == "CURRENT"

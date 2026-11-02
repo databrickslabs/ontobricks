@@ -7,6 +7,7 @@ from typing import Any
 from back.core.errors import OntoBricksError
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinIncrementalBuild import TwinIncrementalBuild
+from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 
 logger = get_logger(__name__)
 
@@ -140,7 +141,7 @@ class TwinScheduledRefresh:
             )
             return False
         if update:
-            TwinIncrementalBuild.run_update(
+            TwinSlotPipeline.run_update(
                 runner, pipeline_id, full_refresh=False, until_running=False
             )
         return True

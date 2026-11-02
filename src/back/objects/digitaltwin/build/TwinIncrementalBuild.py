@@ -13,10 +13,11 @@ a. compile the row-local mappings into a slot pipeline spec, and the batch
    mappings into the translator's ``incremental=True`` SQL;
 b. create/update the per-version Lakeflow slot pipeline (continuous for
    ``microbatch``) — skipped when no mapping is row-local;
-c. run an update and wait for it. A full refresh (new pipeline or changed
-   SQL) always completes as a *triggered* update first, so ``…_data`` is never
-   built over an empty ``…_slots``; a ``microbatch`` pipeline then switches to
-   continuous and is waited for until ``RUNNING``;
+c. run an update and wait for it (b and c: :class:`TwinSlotPipeline`). A full
+   refresh (new pipeline or changed SQL) always completes as a *triggered*
+   update first, so ``…_data`` is never built over an empty ``…_slots``; a
+   ``microbatch`` pipeline then switches to continuous and is waited for until
+   ``RUNNING``;
 d. create ``…_data`` as a materialized view over ``…_slots`` and the batch
    branch (``…_graph`` stays the union VIEW) — or keep it when its definition
    fingerprint is unchanged — and refresh it.
@@ -30,7 +31,6 @@ cancel is never swallowed.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from typing import Any
 
@@ -45,7 +45,7 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
-from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
+from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 
 logger = get_logger(__name__)
 
@@ -60,36 +60,9 @@ _BATCH_SPARQL = (
     "SELECT DISTINCT ?subject ?predicate ?object WHERE { ?subject ?predicate ?object . }"
 )
 
-_TIMEOUT_ENV = "DTWIN_SLOT_PIPELINE_TIMEOUT_S"
-_DEFAULT_TIMEOUT_S = 3600
-_DEFAULT_CHANNEL = "PREVIEW"
-
-#: Pipeline states in which an update may be running (it must be stopped first).
-_ACTIVE_PIPELINE_STATES = frozenset(
-    {"DEPLOYING", "RECOVERING", "RESETTING", "RUNNING", "STARTING", "STOPPING"}
-)
-
 
 class TwinIncrementalBuild:
     """Slot pipeline + materialized ``…_data`` for incremental / microbatch domains."""
-
-    # ------------------------------------------------------------------
-    # Settings
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def slot_pipeline_channel(settings: Any) -> str:
-        """Lakeflow channel of the slot pipeline (``PREVIEW`` unless configured)."""
-        return str(getattr(settings, "slot_pipeline_channel", "") or _DEFAULT_CHANNEL)
-
-    @staticmethod
-    def slot_pipeline_timeout_s() -> int:
-        """``DTWIN_SLOT_PIPELINE_TIMEOUT_S``; 3600 when unset, invalid or not positive."""
-        try:
-            value = int((os.environ.get(_TIMEOUT_ENV) or "").strip())
-        except ValueError:
-            return _DEFAULT_TIMEOUT_S
-        return value if value > 0 else _DEFAULT_TIMEOUT_S
 
     # ------------------------------------------------------------------
     # Hooks
@@ -164,38 +137,7 @@ class TwinIncrementalBuild:
             pipe.source_client, _table_naming.slots_table_fqn(pipe.domain, pipe.settings)
         ):
             return
-        TwinIncrementalBuild._stop_slot_pipeline(pipe)
-
-    @staticmethod
-    def _stop_slot_pipeline(pipe: Any) -> None:
-        """Best-effort stop of this version's slot pipeline when it is active.
-
-        Failures are logged and swallowed: a pipeline left running costs
-        compute, not correctness, and must not fail the full build.
-        """
-        # Follow-up (docs/incremental-materialization.md, Known limitations):
-        # pipelines of earlier versions keep running after a version bump;
-        # only the current version's pipeline is stopped here.
-        from back.core.streaming import SlotPipelineRunner
-
-        name = SlotPipelineRunner.pipeline_name(
-            pipe.domain_name, TwinBuildRunHistory.build_run_key(pipe)[1]
-        )
-        try:
-            runner = SlotPipelineRunner()
-            pipeline_id = runner.find_pipeline_id(name)
-            if pipeline_id and runner.get_state(pipeline_id) in _ACTIVE_PIPELINE_STATES:
-                runner.stop(pipeline_id)
-                logger.info("[DT-BUILD %s] stopped slot pipeline %s", pipe.task_id, name)
-        except OperationCancelledError:
-            raise
-        except OntoBricksError as exc:
-            logger.warning(
-                "[DT-BUILD %s] could not stop slot pipeline %s (non-fatal): %s",
-                pipe.task_id,
-                name,
-                exc,
-            )
+        TwinSlotPipeline.stop_if_active(pipe)
 
     @staticmethod
     def skips_graph_stream(pipe: Any) -> bool:
@@ -267,7 +209,7 @@ class TwinIncrementalBuild:
             )
         slots = definition["slots_fqn"]
         if slots:
-            TwinIncrementalBuild._run_slot_pipeline(pipe, spec)
+            TwinSlotPipeline.run(pipe, spec)
         TwinIncrementalBuild._apply_views(pipe, definition)
         pipe.slots_table = slots
         logger.info(
@@ -335,121 +277,6 @@ class TwinIncrementalBuild:
         if not sql.strip():
             raise ValidationError("The batch mappings translated to no SQL")
         return sql
-
-    @staticmethod
-    def _run_slot_pipeline(pipe: Any, spec: Any) -> None:
-        """Steps b and c: ensure the pipeline, then update and wait.
-
-        A full refresh runs when the pipeline is new or its stored SQL
-        fingerprint differs (flows were added or removed, so stale slots must
-        go). It always runs as a *triggered* update to ``COMPLETED`` — a
-        continuous one would let ``…_data`` be built over a still-empty
-        ``…_slots`` — and the pipeline keeps its previous fingerprint until
-        then, so a failed refresh is retried by the next build. Afterwards the
-        new fingerprint is stamped and a ``microbatch`` pipeline is switched
-        to continuous (waited for until ``RUNNING``).
-
-        Without a full refresh a ``microbatch`` pipeline already running the
-        current SQL is left running; any other active pipeline is stopped
-        before the update.
-        """
-        from back.core.streaming import SlotPipelineRunner
-
-        runner = SlotPipelineRunner()
-        name = SlotPipelineRunner.pipeline_name(
-            pipe.domain_name, TwinBuildRunHistory.build_run_key(pipe)[1]
-        )
-        catalog, schema, _ = spec.slots_fqn.split(".", 2)
-        definition = {
-            "name": name,
-            "catalog": catalog,
-            "schema": schema,
-            "sql_text": spec.to_sql(),
-            "serverless": True,
-            "channel": TwinIncrementalBuild.slot_pipeline_channel(pipe.settings),
-        }
-        current = SlotPipelineRunner.fingerprint(definition["sql_text"])
-        continuous = pipe.mode_decision.effective == "microbatch"
-
-        existing = runner.find_pipeline_id(name)
-        stored = runner.stored_fingerprint(existing) if existing else ""
-        full_refresh = stored != current
-        if existing and continuous and not full_refresh and runner.get_state(existing) == "RUNNING":
-            pipe.slot_pipeline_id = existing
-            logger.info(
-                "[DT-BUILD %s] slot pipeline %s already streams the current SQL",
-                pipe.task_id,
-                name,
-            )
-            return
-
-        pipe.tm.update_progress(pipe.task_id, 27, f"Preparing slot pipeline {name}...")
-        pipeline_id = runner.ensure(
-            **definition,
-            continuous=continuous and not full_refresh,
-            fingerprint=stored if full_refresh else current,
-        )
-        pipe.slot_pipeline_id = pipeline_id
-        if runner.get_state(pipeline_id) in _ACTIVE_PIPELINE_STATES:
-            runner.stop(pipeline_id)
-        TwinIncrementalBuild._update(
-            pipe,
-            runner,
-            pipeline_id,
-            name,
-            full_refresh=full_refresh,
-            until_running=continuous and not full_refresh,
-        )
-        if not full_refresh:
-            return
-        runner.ensure(**definition, continuous=continuous, fingerprint=current)
-        if continuous:
-            TwinIncrementalBuild._update(
-                pipe, runner, pipeline_id, name, full_refresh=False, until_running=True
-            )
-
-    @staticmethod
-    def _update(
-        pipe: Any,
-        runner: Any,
-        pipeline_id: str,
-        name: str,
-        *,
-        full_refresh: bool,
-        until_running: bool,
-    ) -> None:
-        """:meth:`run_update` with the build's cancel check and progress reports."""
-        TwinIncrementalBuild.run_update(
-            runner,
-            pipeline_id,
-            full_refresh=full_refresh,
-            until_running=until_running,
-            cancel_check=pipe._is_cancelled,
-            on_state=lambda state: pipe.tm.update_progress(
-                pipe.task_id, 28, f"Slot pipeline {name}: {state.lower()}"
-            ),
-        )
-
-    @staticmethod
-    def run_update(
-        runner: Any,
-        pipeline_id: str,
-        *,
-        full_refresh: bool,
-        until_running: bool,
-        cancel_check: Callable[[], bool] | None = None,
-        on_state: Callable[[str], None] | None = None,
-    ) -> None:
-        """Start one update of *pipeline_id* and wait for it (``COMPLETED``, or ``RUNNING``)."""
-        update_id = runner.start_update(pipeline_id, full_refresh=full_refresh)
-        runner.wait_for_update(
-            pipeline_id,
-            update_id,
-            timeout_s=TwinIncrementalBuild.slot_pipeline_timeout_s(),
-            cancel_check=cancel_check,
-            on_state=on_state,
-            until_running=until_running,
-        )
 
     @staticmethod
     def _apply_views(pipe: Any, definition: dict) -> None:
