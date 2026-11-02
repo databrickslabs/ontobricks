@@ -356,6 +356,16 @@ class TestScheduledTickKeepsTheIncrementalView:
         [(_, _, kwargs)] = _ensures(log)
         assert kwargs["sync_mode"] == "triggered"
 
+    def test_a_graph_materialized_view_is_refreshed_right_after_the_data(self, slot_runner):
+        log: list = []
+        graph = _DATA.removesuffix("_data") + "_graph"
+
+        self._tick("incremental", log)
+
+        statements = _statements(log)
+        data = statements.index(f"REFRESH MATERIALIZED VIEW {_DATA}")
+        assert statements.index(f"REFRESH MATERIALIZED VIEW {graph}") == data + 1
+
     def test_a_microbatch_tick_only_refreshes_the_view(self, slot_runner):
         log: list = []
 

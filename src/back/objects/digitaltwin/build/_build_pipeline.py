@@ -300,6 +300,7 @@ class _BuildPipeline:
         self.realtime_run_id: str = ""  # the stream run a realtime build started
         self.realtime_state: str = ""
         self.slots_seed_version: int | None = None  # the _slots version _live was seeded at
+        self.graph_relation: str = "view"  # "mv" when TwinGraphRelation made …_graph a materialized view
         self.fingerprint: str = ""
         self.strategy: str = ""  # "merge" when TwinMergeFallback built …_data
         self.apply_mode: str = ""

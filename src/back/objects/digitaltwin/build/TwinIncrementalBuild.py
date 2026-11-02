@@ -19,8 +19,9 @@ c. run an update and wait for it (b and c: :class:`TwinSlotPipeline`). A full
    ``microbatch`` pipeline then switches to continuous and is waited for until
    ``RUNNING``;
 d. create ``…_data`` as a materialized view over ``…_slots`` and the batch
-   branch (``…_graph`` stays the union VIEW) — or keep it when its definition
-   fingerprint is unchanged — and refresh it.
+   branch — or keep it when its definition fingerprint is unchanged — and
+   refresh it; then ``…_graph`` (:class:`TwinGraphRelation`: a materialized
+   view on the Lakehouse engine, the union VIEW elsewhere).
 
 Any :class:`OntoBricksError` in a–d records ``incremental_failed:<Error>`` on
 the mode decision and hands the build back to the ``full`` path, which drops
@@ -47,6 +48,7 @@ from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
     TwinBuildPostMaterialize,
 )
 from back.objects.digitaltwin.build.TwinBuildRunHistory import TwinBuildRunHistory
+from back.objects.digitaltwin.build.TwinGraphRelation import TwinGraphRelation
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 from back.objects.digitaltwin.build.TwinSlotRefreshPlan import (
     REASON_RECONCILE_DRIFT,
@@ -152,9 +154,9 @@ class TwinIncrementalBuild:
     def _leave(pipe: Any, *, only_if_slots_exist: bool = False) -> None:
         """Hand the build to the full path: clear ``…_graph``, stop the slot pipeline.
 
-        A ``…_graph`` MATERIALIZED VIEW (``with_graph_mv``) would block the
-        union VIEW the full path creates, so it is dropped (best-effort; a VIEW
-        or nothing makes the drop fail harmlessly). A ``…_data`` MV is dropped
+        A ``…_graph`` MATERIALIZED VIEW (:class:`TwinGraphRelation`) would block
+        the union VIEW the full path creates, so it is dropped (best-effort; a
+        VIEW or nothing makes the drop fail harmlessly). A ``…_data`` MV is dropped
         by ``materialize.apply_data_relation`` itself.
 
         This version's slot pipeline is stopped if it is running. A requested
@@ -348,7 +350,7 @@ class TwinIncrementalBuild:
 
     @staticmethod
     def _apply_views(pipe: Any, definition: dict, *, full_refresh: bool = False) -> None:
-        """Step d: the ``…_data`` materialized view, a synchronous refresh, its technique.
+        """Step d: the ``…_data`` materialized view, a synchronous refresh, its technique, ``…_graph``.
 
         *definition* holds the :meth:`MaterializedViewBuilder.data_mv_sql` keywords
         (``slots_fqn``, ``batch_branch_sql``, ``refresh_clause``). *full_refresh*
@@ -358,7 +360,8 @@ class TwinIncrementalBuild:
         runs when the stored definition fingerprint (``ontobricks.mv_sql_sha256``)
         differs from the current one; otherwise the existing view is refreshed
         in place. ``refresh_technique`` is read after the REFRESH, so it
-        describes the refresh that actually ran.
+        describes the refresh that actually ran. ``…_graph`` follows
+        (:meth:`TwinGraphRelation.after_data`).
 
         ``drop_existing_table`` is ``True`` whenever the view is created: no
         earlier incremental build is recorded yet (the build-run trace is
@@ -376,14 +379,15 @@ class TwinIncrementalBuild:
             raise ValidationError("Could not resolve the incremental table names")
         client = pipe.source_client
         current = MaterializedViewBuilder.data_mv_sha(**definition)
-        if MaterializedViewBuilder.existing_mv_sha(client, data) == current:
+        created = MaterializedViewBuilder.existing_mv_sha(client, data) != current
+        if created:
+            TwinIncrementalBuild._create_views(pipe, data, graph, inferred, definition)
+        else:
             logger.info(
                 "[DT-BUILD %s] %s definition unchanged; refreshing it in place",
                 pipe.task_id,
                 data,
             )
-        else:
-            TwinIncrementalBuild._create_views(pipe, data, graph, inferred, definition)
         pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
         TwinIncrementalBuild.warehouse_step(
             f"refresh {data}",
@@ -394,6 +398,9 @@ class TwinIncrementalBuild:
         pipe.refresh_technique = MaterializedViewBuilder.last_refresh_technique(client, data)
         pipe.data_table = data
         pipe.data_relation_mode = TwinBuildPostMaterialize.MATERIALIZED_VIEW
+        TwinGraphRelation.after_data(
+            pipe, data=data, graph=graph, inferred=inferred, definition=definition, created=created
+        )
 
     @staticmethod
     def _create_views(pipe: Any, data: str, graph: str, inferred: str, definition: dict) -> None:
@@ -409,7 +416,8 @@ class TwinIncrementalBuild:
                 graph_fqn=graph,
                 inferred_fqn=inferred,
                 drop_existing_table=True,
-                with_graph_mv=False,
+                with_graph_mv=TwinGraphRelation.materialized(pipe),
+                graph_refresh_clause=TwinGraphRelation.refresh_clause(definition),
                 **definition,
             ),
         )

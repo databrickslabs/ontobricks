@@ -13,6 +13,7 @@ from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.graphdb.delta.DeltaBase import create_databricks_client
 from back.core.graphdb.delta.DeltaOverviewStats import DeltaOverviewStats
+from back.core.graphdb.delta.GraphRelation import GraphRelation
 from back.core.graphdb.entity_search import (
     is_missing_relation_error,
     is_view_not_table_error,
@@ -284,14 +285,14 @@ class DeltaFlatStore(GraphDBBackend):
         raise ValueError(f"Cannot resolve inferred companion table for {table_name!r}")
 
     def _ensure_companion_objects(self, table_name: str) -> str:
-        """Ensure inferred TABLE + union graph VIEW exist before app writes."""
+        """Ensure inferred TABLE + union graph VIEW (a graph MV is kept) exist before app writes."""
         inferred = self._writable_table_fqn(table_name)
         materialize.ensure_inferred_table(self._client, inferred)
         if self._domain is not None:
             data = _table_naming.data_table_fqn(self._domain, self._settings)
             graph = _table_naming.graph_view_fqn(self._domain, self._settings)
             if data and graph:
-                materialize.ensure_graph_view(self._client, graph, data, inferred)
+                GraphRelation.ensure_view(self._client, graph, data, inferred)
         return inferred
 
     def synced_table_name(self, table_name: str) -> str:
@@ -423,13 +424,17 @@ class DeltaFlatStore(GraphDBBackend):
         """Insert triples, routing app writes to the inferred companion table.
 
         In raw mode (``domain is None``) writes go directly to *table_name*.
+        A ``…_graph`` materialized view over the companion written is then
+        refreshed (``GraphRelation.refresh_after_write``).
         """
         target = (
             table_name
             if self._domain is None
             else self._ensure_companion_objects(table_name)
         )
-        return self._execute_insert_triples(target, triples, batch_size, on_progress)
+        written = self._execute_insert_triples(target, triples, batch_size, on_progress)
+        GraphRelation.refresh_after_write(self._client, target)
+        return written
 
     def optimize_inferred_companion(self, table_name: str) -> None:
         """Compact and re-cluster the inferred companion after app writes."""
@@ -459,6 +464,7 @@ class DeltaFlatStore(GraphDBBackend):
                 return 0
             raise
         materialize.truncate_table(self._client, inferred)
+        GraphRelation.refresh_after_write(self._client, inferred)
         from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
 
         rebuild_graph_cache_if_enabled(self, table_name, self._domain)

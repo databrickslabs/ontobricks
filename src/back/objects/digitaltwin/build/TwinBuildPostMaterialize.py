@@ -51,7 +51,7 @@ class TwinBuildPostMaterialize:
 
     @staticmethod
     def reset_inferred_companion(pipe: Any) -> bool:
-        """Empty ``…_inferred`` and refresh the ``…_graph`` union view.
+        """Empty ``…_inferred`` and refresh ``…_graph`` (the union VIEW, or its materialized view).
 
         Applies to the ``databricks`` backend only. Lakebase and Neo4j drop and
         recreate their graph table in the full rebuild, which discards
@@ -64,7 +64,7 @@ class TwinBuildPostMaterialize:
         ``tm.fail_task``.
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
-        from back.core.graphdb.delta import _table_naming, materialize
+        from back.core.graphdb.delta import GraphRelation, _table_naming, materialize
 
         backend = GraphDBFactory._resolve_triple_store_backend(
             pipe.domain, pipe.settings
@@ -93,7 +93,11 @@ class TwinBuildPostMaterialize:
             materialize.run_sql(
                 pipe.source_client, materialize.build_truncate_sql(inferred)
             )
-            materialize.ensure_graph_view(pipe.source_client, graph, data, inferred)
+            if getattr(pipe, "graph_relation", "") == GraphRelation.MATERIALIZED:
+                # TwinGraphRelation made …_graph an MV: refreshing it drops the old inferences.
+                GraphRelation.refresh_materialized(pipe.source_client, graph)
+            else:
+                materialize.ensure_graph_view(pipe.source_client, graph, data, inferred)
         except Exception as exc:  # noqa: BLE001
             msg = f"Could not reset the inferred triples table {inferred}: {exc}"
             logger.error("[DT-BUILD %s] %s", pipe.task_id, msg)

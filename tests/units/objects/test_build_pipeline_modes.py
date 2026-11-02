@@ -92,7 +92,7 @@ class _Warehouse:
         tracked: bool = True,
         fail_on: str | None = None,
         count=5,
-        mv_sha: str = "",
+        mv_sha: str | dict = "",
         slots_exist: bool = False,
         technique: str = "ROW_BASED",
     ):
@@ -114,7 +114,9 @@ class _Warehouse:
     def execute_query(self, sql: str):
         self._record(sql)
         if sql.startswith("SHOW TBLPROPERTIES") and "ontobricks.mv_sql_sha256" in sql:
-            return [{"key": "ontobricks.mv_sql_sha256", "value": self._mv_sha}]
+            relation = sql.split()[2]
+            sha = self._mv_sha.get(relation, "") if isinstance(self._mv_sha, dict) else self._mv_sha
+            return [{"key": "ontobricks.mv_sql_sha256", "value": sha}]
         if sql.startswith("SHOW TBLPROPERTIES"):
             return [{"key": "delta.enableRowTracking", "value": str(self._tracked).lower()}]
         if sql.startswith("SHOW TABLES"):
@@ -302,13 +304,47 @@ class TestIncremental:
         assert pipe.data_relation_mode == "materialized_view"
         assert pipe._triples_source_relation() == _DATA
 
-    def test_the_graph_stays_the_union_view(self):
-        _, _, warehouse = _run(_pipeline("incremental"))
+    def test_a_lakehouse_graph_becomes_a_materialized_view_refreshed_after_the_data(self):
+        pipe = _pipeline("incremental")
+
+        log, _, warehouse = _run(pipe)
+
+        assert any(
+            s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {_GRAPH}") for s in warehouse.calls
+        )
+        assert not any(s.startswith(f"CREATE OR REPLACE VIEW {_GRAPH} AS") for s in warehouse.calls)
+        assert _sql_index(log, f"REFRESH MATERIALIZED VIEW {_DATA}") < _sql_index(
+            log, f"REFRESH MATERIALIZED VIEW {_GRAPH}"
+        )
+        assert pipe.graph_relation == "mv"
+
+    def test_another_engine_keeps_the_graph_union_view(self):
+        pipe = _pipeline("incremental", backend="lakebase")
+
+        _, _, warehouse = _run(pipe)
 
         assert not any(
             s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {_GRAPH}") for s in warehouse.calls
         )
-        assert any(s.startswith(f"CREATE OR REPLACE VIEW {_GRAPH} AS") for s in warehouse.calls)
+        assert pipe.graph_relation == "view"
+
+    def test_the_build_run_records_the_graph_relation(self):
+        from back.objects.digitaltwin.build import TwinBuildRunHistory
+
+        pipe = _pipeline("incremental")
+
+        _run(pipe)
+
+        assert TwinBuildRunHistory.build_run_stats(pipe)["materialization"]["graph_relation"] == "mv"
+
+    def test_a_full_build_replaces_a_graph_materialized_view_by_the_union_view(self):
+        _, _, warehouse = _run(_pipeline("full"))
+
+        drop = warehouse.calls.index(f"DROP MATERIALIZED VIEW IF EXISTS {_GRAPH}")
+        create = next(
+            i for i, s in enumerate(warehouse.calls) if s.startswith(f"CREATE OR REPLACE VIEW {_GRAPH}")
+        )
+        assert drop < create
 
     def test_an_existing_data_table_is_dropped_on_every_incremental_build(self):
         _, _, warehouse = _run(_pipeline("incremental"))
@@ -730,10 +766,21 @@ class TestUnchangedDataView:
         )
         return re.search(r"'ontobricks.mv_sql_sha256' = '([0-9a-f]{64})'", create).group(1)
 
+    @staticmethod
+    def _graph_sha(warehouse) -> str:
+        import re
+
+        create = next(
+            s for s in warehouse.calls
+            if s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {_GRAPH}")
+        )
+        return re.search(r"'ontobricks.mv_sql_sha256' = '([0-9a-f]{64})'", create).group(1)
+
     def test_a_matching_fingerprint_skips_the_replace_and_only_refreshes(self):
         _, _, first = _run(_pipeline("incremental"))
         pipe = _pipeline("incremental")
-        warehouse = _Warehouse([], mv_sha=self._sha(first), technique="NO_OP")
+        shas = {_DATA: self._sha(first), _GRAPH: self._graph_sha(first)}
+        warehouse = _Warehouse([], mv_sha=shas, technique="NO_OP")
 
         log, _, warehouse = _run(pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current")
 
@@ -742,6 +789,41 @@ class TestUnchangedDataView:
         assert refresh < _sql_index(log, "event_log(")
         assert pipe.refresh_technique == "NO_OP"
         assert pipe.data_relation_mode == "materialized_view"
+        assert f"REFRESH MATERIALIZED VIEW {_GRAPH}" in warehouse.calls
+
+    def test_an_unchanged_data_view_still_turns_a_graph_view_into_a_materialized_view(self):
+        _, _, first = _run(_pipeline("incremental"))
+        warehouse = _Warehouse([], mv_sha={_DATA: self._sha(first)}, technique="NO_OP")
+
+        _, _, warehouse = _run(
+            _pipeline("incremental"), warehouse=warehouse, existing="pipe-1", stored="fp-current"
+        )
+
+        assert not any(
+            s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}") for s in warehouse.calls
+        )
+        create = next(
+            i for i, s in enumerate(warehouse.calls)
+            if s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {_GRAPH}")
+        )
+        assert warehouse.calls.index(f"DROP VIEW IF EXISTS {_GRAPH}") < create
+
+    def test_another_engine_replaces_a_leftover_graph_materialized_view_by_the_view(self):
+        """A domain moved off the Lakehouse engine: its old ``…_graph`` MV becomes the VIEW."""
+        _, _, first = _run(_pipeline("incremental"))
+        pipe = _pipeline("incremental", backend="lakebase")
+        shas = {_DATA: self._sha(first), _GRAPH: self._graph_sha(first)}
+        warehouse = _Warehouse([], mv_sha=shas, technique="NO_OP")
+
+        _, _, warehouse = _run(pipe, warehouse=warehouse, existing="pipe-1", stored="fp-current")
+
+        drop = warehouse.calls.index(f"DROP MATERIALIZED VIEW IF EXISTS {_GRAPH}")
+        create = next(
+            i for i, s in enumerate(warehouse.calls) if s.startswith(f"CREATE OR REPLACE VIEW {_GRAPH}")
+        )
+        assert drop < create
+        assert f"REFRESH MATERIALIZED VIEW {_GRAPH}" not in warehouse.calls
+        assert pipe.graph_relation == "view"
 
     def test_a_different_fingerprint_replaces_the_view_then_refreshes(self):
         pipe = _pipeline("incremental")

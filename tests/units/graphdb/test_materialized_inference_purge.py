@@ -164,3 +164,48 @@ def test_lakebase_purge_surfaces_adjacency_rebuild_failure():
     ):
         with pytest.raises(RuntimeError, match="adjacency failed"):
             store.purge_materialized_triples("sales_V3")
+
+
+def test_delta_writes_to_inferred_refresh_the_graph_relation():
+    client = MagicMock()
+    store = DeltaFlatStore(client, domain=MagicMock(), settings=MagicMock())
+    store.rebuild_adjacency = MagicMock()
+
+    with (
+        patch.object(store, "_writable_table_fqn", return_value="cat.sch.sales_inferred"),
+        patch.object(store, "_ensure_companion_objects", return_value="cat.sch.sales_inferred"),
+        patch.object(store, "count_triples", return_value=1),
+        patch.object(store, "_execute_insert_triples", return_value=2),
+        patch("back.core.graphdb.delta.DeltaFlatStore.materialize.truncate_table"),
+        patch("back.core.graphdb.delta.DeltaFlatStore.GraphRelation.refresh_after_write") as refresh,
+    ):
+        assert store.insert_triples("sales_V3", [{"subject": "s", "predicate": "p", "object": "o"}]) == 2
+        store.purge_materialized_triples("sales_V3")
+
+    assert refresh.call_count == 2
+    refresh.assert_called_with(client, "cat.sch.sales_inferred")
+
+
+def test_a_raw_write_to_another_table_refreshes_nothing():
+    client = MagicMock()
+    store = DeltaFlatStore(client)
+
+    with patch.object(store, "_execute_insert_triples", return_value=1):
+        store.insert_triples("cat.sch.t", [{"subject": "s", "predicate": "p", "object": "o"}])
+
+    client.execute_query.assert_not_called()
+    client.execute_statement.assert_not_called()
+
+
+def test_a_raw_write_to_an_inferred_companion_refreshes_its_graph_relation():
+    """``ReasoningService.materialize_to_delta`` into ``…_inferred`` (a raw store) refreshes ``…_graph``."""
+    client = MagicMock()
+    store = DeltaFlatStore(client)
+
+    with (
+        patch.object(store, "_execute_insert_triples", return_value=1),
+        patch("back.core.graphdb.delta.DeltaFlatStore.GraphRelation.refresh_after_write") as refresh,
+    ):
+        store.insert_triples("cat.sch.t_inferred", [{"subject": "s", "predicate": "p", "object": "o"}])
+
+    refresh.assert_called_once_with(client, "cat.sch.t_inferred")

@@ -50,7 +50,9 @@ class TwinBuildRunHistory:
         version belongs to, ``""`` when unknown) and the realtime stream run it
         started or stopped (``realtime_run_id``, ``realtime_state``, and the
         ``_slots`` version a started stream was seeded at,
-        ``slots_seed_version``; ``TwinRealtimeStream.after_build``). A build that reached the
+        ``slots_seed_version``; ``TwinRealtimeStream.after_build``) and the
+        kind of ``…_graph`` (``graph_relation``: ``view`` / ``mv``,
+        ``TwinGraphRelation``). A build that reached the
         incremental step adds its ``slot_refresh_facts``
         (:class:`TwinSlotRefreshPlan`: ``source_versions``,
         ``source_table_ids``, ``slot_full_refresh_pending``,
@@ -82,6 +84,7 @@ class TwinBuildRunHistory:
             "slots_seed_version": TwinBuildRunHistory._version_or_none(
                 getattr(pipe, "slots_seed_version", None)
             ),
+            "graph_relation": text(pipe, "graph_relation"),
             **TwinBuildRunHistory._slot_refresh_facts(pipe),
         }
         return {**stats, "materialization": materialization}

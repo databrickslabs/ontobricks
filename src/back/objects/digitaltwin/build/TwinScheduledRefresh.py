@@ -47,7 +47,7 @@ class TwinScheduledRefresh:
         spec: Any = None,
         facts: dict | None = None,
     ) -> bool:
-        """True when ``…_data`` is kept (refreshed in place); ``False``: build it by CTAS.
+        """True when ``…_data`` is kept (refreshed in place, then a ``…_graph`` MV); ``False``: build it by CTAS.
 
         ``False`` for any other *mode* (``full``, a MERGE-promoted domain), when
         ``…_data`` is not a materialized view of ours, when the mappings are
@@ -67,7 +67,12 @@ class TwinScheduledRefresh:
         the refresh completed. Pipeline and warehouse errors raise
         :class:`InfrastructureError`; nothing has been dropped then.
         """
-        from back.core.graphdb.delta import MaterializedViewBuilder, materialize
+        from back.core.graphdb.delta import (
+            GraphRelation,
+            MaterializedViewBuilder,
+            _table_naming,
+            materialize,
+        )
 
         if mode not in _VIEW_MODES:
             return False
@@ -100,6 +105,10 @@ class TwinScheduledRefresh:
             lambda: materialize.run_sql(
                 client, MaterializedViewBuilder.refresh_sql(data_fqn, full=full)
             ),
+        )
+        graph_fqn = _table_naming.graph_view_fqn(domain, settings)
+        TwinIncrementalBuild.warehouse_step(
+            f"refresh {graph_fqn}", lambda: GraphRelation.refresh(client, graph_fqn)
         )
         facts.update(plan["after"])
         logger.info("Scheduled build: refreshed the %s view %s in place", mode, data_fqn)

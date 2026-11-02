@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from back.core.errors import OntoBricksError, OperationCancelledError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+from back.core.graphdb.delta.GraphRelation import GraphRelation
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build._build_pipeline import collect_domain_stats
@@ -373,9 +374,10 @@ class DeltaTripleStoreBuildPipeline:
         materialize.truncate_table(self.source_client, self.inferred_table)
 
     def _ensure_graph_view(self) -> None:
+        """The union VIEW: this build makes ``…_data`` a TABLE, so a graph MV is replaced."""
         if not self.graph_view or not self.data_table or not self.inferred_table:
             return
-        materialize.ensure_graph_view(
+        GraphRelation.replace_with_view(
             self.source_client,
             self.graph_view,
             self.data_table,

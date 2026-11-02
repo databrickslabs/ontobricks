@@ -180,20 +180,44 @@ class MaterializedViewBuilder:
         inferred_fqn: str,
         *,
         refresh_policy: str = "INCREMENTAL",
+        refresh_clause: str = "",
     ) -> str:
         """``CREATE OR REPLACE MATERIALIZED VIEW`` for ``_graph``.
 
         A plain ``UNION ALL`` of ``_data`` and ``_inferred``, as the union
         VIEW it replaces. ``_inferred`` needs row tracking for Enzyme to read
-        it incrementally (see :meth:`apply`).
+        it incrementally (see :meth:`apply`). Like the data MV it carries its
+        definition fingerprint (:meth:`graph_mv_sha`), which is also how a
+        graph MV is told from the union VIEW.
         """
         validate_table_name(graph_fqn)
         validate_table_name(data_fqn)
         validate_table_name(inferred_fqn)
         policy = MaterializedViewBuilder._policy(refresh_policy)
+        clause = MaterializedViewBuilder._clause(refresh_clause)
+        body = MaterializedViewBuilder._graph_mv_body(data_fqn, inferred_fqn)
+        extra = f", '{MV_SHA_PROPERTY}' = '{MaterializedViewBuilder._sha(policy, body, clause)}'"
+        header = _MV_HEADER.format(fqn=graph_fqn, policy=policy, extra=extra)
+        return header + (f"  {clause}\n" if clause else "") + body
+
+    @staticmethod
+    def graph_mv_sha(
+        data_fqn: str,
+        inferred_fqn: str,
+        *,
+        refresh_policy: str = "INCREMENTAL",
+        refresh_clause: str = "",
+    ) -> str:
+        """SHA-256 of the graph MV definition (header template, policy, clause and body)."""
+        policy = MaterializedViewBuilder._policy(refresh_policy)
+        clause = MaterializedViewBuilder._clause(refresh_clause)
+        body = MaterializedViewBuilder._graph_mv_body(data_fqn, inferred_fqn)
+        return MaterializedViewBuilder._sha(policy, body, clause)
+
+    @staticmethod
+    def _graph_mv_body(data_fqn: str, inferred_fqn: str) -> str:
         return (
-            _MV_HEADER.format(fqn=graph_fqn, policy=policy, extra="")
-            + f"AS SELECT subject, predicate, object FROM {data_fqn}\n"
+            f"AS SELECT subject, predicate, object FROM {data_fqn}\n"
             "UNION ALL\n"
             f"SELECT subject, predicate, object FROM {inferred_fqn}"
         )
@@ -209,10 +233,10 @@ class MaterializedViewBuilder:
         return "EXPLAIN " + _OR_REPLACE_MV.sub("CREATE MATERIALIZED VIEW", mv_sql, count=1)
 
     @staticmethod
-    def refresh_sql(fqn: str, *, full: bool = False) -> str:
-        """``REFRESH MATERIALIZED VIEW`` (``… FULL`` forces a full recompute)."""
+    def refresh_sql(fqn: str, *, full: bool = False, wait: bool = True) -> str:
+        """``REFRESH MATERIALIZED VIEW`` (``… FULL`` recomputes; ``… ASYNC`` returns at once)."""
         validate_table_name(fqn)
-        return f"REFRESH MATERIALIZED VIEW {fqn}" + (" FULL" if full else "")
+        return f"REFRESH MATERIALIZED VIEW {fqn}" + (" FULL" if full else "") + ("" if wait else " ASYNC")
 
     @staticmethod
     def refresh_technique_sql(fqn: str) -> str:
@@ -252,14 +276,16 @@ class MaterializedViewBuilder:
         refresh_policy: str = "INCREMENTAL",
         with_graph_mv: bool = False,
         refresh_clause: str = "",
+        graph_refresh_clause: str = "",
     ) -> dict:
         """Create or replace the ``_data`` materialized view and the ``_graph`` relation.
 
         ``_graph`` is the union of ``_data`` and ``_inferred``. By default
         (*with_graph_mv* false) it stays the plain union VIEW
-        (``materialize.ensure_graph_view``), which the inferred reset and the
-        Delta store's app writes keep replacing; with *with_graph_mv* it
-        becomes a materialized view too (not used by the build yet).
+        (``materialize.ensure_graph_view``); with *with_graph_mv* it becomes a
+        materialized view too (*graph_refresh_clause*: its own refresh
+        clause), which the inferred reset and the Delta store's app writes
+        then refresh instead of replacing (``GraphRelation``).
 
         Every statement is built (and validated) before anything runs. Then,
         in order:
@@ -294,7 +320,11 @@ class MaterializedViewBuilder:
         )
         if with_graph_mv:
             graph_sql = MaterializedViewBuilder.graph_mv_sql(
-                graph_fqn, data_fqn, inferred_fqn, refresh_policy=refresh_policy
+                graph_fqn,
+                data_fqn,
+                inferred_fqn,
+                refresh_policy=refresh_policy,
+                refresh_clause=graph_refresh_clause,
             )
             enable_tracking_sql = materialize.build_enable_row_tracking_sql(inferred_fqn)
         else:

@@ -398,6 +398,20 @@ class TestInferredReset:
         assert getattr(pipe, "inferred_reset", False) is False
         assert pipe.tm.failed is False
 
+    def test_a_graph_materialized_view_is_refreshed_not_replaced_by_the_view(self):
+        """``TwinGraphRelation`` made ``…_graph`` an MV: the reset refreshes it to drop old inferences."""
+        pipe = _bare_pipeline(info=_DATABRICKS)
+        pipe.source_client = _Warehouse()
+        pipe.data_table = _DATA
+        pipe.graph_relation = "mv"
+
+        assert TwinBuildPostMaterialize.reset_inferred_companion(pipe) is True
+
+        calls = pipe.source_client.calls
+        assert f"TRUNCATE TABLE {_INFERRED}" in calls
+        assert calls.index(f"TRUNCATE TABLE {_INFERRED}") < calls.index(f"REFRESH MATERIALIZED VIEW {_GRAPH}")
+        assert not any(sql.startswith(f"CREATE OR REPLACE VIEW {_GRAPH}") for sql in calls)
+
     def test_the_reset_reports_success_for_a_skipped_backend(self):
         pipe = _bare_pipeline(info=_LAKEBASE)
 

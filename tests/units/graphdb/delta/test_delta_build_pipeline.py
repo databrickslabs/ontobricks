@@ -286,3 +286,23 @@ def test_run_sets_terminal_step_statuses_with_real_task_manager(
             assert step_statuses[step_name] == expected_status
     finally:
         tm.delete_task(task.id)
+
+
+@pytest.mark.unit
+def test_the_standalone_build_replaces_a_graph_materialized_view_by_the_union_view() -> None:
+    """Its ``…_data`` is a CTAS table, so an incremental ``…_graph`` MV goes back to the VIEW."""
+    from back.core.graphdb.delta import materialize
+
+    pipe = DeltaTripleStoreBuildPipeline.__new__(DeltaTripleStoreBuildPipeline)
+    pipe.source_client = MagicMock()
+    pipe.graph_view = "cat.sch.t_graph"
+    pipe.data_table = "cat.sch.t_data"
+    pipe.inferred_table = "cat.sch.t_inferred"
+
+    pipe._ensure_graph_view()
+
+    statements = [c.args[0] for c in pipe.source_client.execute_statement.call_args_list]
+    assert statements == [
+        "DROP MATERIALIZED VIEW IF EXISTS cat.sch.t_graph",
+        materialize.build_union_view_sql("cat.sch.t_graph", "cat.sch.t_data", "cat.sch.t_inferred"),
+    ]

@@ -297,11 +297,28 @@ class TestMicrobatchRefreshClause:
 
 class TestGraphMvSql:
     def test_exact_statement(self):
+        sha = MaterializedViewBuilder.graph_mv_sha(DATA, INFERRED)
         assert MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED) == (
-            _header(GRAPH)
+            _header(GRAPH, sha=sha)
             + f"AS SELECT subject, predicate, object FROM {DATA}\n"
             "UNION ALL\n"
             f"SELECT subject, predicate, object FROM {INFERRED}"
+        )
+
+    def test_the_fingerprint_follows_the_definition(self):
+        base = MaterializedViewBuilder.graph_mv_sha(DATA, INFERRED)
+        assert base == MaterializedViewBuilder.graph_mv_sha(DATA, INFERRED)
+        assert base != MaterializedViewBuilder.graph_mv_sha(DATA, INFERRED, refresh_clause=_TRIGGER)
+        assert base != MaterializedViewBuilder.graph_mv_sha(DATA, f"{INFERRED}_x")
+        assert base != MaterializedViewBuilder.data_mv_sha(slots_fqn=SLOTS)
+
+    def test_a_self_refreshing_graph_view_carries_its_trigger(self):
+        sql = MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED, refresh_clause=_TRIGGER)
+        assert f"\n  {_TRIGGER}\nAS SELECT" in sql
+
+    def test_an_async_refresh_returns_at_once(self):
+        assert MaterializedViewBuilder.refresh_sql(GRAPH, wait=False) == (
+            f"REFRESH MATERIALIZED VIEW {GRAPH} ASYNC"
         )
 
     def test_policy_keyword(self):
