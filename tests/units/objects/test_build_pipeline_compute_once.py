@@ -411,7 +411,7 @@ class TestBuildRunTrace:
 
         A requested ``incremental``/``realtime`` build with serverless off
         falls back through ``TwinIncrementalBuild._leave`` →
-        ``_stop_slot_pipeline``, which lazily imports
+        ``TwinSlotPipeline.stop_if_active``, which lazily imports
         ``back.core.streaming.SlotPipelineRunner`` and would otherwise build a
         real ``WorkspaceClient`` against the fake test host and wait out the
         90 s API timeout (the resulting ``InfrastructureError`` is swallowed,

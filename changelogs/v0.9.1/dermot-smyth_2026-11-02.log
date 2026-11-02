@@ -514,7 +514,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the follow-ups from the final review): 10545 passed, 338 skipped, 9 deselected
+Final test result (after the design-traceability round): 10687 passed, 339 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -710,11 +710,9 @@ Changes:
    tests/units/front/test_settings_lakebase_sync_defaults.py.
 
 Known limitations (follow-ups):
-- TwinIncrementalBuild is 483 lines (soft budget 400; hard 800): an Extract
-  Class of the slot-pipeline steps (find/ensure/update/stop, channel, timeout)
-  would bring it near 300.
-- The scheduled tick compiles the slot spec twice (source tables, then the
-  currency check); cheap, pure CPU.
+- Resolved by the follow-up round: TwinIncrementalBuild's size (483 lines; the
+  slot-pipeline steps moved to TwinSlotPipeline, 37c137ff) and the scheduled
+  tick compiling the slot spec twice (compiled once per tick, 40de6f1a).
 
 Modified files:
 - changelogs/v0.9.1/dermot-smyth_2026-11-02.log
@@ -833,4 +831,176 @@ tests/units/streaming tests/units/graphdb tests/units/core/test_lakebase_flat_st
 -> 2200 passed in 6.35s (slowest 0.87s, test_class_per_file); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10545 passed, 338 skipped, 9 deselected in 53.71s (slowest test 1.05s);
+architecture suite green; tests/units/architecture/baseline.json unchanged.
+
+
+================================================================================
+## Design traceability: closing the Phase 1/2 gaps
+================================================================================
+
+Context: The design review traced seven Phase 1/2 commitments that the branch did
+not yet keep: a source rewrite (INSERT OVERWRITE, CREATE OR REPLACE, TRUNCATE,
+RESTORE) silently broke the slot pipeline's change feed; nothing told an operator,
+before a build, why a domain would run as `full` or let them fix it; the
+"EXPLAIN says incremental" check had been deleted as unused; there was no
+incremental status view; reconciliation compared only `_slots` with `_data` and
+never ran unattended; Neo4j net apply; and no property test of the slot fold. The
+re-review of the follow-up round added one Important finding (the MERGE added
+`object_hash` without backfilling it) and two stale notes.
+
+Changes:
+
+1. src/back/core/streaming/SourceReadiness.py, src/back/objects/digitaltwin/build/
+   TwinIncrementalBuild.py, TwinSlotPipeline.py, TwinBuildRunHistory.py,
+   _build_pipeline.py (efc08a5d)
+   Source overwrite detection: every build records `source_versions` (latest Delta
+   version per slot-pipeline source) in `stats.materialization`; the next build
+   reads `DESCRIBE HISTORY` of each source since the base run's version
+   (`SourceReadiness.source_overwritten_since`) and, on a rewriting operation,
+   runs the slot pipeline with `force_full_refresh=True` in the same mode and
+   records `mode_fallback_reason = source_overwritten`. An unreadable history is
+   `incremental_failed:InfrastructureError`.
+2. src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py (new,
+   re-exported), TwinBuildPostMaterialize.py (`resolve_for`),
+   TwinSlotReconciliation.py, src/api/routers/internal/dtwin.py,
+   src/front/templates/partials/domain/_domain_information.html,
+   src/front/static/domain/js/domain-information.js (278d687b)
+   `GET /dtwin/incremental/readiness` (builder role, build warehouse, as the
+   caller): requested mode, the resolver's decision, serverless availability,
+   each source with its row-tracking flag, the pipeline channel.
+   `POST /dtwin/incremental/enable-row-tracking`: the row-tracking `ALTER TABLE`
+   on the untracked sources or a validated subset of the domain's own sources,
+   per-table success/error (UC decides who may alter). The Domain information
+   panel shows a Readiness line and an "Enable row tracking" button for editors.
+3. src/back/core/graphdb/delta/DeltaMergeMaterializer.py (4a1c3f6a)
+   Re-review Important: a MERGE table created before the domain became
+   Lakeflow-synced got `object_hash` added but its existing rows kept NULL in the
+   synced table's primary key. `merge_sql(with_object_hash=True)` now carries
+   `WHEN MATCHED AND t.object_hash IS NULL THEN UPDATE SET object_hash =
+   sha2(s.object, 256)` in the same statement as the merge (atomic, retried by
+   the next build after a failure, matches no row once filled).
+4. src/back/core/graphdb/delta/MaterializedViewBuilder.py,
+   tests/external/test_mv_incremental_plan.py (new) (06f0dd73)
+   `explain_sql` / `plan_is_incremental` restored with their unit tests;
+   `explain_sql` explains a `CREATE OR REPLACE MATERIALIZED VIEW` as its
+   `CREATE`. The external test (`external` marker; skipped unless
+   `ONTOBRICKS_EXTERNAL_WAREHOUSE=1`, `DATABRICKS_CONFIG_PROFILE`, a warehouse
+   id and a schema are set) EXPLAINs the `_data` definition a build would create
+   from a row-local and a `sql_query` fixture mapping and asserts an incremental
+   plan. Docs: Verification section.
+5. src/back/objects/digitaltwin/build/TwinIncrementalStatus.py (new,
+   re-exported), src/back/core/graphdb/delta/materialize.py (`relation_kind`),
+   ChangeFeedReader.py (`last_commit`), TwinBuildRunHistory.py (`run_key_of`),
+   src/api/routers/internal/dtwin.py,
+   src/front/templates/partials/dtwin/_incremental_status_card.html (new),
+   _query_sync.html, _query_databricks_build.html, dtwin.html,
+   src/front/static/query/js/incremental-status.js (new), query-sync.js,
+   query-databricks-build.js (b52a13b7)
+   `GET /dtwin/incremental/status` (builder role): slot pipeline state, kind and
+   last commit of `_data` / `_slots`, freshness lag of `_data`, the Lakebase
+   synced-table state of a managed_synced store, the newest build run's
+   materialization facts; each section best-effort on its own. Both build panels
+   show a compact "Incremental status" card (hidden for `full`).
+6. src/back/core/streaming/SlotReconciler.py, TwinSlotReconciliation.py,
+   TwinBuildRunHistory.py, TwinIncrementalBuild.py,
+   src/back/objects/registry/schedule/build.py, dtwin.py (72ebc7eb)
+   Reconciliation adds the batch recompute (gateway VIEW, same distinct-triple
+   xxhash64 totals) and the Lakebase synced-table row count, `pairs`,
+   `pairs_meaningful` and `reconcile_drift`. A scheduled tick of a Lakeflow-synced
+   incremental / microbatch domain whose `_data` view it refreshed in place
+   reconciles at the end, logs drift at warning and records
+   `stats.materialization.reconcile_drift`; the next incremental build
+   (`reconcile_drift_pending`) runs the slot pipeline with `full_refresh=True`.
+   A scheduled run still ends the base-run search, so its drift facts cannot
+   make it skippable (the tick rewrote the store).
+7. docs/incremental-materialization.md
+   Neo4j net apply stays a known limitation, with the reason: the property graph
+   has no place to mark a triple as inferred (literals are node properties with
+   one value per key, `rdf:type` is a label, only object triples are
+   relationships), so inferred triples cannot be purged on their own and the
+   `inferred_not_separable` fallback (full stream) stays.
+8. tests/units/streaming/test_slot_fold_property.py (new) (2b96a5c4)
+   Hypothesis property: any change history of a source, projected into slot
+   events as `slot_event_view_sql` does, delivered in any order and folded SCD
+   TYPE 1 by `(map_id, source_key, predicate)` ordered by
+   `(_commit_version, seq_rank)`, equals the slots of the final rows; its
+   distinct non-blank triples equal the full build's projection. The model reads
+   the `stack()` pairs from the compiler and asserts its rules against the SQL.
+9. changelogs/v0.9.1/dermot-smyth_2026-11-02.log,
+   tests/units/objects/test_build_pipeline_compute_once.py
+   The residuals section's two open limitations are marked resolved by the
+   follow-up round; a docstring names `TwinSlotPipeline.stop_if_active` instead
+   of the removed `_stop_slot_pipeline`; the roll-up carries the new numbers.
+
+Known limitations (follow-ups):
+- Live-unverified: `EXPLAIN CREATE MATERIALIZED VIEW` output on the workspace (the
+  external test is the check), `information_schema.tables.table_type` values for
+  MVs and streaming tables, `DESCRIBE HISTORY` on an MV / streaming table.
+- The `view_data` and `sync_data` pairs compare as of the last refresh of
+  `_data`: a source changed since shows as drift until the next build or tick
+  (the tick reconciles right after its refresh, so its window is the tick
+  itself).
+- Neo4j net apply: see item 7.
+- TwinIncrementalStatus reads the synced-table state through
+  `SyncedTableManager._extract_state` / `_extract_status_message`, as
+  GraphEngineLakebaseSettings already does (the class is at its frozen size
+  budget, so no public wrapper was added).
+
+Modified files:
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+- docs/incremental-materialization.md
+- src/api/routers/internal/dtwin.py
+- src/back/core/graphdb/delta/ChangeFeedReader.py
+- src/back/core/graphdb/delta/DeltaMergeMaterializer.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/streaming/SlotReconciler.py
+- src/back/core/streaming/SourceReadiness.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinIncrementalReadiness.py (new)
+- src/back/objects/digitaltwin/build/TwinIncrementalStatus.py (new)
+- src/back/objects/digitaltwin/build/TwinSlotPipeline.py
+- src/back/objects/digitaltwin/build/TwinSlotReconciliation.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- src/front/static/domain/js/domain-information.js
+- src/front/static/query/js/incremental-status.js (new)
+- src/front/static/query/js/query-databricks-build.js
+- src/front/static/query/js/query-sync.js
+- src/front/templates/dtwin.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/dtwin/_incremental_status_card.html (new)
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/templates/partials/dtwin/_query_sync.html
+- tests/external/__init__.py (new)
+- tests/external/test_mv_incremental_plan.py (new)
+- tests/units/api/test_dtwin_incremental_readiness.py (new)
+- tests/units/api/test_dtwin_reconcile.py
+- tests/units/front/test_incremental_status_ui.py (new)
+- tests/units/front/test_materialization_readiness_ui.py (new)
+- tests/units/graphdb/delta/test_change_feed_reader.py
+- tests/units/graphdb/delta/test_delta_merge_materializer.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/graphdb/delta/test_relation_kind.py (new)
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/objects/test_incremental_readiness.py (new)
+- tests/units/objects/test_incremental_status.py (new)
+- tests/units/registry/test_scheduled_build_reconcile.py (new)
+- tests/units/streaming/test_slot_fold_property.py (new)
+- tests/units/streaming/test_slot_reconciler.py
+- tests/units/streaming/test_source_readiness.py
+
+Tests: uv run --frozen pytest -q --durations=1 tests/units/objects tests/units/streaming
+tests/units/graphdb tests/units/api/test_dtwin_reconcile.py
+tests/units/api/test_dtwin_incremental_readiness.py tests/units/registry tests/units/front
+tests/units/architecture tests/external
+-> 3985 passed, 1 skipped (the external EXPLAIN check) in 26.83s (slowest 1.01s,
+test_class_per_file); slot fold property tests 0.29s / 0.23s; full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10687 passed, 339 skipped, 9 deselected in 55.67s (slowest test 1.04s);
 architecture suite green; tests/units/architecture/baseline.json unchanged.

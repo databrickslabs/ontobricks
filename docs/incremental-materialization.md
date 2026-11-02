@@ -361,7 +361,14 @@ Behaviour in this release:
   source update (at most once a minute) for at most ten sources, otherwise every 15
   minutes — and every domain with a `sql_query` or join mapping (most real ones,
   see above) gets the 15-minute schedule.
-- Neo4j always streams in full (`inferred_not_separable`).
+- Neo4j always streams in full (`inferred_not_separable`). A net apply keeps the
+  store and must purge the inferred triples first, but the Neo4j property graph
+  has no place to mark a triple as inferred: a literal triple is a node property
+  (`SET n += props`, one value per key), `rdf:type` is a node label, and only
+  object triples are relationships that could carry a flag. Tagging would need
+  per-node bookkeeping of inferred property keys and labels, an `inferred` flag
+  through every triple writer, and still could not tell a value that is both
+  mapped and inferred; until then the fallback stays.
 - The MERGE fallback engages for any slot-pipeline failure in `incremental`
   (every runner message mentions the pipeline); `microbatch` falls back to CTAS.
   The MERGE skip only fires for all-row-local domains. A MERGE build sets the table
