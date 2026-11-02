@@ -104,7 +104,9 @@ class TwinSlotReconciliation:
     def live_rows(domain: Any, settings: Any, get_store: Callable[..., Any] | None) -> int | None:
         """Slots a ``realtime`` domain's Lakebase ``_live`` table serves, else ``None``.
 
-        Best-effort like :meth:`sync_rows`: an unreachable store is left out.
+        ``None`` too when ``_live`` is not served (a stopped or retired stream:
+        it is empty and out of the view, which is no drift). Best-effort like
+        :meth:`sync_rows`: an unreachable store is left out.
         """
         from back.core.graphdb.GraphDBFactory import (
             GraphDBFactory,
@@ -121,7 +123,10 @@ class TwinSlotReconciliation:
             store = get_store(domain, settings)
             if not hasattr(store, "live_table"):
                 return None
-            return int(store.live_table().count(effective_graph_name(domain)))
+            live, graph = store.live_table(), effective_graph_name(domain)
+            if not live.serving(graph):
+                return None
+            return int(live.count(graph))
         except Exception as exc:  # noqa: BLE001 — store drivers raise their own errors
             logger.warning("Slot reconciliation: live table not counted: %s", exc)
             return None

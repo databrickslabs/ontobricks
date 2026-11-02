@@ -336,7 +336,8 @@
                                 falls back to the next mode and records the reason.
                             </small>
                             <fieldset class="border rounded p-2 mt-2 {% if domain.materialization_mode != 'realtime' %}d-none{% endif %}"
-                                      id="realtimeSourceSection">
+                                      id="realtimeSourceSection"
+                                      data-state-ttl-hours="{{ realtime_source.state_ttl_hours if realtime_source.state_ttl_hours is not none else '' }}">
                                 <legend class="float-none w-auto px-1 small fw-semibold mb-0">
                                     <i class="bi bi-broadcast me-1"></i> Real-time source
                                 </legend>

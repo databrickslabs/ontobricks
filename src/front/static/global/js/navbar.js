@@ -812,6 +812,9 @@ function buildDomainInfoPayload() {
             const topicEl = document.getElementById('realtimeSourceTopic');
             if (!topicEl) return undefined;
             const value = id => ((document.getElementById(id) || {}).value || '').trim();
+            // Not editable on the panel: keep the stored state TTL (absent: the server default).
+            const section = document.getElementById('realtimeSourceSection');
+            const ttl = section ? (section.dataset.stateTtlHours || '').trim() : '';
             return {
                 kind: value('realtimeSourceKind'),
                 bootstrap_servers: value('realtimeSourceServers'),
@@ -819,6 +822,7 @@ function buildDomainInfoPayload() {
                 secret_scope: value('realtimeSourceSecretScope'),
                 secret_key: value('realtimeSourceSecretKey'),
                 key_format: 'json',
+                state_ttl_hours: ttl ? Number(ttl) : undefined,
             };
         })(),
         graph_cache_enabled: (function () {

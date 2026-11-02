@@ -239,6 +239,15 @@ class TestTheRealtimeSource:
         route = _read(REPO_ROOT / "src/front/routes/domain.py")
         assert '"realtime_kinds": RealtimeSource.kind_options(' in route
 
+    def test_the_stored_state_ttl_is_kept_by_the_save(self):
+        rt = {"kind": "kafka", "topic": "orders", "secret_scope": "sc", "secret_key": "k", "state_ttl_hours": 48}
+
+        rendered = self._section(materialization_mode="realtime", realtime_source=rt)
+
+        assert 'data-state-ttl-hours="48"' in rendered
+        body = _function_body(_read(NAVBAR_JS), "function buildDomainInfoPayload(", span=5000)
+        assert "dataset.stateTtlHours" in body and "state_ttl_hours:" in body
+
     def test_no_secret_value_field_exists(self):
         section = self._section(materialization_mode="realtime").lower()
         assert "password" not in section and 'type="password"' not in section

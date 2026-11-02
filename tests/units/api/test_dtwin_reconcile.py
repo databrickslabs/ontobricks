@@ -52,13 +52,16 @@ class _LiveStore:
 
     is_synced = False
 
-    def __init__(self, rows=0, error=None):
-        self.rows, self.error = rows, error
+    def __init__(self, rows=0, error=None, serving=True):
+        self.rows, self.error, self.is_serving = rows, error, serving
 
     def live_table(self):
         store = self
 
         class _Live:
+            def serving(self, graph):
+                return store.is_serving
+
             def count(self, graph):
                 if store.error is not None:
                     raise store.error
@@ -288,6 +291,22 @@ class TestTwinSlotReconciliation:
         assert seen["live_rows"] == 5
         assert result["live_drift"] is True
         assert result["reconcile_drift"] is False
+
+    def test_a_retired_live_table_is_not_counted(self, monkeypatch, names, mappings):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        monkeypatch.setattr(
+            GraphDBFactory, "resolve_materialization_mode", staticmethod(lambda d, s: "realtime")
+        )
+        seen = _compare(monkeypatch, _COMPARED)
+        _compiler(monkeypatch, batch=False)
+
+        TwinSlotReconciliation.run(
+            _Domain(), object(), _Client(tables=["triplestore_sales_v1_slots"]),
+            get_store=lambda d, s: _LiveStore(rows=0, serving=False),
+        )
+
+        assert seen["live_rows"] is None
 
     def test_another_mode_counts_no_live_table(self, monkeypatch, names, mappings):
         seen = _compare(monkeypatch, _COMPARED)
