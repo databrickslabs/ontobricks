@@ -72,7 +72,7 @@ jobs:
   external-smoke:
     name: External smoke probe (fevm-ontobricks-int)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     # External tier — only on schedule, never on PR. Requires repository secrets.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     env:
@@ -102,6 +102,7 @@ jobs:
           # If the workspace isn't reachable or auth fails, the run is reported but no PR is gated.
           uv run pytest tests/ -m external -v --tb=short \
             --ignore=tests/external/test_mv_incremental_plan.py \
+            --ignore=tests/external/test_freshness_slo.py \
             || echo "external probe failed (non-blocking)"
 
       # Blocking (unlike the probe above): a _data view that no longer plans an
@@ -126,6 +127,43 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$status" -ne 0 ]; then
             echo "::error title=Incremental _data view::EXPLAIN no longer plans an incremental refresh (see the step summary)"
+          fi
+          exit "$status"
+
+      # Non-blocking: the freshness / drift KPIs of the integration domain named by
+      # the ONTOBRICKS_INT_FRESHNESS_* repository variables (scripts/measure_freshness.py,
+      # docs/incremental-materialization.md#verification). A missed SLO is a warning
+      # and a step summary, never a failed job. Skipped without the domain.
+      - name: Freshness and drift of the integration domain (non-blocking)
+        if: env.DATABRICKS_HOST != '' && env.DATABRICKS_TOKEN != '' && env.DATABRICKS_SQL_WAREHOUSE_ID != '' && vars.ONTOBRICKS_INT_FRESHNESS_STEM != ''
+        continue-on-error: true
+        env:
+          ONTOBRICKS_EXTERNAL_WAREHOUSE: "1"
+          ONTOBRICKS_FRESHNESS_STEM: ${{ vars.ONTOBRICKS_INT_FRESHNESS_STEM }}
+          ONTOBRICKS_FRESHNESS_MODE: ${{ vars.ONTOBRICKS_INT_FRESHNESS_MODE || 'microbatch' }}
+          ONTOBRICKS_FRESHNESS_SOURCE_TABLE: ${{ vars.ONTOBRICKS_INT_FRESHNESS_SOURCE_TABLE }}
+          ONTOBRICKS_FRESHNESS_KEY_COLUMN: ${{ vars.ONTOBRICKS_INT_FRESHNESS_KEY_COLUMN }}
+          ONTOBRICKS_FRESHNESS_KEY_VALUE: ${{ vars.ONTOBRICKS_INT_FRESHNESS_KEY_VALUE }}
+          ONTOBRICKS_FRESHNESS_VALUE_COLUMN: ${{ vars.ONTOBRICKS_INT_FRESHNESS_VALUE_COLUMN }}
+          ONTOBRICKS_FRESHNESS_READ_WAREHOUSE_ID: ${{ vars.ONTOBRICKS_INT_RT_WAREHOUSE_ID }}
+          ONTOBRICKS_FRESHNESS_PG_DSN: ${{ secrets.ONTOBRICKS_INT_LAKEBASE_DSN }}
+          ONTOBRICKS_FRESHNESS_SYNC_TABLE: ${{ vars.ONTOBRICKS_INT_FRESHNESS_SYNC_TABLE }}
+          ONTOBRICKS_FRESHNESS_LIVE_TABLE: ${{ vars.ONTOBRICKS_INT_FRESHNESS_LIVE_TABLE }}
+          ONTOBRICKS_FRESHNESS_REPORT: freshness-report.md
+        run: |
+          set +e  # keep going to write the summary
+          uv run pytest tests/external/test_freshness_slo.py -m external -v --tb=short -rs \
+            | tee freshness.log
+          status=${PIPESTATUS[0]}
+          {
+            echo "### Freshness and drift (non-blocking)"
+            if [ -f freshness-report.md ]; then cat freshness-report.md; fi
+            echo '```'
+            tail -n 20 freshness.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning title=Freshness SLO::a freshness or drift SLO was missed (see the step summary)"
           fi
           exit "$status"
 
