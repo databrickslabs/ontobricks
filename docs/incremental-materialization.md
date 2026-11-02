@@ -28,12 +28,12 @@ Settings) and defaults to `full`, so existing domains behave as before.
 
 ## Modes
 
-| Mode | Slot pipeline | `_data` relation | Lakebase sync schedule | Use when |
-|---|---|---|---|---|
-| `full` | none | Delta table rewritten by CTAS (or a pass-through view on the Lakehouse engine) | snapshot | Default; small graphs, sources without row tracking, any backend |
-| `incremental` | Lakeflow SDP pipeline, **triggered** once per build | materialized view, `REFRESH POLICY INCREMENTAL` (Enzyme) | triggered | Sources tracked, freshness = one build |
-| `microbatch` | the same pipeline run **continuously** (a triggered bootstrap first) | the same materialized view, refreshing itself between builds: `TRIGGER ON UPDATE` (at most ten sources) or every 15 minutes | continuous | Sources tracked, minutes freshness between builds |
-| `realtime` | the `microbatch` pipeline, plus a Real-Time Mode stream job from a Kafka-compatible topic into Lakebase `_live` | the `microbatch` view | continuous (and `_live` read live by the union view) | Lakebase domains with a change-event topic, seconds freshness; needs `ONTOBRICKS_REALTIME_ENABLED` and the domain's `realtime_source` ([Realtime](#realtime)) |
+| Mode | Slot pipeline | `_data` relation | `_graph` relation | Lakebase sync schedule | Use when |
+|---|---|---|---|---|---|
+| `full` | none | Delta table rewritten by CTAS (or a pass-through view on the Lakehouse engine) | union VIEW | snapshot | Default; small graphs, sources without row tracking, any backend |
+| `incremental` | Lakeflow SDP pipeline, **triggered** once per build | materialized view, `REFRESH POLICY INCREMENTAL` (Enzyme) | materialized view over `_data ∪ _inferred` on the Lakehouse engine, union VIEW on Lakebase / Neo4j ([below](#the-_graph-relation)) | triggered | Sources tracked, freshness = one build |
+| `microbatch` | the same pipeline run **continuously** (a triggered bootstrap first) | the same materialized view, refreshing itself between builds: `TRIGGER ON UPDATE` (at most ten sources) or every 15 minutes | the same, `TRIGGER ON UPDATE` (it refreshes when `_data` does) | continuous | Sources tracked, minutes freshness between builds |
+| `realtime` | the `microbatch` pipeline fed by the domain's Kafka-compatible topic instead of the change feed, plus a Real-Time Mode stream job from that topic into Lakebase `_live` | the `microbatch` view | union VIEW (realtime is Lakebase-only) | continuous (and `_live` read live by the union view) | Lakebase domains with a change-event topic, seconds freshness; needs `ONTOBRICKS_REALTIME_ENABLED` and the domain's `realtime_source` ([Realtime](#realtime)) |
 
 The Lakebase schedule is the mode's schedule capped by
 `graph_engine_config.lakebase.sync_table_mode` (snapshot < triggered < continuous):
@@ -98,6 +98,31 @@ did not change refreshes the MV instead of replacing it, and switching between
 `incremental` and `microbatch` replaces it. The refresh technique Enzyme chose is read from the
 pipeline event log and recorded in the build-run trace (`refresh_technique`).
 
+### The `_graph` relation
+
+`_graph` is the union of `_data` and `_inferred` that graph queries read
+(`DeltaFlatStore` reads `_graph` whenever it exists, `_data` only for asserted-only
+reads). On the **Lakehouse engine** an `incremental` / `microbatch` build makes it
+a materialized view too, so Lakehouse//RT can read it (RT reads no plain views):
+`CREATE OR REPLACE MATERIALIZED VIEW <graph> … REFRESH POLICY INCREMENTAL` over
+`SELECT subject, predicate, object FROM _data UNION ALL SELECT … FROM _inferred`,
+row tracking on `_inferred`, its own definition fingerprint
+(`ontobricks.mv_sql_sha256`, which also tells it from the VIEW) and, when `_data`
+refreshes itself (`microbatch`), `TRIGGER ON UPDATE`. A build whose definition did
+not change keeps it (`GraphRelation.ensure_materialized`, dropping a union VIEW
+first) and refreshes it synchronously right after `_data`
+(`TwinGraphRelation.after_data`); a scheduled tick that refreshes `_data` in place
+refreshes it next. Every write to `_inferred` — the store's app writes (reasoning,
+cohorts), the inferred purge, `ReasoningService.materialize_to_delta` into the
+companion — runs `REFRESH MATERIALIZED VIEW … ASYNC` through one method,
+`GraphRelation.refresh_after_write` (best-effort: a failed refresh is logged and the
+next write, build or trigger catches up); the build's inferred reset refreshes it
+synchronously. A union VIEW needs none of this and is left alone. `full`, the MERGE
+fallback, the standalone Delta build and the other engines (whose readers use their
+own store) keep the union VIEW; a switch drops the other kind first, as for
+`_data`. The build-run trace records which one it is (`graph_relation`: `mv` /
+`view`).
+
 ## Readiness and the fallback ladder
 
 `MaterializationModeResolver.resolve` turns the requested mode into the one that
@@ -113,12 +138,16 @@ reason is the first downgrade's:
    `ONTOBRICKS_SERVERLESS_PIPELINES_ENABLED`, default on), or `backend_not_eligible` when
    the domain's graph backend is not one of `databricks`, `lakebase`, `neo4j`.
 3. `microbatch` / `realtime` → `incremental` — `row_tracking_missing` (the stream
-   bootstraps from `_slots`, which the change feed fills).
+   bootstraps from `_slots`, which the change feed fills; a topic-fed `realtime`
+   pipeline fills it from the topic, so its sources count as tracked).
 4. `incremental` → `full` — `row_tracking_missing`.
 
 Row tracking is probed with `SHOW TBLPROPERTIES <table> ('delta.enableRowTracking')`
 on every source table of the compiled slot pipeline (`SourceReadiness.check`);
-a domain whose mappings are all batch has no source tables and counts as tracked.
+a domain whose mappings are all batch has no source tables and counts as tracked,
+and so does a `realtime` slot pipeline fed by its topic (`spec.needs_row_tracking`
+false, `TwinIncrementalBuild.feed_tables`): it reads no change feed, so neither the
+build, the tick nor the preflight probes its sources.
 A table owner makes a source ready with `ALTER TABLE <table> SET TBLPROPERTIES
 (delta.enableRowTracking = true, delta.enableDeletionVectors = true)`. A failed probe or a failed slot pipeline / MV build
 is `incremental_failed:<ErrorClass>` and the build continues on the full path.
@@ -131,7 +160,9 @@ serverless runs as `incremental` by MERGE, as the build does),
 `serverless_available`, `sources` (each slot-pipeline source table with its
 `row_tracking` flag), `compile_error` (mappings that do not compile, with the
 build's `incremental_failed:ValidationError` decision) and `previews` (the slot
-pipeline's Lakeflow channel). It runs the probe on the build warehouse as the
+pipeline's Lakeflow channel). A topic-fed pipeline reports
+`row_tracking_required: false` and lists its sources unprobed (`row_tracking:
+null`), which the panel does not flag. It runs the probe on the build warehouse as the
 caller; a probe that fails is an error, not "untracked". `POST
 /dtwin/incremental/enable-row-tracking` (builder role) runs the `ALTER TABLE`
 above on the untracked sources, or on a `tables` subset of the domain's own
@@ -153,7 +184,8 @@ count as a rewrite) holds `CREATE OR REPLACE TABLE [AS SELECT]`, `REPLACE TABLE
 [AS SELECT]`, `CLONE`, `TRUNCATE`, `RESTORE`, an `INSERT OVERWRITE` (a `WRITE` in
 `Overwrite` mode) or a `Complete`-mode `STREAMING UPDATE`. A rewrite breaks the
 change feed the pipeline reads, so the update runs as a **full refresh in the same
-mode**. A reconciliation drift (see [Reconciliation](#reconciliation)) does too,
+mode**. A topic-fed `realtime` pipeline reads no change feed (and a full refresh
+would replay its topic), so its sources' history is not read. A reconciliation drift (see [Reconciliation](#reconciliation)) does too,
 and also refreshes `_data` with `REFRESH MATERIALIZED VIEW … FULL`. The reason is
 recorded as `slot_full_refresh_reason` (`source_overwritten` / `reconcile_drift`);
 `mode_fallback_reason` keeps the first downgrade. The refresh is **sticky**:
@@ -190,15 +222,30 @@ Two further fallbacks apply after the mode is decided:
   base came from a different `_data` relation kind / table id, or the store no
   longer holds the graph), `changeset_too_large` (more than 10 % of the current
   `_data` rows), `cdf_unavailable` (any change-feed read error, before or during
-  the stream, or a base version newer than `_data`) or `inferred_not_separable` (the store
-  cannot purge its inferred triples on their own — Neo4j today). After a net
-  apply the store's inferred triples are purged and the graph cache rebuilt, so
-  reasoning starts from a clean slate exactly as after a full build.
+  the stream, or a base version newer than `_data`), `inferred_unreadable` (the
+  Neo4j inference list below could not be read) or `inferred_not_separable` (a
+  store with neither way to purge its inferences). The store's inferred triples
+  are purged, so reasoning starts from a clean slate exactly as after a full
+  build: Lakebase purges its `__app` companion after the writes (and rebuilds the
+  graph cache). **Neo4j** cannot mark a triple as inferred (a literal is a node
+  property, `rdf:type` a label), so its app writers — reasoning and cohorts —
+  list every batch in the Delta `_inferred` table *before* writing it to Neo4j
+  (`InferredTripleLedger`, kept for a domain that is not `full`). Before the net
+  changes the build deletes from Neo4j every listed triple that `_data` does not
+  assert, `SELECT subject, predicate, object FROM <inferred> EXCEPT SELECT subject,
+  predicate, object FROM <data>`, streamed in batches of 500 into
+  `delete_triples` — a triple both inferred and mapped stays. Neo4j keeps one value
+  per property key, label set and name, so deleting a listed literal also unsets an
+  asserted value of the same key: the `_data` triples on the subject and predicate
+  of a deleted one are written again (`LEFT SEMI JOIN`), then `_inferred` is
+  emptied and the net changes applied. A listed triple whose Neo4j write failed is
+  harmless (its delete removes nothing).
 
 ## What a build does per backend
 
 **Lakehouse / Delta engine.** `_data` is the graph. `full`: CTAS. `incremental` /
-`microbatch`: slot pipeline + `_data` MV (or the MERGE table); `_inferred` is
+`microbatch`: slot pipeline + `_data` MV (or the MERGE table) and the `_graph` MV
+over it ([The `_graph` relation](#the-_graph-relation)); `_inferred` is
 reset in every mode, except by a MERGE build skipped for unchanged sources, which
 completes before the reset (the inferences of the unchanged graph stay); no graph
 stream (`apply_mode = none`). Reads may go to a
@@ -215,8 +262,9 @@ A continuous table is waited for until it streams (`ONLINE_CONTINUOUS_UPDATE`).
 `<graph>_sync` table itself: a net-change apply when a matching base run exists
 (`delete_from_sync_iter` then `bulk_load_into_sync`), otherwise drop + full stream.
 
-**Neo4j.** `_data` is built as above; the graph is always streamed in full in this
-release (`inferred_not_separable`).
+**Neo4j.** `_data` is built as above; an incremental `_data` reaches the graph as
+net changes after the listed inferences are purged (above), otherwise by drop +
+full stream.
 
 ## Scheduled builds
 
@@ -231,7 +279,8 @@ The tick decides (and probes) before it writes anything, so a failed probe drops
 nothing. When `_data` already is the incremental main build's materialized view the
 tick refreshes it in place instead of replacing it: `incremental` runs one triggered
 update of the slot pipeline, then `REFRESH MATERIALIZED VIEW`; `microbatch` only
-refreshes (its continuous pipeline keeps `_slots` current). It does so only while
+refreshes (its continuous pipeline keeps `_slots` current). A `_graph` materialized
+view is refreshed right after it. It does so only while
 the view still has the current definition: the tick recompiles the mappings and
 compares the MV definition fingerprint and the slot pipeline's SQL fingerprint, so
 mappings edited since the last main build are picked up by the CTAS (the next main
@@ -241,9 +290,13 @@ the CTAS from the gateway VIEW, as before.
 
 ## Lakehouse//RT
 
-In the incremental and microbatch modes `_data` becomes a materialized view that
-Lakehouse//RT can read directly (RT reads managed tables, materialized views and
-streaming tables, not plain views). `_graph` remains a union view for now.
+In the incremental and microbatch modes `_data` and, on the Lakehouse engine,
+`_graph` become materialized views that Lakehouse//RT can read directly (RT reads
+managed tables, materialized views and streaming tables, not plain views): graph
+queries read `_graph`, so RT serves the union of mapped and inferred triples. A
+source change reaches it with `_data`'s refresh (the build, the tick, or
+`TRIGGER ON UPDATE` in `microbatch`); an inferred triple lags only until the
+`REFRESH … ASYNC` its write starts completes.
 
 Graph reads go to the query warehouse (`graph_engine_config.lakehouse.warehouse_id`
 plus "Use Lakehouse//RT for queries"). A heavy traversal can trip an RT guardrail
@@ -274,6 +327,7 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `reconcile_drift` | a scheduled tick's reconciliation found drift (tick runs only) |
 | `live_drift` | a realtime tick found `_live` and the slots apart (tick runs only; restart the stream) |
 | `realtime_run_id`, `realtime_state` | the stream job run a `realtime` build started (or a later build stopped), its state (`PENDING`, `RUNNING`, `CANCELLING`, `failed:<Error>`); `""` otherwise |
+| `graph_relation` | `mv` when the build made `_graph` a materialized view, `view` for the union VIEW |
 
 The Knowledge Graph › Runs cockpit shows the effective mode (with the requested
 one and the fallback reason when they differ), the strategy / refresh technique
@@ -406,6 +460,47 @@ an error annotation) and the nightly opens its regression issue.
 
 Without those variables the test is skipped, so the unit run stays offline.
 
+**Freshness and drift.** `scripts/measure_freshness.py` (`FreshnessProbe`) measures
+the design's KPIs on a domain that already runs in its mode. It updates one row of a
+source table `--changes` times (default 5, `--spacing` 10 s apart), each time to a
+new marker value of a column the domain maps as a plain literal, and polls every
+configured path until the marker is the object of a triple there: `data` / `graph`
+(`_data` / `_graph` on the warehouse; `--read-warehouse-id` is the Lakehouse//RT
+query warehouse) and `sync` / `live` (the Lakebase synced table and `_live`, with
+`--pg-dsn`). It reports p50 / p95 / p99 per path (a change not seen within
+`--timeout`, default 120 s, counts as never seen), reconciles `_data` with the batch
+recompute (the gateway VIEW), the synced table and `_live` (`SlotReconciler.compare`;
+`slots_data` is reported but not judged, since batch mappings feed `_data` too),
+restores the row and checks the SLOs of `--mode`:
+
+| Mode | SLO |
+|---|---|
+| `microbatch` | `graph` ≤ 30 s p95 (Lakehouse//RT), `sync` ≤ 60 s p95 (Lakebase) |
+| `realtime` | `live` ≤ 1 s p99, `sync` ≤ 60 s p95 |
+| every mode | no drift in `view_data`, `sync_data`, `live_slots` |
+
+A path that is not configured is not judged; an `incremental` domain only moves on a
+build, so only its drift is. With `--source-dsn` the row is updated on the Postgres
+database a `realtime` domain's Debezium connector captures instead of the warehouse.
+Every option also reads `ONTOBRICKS_FRESHNESS_<OPTION>`, with the credentials of the
+EXPLAIN test:
+
+```bash
+DATABRICKS_CONFIG_PROFILE=<profile> ONTOBRICKS_EXTERNAL_WAREHOUSE_ID=<warehouse id> \
+PYTHONPATH=src uv run --frozen python scripts/measure_freshness.py \
+  --stem <catalog.schema.triplestore_<dom>_V<n>> --mode microbatch \
+  --source-table <catalog.schema.table> --key-column id --key-value 42 --value-column name \
+  [--read-warehouse-id <RT warehouse>] [--pg-dsn <dsn> --sync-table <schema.table>]
+```
+
+`tests/external/test_freshness_slo.py` (`external`) runs it from the environment and
+asserts the SLOs; it is skipped without `ONTOBRICKS_EXTERNAL_WAREHOUSE=1`, the
+credentials and the domain (`ONTOBRICKS_FRESHNESS_STEM`, `_SOURCE_TABLE`,
+`_KEY_COLUMN`, `_KEY_VALUE`, `_VALUE_COLUMN`). The nightly `external-smoke` job runs it
+as a **non-blocking** step (`continue-on-error`, a warning annotation and a step
+summary with the report) when the repository variables `ONTOBRICKS_INT_FRESHNESS_*`
+name an integration domain.
+
 ## Design traceability
 
 Requirements of the design document (`[Design] Incremental Triple Materialization | OntoBricks`)
@@ -417,11 +512,11 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 1 P0 | `_inferred` reset on both build paths | ◐ | reset on every build that changes base triples; the MERGE *skip* (no source change) keeps it |
 | 1 P0 | `SlotProjectionCompiler` reuses the translator's predicate unpivot; deletes / NULL objects / pre-images → tombstones | ✅ | SCD1 physical deletes stand in for a `deleted` column |
 | 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource; development targets set `presets: {name_prefix: "", pipelines_development: false}` and the runner also finds a `[dev <user>] ` name |
-| 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ◐ | `_data` MV ✅; `_graph` stays a VIEW (Lakehouse//RT reads `_data`); `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
+| 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ✅ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation): the Lakehouse engine, the only one whose readers read `_graph`; Lakebase / Neo4j keep the VIEW); `EXPLAIN` check is the nightly external test `tests/external/test_mv_incremental_plan.py` |
 | 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
 | 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ◐ | from `_data` only (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode` |
 | 1 P0 | Build-run trace: mode, refresh technique, fallback reason | ✅ | `stats.materialization`; cockpit column, details and status card |
-| 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ◐ | Lakebase ✅ (`TwinNetChangeApply`); Neo4j streams in full — its model has no place to mark a triple as inferred |
+| 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | `TwinNetChangeApply`; Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`) |
 | 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | `DeltaMergeMaterializer`, `TwinMergeFallback` |
 | 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh |
 | 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline |
@@ -432,8 +527,9 @@ against this release. ✅ implemented · ◐ implemented with a documented devia
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
 | 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ◐ | `jobs/triple_stream` (`main.py`, `processor.py`); the Spark / connector / RTM wiring is live-unverified |
 | 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them |
-| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; one stream per domain and per deployment at a time; the slot pipeline reads the CDF, not the topic ([why](#realtime)); cluster sizing and run-as grants are live-unverified |
+| 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ◐ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinIncrementalBuild.slot_topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time; cluster sizing, run-as grants and the topic-fed SDP pipeline are live-unverified |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
+| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ◐ | `scripts/measure_freshness.py` + `tests/external/test_freshness_slo.py`, nightly non-blocking step ([Verification](#verification)); not yet run on the integration workspace |
 
 ## Known limitations
 
@@ -453,14 +549,11 @@ Behaviour in this release:
   source update (at most once a minute) for at most ten sources, otherwise every 15
   minutes — and every domain with a `sql_query` or join mapping (most real ones,
   see above) gets the 15-minute schedule.
-- Neo4j always streams in full (`inferred_not_separable`). A net apply keeps the
-  store and must purge the inferred triples first, but the Neo4j property graph
-  has no place to mark a triple as inferred: a literal triple is a node property
-  (`SET n += props`, one value per key), `rdf:type` is a node label, and only
-  object triples are relationships that could carry a flag. Tagging would need
-  per-node bookkeeping of inferred property keys and labels, an `inferred` flag
-  through every triple writer, and still could not tell a value that is both
-  mapped and inferred; until then the fallback stays.
+- Neo4j's inference list (`_inferred`) is emptied by a net apply only; a domain
+  whose builds keep streaming in full (e.g. `changeset_too_large`) accumulates
+  listed triples until one does (harmless: deleting an absent triple removes
+  nothing). An inferred literal that overwrote a mapped value of the same key
+  leaves Neo4j showing the inferred value until the purge, as before.
 - The MERGE fallback engages for any slot-pipeline failure in `incremental`
   (every runner message mentions the pipeline); `microbatch` falls back to CTAS.
   The MERGE skip only fires for all-row-local domains. A MERGE build sets the table
@@ -503,7 +596,8 @@ Live-unverified (workspace spike checklist):
 - `ImportFormat.AUTO` for the pipeline notebook; the stop→start race of a
   continuous pipeline.
 - A build's `REFRESH MATERIALIZED VIEW` while a `TRIGGER ON UPDATE` or scheduled
-  refresh of the same view is running.
+  refresh of the same view is running; `REFRESH MATERIALIZED VIEW … ASYNC` and a
+  `TRIGGER ON UPDATE` `_graph` MV whose upstream is the `_data` MV.
 - A foreign or shared (Delta Sharing) source table counted toward the ten upstream
   sources of `TRIGGER ON UPDATE`.
 - A CTAS `_data` that keeps a triggered/continuous registration — the scheduled
@@ -514,11 +608,13 @@ Live-unverified (workspace spike checklist):
 
 ## Realtime
 
-`realtime` keeps the `microbatch` machinery (continuous slot pipeline over the
-change data feed, self-refreshing `_data` view, continuous synced table) and adds a
-stream that brings a source change into the graph in seconds: a classic-compute job
-reads a Kafka-compatible topic, diffs each changed source row's slots and upserts
-them into a Lakebase `_live` table the graph's union view reads.
+`realtime` keeps the `microbatch` machinery (continuous slot pipeline,
+self-refreshing `_data` view, continuous synced table) and adds a stream that brings
+a source change into the graph in seconds: a classic-compute job reads a
+Kafka-compatible topic, diffs each changed source row's slots and upserts them into a
+Lakebase `_live` table the graph's union view reads. The slot pipeline consumes the
+same topic ([below](#the-slot-pipeline-in-realtime-mode)), so `_slots` / `_data` and
+`_live` follow the same changes.
 
 **Prerequisites.**
 
@@ -536,8 +632,9 @@ them into a Lakebase `_live` table the graph's union view reads.
   (`ONTOBRICKS_REALTIME_LAKEBASE_USER`, `ONTOBRICKS_REALTIME_LAKEBASE_SECRET` =
   `scope/key`), and a UC volume path (`/Volumes/…`) for the checkpoints and each
   run's mappings (`ONTOBRICKS_REALTIME_CHECKPOINT_ROOT`).
-- The domain: a **Lakebase** graph backend, a **published** version, row-tracked
-  sources (as `microbatch`), and its `realtime_source` (Domain › Information ›
+- The domain: a **Lakebase** graph backend, a **published** version (row tracking on
+  the sources is only needed for a Kinesis stream, whose slot pipeline keeps the
+  change feed), and its `realtime_source` (Domain › Information ›
   Materialization mode › Real-time source):
   `{kind: kafka | eventhubs | kinesis, bootstrap_servers, topic, secret_scope,
   secret_key, key_format: json, state_ttl_hours}` — `RealtimeSource` stores the
@@ -699,14 +796,66 @@ A difference is `live_drift` — the stream diverged; restart it — and never a
 full refresh. A scheduled tick of a realtime domain reconciles that pair (no batch
 recompute: its slots run ahead) and records `live_drift`.
 
-**Two consumers of the same changes, on purpose.** The slot pipeline reads the
-sources' change data feed and the stream reads the topic. `_slots` stays the
-complete, replayable snapshot every mode shares — `_data`, the reconciliation and the
-stream's own seed are built from it — while a topic is neither complete history nor
-guaranteed to carry every write to a source table (a backfill or a repair `UPDATE`
-reaches the change data feed only). The stream is the low-latency overlay on top,
-reconciled against `_slots` by the tick. One stream runs per deployment at a time
-(`max_concurrent_runs: 1`; raise it to stream several domains).
+### The slot pipeline in realtime mode
+
+An effective `realtime` domain's slot pipeline reads the same Debezium topic as the
+stream job instead of the source tables' change data feed, so `_slots` / `_data`
+(Delta) and `_live` (Lakebase) follow the same changes, as the design has it.
+`TwinIncrementalBuild.compile_for` — the one compile the build, the scheduled tick,
+the MERGE fingerprint, the readiness preflight and the DAB renderer share, hence one
+SQL fingerprint — calls `SlotProjectionCompiler.compile(..., source="topic",
+topic=TopicSource.from_realtime_source(...), column_types={table: {column: type}})`
+whenever the domain's best mode is `realtime` (`TwinIncrementalBuild.slot_topic`);
+the column types come from `DESCRIBE TABLE` of each row-local source, read once per
+compile on the build's or the tick's warehouse (a source that cannot be described is
+an `InfrastructureError`, not other SQL). A **Kinesis** stream, which `read_kafka`
+cannot read, keeps the change feed (and needs row tracking).
+
+**Reading the topic.** Each row-local mapping's view reads `STREAM read_kafka(...)`
+from the earliest offset. It logs in with `SASL_SSL` / `PLAIN` through
+`secret('<scope>', '<key>')`: the JAAS line for Kafka, the connection string for
+Event Hubs.
+
+**Parsing the envelope.** It uses the stream job's rules: an optional `payload`
+wrapper; case-insensitive columns, where the last of two case-variants wins;
+`source.table` matched by full name, or by leaf name when no other mapped table
+shares it (a shared leaf logs a warning, because stock Debezium sends bare names);
+deletes from `before`, upserts from `after`, and the old key deleted on a
+key-changing update.
+
+**Typing values.** Values are typed from the source tables' column types, so
+Debezium's epoch-day dates, epoch timestamps and base64 decimals read as `CAST(<column>
+AS STRING)` prints them (`DebeziumValueText`, the stream job's `SparkColumnText`
+rules). A mapped column without a type logs a warning and keeps its text; JSON
+numbers and booleans are read as their text, so an exponent float or a Debezium
+encoding beyond the defaults can still print differently from the change-feed
+variant.
+
+**Sequencing.** The Kafka offset sequences the AUTO CDC flow. That flow, `_slots`
+and the `_data` MV are unchanged, and a topic source needs no row tracking on the
+source tables (`spec.needs_row_tracking` is `False`): the build, the tick and the
+preflight probe none, and no source history is read for the full-refresh plan.
+
+**What the topic must provide.**
+
+- It must be keyed by the source row's primary key: offsets order changes only
+  within a partition, so a key reached by events in two partitions (a key-changing
+  update, a mapping keyed by a non-PK column) can be misordered.
+- It must carry full pre-images (`REPLICA IDENTITY FULL`, `binlog_row_image=FULL`), so
+  deletes and re-keys of mappings keyed by non-PK columns are seen.
+- It must retain, or compact, every row's latest change (log compaction or a Debezium
+  snapshot). A full refresh — which any change to the compiled SQL triggers, including
+  a new broker list, topic or secret name, and a reconciliation drift — replays it from
+  the earliest offset; with time-based retention a rebuilt `_slots` misses the rows
+  not changed recently. Rotate a credential by writing the new value under the same
+  secret scope and key.
+- A write that reaches a source table but not the topic (a backfill, a repair
+  `UPDATE` on the Delta copy) reaches neither `_slots` nor `_live`; the reconciliation
+  against the batch recompute (`view_data`) shows it as drift.
+
+The stream is the low-latency overlay on top, reconciled against `_slots` by the
+tick. One stream runs per deployment at a time (`max_concurrent_runs: 1`; raise it to
+stream several domains).
 
 **Live-unverified:** Real-Time Mode in update output mode with
 `transformWithState` (row API, `MapState` TTL) and the per-row `foreach` Postgres
