@@ -3335,3 +3335,34 @@ Modified files:
 - changelogs/v0.9.2/dermot-smyth_2026-11-02.log
 
 Test result: documentation only.
+
+================================================================================
+## Live: MERGE fallback, source-overwrite detection, row-tracking probe (fevm-ontobricks-int)
+================================================================================
+
+Context: three Phase 1 / Phase 2 rows had unit tests only. A warehouse-only
+spike on fixture tables (scratch schema, dropped afterwards) exercised the
+real code paths; no code change.
+
+Observed (2026-11-02):
+- `DeltaMergeMaterializer.apply` (the incremental-without-serverless path):
+  the first build creates `_data` with row tracking, deletion vectors and the
+  change feed on and merges 3 rows; a build with no source change merges
+  **0 rows** (`numOutputRows 0` — cost proportional to change); one changed
+  source row → 1 delete + 1 insert (set semantics: the triple's identity
+  changed); one deleted source row → 1 delete, 2 rows left. `table_changes`
+  on the MERGE table at that version lists exactly the one delete — the
+  change feed the net-change apply reads when `_data` is a table works
+  without any preview.
+- `SourceReadiness.source_overwritten_since`: a plain `UPDATE` is not a
+  rewrite; `INSERT OVERWRITE` (`WRITE`, mode Overwrite) and
+  `CREATE OR REPLACE TABLE AS SELECT` are detected.
+- `SourceReadiness.check`: the table replaced by `CREATE OR REPLACE TABLE AS
+  SELECT` lost its properties and reads `row_tracking = false` — exactly what
+  the readiness preflight reports and what degrades the mode to `full`.
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: documentation only.
