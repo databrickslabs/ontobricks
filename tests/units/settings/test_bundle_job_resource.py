@@ -251,11 +251,23 @@ class TestSlotPipelineTemplateIsNotAutoIncluded:
             for path in (REPO_ROOT / "resources").glob("*.yml")
         )
 
-    def test_the_example_exists_and_parses_as_yaml(self):
+    def test_the_example_block_parses_and_matches_the_runner(self):
+        """The commented resource block, uncommented, is a valid pipeline
+        resource with the settings ``SlotPipelineRunner.ensure`` applies."""
+        from back.core.streaming import SlotPipelineRunner
+
         path = REPO_ROOT / "resources/triple_slots.pipeline.yml.example"
-        assert path.exists()
-        text = path.read_text()
-        yaml.safe_load(text)  # comments only: must not raise
-        assert "SlotPipelineRunner" in text
-        assert "channel: PREVIEW" in text
-        assert "serverless: true" in text
+        lines = path.read_text().splitlines()
+        start = next(i for i, line in enumerate(lines) if line.startswith("# resources:"))
+        block = "\n".join(line[2:] if line.startswith("# ") else line[1:] for line in lines[start:])
+        doc = yaml.safe_load(block)
+
+        (pipeline,) = doc["resources"]["pipelines"].values()
+        assert pipeline["serverless"] is True
+        assert pipeline["channel"] == "PREVIEW"
+        assert pipeline["development"] is False
+        assert pipeline["continuous"] is False
+        assert "file" in pipeline["libraries"][0]
+        assert SlotPipelineRunner.FINGERPRINT_KEY in pipeline["configuration"]
+        assert pipeline["name"].startswith("ontobricks-slots-")
+        assert "SlotPipelineRunner" in path.read_text()

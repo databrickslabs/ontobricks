@@ -29,7 +29,7 @@
 
 ### What's new in 0.9.1
 
-- **Incremental triple materialization**: per-domain `full` / `incremental` / `microbatch` modes — a Lakeflow slot pipeline over the sources' change feed, an Enzyme-refreshed `_data` materialized view, Lakebase sync schedules that follow the mode, net-change apply for Neo4j / app-managed Lakebase and a MERGE fallback without serverless; every fallback is recorded in the build-run trace. See [docs/incremental-materialization.md](docs/incremental-materialization.md).
+- **Incremental triple materialization**: per-domain `full` / `incremental` / `microbatch` modes — a Lakeflow slot pipeline over the sources' change feed, an Enzyme-refreshed `_data` materialized view, Lakebase sync schedules that follow the mode, net-change apply for app-managed Lakebase (Neo4j still streams in full) and a MERGE fallback without serverless; every fallback is recorded in the build-run trace. See [docs/incremental-materialization.md](docs/incremental-materialization.md).
 - **Viewer search and Graph Chat**: Viewers can search / expand Explorer and chat over the graph; load and node-action writes stay blocked.
 - **SWRL builtins**: `swrlb:` filters apply on inference **and** materialization (Lakebase `TRY_CAST` included).
 - **Auto-Map Metric Views**: the agent emits `MEASURE(...)` + `GROUP BY` and rejects table-style `SELECT *`.

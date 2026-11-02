@@ -14,6 +14,11 @@ logger = get_logger(__name__)
 # parameters — Databricks cannot bind an object name. Anything outside these
 # character sets is rejected by the caller instead of being escaped.
 SAFE_SQL_IDENT = re.compile(r"^[A-Za-z0-9_.]+$")  # qualified: catalog.schema.name
+
+#: Triple rows worth keeping: unset attributes arrive as ``NULL`` or ``''``
+#: objects (``COALESCE(TRY_CAST(col AS STRING), '')``) and the ``_data``
+#: materialized view and the slot reconciler both leave them out.
+NON_BLANK_OBJECT_SQL = "WHERE object IS NOT NULL AND TRIM(object) != ''"
 SAFE_COL_IDENT = re.compile(r"^[A-Za-z0-9_]+$")  # single column / attribute name
 
 SQL_DIALECT_SPARK = "spark"

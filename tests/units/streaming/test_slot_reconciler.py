@@ -13,6 +13,8 @@ pytestmark = pytest.mark.unit
 
 _SLOTS = "main.kg.triplestore_sales_V1_slots"
 _DATA = "main.kg.triplestore_sales_V1_data"
+_FILTER = "WHERE object IS NOT NULL AND TRIM(object) != ''"
+_HASH = "sum(CAST(xxhash64(subject, predicate, object) AS DECIMAL(38, 0))) AS h"
 
 
 class _Client:
@@ -30,29 +32,30 @@ class _Client:
             raise RuntimeError("TABLE_OR_VIEW_NOT_FOUND")
         if "GROUP BY map_id" in sql:
             return list(self._per_map)
-        for fqn, row in self._totals.items():
-            if f"FROM {fqn})" in sql:
-                return [row]
+        for fqn, rows in self._totals.items():
+            if f"FROM {fqn} " in sql:
+                return list(rows) if isinstance(rows, list) else [rows]
         return [{"n": 0, "h": None}]
 
 
 class TestCountsSql:
-    def test_the_totals_count_distinct_triples(self):
+    def test_the_totals_count_distinct_non_blank_triples(self):
+        """The ``_data`` MV groups the slots and drops blank objects (unset
+        attributes); counting the slots the same way is what makes the two
+        sides comparable."""
         sql = SlotReconciler.counts_sql(_DATA)
 
         assert sql == (
-            "SELECT count(*) AS n, "
-            "sum(CAST(xxhash64(subject, predicate, object) AS DECIMAL(38, 0))) AS h "
-            f"FROM (SELECT DISTINCT subject, predicate, object FROM {_DATA})"
+            f"SELECT count(*) AS n, {_HASH} "
+            f"FROM (SELECT DISTINCT subject, predicate, object FROM {_DATA} {_FILTER})"
         )
 
-    def test_the_per_mapping_counts_group_by_map_id(self):
+    def test_the_per_mapping_counts_group_by_map_id_with_the_same_filter(self):
         sql = SlotReconciler.counts_sql(_SLOTS, group_by_map_id=True)
 
         assert sql == (
-            "SELECT map_id, count(*) AS n, "
-            "sum(CAST(xxhash64(subject, predicate, object) AS DECIMAL(38, 0))) AS h "
-            f"FROM {_SLOTS} GROUP BY map_id ORDER BY map_id"
+            f"SELECT map_id, count(*) AS n, {_HASH} "
+            f"FROM {_SLOTS} {_FILTER} GROUP BY map_id ORDER BY map_id"
         )
 
     @pytest.mark.parametrize("fqn", ["", "main.kg.t; DROP TABLE x", "main.kg.t'--"])
@@ -115,3 +118,16 @@ class TestCompare:
     def test_a_warehouse_error_is_an_infrastructure_error(self):
         with pytest.raises(InfrastructureError, match="Could not count"):
             SlotReconciler.compare(_Client(fail=True), _SLOTS, _DATA)
+
+    def test_an_unreadable_count_is_an_error_not_a_zero(self):
+        """Two garbled answers must never compare as 'no drift'."""
+        client = _Client(totals={_SLOTS: {"n": "many", "h": 1}, _DATA: {"n": 1, "h": 1}})
+
+        with pytest.raises(InfrastructureError, match="Unreadable"):
+            SlotReconciler.compare(client, _SLOTS, _DATA)
+
+    def test_a_missing_row_is_an_error(self):
+        client = _Client(totals={_SLOTS: [], _DATA: {"n": 1, "h": 1}})
+
+        with pytest.raises(InfrastructureError, match="no row returned"):
+            SlotReconciler.compare(client, _SLOTS, _DATA)

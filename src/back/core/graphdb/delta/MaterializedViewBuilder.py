@@ -10,6 +10,7 @@ from typing import Any
 from back.core.errors import ValidationError
 from back.core.graphdb.delta import materialize
 from back.core.helpers import SAFE_SQL_IDENT, SQLHelpers, validate_table_name
+from back.core.helpers.SQLHelpers import NON_BLANK_OBJECT_SQL
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -28,7 +29,7 @@ _MV_HEADER = (
 MV_SHA_PROPERTY = "ontobricks.mv_sql_sha256"
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 
-_NON_BLANK_OBJECT = "WHERE object IS NOT NULL AND TRIM(object) != ''"
+_NON_BLANK_OBJECT = NON_BLANK_OBJECT_SQL
 
 _INCREMENTAL_TECHNIQUES = re.compile(
     r"\b(?:ROW_BASED|GROUP_AGGREGATE|APPEND_ONLY|PARTITION_OVERWRITE"

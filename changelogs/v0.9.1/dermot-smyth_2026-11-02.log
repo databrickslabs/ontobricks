@@ -407,6 +407,84 @@ tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_c
 -> 10505 passed, 338 skipped, 9 deselected in 54 s; slowest test 1.16 s.
 
 ================================================================================
+## Fix: Task 8 review round 1 (reconciler counts like the MV, honest 404, DAB template)
+================================================================================
+
+Context: the Task 8 review found the reconciler reporting drift on healthy
+graphs, a 404 that also covered outages, and a DAB template that did not match
+the runner.
+
+Changes:
+
+1. src/back/core/helpers/SQLHelpers.py, src/back/core/graphdb/delta/MaterializedViewBuilder.py,
+   src/back/core/streaming/SlotReconciler.py
+   `NON_BLANK_OBJECT_SQL` (the `WHERE object IS NOT NULL AND TRIM(object) != ''`
+   the `_data` MV applies to its slots branch) is now one constant; the
+   reconciler applies it inside both DISTINCT totals and the per-`map_id`
+   query, so `_slots` rows for unset attributes (blank objects kept as
+   upserts) no longer read as drift. An unreadable count or a missing row is
+   an `InfrastructureError`, not a zero (two garbled answers must not compare
+   equal). Comment on the DECIMAL(38,0) cast made exact (BIGINT sums overflow
+   after a handful of 64-bit hashes in ANSI mode).
+2. src/back/objects/digitaltwin/build/TwinSlotReconciliation.py
+   A missing warehouse client is an `InfrastructureError`; the slots table is
+   looked up with `WarehouseStatements.query("SHOW TABLES IN … LIKE …")`
+   (`slots_table_listed`), so a permission gap or an outage surfaces as
+   502/503 instead of "no incremental build has run" (404 only for a clean
+   empty listing). The mapping compile uses `DEFAULT_BASE_URI` like the main
+   build.
+3. src/api/routers/internal/dtwin.py
+   The reconcile scans run on the build warehouse as the caller
+   (`create_databricks_client(..., warehouse_id=resolve_build_warehouse_id(...))`
+   keeps the OBO token; a Lakehouse//RT query warehouse would hit its
+   guardrails).
+4. resources/triple_slots.pipeline.yml.example
+   Matches `SlotPipelineRunner.ensure`: pipeline name
+   `ontobricks-slots-<domain>-v<n>`, a `file:` library pointing at the
+   uploaded workspace SQL file, configuration key `ontobricks.slot_sql_sha256`,
+   channel from `settings.slot_pipeline_channel`; warns against copying the
+   block for an app-built domain (two pipelines would write one `_slots`).
+   tests/units/settings/test_bundle_job_resource.py now uncomments the block
+   and parses it as a pipeline resource.
+5. docs/incremental-materialization.md
+   Corrections from the review: the pipeline is always reused (the fingerprint
+   chooses incremental update vs full refresh); channel configurable; the MV's
+   blank-object filter; `cdf_unavailable` also for a base newer than `_data`
+   and `no_previous_version` for a store that lost the graph; base-run search
+   rules (failed run whose apply started, sync-mode change end the search;
+   50-run window); reconciliation caveats (microbatch slots run ahead; current
+   mappings; 502 vs 404); preview notes marked live-unverified; row tracking +
+   deletion vectors; "up to four GETs per sync" limitation carried.
+6. README.md ("net-change apply for app-managed Lakebase (Neo4j still streams
+   in full)"), src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+   (`TODO(task-8)` retagged as a documented follow-up).
+
+Deferred (follow-ups, per review): `batch_branches_present` reads the current
+mappings, not the ones the last build used; the inline `style="width:…"` on the
+new header matches the table's existing inline widths; JS tests assert source
+text (no JS runtime in the suite); `digitaltwin/build/` has 13 modules.
+
+Modified files:
+- src/back/core/helpers/SQLHelpers.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/streaming/SlotReconciler.py
+- src/back/objects/digitaltwin/build/TwinSlotReconciliation.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/api/routers/internal/dtwin.py
+- resources/triple_slots.pipeline.yml.example
+- docs/incremental-materialization.md
+- README.md
+- tests/units/streaming/test_slot_reconciler.py
+- tests/units/api/test_dtwin_reconcile.py
+- tests/units/settings/test_bundle_job_resource.py
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+
+Test result: covering run (streaming, reconcile route, help API, MV builder,
+bundle resources, runs page, architecture) 381 passed; slowest 0.77 s. Full
+suite: see the roll-up below (the readiness-route test is deselected because it
+probes live services and hangs without network).
+
+================================================================================
 ## Incremental triple materialization — roll-up (Tasks 0-8)
 ================================================================================
 

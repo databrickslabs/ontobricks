@@ -1177,12 +1177,20 @@ async def reconcile_incremental_slots(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Compare the domain's ``…_slots`` streaming table with ``…_data`` (drift check)."""
+    """Compare the domain's ``…_slots`` streaming table with ``…_data`` (drift check).
+
+    The scans run on the build warehouse (a Lakehouse//RT query warehouse
+    would hit its guardrails) as the caller: ``warehouse_id`` keeps the OBO
+    token, ``for_write`` would not.
+    """
     from back.core.graphdb.delta.DeltaBase import create_databricks_client
+    from back.core.helpers import resolve_build_warehouse_id
     from back.objects.digitaltwin.build import TwinSlotReconciliation
 
     domain = get_domain(session_mgr)
-    client = create_databricks_client(domain, settings)
+    client = create_databricks_client(
+        domain, settings, warehouse_id=resolve_build_warehouse_id(domain, settings) or None
+    )
     result = await run_blocking(TwinSlotReconciliation.run, domain, settings, client)
     return {"success": True, **result}
 

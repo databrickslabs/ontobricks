@@ -162,8 +162,9 @@ class TwinIncrementalBuild:
         Failures are logged and swallowed: a pipeline left running costs
         compute, not correctness, and must not fail the full build.
         """
-        # TODO(task-8): pipelines of earlier versions keep running after a
-        # version bump; only the current version's pipeline is stopped here.
+        # Follow-up (docs/incremental-materialization.md, Known limitations):
+        # pipelines of earlier versions keep running after a version bump;
+        # only the current version's pipeline is stopped here.
         from back.core.streaming import SlotPipelineRunner
 
         name = SlotPipelineRunner.pipeline_name(

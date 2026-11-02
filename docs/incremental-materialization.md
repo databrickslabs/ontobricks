@@ -46,17 +46,21 @@ Row-local mappings (one source table, no join, no `sql_query`) are compiled by
 pre-images and `NULL` objects. An `AUTO CDC … KEYS (map_id, source_key, predicate)
 … STORED AS SCD TYPE 1` flow folds them into `triplestore_<domain>_V<n>_slots`.
 Join, aggregate and `sql_query` mappings stay batch: their SQL becomes the batch
-branch of the `_data` MV. The pipeline is serverless, on the `PREVIEW` channel,
-never in development mode, and carries a fingerprint of its SQL so an unchanged
-mapping reuses the existing pipeline.
+branch of the `_data` MV. The pipeline is serverless, on the `PREVIEW` channel by
+default (`settings.slot_pipeline_channel`), never in development mode, and is
+always reused across builds; it carries a fingerprint of its SQL
+(`ontobricks.slot_sql_sha256`) that decides between an incremental update
+(unchanged mapping) and a full refresh (changed mapping).
 
 ### The `_data` materialized view
 
 In `incremental` and `microbatch` the `_data` relation is
 `CREATE OR REPLACE MATERIALIZED VIEW … REFRESH POLICY INCREMENTAL` over
 `SELECT subject, predicate, object, sha2(object, 256) AS object_hash FROM
-(_slots UNION ALL <batch branches>) GROUP BY …` — `GROUP BY` instead of
-`DISTINCT`, no `stack()`, row tracking on, `pipelines.channel = preview`. The MV
+(_slots WHERE object IS NOT NULL AND TRIM(object) != '' UNION ALL <batch branches>)
+GROUP BY …` — `GROUP BY` instead of `DISTINCT`, no `stack()`, blank objects (unset
+attributes) dropped from the slots branch, row tracking on,
+`pipelines.channel = preview`. The MV
 definition is hashed; a build whose definition did not change refreshes the MV
 instead of replacing it. The refresh technique Enzyme chose is read from the
 pipeline event log and recorded in the build-run trace (`refresh_technique`).
@@ -102,10 +106,11 @@ Two further fallbacks apply after the mode is decided:
   `table_changes('<data>', since + 1, latest)` reduced to net inserts/deletes
   since the `_data` version the store was last brought to, deletes first. The
   store falls back to the full stream (`apply_mode = full_stream`) with
-  `apply_fallback_reason` = `no_previous_version` (no matching base run, or the
-  base came from a different `_data` relation kind / table id), `changeset_too_large`
-  (more than 10 % of the current `_data` rows), `cdf_unavailable` (any change-feed
-  read error, before or during the stream) or `inferred_not_separable` (the store
+  `apply_fallback_reason` = `no_previous_version` (no matching base run, the
+  base came from a different `_data` relation kind / table id, or the store no
+  longer holds the graph), `changeset_too_large` (more than 10 % of the current
+  `_data` rows), `cdf_unavailable` (any change-feed read error, before or during
+  the stream, or a base version newer than `_data`) or `inferred_not_separable` (the store
   cannot purge its inferred triples on their own — Neo4j today). After a net
   apply the store's inferred triples are purged and the graph cache rebuilt, so
   reasoning starts from a clean slate exactly as after a full build.
@@ -175,19 +180,26 @@ The Knowledge Graph › Runs cockpit shows the effective mode (with the requeste
 one and the fallback reason when they differ), the strategy / refresh technique
 and the apply mode per run, and a "Materialization" block in the run details.
 The newest successful run with the same graph engine, sync mode and graph name
-whose apply reached the store is the *base* the next build continues from; a
-run that touched the store without recording these facts (a scheduled tick, a
-pre-0.9.1 build) ends the search, and the next build streams in full.
+whose apply reached the store is the *base* the next build continues from. The
+search (newest 50 runs) ends without a base — and the next build streams in
+full — at a run that touched the store without recording these facts (a
+scheduled tick, a pre-0.9.1 build), at a failed run whose apply had started, or
+at a run of the same graph under another sync mode; failed runs that never
+reached the store and Lakebase skip runs are passed over.
 
 ## Reconciliation
 
 `POST /dtwin/incremental/reconcile` (builder role) compares the domain's `_slots`
-streaming table with its `_data` relation: distinct-triple row counts and
-`sum(xxhash64(subject, predicate, object))` of both, `drift` when they differ,
-and the slot counts per `map_id`. `_data` is the union of the slots and the batch
-branches, so the response carries `batch_branches_present`; `drift` is meaningful
-(`drift_meaningful: true`) only when every mapping is row-local. A domain without
-a slots table answers 404.
+streaming table with its `_data` relation the way the MV reads the slots:
+distinct-triple row counts and `sum(xxhash64(subject, predicate, object))` of
+both, blank objects left out, `drift` when they differ, and the slot counts per
+`map_id`. The scans run on the build warehouse as the caller. `_data` is the
+union of the slots and the batch branches, so the response carries
+`batch_branches_present` (derived from the domain's *current* mappings) and
+`slots_run_ahead` (a `microbatch` domain, whose continuous pipeline keeps
+moving `_slots` between builds); `drift` is meaningful
+(`drift_meaningful: true`) only when both are false. A domain without a slots table answers 404; an unreadable
+catalog or a missing warehouse client answers 502/503, not 404.
 
 ## Preview enrolment
 
@@ -195,13 +207,17 @@ Three Databricks previews are assumed on the workspace; without them the modes
 degrade as described above:
 
 - **Enzyme incremental materialized views** on the `PREVIEW` pipeline channel,
-  and the **materialized-view change data feed** (`table_changes` on an MV,
-  `REPAIR TABLE … SYNC METADATA` once) used by the net-change apply.
+  and the **materialized-view change data feed** (`table_changes` on an MV; the
+  Databricks preview notes ask for a one-time `REPAIR TABLE … SYNC METADATA`,
+  which the app does not run — live-unverified) used by the net-change apply.
 - **Materialized view → Lakebase triggered/continuous synced tables**.
-- **Lakehouse//RT** read warehouses.
+- **Lakehouse//RT** read warehouses (guardrail values quoted above are the
+  documented ones at design time; verify on the workspace).
 
-Row tracking (automatic change data feed) is GA on DBR 19 and is the only
-requirement on the customer's source tables.
+On the customer's source tables the app only requires row tracking
+(`delta.enableRowTracking`, the basis of automatic change data feed on DBR 19);
+`SourceReadiness.enable_sql` also turns on deletion vectors, which row tracking
+needs for in-place updates.
 
 ## Known limitations
 
@@ -230,7 +246,8 @@ Behaviour in this release:
 - The first build after upgrading re-registers every managed-synced table on
   `_data` instead of the VIEW (one full resync). `SyncedTableManager.trigger_refresh`
   still starts updates with `full_refresh=True`. The drift check ignores a ghost
-  `_b` fallback registration; a delete→create race is handled by polling.
+  `_b` fallback registration; a delete→create race is handled by polling; a
+  registration costs up to four synced-table GETs per build.
 - The Lakehouse//RT fallback runs as the caller, who therefore needs CAN_USE on
   the build warehouse.
 
