@@ -3130,3 +3130,42 @@ Modified files:
 
 Test result: see the roll-up line ("Incremental triple materialization —
 roll-up" section) for the full-suite number after these edits.
+
+================================================================================
+## Live Lakebase synced-table probe: MV source blocked by the preview, `_slots` source works
+================================================================================
+
+Context: the design offers `_slots` or `_data` as the Lakebase synced-table
+source in the triggered / continuous schedules; the app synced from `_data`
+only. A live probe on `ontobricks-int` through the app's own
+`SyncedTableManager` (fixture slot pipeline + `_data` view in a scratch schema,
+all dropped afterwards) settled which source the workspace can run.
+
+Observed (2026-11-02):
+- TRIGGERED from the `_data` materialized view: registration accepted, initial
+  snapshot landed (9 rows), every sync pipeline update then ends
+  `SYNCED_TABLE_ONLINE_PIPELINE_FAILED` with `[SYNCED_TABLE_USER_ERROR.
+  SOURCE_READ_ERROR] … [MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA]` —
+  the synced-table pipeline reads the MV's change feed, which is the same
+  private preview the MV change feed itself needs.
+- TRIGGERED from the `_slots` streaming table (key `map_id, source_key,
+  predicate`): online (`SYNCED_TABLE_ONLINE_NO_PENDING_UPDATE`) in 57 s, 9 rows.
+- CONTINUOUS from `_slots`: online (`SYNCED_TABLE_ONLINE_CONTINUOUS_UPDATE`) in
+  56 s; with the slot pipeline continuous, a source `UPDATE` was visible in the
+  Postgres synced table after 45.8 s (design target < 60 s).
+
+Changes:
+
+1. docs/incremental-materialization.md — Live verification: the synced-table
+   probe; traceability rows for the Lakebase triggered / continuous sync are
+   live-verified and describe the source rule the follow-up round implements
+   (`_slots` when the slots carry the whole graph; snapshot fallback with
+   `mv_change_feed_unavailable` when an MV-sourced sync hits the preview wall);
+   the Live-unverified list drops the synced-table item.
+2. changelogs/v0.9.2/dermot-smyth_2026-11-02.log — this section.
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: documentation only (no code change in this section).

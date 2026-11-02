@@ -689,7 +689,7 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 1 P0 | Slot pipeline per (domain, version) via DAB, AUTO CDC into `_slots` | ✅ | ✅ | rendered per published version into `resources/_generated_triple_slots.yml` at deploy time ([DAB deployment](#dab-deployment)); a pipeline the runner created first is bound to its resource before the deploy; a compile error keeps the rendered resource; development targets set `presets: {name_prefix: "", pipelines_development: false}` and the runner also finds a `[dev <user>] ` name. Live: the runner's create / validate / start / adopt / stop cycle (the DAB render itself is a unit test) |
 | 1 P0 | `_data` / `_graph` MVs with `REFRESH POLICY INCREMENTAL`; CI check with `EXPLAIN` | ✅ | ✅ | `MaterializedViewBuilder`, `TwinGraphRelation` / `GraphRelation` ([The `_graph` relation](#the-_graph-relation)); `_graph` is an MV on the Lakehouse engine — the design wants the MV so Lakehouse//RT can read it, and only that engine's readers read `_graph`; Lakebase / Neo4j (every `realtime` domain among them) keep the VIEW their sync and stream read. Live: `EXPLAIN` incremental-eligible (`tests/external/test_mv_incremental_plan.py`, nightly), post-mutation refresh `GROUP_AGGREGATE` |
 | 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | ○ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing` |
-| 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ✅ | ○ | the design offers either; from `_data` (`_slots` would expose duplicate and blank rows to asserted-only readers); capped by `sync_table_mode`. An MV as a triggered/continuous synced-table source is a private preview the workspace does not have |
+| 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ✅ | ✅ | both sources: `_slots` (slot key) when the slots carry the whole graph, else `_data`; asserted-only readers go through a `DISTINCT` non-blank Postgres view; capped by `sync_table_mode`. Live: TRIGGERED from `_slots` online in 57 s; TRIGGERED from the `_data` MV registers and snapshots but its updates fail on `MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA` (private preview) → the build falls back to a snapshot registration and records `mv_change_feed_unavailable` |
 | 1 P0 | Build-run trace: mode, refresh technique, fallback reason, slot counts changed | ✅ | ✅ | `stats.materialization`; cockpit column, details and status card; `slots_changed` from the update's `flow_progress` metrics (`SlotUpdateMetrics`), with `slot_update_id` / `warehouse_id` for the DBU join on `system.billing.usage`. Live: a bootstrap reported 9 upserted slots against 9 slot rows, a one-row source update 3 (every slot of the row) — one RUNNING event carries the totals, no double count |
 | 1 exp. | Per-mapping freshness class: the UI shows which mappings are row-local (`microbatch`-eligible) and which are batch-incremental | ✅ | ○ | readiness `mappings` (`kind` = `slot` / `batch` with the compiler's reason) + counts; "Mappings: n row-local, m batch-incremental" line on the readiness card |
 | 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | ○ | `TwinNetChangeApply`; Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`); the MV change feed needs external metadata (private preview) — until then the apply falls back to a full stream as designed, the MERGE-table feed works |
@@ -698,7 +698,7 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | ○ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline |
 | 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ✅ | query warehouse + "Use Lakehouse//RT"; `DeltaFlatStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Live: the app's `use_sea` client on the RT warehouse `realtime` runs the fingerprint probe and every store read shape over the relation; recursive CTEs are refused there and take the build-warehouse fallback; point reads p50 216 ms through the SEA from a laptop |
 | 2 P1 | Lakehouse//RT offered only where available, and only for tables without row filters / column masks | ✅ | ○ | readiness `lakehouse_rt` facts (query warehouse configured, RT reads on, fast path) + card line; `_slots` / `_data` / `_graph` / `_inferred` are app-created without filters or masks, so nothing to check |
-| 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | ○ | `ContinuousSyncWait`; Postgres union view |
+| 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | ✅ | `ContinuousSyncWait`; Postgres union view. Live: CONTINUOUS from `_slots` online in 56 s, a source change visible in Postgres after 45.8 s (target < 60 s) |
 | 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ○ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace |
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh. Live: `drift: false`, identical counts and `xxhash64` sums after bootstrap and after mutations |
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | ○ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
@@ -880,6 +880,24 @@ row deleted — `purge_live_tombstones_sql` removed it and detaching cleared the
 Single-row upsert latency from a laptop over TLS: p50 105 ms, p99 218 ms (the sink's share of the
 sub-second budget; a cluster in-region sits well below that).
 
+Live Lakebase synced tables (2026-11-02, instance `ontobricks-int`, through the app's own
+`SyncedTableManager`, fixture slot pipeline + `_data` view in a scratch schema, all dropped afterwards):
+
+- **TRIGGERED from the `_data` materialized view**: the registration is accepted and the initial snapshot
+  lands (9 rows in Postgres), but every sync pipeline update ends `SYNCED_TABLE_ONLINE_PIPELINE_FAILED` —
+  `[SYNCED_TABLE_USER_ERROR.SOURCE_READ_ERROR] … [MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA] Change
+  Data Feed reads from Materialized Views require external metadata`. The synced-table pipeline reads the
+  MV's change feed, so "MV → Lakebase TRIGGERED / CONTINUOUS" needs the same private preview as the MV
+  change feed itself; without it the build falls back to a snapshot registration ([per
+  backend](#what-a-build-does-per-backend)).
+- **TRIGGERED from the `_slots` streaming table** (key `map_id, source_key, predicate`): works —
+  `SYNCED_TABLE_PROVISIONING_PIPELINE_RESOURCES` → `…_PROVISIONING_INITIAL_SNAPSHOT` →
+  `SYNCED_TABLE_ONLINE_TRIGGERED_UPDATE` → `SYNCED_TABLE_ONLINE_NO_PENDING_UPDATE` in 57 s, 9 rows.
+- **CONTINUOUS from `_slots`**: works — `SYNCED_TABLE_ONLINE_CONTINUOUS_UPDATE` after 56 s; with the slot
+  pipeline continuous, a source `UPDATE` was visible in the Postgres synced table after **45.8 s** (the
+  design's Lakebase target is < 60 s). This is why a domain whose slots carry the whole graph syncs
+  Lakebase from `_slots` in the triggered and continuous schedules.
+
 Attempted and blocked on the workspace (2026-11-02): the `transformWithState` processor + `LiveSink`
 harness could not run there — classic job clusters are refused ("Only serverless compute is
 supported in the workspace"), and on serverless job compute the slim closure imports fine
@@ -898,8 +916,6 @@ Live-unverified (workspace spike checklist):
 - The MV change data feed and time travel once external metadata is enabled
   (`REPAIR TABLE … SYNC METADATA`): the net-change apply from the `_data` MV and the
   Neo4j purge's `VERSION AS OF` reads have only been exercised against the MERGE table.
-- A Lakeflow streaming table or the `_data` MV as a triggered/continuous synced
-  table source.
 - `ImportFormat.AUTO` for the pipeline notebook; the stop→start race of a
   continuous pipeline.
 - A build's `REFRESH MATERIALIZED VIEW` while a `TRIGGER ON UPDATE` or scheduled
