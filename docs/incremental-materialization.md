@@ -137,7 +137,9 @@ Two further fallbacks apply after the mode is decided:
 
 **Lakehouse / Delta engine.** `_data` is the graph. `full`: CTAS. `incremental` /
 `microbatch`: slot pipeline + `_data` MV (or the MERGE table); `_inferred` is
-reset in every mode; no graph stream (`apply_mode = none`). Reads may go to a
+reset in every mode, except by a MERGE build skipped for unchanged sources, which
+completes before the reset (the inferences of the unchanged graph stay); no graph
+stream (`apply_mode = none`). Reads may go to a
 Lakehouse//RT warehouse (below).
 
 **Lakebase, managed_synced.** `_data` is built as above and the Lakeflow synced
@@ -278,6 +280,11 @@ Behaviour in this release:
   registration costs up to four synced-table GETs per build.
 - The Lakehouse//RT fallback runs as the caller, who therefore needs CAN_USE on
   the build warehouse.
+- The standalone Delta build (`/dtwin/databricks-build/start`,
+  `DeltaTripleStoreBuildPipeline`) does not know the materialization modes: it
+  rebuilds `_data` by CTAS, which drops an incremental domain's materialized view
+  (the next main build recreates it), and it never stops a running `microbatch`
+  slot pipeline.
 
 Live-unverified (workspace spike checklist):
 
