@@ -43,46 +43,41 @@ classDiagram
         <<ABC>>
         +read-only, no-copy
     }
-    class ReadStore {
+    class dReadStore["delta.ReadStore"] {
         +expand_and_fetch_subgraph()
         +execute_query()
     }
-    class MaterializedStore {
+    class dMaterializedStore["delta.MaterializedStore"] {
         +create_table()
         +insert_triples()
     }
-    class ViewStore {
+    class dViewStore["delta.ViewStore"] {
         +pass-through view
     }
-    class Base {
+    class lBase["lakebase.Base"] {
         +physical_table_id()
         +get_node_table()
         +get_query_translator()
     }
-    class FlatStore {
+    class lFlatStore["lakebase.FlatStore"] {
         +sync_mode()
         +is_synced()
         +sync_uc_catalog()
     }
-    class Store {
+    class nStore["neo4j.Store"] {
         +get_connection()
-    }
-    class ExampleStore {
-        +get_connection()
-        +close()
     }
 
     ABC                      <|-- GraphBackend
     GraphBackend             <|-- MaterializedGraphBackend
     GraphBackend             <|-- VirtualBackend
-    MaterializedGraphBackend <|-- Base
-    MaterializedGraphBackend <|-- MaterializedStore
-    MaterializedGraphBackend <|-- Store
-    MaterializedGraphBackend <|-- ExampleStore
-    VirtualBackend           <|-- ViewStore
-    ReadStore           <|-- MaterializedStore
-    ReadStore           <|-- ViewStore
-    Base             <|-- FlatStore
+    MaterializedGraphBackend <|-- lBase
+    MaterializedGraphBackend <|-- dMaterializedStore
+    MaterializedGraphBackend <|-- nStore
+    VirtualBackend           <|-- dViewStore
+    dReadStore               <|-- dMaterializedStore
+    dReadStore               <|-- dViewStore
+    lBase                    <|-- lFlatStore
 
     %% ─── Graph DB Capabilities (factory-vended, per backend) ────────────────────
     class GraphBuilder { <<ABC>> }
@@ -101,17 +96,29 @@ classDiagram
         +classify_store()
     }
 
-    GraphBuilder     <|-- Builder
-    GraphBuilder     <|-- Builder
-    GraphBuilder     <|-- Builder
-    GraphHealthProbe <|-- HealthProbe
-    GraphHealthProbe <|-- HealthProbe
-    GraphHealthProbe <|-- HealthProbe
-    GraphProvisioner <|-- Provisioner
-    GraphProvisioner <|-- Provisioner
-    GraphSimulation  <|-- Simulation
-    GraphSimulation  <|-- Simulation
-    GraphSimulation  <|-- Simulation
+    class dBuilder["delta.Builder"]
+    class lBuilder["lakebase.Builder"]
+    class nBuilder["neo4j.Builder"]
+    class dHealthProbe["delta.HealthProbe"]
+    class lHealthProbe["lakebase.HealthProbe"]
+    class nHealthProbe["neo4j.HealthProbe"]
+    class lProvisioner["lakebase.Provisioner"]
+    class nProvisioner["neo4j.Provisioner"]
+    class dSimulation["delta.Simulation"]
+    class lSimulation["lakebase.Simulation"]
+    class nSimulation["neo4j.Simulation"]
+
+    GraphBuilder     <|-- dBuilder
+    GraphBuilder     <|-- lBuilder
+    GraphBuilder     <|-- nBuilder
+    GraphHealthProbe <|-- dHealthProbe
+    GraphHealthProbe <|-- lHealthProbe
+    GraphHealthProbe <|-- nHealthProbe
+    GraphProvisioner <|-- lProvisioner
+    GraphProvisioner <|-- nProvisioner
+    GraphSimulation  <|-- dSimulation
+    GraphSimulation  <|-- lSimulation
+    GraphSimulation  <|-- nSimulation
     GraphDBFactory ..> GraphBuilder : vends
     GraphDBFactory ..> GraphHealthProbe : vends
     GraphDBFactory ..> GraphProvisioner : vends

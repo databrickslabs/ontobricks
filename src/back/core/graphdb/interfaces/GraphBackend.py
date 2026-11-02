@@ -1,8 +1,9 @@
 """Shared read root for all graph database backends.
 
 A graph DB backend is a graph-capable triple store (e.g. Lakebase Postgres,
-Databricks Delta, or any future Cypher / Gremlin engine plugged in via
-``_starter_kit/``) operating on the ``(subject, predicate, object)`` triple
+Databricks Delta, or any future Cypher / Gremlin engine implementing the
+``back.core.graphdb.interfaces`` contract) operating on the
+``(subject, predicate, object)`` triple
 model.  It is the single storage abstraction used across OntoBricks for
 querying, reasoning, graph traversal, and analytics.
 

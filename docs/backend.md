@@ -34,7 +34,7 @@ and the query optimizations shared by all engines.
   - [2. The Contract](#2-the-contract)
   - [3. Step-by-Step Integration](#3-step-by-step-integration)
   - [4. Reference: Lakebase Engine Structure](#4-reference-lakebase-engine-structure)
-  - [5. Starter Kit](#5-starter-kit)
+  - [5. Implementing the interfaces](#5-implementing-the-interfaces)
   - [6. Checklist](#6-checklist)
   - [7. FAQ](#7-faq)
   - [8. Lakebase build performance](#8-lakebase-build-performance)
@@ -962,8 +962,9 @@ Neo4j domain's **Neo4j connection** on Domain → General → Knowledge Graph.
 
 
 This guide walks a developer through adding support for a new graph database
-engine to OntoBricks.  It covers the architecture, the abstract contracts,
-registration in the factory and global config, and a ready-to-use starter kit.
+engine to OntoBricks.  It covers the architecture, the abstract contracts
+(the `back.core.graphdb.interfaces` package), and registration in the factory
+and global config.
 
 ---
 
@@ -1138,8 +1139,7 @@ A new engine subclasses **one of the two hats** over the shared read root
 
 - **`MaterializedGraphBackend`** — the engine owns a copy of the triples
   (Lakebase, Delta `table`, Neo4j). It implements the full write / companion /
-  sync surface below. This is the common case — the starter kit's `ExampleStore`
-  subclasses this hat.
+  sync surface below. This is the common case.
 - **`VirtualBackend`** — a read-only, no-copy pass-through (Delta `view`). It
   implements only the read surface and omits the write methods.
 
@@ -1244,10 +1244,9 @@ accessor returns `None` for that engine.
 ```
 src/back/core/graphdb/
 ├── __init__.py
-├── GraphBackend.py
 ├── GraphDBFactory.py
+├── interfaces/         ← the backend contract (hats + capability ABCs)
 ├── lakebase/           ← existing (Postgres flat-store reference impl)
-├── _starter_kit/       ← copy-paste template (ExampleStore.py)
 └── kuzu/               ← NEW
     ├── __init__.py
     └── KuzuStore.py
@@ -1258,9 +1257,11 @@ in PascalCase.
 
 #### Step 2 — Implement the store class
 
-Create `src/back/core/graphdb/kuzu/KuzuStore.py`.  Copy it from the starter
-kit at `src/back/core/graphdb/_starter_kit/ExampleStore.py` and rename.
-See [Section 5](#5-starter-kit) for details.
+Create `src/back/core/graphdb/kuzu/KuzuStore.py` subclassing the right hat from
+`back.core.graphdb.interfaces` — `MaterializedGraphBackend` if the engine owns a
+copy of the triples, or `VirtualBackend` for a read-only no-copy pass-through
+(then drop the write methods). Implement every abstract method of the chosen
+hat. See [Section 5](#5-implementing-the-interfaces) for the capability contract.
 
 Key decisions:
 
@@ -1425,51 +1426,69 @@ Lakeflow). A simpler engine can use a single store class and skip
 
 ---
 
-### 5. Starter Kit
+### 5. Implementing the interfaces
 
-A ready-to-use starter kit lives at:
+The backend contract lives in one place — `back.core.graphdb.interfaces` — and
+every engine implements it. There is no copy-paste template; subclass the ABCs
+directly.
 
 ```
-src/back/core/graphdb/_starter_kit/
-├── README.md          ← usage instructions
-├── __init__.py        ← package re-exports (template)
-└── ExampleStore.py    ← full store class with every method stubbed
+src/back/core/graphdb/interfaces/
+├── __init__.py                   ← re-exports the seven contracts
+├── GraphBackend.py               ← shared read root (abstract)
+├── MaterializedGraphBackend.py   ← copy-owning hat (full write/companion/sync)
+├── VirtualBackend.py             ← read-only, no-copy hat
+├── GraphBuilder.py               ← capability ABC
+├── GraphHealthProbe.py           ← capability ABC
+├── GraphProvisioner.py           ← capability ABC
+└── GraphSimulation.py            ← capability ABC
 ```
 
-#### How to use
+#### The store (a hat)
 
-1. **Copy** the `_starter_kit/` directory into a new subpackage:
+Pick one hat and implement its abstract methods:
 
-   ```bash
-   cp -r src/back/core/graphdb/_starter_kit src/back/core/graphdb/kuzu
-   ```
+- `MaterializedGraphBackend` — the engine owns a copy of the triples; carries
+  the write surface (`create_table`, `drop_table`, `insert_triples`) plus
+  companion/sync helpers. This is the common case (Lakebase, Delta `table`,
+  Neo4j).
+- `VirtualBackend` — read-only, no-copy pass-through (Delta `view`). No write
+  surface.
 
-2. **Rename** `ExampleStore.py` to `KuzuStore.py` (matching your engine class).
+Both share the read contract on `GraphBackend` and the capability flags
+(`supports_cypher`, `query_dialect`, `supports_graph_model`, …). The constructor
+receives the free-form `engine_config` dict from **Settings → Back end**; define
+the keys your engine needs (an empty `{}` is fine for engines without config).
 
-3. **Find and replace** these placeholders throughout the copied files:
+#### The capabilities (import boundary)
 
-   | Placeholder | Replace with | Example |
-   |-------------|-------------|---------|
-   | `ExampleStore` | Your class name | `KuzuStore` |
-   | `example_store` | Your module name (snake_case) | `kuzu_store` |
-   | `example` | Your engine identifier (lowercase) | `kuzu` |
-   | `Example` | Your engine display name | `Kuzu` |
-   | `example_library` | The Python package to import | `kuzu` |
+The store class is only half the contract. **No code outside
+`back/core/graphdb/` may import a backend package** — build, health, provision,
+and simulation logic is reached through four factory-vended capability
+interfaces instead, enforced by
+`tests/units/architecture/test_backend_import_boundary.py`.
 
-4. **Fill in** every `TODO` marker with your engine's native API calls.
+For each capability the engine needs, add a small facade subclass and wire it
+into `GraphDBFactory`:
 
-5. **Continue from [Step 3](#step-3--create-the-package-__init__py)** above
-   to register the engine in the factory, global config, and UI.
+| Capability | Factory accessor | Covers |
+|------------|------------------|--------|
+| `GraphBuilder` | `get_builder()` | build / materialize / naming helpers |
+| `GraphHealthProbe` | `get_health_probe()` | health / quality / object-listing probes |
+| `GraphProvisioner` | `get_provisioner()` | config validation / provisioning / credentials |
+| `GraphSimulation` | `get_simulation()` | sandbox store, sim naming, union-view lifecycle |
 
-The `ExampleStore.py` template contains the full method contract with
-detailed docstrings, grouped into sections:
-- Capability flags (`supports_cypher`, `query_dialect`, …)
-- Connection management (`get_connection`, `close`)
-- Schema helpers (`get_node_table`, `get_graph_schema`)
-- Sync to/from UC Volume (`sync_to_remote`, `sync_from_remote`)
-- Reasoning support (`get_query_translator`)
-- Core CRUD (`create_table`, `insert_triples`, `query_triples`, …)
-- Named query overrides (commented stubs for non-SQL engines)
+A capability the engine does not need simply has no impl (the accessor returns
+`None` — e.g. Delta has no provisioner). Each backend folder presents the same
+predictable files for the capabilities it implements (`Builder.py`,
+`HealthProbe.py`, `Simulation.py`, and `Provisioner.py` where applicable); see
+the Delta / Lakebase / Neo4j impls for the shape.
+
+> If you are about to write `from back.core.graphdb.<engine> import …` outside
+> `graphdb/`, stop — add or use a capability accessor instead.
+
+Then **continue from [Step 3](#step-3--create-the-package-__init__py)** above to
+register the engine in the factory, global config, and UI.
 
 ---
 

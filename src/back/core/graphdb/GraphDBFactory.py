@@ -12,8 +12,9 @@ constructs the graph DB backend for a domain:
   SQL warehouse (health probes and quality SQL against a UC view/table;
   never the Lakehouse//RT query warehouse).
 
-New engines are pluggable — copy ``_starter_kit/`` into
-``back/core/graphdb/<engine>/`` and register a ``_create_<engine>`` branch.
+New engines are pluggable — implement the contracts in
+``back.core.graphdb.interfaces`` under ``back/core/graphdb/<engine>/`` and
+register a ``_create_<engine>`` branch.
 The *engine_config* JSON is engine-specific (admin: Settings → Graph DB).
 """
 

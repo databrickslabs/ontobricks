@@ -180,3 +180,55 @@ Delta is intentionally out of scope for this pass (not requested).
 ## Tests
 `uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
 (explicit `PYTEST_EXIT=0`; architecture import-boundary + ratchet baseline updated).
+
+---
+
+# GraphDB: interfaces/ package + Delta de-prefix (backend structure unification)
+
+## Context
+Follow-up to the cloisonnement + de-prefix work. The seven backend ABCs were
+loose modules at the `graphdb/` root and the `_starter_kit/` was a copy-paste
+template rather than a contract; Delta still carried its `Delta` prefix while
+Lakebase/Neo4j were already de-prefixed. Goal: one home for the contract and a
+uniform capability file set across the three backend folders. Spec:
+`docs/superpowers/specs/2026-11-02-graphdb-interfaces-package-and-structure-unification-design.md`.
+
+## Changes
+1. `src/back/core/graphdb/interfaces/` — renamed from `_starter_kit/`; deleted
+   `ExampleStore.py` and `README.md`. Moved the seven contracts here:
+   `GraphBackend`, `MaterializedGraphBackend`, `VirtualBackend`, `GraphBuilder`,
+   `GraphHealthProbe`, `GraphProvisioner`, `GraphSimulation`. New `__init__.py`
+   re-exports them.
+2. `src/back/core/graphdb/__init__.py` — dropped the ABC re-exports (kept
+   `GraphDBFactory`, `get_graphdb`, constants). Every caller now imports from
+   `back.core.graphdb.interfaces` (incl. `reasoning/swrl/SWRLEngine.py`); no shim.
+3. Delta de-prefix: `DeltaBase→Base`, `DeltaReadStore→ReadStore`,
+   `DeltaMaterializedStore→MaterializedStore`, `DeltaViewStore→ViewStore`,
+   `DeltaGraphBuilder→Builder`, `DeltaHealthProbe→HealthProbe`,
+   `DeltaSimulation→Simulation`, `DeltaOverviewStats→OverviewStats`,
+   `DeltaTripleStoreBuildPipeline→BuildPipeline`. Each backend now presents the
+   same capability files (`Builder`/`HealthProbe`/`Simulation`, plus
+   `Provisioner` for lakebase/neo4j; Delta has none by design).
+4. Collisions where one module imports two backends' same-named class are
+   aliased (`… as DeltaBuilder` / `… as LakebaseHealthProbe`) in
+   `tests/units/graphdb/test_backend_hats_and_capabilities.py`.
+5. `tests/units/architecture/baseline.json` — relocated the moved/renamed keys
+   (same LOC values); ratchet confirms shrink-only.
+6. Docs: `docs/backend.md` Engine-integration section rewritten around
+   `interfaces/` (new "5. Implementing the interfaces" folding the old
+   starter-kit README: hat choice + capability table + import boundary);
+   `docs/architecture.md` references updated; `docs/diagrams/class-hierarchy.mmd`
+   updated (backend-qualified concrete nodes) and `class-hierarchy.png`
+   regenerated.
+
+## Modified files
+- `src/back/core/graphdb/interfaces/**` (moved + new `__init__`)
+- `src/back/core/graphdb/__init__.py`, `GraphDBFactory.py`
+- `src/back/core/graphdb/delta/**` (9 modules renamed)
+- `src/back/core/reasoning/swrl/SWRLEngine.py` + ~70 import sites across `src/`/`tests/`
+- `tests/units/architecture/baseline.json`
+- `docs/backend.md`, `docs/architecture.md`, `docs/diagrams/class-hierarchy.{mmd,png}`
+
+## Tests
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
+(explicit `EXIT=0`). Architecture import-boundary + size-budget + ratchet all green.

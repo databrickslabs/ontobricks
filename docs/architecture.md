@@ -465,7 +465,7 @@ src/
 │   │   │   ├── constants.py            # RDF_TYPE, RDFS_LABEL
 │   │   │   ├── delta/                  # MaterializedStore (SQL Warehouse engine)
 │   │   │   ├── lakebase/               # FlatStore, Base, SyncedTableManager
-│   │   │   └── _starter_kit/           # ExampleStore template for new engines
+│   │   │   └── interfaces/             # backend contract (hats + capability ABCs)
 │   │   │
 │   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SWRL + SPARQL rules + Decision tables)
 │   │   │   ├── ReasoningService.py     # Multi-phase orchestrator
@@ -1173,7 +1173,7 @@ Neo4j is a Cypher-native engine for domains whose `graph_backend` is `neo4j`. Th
 
 Connection settings are configured under **Settings → Back end → Neo4j**. The Bolt password is resolved from the `NEO4J_PASSWORD` env var (a Databricks Apps secret resource) in the deployed app, falling back to the persisted `engine_config` only in local development; there is no raw-Cypher entry point (`execute_query` raises `NotImplementedError`) — all writes enter through `insert_triples` after ontology validation in the build pipeline. `neo4j>=5` ships as a core dependency (`pyproject.toml`).
 
-**Adding a new engine** — copy `src/back/core/graphdb/_starter_kit/ExampleStore.py`, implement the `GraphBackend` contract, register the engine key in `GraphDBFactory`, and add it to `ALLOWED_GRAPH_ENGINES`. Pure-SQL engines inherit the named-query defaults from `GraphBackend`; non-SQL engines (Cypher / Gremlin / SPARQL stores) override the relevant methods and may flip `supports_cypher` to re-enable the corresponding reasoning paths.
+**Adding a new engine** — implement the contracts in `src/back/core/graphdb/interfaces/` (subclass the right hat + the capability ABCs you need), register the engine key in `GraphDBFactory`, and add it to `ALLOWED_GRAPH_ENGINES`. Pure-SQL engines inherit the named-query defaults from `GraphBackend`; non-SQL engines (Cypher / Gremlin / SPARQL stores) override the relevant methods and may flip `supports_cypher` to re-enable the corresponding reasoning paths.
 
 ---
 
@@ -1930,7 +1930,7 @@ See [API Documentation](api.md) for complete endpoint reference.
 5. **Custom Visualizations**: Extend Sigma.js graph viewer in query template
 6. **Authentication Providers**: Add new auth methods in `DatabricksClient`
 7. **OntoViz Extensions**: Add new entity/relationship types, custom rendering
-8. **Graph DB Engines**: Implement `GraphBackend` in `src/back/core/graphdb/` (Lakebase Postgres, Unity Catalog Delta, and Neo4j ship today; the `_starter_kit/ExampleStore.py` template plus `GraphDBFactory` make it straightforward to add Memgraph, Gremlin, or other engines).
+8. **Graph DB Engines**: Implement the `back.core.graphdb.interfaces` contracts in `src/back/core/graphdb/` (Lakebase Postgres, Unity Catalog Delta, and Neo4j ship today; the `interfaces/` package plus `GraphDBFactory` make it straightforward to add Memgraph, Gremlin, or other engines).
 9. **Theming**: Modify OntoViz CSS variables for custom themes
 10. **SWRL Built-ins**: Extend the SWRL engine (`src/back/core/reasoning/swrl/SWRLEngine.py`) with additional built-in atoms beyond class and property assertions (e.g., math, string, comparison built-ins)
 11. **Reasoning Profiles**: Add new reasoning profiles beyond OWL 2 RL (e.g., OWL 2 EL) by implementing alternative reasoner classes in `src/back/core/reasoning/`
@@ -2966,8 +2966,8 @@ swapped.
 > engines live under `back/core/graphdb/<engine>/`. The currently shipped
 > engine is **Lakebase Postgres** (`back/core/graphdb/lakebase/`); additional
 > engines (e.g. KuzuDB, Neo4j, Memgraph) can be plugged in via `GraphDBFactory`
-> using the `_starter_kit/ExampleStore.py` template, without changing any of
-> the user-facing wrappers above.
+> by implementing the `back.core.graphdb.interfaces` contracts, without changing
+> any of the user-facing wrappers above.
 
 ---
 
