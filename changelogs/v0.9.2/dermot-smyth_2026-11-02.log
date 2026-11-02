@@ -1913,3 +1913,115 @@ Tests: uv run --frozen pytest -q --durations=5 tests/units/streaming tests/units
 -> 435 passed in 11.16s (slowest 0.99s, test_class_per_file; slowest new test
 0.71s, the topic fold property); architecture suite green,
 tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Fix: the topic slot pipeline parses in SDP and types Debezium values
+================================================================================
+
+Context: review of the topic-fed slot pipeline (commits 345ac733, 9840cfbc)
+against the Databricks docs. CRITICAL: `read_kafka` requires backticks around
+`kafka.`-prefixed consumer options, so every topic view failed to parse.
+IMPORTANT: images are read as `MAP<STRING, STRING>`, so stock Debezium's
+encodings (epoch-day dates, epoch timestamps, base64 decimals) diverged from
+the change feed's `CAST(<column> AS STRING)`; the topic's preconditions were
+undocumented; the SQL had never met a real SDP. Plus minors (reserved
+identifiers, duplicate-key failure, private cross-class calls, duplicated
+patterns, unused options, shared leaf names, leaf case). Implementer B.
+
+Changes:
+
+1. src/back/core/streaming/TopicSource.py
+   `read_kafka_sql()` backticks `kafka.security.protocol`,
+   `kafka.sasl.mechanism` and `kafka.sasl.jaas.config`. The unused
+   `security_protocol` / `sasl_mechanism` options are removed: the login is
+   always `SASL_SSL` / `PLAIN`, as in the stream job. Field validation uses
+   `RealtimeSource.parse` (one home for the patterns; imported on construction
+   only, so the stream job's executors do not load `back.core.graphdb`), plus
+   non-empty, unpadded strings. The connection stays in the SQL: a new broker
+   list or topic is a new offset space and must replay; a credential is
+   rotated under the same secret scope / key, which changes no SQL. The SDP
+   docs show `${key}` configuration only inside a WHERE literal and say
+   nothing of `read_kafka` options or `secret()` arguments, so the names are
+   not moved to the pipeline configuration.
+2. src/back/core/streaming/DebeziumValueText.py (new)
+   SQL turning a Debezium value's JSON text into the text of its typed
+   column, with the stream job's `SparkColumnText` rules: epoch days for a
+   DATE; epoch milli / micro / nanoseconds (by magnitude) for a TIMESTAMP;
+   numeric text or the base64 two's-complement unscaled bytes for a DECIMAL
+   (byte fold with `try_add` / `try_multiply`, then `E-<scale>`); true words or
+   non-zero numbers for a BOOLEAN; `try_cast` for integral and floating types;
+   base64 for BINARY; other types keep the text. Residuals named in the module
+   docstring: from_json cannot tell a numeric string from a number (digit
+   strings in a date / timestamp / boolean column); the timestamp unit guess
+   misreads micro / nanoseconds within about 3 years of 1970 (shared with the
+   stream job); HALF_UP rounding for excess fraction digits; nested types keep
+   JSON text; the session time zone (UTC by default); an unreadable value is
+   NULL here where the stream job skips the record.
+3. src/back/core/streaming/TopicSlotSource.py
+   `slot_event_view_sql(..., match_leaf=False, types=None)`: the full table
+   name matches by default; `types` (`{column: UC type}`) converts the
+   mapping's typed columns once per image (`transform_values`). `offset` and
+   `table` are backticked (reserved under `enforceReservedKeywords`). Image
+   columns are lower-cased without `DUPLICATED_MAP_KEY`: of two columns
+   differing only in case the last one wins, as in the stream job (whose rows
+   are Python dicts). New `view_emitter(mappings, *, topic, column_types)`
+   (moved from the compiler): validates the topic, lower-cases tables
+   consistently, decides `match_leaf`, and warns once per table about mapped
+   columns without a type and about a leaf name shared by two mapped tables
+   (never matched by stock Debezium's bare names). The module docstring
+   states the topic preconditions: keyed by the source row's primary key,
+   full pre-images (`REPLICA IDENTITY FULL` / `binlog_row_image=FULL`), and
+   retention / compaction for a full refresh's replay from `earliest`
+   (neither the mappings nor the realtime config can tell, so not checked).
+4. src/back/core/streaming/SlotProjectionCompiler.py
+   `compile(..., column_types=None)` passes the types to the topic views (the
+   change feed reads typed columns and ignores them). `require_ident` /
+   `require_fqn` are public (no private cross-class calls); the topic branch
+   of `_view_emitter` moved to `TopicSlotSource.view_emitter`; `compile()`
+   reuses `row_local_mappings` instead of repeating its loop (492 -> 480 lines).
+5. src/back/core/streaming/__init__.py
+   Re-exports `DebeziumValueText`.
+6. Tests: tests/units/streaming/test_topic_source.py (backticked options,
+   fixed login, RealtimeSource rules), tests/units/streaming/test_topic_slot_source.py
+   (re-pinned view SQL, typed values, case-duplicate columns, emitter and its
+   warnings), tests/units/streaming/test_debezium_value_text.py (new, pinned
+   conversions), tests/units/streaming/test_slot_projection_compiler_topic.py
+   (`column_types`), tests/property/test_debezium_value_property.py (new: the
+   SQL rule's model equals `SparkColumnText` for generated dates, timestamps,
+   decimals and booleans; mutants of the sign rule and the nanosecond floor
+   are caught), tests/property/test_slot_topic_property.py (case-duplicate
+   columns, re-pinned fragments), tests/external/test_topic_pipeline_sql.py
+   (new, `external`: a development pipeline with the compiled topic SQL runs a
+   validate-only update, then is deleted; skipped without
+   `ONTOBRICKS_EXTERNAL_PIPELINE=1`, `ONTOBRICKS_EXTERNAL_SCHEMA` and
+   credentials).
+7. Verified outside the suite on local Spark 4.0.1 (ANSI and
+   `enforceReservedKeywords` on; `read_kafka` and the change feed replaced by
+   local tables): the converter SQL equals `SparkColumnText` on 12,027
+   Debezium-encoded values (the only mismatches are the shared timestamp-unit
+   window); the compiled topic view and the change-feed view emit identical
+   slot events for 400 typed inserts, and fold to identical `_slots` (567
+   slots) over 592 inserts, updates, re-keys and deletes.
+
+Modified files:
+- src/back/core/streaming/DebeziumValueText.py (new)
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/streaming/TopicSlotSource.py
+- src/back/core/streaming/TopicSource.py
+- src/back/core/streaming/__init__.py
+- tests/external/test_topic_pipeline_sql.py (new)
+- tests/property/test_debezium_value_property.py (new)
+- tests/property/test_slot_topic_property.py
+- tests/units/streaming/test_debezium_value_text.py (new)
+- tests/units/streaming/test_slot_projection_compiler_topic.py
+- tests/units/streaming/test_topic_slot_source.py
+- tests/units/streaming/test_topic_source.py
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/streaming tests/property tests/units/architecture
+-> 382 passed in 9.86s (slowest 1.30s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11291 passed, 340 skipped, 9 deselected in 116.30s, run in a clean checkout
+of commit 8860c0b7 (the shared worktree also holds Implementer A's uncommitted
+build / registry edits, whose own tests fail there meanwhile). Architecture
+suite green; tests/units/architecture/baseline.json unchanged.
