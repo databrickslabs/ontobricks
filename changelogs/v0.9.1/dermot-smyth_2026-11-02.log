@@ -514,7 +514,145 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (HEAD of Task 8): 10505 passed, 338 skipped, 9 deselected
+Final test result (after the final whole-branch review fixes): 10525 passed, 338 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
+
+================================================================================
+## Fix: final whole-branch review (microbatch freshness, settings, sync schedule, scheduled MV refresh)
+================================================================================
+
+Context: The final whole-branch review found four Important issues: a
+`microbatch` `_data` view never refreshed between builds; the
+`serverless_pipelines_enabled` / `slot_pipeline_channel` settings were never
+declared (always on / PREVIEW); a runtime incremental failure re-registered the
+Lakebase synced table as a snapshot; and a scheduled tick replaced the
+incremental `_data` view by a CTAS (before even probing). It also listed minors:
+an empty graph after a net-apply fallback recorded a base, unused code, copies to
+share, row-local relationship mappings that lose rows, and two doc gaps.
+
+Changes:
+
+1. src/back/core/graphdb/delta/MaterializedViewBuilder.py,
+   src/back/core/streaming/SlotPipelineSpec.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+   A `microbatch` `_data` MV gets `TRIGGER ON UPDATE` when it reads at most ten
+   relations (`SlotPipelineSpec.mv_source_count`: `_slots` plus table-based batch
+   mappings; unknown with a `sql_query` or a join), else
+   `SCHEDULE CRON '0 0/15 * * * ?' AT TIME ZONE 'UTC'`. Verified against the
+   CREATE MATERIALIZED VIEW reference
+   (https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-ddl-create-materialized-view):
+   `SCHEDULE EVERY` only takes hours, days or weeks, so the requested
+   "SCHEDULE EVERY 15 MINUTES" is not valid and a Quartz cron is used; an unset
+   session time zone is an error, so the zone is given; TRIGGER ON UPDATE allows
+   at most ten upstream sources. The clause is part of the definition
+   fingerprint (unchanged without a clause); `incremental` and the MERGE table
+   get none; the chosen clause is logged, the trace keys are unchanged.
+2. src/shared/config/settings.py, docs/getting-started.md
+   `serverless_pipelines_enabled` (ONTOBRICKS_SERVERLESS_PIPELINES_ENABLED,
+   default true) and `slot_pipeline_channel` (ONTOBRICKS_SLOT_PIPELINE_CHANNEL,
+   PREVIEW or CURRENT, anything else refused) are declared and documented.
+3. src/back/objects/digitaltwin/build/TwinMergeFallback.py,
+   src/back/objects/registry/schedule/build.py
+   `TwinMergeFallback.promotes(decision, detail)` is the MERGE-promotion
+   predicate; the scheduled tick (`_tick_modes`) uses it, so with serverless off
+   an incremental domain syncs TRIGGERED on a tick like its MERGE main build.
+4. src/back/objects/digitaltwin/build/TwinLakebaseSync.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/digitaltwin/build/_build_pipeline.py
+   The sync schedule follows `sync_schedule_mode`, the resolver's decision before
+   any runtime fallback (`_fall_back` does not touch it; a MERGE promotion sets
+   `incremental`), so a transient failure keeps a triggered/continuous
+   registration; `materialization_mode_effective` still traces `full`.
+5. src/back/objects/digitaltwin/build/TwinScheduledRefresh.py (new,
+   re-exported), src/back/objects/registry/schedule/build.py
+   A tick decides (and probes) before writing; an existing incremental `_data`
+   MV is refreshed in place (`incremental`: one triggered slot-pipeline update
+   via `TwinIncrementalBuild.run_update`, then REFRESH; `microbatch`: REFRESH
+   only); `full`, MERGE-promoted domains, a non-MV `_data` or a missing slot
+   pipeline keep the CTAS.
+6. src/back/objects/digitaltwin/build/_build_pipeline.py
+   The empty-graph completion clears `apply_mode`, `data_table_version` and
+   `data_table_id` (the store was not touched, so the run is no base).
+7. Dead code removed: `SourceReadiness.source_overwritten_since` / `enable_sql`
+   (docs quote the ALTER TABLE instead), `MaterializedViewBuilder.explain_sql` /
+   `plan_is_incremental` and their regexes / `_texts`,
+   `SlotPipelineRunner.read_event_log_technique`, `slots_complete`, and the
+   `_BuildPipeline._count_view_triples` alias (one compute-once test that called
+   it removed); a stale `_report_post_sync_triple_count` docstring fixed.
+8. Duplication: `TwinIncrementalBuild.compile_for` serves the main build, the
+   MERGE fingerprint and the tick; the slot pipeline name takes its version from
+   `TwinBuildRunHistory.build_run_key`; `materialize.relation_exists(...,
+   strict=True)` replaces `TwinSlotReconciliation.slots_table_listed`.
+9. src/back/core/streaming/SlotProjectionCompiler.py
+   Relationship mappings always classify as batch (several objects of one
+   subject would collapse onto one slot); docs say row-local entity mappings need
+   a unique id column.
+10. docs/incremental-materialization.md, src/front/templates/settings.html
+    Modes table and known limitations describe the microbatch refresh; the
+    Continuous option names the continuous slot pipeline and the view refresh;
+    the MERGE skip does not reset `_inferred`; `/dtwin/databricks-build/start`
+    CTAS-es over the MV and never stops a microbatch pipeline (known limitation);
+    the scheduled-build and sync-schedule behaviour is described.
+11. Tests: tests/units/graphdb/delta/test_materialized_view_builder.py,
+    tests/units/graphdb/delta/test_delta_package.py,
+    tests/units/streaming/test_slot_projection_compiler.py,
+    tests/units/streaming/test_source_readiness.py,
+    tests/units/streaming/test_slot_pipeline_runner.py,
+    tests/units/objects/test_build_pipeline_modes.py,
+    tests/units/objects/test_build_pipeline_net_apply.py,
+    tests/units/objects/test_build_pipeline_compute_once.py (one test removed:
+    it called the removed alias), tests/units/registry/test_scheduled_build_lakeflow_source.py,
+    tests/units/settings/test_config.py,
+    tests/units/front/test_settings_lakebase_sync_defaults.py.
+
+Known limitations:
+- `TRIGGER ON UPDATE` with the `_slots` streaming table as upstream is
+  live-unverified; most real domains (sql_query / join mappings) get the
+  15-minute schedule.
+- A failed row-tracking probe still resolves the sync schedule to snapshot (the
+  probe decides the mode, so there is no resolver decision to keep).
+- A scheduled tick on a MERGE-promoted domain rebuilds `_data` by CTAS.
+- TwinIncrementalBuild is 458 lines (soft budget 400; hard 800).
+
+Modified files:
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+- docs/getting-started.md
+- docs/incremental-materialization.md
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/streaming/SlotPipelineRunner.py
+- src/back/core/streaming/SlotPipelineSpec.py
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/streaming/SourceReadiness.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinLakebaseSync.py
+- src/back/objects/digitaltwin/build/TwinMergeFallback.py
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/digitaltwin/build/TwinSlotReconciliation.py
+- src/back/objects/digitaltwin/build/__init__.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/registry/schedule/build.py
+- src/front/templates/settings.html
+- src/shared/config/settings.py
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- tests/units/settings/test_config.py
+- tests/units/streaming/test_slot_pipeline_runner.py
+- tests/units/streaming/test_slot_projection_compiler.py
+- tests/units/streaming/test_source_readiness.py
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/graphdb tests/units/objects
+tests/units/registry tests/units/streaming tests/units/settings tests/units/api/test_dtwin_reconcile.py
+tests/units/api/test_help_api.py tests/units/front/test_settings_lakebase_sync_defaults.py tests/units/architecture
+-> 3199 passed in 11.56s (slowest test 0.91s, test_class_per_file); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10525 passed, 338 skipped, 9 deselected in 53.91s (slowest test 1.10s);
+architecture suite green; tests/units/architecture/baseline.json unchanged.
