@@ -1276,6 +1276,124 @@ class TestLakebaseSyncPlan:
             "sync_mode": "continuous",
         }
 
+
+_PIPELINE_FAILED = InfrastructureError(
+    "Synced table cat.sch.g_sync did not reach an online state: state "
+    "SYNCED_TABLE_ONLINE_PIPELINE_FAILED: Synced table is online, however latest "
+    "pipeline update failed."
+)
+
+
+def _mv_pipe(relation_mode: str = TwinBuildPostMaterialize.MATERIALIZED_VIEW):
+    return SimpleNamespace(
+        store=SimpleNamespace(sync_timeout_s=60, drop_union_view=MagicMock()),
+        _is_cancelled=lambda: False,
+        data_relation_mode=relation_mode,
+        graph_name="G_V3",
+        sync_mode_effective="triggered",
+        sync_fallback_reason="",
+    )
+
+
+class TestMVSyncFallback:
+    """A triggered / continuous sync of the ``_data`` MV needs the MV change-feed preview.
+
+    Measured live: the sync pipeline fails with
+    ``MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA`` where it is missing, while a
+    snapshot of the same view lands.
+    """
+
+    def test_a_failed_mv_sync_is_re_registered_as_a_snapshot_and_synced_again(self):
+        mgr = MagicMock()
+        mgr.trigger_and_wait.side_effect = [_PIPELINE_FAILED, "ONLINE"]
+        plan = SyncPlan(_DATA, _TRIPLE_KEY, "triggered")
+
+        state, synced = TwinLakebaseSync.trigger_and_wait(
+            mgr, "cat.sch.g_sync", plan, timeout_s=60, data_is_mv=True
+        )
+
+        assert (state, synced) == ("ONLINE", SyncPlan(_DATA, _TRIPLE_KEY, "snapshot"))
+        assert mgr.ensure.call_args.kwargs["sync_mode"] == "snapshot"
+        assert mgr.ensure.call_args.kwargs["source_table_full_name"] == _DATA
+        assert mgr.trigger_and_wait.call_count == 2
+
+    def test_the_build_records_the_snapshot_and_the_reason(self):
+        mgr = MagicMock()
+        mgr.trigger_and_wait.side_effect = [_PIPELINE_FAILED, "ONLINE"]
+        pipe = _mv_pipe()
+
+        state = TwinLakebaseSync.sync_and_wait(
+            pipe, mgr, "cat.sch.g_sync", SyncPlan(_DATA, _TRIPLE_KEY, "continuous")
+        )
+
+        assert state == "ONLINE"
+        assert (pipe.sync_mode_effective, pipe.sync_fallback_reason) == (
+            "snapshot",
+            "mv_change_feed_unavailable",
+        )
+
+    def test_a_good_sync_records_no_fallback(self):
+        mgr = MagicMock()
+        mgr.trigger_and_wait.return_value = "ONLINE"
+        pipe = _mv_pipe()
+
+        TwinLakebaseSync.sync_and_wait(
+            pipe, mgr, "cat.sch.g_sync", SyncPlan(_DATA, _TRIPLE_KEY, "triggered")
+        )
+
+        assert (pipe.sync_mode_effective, pipe.sync_fallback_reason) == ("triggered", "")
+        mgr.ensure.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("plan", "data_is_mv"),
+        [
+            (SyncPlan(_DATA, _TRIPLE_KEY, "triggered"), False),  # a MERGE table has a feed
+            (SyncPlan(_DATA, _TRIPLE_KEY, "snapshot"), True),  # nothing to fall back to
+            (SyncPlan(_SLOTS, _SLOT_KEY, "continuous", "slots"), True),  # a streaming table
+        ],
+        ids=["table-source", "already-snapshot", "slots-source"],
+    )
+    def test_other_failed_syncs_propagate(self, plan, data_is_mv):
+        mgr = MagicMock()
+        mgr.trigger_and_wait.side_effect = _PIPELINE_FAILED
+
+        with pytest.raises(InfrastructureError):
+            TwinLakebaseSync.trigger_and_wait(
+                mgr, "cat.sch.g_sync", plan, timeout_s=60, data_is_mv=data_is_mv
+            )
+        mgr.ensure.assert_not_called()
+
+    def test_a_failure_that_is_not_the_pipeline_propagates(self):
+        mgr = MagicMock()
+        mgr.trigger_and_wait.side_effect = InfrastructureError("timed out after 600s")
+
+        with pytest.raises(InfrastructureError, match="timed out"):
+            TwinLakebaseSync.trigger_and_wait(
+                mgr, "cat.sch.g_sync", SyncPlan(_DATA, _TRIPLE_KEY, "triggered"),
+                timeout_s=60, data_is_mv=True,
+            )
+
+    def test_a_cancellation_is_never_turned_into_a_fallback(self):
+        mgr = MagicMock()
+        mgr.trigger_and_wait.side_effect = OperationCancelledError("cancelled")
+
+        with pytest.raises(OperationCancelledError):
+            TwinLakebaseSync.trigger_and_wait(
+                mgr, "cat.sch.g_sync", SyncPlan(_DATA, _TRIPLE_KEY, "triggered"),
+                timeout_s=60, data_is_mv=True,
+            )
+        mgr.ensure.assert_not_called()
+
+    def test_a_failed_snapshot_after_the_fallback_propagates(self):
+        mgr = MagicMock()
+        mgr.trigger_and_wait.side_effect = [_PIPELINE_FAILED, InfrastructureError("still failing")]
+
+        with pytest.raises(InfrastructureError, match="still failing"):
+            TwinLakebaseSync.trigger_and_wait(
+                mgr, "cat.sch.g_sync", SyncPlan(_DATA, _TRIPLE_KEY, "triggered"),
+                timeout_s=60, data_is_mv=True,
+            )
+
     def test_a_view_source_is_always_a_snapshot_of_the_gateway_view(self):
         plan = _plan(
             source_is_view=True,

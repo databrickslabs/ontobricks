@@ -49,6 +49,7 @@ _TRACE_KEYS = {
     "sync_source",
     "sync_source_kind",
     "sync_mode_effective",
+    "sync_fallback_reason",
 }
 _FACT_KEYS = {
     "data_table_version",

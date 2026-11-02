@@ -173,7 +173,10 @@ def _apply_synced_pipeline(
         **plan.ensure_kwargs(),
     )
     store.ensure_synced_companion(graph_name)
-    state = mgr.trigger_and_wait(synced_uc, timeout_s=store.sync_timeout_s)
+    state, plan = TwinLakebaseSync.trigger_and_wait(
+        mgr, synced_uc, plan, timeout_s=store.sync_timeout_s, data_is_mv=kept,
+        before_delete=TwinLakebaseSync.union_view_dropper(store, graph_name),
+    )
     if mappings is not None:
         mappings["sync_state"] = state
     logger.info(

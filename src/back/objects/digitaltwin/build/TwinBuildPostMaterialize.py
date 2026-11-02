@@ -255,6 +255,7 @@ class TwinBuildPostMaterialize:
             "sync_source": text(pipe, "sync_source"),
             "sync_source_kind": text(pipe, "sync_source_kind"),
             "sync_mode_effective": text(pipe, "sync_mode_effective"),
+            "sync_fallback_reason": text(pipe, "sync_fallback_reason"),
         }
 
     @staticmethod

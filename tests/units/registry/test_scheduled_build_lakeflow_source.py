@@ -388,6 +388,31 @@ class TestScheduledTickKeepsTheIncrementalView:
         [view] = [e for e in log if e[0] == "union_view"]
         assert view[2] == {"source_kind": "slots"}
 
+    def test_a_tick_whose_mv_sync_fails_falls_back_to_a_snapshot_of_the_view(self, slot_runner):
+        """The kept view is an MV: without the change-feed preview its triggered sync fails."""
+        from back.core.errors import InfrastructureError
+
+        log: list = []
+        store, mgr = _store(log, sync_table_mode="continuous")
+        mgr.trigger_and_wait.side_effect = [
+            InfrastructureError("state SYNCED_TABLE_ONLINE_PIPELINE_FAILED: latest update failed"),
+            "ONLINE",
+        ]
+        mappings = _mappings(batch=True)
+        stored = _current_sha("microbatch", mappings)
+        with patch.object(SourceReadiness, "check", _readiness()):
+            _apply(
+                store,
+                _mv_warehouse(log, mv_sha=stored),
+                domain=_domain("microbatch"),
+                source_tables=_SOURCES,
+                mappings=mappings,
+            )
+
+        modes = [kwargs["sync_mode"] for _, _, kwargs in _ensures(log)]
+        assert modes == ["continuous", "snapshot"]
+        assert mappings["sync_state"] == "ONLINE"
+
     def test_a_tick_with_a_batch_mapping_keeps_syncing_the_data_view(self, slot_runner):
         log: list = []
 

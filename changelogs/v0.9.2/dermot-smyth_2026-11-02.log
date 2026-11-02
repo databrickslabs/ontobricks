@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the design-doc gap round and the live Lakehouse//RT verification): 11503 passed, 341 skipped, 9 deselected
+Final test result (after the Lakebase `_slots` sync and MV-feed fallback rounds): 11531 passed, 341 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -3235,3 +3235,65 @@ Modified files:
 Test result: full suite 11521 passed (one pinned key set updated after the
 run), 341 skipped, 9 deselected; architecture suite green; `baseline.json`
 unchanged.
+
+================================================================================
+## Snapshot fallback when an MV-sourced Lakebase sync hits the change-feed preview wall
+================================================================================
+
+Context: measured live, a triggered or continuous synced table on the `_data`
+materialized view creates and snapshots, then its sync pipeline fails with
+`MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA` (the MV change-feed private
+preview). A build whose slots do not carry the whole graph (batch mappings)
+still has to sync `_data`; it must not fail the build or leave the registration
+in `SYNCED_TABLE_ONLINE_PIPELINE_FAILED`.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinLakebaseSync.py —
+   `trigger_and_wait(mgr, synced_uc, plan, *, timeout_s, data_is_mv, …)`
+   returns `(state, plan synced)`: a triggered / continuous `triples` plan on a
+   materialized view whose wait fails with `PIPELINE_FAILED` is re-registered
+   as a snapshot of the same relation (`ensure` recreates a registration whose
+   policy changed; the union-view dropper runs before the delete) and synced
+   again; a cancellation, any other failure, and a failed snapshot propagate.
+   `sync_and_wait(pipe, …)` is the build's wrapper: it records
+   `sync_mode_effective = snapshot` and `sync_fallback_reason =
+   mv_change_feed_unavailable` (`MV_CHANGE_FEED_UNAVAILABLE`) on the pipe.
+2. src/back/objects/digitaltwin/build/_build_pipeline.py — step 5 of the
+   managed-sync apply calls `TwinLakebaseSync.sync_and_wait` (the
+   `_apply_via_synced_pipeline` function shrank by three lines);
+   `sync_fallback_reason` attribute.
+3. src/back/objects/registry/schedule/build.py — the tick's wait goes through
+   `TwinLakebaseSync.trigger_and_wait` with `data_is_mv` = the view was kept.
+4. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py — trace fact
+   `sync_fallback_reason` (the status endpoint's `last_build.materialization`
+   carries it with the other facts).
+5. src/front/static/global/js/runs-render.js — run details show "Sync Source
+   Kind" and "Sync Fallback" when recorded.
+6. docs/incremental-materialization.md — per-backend Lakebase paragraph (source
+   rule, asserted view, fallback, resync cost, live status name), Scheduled
+   builds (the tick's source rule and fallback), Build-run trace rows,
+   Reconciliation (`sync_data` counts the asserted view), Preview enrolment
+   (MV → Lakebase sync is the same preview; what happens without it),
+   Upgrading (one build creates the asserted view).
+7. Tests — `TestMVSyncFallback` (re-register + resync, facts recorded, no
+   fallback on success, propagation for a table source / an already-snapshot
+   plan / a slots source / a non-pipeline failure / a cancellation / a failed
+   snapshot); the tick falls back to a snapshot of the kept view; trace key
+   sets (twelve keys).
+
+Modified files:
+- src/back/objects/digitaltwin/build/TwinLakebaseSync.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/registry/schedule/build.py
+- src/front/static/global/js/runs-render.js
+- docs/incremental-materialization.md
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: see the roll-up line ("Incremental triple materialization —
+roll-up" section) for the full-suite number after this section.

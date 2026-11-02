@@ -171,7 +171,9 @@ window.RunsRender = (function () {
         html += kv('Apply Fallback', text(facts.apply_fallback_reason));
         html += kv('Triples Source', text(facts.triples_source));
         html += kv('Sync Source', text(facts.sync_source));
+        if (facts.sync_source_kind) html += kv('Sync Source Kind', text(facts.sync_source_kind));
         html += kv('Sync Schedule', text(facts.sync_mode_effective));
+        if (facts.sync_fallback_reason) html += kv('Sync Fallback', text(facts.sync_fallback_reason));
         html += kv('Slots Table', text(facts.slots_table));
         html += kv('Slot Pipeline', text(facts.slot_pipeline_id));
         html += kv('Data Table Version', facts.data_table_version == null ? dash : esc(facts.data_table_version));

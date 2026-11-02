@@ -284,11 +284,28 @@ stream (`apply_mode = none`). Reads may go to a
 Lakehouse//RT warehouse (below).
 
 **Lakebase, managed_synced.** `_data` is built as above and the Lakeflow synced
-table is registered on it with the mode's schedule (capped by `sync_table_mode`);
-a drifted registration (other source or schedule) is deleted and recreated, the
-Postgres union view is dropped only right before that delete and recreated after.
-A continuous table is waited for until it streams (`ONLINE_CONTINUOUS_UPDATE`).
-`apply_mode = lakeflow_sync`.
+table is registered with the mode's schedule (capped by `sync_table_mode`) on
+**`_slots`** — key `(map_id, source_key, predicate)` — when the schedule is triggered
+or continuous and the slots carry the whole graph (a slot pipeline ran and the build
+counted no join / aggregate / `sql_query` / relationship mapping, `batch_mappings = 0`),
+otherwise on **`_data`** (`subject, predicate, object_hash`). A streaming table has a
+change feed every workspace can sync from; the `_data` materialized view only has one
+where the MV change-feed preview is enabled — measured live, a triggered or continuous
+registration on the MV creates and snapshots, then its sync pipeline fails
+(`MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA`). When that happens the build
+re-registers the same view as a **snapshot** and syncs again
+(`TwinLakebaseSync.trigger_and_wait`; trace `sync_mode_effective = snapshot`,
+`sync_fallback_reason = mv_change_feed_unavailable`); a MERGE-table `_data` keeps its
+schedule (row tracking gives it a feed). Postgres gets two views over the `_sync`
+table: the union view readers query (`DISTINCT` and non-blank over a slots source) and
+the **asserted view** `<graph>_asserted` — the synced triples alone, distinct and
+non-blank — which `include_inferred=False` reads, the asserted entity-search rebuild,
+BFS expansion and the reconciler use (`LakebaseFlatStore.synced_table_name`), so a
+slots source reads like `_data` to them. A drifted registration (other source or
+schedule — including a fallback build, whose slots are not live, going back to `_data`)
+is deleted and recreated: a full resync; both views are dropped right before that
+delete and recreated after. A continuous table is waited for until it streams
+(`SYNCED_TABLE_ONLINE_CONTINUOUS_UPDATE`). `apply_mode = lakeflow_sync`.
 
 **Lakebase, app_managed.** `_data` is built as above; the app writes the
 `<graph>_sync` table itself: a net-change apply when a matching base run exists
@@ -305,7 +322,11 @@ same resolver and the same row-tracking probe as the main build
 (`TwinBuildPostMaterialize.decide_mode_for`), and counts a decision the main build
 promotes to the MERGE fallback (`TwinMergeFallback.promotes`) as `incremental`, so a
 tick and a main build register the Lakebase synced table on the same source and
-schedule and never alternate between triggered/continuous and snapshot.
+schedule and never alternate between triggered/continuous and snapshot. The source
+follows the same rule too: a tick that kept the `_data` view (the slot pipeline is
+live) syncs `_slots` when the compiled spec has no batch mapping, `_data` otherwise
+(`_tick_sync_plan`); a tick that rebuilt `_data` syncs it. A failed sync of the kept
+view falls back to a snapshot of it as the main build does.
 
 The tick decides (and probes) before it writes anything, so a failed probe drops
 nothing. When `_data` already is the incremental main build's materialized view the
@@ -430,7 +451,8 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `refresh_technique` | Enzyme technique of the `_data` MV refresh (`""` when not an MV) |
 | `slot_pipeline_id`, `slots_table` | the Lakeflow pipeline and the `_slots` table (`""` when none) |
 | `triples_source`, `inferred_reset` | the relation the graph was counted/streamed from; whether `_inferred` was reset |
-| `sync_source`, `sync_mode_effective` | what the Lakebase synced table was registered on, and its schedule |
+| `sync_source`, `sync_source_kind`, `sync_mode_effective` | what the Lakebase synced table was registered on (`slots` or `triples`), and its schedule as synced |
+| `sync_fallback_reason` | `mv_change_feed_unavailable` when a triggered / continuous sync of the `_data` materialized view failed and the table was re-registered as a snapshot of it ([per backend](#what-a-build-does-per-backend)); `""` otherwise |
 | `strategy` | `mv`, `merge`, `ctas` or `""` |
 | `apply_mode`, `apply_fallback_reason` | `net_changes`, `full_stream`, `lakeflow_sync`, `none`; why a net apply was not done |
 | `data_table_version`, `data_table_id`, `fingerprint` | the `_data` version/table id the store matches; the MERGE fingerprint |
@@ -538,8 +560,10 @@ the sides differ):
   recomputed from the sources), counted and hashed exactly like `_data`. It
   scans the whole VIEW, a full read of the sources, so on demand it only runs
   with `?recompute=true`.
-- `sync_data`: the row count of the Lakebase synced table (`managed_synced`
-  stores only; counts, no hash). A store that cannot be counted is left out.
+- `sync_data`: the row count of the Lakebase asserted view over the synced table
+  (`managed_synced` stores only; distinct non-blank triples whether the table was
+  registered on `_data` or on `_slots`; counts, no hash). A store that cannot be
+  counted is left out.
 
 A domain without `_slots` (every mapping batch) compares these two alone
 (`slots_present: false`); with nothing to compare it answers 404.
@@ -573,7 +597,11 @@ degrade as described above:
   and the **materialized-view change data feed** (`table_changes` on an MV; the
   Databricks preview notes ask for a one-time `REPAIR TABLE … SYNC METADATA`,
   which the app does not run — live-unverified) used by the net-change apply.
-- **Materialized view → Lakebase triggered/continuous synced tables**.
+- **Materialized view → Lakebase triggered/continuous synced tables** — the same
+  external-metadata preview: the synced-table pipeline reads the MV's change feed
+  (measured live, [Live verification](#known-limitations)). Not needed when the slots
+  carry the whole graph (the sync reads the `_slots` streaming table); otherwise the
+  build falls back to a snapshot of the view and records `mv_change_feed_unavailable`.
 - **Lakehouse//RT** read warehouses (guardrail values quoted above are the
   documented ones at design time; verify on the workspace).
 
@@ -719,6 +747,12 @@ full refresh of the slot pipeline, and until it has run the scheduled ticks rebu
 
 Also after upgrading:
 
+- **Lakebase `managed_synced` domains.** Asserted-only reads (`include_inferred=false`,
+  the asserted entity-search rebuild, BFS expansion, the reconciler's Lakebase leg) now
+  query the Postgres view `<graph>_asserted`, which the build creates next to the union
+  view; run one build of every such domain, as those reads fail on a domain that has
+  not been rebuilt. The same build re-registers a triggered / continuous synced table on
+  `_slots` when the slots carry the whole graph (a full resync, once).
 - **Lakehouse domains with a schedule.** Earlier scheduled ticks on the Lakehouse
   engine appended every asserted triple to `_inferred` (and created a stray
   `<Name>_V<n>` table in the warehouse's default schema); a tick no longer does. The

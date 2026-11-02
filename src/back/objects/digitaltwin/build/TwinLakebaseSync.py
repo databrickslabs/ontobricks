@@ -33,8 +33,9 @@ snapshot.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
+from back.core.errors import InfrastructureError, OperationCancelledError
 from back.core.logging import get_logger
 from back.objects.digitaltwin.build.SyncPlan import SyncPlan
 from back.objects.digitaltwin.build.TwinBuildPostMaterialize import (
@@ -57,6 +58,12 @@ _SCHEDULE_MODE = {"snapshot": "full", "triggered": "incremental", "continuous": 
 
 #: ``data_relation_mode`` values whose ``…_data`` holds a computed copy of the triples.
 _COPIED_RELATIONS = ("table", TwinBuildPostMaterialize.MATERIALIZED_VIEW)
+
+#: ``sync_fallback_reason`` of a triggered / continuous registration on the ``…_data``
+#: materialized view re-registered as a snapshot because its sync pipeline failed:
+#: a synced table reads its source's change feed, and an MV only has one where the
+#: external-metadata preview is enabled (``MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA``).
+MV_CHANGE_FEED_UNAVAILABLE = "mv_change_feed_unavailable"
 
 
 class TwinLakebaseSync:
@@ -156,6 +163,89 @@ class TwinLakebaseSync:
         pipe.sync_source, pipe.sync_mode_effective = plan.source_fqn, plan.sync_mode
         pipe.sync_source_kind = plan.source_kind
         return synced
+
+    @staticmethod
+    def sync_and_wait(
+        pipe: Any, mgr: Any, synced_uc: str, plan: SyncPlan, *, on_state_change: Any = None
+    ) -> str:
+        """The build's sync wait (:meth:`trigger_and_wait`), recording a snapshot fallback on *pipe*."""
+        state, synced = TwinLakebaseSync.trigger_and_wait(
+            mgr,
+            synced_uc,
+            plan,
+            timeout_s=pipe.store.sync_timeout_s,
+            data_is_mv=getattr(pipe, "data_relation_mode", None)
+            == TwinBuildPostMaterialize.MATERIALIZED_VIEW,
+            cancel_check=pipe._is_cancelled,
+            on_state_change=on_state_change,
+            before_delete=TwinLakebaseSync.union_view_dropper(pipe.store, pipe.graph_name),
+        )
+        if synced is not plan:
+            pipe.sync_mode_effective = synced.sync_mode
+            pipe.sync_fallback_reason = MV_CHANGE_FEED_UNAVAILABLE
+        return state
+
+    @staticmethod
+    def trigger_and_wait(
+        mgr: Any,
+        synced_uc: str,
+        plan: SyncPlan,
+        *,
+        timeout_s: int,
+        data_is_mv: bool,
+        cancel_check: Any = None,
+        on_state_change: Any = None,
+        before_delete: Optional[Callable[[str], None]] = None,
+    ) -> tuple[str, SyncPlan]:
+        """``mgr.trigger_and_wait`` with the MV change-feed fallback; returns the state and the plan synced.
+
+        A triggered or continuous registration on the ``…_data`` materialized
+        view (*data_is_mv*) whose sync pipeline fails is re-registered as a
+        snapshot of the same relation (``ensure`` recreates a registration whose
+        policy changed) and synced again — measured live, the pipeline reads
+        the MV's change feed and fails with
+        ``MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA`` where that preview
+        is missing, while the snapshot of the same view lands. Any other failure,
+        a cancellation, and a failure of the snapshot itself propagate.
+        """
+        from back.core.graphdb.lakebase._companion_ddl import SOURCE_KIND_TRIPLES
+
+        try:
+            return (
+                mgr.trigger_and_wait(
+                    synced_uc,
+                    timeout_s=timeout_s,
+                    cancel_check=cancel_check,
+                    on_state_change=on_state_change,
+                ),
+                plan,
+            )
+        except OperationCancelledError:
+            raise
+        except InfrastructureError as exc:
+            mv_feed = (
+                data_is_mv
+                and plan.source_kind == SOURCE_KIND_TRIPLES
+                and plan.sync_mode != "snapshot"
+                and "PIPELINE_FAILED" in str(exc).upper()
+            )
+            if not mv_feed:
+                raise
+            logger.warning(
+                "Synced table %s: the %s sync of the %s materialized view failed (%s); "
+                "its change feed needs the external-metadata preview — re-registering "
+                "the table as a snapshot of the same view",
+                synced_uc,
+                plan.sync_mode,
+                plan.source_fqn,
+                exc,
+            )
+        snapshot = SyncPlan(plan.source_fqn, plan.primary_key, "snapshot", plan.source_kind)
+        mgr.ensure(synced_uc, before_delete=before_delete, **snapshot.ensure_kwargs())
+        state = mgr.trigger_and_wait(
+            synced_uc, timeout_s=timeout_s, cancel_check=cancel_check, on_state_change=on_state_change
+        )
+        return state, snapshot
 
     @staticmethod
     def union_view_dropper(store: Any, graph_name: str) -> Callable[[str], None]:

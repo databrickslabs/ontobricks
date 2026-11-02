@@ -515,7 +515,7 @@ class TestBuildRunTrace:
         assert entry["triples_source"] == _VIEW
         assert entry["inferred_reset"] is False
 
-    def test_trace_fields_has_exactly_the_eleven_keys(self):
+    def test_trace_fields_has_exactly_the_twelve_keys(self):
         fields = TwinBuildPostMaterialize.trace_fields(
             SimpleNamespace(view_table=_VIEW)
         )
@@ -532,6 +532,7 @@ class TestBuildRunTrace:
             "sync_source": "",
             "sync_source_kind": "",
             "sync_mode_effective": "",
+            "sync_fallback_reason": "",
         }
 
     def test_trace_fields_reports_the_incremental_facts(self):

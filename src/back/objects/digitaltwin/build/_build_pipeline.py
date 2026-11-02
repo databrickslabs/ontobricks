@@ -289,6 +289,7 @@ class _BuildPipeline:
         self.sync_source: str = ""
         self.sync_source_kind: str = ""
         self.sync_mode_effective: str = ""
+        self.sync_fallback_reason: str = ""
         # The resolver's mode the sync schedule follows (a runtime fallback keeps it).
         self.sync_schedule_mode: str = ""
         self.slot_pipeline_id: str = ""
@@ -1294,11 +1295,8 @@ class _BuildPipeline:
 
         t_sync = time.time()
         try:
-            state = mgr.trigger_and_wait(
-                actual_synced_uc,
-                timeout_s=self.store.sync_timeout_s,
-                cancel_check=self._is_cancelled,
-                on_state_change=_on_sync_state,
+            state = TwinLakebaseSync.sync_and_wait(
+                self, mgr, actual_synced_uc, plan, on_state_change=_on_sync_state
             )
             logger.info(
                 "[DT-BUILD %s] step 5/7 done: Lakeflow pipeline reached %s "
