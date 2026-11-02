@@ -514,7 +514,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the final whole-branch review fixes): 10525 passed, 338 skipped, 9 deselected
+Final test result (after the final review residuals): 10532 passed, 338 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
@@ -608,9 +608,7 @@ Changes:
     tests/units/front/test_settings_lakebase_sync_defaults.py.
 
 Known limitations:
-- `TRIGGER ON UPDATE` with the `_slots` streaming table as upstream is
-  live-unverified; most real domains (sql_query / join mappings) get the
-  15-minute schedule.
+- Most real domains (sql_query / join mappings) get the 15-minute schedule.
 - A failed row-tracking probe still resolves the sync schedule to snapshot (the
   probe decides the mode, so there is no resolver decision to keep).
 - A scheduled tick on a MERGE-promoted domain rebuilds `_data` by CTAS.
@@ -655,4 +653,79 @@ tests/units/api/test_help_api.py tests/units/front/test_settings_lakebase_sync_d
 -> 3199 passed in 11.56s (slowest test 0.91s, test_class_per_file); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10525 passed, 338 skipped, 9 deselected in 53.91s (slowest test 1.10s);
+architecture suite green; tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Fix: final review residuals (sync schedule on a failed probe or MERGE; stale view on a tick)
+================================================================================
+
+Context: The re-review of the final fix wave confirmed the microbatch clause,
+the settings and the scheduled refresh, and found two remaining issues. The main
+build still re-registered a triggered synced table as a snapshot when the
+row-tracking probe raised (before the schedule was set) or when the MERGE failed
+(the schedule stayed full before the CTAS), while a scheduled tick left the
+registration alone or kept TRIGGERED. And a scheduled tick refreshed any
+materialized view of ours in place, so mappings edited since the last main build
+were regenerated into the gateway VIEW while `_data` silently kept the old
+definition.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/digitaltwin/build/TwinMergeFallback.py
+   New `TwinBuildPostMaterialize.gate_decision` (the resolver with the sources
+   counted as tracked; `decide_mode_for` uses it for its probe gate). The sync
+   schedule starts from it before the probe and is refined after the probe;
+   `TwinMergeFallback.apply` sets `incremental` as soon as it runs, so a failed
+   MERGE (CTAS) keeps it. `materialization_mode_effective` still reports the
+   mode that ran. By hand: a tick whose probe fails raises in `_tick_modes`
+   before `ensure` (registration untouched); a tick with serverless off resolves
+   (data_mode, sync_mode) = (full, incremental), i.e. TRIGGERED, like the main
+   build's MERGE.
+2. src/back/objects/digitaltwin/build/TwinScheduledRefresh.py,
+   src/back/objects/digitaltwin/build/TwinIncrementalBuild.py,
+   src/back/objects/registry/schedule/build.py
+   The tick hands its mappings down; `TwinScheduledRefresh.refresh` recompiles
+   them, compares the MV definition fingerprint
+   (`TwinIncrementalBuild.data_definition_for`, now shared with the main build,
+   refresh clause included) and the slot pipeline's stored SQL fingerprint, and
+   on any mismatch (or unknown mappings) logs why and leaves `_data` to the CTAS.
+3. docs/incremental-materialization.md, src/front/templates/settings.html,
+   changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+   Reconcile answers 502; the wrong live-unverified bullet about TRIGGER ON
+   UPDATE upstreams is removed (here and from the final-review section); the
+   spike checklist gains three items; a follow-up line names the unreachable
+   relationship branches (left in place: deleting them with their tests is
+   ~85 lines); the Continuous option mentions the 15-minute schedule.
+4. tests/units/objects/test_build_pipeline_compute_once.py
+   The vacuous `_count_view_triples` and `slots_complete` assignments removed.
+5. Tests: tests/units/objects/test_build_pipeline_modes.py (failed probe keeps
+   TRIGGERED; a gated domain schedules a snapshot),
+   tests/units/objects/test_build_pipeline_net_apply.py (failed MERGE keeps
+   TRIGGERED), tests/units/registry/test_scheduled_build_lakeflow_source.py
+   (unchanged definition refreshes in place; changed batch mapping or slot SQL,
+   unknown mappings -> CTAS; the change is logged),
+   tests/units/front/test_settings_lakebase_sync_defaults.py.
+
+Modified files:
+- changelogs/v0.9.1/dermot-smyth_2026-11-02.log
+- docs/incremental-materialization.md
+- src/back/objects/digitaltwin/build/TwinBuildPostMaterialize.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinMergeFallback.py
+- src/back/objects/digitaltwin/build/TwinScheduledRefresh.py
+- src/back/objects/registry/schedule/build.py
+- src/front/templates/settings.html
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+- tests/units/objects/test_build_pipeline_compute_once.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/registry/test_scheduled_build_lakeflow_source.py
+
+Tests: covering run (graphdb, objects, registry, streaming, settings, reconcile and
+help API, settings sync page, architecture) -> 3206 passed in 11.04s (slowest
+0.89s); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10532 passed, 338 skipped, 9 deselected in 53.91s (slowest test 1.10s);
 architecture suite green; tests/units/architecture/baseline.json unchanged.
