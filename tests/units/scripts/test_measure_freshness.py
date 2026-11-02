@@ -199,6 +199,16 @@ class TestWarehouseSQL:
             "SELECT 1 AS hit FROM main.kg.t_V1_graph WHERE object = 'ob-1' LIMIT 1"
         )
 
+    def test_visibility_can_be_held_to_the_row_s_triple(self, script):
+        sql = script._Warehouse.visible_sql(
+            "main.kg.t_V1_graph", "-2000000003", subject="http://ex/C/42", predicate="http://ex/age"
+        )
+
+        assert sql == (
+            "SELECT 1 AS hit FROM main.kg.t_V1_graph WHERE object = '-2000000003' "
+            "AND subject = 'http://ex/C/42' AND predicate = 'http://ex/age' LIMIT 1"
+        )
+
     def test_the_reader_runs_on_the_read_warehouse(self, script):
         build, read = SimpleNamespace(), SimpleNamespace(execute_query=lambda sql: [{"hit": 1}])
 
@@ -214,16 +224,33 @@ class TestMarkerValue:
         )
 
     @pytest.mark.parametrize(
-        ("sql_type", "shown"),
-        [("int", r"\d{4}"), ("bigint", r"\d{4}"), ("decimal(10,2)", r"\d{4}\.00"), ("double", r"\d{4}\.0")],
+        ("sql_type", "low", "high", "shown"),
+        [
+            ("int", -2**31, -2_000_000_000, r"-\d{10}"),
+            ("bigint", -2**31, -2_000_000_000, r"-\d{10}"),
+            ("smallint", -2**15, -32_000, r"-\d{5}"),
+            ("double", -10**7 + 1, -9_900_000, r"-\d{7}\.0"),
+            ("decimal(10,2)", -(10**8) + 1, -(10**8) + 1000, r"-\d{8}\.00"),
+            ("numeric(12,0)", -(10**12) + 1, -(10**12) + 1000, r"-\d{12}"),
+        ],
     )
-    def test_a_numeric_column_takes_a_number_printed_as_cast_prints_it(self, script, sql_type, shown):
+    def test_a_numeric_column_takes_a_negative_number_at_the_bottom_of_its_range(
+        self, script, sql_type, low, high, shown
+    ):
+        """No real value sits there, so the marker cannot match an existing literal."""
         value, text = script.FreshnessProbe.marker_value("ob-freshness-ab12-3", sql_type)
 
-        assert value.isdigit() and re.fullmatch(shown, text) and text.startswith(value)
+        assert low <= int(value) <= high
+        assert re.fullmatch(shown, text) and text.startswith(value)
 
-    def test_each_change_of_a_run_gets_its_own_number(self, script):
-        values = {script.FreshnessProbe.marker_value(f"ob-freshness-ab12-{i}", "int")[0] for i in range(5)}
+    def test_a_decimal_with_too_few_integer_digits_is_a_usage_error(self, script):
+        with pytest.raises(script._UsageError, match="too few integer digits"):
+            script.FreshnessProbe.marker_value("ob-freshness-ab12-0", "decimal(6,2)")
+
+    @pytest.mark.parametrize("sql_type", ["int", "smallint", "double", "decimal(10,2)"])
+    def test_each_change_of_a_run_gets_its_own_number(self, script, sql_type):
+        marker = script.FreshnessProbe.marker_value
+        values = {marker(f"ob-freshness-ab12-{i}", sql_type)[0] for i in range(5)}
 
         assert len(values) == 5
 
@@ -302,6 +329,47 @@ class TestRun:
         assert seen_at_reconcile[0].startswith("ob-freshness-") and seen_at_reconcile[0].endswith("-1")
         assert table.value == "Ada"
         assert report["violations"] == [] and report["summary"]["graph"]["seen"] == 2
+
+    def test_an_unsupported_value_column_writes_nothing(self, script, monkeypatch):
+        table = _OneRowTable()
+        table.execute_query = lambda sql: (
+            [{"col_name": "name", "data_type": "date"}]
+            if sql.startswith("DESCRIBE TABLE")
+            else _OneRowTable.execute_query(table, sql)
+        )
+        writes: list = []
+        table.execute_statement = writes.append
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        args = script.parse_args(
+            [
+                "--stem", "main.kg.triplestore_d_V1", "--source-table", "main.ob_it.ob_it_customers",
+                "--key-column", "id", "--key-value", "42", "--value-column", "name",
+            ]
+        )
+
+        with pytest.raises(script._UsageError, match="Unsupported value column type"):
+            script.run(args)
+        assert writes == []
+
+    def test_a_run_without_a_data_or_graph_path_warns(self, script, monkeypatch):
+        table = _OneRowTable()
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        monkeypatch.setattr(script, "_Postgres", lambda dsn: SimpleNamespace(
+            reader=lambda name, **kw: (lambda shown: True), count=lambda name, **kw: 0
+        ))
+        monkeypatch.setattr(script._Warehouse, "reconcile", lambda self, stem, **kw: {"pairs": {}})
+        args = script.parse_args(
+            [
+                "--stem", "main.kg.triplestore_d_V1", "--source-table", "main.ob_it.ob_it_customers",
+                "--key-column", "id", "--key-value", "42", "--value-column", "name",
+                "--paths", "sync", "--pg-dsn", "x", "--sync-table", "s.t", "--changes", "1",
+            ]
+        )
+
+        report = script.run(args)
+
+        assert report["warnings"] and "reconciliation may run before" in report["warnings"][0]
+        assert "Warning: no data / graph path" in report["markdown"]
 
     def test_a_missing_key_writes_nothing(self, script, monkeypatch):
         table = _OneRowTable()

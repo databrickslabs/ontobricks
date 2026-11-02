@@ -479,15 +479,22 @@ Without those variables the test is skipped, so the unit run stays offline.
 **Freshness and drift.** `scripts/measure_freshness.py` (`FreshnessProbe`) measures
 the design's KPIs on a domain that already runs in its mode. It updates one row of a
 source table `--changes` times (default 5, `--spacing` 10 s apart), each time to a
-new marker value of a column the domain maps as a plain literal (a text column takes
-a text marker, a numeric one a number written through `CAST` and expected as `CAST(…
-AS STRING)` prints it), and polls every path — each on its own thread (one Postgres
+new marker value of a column the domain maps as a plain literal — a text column takes
+`ob-freshness-<run>-<i>`, a numeric one a negative number near the bottom of its
+type's range, where no real value sits (`-2 000 000 000 - k` for an integer, `-32 000
+- k` for a smallint, `-9 900 000 - k` for a double, `-(10^(p-s) - 1) + k` for a
+`decimal(p, s)` with at least six integer digits), written through `CAST` and expected
+as `CAST(… AS STRING)` prints it; any other type is refused before anything is written
+— and polls every path — each on its own thread (one Postgres
 connection per Lakebase path), timed from the write — until the marker is the object
 of a triple there: `data` / `graph` (`_data` / `_graph` on the warehouse;
 `--read-warehouse-id` is the Lakehouse//RT query warehouse) and `sync` / `live` (the
-Lakebase synced table and `_live`, with `--pg-dsn`). `--paths` defaults to `data,graph`,
-plus `live` in `realtime` and `sync` when `--sync-table` is set; a Lakebase path
-without its DSN and table is a usage error. It reports p50 / p95 / p99 per path (a
+Lakebase synced table and `_live`, with `--pg-dsn`); `--subject` / `--predicate` (the
+row's subject URI, the predicate the column maps to) hold the match to that triple.
+`--paths` defaults to `data,graph`, plus `live` in `realtime` and `sync` when
+`--sync-table` is set; a Lakebase path without its DSN and table is a usage error, and a
+run without `data` or `graph` warns (the reconciliation may then run before `_data`
+holds the last marker). It reports p50 / p95 / p99 per path (a
 change not seen within `--timeout`, default 120 s, counts as never seen); once the
 last change is seen it reconciles `_data` with the batch recompute (the gateway VIEW),
 the synced table and `_live` (`SlotReconciler.compare`; `slots_data` is reported but

@@ -25,8 +25,11 @@ table and ``_live`` (``SlotReconciler``), then restores the row's original
 value and checks the SLOs of ``--mode``. The source row is updated on the
 warehouse, or with ``--source-dsn`` on the Postgres database a ``realtime``
 domain's Debezium topic captures. Only a fixture table is updated: its name
-must match ``--allow-pattern`` (default ``*ob_it_*,*fixture*``), and the key
-must name an existing row.
+must match ``--allow-pattern`` (default ``*ob_it_*,*fixture*``), the key must
+name an existing row, and the value column must be text or numeric (checked
+before anything is written; a numeric column gets a negative marker near the
+bottom of its range, :meth:`FreshnessProbe.marker_value`). ``--subject`` /
+``--predicate`` restrict the match to the row's triple.
 
 Credentials, as ``tests/external/test_mv_incremental_plan.py``: a CLI profile
 (``DATABRICKS_CONFIG_PROFILE`` + ``ONTOBRICKS_EXTERNAL_WAREHOUSE_ID``) or
@@ -144,25 +147,38 @@ class FreshnessProbe:
     def marker_value(marker: str, sql_type: str) -> tuple[str, str]:
         """``(value written, object text shown)`` of *marker* for a column of *sql_type*.
 
-        A text column takes the marker; a numeric one a number unique to the
-        run and the change (the marker's index added to a run base), printed
-        as ``CAST(<column> AS STRING)`` prints it. Any other type is a usage
-        error (no unique, comparable marker).
+        A text column takes the marker (``ob-freshness-<run>-<i>``, which no
+        source holds). A numeric one takes a negative number near the bottom of
+        its type's range, where real data does not sit, unique to the run and
+        the change (a run offset plus the change's index), printed as
+        ``CAST(<column> AS STRING)`` prints it: ``-2 000 000 000 - k`` for an
+        integer (inside 32 bits), ``-32 000 - k`` for a smallint, ``-9 900 000
+        - k`` for a double (below 10^7, so it prints without an exponent) and
+        ``-(10^(p-s) - 1) + k`` for a ``decimal(p, s)`` (at least six integer
+        digits). Any other type is a usage error.
         """
         run, index = marker.rsplit("-", 1)
         kind = sql_type.strip().lower()
         family = kind.split("(")[0].strip()
         if family.startswith(_TEXT_TYPES):
             return marker, marker
-        base = 1000 + zlib.crc32(run.encode()) % 8000 + int(index)
-        if family in _SMALL_INT_TYPES or family in _INT_TYPES:
-            return str(base), str(base)
+        run_offset, change = zlib.crc32(run.encode()), int(index)
+        if family in _INT_TYPES:
+            number = str(-2_000_000_000 - (run_offset % 900) * 100 - change)
+            return number, number
+        if family in _SMALL_INT_TYPES:
+            number = str(-32_000 - (run_offset % 7) * 100 - change)
+            return number, number
         if family in _FLOAT_TYPES:
-            return str(base), f"{base}.0"
+            number = -9_900_000 - (run_offset % 900) * 100 - change
+            return str(number), f"{number}.0"
         if family in _DECIMAL_TYPES:
-            scale = re.search(r",\s*(\d+)\s*\)", kind)
-            digits = int(scale.group(1)) if scale else 0
-            return str(base), f"{base}.{'0' * digits}" if digits else str(base)
+            size = re.search(r"\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\)", kind)
+            precision, scale = (int(size.group(1)), int(size.group(2) or 0)) if size else (10, 0)
+            if precision - scale < 6:
+                raise _UsageError(f"{sql_type!r} holds too few integer digits for a marker (at least 6)")
+            number = -(10 ** (precision - scale) - 1) + (run_offset % 9) * 100 + change
+            return str(number), f"{number}.{'0' * scale}" if scale else str(number)
         raise _UsageError(f"Unsupported value column type {sql_type!r} (use a text or numeric column)")
 
     @staticmethod
@@ -200,7 +216,13 @@ class FreshnessProbe:
         return failed
 
     @staticmethod
-    def markdown(mode: str, summary: Mapping[str, dict], pairs: Mapping[str, bool], failed: list) -> str:
+    def markdown(
+        mode: str,
+        summary: Mapping[str, dict],
+        pairs: Mapping[str, bool],
+        failed: list,
+        warnings: tuple | list = (),
+    ) -> str:
         """The report as Markdown (a GitHub step summary)."""
         def cell(value: float | None) -> str:
             return "—" if value is None else f"{value:.3f}"
@@ -217,6 +239,7 @@ class FreshnessProbe:
         drift = ", ".join(f"{name}={'drift' if differs else 'ok'}" for name, differs in pairs.items())
         lines += ["", f"Reconciliation: {drift or 'not run'}", ""]
         lines.append("SLOs met" if not failed else "SLOs missed: " + "; ".join(failed))
+        lines += [f"Warning: {warning}" for warning in warnings]
         return "\n".join(lines)
 
 
@@ -252,11 +275,15 @@ class _Warehouse:
         )
 
     @staticmethod
-    def visible_sql(relation: str, marker: str) -> str:
+    def visible_sql(relation: str, marker: str, *, subject: str = "", predicate: str = "") -> str:
+        """The marker as an object of *relation*; on the given *subject* / *predicate* only."""
         from back.core.helpers import validate_table_name
 
         validate_table_name(relation)
-        return f"SELECT 1 AS hit FROM {relation} WHERE object = {_Warehouse.literal(marker)} LIMIT 1"
+        where = [f"object = {_Warehouse.literal(marker)}"]
+        where += [f"subject = {_Warehouse.literal(subject)}"] if subject else []
+        where += [f"predicate = {_Warehouse.literal(predicate)}"] if predicate else []
+        return f"SELECT 1 AS hit FROM {relation} WHERE {' AND '.join(where)} LIMIT 1"
 
     @staticmethod
     def ident(name: str) -> str:
@@ -297,8 +324,12 @@ class _Warehouse:
         sql = self.update_sql(table, key_column, key_value, column, value, sql_type)
         self._client.execute_statement(sql)
 
-    def reader(self, relation: str) -> Callable[[str], bool]:
-        return lambda marker: bool(self._read.execute_query(self.visible_sql(relation, marker)))
+    def reader(self, relation: str, *, subject: str = "", predicate: str = "") -> Callable[[str], bool]:
+        def visible(marker: str) -> bool:
+            sql = self.visible_sql(relation, marker, subject=subject, predicate=predicate)
+            return bool(self._read.execute_query(sql))
+
+        return visible
 
     def reconcile(self, stem: str, *, recompute: bool, sync_rows: int | None, live_rows: int | None) -> dict:
         from back.core.graphdb.delta import materialize
@@ -336,14 +367,20 @@ class _Postgres:
             cur.execute(statement, params)
             return (cur.fetchall() if cur.description else []), cur.rowcount
 
-    def reader(self, name: str, *, live: bool) -> Callable[[str], bool]:
+    def reader(
+        self, name: str, *, live: bool, subject: str = "", predicate: str = ""
+    ) -> Callable[[str], bool]:
         from psycopg import sql
 
-        served = sql.SQL(" AND NOT deleted") if live else sql.SQL("")
-        statement = sql.SQL("SELECT 1 FROM {} WHERE object = %s{} LIMIT 1").format(
-            self.relation(name), served
+        conditions = [sql.SQL("object = %s")]
+        conditions += [sql.SQL("subject = %s")] if subject else []
+        conditions += [sql.SQL("predicate = %s")] if predicate else []
+        conditions += [sql.SQL("NOT deleted")] if live else []
+        statement = sql.SQL("SELECT 1 FROM {} WHERE {} LIMIT 1").format(
+            self.relation(name), sql.SQL(" AND ").join(conditions)
         )
-        return lambda marker: bool(self._query(statement, (marker,))[0])
+        extra = tuple(v for v in (subject, predicate) if v)
+        return lambda marker: bool(self._query(statement, (marker, *extra))[0])
 
     def count(self, name: str, *, live: bool) -> int:
         from psycopg import sql
@@ -414,6 +451,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     option("key-column")
     option("key-value")
     option("value-column", help="a text or numeric column the domain maps as a plain literal")
+    option("subject", help="the row's subject URI: match the marker on it only (recommended)")
+    option("predicate", help="the predicate URI the value column maps to: match on it only")
     option("allow-pattern", "*ob_it_*,*fixture*", help="fnmatch patterns a source table must match")
     option("changes", 5, type=int)
     option("spacing", 10.0, type=float)
@@ -487,13 +526,14 @@ def _readers(args: argparse.Namespace, paths: list[str], warehouse: _Warehouse) 
     readers: dict[str, Callable[[str], bool]] = {}
     lakebase = None
     for path in paths:
+        triple = {"subject": args.subject, "predicate": args.predicate}
         if path in ("data", "graph"):
-            readers[path] = warehouse.reader(f"{args.stem}_{path}")
+            readers[path] = warehouse.reader(f"{args.stem}_{path}", **triple)
             continue
         connection = _Postgres(args.pg_dsn)
         lakebase = lakebase or connection
         table = args.sync_table if path == "sync" else args.live_table
-        readers[path] = connection.reader(table, live=path == "live")
+        readers[path] = connection.reader(table, live=path == "live", **triple)
     return readers, lakebase
 
 
@@ -507,6 +547,11 @@ def run(args: argparse.Namespace) -> dict:
     """
     guard_fixture(args)
     paths = paths_for(args)
+    warnings = []
+    if not {"data", "graph"} & set(paths):
+        warnings.append(
+            "no data / graph path: the reconciliation may run before …_data holds the last marker"
+        )
     client, read_client = _warehouse_clients(args.read_warehouse_id)
     warehouse = _Warehouse(client, read_client)
     source = _Postgres(args.source_dsn) if args.source_dsn else warehouse
@@ -516,6 +561,7 @@ def run(args: argparse.Namespace) -> dict:
     if not found:
         raise _UsageError(f"{args.source_table} has no row with {args.key_column} = {args.key_value!r}")
     sql_type = source.column_type(args.source_table, args.value_column)
+    FreshnessProbe.marker_value("ob-freshness-check-0", sql_type)  # an unsupported type writes nothing
 
     def write(marker: str) -> str:
         value, shown = FreshnessProbe.marker_value(marker, sql_type)
@@ -542,7 +588,8 @@ def run(args: argparse.Namespace) -> dict:
         "summary": summary,
         "pairs": pairs,
         "violations": failed,
-        "markdown": FreshnessProbe.markdown(args.mode, summary, pairs, failed),
+        "warnings": warnings,
+        "markdown": FreshnessProbe.markdown(args.mode, summary, pairs, failed, warnings),
     }
 
 
@@ -556,6 +603,8 @@ def main(argv: list[str] | None = None) -> int:
     except _UsageError as exc:
         print(f"measure_freshness: {exc}")
         return 2
+    for warning in report["warnings"]:
+        print(f"measure_freshness: warning: {warning}", file=sys.stderr)
     print(json.dumps(report, indent=2, default=str) if args.json else report["markdown"])
     if args.summary_file:
         with open(args.summary_file, "a", encoding="utf-8") as handle:
