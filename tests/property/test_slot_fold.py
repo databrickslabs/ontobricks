@@ -5,10 +5,16 @@ feed — the event projection of ``SlotProjectionCompiler.slot_event_view_sql``
 and the AUTO CDC SCD TYPE 1 fold of ``auto_cdc_flow_sql`` — checked against
 the final state of the source table:
 
-1. the folded slots equal the slots of the final rows (one per
+1. the folded slots equal the slots of the final keyed rows (one per
    ``(map_id, source_key, predicate)``, blank objects kept as upserts);
 2. their distinct non-blank triples equal what a full build projects from the
-   final table (``NON_BLANK_OBJECT_SQL``).
+   final table (``NON_BLANK_OBJECT_SQL``), rows with a NULL key aside: the slot
+   view drops them (no subject URI, no AUTO CDC key) while the full build
+   would emit NULL subjects.
+
+The histories include a key deleted and inserted again in one commit (a
+``REPLACE WHERE`` / ``INSERT OVERWRITE`` of part of a table): the insert must
+win, which is why deletes rank 0 like pre-images.
 
 The model reads the mapping's ``stack()`` pairs from the compiler itself and
 asserts the rules it encodes against the emitted SQL, so it cannot drift from
@@ -26,7 +32,7 @@ from hypothesis import strategies as st
 from back.core.helpers.SQLHelpers import NON_BLANK_OBJECT_SQL
 from back.core.streaming import SlotProjectionCompiler
 
-pytestmark = [pytest.mark.unit, pytest.mark.property]
+pytestmark = pytest.mark.property
 
 _MAPPING = {
     "table": "main.sales.customers",
@@ -45,6 +51,8 @@ _SUBJECT_PREFIX = "http://ex.org/Customer/"
 _LITERAL = re.compile(r"\A'(?P<value>[^']*)'\Z")
 _COLUMN = re.compile(r"\ACOALESCE\(TRY_CAST\((?P<column>\w+) AS STRING\), ''\)\Z")
 _DELETES = ("delete", "update_preimage")
+#: Change types that rank first within a commit (``seq_rank`` 0).
+_RANK_ZERO = ("update_preimage", "delete")
 
 
 def _projection():
@@ -66,12 +74,17 @@ _PAIRS = _projection()
 
 
 def _events(change_type: str, row: dict, version: int):
-    """The slot events of one change-feed row (``slot_event_view_sql``)."""
+    """The slot events of one change-feed row (``slot_event_view_sql``).
+
+    A row whose key is NULL yields none (``WHERE id IS NOT NULL``).
+    """
+    if row["id"] is None:
+        return
     key = str(row["id"])
     for predicate, project in _PAIRS:
         obj = project(row)
         op = "DELETE" if change_type in _DELETES or obj is None else "UPSERT"
-        seq = (version, 0 if change_type == "update_preimage" else 1)
+        seq = (version, 0 if change_type in _RANK_ZERO else 1)
         yield (_MAP_ID, key, predicate), seq, op, (_SUBJECT_PREFIX + key, obj)
 
 
@@ -96,10 +109,13 @@ def _non_blank(obj) -> bool:
     return obj is not None and obj.strip() != ""
 
 
-def _full_build(table: dict) -> set:
+def _full_build(table: dict, null_key_rows: list) -> set:
+    """The full build's triples of the final table, NULL-key rows (NULL subjects) aside."""
+    rows = list(table.values()) + null_key_rows
     return {
         (_SUBJECT_PREFIX + str(row["id"]), predicate, project(row))
-        for row in table.values()
+        for row in rows
+        if row["id"] is not None
         for predicate, project in _PAIRS
         if _non_blank(project(row))
     }
@@ -107,34 +123,43 @@ def _full_build(table: dict) -> set:
 
 _VALUES = st.sampled_from([None, "", " ", "a", "b"])
 #: Per commit, distinct source keys with what to do with each: a key not in the
-#: table is inserted; one in it is deleted or updated.
+#: table is inserted; one in it is deleted, updated, or deleted and inserted
+#: again (``replace``). ``None`` inserts a row with a NULL key.
 _COMMITS = st.lists(
     st.dictionaries(
-        st.integers(0, 4),
-        st.tuples(st.sampled_from(["delete", "update"]), _VALUES, _VALUES),
+        st.one_of(st.integers(0, 4), st.none()),
+        st.tuples(st.sampled_from(["delete", "update", "replace"]), _VALUES, _VALUES),
         max_size=4,
     ),
     max_size=8,
 )
 
 
-def _replay(commits) -> tuple[dict, list]:
-    """Apply *commits* to an empty table; return the final table and the change feed."""
+def _replay(commits) -> tuple[dict, list, list]:
+    """Apply *commits* to an empty table: the final keyed rows, NULL-key rows and the feed."""
     table: dict = {}
+    null_key_rows: list = []
     feed: list = []
     for version, commit in enumerate(commits, start=1):
         for key, (action, name, age) in commit.items():
             new = {"id": key, "name": name, "age": age}
-            if key not in table:
+            if key is None:
+                feed.append(("insert", new, version))
+                null_key_rows.append(new)
+            elif key not in table:
                 feed.append(("insert", new, version))
                 table[key] = new
             elif action == "delete":
                 feed.append(("delete", table.pop(key), version))
+            elif action == "replace":
+                feed.append(("delete", table[key], version))
+                feed.append(("insert", new, version))
+                table[key] = new
             else:
                 feed.append(("update_preimage", table[key], version))
                 feed.append(("update_postimage", new, version))
                 table[key] = new
-    return table, feed
+    return table, null_key_rows, feed
 
 
 def _folded(feed, rnd) -> dict:
@@ -147,7 +172,7 @@ def _folded(feed, rnd) -> dict:
 @settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(_COMMITS, st.randoms(use_true_random=False))
 def test_the_folded_slots_are_the_slots_of_the_final_rows(commits, rnd):
-    table, feed = _replay(commits)
+    table, _null_key_rows, feed = _replay(commits)
 
     assert _folded(feed, rnd) == _slots_of(table)
 
@@ -155,14 +180,14 @@ def test_the_folded_slots_are_the_slots_of_the_final_rows(commits, rnd):
 @settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(_COMMITS, st.randoms(use_true_random=False))
 def test_the_distinct_non_blank_slot_triples_are_the_full_build(commits, rnd):
-    table, feed = _replay(commits)
+    table, null_key_rows, feed = _replay(commits)
 
     triples = {
         (subject, predicate, obj)
         for (_map, _key, predicate), (subject, obj) in _folded(feed, rnd).items()
         if _non_blank(obj)
     }
-    assert triples == _full_build(table)
+    assert triples == _full_build(table, null_key_rows)
 
 
 class TestTheModelMatchesTheCompiler:
@@ -185,7 +210,11 @@ class TestTheModelMatchesTheCompiler:
             "CASE WHEN _change_type IN ('delete','update_preimage') OR s.object IS NULL"
             in view
         )
-        assert "CASE WHEN _change_type = 'update_preimage' THEN 0 ELSE 1 END AS seq_rank" in view
+        assert (
+            "CASE WHEN _change_type IN ('update_preimage','delete') THEN 0 ELSE 1 END "
+            "AS seq_rank" in view
+        )
+        assert "WHERE id IS NOT NULL" in view
         assert "CAST(id AS STRING) AS source_key" in view
         assert f"CONCAT('{_SUBJECT_PREFIX}', TRY_CAST(id AS STRING)) AS subject" in view
 

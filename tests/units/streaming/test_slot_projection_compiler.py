@@ -232,7 +232,8 @@ class TestSlotEventViewSql:
         assert "'DELETE'" in sql and "'UPSERT'" in sql
         assert "_commit_version" in sql
         assert (
-            "CASE WHEN _change_type = 'update_preimage' THEN 0 ELSE 1 END AS seq_rank"
+            "CASE WHEN _change_type IN ('update_preimage','delete') THEN 0 ELSE 1 END "
+            "AS seq_rank"
             in sql
         )
         assert "CAST(id AS STRING) AS source_key" in sql

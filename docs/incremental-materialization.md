@@ -56,7 +56,13 @@ Row-local entity mappings (one source table, no join, no `sql_query`) are compil
 `(map_id, source_key, predicate)` read from the source table's change feed
 (`STREAM … WITH (readChangeFeed = true)`), with `op = DELETE` for deleted rows,
 pre-images and `NULL` objects. An `AUTO CDC … KEYS (map_id, source_key, predicate)
-… STORED AS SCD TYPE 1` flow folds them into `triplestore_<domain>_V<n>_slots`.
+… SEQUENCE BY STRUCT(_commit_version, seq_rank) … STORED AS SCD TYPE 1` flow folds
+them into `triplestore_<domain>_V<n>_slots`; within one commit pre-images and deletes
+rank first (`seq_rank` 0), so a key a commit deletes and inserts again
+(`REPLACE WHERE`, a partial `INSERT OVERWRITE`) ends upserted. Rows with a `NULL`
+key are dropped (no subject URI, no slot key). `tests/property/test_slot_fold.py`
+checks, for any change history, that the fold equals the final rows' slots and its
+distinct non-blank triples equal the full build's.
 Join, aggregate and `sql_query` mappings stay batch: their SQL becomes the batch
 branch of the `_data` MV. Relationship mappings always stay batch: under that slot
 key a subject with several objects of one predicate would keep only one of them.

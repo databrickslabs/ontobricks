@@ -130,6 +130,9 @@ class SlotProjectionCompiler:
         build would emit NULL subjects for them.
         *base_uri* is accepted for signature stability and unused: subject
         templates carry their own prefix, exactly as in the full build.
+        Within one commit, pre-images and deletes rank 0 and everything else
+        1 (``seq_rank``): a key deleted and inserted again by one commit
+        (``REPLACE WHERE``, a partial ``INSERT OVERWRITE``) ends upserted.
         """
         compiler = SlotProjectionCompiler
         compiler._require_ident(view_name, "view name")
@@ -156,7 +159,7 @@ class SlotProjectionCompiler:
             "OR s.object IS NULL\n"
             "            THEN 'DELETE' ELSE 'UPSERT' END AS op,\n"
             "       _commit_version,\n"
-            "       CASE WHEN _change_type = 'update_preimage' THEN 0 ELSE 1 END "
+            "       CASE WHEN _change_type IN ('update_preimage','delete') THEN 0 ELSE 1 END "
             "AS seq_rank\n"
             f"FROM STREAM {source_fqn} WITH (readChangeFeed = true)\n"
             f"LATERAL VIEW stack({len(pairs)}, {stack_args}) s AS predicate, object\n"
