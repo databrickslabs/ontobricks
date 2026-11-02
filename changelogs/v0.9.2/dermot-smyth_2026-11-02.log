@@ -1317,3 +1317,69 @@ uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_rout
 -> 10867 passed, 339 skipped, 9 deselected, 1 failed: tests/units/front/
 test_materialization_mode_ui.py (Implementer A's in-progress realtime picker
 change, not in these files); tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Fix: Phase 3 core review
+================================================================================
+
+Context: Review of the Phase 3 processing core (Implementer B): one Critical
+finding (state evicted by the TTL lost tombstones), three Important ones
+(key-changing updates, Spark string rendering, a wrong "pure Python" claim) and
+minors.
+
+Changes:
+
+1. src/back/core/streaming/SlotDiffProcessor.py (Critical)
+   A key with no state, never seen or evicted by the MapState TTL, is unknown:
+   any slot of it may still be live in `_live`. Its first event upserts every
+   non-blank slot and tombstones every other predicate the mapping can produce
+   (a delete tombstones them all); the sink's seq guard absorbs the extra
+   tombstones. Before, a delete after an eviction emitted nothing and the
+   `_live` row stayed `deleted = false`. The docstring states that the TTL
+   must exceed the maximum event lateness and that without a TTL the state
+   keeps a watermark per predicate of every key it saw (unbounded growth).
+2. src/back/core/streaming/SlotRowProjector.py (Important, minor)
+   `spark_string(value, column)` accepts strings, integers, booleans and
+   `None` only and raises `ValidationError` naming the column otherwise:
+   Python renders floats, decimals, dates and nested values unlike Spark's
+   `CAST(... AS STRING)`, so the stream casts every source column to STRING
+   in Spark before serialising the row. Columns are looked up
+   case-insensitively, as Spark resolves them; `project(row)` returns the key,
+   subject and slots from one lower-cased copy; `predicates()` is a method
+   (`rdf:type`, `rdfs:label` when there is a label column, the attributes).
+3. src/jobs/triple_stream/processor.py (Important, minors)
+   The module docstring no longer claims the logic is pure Python: importing
+   it loads the application package, so the job needs OntoBricks installed on
+   the cluster; it also states the string-valued row and TTL contracts. The
+   unused logger and the `noqa` noise are removed; `_store`'s docstring says
+   that an applied event rewrites every entry (each carries the event's seq).
+4. src/back/core/streaming/__init__.py
+   Imports sorted (ruff I001).
+5. Tests: tests/property/test_slot_diff_property.py rebuilt on a generic
+   model: three mappings on one table (one with the composite key
+   `region|num`), key-changing updates whose input rows delete the old key
+   (Important 2), NULL keys through the processor path, tab objects (not
+   blank, as `TRIM` strips spaces only), in-order, out-of-order and replayed
+   delivery, TTL evictions and a start from a `_slots` snapshot; its AUTO CDC
+   model is checked against `test_slot_fold.py`'s, and the SQL oracle in
+   tests/units/streaming/test_slot_row_projector.py no longer uses
+   `spark_string` (string rows only). Unit tests: evicted state + delete,
+   evicted state + blank column, unknown mapping delete, tab objects, strict
+   casts, case-insensitive lookups (test_slot_diff_processor.py,
+   test_slot_row_projector.py, tests/units/jobs/test_triple_stream_processor.py).
+
+Modified files:
+- src/back/core/streaming/SlotDiffProcessor.py
+- src/back/core/streaming/SlotRowProjector.py
+- src/back/core/streaming/__init__.py
+- src/jobs/triple_stream/processor.py
+- tests/property/test_slot_diff_property.py
+- tests/units/jobs/test_triple_stream_processor.py
+- tests/units/streaming/test_slot_diff_processor.py
+- tests/units/streaming/test_slot_row_projector.py
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/streaming tests/units/jobs tests/property tests/units/architecture
+-> 369 passed in 7.23s (slowest 0.97s, test_class_per_file; slowest new test
+0.42s); architecture suite 9 passed, tests/units/architecture/baseline.json
+unchanged.
