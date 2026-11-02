@@ -179,7 +179,7 @@ class TwinStoreCache:
         domain = self._domain
         graph_engine = _digital_twin().resolve_graph_engine(domain, settings)
         view_table = effective_view_table(domain)
-        graph_name = effective_graph_query_table(domain, settings, physical=True)
+        graph_name = effective_graph_query_table(domain, settings)
 
         result: Dict[str, Any] = {
             "view_exists": None,
@@ -303,7 +303,7 @@ class TwinStoreCache:
 
         domain = self._domain
         try:
-            graph_name = effective_graph_query_table(domain, settings, physical=True)
+            graph_name = effective_graph_query_table(domain, settings)
             view_table = effective_view_table(domain)
             graph_store = get_graphdb(domain, settings)
             graph_exists = False
@@ -377,7 +377,7 @@ class TwinStoreCache:
         domain = self._domain
         graph_engine = _digital_twin().resolve_graph_engine(domain, settings)
         view_table = effective_view_table(domain)
-        graph_name = effective_graph_query_table(domain, settings, physical=True)
+        graph_name = effective_graph_query_table(domain, settings)
         last_built = domain.last_build or None
         last_update = domain.last_update or None
 

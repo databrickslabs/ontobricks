@@ -165,10 +165,12 @@ class TwinIncrementalBuild:
         This version's slot pipeline is stopped if it is running. A requested
         ``full`` build only looks it up (*only_if_slots_exist*) when the
         ``…_slots`` table exists, so domains that never ran incrementally make
-        no pipelines API call.
+        no pipelines API call. Reads stop trusting a cached Lakehouse//RT fast
+        path (``GraphReadRelation``; this process's cache only).
         """
-        from back.core.graphdb.delta import _table_naming, materialize
+        from back.core.graphdb.delta import GraphReadRelation, _table_naming, materialize
 
+        GraphReadRelation.clear_cache()
         graph = _table_naming.graph_view_fqn(pipe.domain, pipe.settings)
         if graph:
             materialize.drop_relation(pipe.source_client, graph, kind="materialized_view")
@@ -380,8 +382,10 @@ class TwinIncrementalBuild:
         in-memory until it is persisted), and the drop is best-effort — a
         no-op when ``…_data`` is absent, the needed drop when a full build left
         a TABLE, refused (harmlessly) when it already is a materialized view.
+        Once the definition is in place, reads re-decide their Lakehouse//RT
+        fast path from it (``GraphReadRelation.clear_cache``, this process only).
         """
-        from back.core.graphdb.delta import _table_naming, materialize
+        from back.core.graphdb.delta import GraphReadRelation, _table_naming, materialize
         from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
 
         data = _table_naming.data_table_fqn(pipe.domain, pipe.settings)
@@ -400,6 +404,7 @@ class TwinIncrementalBuild:
                 pipe.task_id,
                 data,
             )
+        GraphReadRelation.clear_cache()
         pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
         WarehouseStatements.step(
             f"refresh {data}",
@@ -453,7 +458,7 @@ class TwinIncrementalBuild:
         pipe.mode_fallback_detail = f"{exc} {exc.detail or ''}".strip()
         pipe.slots_table, pipe.batch_mappings = None, None
         pipe.refresh_technique = ""
-        TwinIncrementalBuild._leave(pipe)
+        TwinIncrementalBuild._leave(pipe)  # also clears the cached read relation
         pipe.tm.update_progress(
             pipe.task_id, 30, "Incremental build unavailable; running a full rebuild..."
         )

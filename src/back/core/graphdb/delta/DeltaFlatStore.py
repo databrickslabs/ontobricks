@@ -120,9 +120,9 @@ class DeltaFlatStore(GraphDBBackend):
         return data or graph or ""
 
     def _sql_relation(self, table_name: str) -> str:
-        """Map logical names to UC ``…_graph`` / ``…_data``; FQNs and inline relations pass."""
-        if table_name.count(".") == 2 or GraphReadRelation.is_inline(table_name):
-            return table_name
+        """Map logical names to UC ``…_graph`` / ``…_data``; an FQN passes (``GraphReadRelation`` may swap it)."""
+        if table_name.count(".") == 2:
+            return GraphReadRelation.for_read(table_name, self._domain, self._settings, self._client)
         resolved = self._readable_table_fqn()
         if resolved:
             return resolved
@@ -198,7 +198,6 @@ class DeltaFlatStore(GraphDBBackend):
         )
 
     def rebuild_adjacency(self, table_name: str) -> None:
-        table_name = GraphReadRelation.physical(table_name, self._domain, self._settings)
         relation = self._sql_relation(table_name)
         adj_out, adj_in = self.adjacency_table_ids(table_name)
         search = self.entity_search_table_id(table_name)
@@ -474,16 +473,16 @@ class DeltaFlatStore(GraphDBBackend):
         return count
 
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
-        """SELECT all triples."""
+        """SELECT all triples (a dump: no statement timeout, but the RT fallback)."""
         validate_table_name(table_name)
-        return self._client.execute_query(
-            f"SELECT subject, predicate, object FROM {table_name}"
-        )
+        sql = f"SELECT subject, predicate, object FROM {self._sql_relation(table_name)}"
+        return self.execute_query(sql, bounded=False)
 
     def count_triples(self, table_name: str) -> int:
-        """Count triples."""
+        """Count triples (no statement timeout, but the RT fallback)."""
         validate_table_name(table_name)
-        rows = self._client.execute_query(f"SELECT COUNT(*) AS cnt FROM {table_name}")
+        sql = f"SELECT COUNT(*) AS cnt FROM {self._sql_relation(table_name)}"
+        rows = self.execute_query(sql, bounded=False)
         if rows and len(rows) > 0:
             return int(rows[0].get("cnt", 0))
         return 0
@@ -586,14 +585,14 @@ class DeltaFlatStore(GraphDBBackend):
         logger.info("Optimizing Delta table: %s", table_name)
         self._client.execute_statement(f"OPTIMIZE {table_name}")
 
-    def execute_query(self, query: str) -> List[Dict[str, Any]]:
+    def execute_query(self, query: str, *, bounded: bool = True) -> List[Dict[str, Any]]:
         """Execute a graph read query, bounded by the graph statement timeout.
 
         Routed through :meth:`SQLWarehouse.execute_query` with a
         ``statement_timeout_s`` so a runaway traversal (e.g. the recursive BFS
         CTE) is cancelled server-side instead of pinning a warehouse session.
-        The unbounded ``client.execute_query`` is intentionally reserved for
-        full-graph dumps (``query_triples``) and the build pipeline.
+        Full-graph dumps and counts pass ``bounded=False`` (the unbounded
+        ``client.execute_query``, as the build pipeline uses).
 
         A read refused by a Lakehouse//RT guardrail (see
         :data:`RT_FALLBACK_MARKERS`) is retried once on the build warehouse;
@@ -601,7 +600,7 @@ class DeltaFlatStore(GraphDBBackend):
         """
         self._last_read_route = "query"
         try:
-            rows = self._run_read(self._client, query)
+            rows = self._run_read(self._client, query, bounded)
         except Exception as exc:
             fallback = self._rt_fallback_client(exc, query)
             if fallback is None:
@@ -613,20 +612,19 @@ class DeltaFlatStore(GraphDBBackend):
                 query[:120],
                 exc,
             )
-            rows = self._run_read(fallback, query)
+            rows = self._run_read(fallback, query, bounded)
             self._last_read_route = "build-fallback"
             return rows
         return rows
 
     @staticmethod
-    def _run_read(client: Any, query: str) -> List[Dict[str, Any]]:
-        """Run *query* on *client*, bounded by the graph statement timeout."""
+    def _run_read(client: Any, query: str, bounded: bool = True) -> List[Dict[str, Any]]:
+        """Run *query* on *client*, bounded by the graph statement timeout when *bounded*."""
         from back.core.query_limits import get_graph_query_timeout_s
 
-        timeout_s = get_graph_query_timeout_s()
         sql_service = getattr(client, "sql", None)
-        if sql_service is not None and hasattr(sql_service, "execute_query"):
-            return sql_service.execute_query(query, statement_timeout_s=timeout_s)
+        if bounded and sql_service is not None and hasattr(sql_service, "execute_query"):
+            return sql_service.execute_query(query, statement_timeout_s=get_graph_query_timeout_s())
         return client.execute_query(query)
 
     @staticmethod

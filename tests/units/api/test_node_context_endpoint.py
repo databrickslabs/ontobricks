@@ -403,6 +403,50 @@ class TestNodeContextEndpoint:
         assert resp.status_code == 200
         assert mock_target_store.bfs_traversal.call_args.kwargs["depth"] == 2
 
+    def _bridge_store_after(self, client, target_table):
+        """The bridge target store after a ``follow_bridges`` request whose relation is *target_table*."""
+        mock_domain = self._mock_domain()
+        mock_target_store = MagicMock()
+        mock_target_store.bfs_traversal.return_value = []
+        mock_target_store.sql_table_reference.side_effect = lambda t: f"<read of {t}>"
+        resolve_calls = []
+
+        def _resolve_side_effect(*args, **kwargs):
+            resolve_calls.append(args)
+            return mock_domain if len(resolve_calls) == 1 else MagicMock()
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            side_effect=_resolve_side_effect,
+        ), patch(
+            "back.objects.digitaltwin.node.NodeContextService.get_graphdb",
+            return_value=mock_target_store,
+        ), patch(
+            "back.objects.digitaltwin.node.NodeContextService.effective_graph_query_table",
+            return_value=target_table,
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                    "follow_bridges": "true",
+                },
+            )
+        assert resp.status_code == 200
+        return mock_target_store
+
+    def test_bridge_seed_reads_the_store_relation_of_the_target(self, client):
+        store = self._bridge_store_after(client, "catalog.schema.graph")
+
+        seed_where = store.bfs_traversal.call_args.args[1]
+        assert "SELECT subject FROM <read of catalog.schema.graph> " in seed_where
+
+    def test_bridge_refuses_a_target_relation_that_is_not_a_table_name(self, client):
+        store = self._bridge_store_after(client, "(SELECT 1); DROP x")
+
+        store.bfs_traversal.assert_not_called()
+
     def test_bridges_enriched_with_target_description(self, client):
         """Bridges expose the target domain description from the registry."""
         mock_domain = self._mock_domain()

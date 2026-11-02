@@ -504,9 +504,7 @@ async def dt_status(
             reason="Graph backend not configured",
         )
 
-    query_table = effective_graph_query_table(
-        domain, settings, store=graph_store, physical=True
-    )
+    query_table = effective_graph_query_table(domain, settings, store=graph_store)
 
     try:
         if not graph_store.table_exists(query_table):
@@ -1000,7 +998,7 @@ async def dt_triples(
         if entity_type:
             rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
             conditions.append(
-                f"subject IN (SELECT subject FROM {table} "
+                f"subject IN (SELECT subject FROM {store.sql_table_reference(table)} "
                 f"WHERE predicate = '{rdf_type}' AND object LIKE '%{sql_escape(entity_type)}%')"
             )
         if search:

@@ -754,6 +754,17 @@ class TestExistingMvSha:
 
         assert MaterializedViewBuilder.existing_mv_sha(client, DATA) == ""
 
+    def test_strict_still_reads_an_absent_relation_as_no_sha(self):
+        client = RecordingClient(query_error=RuntimeError("TABLE_OR_VIEW_NOT_FOUND"))
+
+        assert MaterializedViewBuilder.existing_mv_sha(client, DATA, strict=True) == ""
+
+    def test_strict_raises_any_other_failure(self):
+        client = RecordingClient(query_error=RuntimeError("PERMISSION_DENIED"))
+
+        with pytest.raises(RuntimeError, match="PERMISSION_DENIED"):
+            MaterializedViewBuilder.existing_mv_sha(client, DATA, strict=True)
+
     @pytest.mark.parametrize("fqn", ["", "a.b.c; DROP TABLE x"])
     def test_an_invalid_name_reads_as_no_sha_without_a_query(self, fqn):
         client = RecordingClient()

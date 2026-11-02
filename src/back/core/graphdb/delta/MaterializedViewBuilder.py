@@ -9,6 +9,7 @@ from typing import Any
 
 from back.core.errors import ValidationError
 from back.core.graphdb.delta import materialize
+from back.core.graphdb.entity_search import is_missing_relation_error
 from back.core.helpers import SAFE_SQL_IDENT, SQLHelpers, validate_table_name
 from back.core.helpers.SQLHelpers import NON_BLANK_OBJECT_SQL
 from back.core.logging import get_logger
@@ -161,12 +162,14 @@ class MaterializedViewBuilder:
         return SCHEDULE_EVERY_15_MINUTES
 
     @staticmethod
-    def existing_mv_sha(client: Any, fqn: str) -> str:
+    def existing_mv_sha(client: Any, fqn: str, *, strict: bool = False) -> str:
         """The ``ontobricks.mv_sql_sha256`` of *fqn*, or ``""``.
 
         ``""`` when the relation is absent, has no such property (a TABLE or
         VIEW left by a full build), the name is invalid, or anything else goes
-        wrong: the caller then simply re-creates the view. Never raises.
+        wrong: the caller then simply re-creates the view. Never raises —
+        unless *strict*, where a lookup that fails for another reason than an
+        absent relation raises (an unknown answer is not "no fingerprint").
         """
         try:
             validate_table_name(fqn)
@@ -183,7 +186,9 @@ class MaterializedViewBuilder:
                     continue
                 value = str(row.get("value") or "").strip()
                 return value if _SHA256_HEX.fullmatch(value) else ""
-        except Exception as exc:  # noqa: BLE001 — contract: never raises
+        except Exception as exc:  # noqa: BLE001 — contract: never raises unless strict
+            if strict and not is_missing_relation_error(exc):
+                raise
             logger.debug("No materialized view fingerprint for %s: %s", fqn, exc)
         return ""
 

@@ -2638,3 +2638,104 @@ Modified files:
 
 Test result: documentation only; the full-suite number is in the "Incremental
 triple materialization — roll-up" section above.
+
+================================================================================
+## Fix: fast-path review
+================================================================================
+
+Context: the review of the microbatch Lakehouse//RT fast path (`bf217fbc`)
+requested changes (2 P1, 10 P2). The fast path is re-founded on `_data`'s stored
+definition fingerprint and moved inside `DeltaFlatStore`, so
+`effective_graph_query_table` is a pure name lookup again.
+
+Changes:
+
+1. src/back/core/graphdb/delta/GraphReadRelation.py
+   The decision no longer reads build history (it used to skip a newer failed or
+   cancelled build that had already replaced `_data` with a batch-branch view, and
+   could drop the batch triples). `slots_live` iff the domain is on the Lakehouse
+   engine, requested a continuous mode (no read otherwise), has "Use
+   Lakehouse//RT for queries" on (no probe otherwise) and `_data`'s
+   `ontobricks.mv_sql_sha256` equals `data_mv_sha(slots, no batch branch,
+   TRIGGER ON UPDATE)` — one `SHOW TBLPROPERTIES` saying `_data` is the
+   microbatch view over the non-blank slots alone (the incremental view, with no
+   refresh clause, has another fingerprint; a CTAS table has none). The probe
+   runs on the reading store's client (the reader's identity, in the worker
+   thread the read already runs in; no build-warehouse client, no `back/objects`
+   import). An absent `_data` reads as `graph` quietly, any other failing probe
+   logs a warning (once per TTL). Cache key: the `_data` FQN, 30 s TTL. New
+   `for_read(table_name, domain, settings, client)` swaps this domain's `_graph`
+   FQN for `(SELECT DISTINCT … FROM <slots> WHERE <non-blank> UNION ALL SELECT …
+   FROM <inferred>)` — `_graph`'s multiset exactly — and its `_data` FQN for the
+   distinct non-blank slots; both strings are built explicitly
+   (`relation_sql`, `asserted_relation_sql`). `physical`, `is_inline`,
+   `includes_inferred` and `read_relation` are gone.
+2. src/back/core/graphdb/delta/MaterializedViewBuilder.py
+   `existing_mv_sha(..., strict=True)` raises a failed lookup (an absent
+   relation still reads as `""`).
+3. src/back/core/graphdb/delta/DeltaFlatStore.py
+   `_sql_relation` (hence `sql_table_reference`) returns `GraphReadRelation.for_read`
+   for an FQN; logical names still resolve to the views. `query_triples` /
+   `count_triples` read through `_sql_relation` and `execute_query(…,
+   bounded=False)`: they gain the RT guardrail fallback and keep running without
+   the statement timeout (full-graph dumps may legitimately run long).
+   `rebuild_adjacency` no longer maps back (a rebuild reads the same relation as
+   the reads). Class at 789 LOC.
+4. src/back/core/helpers/SQLHelpers.py, src/back/objects/digitaltwin/TwinGraphAccess.py,
+   src/back/objects/digitaltwin/cache/TwinStoreCache.py, src/api/routers/internal/dtwin.py,
+   src/back/core/graphdb/entity_search.py
+   Reverted to their pre-fast-path state: no `physical` parameter or sites, no
+   inline sniffing in `is_asserted_only_relation`.
+5. src/api/routers/digitaltwin.py, src/back/objects/digitaltwin/node/NodeContextService.py
+   The `dt_triples` type filter and the bridge `seed_where` build their subquery
+   over `store.sql_table_reference(table)`; the bridge's strict `SAFE_SQL_IDENT`
+   guard is restored (`_readable_relation` removed).
+6. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+   `GraphReadRelation.clear_cache()` (this process only) in `_leave` (so also on
+   `_fall_back`) and in `_apply_views` once `_data` has its definition.
+7. src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+   `last_success_facts` deleted; the `batch_mappings` trace fact stays.
+8. Tests — tests/units/graphdb/delta/test_graph_read_relation.py rewritten:
+   fingerprint match; mismatch for a batch branch, the incremental clause, a CTAS
+   table, `""`; absent `_data` quiet, failing probe warns; RT off and non-microbatch
+   domains without a probe; TTL reuse / expiry, per-version key, warm cache then
+   `clear_cache()` and a switch away from microbatch; pinned relation strings;
+   `_sql_relation` swaps `_graph` / `_data` and leaves every other name alone;
+   dumps and counts through `execute_query` unbounded, with the RT fallback; a
+   sqlglot (`databricks`) parse of 20 read templates with both relations,
+   companions present and absent; `read_relation` in status / readiness.
+   test_materialized_view_builder.py (strict lookup), test_build_pipeline_modes.py
+   (cache cleared after the view definition, on fallback, on leaving),
+   test_node_context_endpoint.py (seed over the store relation; strict guard
+   rejects `(SELECT 1); DROP x`), test_digitaltwin_api.py (type filter over the
+   store relation). test_v090_graph_access_twin_helpers.py reverted.
+9. docs/incremental-materialization.md — Lakehouse//RT section: the swap in
+   `DeltaFlatStore._sql_relation`, the two conditions (toggle, fingerprint), the
+   `UNION ALL` relation, cache clearing, the grants (no build grant step exists),
+   the measure-before-enabling caveat.
+
+Modified files:
+- src/back/core/graphdb/delta/GraphReadRelation.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/core/graphdb/entity_search.py
+- src/back/core/helpers/SQLHelpers.py
+- src/back/objects/digitaltwin/TwinGraphAccess.py
+- src/back/objects/digitaltwin/cache/TwinStoreCache.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- tests/units/graphdb/delta/test_graph_read_relation.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/graphdb/test_v090_graph_access_twin_helpers.py
+- tests/units/objects/test_build_pipeline_modes.py
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/dtwin/test_digitaltwin_api.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 11435 passed, 341 skipped, 9 deselected in 97.54s; architecture suite green; baseline.json
+unchanged.

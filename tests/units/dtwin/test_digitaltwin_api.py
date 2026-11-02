@@ -651,6 +651,35 @@ class TestDtTriplesBackendSelection:
 
         assert store.paginated_count.call_args[0][0] == "c.s.view_V1"
 
+    @patch("api.routers.digitaltwin.effective_view_table", return_value="c.s.view_V1")
+    @patch(
+        "api.routers.digitaltwin.effective_graph_query_table",
+        return_value="c.s.graph_V1",
+    )
+    @patch("api.routers.digitaltwin.get_graphdb")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    async def test_the_type_filter_reads_the_store_relation(
+        self, mock_resolve, mock_store, _query, _view
+    ):
+        """The ``entity_type`` subquery reads what the store reads (its live relation)."""
+        from api.routers.digitaltwin import dt_triples
+
+        mock_resolve.return_value = MagicMock()
+        store = self._store()
+        store.sql_table_reference.side_effect = lambda t: f"<read of {t}>"
+        mock_store.return_value = store
+
+        await dt_triples(
+            request=MagicMock(),
+            backend="graph",
+            entity_type="Customer",
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+
+        conditions = store.paginated_count.call_args[0][1]
+        assert any("SELECT subject FROM <read of c.s.graph_V1> " in c for c in conditions)
+
 
 class TestTriplesFindHasMorePropagation:
     @patch("api.routers.digitaltwin.run_blocking")

@@ -26,11 +26,7 @@ __all__ = [
 
 
 def is_asserted_only_relation(table_name: str) -> bool:
-    """Whether *table_name* (or an inline ``GraphReadRelation``) excludes the inferred companion."""
-    from back.core.graphdb.delta.GraphReadRelation import GraphReadRelation
-
-    if GraphReadRelation.is_inline(table_name):
-        return not GraphReadRelation.includes_inferred(table_name)
+    """Whether *table_name* excludes the inferred companion."""
     leaf = table_name.rsplit(".", 1)[-1]
     return leaf.endswith("_data") or leaf.endswith("_sync")
 

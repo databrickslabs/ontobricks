@@ -55,8 +55,9 @@ class TwinBuildRunHistory:
         ``TwinGraphRelation``) and whether the store lists its inferences
         (``inferred_listed``, Neo4j: ``TwinNetChangeApply``) and how many batch
         mappings its slot pipeline left to ``…_data``'s batch branch
-        (``batch_mappings``, ``None`` when no incremental build ran:
-        ``GraphReadRelation`` reads the live slots only at ``0``). A build that reached the
+        (``batch_mappings``, ``None`` when no incremental build ran; at ``0``
+        ``…_data`` is the slots alone, the Lakehouse//RT fast path's
+        condition). A build that reached the
         incremental step adds its ``slot_refresh_facts``
         (:class:`TwinSlotRefreshPlan`: ``source_versions``,
         ``source_table_ids``, ``slot_full_refresh_pending``,
@@ -183,25 +184,6 @@ class TwinBuildRunHistory:
         return TwinBuildRunHistory._load_runs(
             lambda: (domain, settings, TwinBuildRunHistory.run_key_of(domain)), "-"
         )
-
-    @staticmethod
-    def last_success_facts(domain: Any, settings: Any) -> dict | None:
-        """``stats["materialization"]`` of *domain*'s newest successful build, ``None`` without one.
-
-        Over :meth:`recent_runs_for` (newest first); scheduled ticks (their
-        facts are reconciliation's only), failures and runs that recorded no
-        effective mode are passed over.
-        """
-        for run in TwinBuildRunHistory.recent_runs_for(domain, settings):
-            facts = TwinBuildRunHistory.facts_of(run)
-            if (
-                facts
-                and facts.get("materialization_mode_effective")
-                and run.get("status") == "success"
-                and run.get("build_kind") != "scheduled"
-            ):
-                return facts
-        return None
 
     @staticmethod
     def _load_runs(context: Any, task_id: Any) -> list:

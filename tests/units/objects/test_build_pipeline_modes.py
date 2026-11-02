@@ -539,6 +539,45 @@ class TestSlotPipelineUpdates:
         assert _events(log, "stop") == []
 
 
+class TestReadRelationCache:
+    """A build that changes ``_data`` drops the cached Lakehouse//RT read decisions."""
+
+    @pytest.fixture
+    def warehouse(self, monkeypatch):
+        """A warehouse whose ``clears`` holds how many statements had run at each cache clear."""
+        from back.core.graphdb.delta import GraphReadRelation
+
+        warehouse = _Warehouse([])
+        warehouse.clears = []
+        monkeypatch.setattr(
+            GraphReadRelation,
+            "clear_cache",
+            staticmethod(lambda: warehouse.clears.append(len(warehouse.calls))),
+        )
+        return warehouse
+
+    @staticmethod
+    def _position(warehouse, needle):
+        return next(i for i, sql in enumerate(warehouse.calls) if needle in sql)
+
+    def test_the_views_clear_it_once_data_has_its_definition(self, warehouse):
+        _run(_pipeline("microbatch"), warehouse=warehouse)
+
+        created = self._position(warehouse, f"CREATE OR REPLACE MATERIALIZED VIEW {_DATA}")
+        refreshed = self._position(warehouse, f"REFRESH MATERIALIZED VIEW {_DATA}")
+        assert any(created < clear <= refreshed for clear in warehouse.clears)
+
+    def test_a_fallback_clears_it(self, warehouse):
+        _run(_pipeline("microbatch"), warehouse=warehouse, fail_on="wait")
+
+        assert warehouse.clears
+
+    def test_leaving_the_incremental_modes_clears_it(self, warehouse):
+        _run(_pipeline("full"), warehouse=warehouse)
+
+        assert warehouse.clears
+
+
 class TestFallback:
     @pytest.mark.parametrize("step", ["ensure", "start", "wait"])
     def test_a_runner_failure_falls_back_to_full(self, step):
