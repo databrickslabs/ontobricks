@@ -8,7 +8,6 @@ values that rarely change and are used by more than one package.
 """
 
 import os
-from rdflib import Namespace
 
 
 def _read_version() -> str:
@@ -49,7 +48,8 @@ LOG_BACKUP_COUNT: int = 5
 # =====================================================
 # OWL / RDF Namespaces
 # =====================================================
-ONTOBRICKS_NS = Namespace("http://ontobricks.com/schema#")
+#: The OntoBricks schema namespace (its ``rdflib.Namespace`` is ``back.core.w3c.owl.iri.ONTOBRICKS_NS``).
+ONTOBRICKS_NS_URI: str = "http://ontobricks.com/schema#"
 DEFAULT_BASE_URI: str = "https://databricks-ontology.com/"
 
 # =====================================================

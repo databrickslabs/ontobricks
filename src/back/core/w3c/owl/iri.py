@@ -10,11 +10,15 @@ ones) are left untouched.
 import re
 from urllib.parse import quote
 
-from rdflib import Graph, URIRef
+from rdflib import Graph, Namespace, URIRef
 
 from back.core.logging import get_logger
+from shared.config.constants import ONTOBRICKS_NS_URI
 
 logger = get_logger(__name__)
+
+#: The OntoBricks schema namespace the OWL generator writes and the parser reads.
+ONTOBRICKS_NS = Namespace(ONTOBRICKS_NS_URI)
 
 _IRI_UNSAFE = re.compile(r'[\s<>"{}|\\^`]')
 

@@ -15,13 +15,13 @@ from back.core.errors import ValidationError
 from back.core.helpers import (
     SAFE_COL_IDENT,
     SAFE_SQL_IDENT,
+    SQL_DIALECT_SPARK,
+    TripleProjectionSql,
     sql_escape,
     validate_table_name,
 )
 from back.core.logging import get_logger
 from back.core.streaming.SlotPipelineSpec import SlotPipelineSpec
-from back.core.w3c.sparql.constants import DIALECT_SPARK
-from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
 
 logger = get_logger(__name__)
 
@@ -148,8 +148,8 @@ class SlotProjectionCompiler:
         not_null = " AND ".join(
             f"{column} IS NOT NULL" for column in compiler.key_columns(mapping)
         )
-        subject_expr = SparqlTranslator._subject_expr_from_template(
-            sql_escape(template or ""), id_column, dialect=DIALECT_SPARK
+        subject_expr = TripleProjectionSql.subject_expr_from_template(
+            sql_escape(template or ""), id_column, dialect=SQL_DIALECT_SPARK
         )
         stack_args = ", ".join(
             f"'{sql_escape(predicate)}', {expr}" for predicate, expr in pairs
@@ -422,11 +422,11 @@ class SlotProjectionCompiler:
             raise ValidationError("Entity mapping has no class_uri")
         for column in compiler._entity_columns(mapping):
             compiler._require_col(column)
-        return SparqlTranslator._generic_triples_stack_predicates_for_mapping(
+        return TripleProjectionSql.stack_predicates_for_mapping(
             {"predicates": mapping.get("predicates") or {}},
             sql_escape(class_uri),
             mapping.get("label_column") or "",
-            DIALECT_SPARK,
+            SQL_DIALECT_SPARK,
             None,
             None,
         )

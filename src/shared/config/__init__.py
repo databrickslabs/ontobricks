@@ -1,11 +1,5 @@
-"""OntoBricks shared configuration — settings and constants."""
+"""OntoBricks shared configuration: ``shared.config.settings`` and ``shared.config.constants``.
 
-from shared.config.settings import Settings, get_settings
-from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
-
-__all__ = [
-    "Settings",
-    "get_settings",
-    "APP_VERSION",
-    "SESSION_COOKIE_NAME",
-]
+The package re-exports nothing, so importing the constants (as logging does)
+does not import the pydantic settings model.
+"""

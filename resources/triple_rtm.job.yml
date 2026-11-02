@@ -47,6 +47,8 @@ resources:
             aws_attributes:
               availability: ON_DEMAND
               first_on_demand: 1
+            spark_env_vars:
+              PYTHONPATH: "${workspace.file_path}/src"
             spark_conf:
               spark.databricks.streaming.realTimeMode.enabled: "true"
               # SparkColumnText prints timestamps in UTC, as the slot SQL reads them here.
@@ -55,14 +57,17 @@ resources:
       tasks:
         - task_key: stream
           job_cluster_key: rtm
-          # The app wheel (artifact ``ontobricks_wheel`` in databricks.yml) brings
-          # the code the driver and the executors import (``back.*``,
-          # ``jobs.triple_stream.*``) and its dependencies; the driver runs
-          # main.py from the synced workspace files of the same deploy.
+          # No app wheel: the driver and the executors import ``back.core.streaming``
+          # and ``jobs.triple_stream`` from the synced workspace files of the same
+          # deploy (``PYTHONPATH`` on the cluster). That closure needs no app layer,
+          # web stack, SPARQL parser or pydantic (tests/units/jobs/
+          # test_triple_stream_closure.py) — only what the runtime ships plus the
+          # two packages below. The runtime's pyarrow is never pinned or replaced.
           libraries:
-            - whl: ../dist/*.whl
             - pypi:
                 package: "psycopg[binary]>=3.1"
+            - pypi:
+                package: "databricks-sql-connector>=4.4.0"
           spark_python_task:
             python_file: "${workspace.file_path}/src/jobs/triple_stream/main.py"
             # Supplied per run by TwinRealtimeStream through ``job_parameters``.

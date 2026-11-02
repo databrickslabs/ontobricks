@@ -1,54 +1,7 @@
-"""Core functionality for OntoBricks.
+"""Core functionality for OntoBricks (infrastructure: Databricks, W3C, graph stores, ...).
 
-Heavy sub-packages (w3c, objects) are imported lazily to avoid circular
-dependencies at module-init time.
+The package re-exports nothing: callers import the sub-package that does the
+work (``back.core.databricks``, ``back.core.helpers``, ``back.core.w3c``, ...),
+so importing one of them (e.g. ``back.core.streaming`` on the realtime job
+cluster) does not import the others.
 """
-
-from back.core.databricks import DatabricksClient, VolumeFileService
-from back.core.helpers import (
-    get_databricks_client,
-    get_databricks_credentials,
-    get_databricks_host_and_token,
-    sql_escape,
-    effective_view_table,
-    effective_graph_name,
-    validate_table_name,
-)
-from back.core.errors import (
-    OntoBricksError,
-    NotFoundError,
-    ValidationError,
-    AuthorizationError,
-    InfrastructureError,
-    ConflictError,
-    ErrorResponse,
-)
-
-
-def __getattr__(name):
-    if name == "sparql":
-        from back.core.w3c import sparql as _sparql
-
-        return _sparql
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-__all__ = [
-    "DatabricksClient",
-    "VolumeFileService",
-    "sparql",
-    "get_databricks_client",
-    "get_databricks_credentials",
-    "get_databricks_host_and_token",
-    "sql_escape",
-    "effective_view_table",
-    "effective_graph_name",
-    "validate_table_name",
-    "OntoBricksError",
-    "NotFoundError",
-    "ValidationError",
-    "AuthorizationError",
-    "InfrastructureError",
-    "ConflictError",
-    "ErrorResponse",
-]

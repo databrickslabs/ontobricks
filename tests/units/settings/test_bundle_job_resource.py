@@ -336,15 +336,19 @@ class TestTheRealtimeStreamJob:
 
 
 class TestTheRealtimeJobEnvironment:
-    def test_the_cluster_installs_the_app_wheel(self, rtm_job):
-        libraries = rtm_job["tasks"][0]["libraries"]
-        assert {"whl": "../dist/*.whl"} in libraries
+    def test_the_cluster_imports_the_synced_source_not_a_wheel(self, rtm_job):
+        env = rtm_job["job_clusters"][0]["new_cluster"]["spark_env_vars"]
+        assert env["PYTHONPATH"] == "${workspace.file_path}/src"
+        assert not any("whl" in library for library in rtm_job["tasks"][0]["libraries"])
 
-    def test_the_bundle_builds_that_wheel_with_the_job_code(self):
+    def test_it_installs_only_the_sink_and_warehouse_drivers(self, rtm_job):
+        packages = [lib["pypi"]["package"] for lib in rtm_job["tasks"][0]["libraries"]]
+        assert [p.split(">")[0] for p in packages] == ["psycopg[binary]", "databricks-sql-connector"]
+        assert not any("pyarrow" in p or "[kernel]" in p for p in packages)
+
+    def test_the_bundle_builds_no_wheel(self):
         bundle = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
-        assert bundle["artifacts"]["ontobricks_wheel"]["type"] == "whl"
-        packages = (REPO_ROOT / "pyproject.toml").read_text()
-        assert '"src/jobs"' in packages and '"src/back"' in packages
+        assert "artifacts" not in bundle
 
     def test_the_session_time_zone_is_utc(self, rtm_job):
         conf = rtm_job["job_clusters"][0]["new_cluster"]["spark_conf"]

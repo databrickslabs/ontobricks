@@ -10,10 +10,10 @@ from back.core.errors import (
     AuthorizationError,
     InfrastructureError,
     ConflictError,
-    ErrorResponse,
     _error_code_from_class,
     register_exception_handlers,
 )
+from back.core.errors.ErrorResponse import ErrorResponse
 
 
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ from back.core.helpers.SQLHelpers import (  # noqa: F401
     SQLHelpers,
 )
 from back.core.helpers.URIHelpers import URIHelpers  # noqa: F401
+from back.core.helpers.TripleProjectionSql import TripleProjectionSql  # noqa: F401
 from back.core.helpers.WarehouseStatements import WarehouseStatements  # noqa: F401
 from back.core.helpers.UIBranding import (  # noqa: F401
     BrandPalette,

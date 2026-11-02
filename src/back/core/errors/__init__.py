@@ -1,6 +1,8 @@
 """Centralized error handling for OntoBricks.
 
-Provides a custom exception hierarchy and a uniform error response model.
+Provides a custom exception hierarchy. The uniform error response model
+(pydantic) is :class:`back.core.errors.ErrorResponse.ErrorResponse`, imported
+by the API layer only, so raising an error does not import pydantic.
 """
 
 from back.core.errors.OntoBricksError import OntoBricksError  # noqa: F401
@@ -13,7 +15,6 @@ from back.core.errors.GoneError import GoneError  # noqa: F401
 from back.core.errors.OperationCancelledError import (  # noqa: F401
     OperationCancelledError,
 )
-from back.core.errors.ErrorResponse import ErrorResponse  # noqa: F401
 
 _error_code_from_class = OntoBricksError.error_code_from_class
 
@@ -34,7 +35,6 @@ __all__ = [
     "ConflictError",
     "GoneError",
     "OperationCancelledError",
-    "ErrorResponse",
     "_error_code_from_class",
     "register_exception_handlers",
 ]

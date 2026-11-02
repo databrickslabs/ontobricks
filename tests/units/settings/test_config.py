@@ -16,7 +16,7 @@ class TestGlobalConfig:
             DEFAULT_LOG_FILE,
             LOG_MAX_BYTES,
             LOG_BACKUP_COUNT,
-            ONTOBRICKS_NS,
+            ONTOBRICKS_NS_URI,
             DEFAULT_BASE_URI,
             SESSION_COOKIE_NAME,
             WIZARD_TEMPLATES,

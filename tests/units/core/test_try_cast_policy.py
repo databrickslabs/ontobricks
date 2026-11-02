@@ -28,21 +28,21 @@ class TestSqlHelpers:
         assert _no_bare_cast(SQLHelpers.sql_cast("x", "DOUBLE"))
 
 
-class TestSparqlTranslator:
+class TestTripleProjectionSql:
     def test_cast_str_has_no_bare_cast(self):
-        from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
+        from back.core.helpers.TripleProjectionSql import TripleProjectionSql
 
-        assert _no_bare_cast(SparqlTranslator._cast_str("col"))
+        assert _no_bare_cast(TripleProjectionSql.cast_str("col"))
 
     def test_coalesce_cast_str_has_no_bare_cast(self):
-        from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
+        from back.core.helpers.TripleProjectionSql import TripleProjectionSql
 
-        assert _no_bare_cast(SparqlTranslator._coalesce_cast_str("col"))
+        assert _no_bare_cast(TripleProjectionSql.coalesce_cast_str("col"))
 
     def test_subject_expr_from_template_has_no_bare_cast(self):
-        from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
+        from back.core.helpers.TripleProjectionSql import TripleProjectionSql
 
-        result = SparqlTranslator._subject_expr_from_template(
+        result = TripleProjectionSql.subject_expr_from_template(
             "http://ex.org/Customer/{id}", "customer_id", alias="c"
         )
         assert "TRY_CAST(c.customer_id AS STRING)" in result

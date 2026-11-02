@@ -8,7 +8,8 @@ from typing import Any, Dict, List
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
 from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
-from shared.config.constants import DEFAULT_BASE_URI, ONTOBRICKS_NS
+from back.core.w3c.owl.iri import ONTOBRICKS_NS
+from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 

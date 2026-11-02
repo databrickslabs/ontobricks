@@ -3,6 +3,7 @@
 import pytest
 
 from back.core.errors import ValidationError
+from back.core.helpers.TripleProjectionSql import TripleProjectionSql
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 from back.core.w3c.sparql.SparqlQueryRunner import SparqlQueryRunner
 from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
@@ -10,8 +11,8 @@ from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
 translate_sparql_to_spark = SparqlTranslator.translate_sparql_to_spark
 execute_local_query = SparqlQueryRunner.execute_local_query
 extract_r2rml_mappings = SparqlQueryRunner.extract_r2rml_mappings
-_string_type = SparqlTranslator._string_type
-_cast_str = SparqlTranslator._cast_str
+_string_type = TripleProjectionSql.string_type
+_cast_str = TripleProjectionSql.cast_str
 
 
 SAMPLE_R2RML = """@prefix rr: <http://www.w3.org/ns/r2rml#> .

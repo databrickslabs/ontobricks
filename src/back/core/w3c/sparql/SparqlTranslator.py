@@ -9,7 +9,7 @@ from back.core.logging import get_logger
 from back.core.helpers import (
     sql_escape as _escape_sql,
     extract_local_name as _extract_local,
-    sql_cast as _sql_cast,
+    TripleProjectionSql,
 )
 from back.core.w3c.sparql.SparqlCapabilityValidator import SparqlCapabilityValidator
 from back.core.w3c.sparql.TripleSQLAssembler import TripleSQLAssembler
@@ -25,26 +25,6 @@ class SparqlTranslator:
     # ---------------------------------------------------------------------------
 
     @staticmethod
-    def _string_type(dialect: str = DIALECT_SPARK) -> str:
-        """Return the string type name for the dialect."""
-        return "STRING"
-
-    @staticmethod
-    def _cast_str(expr: str, dialect: str = DIALECT_SPARK) -> str:
-        """TRY_CAST(<expr> AS STRING) for Spark SQL (ANSI-safe stringification)."""
-        return _sql_cast(expr, SparqlTranslator._string_type(dialect))
-
-    @staticmethod
-    def _coalesce_cast_str(expr: str, dialect: str = DIALECT_SPARK) -> str:
-        """COALESCE(TRY_CAST(<expr> AS STRING), '')."""
-        return f"COALESCE({SparqlTranslator._cast_str(expr, dialect)}, '')"
-
-    @staticmethod
-    def _predicate_local_name_key(uri: str) -> str:
-        """Lower-case RDF local name for SQL filter / column-key matching."""
-        return _extract_local(uri).lower()
-
-    @staticmethod
     def _relationship_predicate_local_name(uri: str) -> str:
         """Case-sensitive RDF local name for relationship predicate URI matching."""
         return _extract_local(uri) if uri else ""
@@ -53,22 +33,6 @@ class SparqlTranslator:
     def _unpivot_select(*args, **kwargs) -> str:
         """Delegates to :meth:`TripleSQLAssembler.unpivot_select`."""
         return TripleSQLAssembler.unpivot_select(*args, **kwargs)
-
-    @staticmethod
-    def _subject_expr_from_template(
-        uri_template: str,
-        id_column: str,
-        alias: str = "",
-        dialect: str = DIALECT_SPARK,
-    ) -> str:
-        """Build a subject expression from a URI template, like CONCAT(base, TRY_CAST(col AS STRING))."""
-        col_ref = f"{alias}.{id_column}" if alias else id_column
-        if uri_template and "{" in uri_template:
-            base_uri = uri_template.split("{")[0]
-            return (
-                f"CONCAT('{base_uri}', {SparqlTranslator._cast_str(col_ref, dialect)})"
-            )
-        return SparqlTranslator._cast_str(col_ref, dialect)
 
     @staticmethod
     def _collect_source_ctes(mappings, relationship_mappings=None):
@@ -719,7 +683,7 @@ class SparqlTranslator:
         for pred_uri, pred_info in mapping.get("predicates", {}).items():
             if pred_info.get("type") == "column":
                 pred_to_column[pred_uri] = pred_info["column"]
-                pred_to_column[SparqlTranslator._predicate_local_name_key(pred_uri)] = (
+                pred_to_column[TripleProjectionSql.predicate_local_name_key(pred_uri)] = (
                     pred_info["column"]
                 )
         return pred_to_column
@@ -732,7 +696,7 @@ class SparqlTranslator:
         clean = re.sub(r"\{[^}]+\}$", "", template).rstrip("/")
         if not clean or "/" not in clean:
             return None
-        key = SparqlTranslator._predicate_local_name_key(clean)
+        key = TripleProjectionSql.predicate_local_name_key(clean)
         return key or None
 
     @staticmethod
@@ -752,7 +716,7 @@ class SparqlTranslator:
             return True
         return (
             class_uri in filter_class_uris
-            or SparqlTranslator._predicate_local_name_key(class_uri)
+            or TripleProjectionSql.predicate_local_name_key(class_uri)
             in filter_local_names
         )
 
@@ -773,7 +737,7 @@ class SparqlTranslator:
                 )
                 if (
                     pred_uri in pred_to_column
-                    or SparqlTranslator._predicate_local_name_key(pred_uri)
+                    or TripleProjectionSql.predicate_local_name_key(pred_uri)
                     in pred_to_column
                 ):
                     filtered_entity_types.add(class_uri)
@@ -805,7 +769,7 @@ class SparqlTranslator:
             from_clause = SparqlTranslator._source_from_alias(source_key, source_alias)
             id_column = mapping.get("id_column", "id")
             uri_template = mapping.get("uri_template", "")
-            subject_expr = SparqlTranslator._subject_expr_from_template(
+            subject_expr = TripleProjectionSql.subject_expr_from_template(
                 uri_template, id_column, "e", dialect
             )
             pred_to_column = SparqlTranslator._mapping_predicate_uri_to_column(mapping)
@@ -845,7 +809,7 @@ class SparqlTranslator:
             id_column = mapping.get("id_column", "id")
             label_column = mapping.get("label_column", "")
             uri_template = mapping.get("uri_template", "")
-            subject_expr = SparqlTranslator._subject_expr_from_template(
+            subject_expr = TripleProjectionSql.subject_expr_from_template(
                 uri_template, id_column, "e", dialect
             )
             predicates = [
@@ -855,7 +819,7 @@ class SparqlTranslator:
                 predicates.append(
                     (
                         "http://www.w3.org/2000/01/rdf-schema#label",
-                        SparqlTranslator._coalesce_cast_str(
+                        TripleProjectionSql.coalesce_cast_str(
                             f"e.{label_column}", dialect
                         ),
                     )
@@ -867,7 +831,7 @@ class SparqlTranslator:
                         predicates.append(
                             (
                                 pred_uri,
-                                SparqlTranslator._coalesce_cast_str(
+                                TripleProjectionSql.coalesce_cast_str(
                                     f"e.{column}", dialect
                                 ),
                             )
@@ -895,8 +859,8 @@ class SparqlTranslator:
             if relationship_filter:
                 if not any(
                     predicate == f
-                    or SparqlTranslator._predicate_local_name_key(predicate)
-                    == SparqlTranslator._predicate_local_name_key(f)
+                    or TripleProjectionSql.predicate_local_name_key(predicate)
+                    == TripleProjectionSql.predicate_local_name_key(f)
                     for f in relationship_filter
                 ):
                     continue
@@ -908,10 +872,10 @@ class SparqlTranslator:
             if not rel_sql or not subject_column or not object_column:
                 continue
             rel_from = SparqlTranslator._source_from_alias(rel_sql, source_alias, "r")
-            subj_expr = SparqlTranslator._subject_expr_from_template(
+            subj_expr = TripleProjectionSql.subject_expr_from_template(
                 subject_template, subject_column, "r", dialect
             )
-            obj_expr = SparqlTranslator._subject_expr_from_template(
+            obj_expr = TripleProjectionSql.subject_expr_from_template(
                 object_template, object_column, "r", dialect
             )
             rel_queries.append(
@@ -965,7 +929,7 @@ class SparqlTranslator:
 
         filter_local_names = (
             set(
-                SparqlTranslator._predicate_local_name_key(uri)
+                TripleProjectionSql.predicate_local_name_key(uri)
                 for uri in filter_class_uris
             )
             if filter_class_uris
@@ -1030,7 +994,7 @@ class SparqlTranslator:
         if predicate_filter and not value_filters:
             predicate_filter_set = set(p.lower() for p in predicate_filter)
             predicate_filter_local = set(
-                SparqlTranslator._predicate_local_name_key(p) for p in predicate_filter
+                TripleProjectionSql.predicate_local_name_key(p) for p in predicate_filter
             )
             logger.debug("Filtering by predicate URIs: %s", predicate_filter)
             logger.debug("Predicate filter local names: %s", predicate_filter_local)
@@ -1039,20 +1003,6 @@ class SparqlTranslator:
                 "IGNORING predicate filter because value_filters are present (user wants ALL attributes of filtered entities)"
             )
         return predicate_filter_set, predicate_filter_local
-
-    @staticmethod
-    def _generic_triples_predicate_output_allowed(
-        pred_uri, predicate_filter_set, predicate_filter_local
-    ) -> bool:
-        if predicate_filter_set is None:
-            return True
-        if pred_uri.lower() in predicate_filter_set:
-            return True
-        return bool(
-            predicate_filter_local
-            and SparqlTranslator._predicate_local_name_key(pred_uri)
-            in predicate_filter_local
-        )
 
     @staticmethod
     def _generic_triples_relationship_template_class_keys(
@@ -1065,8 +1015,8 @@ class SparqlTranslator:
             predicate = rel.get("predicate", "")
             if not any(
                 predicate == filter_uri
-                or SparqlTranslator._predicate_local_name_key(predicate)
-                == SparqlTranslator._predicate_local_name_key(filter_uri)
+                or TripleProjectionSql.predicate_local_name_key(predicate)
+                == TripleProjectionSql.predicate_local_name_key(filter_uri)
                 for filter_uri in relationship_filter
             ):
                 continue
@@ -1092,7 +1042,7 @@ class SparqlTranslator:
     ) -> bool:
         if filter_class_uris is None:
             return True
-        class_local = SparqlTranslator._predicate_local_name_key(class_uri)
+        class_local = TripleProjectionSql.predicate_local_name_key(class_uri)
         if class_uri in filter_class_uris:
             logger.debug("Including class (exact match): %s", class_uri)
             return True
@@ -1104,45 +1054,6 @@ class SparqlTranslator:
             return True
         logger.debug("SKIPPING class (no match): %s", class_uri)
         return False
-
-    @staticmethod
-    def _generic_triples_stack_predicates_for_mapping(
-        mapping,
-        class_uri,
-        label_column,
-        dialect,
-        predicate_filter_set,
-        predicate_filter_local,
-    ) -> list:
-        predicates = []
-        rdf_type_uri = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-        if SparqlTranslator._generic_triples_predicate_output_allowed(
-            rdf_type_uri, predicate_filter_set, predicate_filter_local
-        ):
-            predicates.append((rdf_type_uri, f"'{class_uri}'"))
-        rdfs_label_uri = "http://www.w3.org/2000/01/rdf-schema#label"
-        if label_column and SparqlTranslator._generic_triples_predicate_output_allowed(
-            rdfs_label_uri, predicate_filter_set, predicate_filter_local
-        ):
-            predicates.append(
-                (
-                    rdfs_label_uri,
-                    SparqlTranslator._coalesce_cast_str(label_column, dialect),
-                )
-            )
-        for pred_uri, pred_info in mapping.get("predicates", {}).items():
-            if pred_info.get("type") == "column":
-                column = pred_info["column"]
-                if (
-                    column != label_column
-                    and SparqlTranslator._generic_triples_predicate_output_allowed(
-                        pred_uri, predicate_filter_set, predicate_filter_local
-                    )
-                ):
-                    predicates.append(
-                        (pred_uri, SparqlTranslator._coalesce_cast_str(column, dialect))
-                    )
-        return predicates
 
     @staticmethod
     def _generic_triples_value_filter_where_clause(
@@ -1157,7 +1068,7 @@ class SparqlTranslator:
             for vf in value_filters:
                 pred_uri = vf["predicate_uri"]
                 column = pred_to_column.get(pred_uri) or pred_to_column.get(
-                    SparqlTranslator._predicate_local_name_key(pred_uri)
+                    TripleProjectionSql.predicate_local_name_key(pred_uri)
                 )
                 if column:
                     logger.debug(
@@ -1188,9 +1099,9 @@ class SparqlTranslator:
             for filter_uri in relationship_filter:
                 if rel_uri == filter_uri:
                     return True
-                if SparqlTranslator._predicate_local_name_key(
+                if TripleProjectionSql.predicate_local_name_key(
                     rel_uri
-                ) == SparqlTranslator._predicate_local_name_key(filter_uri):
+                ) == TripleProjectionSql.predicate_local_name_key(filter_uri):
                     return True
             return False
         if filter_class_uris is not None:
@@ -1246,10 +1157,10 @@ class SparqlTranslator:
             id_column = mapping.get("id_column", "id")
             label_column = mapping.get("label_column", "")
             logger.debug("Entity URI template for %s: %s", class_uri, uri_template)
-            subject_expr = SparqlTranslator._subject_expr_from_template(
+            subject_expr = TripleProjectionSql.subject_expr_from_template(
                 uri_template, id_column, dialect=dialect
             )
-            predicates = SparqlTranslator._generic_triples_stack_predicates_for_mapping(
+            predicates = TripleProjectionSql.stack_predicates_for_mapping(
                 mapping,
                 class_uri,
                 label_column,
@@ -1337,10 +1248,10 @@ class SparqlTranslator:
             rel_from = SparqlTranslator._source_from_alias(
                 rel_sql_query, source_alias, "rel_subquery"
             )
-            subject_expr = SparqlTranslator._subject_expr_from_template(
+            subject_expr = TripleProjectionSql.subject_expr_from_template(
                 subject_template, subject_column, dialect=dialect
             )
-            object_expr = SparqlTranslator._subject_expr_from_template(
+            object_expr = TripleProjectionSql.subject_expr_from_template(
                 object_template, object_column, dialect=dialect
             )
             logger.debug("Relationship URI templates for %s:", predicate)
@@ -1400,7 +1311,7 @@ class SparqlTranslator:
         filter_local_names = None
         if filter_class_uris:
             filter_local_names = set(
-                SparqlTranslator._predicate_local_name_key(uri)
+                TripleProjectionSql.predicate_local_name_key(uri)
                 for uri in filter_class_uris
             )
             logger.debug("Filtering by class URIs: %s", filter_class_uris)
@@ -1698,7 +1609,7 @@ class SparqlTranslator:
             template = target_mapping["uri_template"]
             uri_base = template.split("{")[0]
             var_to_column[obj_var] = (
-                f"CONCAT('{uri_base}', {SparqlTranslator._cast_str(f'{rel_alias}.{object_col}', dialect)})"
+                f"CONCAT('{uri_base}', {TripleProjectionSql.cast_str(f'{rel_alias}.{object_col}', dialect)})"
             )
             logger.debug(
                 "Mapped %s to URI: CONCAT('%s', %s.%s)",
@@ -1891,7 +1802,7 @@ class SparqlTranslator:
                 template = target_mapping["uri_template"]
                 uri_base = template.split("{")[0]
                 var_to_column[obj_var] = (
-                    f"CONCAT('{uri_base}', {SparqlTranslator._cast_str(f'{rel_alias}.{object_col}', dialect)})"
+                    f"CONCAT('{uri_base}', {TripleProjectionSql.cast_str(f'{rel_alias}.{object_col}', dialect)})"
                 )
                 logger.debug(
                     "Mapped %s to URI: CONCAT('%s', %s.%s)",

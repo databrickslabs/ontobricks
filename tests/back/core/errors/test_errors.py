@@ -20,8 +20,8 @@ from back.core.errors import (
     ConflictError,
     GoneError,
     InfrastructureError,
-    ErrorResponse,
 )
+from back.core.errors.ErrorResponse import ErrorResponse
 from back.core.errors.OntoBricksError import OntoBricksError as _Base
 
 

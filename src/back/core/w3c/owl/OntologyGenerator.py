@@ -9,8 +9,7 @@ from typing import List, Dict
 
 from back.core.logging import get_logger
 from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
-from back.core.w3c.owl.iri import serialize_turtle
-from shared.config.constants import ONTOBRICKS_NS
+from back.core.w3c.owl.iri import ONTOBRICKS_NS, serialize_turtle
 
 logger = get_logger(__name__)
 

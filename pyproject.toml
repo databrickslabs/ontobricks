@@ -129,7 +129,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/back", "src/front", "src/shared", "src/agents", "src/api", "src/jobs"]
+packages = ["src/back", "src/front", "src/shared", "src/agents", "src/api"]
 
 [tool.uv]
 constraint-dependencies = [
