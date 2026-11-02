@@ -334,6 +334,16 @@
                                 changes; when the workspace or the sources do not support the mode yet, the build
                                 falls back to a full rebuild and records the reason.
                             </small>
+                            <div class="mt-2 small d-none" id="materializationReadiness" aria-live="polite">
+                                <div class="fw-semibold"><i class="bi bi-clipboard-check me-1"></i> Readiness</div>
+                                <div class="text-muted" id="materializationReadinessText"></div>
+                                <ul class="list-unstyled mb-1 d-none" id="materializationReadinessSources"></ul>
+                                <button type="button" class="btn btn-sm btn-outline-primary domain-editable d-none"
+                                        id="enableRowTrackingBtn">
+                                    <i class="bi bi-check2-circle me-1"></i> Enable row tracking
+                                </button>
+                                <div class="text-muted d-none" id="enableRowTrackingResult"></div>
+                            </div>
                         </div>
 
                         <!-- Search cache (Lakehouse + Lakebase companions) -->

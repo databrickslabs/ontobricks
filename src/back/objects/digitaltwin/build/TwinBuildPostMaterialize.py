@@ -150,22 +150,16 @@ class TwinBuildPostMaterialize:
         known, else at debug. A failed probe raises :class:`InfrastructureError`
         (the incremental phase turns it into a fallback).
         """
-        from back.core.graphdb.GraphDBFactory import GraphDBFactory
-        from back.core.graphdb.MaterializationModeResolver import (
-            MaterializationModeResolver,
-        )
         from back.core.streaming import SourceReadiness
 
-        requested = GraphDBFactory.resolve_materialization_mode(domain, settings)
-        inputs = TwinBuildPostMaterialize._resolver_inputs(domain, settings)
         tracked = False
         if source_tables is not None:
             gate = TwinBuildPostMaterialize.gate_decision(domain, settings)
             if gate.effective != "full":
                 readiness = SourceReadiness.check(client, source_tables)
                 tracked = all(readiness.values())
-        decision = MaterializationModeResolver.resolve(
-            requested, sources_row_tracked=tracked, **inputs
+        decision = TwinBuildPostMaterialize.resolve_for(
+            domain, settings, sources_row_tracked=tracked
         )
         if decision.effective != decision.requested:
             TwinBuildPostMaterialize._log_downgrade(
@@ -181,6 +175,11 @@ class TwinBuildPostMaterialize:
         only when this is not ``full``; the Lakebase sync schedule starts from it,
         so a probe that fails keeps the schedule the sources could support.
         """
+        return TwinBuildPostMaterialize.resolve_for(domain, settings, sources_row_tracked=True)
+
+    @staticmethod
+    def resolve_for(domain: Any, settings: Any, *, sources_row_tracked: bool) -> ModeDecision:
+        """The resolver's decision for the domain's requested mode and *sources_row_tracked*."""
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.MaterializationModeResolver import (
             MaterializationModeResolver,
@@ -188,7 +187,7 @@ class TwinBuildPostMaterialize:
 
         return MaterializationModeResolver.resolve(
             GraphDBFactory.resolve_materialization_mode(domain, settings),
-            sources_row_tracked=True,
+            sources_row_tracked=sources_row_tracked,
             **TwinBuildPostMaterialize._resolver_inputs(domain, settings),
         )
 

@@ -1183,15 +1183,67 @@ async def reconcile_incremental_slots(
     would hit its guardrails) as the caller: ``warehouse_id`` keeps the OBO
     token, ``for_write`` would not.
     """
-    from back.core.graphdb.delta.DeltaBase import create_databricks_client
-    from back.core.helpers import resolve_build_warehouse_id
     from back.objects.digitaltwin.build import TwinSlotReconciliation
 
     domain = get_domain(session_mgr)
-    client = create_databricks_client(
+    client = _build_warehouse_client(domain, settings)
+    result = await run_blocking(TwinSlotReconciliation.run, domain, settings, client)
+    return {"success": True, **result}
+
+
+def _build_warehouse_client(domain, settings):
+    """The domain's client on the build warehouse, as the caller (OBO token kept)."""
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
+    from back.core.helpers import resolve_build_warehouse_id
+
+    return create_databricks_client(
         domain, settings, warehouse_id=resolve_build_warehouse_id(domain, settings) or None
     )
-    result = await run_blocking(TwinSlotReconciliation.run, domain, settings, client)
+
+
+@router.get(
+    "/incremental/readiness",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def incremental_readiness(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """What the domain's materialization mode would run as, and its untracked sources."""
+    from back.objects.digitaltwin.build import TwinIncrementalReadiness
+
+    domain = get_domain(session_mgr)
+    client = _build_warehouse_client(domain, settings)
+    result = await run_blocking(TwinIncrementalReadiness.report, domain, settings, client)
+    return {"success": True, **result}
+
+
+@router.post(
+    "/incremental/enable-row-tracking",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def enable_incremental_row_tracking(
+    body: dict = Depends(cohort_json_body),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Turn row tracking on for the domain's untracked sources (or ``tables``, a subset).
+
+    Runs as the caller on the build warehouse: Unity Catalog decides who may
+    alter each table. Only the domain's own slot-pipeline sources are accepted.
+    """
+    from back.objects.digitaltwin.build import TwinIncrementalReadiness
+
+    tables = body.get("tables")
+    if tables is not None and not (
+        isinstance(tables, list) and all(isinstance(t, str) for t in tables)
+    ):
+        raise ValidationError("tables must be a list of table names")
+    domain = get_domain(session_mgr)
+    client = _build_warehouse_client(domain, settings)
+    result = await run_blocking(
+        TwinIncrementalReadiness.enable_row_tracking, domain, settings, client, tables
+    )
     return {"success": True, **result}
 
 

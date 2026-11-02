@@ -109,6 +109,21 @@ A table owner makes a source ready with `ALTER TABLE <table> SET TBLPROPERTIES
 (delta.enableRowTracking = true, delta.enableDeletionVectors = true)`. A failed probe or a failed slot pipeline / MV build
 is `incremental_failed:<ErrorClass>` and the build continues on the full path.
 
+**Readiness preflight.** `GET /dtwin/incremental/readiness` (builder role,
+`TwinIncrementalReadiness.report`) answers before a build what the requested mode
+would run as: `mode_requested`, `decision` (`effective`, `reason`, the same
+resolver a build uses), `serverless_available`, `sources` (each slot-pipeline
+source table with its `row_tracking` flag) and `previews` (the slot pipeline's
+Lakeflow channel). It runs the probe on the build warehouse as the caller; a
+probe that fails is an error, not "untracked". `POST
+/dtwin/incremental/enable-row-tracking` (builder role) runs the `ALTER TABLE`
+above on the untracked sources, or on a `tables` subset of the domain's own
+slot-pipeline sources (any other name is refused before anything runs). It runs
+as the caller, so Unity Catalog decides who may alter which table, and reports
+`{table, success[, error]}` per table. The Domain information panel shows the
+answer under the materialization mode (Readiness line, "Enable row tracking"
+button for editors when a source is untracked).
+
 After the probe, before the slot pipeline update, every source is checked against
 the Delta version the base build recorded for it (`source_versions`): a rewrite
 since then (`CREATE OR REPLACE`, `REPLACE TABLE AS SELECT`, `INSERT OVERWRITE` —

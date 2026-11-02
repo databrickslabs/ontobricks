@@ -253,6 +253,81 @@ function populateVersionDropdown(versions, currentVersion) {
     if (versionDisplay) versionDisplay.value = `v${currentVersion}`;
 }
 
+// Readiness of an incremental / microbatch domain: what the mode would run as and
+// which slot-pipeline sources lack row tracking (GET /dtwin/incremental/readiness).
+function _readinessUntracked(report) {
+    return (report.sources || []).filter(s => !s.row_tracking).map(s => s.table);
+}
+
+function renderMaterializationReadiness(report) {
+    const box = document.getElementById('materializationReadiness');
+    const text = document.getElementById('materializationReadinessText');
+    const list = document.getElementById('materializationReadinessSources');
+    const button = document.getElementById('enableRowTrackingBtn');
+    if (!box || !text || !list || !button) return;
+    const decision = report.decision || {};
+    const reason = decision.reason ? ` (${decision.reason})` : '';
+    text.textContent = `${report.mode_requested} runs as ${decision.effective}${reason}`;
+    const untracked = _readinessUntracked(report);
+    list.replaceChildren(...untracked.map(table => {
+        const item = document.createElement('li');
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-exclamation-triangle text-warning me-1';
+        item.append(icon, `${table} — row tracking off`);
+        return item;
+    }));
+    list.classList.toggle('d-none', untracked.length === 0);
+    button.classList.toggle('d-none', untracked.length === 0);
+    button.dataset.tables = JSON.stringify(untracked);
+    box.classList.remove('d-none');
+}
+
+async function loadMaterializationReadiness() {
+    const modeEl = document.getElementById('domainMaterializationMode');
+    const box = document.getElementById('materializationReadiness');
+    if (!modeEl || !box) return;
+    if ((modeEl.dataset.savedValue || modeEl.value) === 'full') {
+        box.classList.add('d-none');
+        return;
+    }
+    try {
+        const resp = await fetch('/dtwin/incremental/readiness', { credentials: 'same-origin' });
+        if (!resp.ok) return;
+        renderMaterializationReadiness(await resp.json());
+    } catch (err) {
+        console.warn('Readiness check failed', err);
+    }
+}
+
+async function enableRowTracking() {
+    const button = document.getElementById('enableRowTrackingBtn');
+    const result = document.getElementById('enableRowTrackingResult');
+    if (!button || !result) return;
+    const tables = JSON.parse(button.dataset.tables || '[]');
+    button.disabled = true;
+    try {
+        const resp = await fetch('/dtwin/incremental/enable-row-tracking', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tables }),
+        });
+        const data = await resp.json();
+        const rows = (data.tables || []);
+        const failed = rows.filter(r => !r.success);
+        result.textContent = failed.length
+            ? `Row tracking could not be enabled on ${failed.map(r => r.table).join(', ')}: ${failed[0].error || 'error'}`
+            : `Row tracking enabled on ${rows.length} table(s).`;
+        result.classList.remove('d-none');
+    } catch (err) {
+        result.textContent = 'Row tracking could not be enabled.';
+        result.classList.remove('d-none');
+    } finally {
+        button.disabled = false;
+        loadMaterializationReadiness();
+    }
+}
+
 // No-op: version selector has been replaced by a read-only label
 function enableVersionSelector() {}
 
@@ -373,6 +448,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                 refreshSearchCacheStatusLine();
             });
         }
+        const enableRowTrackingBtn = document.getElementById('enableRowTrackingBtn');
+        if (enableRowTrackingBtn) {
+            enableRowTrackingBtn.addEventListener('click', enableRowTracking);
+        }
+        loadMaterializationReadiness();
         initGraphBackendCards();
         syncNeo4jConnectionSection();
         toggleLakehouseMaterializationSection();

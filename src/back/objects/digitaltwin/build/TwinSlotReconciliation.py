@@ -6,7 +6,6 @@ from typing import Any
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.logging import get_logger
-from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 
@@ -84,21 +83,15 @@ class TwinSlotReconciliation:
         batch: an unknown mapping shape cannot be reconciled either.
         """
         from back.core.streaming import SlotProjectionCompiler
-        from back.core.w3c import sparql
-        from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+        from back.objects.digitaltwin.build.TwinIncrementalReadiness import (
+            TwinIncrementalReadiness,
+        )
 
-        r2rml = domain.get_r2rml() if hasattr(domain, "get_r2rml") else ""
-        if not r2rml:
-            return True
-        base_uri = (getattr(domain, "ontology", None) or {}).get("base_uri", DEFAULT_BASE_URI)
-        mapping_config = getattr(domain, "assignment", None)
-        ontology_config = getattr(domain, "ontology", None)
         try:
-            ent, rels = sparql.extract_r2rml_mappings(r2rml)
-            ent = DigitalTwin.augment_mappings_from_config(ent, mapping_config, base_uri, ontology_config)
-            rels = DigitalTwin.augment_relationships_from_config(
-                rels, mapping_config, base_uri, ontology_config
-            )
+            mappings = TwinIncrementalReadiness.domain_mappings(domain)
+            if mappings is None:
+                return True
+            ent, rels, base_uri = mappings
             spec = SlotProjectionCompiler.compile(ent, rels, base_uri=base_uri, slots_fqn=slots_fqn)
         except ValidationError as exc:
             logger.warning("Slot reconciliation: mappings do not compile (%s); counted as batch", exc)
