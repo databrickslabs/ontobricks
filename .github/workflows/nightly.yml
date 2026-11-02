@@ -102,6 +102,7 @@ jobs:
           # If the workspace isn't reachable or auth fails, the run is reported but no PR is gated.
           uv run pytest tests/ -m external -v --tb=short \
             --ignore=tests/external/test_mv_incremental_plan.py \
+            --ignore=tests/external/test_incremental_readiness_live.py \
             --ignore=tests/external/test_freshness_slo.py \
             || echo "external probe failed (non-blocking)"
 
@@ -116,7 +117,8 @@ jobs:
           ONTOBRICKS_EXTERNAL_SCHEMA: ${{ vars.ONTOBRICKS_INT_EXTERNAL_SCHEMA || 'main.ontobricks_it' }}
         run: |
           set +e  # the default shell is -eo pipefail: keep going to write the summary
-          uv run pytest tests/external/test_mv_incremental_plan.py -m external -v --tb=short -rs \
+          uv run pytest tests/external/test_mv_incremental_plan.py \
+            tests/external/test_incremental_readiness_live.py -m external -v --tb=short -rs \
             | tee explain-check.log
           status=${PIPESTATUS[0]}
           {

@@ -3366,3 +3366,42 @@ Modified files:
 - changelogs/v0.9.2/dermot-smyth_2026-11-02.log
 
 Test result: documentation only.
+
+================================================================================
+## Live service-level test of the readiness and status reports (external, nightly)
+================================================================================
+
+Context: the readiness and status endpoints and their cards were unit-tested
+only. `GET /dtwin/incremental/readiness` and `GET /dtwin/incremental/status`
+are thin routes over `TwinIncrementalReadiness.report` and
+`TwinIncrementalStatus.report`; a new opt-in external test runs both against
+the integration workspace's fixture tables with the real row-tracking probe,
+`information_schema` lookups, Pipelines-API lookup and `GraphReadRelation`
+decision (only the R2RML extraction is the test's fixture).
+
+Changes:
+
+1. tests/external/test_incremental_readiness_live.py (new, `external`) — five
+   tests: the fixture source reads `row_tracking = true`; the mappings are
+   classed `slot` (Customer) / `batch` (Account, reason `sql_query source`)
+   with counts (1, 1); `lakehouse_rt` facts and `read_relation = graph`
+   (no RT toggle, no `_data`); the status report's `_slots` / `_data`
+   lookups answer `absent` without error, `freshness_lag_s` None,
+   `lakebase_sync` None for a Lakehouse domain; the slot-pipeline lookup
+   answers `absent` / `unknown` for a domain without one and `last_build` is
+   reported. Run live on fevm-ontobricks-int: 5 passed (188 s); skipped (5)
+   without the external environment variables.
+2. .github/workflows/nightly.yml — the blocking EXPLAIN step also runs this
+   test; the non-blocking probe ignores it (same pattern as the EXPLAIN test).
+3. docs/incremental-materialization.md — Verification lists the test; the
+   Observability and per-mapping-class traceability rows are live at the
+   service layer (the cards themselves need a deployed app).
+
+Modified files:
+- tests/external/test_incremental_readiness_live.py
+- .github/workflows/nightly.yml
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Test result: external test 5 passed live; the full suite collects it as 5
+skipped (opt-in); see the roll-up line for the suite number.
