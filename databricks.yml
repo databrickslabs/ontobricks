@@ -144,6 +144,22 @@ variables:
     description: "Databricks Apps name for the MCP companion server"
     default: "mcp-ontobricks"
 
+  # ── Realtime triple stream (resources/triple_rtm.job.yml) ─────────
+  # The job is always deployed but inert: the app starts it per realtime
+  # domain version, and only when ONTOBRICKS_REALTIME_ENABLED is on.
+  realtime_enabled:
+    description: "Whether this deployment enables the realtime mode (tags the stream job)"
+    default: "false"
+  realtime_num_workers:
+    description: "Fixed worker count of the realtime stream job cluster"
+    default: 1
+  realtime_spark_version:
+    description: "Databricks Runtime of the stream job (an LTS with Real-Time Mode)"
+    default: "17.3.x-scala2.13"
+  realtime_node_type_id:
+    description: "Node type of the stream job cluster"
+    default: "i3.xlarge"
+
   warehouse_id:
     description: "SQL Warehouse ID for query execution"
     default: "d2096aa075ad44a3"

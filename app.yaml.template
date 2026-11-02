@@ -160,6 +160,21 @@ env:
   # name with "[dev <user>] ", which the lookup already allows for.
   - name: ONTOBRICKS_ANALYTICS_JOB_NAME
     value: ""
+  # Realtime materialization mode (resources/triple_rtm.job.yml). Off: a
+  # "realtime" domain runs as micro-batch. The job name defaults to
+  # "<app>-triple-rtm"; the Postgres role and secret ("scope/key") are what the
+  # stream job writes the Lakebase _live table as; the checkpoint root is a
+  # UC volume path.
+  - name: ONTOBRICKS_REALTIME_ENABLED
+    value: "false"
+  - name: ONTOBRICKS_REALTIME_JOB_NAME
+    value: ""
+  - name: ONTOBRICKS_REALTIME_LAKEBASE_USER
+    value: ""
+  - name: ONTOBRICKS_REALTIME_LAKEBASE_SECRET
+    value: ""
+  - name: ONTOBRICKS_REALTIME_CHECKPOINT_ROOT
+    value: ""
   # PageRank power iterations. 20 fixes the top-N ordering; raise it only
   # if you need converged absolute scores rather than a ranking.
   - name: ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS

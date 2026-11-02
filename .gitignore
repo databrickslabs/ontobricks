@@ -95,6 +95,8 @@ mlartifacts/
 /src/mcp-server/app.yaml
 # Per-INSTANCE_ID DAB target written by _ensure-instance-target.sh
 /resources/_generated_instance_target.yml
+# Rendered by scripts/_internal/_render-slot-pipelines.py at deploy time.
+/resources/_generated_triple_slots.yml
 
 # Cookie jars / curl session dumps (may contain live session + CSRF tokens)
 cookies*.txt

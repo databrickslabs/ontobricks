@@ -1,8 +1,18 @@
 # Slot pipeline template -- documentation only, intentionally NOT deployed.
 #
+# DAB deployment: ``scripts/deploy.sh`` renders the real resources from the
+# registry into ``resources/_generated_triple_slots.yml`` (gitignored, picked
+# up by ``include: resources/*.yml``) with
+# ``scripts/_internal/_render-slot-pipelines.py`` -- one pipeline per published
+# incremental / microbatch / realtime domain version, shaped like the block
+# below. The runner finds a deployed pipeline by name and only creates one
+# when it is absent; the rendered fingerprint is the one the deployed pipeline
+# already carries, and the app principal gets CAN_MANAGE. An unreachable
+# registry keeps the previous file (dropping it would delete the pipelines).
+#
 # OntoBricks creates one Lakeflow Spark Declarative Pipeline per (domain,
 # published version) at build time, through ``SlotPipelineRunner.ensure`` in
-# ``src/back/core/streaming/SlotPipelineRunner.py``. The pipeline turns the
+# ``src/back/core/streaming/SlotPipelineRunner.py``, when DAB did not. The pipeline turns the
 # row-local R2RML mappings into slot events read from the source tables'
 # change feed and folds them with ``AUTO CDC ... STORED AS SCD TYPE 1`` into
 # the ``triplestore_<domain>_V<n>_slots`` streaming table; the ``_data``

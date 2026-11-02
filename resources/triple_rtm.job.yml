@@ -1,0 +1,124 @@
+# Realtime triple stream (the ``realtime`` materialization mode): reads a
+# domain version's Kafka-compatible topic, diffs each source row's slots
+# against the ``…_slots`` snapshot (``transformWithState``) and upserts the
+# changes into the Lakebase ``g_<dom>_v<n>_live`` table the graph's union view
+# reads. Code: ``src/jobs/triple_stream/main.py`` (+ ``processor.py``).
+#
+# Started per domain version by the app (``TwinRealtimeStream.start``) through
+# ``jobs.run_now`` with ``job_parameters``; there is no schedule and no trigger,
+# so the job is inert until a ``realtime`` domain is built with
+# ``ONTOBRICKS_REALTIME_ENABLED=true``. DAB cannot include a resource
+# conditionally, so ``var.realtime_enabled`` (default false) only tags the
+# deployment; the app refuses to start a stream while its own setting is off.
+#
+# Classic compute on purpose: Real-Time Mode and ``transformWithState`` need a
+# dedicated classic cluster (no serverless, no Photon, no autoscaling, no spot
+# — a preempted worker would stall the stream), sized by ``var.realtime_num_workers``.
+# One run at a time per deployment (``max_concurrent_runs: 1``): raise it to
+# stream several domain versions at once. DAB in development mode prefixes the
+# name with ``[dev <user>] ``, which the app's lookup allows for.
+#
+# Live-unverified: Real-Time Mode, ``transformWithState``, the Kafka / Event
+# Hubs / Kinesis connectors and the Postgres sink on the configured runtime.
+
+resources:
+  jobs:
+    triple_rtm_job:
+      name: "${var.app_name}-triple-rtm"
+      description: "OntoBricks: realtime triple stream into Lakebase _live (one domain version per run)"
+
+      email_notifications:
+        on_failure:
+          - "${workspace.current_user.userName}"
+
+      max_concurrent_runs: 1
+
+      tags:
+        ontobricks_realtime_enabled: "${var.realtime_enabled}"
+
+      job_clusters:
+        - job_cluster_key: rtm
+          new_cluster:
+            spark_version: "${var.realtime_spark_version}"
+            node_type_id: "${var.realtime_node_type_id}"
+            num_workers: ${var.realtime_num_workers}
+            runtime_engine: STANDARD
+            data_security_mode: SINGLE_USER
+            aws_attributes:
+              availability: ON_DEMAND
+              first_on_demand: 1
+            spark_conf:
+              spark.databricks.streaming.realTimeMode.enabled: "true"
+
+      tasks:
+        - task_key: stream
+          job_cluster_key: rtm
+          libraries:
+            - pypi:
+                package: "psycopg[binary]>=3.1"
+          spark_python_task:
+            python_file: "${workspace.file_path}/src/jobs/triple_stream/main.py"
+            # Supplied per run by TwinRealtimeStream through ``job_parameters``.
+            parameters:
+              - "--domain"
+              - "{{job.parameters.domain}}"
+              - "--version"
+              - "{{job.parameters.version}}"
+              - "--source-kind"
+              - "{{job.parameters.source_kind}}"
+              - "--bootstrap-servers"
+              - "{{job.parameters.bootstrap_servers}}"
+              - "--topic"
+              - "{{job.parameters.topic}}"
+              - "--secret-scope"
+              - "{{job.parameters.secret_scope}}"
+              - "--secret-key"
+              - "{{job.parameters.secret_key}}"
+              - "--slots-table"
+              - "{{job.parameters.slots_table}}"
+              - "--mappings-json-path"
+              - "{{job.parameters.mappings_json_path}}"
+              - "--lakebase-host"
+              - "{{job.parameters.lakebase_host}}"
+              - "--lakebase-db"
+              - "{{job.parameters.lakebase_db}}"
+              - "--lakebase-user"
+              - "{{job.parameters.lakebase_user}}"
+              - "--lakebase-secret"
+              - "{{job.parameters.lakebase_secret}}"
+              - "--live-table"
+              - "{{job.parameters.live_table}}"
+              - "--checkpoint"
+              - "{{job.parameters.checkpoint}}"
+
+      parameters:
+        - name: domain
+          default: ""
+        - name: version
+          default: ""
+        - name: source_kind
+          default: "kafka"
+        - name: bootstrap_servers
+          default: ""
+        - name: topic
+          default: ""
+        - name: secret_scope
+          default: ""
+        - name: secret_key
+          default: ""
+        - name: slots_table
+          default: ""
+        - name: mappings_json_path
+          default: ""
+        - name: lakebase_host
+          default: ""
+        - name: lakebase_db
+          default: ""
+        - name: lakebase_user
+          default: ""
+        - name: lakebase_secret
+          default: ""
+        - name: live_table
+          default: ""
+        - name: checkpoint
+          default: ""

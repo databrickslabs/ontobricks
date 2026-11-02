@@ -279,3 +279,57 @@ class TestSlotPipelineTemplateIsNotAutoIncluded:
         assert SlotPipelineRunner.FINGERPRINT_KEY in pipeline["configuration"]
         assert pipeline["name"].startswith("ontobricks-slots-")
         assert "SlotPipelineRunner" in path.read_text()
+
+
+RTM_YML = REPO_ROOT / "resources/triple_rtm.job.yml"
+
+
+@pytest.fixture(scope="module")
+def rtm_job() -> dict:
+    return yaml.safe_load(RTM_YML.read_text())["resources"]["jobs"]["triple_rtm_job"]
+
+
+class TestTheRealtimeStreamJob:
+    def test_it_runs_the_stream_entry_point(self, rtm_job):
+        task = rtm_job["tasks"][0]
+        assert task["spark_python_task"]["python_file"] == (
+            "${workspace.file_path}/src/jobs/triple_stream/main.py"
+        )
+
+    def test_every_argument_the_job_parses_is_wired_to_a_declared_parameter(self, rtm_job):
+        from jobs.triple_stream.main import TripleStreamJob
+
+        params = rtm_job["tasks"][0]["spark_python_task"]["parameters"]
+        flags = params[0::2]
+        values = params[1::2]
+        declared = {p["name"] for p in rtm_job["parameters"]}
+        required = {
+            action.option_strings[0]
+            for action in TripleStreamJob.parser()._actions
+            if action.required
+        }
+        assert set(flags) == required
+        for flag, value in zip(flags, values, strict=True):
+            name = value.removeprefix("{{job.parameters.").removesuffix("}}")
+            assert name in declared and name == flag.removeprefix("--").replace("-", "_")
+
+    def test_it_is_started_by_the_app_only(self, rtm_job):
+        assert "schedule" not in rtm_job and "trigger" not in rtm_job
+        assert rtm_job["max_concurrent_runs"] == 1
+
+    def test_it_runs_on_a_fixed_classic_cluster_without_photon_or_spot(self, rtm_job):
+        cluster = rtm_job["job_clusters"][0]["new_cluster"]
+        assert cluster["runtime_engine"] == "STANDARD"
+        assert "autoscale" not in cluster
+        assert cluster["num_workers"] == "${var.realtime_num_workers}"
+        assert cluster["aws_attributes"]["availability"] == "ON_DEMAND"
+        assert rtm_job["tasks"][0]["job_cluster_key"] == rtm_job["job_clusters"][0]["job_cluster_key"]
+
+    def test_its_bundle_variables_are_declared_with_safe_defaults(self):
+        variables = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())["variables"]
+        for name in ("realtime_enabled", "realtime_num_workers", "realtime_spark_version", "realtime_node_type_id"):
+            assert name in variables, name
+        assert variables["realtime_enabled"]["default"] == "false"
+
+    def test_failures_mail_the_deployer_like_the_analytics_job(self, rtm_job, job):
+        assert rtm_job["email_notifications"] == job["email_notifications"]

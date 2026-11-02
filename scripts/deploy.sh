@@ -512,6 +512,26 @@ begin_step "Validate bundle"
 # gitignored generated target between the early ensure (step 0) and here.
 ensure_instance_target "$TARGET" \
     || die "failed to materialise DAB target '${TARGET}' before validate"
+# Per-(domain, version) slot pipelines of the published incremental domains,
+# rendered from the registry into resources/_generated_triple_slots.yml (also
+# gitignored, included by resources/*.yml). An unreachable registry or an
+# unknown app principal keeps the previous file: dropping it would make the
+# deploy delete every pipeline (and its _slots table) it deployed before.
+if $IS_LAKEBASE; then
+    if [[ -z "${APP_SP_CLIENT_ID:-}" ]]; then
+        APP_SP_CLIENT_ID="$(databricks apps get "$APP_NAME" -o json 2>/dev/null | python3 -c "
+import json, sys
+try:
+    print((json.load(sys.stdin).get('service_principal_client_id') or '').strip())
+except Exception:
+    print('')
+" 2>/dev/null || true)"
+    fi
+    export APP_SP_CLIENT_ID LAKEBASE_SCHEMA LAKEBASE_DATABASE REGISTRY_CATALOG REGISTRY_SCHEMA
+    PGUSER="${PGUSER:-${DATABRICKS_USERNAME:-}}" PGDATABASE="${PGDATABASE:-${LAKEBASE_DATABASE:-}}" \
+        PYTHONPATH=src uv run --frozen python scripts/_internal/_render-slot-pipelines.py \
+        || warn "slot pipeline rendering failed — the previous resources/_generated_triple_slots.yml (if any) is deployed as-is"
+fi
 databricks bundle validate -t "$TARGET" "${_dab_var_overrides[@]}" \
     || die "bundle validation failed for target '${TARGET}'. Fix the errors above (commonly a bad --var or a target not declared in databricks.yml)."
 ok "bundle valid"
