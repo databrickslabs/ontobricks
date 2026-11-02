@@ -4,11 +4,13 @@ Extracted from :class:`TwinBuildPostMaterialize` (Fowler Extract Class), in the
 same style: static methods that take the running pipeline (*pipe*).
 :meth:`TwinBuildRunHistory.build_run_stats` is what ``_record_build_run``
 persists under ``build_runs.stats``; :meth:`previous_materialization_stats`
-reads those facts back for the net change apply and the MERGE fingerprint skip.
+reads those facts back for the net change apply and the MERGE fingerprint skip;
+:meth:`persist_last_build_to_registry` stamps the registry's ``last_build``.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from back.core.graphdb.ModeDecision import ModeDecision
@@ -30,7 +32,7 @@ _PREVIOUS_RUNS_LIMIT = 50
 
 
 class TwinBuildRunHistory:
-    """Build-run trace keys and stats, and the base run of the next build."""
+    """The registry side of a build: its run trace, ``last_build``, and the next build's base."""
 
     @staticmethod
     def build_run_stats(pipe: Any) -> dict:
@@ -156,6 +158,69 @@ class TwinBuildRunHistory:
             if same_graph and facts.get("apply_mode") in accepted:
                 return dict(facts)
         return {}
+
+    @staticmethod
+    def persist_last_build_to_registry(pipe: Any) -> None:
+        """Stamp ``last_build`` on the registry row without rewriting JSONB.
+
+        The session/UI build path stamps domain.last_build before the build
+        thread starts; the API path does not. The timestamp must reach the
+        ``domain_versions.last_build`` column so ReviewService.submit() can
+        unblock the Submit-for-Review gate.
+
+        A full ``write_version`` here is unsafe: the worker's live session
+        can have empty ``ontology.classes`` (request-scoped DomainSession
+        after Generate/complete, or a snapshot that only carried mappings).
+        Rewriting the document would wipe a previously saved ontology while
+        keeping mappings — SHACL suggest then returns nothing.
+
+        Best-effort: a failure is logged but never propagates.
+        """
+        try:
+            from back.objects.registry.RegistryService import RegistryService
+
+            folder, version = TwinBuildRunHistory.build_run_key(pipe)
+            if not folder or not version:
+                logger.warning(
+                    "[DT-BUILD %s] _persist_last_build_to_registry: "
+                    "cannot resolve folder=%r version=%r — skipping",
+                    pipe.task_id,
+                    folder,
+                    version,
+                )
+                return
+
+            # API build path never stamps last_build before starting; do it now.
+            if not getattr(pipe.domain, "last_build", None):
+                pipe.domain.last_build = datetime.now(timezone.utc).isoformat()
+
+            svc = RegistryService.from_context(pipe.domain, pipe.settings)
+            ok, msg = svc._store.stamp_last_build(
+                folder, str(version), pipe.domain.last_build
+            )
+            if ok:
+                logger.info(
+                    "[DT-BUILD %s] stamped last_build=%s in registry "
+                    "(folder=%s version=%s)",
+                    pipe.task_id,
+                    pipe.domain.last_build,
+                    folder,
+                    version,
+                )
+            else:
+                logger.error(
+                    "[DT-BUILD %s] stamp_last_build failed when persisting "
+                    "last_build: %s",
+                    pipe.task_id,
+                    msg,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[DT-BUILD %s] could not persist last_build to registry "
+                "(non-fatal — Submit for Review gate may remain blocked): %s",
+                pipe.task_id,
+                exc,
+            )
 
     @staticmethod
     def completion_summary(pipe: Any) -> tuple[str, str]:

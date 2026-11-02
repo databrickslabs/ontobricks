@@ -27,7 +27,7 @@ import pytest
 
 from back.core.graphdb import ModeDecision
 from back.core.graphdb.delta import materialize
-from back.objects.digitaltwin.build import TwinBuildPostMaterialize
+from back.objects.digitaltwin.build import TwinBuildPostMaterialize, TwinBuildRunHistory
 from tests.units.dtwin import test_build_pipeline_streaming as _streaming
 from tests.units.objects.test_build_pipeline_materialize import (
     _DATA,
@@ -595,7 +595,7 @@ class TestPersistLastBuildHook:
         pipe = _bare_pipeline()
 
         with patch.object(
-            TwinBuildPostMaterialize, "persist_last_build_to_registry"
+            TwinBuildRunHistory, "persist_last_build_to_registry"
         ) as persist:
             pipe._persist_last_build_to_registry()
 

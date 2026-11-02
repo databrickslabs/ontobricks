@@ -1566,7 +1566,7 @@ class _BuildPipeline:
 
     def _persist_last_build_to_registry(self) -> None:
         """Stamp ``last_build`` on the registry row (see the collaborator)."""
-        TwinBuildPostMaterialize.persist_last_build_to_registry(self)
+        TwinBuildRunHistory.persist_last_build_to_registry(self)
 
     def _complete_task(self, *, message: str = "", build_mode: str = "") -> None:
         """Complete the task and record the run; the defaults come from the run's facts."""
