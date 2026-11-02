@@ -1230,3 +1230,90 @@ test_class_per_file); full suite
 uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
 -> 10770 passed, 339 skipped, 9 deselected in 57.28s (slowest test 1.06s);
 architecture suite green; tests/units/architecture/baseline.json unchanged.
+
+================================================================================
+## Phase 3 (realtime): SlotRowProjector, SlotDiffProcessor, transformWithState adapter
+================================================================================
+
+Context: Phase 3 (`realtime`), processing part (Implementer B): the pure core
+of the Real-Time-Mode Spark Structured Streaming path. Kafka / Event Hubs
+change events become per-row slot diffs that the job writes to the Lakebase
+`_live` table. The design's P2 requirements: a row-based `transformWithState`
+processor with initial state from `…_slots`, tombstones for vanished slots, a
+`seq` ordering guard and TTL eviction. The job entry point, the sink and the
+`_live` DDL are Implementer A's.
+
+Changes:
+
+1. src/back/core/streaming/SlotChange.py (new)
+   Frozen record of one slot upsert or tombstone (`map_id, source_key,
+   predicate, subject, object, object_hash, deleted, seq`); `upsert()` hashes
+   the object with SHA-256 hex (equal to Spark's `sha2(object, 256)`),
+   `tombstone()` carries no subject / object / hash, `as_row()` keeps the
+   output field order.
+2. src/back/core/streaming/SlotRowProjector.py (new)
+   Pure-Python projection of one row-local mapping, built from the same
+   mapping dict as `SlotProjectionCompiler`: `source_key()` (`CAST` /
+   `concat_ws('|', ...)`; `None` when a key column is NULL, the row is
+   ignored), `subject()` (template prefix + `TRY_CAST(id AS STRING)`),
+   `slots()` (`rdf:type` literal, label and attribute objects as
+   `COALESCE(TRY_CAST(... AS STRING), '')`), Spark-style stringification
+   (booleans `true` / `false`); `for_mappings()` gives one projector per
+   mapping the compiler compiles (relationships and other batch mappings
+   excluded, one per class of a shared TriplesMap).
+3. src/back/core/streaming/SlotProjectionCompiler.py
+   New pure projection facts the projector reads instead of re-implementing
+   them: `row_local_mappings()`, `slot_sources()` (`(predicate, literal,
+   column)` per `stack()` pair), `subject_parts()`; `_key_columns` is now the
+   public `key_columns`; `compile()` shares its candidate enumeration
+   (`_candidates`) with `row_local_mappings()`.
+4. src/back/core/streaming/SlotDiffProcessor.py (new)
+   Stateful diff per `(map_id, source_key)`: `initial_state()` from `_slots`
+   rows (blank objects are not slots; a row without `seq` counts as older
+   than any event), `apply()` for `upsert` / `delete`: changed or new slots
+   are upserts, vanished or blank (`None` or only spaces, the `TRIM(object)
+   != ''` rule) slots tombstones, sorted by predicate; a `seq` not above the
+   state's highest is a no-op. Removed slots stay in the state as
+   `(None, None, seq)`, a watermark that stops a late event from
+   resurrecting a deleted row.
+5. src/jobs/triple_stream/__init__.py, src/jobs/triple_stream/processor.py (new)
+   `SlotDiffStatefulProcessor` (`StatefulProcessor` for `transformWithState`):
+   `init()` declares the `MapState` predicate -> (subject, object, seq) with
+   the caller's `state_ttl_ms` (`ttlDurationMs`), `handleInitialState()` seeds
+   it from `_slots` snapshot rows (a Row, rows or a pandas frame),
+   `handleInputRows()` decodes the envelope rows (`ENVELOPE_FIELDS`) in seq
+   order, applies the diff, writes back only the changed state entries and
+   yields one `OUTPUT_SCHEMA` row per `SlotChange`. pyspark is imported in a
+   guarded block; without it the module imports and the schemas are DDL
+   strings.
+6. src/back/core/streaming/__init__.py
+   Re-exports `SlotChange`, `SlotDiffProcessor`, `SlotRowProjector`.
+7. Tests: tests/units/streaming/test_slot_row_projector.py (rules, plus a
+   property test evaluating the compiled slot-event SQL on random mappings
+   and rows), tests/units/streaming/test_slot_diff_processor.py,
+   tests/property/test_slot_diff_property.py (AUTO CDC fold == streamed fold
+   == the final rows' non-blank slots, with late / replayed events and a
+   start from a `_slots` snapshot), tests/units/jobs/
+   test_triple_stream_processor.py (fake handle and MapState, no pyspark).
+
+Modified files:
+- src/back/core/streaming/SlotChange.py (new)
+- src/back/core/streaming/SlotDiffProcessor.py (new)
+- src/back/core/streaming/SlotProjectionCompiler.py
+- src/back/core/streaming/SlotRowProjector.py (new)
+- src/back/core/streaming/__init__.py
+- src/jobs/triple_stream/__init__.py (new)
+- src/jobs/triple_stream/processor.py (new)
+- tests/property/test_slot_diff_property.py (new)
+- tests/units/jobs/test_triple_stream_processor.py (new)
+- tests/units/streaming/test_slot_diff_processor.py (new)
+- tests/units/streaming/test_slot_row_projector.py (new)
+- changelogs/v0.9.2/dermot-smyth_2026-11-02.log
+
+Tests: uv run --frozen pytest -q --durations=5 tests/units/streaming tests/units/jobs tests/property tests/units/architecture
+-> 278 passed in 6.24s (slowest 0.98s, test_class_per_file; every new test
+under 0.5s); full suite
+uv run --frozen pytest -q -m "not scenario" --deselect tests/units/api/test_routes.py::TestHealthRoutes::test_readiness_route_returns_checks
+-> 10867 passed, 339 skipped, 9 deselected, 1 failed: tests/units/front/
+test_materialization_mode_ui.py (Implementer A's in-progress realtime picker
+change, not in these files); tests/units/architecture/baseline.json unchanged.
