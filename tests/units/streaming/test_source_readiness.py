@@ -106,6 +106,11 @@ class TestSourceOverwrittenSince:
         [
             "CREATE OR REPLACE TABLE AS SELECT",
             "REPLACE TABLE AS SELECT",
+            "CREATE OR REPLACE TABLE",
+            "REPLACE TABLE",
+            "CLONE",
+            "SHALLOW CLONE",
+            "DEEP CLONE",
             "TRUNCATE",
             "RESTORE",
         ],
@@ -148,12 +153,51 @@ class TestSourceOverwrittenSince:
 
         assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is True
 
-    def test_the_history_is_read_from_the_table(self):
+    def test_a_complete_mode_streaming_update_counts(self):
+        client = _Client(history=_history((6, "STREAMING UPDATE", {"outputMode": "Complete"})))
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is True
+
+    def test_an_append_mode_streaming_update_does_not_count(self):
+        client = _Client(history=_history((6, "STREAMING UPDATE", {"outputMode": "Append"})))
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5) is False
+
+    def test_the_history_read_is_bounded_by_the_versions_since(self):
+        client = _Client()
+
+        SourceReadiness.source_overwritten_since(client, _SRC, 5, latest_version=9)
+
+        assert client.calls == [f"DESCRIBE HISTORY {_SRC} LIMIT 4"]
+
+    def test_without_the_latest_version_the_history_read_is_capped(self):
         client = _Client()
 
         SourceReadiness.source_overwritten_since(client, _SRC, 0)
 
-        assert client.calls == [f"DESCRIBE HISTORY {_SRC}"]
+        assert client.calls == [f"DESCRIBE HISTORY {_SRC} LIMIT 10000"]
+
+    def test_no_new_version_reads_nothing(self):
+        client = _Client()
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5, latest_version=5) is False
+        assert client.calls == []
+
+    def test_a_history_that_restarted_below_the_version_is_a_rewrite(self):
+        """``DROP TABLE`` + ``CREATE TABLE`` starts the history again at version 0."""
+        client = _Client()
+
+        assert SourceReadiness.source_overwritten_since(client, _SRC, 5, latest_version=2) is True
+        assert client.calls == []
+
+    def test_a_window_beyond_the_cap_counts_as_a_rewrite(self):
+        client = _Client()
+
+        assert (
+            SourceReadiness.source_overwritten_since(client, _SRC, 0, latest_version=20000)
+            is True
+        )
+        assert client.calls == []
 
     def test_a_failed_history_read_is_an_infrastructure_error(self):
         with pytest.raises(InfrastructureError, match="history"):

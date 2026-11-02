@@ -18,10 +18,18 @@ _REWRITING_OPERATIONS = frozenset(
     {
         "CREATE OR REPLACE TABLE AS SELECT",
         "REPLACE TABLE AS SELECT",
+        "CREATE OR REPLACE TABLE",
+        "REPLACE TABLE",
+        "CLONE",
+        "SHALLOW CLONE",
+        "DEEP CLONE",
         "TRUNCATE",
         "RESTORE",
     }
 )
+
+#: Most history rows read per check; a longer window counts as a rewrite.
+_HISTORY_CAP = 10000
 
 
 class SourceReadiness:
@@ -74,29 +82,57 @@ class SourceReadiness:
         )
 
     @staticmethod
-    def source_overwritten_since(client: Any, table_fqn: str, since_version: int) -> bool:
+    def source_overwritten_since(
+        client: Any, table_fqn: str, since_version: int, latest_version: int | None = None
+    ) -> bool:
         """True when *table_fqn* was rewritten after Delta version *since_version*.
 
-        A ``DESCRIBE HISTORY`` row counts when its ``version`` is greater than
-        *since_version* and its ``operation`` replaces the data wholesale: one
-        of the rewriting operations, or a ``WRITE`` whose ``mode`` parameter
-        is ``Overwrite``.
+        *latest_version* (the table's newest version, read before) bounds the
+        ``DESCRIBE HISTORY`` read to the versions since; a newest version below
+        *since_version* means the history restarted (``DROP`` + ``CREATE``), a
+        rewrite. A row counts when its ``version`` is greater than
+        *since_version* and its ``operation`` replaces the data wholesale: a
+        rewriting operation (``REPLACE``, ``CLONE``, ``TRUNCATE``, ``RESTORE``),
+        a ``WRITE`` in ``Overwrite`` mode or a ``Complete``-mode streaming
+        update. More versions than :data:`_HISTORY_CAP` count as a rewrite too
+        (the check could not see them all).
         """
         SourceReadiness._require_fqn(table_fqn)
+        since = int(since_version)
+        if latest_version is not None and int(latest_version) <= since:
+            return int(latest_version) < since
+        window = _HISTORY_CAP if latest_version is None else int(latest_version) - since
+        if window > _HISTORY_CAP:
+            logger.info(
+                "%s has %d versions since %d (more than %d): counted as rewritten",
+                table_fqn,
+                window,
+                since,
+                _HISTORY_CAP,
+            )
+            return True
         rows = WarehouseStatements.query(
-            client, f"DESCRIBE HISTORY {table_fqn}", f"read the history of {table_fqn}"
+            client,
+            f"DESCRIBE HISTORY {table_fqn} LIMIT {window}",
+            f"read the history of {table_fqn}",
         )
-        for row in rows:
-            if not isinstance(row, Mapping):
-                continue
-            if int(row.get("version") or 0) <= int(since_version):
-                continue
-            operation = str(row.get("operation") or "").upper()
-            if operation in _REWRITING_OPERATIONS:
-                return True
-            params = SourceReadiness._params(row.get("operationParameters"))
-            if operation == "WRITE" and str(params.get("mode", "")).lower() == "overwrite":
-                return True
+        return any(
+            SourceReadiness._rewrites(row)
+            for row in rows
+            if isinstance(row, Mapping) and int(row.get("version") or 0) > since
+        )
+
+    @staticmethod
+    def _rewrites(row: Mapping) -> bool:
+        """True for a ``DESCRIBE HISTORY`` row whose operation replaced the data wholesale."""
+        operation = str(row.get("operation") or "").upper()
+        if operation in _REWRITING_OPERATIONS:
+            return True
+        params = SourceReadiness._params(row.get("operationParameters"))
+        if operation == "WRITE":
+            return str(params.get("mode", "")).lower() == "overwrite"
+        if operation == "STREAMING UPDATE":
+            return str(params.get("outputMode", "")).lower() == "complete"
         return False
 
     # ------------------------------------------------------------------

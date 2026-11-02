@@ -420,7 +420,7 @@ class _CDFWarehouse(_modes._Warehouse):
         if sql.startswith("DESCRIBE DETAIL"):
             self._record(sql)
             return [{"id": self._table_id}] if self._table_id else []
-        if sql.startswith("DESCRIBE HISTORY") and _DATA not in sql and "LIMIT 1" not in sql:
+        if sql.startswith("DESCRIBE HISTORY") and _DATA not in sql and not sql.endswith(" LIMIT 1"):
             self._record(sql)
             return self._source_history
         if sql.startswith("DESCRIBE HISTORY"):
@@ -874,7 +874,7 @@ class TestSourceOverwriteDetection:
 
         assert starts == [("start", "pipe-1", False)]
         assert not any(
-            s.startswith(f"DESCRIBE HISTORY {self._SOURCE}") and "LIMIT 1" not in s
+            s.startswith(f"DESCRIBE HISTORY {self._SOURCE}") and not s.endswith(" LIMIT 1")
             for s in warehouse.calls
         )
 
