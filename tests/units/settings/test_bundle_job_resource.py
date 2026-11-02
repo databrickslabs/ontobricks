@@ -303,12 +303,10 @@ class TestTheRealtimeStreamJob:
         flags = params[0::2]
         values = params[1::2]
         declared = {p["name"] for p in rtm_job["parameters"]}
-        required = {
-            action.option_strings[0]
-            for action in TripleStreamJob.parser()._actions
-            if action.required
-        }
-        assert set(flags) == required
+        actions = [a for a in TripleStreamJob.parser()._actions if a.option_strings[0] != "-h"]
+        required = {a.option_strings[0] for a in actions if a.required}
+        assert required <= set(flags) <= {a.option_strings[0] for a in actions}
+        assert "--state-ttl-hours" in flags
         for flag, value in zip(flags, values, strict=True):
             name = value.removeprefix("{{job.parameters.").removesuffix("}}")
             assert name in declared and name == flag.removeprefix("--").replace("-", "_")
@@ -317,19 +315,53 @@ class TestTheRealtimeStreamJob:
         assert "schedule" not in rtm_job and "trigger" not in rtm_job
         assert rtm_job["max_concurrent_runs"] == 1
 
-    def test_it_runs_on_a_fixed_classic_cluster_without_photon_or_spot(self, rtm_job):
+    def test_it_runs_on_a_fixed_classic_cluster_without_photon(self, rtm_job):
         cluster = rtm_job["job_clusters"][0]["new_cluster"]
         assert cluster["runtime_engine"] == "STANDARD"
         assert "autoscale" not in cluster
         assert cluster["num_workers"] == "${var.realtime_num_workers}"
-        assert cluster["aws_attributes"]["availability"] == "ON_DEMAND"
         assert rtm_job["tasks"][0]["job_cluster_key"] == rtm_job["job_clusters"][0]["job_cluster_key"]
+
+    def test_the_job_itself_is_cloud_neutral(self, rtm_job):
+        cluster = rtm_job["job_clusters"][0]["new_cluster"]
+        assert not [key for key in cluster if key.endswith("_attributes")]
+        assert cluster["node_type_id"] == "${var.realtime_node_type_id}"
+        variables = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())["variables"]
+        assert variables["realtime_node_type_id"]["default"] == ""
+
+    @pytest.mark.parametrize("target", ["dev", "dev-lakebase"])
+    def test_the_aws_targets_pin_an_on_demand_node_type(self, target):
+        config = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())["targets"][target]
+        assert config["variables"]["realtime_node_type_id"] == "i3.xlarge"
+        [cluster] = config["resources"]["jobs"]["triple_rtm_job"]["job_clusters"]
+        assert cluster["job_cluster_key"] == "rtm"
+        assert cluster["new_cluster"]["aws_attributes"]["availability"] == "ON_DEMAND"
+
+    def test_the_generated_instance_target_is_aws_too(self):
+        script = (REPO_ROOT / "scripts/_internal/_ensure-instance-target.sh").read_text()
+        assert "realtime_node_type_id: i3.xlarge" in script
+        assert "triple_rtm_job" in script and "availability: ON_DEMAND" in script
 
     def test_its_bundle_variables_are_declared_with_safe_defaults(self):
         variables = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())["variables"]
-        for name in ("realtime_enabled", "realtime_num_workers", "realtime_spark_version", "realtime_node_type_id"):
+        for name in (
+            "realtime_enabled",
+            "realtime_num_workers",
+            "realtime_shuffle_partitions",
+            "realtime_spark_version",
+            "realtime_node_type_id",
+        ):
             assert name in variables, name
         assert variables["realtime_enabled"]["default"] == "false"
+
+    def test_the_default_size_covers_its_shuffle_and_a_small_topic(self):
+        variables = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())["variables"]
+        slots = int(variables["realtime_num_workers"]["default"]) * 4  # i3.xlarge: 4 cores
+        assert slots >= 4 + int(variables["realtime_shuffle_partitions"]["default"])
+
+    def test_a_failed_run_retries_before_live_is_retired(self, rtm_job):
+        task = rtm_job["tasks"][0]
+        assert task["max_retries"] == 3 and task["min_retry_interval_millis"] == 60000
 
     def test_failures_mail_the_deployer_like_the_analytics_job(self, rtm_job, job):
         assert rtm_job["email_notifications"] == job["email_notifications"]
@@ -353,3 +385,24 @@ class TestTheRealtimeJobEnvironment:
     def test_the_session_time_zone_is_utc(self, rtm_job):
         conf = rtm_job["job_clusters"][0]["new_cluster"]["spark_conf"]
         assert conf["spark.sql.session.timeZone"] == "UTC"
+
+    def test_real_time_mode_gets_few_shuffle_partitions_and_small_arrow_batches(self, rtm_job):
+        conf = rtm_job["job_clusters"][0]["new_cluster"]["spark_conf"]
+        assert conf["spark.sql.shuffle.partitions"] == "${var.realtime_shuffle_partitions}"
+        assert conf["spark.sql.execution.arrow.maxRecordsPerBatch"] == "100"
+
+    def test_the_state_ttl_defaults_to_three_days(self, rtm_job):
+        declared = {p["name"]: p["default"] for p in rtm_job["parameters"]}
+        assert declared["state_ttl_hours"] == "72"
+
+    def test_deploy_resolves_the_newest_19_runtime(self):
+        deploy = (REPO_ROOT / "scripts/deploy.sh").read_text()
+        assert "databricks clusters spark-versions -o json" in deploy
+        assert "_select-spark-version.py" in deploy
+        assert "--var=realtime_spark_version=" in deploy
+        assert deploy.index("--var=realtime_spark_version=") < deploy.index('databricks bundle validate -t "$TARGET"')
+
+    def test_bootstrap_grants_can_manage_run_on_the_stream_job(self):
+        script = (REPO_ROOT / "scripts/bootstrap/app-permissions.sh").read_text()
+        assert '_grant_job_run "${_MAIN_APP}-triple-rtm"' in script
+        assert '_grant_job_run "${_MAIN_APP}-graph-analytics"' in script

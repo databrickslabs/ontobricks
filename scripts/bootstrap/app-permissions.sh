@@ -219,21 +219,26 @@ else
     echo "  [warehouse] SKIP — no sql-warehouse binding on '${_WH_APP:-<none>}'"
 fi
 
-# ── Graph analytics job CAN_MANAGE_RUN for both SPs ──────────────────────────
-# The app triggers the serverless analytics job with ``jobs.run_now`` and
-# resolves it by listing jobs (LakeflowRunner.resolve_job_id). ``jobs.list()``
-# is ACL-filtered, so without an explicit grant the app's service principal
-# sees no job at all and the UI reports the misleading "job was not found —
-# deploy the bundle" error even though the bundle deployed it correctly.
-# DAB cannot declare this grant: the app service principal only exists after
-# the app is created, so it is applied here, post-deploy, like the ACLs above.
+# ── App jobs CAN_MANAGE_RUN for both SPs ─────────────────────────────────────
+# The app triggers its bundle jobs with ``jobs.run_now`` and resolves them by
+# listing jobs (LakeflowRunner.resolve_job_id, TwinRealtimeJob.resolve_job_id):
+# the serverless graph analytics job and the realtime triple stream job.
+# ``jobs.list()`` is ACL-filtered, so without an explicit grant the app's
+# service principal sees no job at all and the UI reports the misleading "job
+# was not found — deploy the bundle" error even though the bundle deployed it
+# correctly. DAB cannot declare this grant: the app service principal only
+# exists after the app is created, so it is applied here, post-deploy, like
+# the ACLs above.
 #
 # Use the main app that was actually bootstrapped (positional arg / FIRST_APP),
 # not the env default — ``./app-permissions.sh ontobricks-07x …`` must grant
 # on ``ontobricks-07x-graph-analytics``, not the hard-coded sandbox default.
 _MAIN_APP="${FIRST_APP:-${APP_FOR_CAN_USE:-${APP_NAME}}}"
-_JOB_NAME="${_MAIN_APP}-graph-analytics"
-_JOB_ID="$(databricks jobs list -o json 2>/dev/null | python3 -c "
+
+# _grant_job_run <job name> <label>: CAN_MANAGE_RUN on the job for both SPs.
+_grant_job_run() {
+    local job_name="$1" label="$2" job_id sp_count=0
+    job_id="$(databricks jobs list -o json 2>/dev/null | python3 -c "
 import sys, json
 name = sys.argv[1]
 try:
@@ -252,33 +257,37 @@ for job in rows:
 match = exact or suffixed
 if match:
     print(match[0].get('job_id', ''))
-" "$_JOB_NAME" 2>/dev/null || true)"
+" "$job_name" 2>/dev/null || true)"
 
-if [[ -n "$_JOB_ID" ]]; then
+    if [[ -z "$job_id" ]]; then
+        echo "  [${label}] SKIP — '${job_name}' not found (deploy the bundle first)"
+        return 0
+    fi
     echo
-    echo "=== Graph analytics job CAN_MANAGE_RUN: ${_JOB_NAME} (${_JOB_ID}) ==="
-    _JOB_SP_COUNT=0
+    echo "=== ${label} CAN_MANAGE_RUN: ${job_name} (${job_id}) ==="
     for sp in "${APP_SP_ID:-}" "${MCP_SP_ID:-}"; do
         [[ -z "$sp" ]] && continue
-        _JOB_SP_COUNT=$((_JOB_SP_COUNT + 1))
-        if databricks permissions update jobs "$_JOB_ID" \
+        sp_count=$((sp_count + 1))
+        if databricks permissions update jobs "$job_id" \
             --json "{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_MANAGE_RUN\"}]}" \
             >/dev/null 2>&1; then
-            echo "  ✓ CAN_MANAGE_RUN on ${_JOB_NAME} → $sp"
+            echo "  ✓ CAN_MANAGE_RUN on ${job_name} → $sp"
         else
             echo "  ✗ job grant failed for $sp — run manually:"
-            echo "    databricks permissions update jobs ${_JOB_ID} \\"
+            echo "    databricks permissions update jobs ${job_id} \\"
             echo "      --json '{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_MANAGE_RUN\"}]}'"
             FAILED=$((FAILED + 1))
         fi
     done
-    if [[ $_JOB_SP_COUNT -eq 0 ]]; then
-        echo "  ✗ no app service principals resolved — cannot grant CAN_MANAGE_RUN on ${_JOB_NAME}"
+    if [[ $sp_count -eq 0 ]]; then
+        echo "  ✗ no app service principals resolved — cannot grant CAN_MANAGE_RUN on ${job_name}"
         FAILED=$((FAILED + 1))
     fi
-else
-    echo "  [analytics job] SKIP — '${_JOB_NAME}' not found (deploy the bundle first)"
-fi
+}
+
+_grant_job_run "${_MAIN_APP}-graph-analytics" "Graph analytics job"
+# The realtime stream job is deployed inert; the app starts and cancels its runs.
+_grant_job_run "${_MAIN_APP}-triple-rtm" "Realtime stream job"
 
 # ── UC schema ALL_PRIVILEGES for both SPs ────────────────────────────────────
 # The SP must be able to CREATE OR REPLACE views/tables in the registry schema

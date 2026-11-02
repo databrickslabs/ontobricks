@@ -512,6 +512,20 @@ begin_step "Validate bundle"
 # gitignored generated target between the early ensure (step 0) and here.
 ensure_instance_target "$TARGET" \
     || die "failed to materialise DAB target '${TARGET}' before validate"
+# Runtime of the realtime stream job: the workspace's newest DBR 19 (LTS
+# first), unless REALTIME_SPARK_VERSION pins one. A failed lookup keeps the
+# bundle default (databricks.yml ``realtime_spark_version``).
+if [[ -z "${REALTIME_SPARK_VERSION:-}" ]]; then
+    REALTIME_SPARK_VERSION="$(databricks clusters spark-versions -o json 2>/dev/null \
+        | python3 scripts/_internal/_select-spark-version.py 2>/dev/null || true)"
+fi
+if [[ -n "${REALTIME_SPARK_VERSION:-}" ]]; then
+    _dab_var_overrides+=("--var=realtime_spark_version=${REALTIME_SPARK_VERSION}")
+    info "realtime stream runtime: ${REALTIME_SPARK_VERSION}"
+else
+    warn "no DBR 19 runtime listed — the realtime stream job keeps the bundle default runtime"
+fi
+
 # Per-(domain, version) slot pipelines of the published incremental domains,
 # rendered from the registry into resources/_generated_triple_slots.yml (also
 # gitignored, included by resources/*.yml). An unreachable registry or an

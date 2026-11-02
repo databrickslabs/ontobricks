@@ -13,13 +13,38 @@
 #
 # Classic compute on purpose: Real-Time Mode and ``transformWithState`` need a
 # dedicated classic cluster (no serverless, no Photon, no autoscaling, no spot
-# — a preempted worker would stall the stream), sized by ``var.realtime_num_workers``.
-# One run at a time per deployment (``max_concurrent_runs: 1``): raise it to
-# stream several domain versions at once. DAB in development mode prefixes the
-# name with ``[dev <user>] ``, which the app's lookup allows for.
+# — a preempted worker would stall the stream). Real-Time Mode schedules every
+# stage at once, so the workers' task slots (``var.realtime_num_workers`` × the
+# node type's cores) must cover the topic's partitions plus
+# ``var.realtime_shuffle_partitions`` (the stream's one shuffle, the
+# ``transformWithState`` grouping); the defaults (2 × 4 cores, 4 shuffle
+# partitions) fit a topic of up to 4 partitions.
 #
-# Live-unverified: Real-Time Mode, ``transformWithState``, the Kafka / Event
-# Hubs / Kinesis connectors and the Postgres sink on the configured runtime.
+# The job is cloud-neutral: ``var.realtime_node_type_id`` has no default and the
+# cloud's on-demand attributes come from the target (``dev`` / ``dev-lakebase``
+# and the generated ``dev-lakebase-<id>`` targets are AWS: ``i3.xlarge``,
+# ``aws_attributes.availability: ON_DEMAND``); an Azure or GCP target sets its
+# own node type (and ``azure_attributes`` / ``gcp_attributes``).
+#
+# The run-as identity is the deployer (the job owner). It needs READ on the
+# domain's secret scope (source credentials, the Lakebase password), SELECT on
+# the domain's ``…_slots`` table and READ VOLUME + WRITE VOLUME on the
+# checkpoint volume (``ONTOBRICKS_REALTIME_CHECKPOINT_ROOT``), where the app
+# also uploads each run's mappings (``_mappings/<run>.json``; the app principal
+# needs WRITE VOLUME there and CAN_MANAGE_RUN on this job —
+# ``scripts/bootstrap/app-permissions.sh``).
+#
+# One run at a time per deployment (``max_concurrent_runs: 1``): raise it to
+# stream several domain versions at once. A failed run retries three times a
+# minute apart; the run stays active meanwhile, so the scheduled tick does not
+# retire ``_live``; past the retries it does, and readers fall back to the
+# microbatch graph. DAB in development mode prefixes the name with
+# ``[dev <user>] ``, which the app's lookup allows for.
+#
+# Live-unverified: Real-Time Mode (update mode, slot sizing),
+# ``transformWithState``, the Kafka / Event Hubs / Kinesis connectors, the
+# Postgres sink and the executors importing the synced source on the
+# configured runtime.
 
 resources:
   jobs:
@@ -44,19 +69,25 @@ resources:
             num_workers: ${var.realtime_num_workers}
             runtime_engine: STANDARD
             data_security_mode: SINGLE_USER
-            aws_attributes:
-              availability: ON_DEMAND
-              first_on_demand: 1
             spark_env_vars:
               PYTHONPATH: "${workspace.file_path}/src"
             spark_conf:
               spark.databricks.streaming.realTimeMode.enabled: "true"
+              # Few shuffle partitions: each one holds a task slot for the whole run.
+              spark.sql.shuffle.partitions: "${var.realtime_shuffle_partitions}"
+              # Small Arrow batches to the Python state processor: a record waits
+              # less for its batch to fill (1 is the lowest latency, at a
+              # throughput cost).
+              spark.sql.execution.arrow.maxRecordsPerBatch: "100"
               # SparkColumnText prints timestamps in UTC, as the slot SQL reads them here.
               spark.sql.session.timeZone: "UTC"
 
       tasks:
         - task_key: stream
           job_cluster_key: rtm
+          max_retries: 3
+          min_retry_interval_millis: 60000
+          retry_on_timeout: false
           # No app wheel: the driver and the executors import ``back.core.streaming``
           # and ``jobs.triple_stream`` from the synced workspace files of the same
           # deploy (``PYTHONPATH`` on the cluster). That closure needs no app layer,
@@ -102,6 +133,8 @@ resources:
               - "{{job.parameters.live_table}}"
               - "--checkpoint"
               - "{{job.parameters.checkpoint}}"
+              - "--state-ttl-hours"
+              - "{{job.parameters.state_ttl_hours}}"
 
       parameters:
         - name: domain
@@ -134,3 +167,5 @@ resources:
           default: ""
         - name: checkpoint
           default: ""
+        - name: state_ttl_hours
+          default: "72"

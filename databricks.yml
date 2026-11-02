@@ -150,15 +150,27 @@ variables:
   realtime_enabled:
     description: "Whether this deployment enables the realtime mode (tags the stream job)"
     default: "false"
+  # Real-Time Mode runs every stage at once: workers × cores per worker must
+  # cover the topic's partitions + realtime_shuffle_partitions.
   realtime_num_workers:
-    description: "Fixed worker count of the realtime stream job cluster"
-    default: 1
+    description: "Fixed worker count of the realtime stream job cluster (task slots >= topic partitions + shuffle partitions)"
+    default: 2
+  realtime_shuffle_partitions:
+    description: "spark.sql.shuffle.partitions of the stream job (each holds a task slot for the whole run)"
+    default: "4"
+  # scripts/deploy.sh passes the workspace's newest DBR 19 (LTS first) when it
+  # can list the runtimes: Kinesis polling in Real-Time Mode needs 19, and the
+  # Python transformWithState low-throughput latency fix needs 18.2+. This
+  # default is the newest LTS key known here; bump it to the 19 LTS key once
+  # that exists (``databricks clusters spark-versions``).
   realtime_spark_version:
-    description: "Databricks Runtime of the stream job (an LTS with Real-Time Mode)"
+    description: "Databricks Runtime of the stream job (resolved to the newest 19.x by scripts/deploy.sh)"
     default: "17.3.x-scala2.13"
+  # Cloud-neutral: no default. The AWS targets below set i3.xlarge; an Azure
+  # or GCP target sets its own (e.g. Standard_D4ds_v5, n2-highmem-4).
   realtime_node_type_id:
-    description: "Node type of the stream job cluster"
-    default: "i3.xlarge"
+    description: "Node type of the stream job cluster (set per target: it depends on the cloud)"
+    default: ""
 
   warehouse_id:
     description: "SQL Warehouse ID for query execution"
@@ -309,6 +321,19 @@ targets:
   dev:
     mode: development
     default: true
+    # AWS workspace (cloud.databricks.com): the stream job's node type and
+    # on-demand workers (a reclaimed spot worker would stall the stream).
+    variables:
+      realtime_node_type_id: i3.xlarge
+    resources:
+      jobs:
+        triple_rtm_job:
+          job_clusters:
+            - job_cluster_key: rtm
+              new_cluster:
+                aws_attributes:
+                  availability: ON_DEMAND
+                  first_on_demand: 1
 
   # Sandbox with the Lakebase Postgres registry backend bound
   # (Autoscaling-only). Uses the Apps ``postgres`` resource type
@@ -322,7 +347,19 @@ targets:
   # extra config.
   dev-lakebase:
     mode: development
+    # AWS workspace (cloud.databricks.com): the stream job's node type and
+    # on-demand workers (a reclaimed spot worker would stall the stream).
+    variables:
+      realtime_node_type_id: i3.xlarge
     resources:
+      jobs:
+        triple_rtm_job:
+          job_clusters:
+            - job_cluster_key: rtm
+              new_cluster:
+                aws_attributes:
+                  availability: ON_DEMAND
+                  first_on_demand: 1
       apps:
         ontobricks_dev_app:
           resources:

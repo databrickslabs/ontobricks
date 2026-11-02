@@ -42,7 +42,19 @@ ensure_instance_target() {
 targets:
   ${target}:
     mode: development
+    # AWS workspace, like dev / dev-lakebase in databricks.yml: the realtime
+    # stream job's node type and on-demand workers.
+    variables:
+      realtime_node_type_id: i3.xlarge
     resources:
+      jobs:
+        triple_rtm_job:
+          job_clusters:
+            - job_cluster_key: rtm
+              new_cluster:
+                aws_attributes:
+                  availability: ON_DEMAND
+                  first_on_demand: 1
       apps:
         ontobricks_dev_app:
           resources:
