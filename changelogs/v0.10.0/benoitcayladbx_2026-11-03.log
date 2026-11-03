@@ -54,3 +54,45 @@ Tests: uv run --frozen pytest -q -m "not scenario" → 9865 passed, 326 skipped,
 Still open (blocked upstream):
 - oauthlib 4.0.0 (#175/#176/#282/#318) — databricks-sql-connector pins oauthlib<4
 - nltk GHSA-8mgp-746c-j5xp — no patched release yet
+
+================================================================================
+## Fix Apps deploy: drop default identity scopes from user_api_scopes
+================================================================================
+
+Context: `make deploy` of a fresh instance failed at app creation with
+`POST /api/2.0/apps → 400 INVALID_PARAMETER_VALUE: The specified scope
+iam.current-user:read is not a valid scope`. Databricks Apps now treats the two
+identity scopes (`iam.current-user:read`, `iam.access-control:read`) as
+non-selectable platform defaults — they are auto-assigned when no scopes are
+requested and the create API rejects them when listed explicitly (confirmed in
+the AWS/Azure "Configure authorization in a Databricks app" docs). Only
+additional scopes such as `sql` may be declared. Removed the two identity
+scopes from every `user_api_scopes` declaration, keeping just `sql` (admin
+group checks / MCP OBO, #208); the identity defaults are still applied
+automatically.
+
+Changes:
+
+1. databricks.yml
+   Both app resources (`ontobricks_dev_app`, `mcp_ontobricks_app`):
+   `user_api_scopes` reduced to `[sql]` (dropped the two identity scopes),
+   with an explaining comment.
+2. app.yaml.template
+   `authorization.user.scopes` reduced to `[sql]`; comment rewritten to note
+   the identity scopes are platform defaults that must not be declared.
+   (`app.yaml` itself is generated from this template and gitignored.)
+
+Modified files:
+- databricks.yml
+- app.yaml.template
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Deployment: `make deploy` (target dev-lakebase-10x) succeeded end-to-end after
+the fix — both apps RUNNING/ACTIVE, `/healthz` → 200, Lakebase schema
+`ontobricks_demo_10_registry_sc` initialized and UC/Lakebase grants applied to
+both app service principals. Also required an unrelated environment fix
+(re-auth of the expired `DEFAULT` OAuth CLI profile) and the account admin
+freeing service-principal quota (50k users+SP account cap).
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9865 passed, 326 skipped,
+8 deselected, 39 warnings in 55.06s (EXIT=0).

@@ -174,16 +174,16 @@ env:
 # User authorization scopes — declares which Databricks APIs the app is
 # allowed to access on behalf of the logged-in user via the
 # x-forwarded-access-token header injected by the Apps platform.
-# The app uses the user token exclusively for permission checks
-# (SCIM user-group lookup + App ACL read) — all data queries go through
-# the app's service principal (M2M OAuth). These two scopes are the
-# minimum required; they are also the platform defaults when no scopes
-# are declared, but explicit declaration is required for Public Preview.
+# The identity scopes (iam.current-user:read, iam.access-control:read) used
+# for permission checks (SCIM user-group lookup + App ACL read) are platform
+# defaults and MUST NOT be declared explicitly — the Apps API now rejects
+# them as invalid. Only the additional `sql` scope (admin group checks /
+# MCP OBO, #208) is declared; all data queries still go through the app's
+# service principal (M2M OAuth).
 authorization:
   user:
     scopes:
-      - iam.current-user:read
-      - iam.access-control:read
+      - sql
 
 # Resources that this app uses.
 # Configure these resources in the Databricks Apps UI after deployment.
