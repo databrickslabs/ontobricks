@@ -990,11 +990,16 @@ supported"):
   key) and 4 tombstones landed, and the end-to-end latency from the event's `ts_ms` to the Postgres
   `updated_at` was **p50 185 ms, p95 234 ms, p99 244 ms, max 246 ms** (n = 198). **The design's
   `realtime` KPI (p99 < 1 s) is met.** Found on the way, and fixed or recorded:
-  - Real-Time Mode refuses the `mapInPandas` envelope explode of `jobs/triple_stream/main.py`
-    (`STREAMING_REAL_TIME_MODE.OPERATOR_OR_SINK_NOT_IN_ALLOWLIST: MapInPandasExec`); with the
-    allowlist check bypassed it fails inside the operator (`ClassCastException … RealTimeIterator`).
-    The explode has to be Spark-native (`from_json`, `get_json_object`, the compiler's key cast) —
-    the harness ran that shape; `main.py` carries it from this release ([Realtime](#realtime)).
+  - Real-Time Mode refuses the `mapInPandas` envelope explode `jobs/triple_stream/main.py` had
+    (`STREAMING_REAL_TIME_MODE.OPERATOR_OR_SINK_NOT_IN_ALLOWLIST: MapInPandasExec`; with the
+    allowlist check bypassed it fails inside the operator, `ClassCastException … RealTimeIterator`),
+    and it refuses a `UNION` of several reads of the same stream
+    (`IDENTICAL_SOURCES_IN_UNION_NOT_SUPPORTED` — the job then fell back to a 1-second micro-batch
+    trigger, which measured p50 1.17 s / p99 1.85 s). The explode is therefore one Spark SQL pass
+    (`TripleStreamEnvelope.explode_sql`: `from_json` typed by the described columns, one
+    `named_struct` per mapping and case in one `array`, `filter`ed and `explode`d). **Run with
+    that SQL, exactly as `main.py` wires it: p50 179 ms, p95 243 ms, p99 248 ms** (n = 198), three
+    real-time batches, 400 live rows, 4 tombstones ([Realtime](#realtime)).
   - Under the real-time trigger `foreach` hands the writer, and `transformWithState` the processor,
     plain tuples rather than `Row` objects: `LiveSink.values` and the processor's row decoding
     accept both (the sink's `dict(tuple)` was the first live failure).
@@ -1114,7 +1119,10 @@ TTL the state keeps one watermark per deleted predicate (unbounded). The equival
 Lakebase host / database / role / secret, `--live-table`, `--checkpoint`,
 `--state-ttl-hours`, `--slots-version`, `--start-timestamp-ms`), `spark.readStream`
 of the topic, the envelope parse and
-explode (`TripleStreamEnvelope`, `mapInPandas`), the stateful diff
+explode (`TripleStreamEnvelope.explode_sql` — one Spark SQL pass: `from_json` images typed
+by the described columns, one `named_struct` per mapping and case in one `array`, `filter`ed
+and `explode`d; Real-Time Mode refuses `mapInPandas` and a `UNION` of several reads of the
+same stream, both measured live), the stateful diff
 (`transformWithState`, output mode **update** — the only one Real-Time Mode runs),
 and a `foreach` writer (`LiveSink`, `writeStream.outputMode("update")`) that upserts
 each change as it arrives:

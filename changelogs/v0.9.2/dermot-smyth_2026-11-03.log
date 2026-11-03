@@ -91,3 +91,63 @@ Modified files:
 - changelogs/v0.9.2/dermot-smyth_2026-11-03.log
 
 Test result: `uv run --frozen pytest -q tests/units/jobs` — 114 passed.
+
+================================================================================
+## Realtime: the envelope explode is one Spark SQL pass (Real-Time Mode runs it: p99 248 ms)
+================================================================================
+
+Context: measured in Real-Time Mode on the classic workspace, the stream job's
+`mapInPandas` envelope explode is refused
+(`STREAMING_REAL_TIME_MODE.OPERATOR_OR_SINK_NOT_IN_ALLOWLIST: MapInPandasExec`;
+with the allowlist check off it fails inside the operator with
+`ClassCastException … RealTimeIterator`), and a first native rewrite as a
+`UNION ALL` of per-mapping branches is refused too
+(`IDENTICAL_SOURCES_IN_UNION_NOT_SUPPORTED`: several reads of the same Kafka
+source) — the job fell back to its 1-second micro-batch trigger (p50 1.17 s,
+p99 1.85 s). One pass over the stream is what Real-Time Mode accepts.
+
+Changes:
+
+1. src/jobs/triple_stream/TripleStreamEnvelope.py — `explode_sql(projectors_by_table,
+   column_types, records_view)`: Spark SQL over the stream's `(value, seq)`
+   records yielding the `ENVELOPE_FIELDS` rows in one pass — `get_json_object`
+   reads the envelope with or without its `payload` wrapper; `from_json` types
+   each table's `after` / `before` images by the described columns (`STRING`
+   for a column the types do not list); every candidate row (upsert of the
+   after image, delete of the before image, delete of the old key when an
+   update changed it) is a `named_struct` in one `array`, `filter`ed on its
+   `keep` condition and `explode`d; the key is the compiler's cast
+   (`concat_ws('|', …)` for a composite key), a NULL key yields nothing; a
+   table is matched by its full name or by a unique leaf name. The Python
+   `explode` stays as the reference the property tests exercise.
+2. src/jobs/triple_stream/main.py — the stream registers the records as a
+   temp view (`RECORDS_VIEW`) and runs `explode_sql` instead of `mapInPandas`
+   (`explode_batches` removed); an optional `--shuffle-partitions` overrides
+   `spark.sql.shuffle.partitions` for a run (the job's cluster sets it from
+   `var.realtime_shuffle_partitions`; Real-Time Mode schedules every stage at
+   once and needs source + shuffle partitions free task slots — Spark's
+   default 200 asked for a 200-slot cluster on the first live attempt).
+3. tests/units/jobs/test_triple_stream_envelope_sql.py (new) — the SQL: payload
+   wrapper, one read of the stream (no `UNION`), leaf / full-name matching,
+   typed images cast to text, untyped columns as STRING, key cast and
+   composite keys, delete and key-change tombstones, three candidates per
+   mapping, two tables in one pass, no mapping → no rows.
+4. docs/incremental-materialization.md — Realtime section and Live
+   verification: the explode, the two Real-Time-Mode refusals, the sizing rule,
+   the measured latencies.
+
+Live (2026-11-03, `ontobricks-rtm`, classic DBR 19, `trigger(realTime="1
+minute")`, 20 events/s for 150 s): the job's own `explode_sql` →
+`SlotDiffStatefulProcessor` → `LiveSink`: three real-time batches, 400 live
+rows, 4 tombstones, end-to-end **p50 179 ms, p95 243 ms, p99 248 ms** (n = 198).
+
+Modified files:
+- src/jobs/triple_stream/TripleStreamEnvelope.py
+- src/jobs/triple_stream/main.py
+- tests/units/jobs/test_triple_stream_envelope_sql.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: full suite `uv run --frozen pytest -q -m "not scenario"`
+(readiness-route test deselected) — 11547 passed, 346 skipped, 9 deselected;
+`tests/units/jobs` 127 passed.

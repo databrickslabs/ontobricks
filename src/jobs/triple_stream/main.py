@@ -38,7 +38,6 @@ import json
 import logging
 import re
 import sys
-from collections import Counter
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -61,7 +60,8 @@ _TOPIC = re.compile(r"[A-Za-z0-9_.\-]{1,249}")
 #: The state TTL when the domain sets none: longer than any expected lateness.
 DEFAULT_STATE_TTL_HOURS = 72
 _REAL_TIME_CONF = "spark.databricks.streaming.realTimeMode.enabled"
-_ENVELOPE_SCHEMA = "map_id STRING, source_key STRING, op STRING, seq BIGINT, row_json STRING"
+#: The streaming records (``value STRING, seq BIGINT``) the envelope explode SQL reads.
+RECORDS_VIEW = "ontobricks_triple_stream_records"
 
 
 class TripleStreamJob:
@@ -105,6 +105,14 @@ class TripleStreamJob:
         add("--real-time-mode", action=argparse.BooleanOptionalAction, default=True)
         add("--real-time-interval", default="5 minutes")
         add("--processing-time", default="10 seconds")
+        add(
+            "--shuffle-partitions",
+            type=int,
+            default=None,
+            help="override spark.sql.shuffle.partitions for this run (the job's cluster sets it from "
+            "var.realtime_shuffle_partitions): Real-Time Mode schedules every stage at once and needs "
+            "source partitions + shuffle partitions free task slots; Spark's default 200 needs a 200-slot cluster",
+        )
         add(
             "--state-ttl-hours",
             type=int,
@@ -323,11 +331,13 @@ class TripleStreamJob:
             .load()
             .selectExpr(f"{value_expr} AS value", f"{seq_expr} AS seq")
         )
+        # Real-Time Mode runs every stage concurrently: source + shuffle partitions must fit the slots.
+        if args.shuffle_partitions:
+            spark.conf.set("spark.sql.shuffle.partitions", str(args.shuffle_partitions))
+        # The envelope explode is Spark SQL: Real-Time Mode refuses mapInPandas (measured live).
+        records.createOrReplaceTempView(RECORDS_VIEW)
         changes = (
-            records.mapInPandas(
-                lambda batches: TripleStreamJob.explode_batches(batches, by_table, column_types),
-                schema=_ENVELOPE_SCHEMA,
-            )
+            spark.sql(TripleStreamEnvelope.explode_sql(by_table, column_types, RECORDS_VIEW))
             .groupBy("map_id", "source_key")
             .transformWithState(
                 SlotDiffStatefulProcessor(
@@ -351,25 +361,6 @@ class TripleStreamJob:
         query, trigger = TripleStreamJob.start(spark, writer, args)
         logger.info("Streaming %s into %s (%s trigger)", args.topic, args.live_table, trigger)
         query.awaitTermination()
-
-    @staticmethod
-    def explode_batches(batches: Any, by_table: Any, column_types: Any) -> Any:
-        """``mapInPandas`` body: each frame of records as adapter input rows; skips logged."""
-        import pandas as pd
-
-        for batch in batches:
-            skipped: Counter = Counter()
-            rows = TripleStreamEnvelope.explode_records(
-                zip(batch["value"], batch["seq"], strict=True),
-                by_table,
-                column_types,
-                on_skip=lambda reason, counts=skipped: counts.update((reason,)),
-            )
-            if skipped:
-                logger.warning(
-                    "Skipped %d record(s) in a batch: %s", sum(skipped.values()), dict(skipped)
-                )
-            yield pd.DataFrame(rows, columns=["map_id", "source_key", "op", "seq", "row_json"])
 
     @staticmethod
     def connect(args: argparse.Namespace, password: str) -> Any:  # pragma: no cover - cluster only

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
@@ -156,6 +157,111 @@ class TripleStreamEnvelope:
                 skip("unmapped_table")
             rows.extend(exploded)
         return rows
+
+    @staticmethod
+    def explode_sql(projectors_by_table: Mapping, column_types: Mapping, records_view: str) -> str:
+        """Spark SQL over *records_view* (``value STRING, seq BIGINT``) yielding ``ENVELOPE_FIELDS`` rows.
+
+        The Spark-native twin of :meth:`explode`, for Real-Time Mode, which refuses
+        the ``mapInPandas`` operator (``OPERATOR_OR_SINK_NOT_IN_ALLOWLIST``) and a
+        ``UNION`` of several reads of the same stream
+        (``IDENTICAL_SOURCES_IN_UNION_NOT_SUPPORTED``) — both measured live — so
+        this is one pass: every candidate row of every mapping is a
+        ``named_struct`` in one ``array``, ``filter``ed on its ``keep`` flag and
+        ``explode``d. Same rules as :meth:`explode`: the envelope's ``payload``
+        wrapper is optional; ``c`` / ``u`` / ``r`` upsert the ``after`` image, ``d``
+        deletes the ``before`` image; the table is matched by its full name, or by
+        its leaf name when that leaf is unique among the mapped tables; every value
+        is the text ``CAST(… AS STRING)`` gives it (``from_json`` typed by
+        *column_types*, ``STRING`` for a column the types do not list); the key is
+        the compiler's cast (``concat_ws('|', …)`` for a composite key) and a NULL
+        key yields nothing; an update whose key changed also tombstones the old key
+        from the pre-image.
+        """
+        env = (
+            "WITH env AS (SELECT seq, "
+            "lower(coalesce(get_json_object(value, '$.payload.op'), get_json_object(value, '$.op'))) AS op, "
+            "coalesce(get_json_object(value, '$.payload.after'), get_json_object(value, '$.after')) AS after, "
+            "coalesce(get_json_object(value, '$.payload.before'), get_json_object(value, '$.before')) AS before, "
+            "lower(trim(coalesce(get_json_object(value, '$.payload.source.table'), "
+            f"get_json_object(value, '$.source.table')))) AS src FROM {records_view})"
+        )
+        leaves = Counter(table.rsplit(".", 1)[-1] for table in projectors_by_table)
+        images, candidates = [], []
+        upserts = ", ".join(f"'{op}'" for op in _UPSERT_OPS)
+        deletes = ", ".join(f"'{op}'" for op in _DELETE_OPS)
+        for index, (table, projectors) in enumerate(projectors_by_table.items()):
+            leaf = table.rsplit(".", 1)[-1]
+            match = f"src = '{table}'"
+            if leaves[leaf] == 1:
+                match = f"({match} OR element_at(split(src, '[.]'), -1) = '{leaf}')"
+            columns = TripleStreamEnvelope._typed_columns(projectors, (column_types or {}).get(table))
+            ddl = ", ".join(f"`{column}` {spark_type}" for column, spark_type in columns.items())
+            a, b = f"a{index}", f"b{index}"
+            images.append(f"from_json(after, '{ddl}') AS {a}, from_json(before, '{ddl}') AS {b}")
+            for projector in projectors:
+                key_a = TripleStreamEnvelope._key_sql(a, projector.key_columns)
+                key_b = TripleStreamEnvelope._key_sql(b, projector.key_columns)
+                row_a = f"to_json({TripleStreamEnvelope._text_struct_sql(a, columns)})"
+                row_b = f"to_json({TripleStreamEnvelope._text_struct_sql(b, columns)})"
+                candidates.append(TripleStreamEnvelope._candidate(
+                    projector.map_id, key_a, "upsert", row_a,
+                    f"{match} AND op IN ({upserts}) AND {a} IS NOT NULL AND {key_a} IS NOT NULL",
+                ))
+                candidates.append(TripleStreamEnvelope._candidate(
+                    projector.map_id, key_b, "delete", row_b,
+                    f"{match} AND op IN ({deletes}) AND {b} IS NOT NULL AND {key_b} IS NOT NULL",
+                ))
+                candidates.append(TripleStreamEnvelope._candidate(
+                    projector.map_id, key_b, "delete", row_b,
+                    f"{match} AND op IN ({upserts}) AND {a} IS NOT NULL AND {b} IS NOT NULL "
+                    f"AND {key_b} IS NOT NULL AND {key_b} <> coalesce({key_a}, '')",
+                ))
+        if not candidates:
+            return (
+                f"{env} SELECT CAST(NULL AS STRING) AS map_id, CAST(NULL AS STRING) AS source_key, "
+                "CAST(NULL AS STRING) AS op, seq, CAST(NULL AS STRING) AS row_json FROM env WHERE false"
+            )
+        typed = f"typed AS (SELECT seq, op, src, {', '.join(images)} FROM env)"
+        return (
+            f"{env}, {typed}\n"
+            "SELECT r.map_id, r.source_key, r.op, seq, r.row_json FROM typed\n"
+            "LATERAL VIEW explode(filter(array(\n  " + ",\n  ".join(candidates) + "\n), x -> x.keep)) rows AS r"
+        )
+
+    @staticmethod
+    def _candidate(map_id: str, key: str, op: str, row_json: str, keep: str) -> str:
+        """One ``named_struct`` of the explode array: a candidate row and the condition that keeps it."""
+        return (
+            f"named_struct('map_id', '{map_id}', 'source_key', {key}, 'op', '{op}', "
+            f"'row_json', {row_json}, 'keep', ({keep}))"
+        )
+
+    @staticmethod
+    def _typed_columns(projectors: Iterable[Any], types: Mapping | None) -> dict[str, str]:
+        """``{column: spark type}`` of a table: its described types, plus any projector column as STRING."""
+        columns = {str(column): str(spark_type) for column, spark_type in (types or {}).items()}
+        for projector in projectors:
+            for column in (*projector.key_columns, projector.id_column):
+                if column:
+                    columns.setdefault(str(column), "STRING")
+            for _predicate, _literal, column in projector.sources:
+                if column:
+                    columns.setdefault(str(column), "STRING")
+        return columns
+
+    @staticmethod
+    def _key_sql(image: str, key_columns: Iterable[str]) -> str:
+        """The compiler's source-key cast over the typed *image* struct."""
+        casts = [f"CAST({image}.`{column}` AS STRING)" for column in key_columns if column]
+        if len(casts) == 1:
+            return casts[0]
+        return f"concat_ws('|', {', '.join(casts)})"
+
+    @staticmethod
+    def _text_struct_sql(image: str, columns: Mapping[str, str]) -> str:
+        """``struct(…)`` of every column of *image* as the text ``CAST(… AS STRING)`` gives it."""
+        return "struct(" + ", ".join(f"CAST({image}.`{c}` AS STRING) AS `{c}`" for c in columns) + ")"
 
     @staticmethod
     def _input_row(projector: Any, key: str, op: str, seq: int, row: Mapping) -> dict:
