@@ -364,7 +364,8 @@ Current explicit security floors include
 `sentence-transformers>=5.6.0`, `pip>=26.2.0`, `transformers>=5.10.0`,
 `gitpython>=3.2.1`, `pyjwt>=2.15.0`, `urllib3>=2.8.0`, `anyio>=4.14.2`,
 `authlib>=1.9.1`, `dnspython>=2.9.0`, `msgpack>=1.2.3`, `pillow>=13.0.0`,
-`filelock>=4.2.1`, `certifi>=2026.10.19`, and `cryptography>=50.0.0`.
+`filelock>=4.2.1`, `certifi>=2026.10.19`, `cryptography>=50.0.0`,
+`pyasn1>=0.6.5`, `graphql-core>=3.3.1`, and `joserfc>=1.7.6`.
 `oauthlib>=4` is blocked by `databricks-sql-connector` (`oauthlib<4`).
 `pyproject.toml` remains authoritative.
 
