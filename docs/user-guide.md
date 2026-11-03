@@ -1325,11 +1325,13 @@ rules, or results, shows the brand spinner over that pane.
 2. **Hypothetical facts** — add rows of *subject / predicate / value*:
    **Set** replaces every value of the predicate on the subject (e.g. a new
    credit score), **Add** asserts an extra triple, **Remove** retracts one.
-   Each fact is a compact card: operation, then subject, predicate, and
-   object side by side. Each field shows a type line (icon, entity type,
-   human label in parentheses) above a local-ID control. The predicate
-   line is *relationship* or *attribute* (with the range class when it is
-   a relationship). Hover the ID for the full URI.
+   Each fact is a compact read-only card: an operation icon (Add / Set /
+   Remove), then subject, predicate, and object side by side. Each field
+   shows a type line (icon, entity type, human label in parentheses) on the
+   same line as the local ID, packed to the left of the column. The predicate line is *relationship* or *attribute* (with)
+   the range class when it is a relationship). Hover the ID for the full
+   URI. **Edit** (before the row delete) opens the fact wizard; the list
+   itself is not typed into.
    **Fact wizard** and **Add fact** sit at the top right of the tab.
    **Describe the facts** is the textarea below: write what should change
    in plain language and click **Propose facts** to the right of the box.

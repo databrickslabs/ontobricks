@@ -15,7 +15,7 @@ const SimulationWorkbench = {
             const el = document.getElementById(id);
             if (el) el.addEventListener(evt, fn);
         };
-        on('simWbAddPatchBtn', 'click', () => this.addPatch());
+        on('simWbAddPatchBtn', 'click', () => this.openFactWizard());
         on('simWbFactWizardBtn', 'click', () => this.openFactWizard());
         on('simWbFactPromptBtn', 'click', () => this.proposeFacts());
         on('simWbSaveBtn', 'click', () => this.save());
@@ -43,15 +43,10 @@ const SimulationWorkbench = {
 
         const body = document.getElementById('simWbPatchesBody');
         if (body) {
-            body.addEventListener('input', (e) => this._onPatchEdit(e));
-            body.addEventListener('change', (e) => this._onPatchEdit(e));
             body.addEventListener('click', (e) => {
-                const lookup = e.target.closest('[data-lookup]');
-                if (lookup) {
-                    this.openFactWizard({
-                        idx: Number(lookup.dataset.idx),
-                        startField: lookup.dataset.lookup,
-                    });
+                const edit = e.target.closest('[data-edit]');
+                if (edit) {
+                    this.openFactWizard({ idx: Number(edit.dataset.edit) });
                     return;
                 }
                 const btn = e.target.closest('[data-remove]');
@@ -376,30 +371,6 @@ const SimulationWorkbench = {
         if (!patch || !row.subject_label) this._resolvePatchLabels();
     },
 
-    _onPatchEdit(e) {
-        const field = e.target.dataset.field;
-        const idx = Number(e.target.dataset.idx);
-        if (!field || Number.isNaN(idx) || !this.patches[idx]) return;
-        const patch = this.patches[idx];
-        const typed = e.target.value;
-        if (field === 'op') {
-            patch.op = typed;
-            return;
-        }
-        const stored = patch[field] || '';
-        const idShown = SimulationPage.isUri(stored) ? SimulationPage.shortUri(stored) : stored;
-        if (typed === idShown || typed === stored) return;
-        patch[field] = typed;
-        patch[`${field}_label`] = '';
-        patch[`${field}_type`] = '';
-        patch[`${field}_type_uri`] = '';
-        if (field === 'predicate') {
-            patch.predicate_kind = '';
-            patch.predicate_range_label = '';
-        }
-        this._resolvePatchLabels();
-    },
-
     renderPatches() {
         const body = this._el('simWbPatchesBody');
         const count = this._el('simWbPatchCount');
@@ -412,22 +383,37 @@ const SimulationWorkbench = {
         body.innerHTML = this.patches.map((p, i) => `<article class="card sim-patch-card">
             <div class="card-body">
                 <div class="d-flex align-items-center gap-2">
-                    <select class="form-select form-select-sm sim-patch-op" data-field="op" data-idx="${i}" aria-label="Operation">
-                        <option value="set" ${p.op === 'set' ? 'selected' : ''}>Set</option>
-                        <option value="add" ${p.op === 'add' ? 'selected' : ''}>Add</option>
-                        <option value="remove" ${p.op === 'remove' ? 'selected' : ''}>Remove</option>
-                    </select>
+                    ${this._opIcon(p.op)}
                     <div class="row g-2 sim-patch-fields">
                         <div class="col-12 col-lg-4">${this._termCell('subject', i, p, 'Subject')}</div>
                         <div class="col-12 col-lg-4">${this._termCell('predicate', i, p, 'Predicate')}</div>
                         <div class="col-12 col-lg-4">${this._termCell('object', i, p, 'Object / value')}</div>
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-danger" data-remove="${i}" title="Remove fact">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
+                    <div class="d-flex gap-1 flex-shrink-0">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-edit="${i}"
+                                title="Edit fact" aria-label="Edit fact">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-remove="${i}"
+                                title="Remove fact" aria-label="Remove fact">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </article>`).join('');
+    },
+
+    _opIcon(op) {
+        const catalog = {
+            add: { icon: 'bi-plus-circle', label: 'Add' },
+            remove: { icon: 'bi-dash-circle', label: 'Remove' },
+            set: { icon: 'bi-arrow-repeat', label: 'Set' },
+        };
+        const meta = catalog[op] || catalog.set;
+        return `<span class="sim-patch-op" title="${meta.label}" aria-label="${meta.label}">
+            <i class="bi ${meta.icon}" aria-hidden="true"></i>
+        </span>`;
     },
 
     _termCell(field, idx, patch, placeholder) {
@@ -437,15 +423,10 @@ const SimulationWorkbench = {
         const idShown = isUri ? SimulationPage.shortUri(uri) : uri;
         const label = String(patch[`${field}_label`] || '').trim();
         const caption = (label && label !== idShown && label !== uri) ? label : '';
+        const shown = idShown || placeholder;
         return `<div class="sim-term">
             ${this._termKindHtml(field, patch, uri, isUri, caption)}
-            <div class="input-group input-group-sm">
-                <input type="text" class="form-control sim-term-id" data-field="${field}" data-idx="${idx}"
-                       value="${esc(idShown)}" title="${esc(uri)}" placeholder="${esc(placeholder)}"
-                       aria-label="${esc(placeholder)}">
-                <button type="button" class="btn btn-outline-secondary" data-lookup="${field}" data-idx="${idx}"
-                        title="Find existing ${esc(field)}"><i class="bi bi-search"></i></button>
-            </div>
+            <div class="sim-term-id" title="${esc(uri)}">${esc(shown)}</div>
         </div>`;
     },
 

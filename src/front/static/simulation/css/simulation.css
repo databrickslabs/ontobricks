@@ -93,8 +93,14 @@ a.sim-uri-link:focus-visible {
 }
 
 .sim-patch-op {
-    width: 6.75rem;
-    flex: 0 0 6.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    flex: 0 0 1.5rem;
+    color: var(--db-text-secondary);
+    font-size: 1rem;
+    line-height: 1;
 }
 
 .sim-patch-fields {
@@ -102,12 +108,21 @@ a.sim-uri-link:focus-visible {
     min-width: 0;
 }
 
+.sim-term {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
 .sim-term-kind {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    min-height: 1rem;
-    margin-bottom: 0.125rem;
+    min-width: 0;
+    flex: 0 1 auto;
+    margin-bottom: 0;
     color: var(--db-text-muted);
     font-size: 0.75rem;
     line-height: 1.2;
@@ -129,6 +144,12 @@ a.sim-uri-link:focus-visible {
 
 .sim-term-id {
     font-family: var(--bs-font-monospace);
+    flex: 0 1 auto;
+    min-width: 0;
+    color: var(--db-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sim-artifact-name {

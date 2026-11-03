@@ -428,3 +428,85 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9856 passed, 326 skipped, 8 deselected, 39 warnings in 47.58s. Remaining failure is `test_each_app_declares_user_api_scopes_for_obo` (pre-existing).
+
+================================================================================
+## Read-only hypothetical-facts list with Edit and op icons
+================================================================================
+
+Context: The Hypothetical facts tab let users type S/P/O and change Add/Set/Remove
+inline, which produced half-edited local ids. The list is now a read-only
+preview: operation icons, an Edit button (opens the fact wizard) before row
+delete, and Add fact also opens the wizard.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Drop inline inputs; render Add/Set/Remove as icons; Edit before delete;
+   Add fact opens the wizard.
+2. src/front/static/simulation/css/simulation.css
+   Size the op icon slot instead of the old 6.75rem select.
+3. tests/units/front/test_simulation_page_contract.py
+   Contract for read-only cards, Edit-before-delete, and op icons.
+4. docs/user-guide.md
+   Describe the read-only cards and Edit → wizard flow.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9856 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Put fact type and value on one line
+================================================================================
+
+Context: Hypothetical-facts cards stacked the type/caption above the local id.
+Keep both on a single row so the list stays compact.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   `.sim-term` is a flex row; kind and id share one line.
+2. tests/units/front/test_simulation_page_contract.py
+   Assert the one-line flex layout.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Lookup moved off the list; contract now checks Edit → wizard.
+4. docs/user-guide.md
+   Type line sits on the same row as the local id.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9856 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Left-align S/P/O values in fact cards
+================================================================================
+
+Context: After putting type and local ID on one line, the type cell grew
+(`flex: 1`) and shoved the value against the right edge of each S/P/O
+column. Pack both to the left of the column.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   `.sim-term` uses `justify-content: flex-start`; `.sim-term-kind` no longer grows.
+2. tests/units/front/test_simulation_page_contract.py
+   Assert left packing and no grow on the kind cell.
+3. docs/user-guide.md
+   Type and local ID sit on the same row, packed left in the column.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9856 passed, 326 skipped, 8 deselected.

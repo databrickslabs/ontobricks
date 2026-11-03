@@ -29,7 +29,7 @@ def test_workbench_exposes_wizard_and_per_field_lookup():
     html = _read(WORKBENCH)
     assert 'id="simWbFactWizardBtn"' in html
     js = _read(WB_JS)
-    assert "data-lookup" in js
+    assert "data-edit" in js
     assert "SimulationFactWizard.open" in js
 
 

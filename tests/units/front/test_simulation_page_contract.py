@@ -132,6 +132,11 @@ def test_hypothetical_facts_show_id_type_and_predicate_kind():
     assert "sim-term-caption" in wb
     assert "(${esc(caption)})" in wb
     assert "sim-term-kind" in css
+    assert "display: flex" in css.split(".sim-term {", 1)[1].split("}", 1)[0]
+    assert "justify-content: flex-start" in css.split(".sim-term {", 1)[1].split("}", 1)[0]
+    assert "margin-bottom: 0" in css.split(".sim-term-kind {", 1)[1].split("}", 1)[0]
+    assert "flex: 0 1 auto" in css.split(".sim-term-kind {", 1)[1].split("}", 1)[0]
+    assert "flex: 1" not in css.split(".sim-term-kind {", 1)[1].split("}", 1)[0]
     assert "shortUri(uri)" in wb
     assert "Relationship" in wb
     assert "Attribute" in wb
@@ -152,6 +157,19 @@ def test_hypothetical_facts_show_id_type_and_predicate_kind():
     assert "padding: 0.35rem 0.5rem" in css.split(".sim-patch-card .card-body", 1)[1].split("}", 1)[0]
     assert "resolveEntitySeed" in page
     assert "_lookupInput" not in wb
+    assert "_onPatchEdit" not in wb
+    assert 'data-field="op"' not in wb
+    assert "form-select" not in wb.split("renderPatches", 1)[1].split("_opIcon", 1)[0]
+    card = wb.split("sim-patch-card", 1)[1].split(").join('')", 1)[0]
+    assert 'data-edit="' in card
+    assert "data-remove=" in card
+    assert card.index("data-edit=") < card.index("data-remove=")
+    assert "bi-plus-circle" in wb
+    assert "bi-arrow-repeat" in wb
+    assert "bi-dash-circle" in wb
+    assert "bi-pencil" in wb
+    assert 'class="form-control sim-term-id"' not in wb
+    assert "on('simWbAddPatchBtn', 'click', () => this.openFactWizard())" in wb
     assert wizard.count('text-muted">${SimulationPage.esc(s.uri)}</div>') == 0
     assert "onclick=" not in html
     assert "style=" not in html
