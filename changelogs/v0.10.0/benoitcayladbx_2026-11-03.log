@@ -510,3 +510,86 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9856 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Scope fact-wizard steps 2 and 3 to subject type and predicate kind
+================================================================================
+
+Context: After picking a subject, step 2 must list that class's ontology
+properties. After picking a predicate, step 3 must follow attribute vs
+relationship (literal vs range-class search).
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-fact-wizard.js
+   Label predicates with the subject class; resolve predicate kind/range;
+   hide entity search for attributes; auto-search the range class for
+   relationships; restore kind when editing a card.
+2. tests/units/front/test_simulation_fact_wizard.py
+   Contract for class-scoped predicate list and kind-aware step 3.
+3. docs/user-guide.md
+   Wizard step 2 is class-scoped; step 3 follows predicate kind.
+
+Modified files:
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9857 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Remove the duplicate Fact wizard button
+================================================================================
+
+Context: Hypothetical facts had both Fact wizard and Add fact, both opening
+the same popup. Keep Add fact (and Edit on a card).
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Drop the Fact wizard button.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Drop its click handler.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Assert the duplicate CTA is gone; Add fact still opens the wizard.
+4. tests/units/front/test_simulation_page_contract.py
+   Facts pane no longer lists simWbFactWizardBtn.
+5. docs/user-guide.md
+   Add fact / Edit open the wizard.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_fact_wizard.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9857 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Deduplicate wizard predicates and bind them to the selected class
+================================================================================
+
+Context: Step 2 listed every class's attributes unioned with the global
+property list, so the same predicate appeared twice (URI vs local name)
+and the rows did not match the class chosen on step 1.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-fact-wizard.js
+   Build the list from the selected class (dropdown, else picked type)
+   plus ancestors; dedupe by URI and local name.
+2. tests/units/front/test_simulation_fact_wizard.py
+   Contract for `_predicatesForSubject` and `_propDedupeKeys`.
+3. docs/user-guide.md
+   Predicate step lists that class's attributes and relationships once.
+
+Modified files:
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9857 passed, 326 skipped, 8 deselected.

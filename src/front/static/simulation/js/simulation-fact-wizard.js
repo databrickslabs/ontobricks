@@ -18,6 +18,7 @@ const SimulationFactWizard = {
     _pickedObjectUri: '',
     _pickedObjectType: '',
     _pickedObjectTypeUri: '',
+    _objectSearchKey: '',
     _busy: false,
 
     init() {
@@ -30,6 +31,13 @@ const SimulationFactWizard = {
         on('simFactSearch', 'keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this._searchSubjects(); } });
         on('simFactObjectSearch', 'keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this._searchObjects(); } });
         on('simFactPredFilter', 'input', () => this._renderPredicates());
+        on('simFactClass', 'change', () => {
+            this._subjectType = '';
+            this._subjectTypeUri = '';
+            void this._ensureSubjectType().then(() => {
+                if (this._step === 2) this._renderPredicates();
+            });
+        });
         on('simFactSubjectUri', 'input', () => {
             if (this._val('simFactSubjectUri') !== this._pickedSubjectUri) {
                 this._subjectType = '';
@@ -104,8 +112,16 @@ const SimulationFactWizard = {
         this._pickedObjectUri = '';
         this._pickedObjectType = '';
         this._pickedObjectTypeUri = '';
+        this._objectSearchKey = '';
         await this._ensureOntology();
         const p = patch || {};
+        this._subjectType = p.subject_type || '';
+        this._subjectTypeUri = p.subject_type_uri || '';
+        this._pickedSubjectUri = p.subject || '';
+        this._pickedLabel = p.subject_label || '';
+        this._predIsObject = p.predicate_kind === 'relationship';
+        this._predRange = p.predicate_range_label || '';
+        this._pickedPredLabel = p.predicate_label || '';
         this._set('simFactOp', p.op || 'set');
         this._set('simFactSubjectUri', p.subject || '');
         this._set('simFactPredicateUri', p.predicate || '');
@@ -220,27 +236,33 @@ const SimulationFactWizard = {
         }) || null;
     },
 
+    _subjectClass() {
+        const classUri = this._val('simFactClass');
+        if (classUri) return this._findClass('', classUri);
+        return this._findClass(this._subjectType, this._subjectTypeUri);
+    },
+
+    _classChain(start) {
+        const chain = [];
+        const seen = new Set();
+        let cls = start || null;
+        while (cls) {
+            const id = String(cls.name || this._assetUri(cls) || '');
+            if (!id || seen.has(id)) break;
+            seen.add(id);
+            chain.push(cls);
+            const parent = cls.parent || '';
+            if (!parent) break;
+            cls = this._findClass(parent, parent);
+        }
+        return chain;
+    },
+
     _declaringKeys() {
         const keys = new Set();
-        const start = this._findClass(this._subjectType, this._subjectTypeUri);
-        const addClass = (cls) => {
-            this._classKeys(cls).forEach((k) => keys.add(k));
-        };
-        if (start) {
-            addClass(start);
-            const seen = new Set([String(start.name || '')]);
-            let parent = start.parent || '';
-            while (parent && !seen.has(parent)) {
-                seen.add(parent);
-                const ancestor = this._findClass(parent, parent);
-                if (!ancestor) {
-                    keys.add(parent.toLowerCase());
-                    keys.add(this._local(parent).toLowerCase());
-                    break;
-                }
-                addClass(ancestor);
-                parent = ancestor.parent || '';
-            }
+        const chain = this._classChain(this._subjectClass());
+        if (chain.length) {
+            chain.forEach((cls) => this._classKeys(cls).forEach((k) => keys.add(k)));
             return keys;
         }
         [this._subjectType, this._subjectTypeUri].forEach((v) => {
@@ -252,16 +274,15 @@ const SimulationFactWizard = {
         return keys;
     },
 
-    _domainMatches(p) {
+    _domainMatches(domain) {
         const keys = this._declaringKeys();
         if (!keys.size) return false;
-        const domain = String(p.domain || '').trim();
-        if (!domain) return false;
-        return keys.has(domain.toLowerCase()) || keys.has(this._local(domain).toLowerCase());
+        const value = String(domain || '').trim();
+        if (!value) return false;
+        return keys.has(value.toLowerCase()) || keys.has(this._local(value).toLowerCase());
     },
 
     async _ensureSubjectType() {
-        if (this._subjectType || this._subjectTypeUri) return;
         const classUri = this._val('simFactClass');
         if (classUri) {
             const cls = this._findClass('', classUri);
@@ -269,6 +290,7 @@ const SimulationFactWizard = {
             this._subjectTypeUri = cls ? (this._assetUri(cls) || classUri) : classUri;
             return;
         }
+        if (this._subjectType || this._subjectTypeUri) return;
         const uri = this._val('simFactSubjectUri');
         if (!uri) return;
         try {
@@ -292,29 +314,63 @@ const SimulationFactWizard = {
         }
     },
 
-    _allPredicates() {
+    _propDedupeKeys(uri, name) {
+        const keys = [];
+        [uri, name, this._local(uri)].forEach((v) => {
+            const s = String(v || '').trim().toLowerCase();
+            if (s) keys.push(s);
+        });
+        return keys;
+    },
+
+    _classAttributes(cls) {
+        const raw = [].concat(cls.dataProperties || [], cls.attributes || []);
+        return raw.map((a) => (typeof a === 'string' ? { name: a } : a)).filter(Boolean);
+    },
+
+    _predicatesForSubject() {
         const seen = new Set();
         const out = [];
-        const push = (uri, label, kind, range, domain) => {
-            if (!uri || seen.has(uri)) return;
-            seen.add(uri);
-            out.push({ uri, label, kind, range, domain });
+        const push = (uri, label, kind, range, name) => {
+            const keys = this._propDedupeKeys(uri, name || label);
+            if (!uri || keys.some((k) => seen.has(k))) return;
+            keys.forEach((k) => seen.add(k));
+            out.push({ uri, label, kind, range });
         };
+        const cls = this._subjectClass();
+        const chain = this._classChain(cls);
+        const domainOk = (domain) => this._domainMatches(domain);
         (this._ontology.properties || []).forEach((p) => {
+            if (!domainOk(p.domain)) return;
+            const uri = this._assetUri(p);
             push(
-                this._assetUri(p),
-                p.label || p.name || this._local(this._assetUri(p)),
+                uri,
+                p.label || p.name || this._local(uri),
                 this._isObjectProp(p) ? 'object' : 'data',
                 p.range || '',
-                p.domain || '',
+                p.name,
             );
         });
-        (this._ontology.classes || []).forEach((c) => {
-            const domain = c.name || this._assetUri(c);
-            const attrs = [].concat(c.attributes || [], c.dataProperties || []);
-            attrs.forEach((a) => {
+        chain.forEach((c) => {
+            this._classAttributes(c).forEach((a) => {
                 const uri = this._assetUri(a) || a.name;
-                push(uri, a.label || a.name || this._local(uri), 'data', a.range || a.datatype || '', domain);
+                push(
+                    uri,
+                    a.label || a.name || this._local(uri),
+                    'data',
+                    a.range || a.datatype || '',
+                    a.name,
+                );
+            });
+            (c.objectProperties || []).forEach((p) => {
+                const uri = this._assetUri(p) || p.name;
+                push(
+                    uri,
+                    p.label || p.name || this._local(uri),
+                    'object',
+                    p.range || '',
+                    p.name,
+                );
             });
         });
         out.sort((a, b) => String(a.label).localeCompare(String(b.label)));
@@ -322,12 +378,21 @@ const SimulationFactWizard = {
     },
 
     _renderPredicates() {
+        const lab = document.querySelector('label[for="simFactPredFilter"]');
+        const cls = this._subjectClass();
+        if (lab) {
+            const name = (cls && (cls.name || cls.label))
+                || this._subjectType
+                || this._local(this._subjectTypeUri);
+            lab.textContent = name
+                ? `Ontology properties of ${name}`
+                : 'Ontology properties of this subject';
+        }
         const list = this._el('simFactPredHits');
         if (!list) return;
         const needle = this._val('simFactPredFilter').toLowerCase();
         const selected = this._val('simFactPredicateUri');
-        const rows = this._allPredicates().filter((p) => {
-            if (!this._domainMatches(p)) return false;
+        const rows = this._predicatesForSubject().filter((p) => {
             if (!needle) return true;
             return `${p.label} ${p.uri}`.toLowerCase().includes(needle);
         });
@@ -354,8 +419,11 @@ const SimulationFactWizard = {
         this._set('simFactSubjectUri', uri);
         this._pickedSubjectUri = uri;
         this._pickedLabel = label || '';
-        this._subjectType = type;
-        this._subjectTypeUri = typeUri;
+        const cls = this._findClass(type, typeUri);
+        this._subjectType = (cls && cls.name) || type;
+        this._subjectTypeUri = (cls && this._assetUri(cls)) || typeUri;
+        const sel = this._el('simFactClass');
+        if (sel && !sel.value && cls && this._assetUri(cls)) sel.value = this._assetUri(cls);
         this._markActive('simFactSubjectHits', btn);
         this._renderPredicates();
     },
@@ -366,6 +434,7 @@ const SimulationFactWizard = {
         this._predRange = range || '';
         this._pickedPredLabel = label || this._local(uri);
         this._markActive('simFactPredHits', btn);
+        this._objectSearchKey = '';
         this._syncObjectHint();
     },
 
@@ -383,32 +452,34 @@ const SimulationFactWizard = {
         const range = this._predRange ? this._local(this._predRange) : '';
         const rel = this._predIsObject
             ? (range
-                ? `This predicate links to ${range}. `
-                : 'This predicate is a relationship. ')
-            : 'This predicate holds a literal. ';
+                ? `This predicate is a relationship to ${range}. Search that class or paste a URI. `
+                : 'This predicate is a relationship. Search the live graph or paste a URI. ')
+            : (range
+                ? `This predicate is an attribute (${range}). Type a literal. `
+                : 'This predicate is an attribute. Type a literal. ');
         const catalog = {
             set: {
                 intro: 'Set replaces every current value of a predicate on the subject. Pick the subject, lock the operation, then choose the predicate and the new value.',
                 pred: 'Choose a predicate declared on this subject\'s class (including inherited).',
-                object: rel + 'Enter the new value. Every existing object of this predicate on the subject is cleared first.',
-                objectLabel: 'New value',
-                objectPlaceholder: 'Replacement URI or literal',
+                object: rel + 'Every existing object of this predicate on the subject is cleared first.',
+                objectLabel: this._predIsObject ? 'Related entity' : (range ? `Literal (${range})` : 'Literal value'),
+                objectPlaceholder: this._predIsObject ? 'Entity URI' : 'Typed value',
                 apply: 'Apply set',
             },
             add: {
                 intro: 'Add asserts an extra triple. Existing values of the predicate are kept. Pick the subject, lock the operation, then choose the predicate and the value to add.',
                 pred: 'Choose a predicate declared on this subject\'s class for the extra triple.',
-                object: rel + 'Enter the additional value. Other objects of this predicate stay in place.',
-                objectLabel: 'Value to add',
-                objectPlaceholder: 'New URI or literal',
+                object: rel + 'Other objects of this predicate stay in place.',
+                objectLabel: this._predIsObject ? 'Related entity to add' : (range ? `Literal to add (${range})` : 'Literal to add'),
+                objectPlaceholder: this._predIsObject ? 'Entity URI' : 'Typed value',
                 apply: 'Apply add',
             },
             remove: {
                 intro: 'Remove retracts one exact triple. Pick the subject, lock the operation, then choose the predicate and the object to delete.',
                 pred: 'Choose a predicate declared on this subject\'s class to retract.',
-                object: rel + 'Pick or type the object to retract. Leave empty only when the triple has an empty object.',
-                objectLabel: 'Value to retract',
-                objectPlaceholder: 'Object of the triple to remove',
+                object: rel + 'Leave empty only when the triple has an empty object.',
+                objectLabel: this._predIsObject ? 'Related entity to retract' : 'Literal to retract',
+                objectPlaceholder: this._predIsObject ? 'Entity URI' : 'Typed value',
                 apply: 'Apply remove',
             },
         };
@@ -437,7 +508,49 @@ const SimulationFactWizard = {
             apply.innerHTML = `<i class="bi bi-check2 me-1"></i>${SimulationPage.esc(copy.apply)}`;
         }
         if (op) op.disabled = this._step !== 1;
-        this._el('simFactObjectSearchWrap')?.classList.remove('d-none');
+        const wrap = this._el('simFactObjectSearchWrap');
+        if (wrap) wrap.classList.toggle('d-none', !this._predIsObject);
+        const tab = this._el('simFactTabObject');
+        if (tab) {
+            if (!this._val('simFactPredicateUri')) tab.textContent = '3. Object';
+            else tab.textContent = this._predIsObject ? '3. Related entity' : '3. Value';
+        }
+        const objSearchLabel = document.querySelector('label[for="simFactObjectSearch"]');
+        if (objSearchLabel) {
+            const range = this._predRange ? this._local(this._predRange) : '';
+            objSearchLabel.textContent = range
+                ? `Search ${range} entities`
+                : 'Search entities';
+        }
+    },
+
+    _resolvePredicateMeta() {
+        const uri = this._val('simFactPredicateUri');
+        if (!uri) return;
+        const local = this._local(uri).toLowerCase();
+        const hit = this._predicatesForSubject().find((p) => (
+            p.uri === uri || this._local(p.uri).toLowerCase() === local
+        ));
+        if (!hit) return;
+        this._predIsObject = hit.kind === 'object';
+        this._predRange = hit.range || this._predRange;
+        if (!this._pickedPredLabel) this._pickedPredLabel = hit.label;
+    },
+
+    async _prepareObjectStep() {
+        this._resolvePredicateMeta();
+        this._syncOpUi();
+        if (!this._predIsObject) {
+            const hits = this._el('simFactObjectHits');
+            if (hits) hits.innerHTML = '';
+            return;
+        }
+        const rangeUri = this._resolveRangeUri(this._predRange);
+        if (!rangeUri) return;
+        const key = `${this._val('simFactPredicateUri')}|${rangeUri}`;
+        if (this._objectSearchKey === key) return;
+        this._objectSearchKey = key;
+        await this._searchObjects();
     },
 
     _syncObjectHint() {
@@ -479,6 +592,7 @@ const SimulationFactWizard = {
         this._el('simFactApplyBtn')?.classList.toggle('d-none', this._step !== 3);
         this._syncOpUi();
         if (this._step === 2) this._renderPredicates();
+        if (this._step === 3) await this._prepareObjectStep();
     },
 
     _setBusy(id, busy, idleHtml, label) {

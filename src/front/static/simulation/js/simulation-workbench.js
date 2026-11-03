@@ -16,7 +16,6 @@ const SimulationWorkbench = {
             if (el) el.addEventListener(evt, fn);
         };
         on('simWbAddPatchBtn', 'click', () => this.openFactWizard());
-        on('simWbFactWizardBtn', 'click', () => this.openFactWizard());
         on('simWbFactPromptBtn', 'click', () => this.proposeFacts());
         on('simWbSaveBtn', 'click', () => this.save());
         on('simWbRunBtn', 'click', () => this.run());

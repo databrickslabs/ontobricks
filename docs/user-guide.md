@@ -1332,7 +1332,7 @@ rules, or results, shows the brand spinner over that pane.
    the range class when it is a relationship). Hover the ID for the full
    URI. **Edit** (before the row delete) opens the fact wizard; the list
    itself is not typed into.
-   **Fact wizard** and **Add fact** sit at the top right of the tab.
+   **Add fact** sits at the top right of the tab and opens the fact wizard.
    **Describe the facts** is the textarea below: write what should change
    in plain language and click **Propose facts** to the right of the box.
    An agent looks up classes, properties, and live-graph entities, then
@@ -1340,9 +1340,11 @@ rules, or results, shows the brand spinner over that pane.
    complete what-if (existing text plus the new facts). The last prompt
    stays in the textarea and is stored with the scenario, so reopening it
    restores the wording you proposed. Review both before you save or run.
-   **Fact wizard** (or the search icon on a cell) looks up existing graph
-   entities, ontology predicates declared on the subject's class (including
-   inherited), and related instances so you do not have to paste URIs by hand.
+   **Add fact** (or **Edit** on a card) opens the wizard: pick an existing subject, then
+   lists that class's attributes and relationships once (including inherited).
+   Step 3 follows the predicate kind: a relationship opens a
+   live-graph search of the range class; an attribute asks for a literal.
+   You can still paste a URI by hand.
    Ontology predicate URIs are resolved to the mapped data predicate when
    the sandbox applies the fact, so an added relationship participates in
    SWRL joins with the existing graph. A relationship object that is only a

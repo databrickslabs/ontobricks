@@ -179,7 +179,7 @@ def test_hypothetical_facts_prompt_uses_agent():
     html = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
     wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
     pane = html.split('id="simWb-pane-facts"', 1)[1].split('id="simWb-pane-reasoning"', 1)[0]
-    assert pane.index('id="simWbFactWizardBtn"') < pane.index('id="simWbFactPrompt"')
+    assert "simWbFactWizardBtn" not in pane
     assert pane.index('id="simWbAddPatchBtn"') < pane.index('id="simWbFactPrompt"')
     assert pane.index('id="simWbFactPrompt"') < pane.index('id="simWbFactPromptBtn"')
     assert pane.index('id="simWbFactPromptBtn"') < pane.index('id="simWbPatchesBody"')

@@ -27,10 +27,13 @@ def test_page_wires_wizard_partial_and_script():
 
 def test_workbench_exposes_wizard_and_per_field_lookup():
     html = _read(WORKBENCH)
-    assert 'id="simWbFactWizardBtn"' in html
+    assert 'id="simWbAddPatchBtn"' in html
+    assert "Fact wizard" not in html
+    assert 'id="simWbFactWizardBtn"' not in html
     js = _read(WB_JS)
     assert "data-edit" in js
     assert "SimulationFactWizard.open" in js
+    assert "simWbFactWizardBtn" not in js
 
 
 def test_entity_neighbourhood_has_graph_search_picker():
@@ -90,5 +93,27 @@ def test_wizard_lists_only_properties_of_subject_class():
     assert "Show all" not in html
     assert "_declaringKeys" in src
     assert "_ensureSubjectType" in src
+    assert "_subjectClass" in src
+    assert "_classChain" in src
+    assert "_predicatesForSubject" in src
+    assert "_allPredicates" not in src
+    assert "_propDedupeKeys" in src
     assert "showAll" not in src
     assert "including inherited" in src
+    assert "_renderPredicates" in src
+    assert "Ontology properties of" in src
+
+
+def test_wizard_step3_follows_attribute_vs_relationship():
+    src = _read(JS)
+    html = _read(MODAL)
+    assert 'id="simFactObjectSearchWrap"' in html
+    assert "_prepareObjectStep" in src
+    assert "_resolvePredicateMeta" in src
+    assert "predicate_kind === 'relationship'" in src
+    assert "_predIsObject" in src
+    assert "3. Related entity" in src
+    assert "3. Value" in src
+    assert "simFactObjectSearchWrap" in src
+    assert "if (this._step === 3) await this._prepareObjectStep()" in src
+    assert "_searchObjects" in src
