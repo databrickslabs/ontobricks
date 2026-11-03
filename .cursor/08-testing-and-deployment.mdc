@@ -56,6 +56,6 @@ When the user asks you to refactor:
    - Mention any remaining smells and potential follow-up refactorings.
 6. Run the architecture guardrails (`uv run --frozen pytest -q tests/units/architecture`) and tighten the shrink-only baseline with `uv run --frozen python -m tests.units.architecture.ratchet` (`.cursor/07 §Class-First Policy`). The graph-backend import boundary (`test_backend_import_boundary.py`) is **zero-offender**, not a shrinking baseline: a new `from back.core.graphdb.{lakebase,delta,neo4j}` outside `graphdb/` is a fail, not a baseline entry.
 
-Prefer the simplest result: if a split adds more concepts than it removes, don't do it (`.cursor/01 §Key Principles`).
+Prefer the simplest result: if a split adds more concepts than it removes, don't do it (`.cursor/01 §Minimal surface`).
 
 Throughout, remember: refactoring means improving design while keeping externally observed behaviour the same, following Martin Fowler's "Refactoring: Improving the Design of Existing Code."

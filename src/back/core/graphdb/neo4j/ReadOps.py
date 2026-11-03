@@ -19,7 +19,7 @@ triple nodes.
 
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.constants import RDF_TYPE
 from back.core.graphdb.neo4j.Connection import Connection
 from back.core.graphdb.neo4j.SchemaMap import SchemaMap
 from back.core.graphdb.neo4j.WriteOps import sanitise_label

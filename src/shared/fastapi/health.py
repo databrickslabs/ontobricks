@@ -773,7 +773,6 @@ def _check_lakebase_env_vars() -> Tuple[str, str]:
                 f"local-dev vars: {', '.join(alt_present)}. "
                 "In a deployed Databricks App, add a ``database`` resource binding in app.yaml.",
             )
-        pghost_present = "PGHOST" in present
         return (
             _ERROR,
             f"Required Lakebase env vars missing: {', '.join(missing)}. "

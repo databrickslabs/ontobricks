@@ -84,7 +84,7 @@ const SidebarNav = {
 
                 const changeHook = SidebarNav._onSectionChange;
                 if (changeHook && typeof changeHook === 'function') {
-                    changeHook(section, targetSection);
+                    changeHook(section, targetSection, { isTrusted: !!e.isTrusted });
                 }
             });
         });

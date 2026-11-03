@@ -35,6 +35,8 @@ const SimulationFactWizard = {
             this._subjectType = '';
             this._subjectTypeUri = '';
             void this._ensureSubjectType().then(() => {
+                this._syncClassIcon();
+                this._syncPreview();
                 if (this._step === 2) this._renderPredicates();
             });
         });
@@ -42,7 +44,25 @@ const SimulationFactWizard = {
             if (this._val('simFactSubjectUri') !== this._pickedSubjectUri) {
                 this._subjectType = '';
                 this._subjectTypeUri = '';
+                this._pickedLabel = '';
+                this._pickedSubjectUri = '';
             }
+            this._syncPreview();
+        });
+        on('simFactPredicateUri', 'input', () => {
+            this._pickedPredLabel = '';
+            this._resolvePredicateMeta();
+            this._syncPreview();
+        });
+        on('simFactObjectValue', 'input', () => {
+            const raw = this._el('simFactObjectValue') ? this._el('simFactObjectValue').value : '';
+            if (raw !== this._pickedObjectUri) {
+                this._pickedObjectUri = '';
+                this._pickedObjectLabel = '';
+                this._pickedObjectType = '';
+                this._pickedObjectTypeUri = '';
+            }
+            this._syncPreview();
         });
         on('simFactBackBtn', 'click', () => this._go(this._step - 1));
         on('simFactNextBtn', 'click', () => this._go(this._step + 1));
@@ -95,6 +115,7 @@ const SimulationFactWizard = {
             this._pickedObjectType = btn.dataset.type || '';
             this._pickedObjectTypeUri = btn.dataset.typeUri || '';
             this._markActive('simFactObjectHits', btn);
+            this._syncPreview();
         });
     },
 
@@ -171,16 +192,58 @@ const SimulationFactWizard = {
     _fillClassSelect() {
         const sel = this._el('simFactClass');
         if (!sel) return;
-        const current = sel.value;
         const classes = this._ontology.classes.slice().sort((a, b) =>
             String(a.label || a.name || '').localeCompare(String(b.label || b.name || ''))
         );
-        sel.innerHTML = '<option value="">Any class</option>' + classes.map((c) => {
+        sel.innerHTML = '<option value="">📦 Any entity type</option>' + classes.map((c) => {
             const uri = this._assetUri(c);
             if (!uri) return '';
-            return `<option value="${SimulationPage.esc(uri)}">${SimulationPage.esc(c.label || c.name || uri)}</option>`;
+            const emoji = this._classEmoji(c);
+            return `<option value="${SimulationPage.esc(uri)}">${SimulationPage.esc(emoji)} ${SimulationPage.esc(c.label || c.name || uri)}</option>`;
         }).join('');
-        if (current) sel.value = current;
+        this._syncEntityTypeSelect();
+    },
+
+    _classEmoji(cls) {
+        return (cls && (cls.emoji || cls.icon)) || '📦';
+    },
+
+    _emojiForType(type, typeUri) {
+        return this._classEmoji(this._findClass(type, typeUri));
+    },
+
+    _opMeta(op) {
+        const catalog = {
+            add: { icon: 'bi-plus-circle', label: 'Add' },
+            remove: { icon: 'bi-dash-circle', label: 'Remove' },
+            set: { icon: 'bi-arrow-repeat', label: 'Set' },
+        };
+        return catalog[op] || catalog.set;
+    },
+
+    _syncOpIcon() {
+        const slot = this._el('simFactOpIcon');
+        if (!slot) return;
+        const meta = this._opMeta(this._op());
+        slot.innerHTML = `<i class="bi ${meta.icon}" aria-hidden="true"></i>`;
+        slot.setAttribute('title', meta.label);
+    },
+
+    _syncClassIcon() {
+        const slot = this._el('simFactClassIcon');
+        if (!slot) return;
+        slot.textContent = this._classEmoji(this._subjectClass());
+    },
+
+    _syncEntityTypeSelect() {
+        const sel = this._el('simFactClass');
+        if (!sel) return;
+        const match = this._findClass(this._subjectType, this._subjectTypeUri);
+        const preferred = (match && this._assetUri(match)) || this._subjectTypeUri;
+        if (preferred && [...sel.options].some((o) => o.value === preferred)) {
+            sel.value = preferred;
+        }
+        this._syncClassIcon();
     },
 
     _assetUri(item) {
@@ -288,11 +351,18 @@ const SimulationFactWizard = {
             const cls = this._findClass('', classUri);
             this._subjectType = cls ? (cls.name || this._local(classUri)) : this._local(classUri);
             this._subjectTypeUri = cls ? (this._assetUri(cls) || classUri) : classUri;
+            this._syncClassIcon();
             return;
         }
-        if (this._subjectType || this._subjectTypeUri) return;
+        if (this._subjectType || this._subjectTypeUri) {
+            this._syncClassIcon();
+            return;
+        }
         const uri = this._val('simFactSubjectUri');
-        if (!uri) return;
+        if (!uri) {
+            this._syncClassIcon();
+            return;
+        }
         try {
             const data = await SimulationPage.api('/dtwin/sync/filter', {
                 method: 'POST',
@@ -308,10 +378,12 @@ const SimulationFactWizard = {
             if (seed) {
                 this._subjectType = seed.type || '';
                 this._subjectTypeUri = seed.type_uri || '';
+                this._syncEntityTypeSelect();
             }
         } catch (_) {
             /* list stays empty until a typed subject is resolved */
         }
+        this._syncClassIcon();
     },
 
     _propDedupeKeys(uri, name) {
@@ -384,9 +456,12 @@ const SimulationFactWizard = {
             const name = (cls && (cls.name || cls.label))
                 || this._subjectType
                 || this._local(this._subjectTypeUri);
-            lab.textContent = name
-                ? `Ontology properties of ${name}`
-                : 'Ontology properties of this subject';
+            if (name) {
+                const emoji = SimulationPage.esc(this._classEmoji(cls));
+                lab.innerHTML = `Ontology properties of <span class="sim-term-emoji">${emoji}</span> ${SimulationPage.esc(name)}`;
+            } else {
+                lab.textContent = 'Ontology properties of this subject';
+            }
         }
         const list = this._el('simFactPredHits');
         if (!list) return;
@@ -398,17 +473,19 @@ const SimulationFactWizard = {
         });
         if (!rows.length) {
             const msg = this._declaringKeys().size
-                ? 'No ontology properties declared on this subject\'s class.'
-                : 'Pick a subject from search so we can list properties of its class.';
+                ? "No ontology properties declared on this subject's entity type."
+                : 'Pick a subject from search so we can list properties of its entity type.';
             list.innerHTML = `<div class="list-group-item small text-muted">${msg}</div>`;
             return;
         }
         list.innerHTML = rows.map((p) => {
             const active = p.uri === selected ? ' active' : '';
             const kind = p.kind === 'object' ? 'relationship' : 'attribute';
+            const kindIcon = p.kind === 'object' ? 'bi-arrow-left-right' : 'bi-tag';
             return `<button type="button" class="list-group-item list-group-item-action small${active}"
                 data-uri="${SimulationPage.esc(p.uri)}" data-kind="${p.kind}"
                 data-range="${SimulationPage.esc(p.range)}" data-label="${SimulationPage.esc(p.label)}">
+                <i class="bi ${kindIcon} me-1" aria-hidden="true"></i>
                 <strong>${SimulationPage.esc(p.label)}</strong>
                 <span class="badge bg-secondary bg-opacity-25 text-dark ms-1">${kind}</span>
             </button>`;
@@ -423,9 +500,10 @@ const SimulationFactWizard = {
         this._subjectType = (cls && cls.name) || type;
         this._subjectTypeUri = (cls && this._assetUri(cls)) || typeUri;
         const sel = this._el('simFactClass');
-        if (sel && !sel.value && cls && this._assetUri(cls)) sel.value = this._assetUri(cls);
+        if (sel && !sel.value) this._syncEntityTypeSelect();
         this._markActive('simFactSubjectHits', btn);
         this._renderPredicates();
+        this._syncPreview();
     },
 
     _pickPredicate(uri, isObject, range, label, btn) {
@@ -452,7 +530,7 @@ const SimulationFactWizard = {
         const range = this._predRange ? this._local(this._predRange) : '';
         const rel = this._predIsObject
             ? (range
-                ? `This predicate is a relationship to ${range}. Search that class or paste a URI. `
+                ? `This predicate is a relationship to ${range}. Search that entity type or paste a URI. `
                 : 'This predicate is a relationship. Search the live graph or paste a URI. ')
             : (range
                 ? `This predicate is an attribute (${range}). Type a literal. `
@@ -460,7 +538,7 @@ const SimulationFactWizard = {
         const catalog = {
             set: {
                 intro: 'Set replaces every current value of a predicate on the subject. Pick the subject, lock the operation, then choose the predicate and the new value.',
-                pred: 'Choose a predicate declared on this subject\'s class (including inherited).',
+                pred: "Choose a predicate declared on this subject's entity type (including inherited).",
                 object: rel + 'Every existing object of this predicate on the subject is cleared first.',
                 objectLabel: this._predIsObject ? 'Related entity' : (range ? `Literal (${range})` : 'Literal value'),
                 objectPlaceholder: this._predIsObject ? 'Entity URI' : 'Typed value',
@@ -468,7 +546,7 @@ const SimulationFactWizard = {
             },
             add: {
                 intro: 'Add asserts an extra triple. Existing values of the predicate are kept. Pick the subject, lock the operation, then choose the predicate and the value to add.',
-                pred: 'Choose a predicate declared on this subject\'s class for the extra triple.',
+                pred: "Choose a predicate declared on this subject's entity type for the extra triple.",
                 object: rel + 'Other objects of this predicate stay in place.',
                 objectLabel: this._predIsObject ? 'Related entity to add' : (range ? `Literal to add (${range})` : 'Literal to add'),
                 objectPlaceholder: this._predIsObject ? 'Entity URI' : 'Typed value',
@@ -476,7 +554,7 @@ const SimulationFactWizard = {
             },
             remove: {
                 intro: 'Remove retracts one exact triple. Pick the subject, lock the operation, then choose the predicate and the object to delete.',
-                pred: 'Choose a predicate declared on this subject\'s class to retract.',
+                pred: "Choose a predicate declared on this subject's entity type to retract.",
                 object: rel + 'Leave empty only when the triple has an empty object.',
                 objectLabel: this._predIsObject ? 'Related entity to retract' : 'Literal to retract',
                 objectPlaceholder: this._predIsObject ? 'Entity URI' : 'Typed value',
@@ -502,26 +580,78 @@ const SimulationFactWizard = {
         if (intro) intro.textContent = copy.intro;
         if (predHint) predHint.textContent = copy.pred;
         if (objHint) objHint.textContent = copy.object;
-        if (objLabel) objLabel.textContent = copy.objectLabel;
+        if (objLabel) {
+            const icon = this._predIsObject ? 'bi-arrow-left-right' : 'bi-fonts';
+            objLabel.innerHTML = `<i class="bi ${icon} me-1" aria-hidden="true"></i>${SimulationPage.esc(copy.objectLabel)}`;
+        }
         if (objInput) objInput.placeholder = copy.objectPlaceholder;
+        this._syncOpIcon();
         if (apply) {
-            apply.innerHTML = `<i class="bi bi-check2 me-1"></i>${SimulationPage.esc(copy.apply)}`;
+            const meta = this._opMeta(this._op());
+            apply.innerHTML = `<i class="bi ${meta.icon} me-1"></i>${SimulationPage.esc(copy.apply)}`;
         }
         if (op) op.disabled = this._step !== 1;
         const wrap = this._el('simFactObjectSearchWrap');
         if (wrap) wrap.classList.toggle('d-none', !this._predIsObject);
         const tab = this._el('simFactTabObject');
         if (tab) {
-            if (!this._val('simFactPredicateUri')) tab.textContent = '3. Object';
-            else tab.textContent = this._predIsObject ? '3. Related entity' : '3. Value';
+            const hasPred = !!this._val('simFactPredicateUri');
+            const icon = !hasPred ? 'bi-circle' : (this._predIsObject ? 'bi-arrow-left-right' : 'bi-fonts');
+            const text = !hasPred ? '3. Object' : (this._predIsObject ? '3. Related entity' : '3. Value');
+            tab.innerHTML = `<i class="bi ${icon} me-1" aria-hidden="true"></i>${text}`;
         }
         const objSearchLabel = document.querySelector('label[for="simFactObjectSearch"]');
         if (objSearchLabel) {
             const range = this._predRange ? this._local(this._predRange) : '';
-            objSearchLabel.textContent = range
-                ? `Search ${range} entities`
-                : 'Search entities';
+            if (range) {
+                const emoji = SimulationPage.esc(this._emojiForType(range, this._predRange));
+                objSearchLabel.innerHTML = `Search <span class="sim-term-emoji">${emoji}</span> ${SimulationPage.esc(range)} entities`;
+            } else {
+                objSearchLabel.textContent = 'Search entities';
+            }
         }
+        this._syncPreview();
+    },
+
+    _draftPatch() {
+        const subject = this._val('simFactSubjectUri');
+        const predicate = this._val('simFactPredicateUri');
+        const objectEl = this._el('simFactObjectValue');
+        const object = objectEl ? objectEl.value : '';
+        const cls = this._subjectClass();
+        return {
+            op: this._op(),
+            subject,
+            predicate,
+            object,
+            subject_label: this._pickedLabel || (subject ? this._local(subject) : ''),
+            subject_type: (cls && (cls.label || cls.name)) || this._subjectType || '',
+            subject_type_uri: (cls && this._assetUri(cls)) || this._subjectTypeUri || '',
+            subject_emoji: this._classEmoji(cls),
+            predicate_label: this._pickedPredLabel || (predicate ? this._local(predicate) : ''),
+            predicate_kind: !predicate ? '' : (this._predIsObject ? 'relationship' : 'attribute'),
+            predicate_range_label: this._predRange || '',
+            object_label: this._objectDisplayLabel(object),
+            object_type: this._predIsObject ? (this._pickedObjectType || '') : '',
+            object_type_uri: this._predIsObject ? (this._pickedObjectTypeUri || '') : '',
+            object_emoji: this._predIsObject
+                ? this._emojiForType(this._pickedObjectType, this._pickedObjectTypeUri)
+                : '',
+        };
+    },
+
+    _syncPreview() {
+        const card = this._el('simFactPreview');
+        const body = this._el('simFactPreviewBody');
+        if (!card || !body) return;
+        const pick = this._pickMode === 'scope';
+        card.classList.toggle('d-none', pick);
+        if (pick) return;
+        if (!window.SimulationWorkbench || typeof SimulationWorkbench._patchFieldsHtml !== 'function') {
+            body.innerHTML = '';
+            return;
+        }
+        body.innerHTML = SimulationWorkbench._patchFieldsHtml(this._draftPatch(), 0);
     },
 
     _resolvePredicateMeta() {
@@ -647,7 +777,7 @@ const SimulationFactWizard = {
     async _runSearch({ btnId, idle, listId, value, entityType }) {
         if (this._busy) return;
         if (!value && !entityType) {
-            showNotification('Enter a search term or pick a class.', 'warning');
+            showNotification('Enter a search term or pick an entity type.', 'warning');
             return;
         }
         const list = this._el(listId);
@@ -673,15 +803,19 @@ const SimulationFactWizard = {
             }
             const cap = data.capped ? ` <span class="text-muted">(first ${seeds.length})</span>` : '';
             list.innerHTML = `<div class="list-group-item small text-muted">${seeds.length} matches${cap}</div>`
-                + seeds.map((s) => `<button type="button" class="list-group-item list-group-item-action small"
+                + seeds.map((s) => {
+                    const emoji = SimulationPage.esc(this._emojiForType(s.type, s.type_uri));
+                    return `<button type="button" class="list-group-item list-group-item-action small"
                     data-uri="${SimulationPage.esc(s.uri)}"
                     data-type="${SimulationPage.esc(s.type || '')}"
                     data-type-uri="${SimulationPage.esc(s.type_uri || '')}"
                     data-label="${SimulationPage.esc(s.label || this._local(s.uri))}">
+                    <span class="sim-term-emoji" aria-hidden="true">${emoji}</span>
                     <strong>${SimulationPage.esc(s.label || this._local(s.uri))}</strong>
                     <span class="badge bg-secondary bg-opacity-25 text-dark ms-1">${SimulationPage.esc(s.type || 'Unknown')}</span>
                     <div class="text-muted">${SimulationPage.esc(this._local(s.uri))}</div>
-                </button>`).join('');
+                </button>`;
+                }).join('');
         } catch (err) {
             list.innerHTML = `<div class="list-group-item small text-danger">${SimulationPage.esc(err.message)}</div>`;
         } finally {
@@ -694,6 +828,7 @@ const SimulationFactWizard = {
         const pick = this._pickMode === 'scope';
         this._el('simFactOpWrap')?.classList.toggle('d-none', pick);
         this._el('simFactWizardTabs')?.classList.toggle('d-none', pick);
+        this._el('simFactPreview')?.classList.toggle('d-none', pick);
         const title = this._el('simFactWizardTitle');
         if (title) {
             title.innerHTML = pick

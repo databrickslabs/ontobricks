@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.delta import _table_naming, materialize

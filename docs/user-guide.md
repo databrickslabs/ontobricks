@@ -1332,8 +1332,10 @@ rules, or results, shows the brand spinner over that pane.
    shows a type line (icon, entity type, human label in parentheses) on the
    same line as the local ID, packed to the left of the column. The predicate line is *relationship* or *attribute* (with)
    the range class when it is a relationship). Hover the ID for the full
-   URI. **Edit** (before the row delete) opens the fact wizard; the list
-   itself is not typed into.
+   URI. **Edit** (before the row delete) opens the fact wizard with the
+   subject's **Entity type** preselected; the list itself is not typed into.
+   While the wizard is open, the same triple card sits above the steps and
+   updates as you pick the operation, subject, predicate, and object.
    **Add fact** sits at the top right of the tab and opens the fact wizard.
    **Describe the facts** is the textarea below: write what should change
    in plain language and click **Propose facts** to the right of the box.
@@ -2709,7 +2711,7 @@ Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Search** by entity type, field, match type, and relationship depth
 - **Cap expansion** with the max-entities control (default 5 000, up to 20 000). The server uses the value you pick, including in Databricks Apps.
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
-- **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario
+- **Graph** chooses the live asserted graph, the live inferred graph, or one ready simulation sandbox per scenario. Opening Explorer from the sidebar always selects **Live graph (inferred)**; an inbound link (for example Results → Explorer with `?simulation=`) keeps that sandbox.
 - **View** opens canvas help: entity and relationship labels, hide orphans, and quality rings
 
 ---

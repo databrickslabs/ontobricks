@@ -287,7 +287,6 @@ class TwinStoreCache:
         ``graph_check_error`` carries the reason when ``has_data`` is ``None``.
         """
         from back.core.helpers import (
-            effective_graph_name,
             effective_graph_query_table,
             effective_view_table,
             run_blocking,
@@ -360,7 +359,6 @@ class TwinStoreCache:
         import asyncio
 
         from back.core.helpers import (
-            effective_graph_name,
             effective_graph_query_table,
             effective_view_table,
             run_blocking,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from back.core.errors import OntoBricksError, OperationCancelledError
 from back.core.graphdb.GraphDBFactory import GraphDBFactory

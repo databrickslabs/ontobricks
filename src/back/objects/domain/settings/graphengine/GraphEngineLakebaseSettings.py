@@ -849,7 +849,6 @@ class GraphEngineLakebaseSettings:
                                 "source_table": "",
                             }
                         else:
-                            spec = getattr(synced, "spec", None)
                             lk_states[full_name] = {
                                 "state": provisioner.sync_state(synced) or "UNKNOWN",
                                 "pipeline_id": provisioner.sync_pipeline_id(synced),

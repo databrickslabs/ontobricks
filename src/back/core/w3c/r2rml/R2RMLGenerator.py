@@ -376,7 +376,6 @@ class R2RMLGenerator:
         # Also get class URIs (from auto-assign)
         source_class_uri = config.get("source_class", "")
         target_class_uri = config.get("target_class", "")
-        attribute_mappings = config.get("attribute_mappings", {})
         direction = config.get("direction", "forward")  # Get relationship direction
 
         if not property_uri or not source_column or not target_column:
@@ -432,8 +431,6 @@ class R2RMLGenerator:
         # Get ontology class URIs - prefer entity lookup, fallback to config values
         source_class = source_entity.get("ontology_class", "") or source_class_uri
         target_class = target_entity.get("ontology_class", "") or target_class_uri
-        source_id = source_entity.get("id_column", source_column)
-        target_id = target_entity.get("id_column", target_column)
 
         # Create unique identifier for this TriplesMap
         prop_name = self._sanitize_name(

@@ -32,7 +32,6 @@ from back.core.errors import (
 from back.objects.registry import RegistryService
 from back.core.graphdb import get_graphdb
 from shared.config.constants import DEFAULT_BASE_URI
-from back.core.helpers import effective_graph_name
 from back.objects.digitaltwin import TwinGraphAccess
 from shared.fastapi.ui_branding import (
     get_request_ui_branding,

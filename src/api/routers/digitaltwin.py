@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError, NotFoundError, InfrastructureError
-from api.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
+from api.constants import DEFAULT_BASE_URI
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
 from back.core.graphdb import get_graphdb

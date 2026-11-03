@@ -651,6 +651,64 @@ Modified files:
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9859 passed, 326 skipped, 8 deselected.
 
 ================================================================================
+## Remove unused code identified by the global review
+================================================================================
+
+Context: The repository-wide review found unused imports and local assignments
+that added dead surface area. Remove only Ruff-confirmed code, while retaining
+imports that form a public re-export or an explicit test patch seam.
+
+Changes:
+
+1. src/{agents,api,back,shared}/
+   Remove unused imports and six unused local assignments across the reviewed
+   modules; preserve required re-export and test-seam imports with `noqa`.
+2. .cursor/01-expertise-and-principles.mdc
+   Restore the concise-response principle accidentally omitted by the
+   Minimal surface addition.
+3. .github/PR_REVIEW_CHECKLIST.md
+   Add Minimal surface as a class-first review gate.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- .github/PR_REVIEW_CHECKLIST.md
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/pge_eval/normalize.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/mapping.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/back/core/graph_analysis/CommunityDetector.py
+- src/back/core/graphdb/delta/BuildPipeline.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/core/graphdb/lakebase/Base.py
+- src/back/core/graphdb/neo4j/ReadOps.py
+- src/back/core/industry/fhir/FhirImportService.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/cache/TwinStoreCache.py
+- src/back/objects/digitaltwin/node/JobActionService.py
+- src/back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py
+- src/back/objects/mapping/Mapping.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/registry/store/lakebase/Bootstrap.py
+- src/back/objects/registry/store/lakebase/GlobalConfig.py
+- src/shared/fastapi/health.py
+- src/shared/fastapi/ui_branding.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen ruff check src --select F401,F811,F841 --exclude
+src/back/objects/domain/settings/SettingsService.py` → passed. The excluded
+module intentionally exposes compatibility symbols as test patch seams.
+`uv run --frozen pytest -q -m "not scenario"` → 2 failed, 9859 passed, 326
+skipped, 8 deselected. The OBO-scope failure was pre-existing; the simulation
+fact-wizard assertion is in a concurrently modified workspace file outside
+this cleanup.
+
+================================================================================
 ## Document the Minimal surface checklist for agents
 ================================================================================
 
@@ -682,6 +740,142 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9859 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Label Hypothetical-fact wizard filter as entity type
+================================================================================
+
+Context: The Hypothetical fact popup still said "Class" / "Any class". Operators
+asked to use entity wording, and when editing an existing fact the dropdown did
+not show the subject's selected entity type.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Relabel the subject filter to Entity type / Any entity type.
+2. src/front/static/simulation/js/simulation-fact-wizard.js
+   Preselect the subject's entity type on edit; user-facing copy now says
+   entity type instead of class.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Contract for the new labels and `_syncEntityTypeSelect`.
+4. docs/user-guide.md
+   Note that Edit opens the wizard with the subject's entity type selected.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9860 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Show operation and entity-type icons in the fact wizard
+================================================================================
+
+Context: After renaming Class to Entity type, the Hypothetical fact popup still
+used plain text for operation, entity type, predicate kind, and search hits.
+Operators asked for the same icons as the fact cards.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Leading icon slots for Operation and Entity type; tab icons.
+2. src/front/static/simulation/js/simulation-fact-wizard.js
+   Sync Add/Set/Remove Bootstrap icons and ontology emojis; mark
+   relationship vs attribute and search hits the same way.
+3. src/front/static/simulation/css/simulation.css
+   Shared `.sim-fact-kind-icon` treatment for the leading addons.
+4. tests/units/front/test_simulation_fact_wizard.py
+   Contract for the icon slots and helpers.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_fact_wizard.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 2 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`, `test_render_reload_focus_and_inferred_refresh_use_overlay`), 9860 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Default Explorer to Live graph (inferred) except inbound links
+================================================================================
+
+Context: Opening Explorer from the sidebar kept the last Graph source (a
+sandbox or Live asserted), including leftover ``?simulation=`` from a
+previous Simulation → Explorer link. Sidebar open must always land on
+**Live graph (inferred)**; a real inbound link (Results → Explorer, entity
+URI) still selects that sandbox. Programmatic switches (SPARQL overlay,
+Load Triple Store) keep the current source.
+
+Changes:
+
+1. src/front/static/global/js/sidebar-nav.js
+   Pass ``isTrusted`` on section change so Explorer can tell a sidebar
+   click from ``switchTo``.
+2. src/front/static/query/js/query.js
+   Consume ``simulation`` once (same as ``focus``) and pass
+   ``fromNavClick`` into ``SigmaGraph.init``.
+3. src/front/static/query/js/query-sigmagraph.js
+   Force live inferred on first open and trusted Explorer clicks; keep
+   ``simulationId`` from the inbound link; skip reset on SPARQL/load
+   re-entry; retarget the canvas when the source actually changes.
+4. src/front/static/query/js/query-graph-source.js
+   ``forceDefault`` beats leftover URL and sessionStorage.
+5. tests/units/front/test_explorer_simulation_select.py
+   Contract for nav-click default vs inbound ``simulation``.
+6. tests/units/front/test_kg_graph_source.py
+   ``forceDefault`` precedes ``wantedFromUrl``.
+7. tests/units/front/test_explorer_loading_overlay.py
+   Init signature update.
+8. docs/user-guide.md
+   Document the Explorer Graph default.
+
+Modified files:
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-graph-source.js
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_kg_graph_source.py
+- tests/units/front/test_explorer_loading_overlay.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`; bundle lists only `sql` because Apps rejects default identity scopes), 9861 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Preview the outcome triple in the fact wizard
+================================================================================
+
+Context: Operators configuring a hypothetical fact could not see the resulting
+S/P/O card until they applied it. Show the same list layout live above the
+wizard tabs while they pick operation, subject, predicate, and object.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Add a `sim-patch-card` preview slot above the step tabs.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Extract `_patchFieldsHtml` so the list and wizard share one triple row.
+3. src/front/static/simulation/js/simulation-fact-wizard.js
+   Rebuild the preview from the current draft on every field change.
+4. tests/units/front/test_simulation_fact_wizard.py
+   Contract: preview sits above the tabs and reuses `_patchFieldsHtml`.
+5. docs/user-guide.md
+   Note the live triple card in the wizard.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9862 passed, 326 skipped, 8 deselected.
 
 ================================================================================
 ## Render Propose-facts agent reply as HTML in the toast
@@ -720,4 +914,7 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9863 passed, 326 skipped, 8 deselected.
+
+
+
 

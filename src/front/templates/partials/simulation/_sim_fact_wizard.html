@@ -12,34 +12,54 @@
                     Look up an existing subject, predicate and value from the ontology and the live graph.
                     You can still type a new URI or literal if the asset does not exist yet.
                 </p>
+                <div class="card sim-patch-card mb-3" id="simFactPreview">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2" id="simFactPreviewBody"
+                             aria-live="polite" aria-label="Outcome triple"></div>
+                    </div>
+                </div>
                 <ul class="nav nav-tabs ob-tabs ob-tabs--compact mb-3" id="simFactWizardTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button type="button" class="nav-link active" id="simFactTabSubject" data-step="1">1. Subject</button>
+                        <button type="button" class="nav-link active" id="simFactTabSubject" data-step="1">
+                            <i class="bi bi-box me-1" aria-hidden="true"></i>1. Subject
+                        </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button type="button" class="nav-link" id="simFactTabPredicate" data-step="2">2. Predicate</button>
+                        <button type="button" class="nav-link" id="simFactTabPredicate" data-step="2">
+                            <i class="bi bi-tag me-1" aria-hidden="true"></i>2. Predicate
+                        </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button type="button" class="nav-link" id="simFactTabObject" data-step="3">3. Object</button>
+                        <button type="button" class="nav-link" id="simFactTabObject" data-step="3">
+                            <i class="bi bi-circle me-1" aria-hidden="true"></i>3. Object
+                        </button>
                     </li>
                 </ul>
 
                 <div class="mb-3" id="simFactOpWrap">
                     <label for="simFactOp" class="form-label small">Operation</label>
-                    <select class="form-select form-select-sm" id="simFactOp">
-                        <option value="set">Set — replace every value of this predicate</option>
-                        <option value="add">Add — assert an extra triple</option>
-                        <option value="remove">Remove — retract this triple</option>
-                    </select>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text sim-fact-kind-icon" id="simFactOpIcon" title="Set" aria-hidden="true">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </span>
+                        <select class="form-select form-select-sm" id="simFactOp">
+                            <option value="set">Set — replace every value of this predicate</option>
+                            <option value="add">Add — assert an extra triple</option>
+                            <option value="remove">Remove — retract this triple</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div id="simFactStepSubject">
                     <div class="row g-2 mb-2">
                         <div class="col-12 col-md-4">
-                            <label for="simFactClass" class="form-label small">Class</label>
-                            <select class="form-select form-select-sm" id="simFactClass">
-                                <option value="">Any class</option>
-                            </select>
+                            <label for="simFactClass" class="form-label small">Entity type</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text sim-fact-kind-icon" id="simFactClassIcon" aria-hidden="true">📦</span>
+                                <select class="form-select form-select-sm" id="simFactClass">
+                                    <option value="">Any entity type</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="col-12 col-md-8">
                             <label for="simFactSearch" class="form-label small">Search live graph</label>
@@ -59,7 +79,7 @@
                 </div>
 
                 <div id="simFactStepPredicate" class="d-none">
-                    <p class="small text-muted mb-2" id="simFactPredHint">Choose a predicate declared on this subject's class.</p>
+                    <p class="small text-muted mb-2" id="simFactPredHint">Choose a predicate declared on this subject's entity type.</p>
                     <label for="simFactPredFilter" class="form-label small">Ontology properties of this subject</label>
                     <input type="text" class="form-control form-control-sm mb-2" id="simFactPredFilter"
                            placeholder="Filter by name" autocomplete="off">

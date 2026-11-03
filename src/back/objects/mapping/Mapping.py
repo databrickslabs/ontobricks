@@ -10,14 +10,12 @@ from pathlib import Path
 import time
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
-import requests
 
 from shared.config.settings import get_settings
 from shared.config.constants import (
     AUTO_ASSIGN_CHUNK_COOLDOWN,
     AUTO_ASSIGN_CHUNK_SIZE,
     DEFAULT_BASE_URI,
-    HTTP_USER_AGENT,
 )
 from back.core.databricks import DocumentParseService
 from back.core.helpers.SQLHelpers import SQLHelpers

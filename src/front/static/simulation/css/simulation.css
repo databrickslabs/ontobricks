@@ -79,6 +79,14 @@ a.sim-uri-link:focus-visible {
     overflow-y: auto;
 }
 
+.sim-fact-kind-icon {
+    min-width: 2.25rem;
+    justify-content: center;
+    color: var(--db-text-secondary);
+    font-size: 1rem;
+    line-height: 1;
+}
+
 .sim-table .input-group {
     min-width: 10rem;
 }

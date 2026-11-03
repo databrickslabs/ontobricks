@@ -7,7 +7,7 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 import os
 import secrets
 import time
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, Query
 from back.core.logging import get_logger
@@ -19,7 +19,7 @@ from back.core.errors import (
 from api.routers.internal._guards import require
 from api.routers.internal._graph_access import assert_domain_graph_read
 from back.objects.registry import ROLE_BUILDER
-from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
+from shared.config.constants import DEFAULT_BASE_URI
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
@@ -60,7 +60,6 @@ from back.core.helpers import (
     effective_view_table,
     get_databricks_client,
     get_triplestore_sql_credentials,
-    make_volume_file_service,
     require_domain_llm,
     run_blocking,
 )
@@ -1124,7 +1123,6 @@ async def sync_info(
     the values are fetched live from Databricks and then cached for the next
     request.
     """
-    import asyncio
     import time as _t
 
     t0 = _t.monotonic()
@@ -2523,7 +2521,6 @@ async def dtwin_graphql_execute(
     to resolve the query.
     """
     from back.core.graphql import build_schema_for_domain, DEFAULT_DEPTH, MAX_DEPTH
-    from back.core.helpers import effective_graph_name
 
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)

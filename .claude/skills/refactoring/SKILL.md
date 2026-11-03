@@ -28,10 +28,10 @@ one public class per file, one purpose per class, class ≤ 400 LOC, method
 ≤ 50 LOC, records grouped by aggregate root, inheritance only where the
 "when inheritance is the right tool" table applies.
 
-**The simplest code is always the best** (`.cursor/01 §Key Principles`). Before
-each extraction ask: does this remove more concepts than it adds? If a split
-creates a class with one caller and no independent purpose, or a base class
-with one subclass, don't do it.
+**Minimal surface** (`.cursor/01 §Minimal surface`). Before each extraction
+ask: does this remove more concepts than it adds? If a split creates a class
+with one caller and no independent purpose, or a base class with one
+subclass, don't do it.
 
 After the last chunk: `uv run --frozen pytest -q tests/units/architecture`, then
 tighten the shrink-only baseline with
@@ -65,7 +65,7 @@ and `src/.coding_rules.md §2`. The few I reach for most often:
 - Don't bundle behavioural changes with a refactor — separate commits.
 - Don't leave backward-compat wrappers, aliases, or shim modules after a move or rename: update every caller (src and tests, including `patch("...")` targets) in the same change and delete the old module. Only external contracts (REST `v1`, MCP tools, string-referenced entry points) keep their names (`.cursor/07 §Package Organisation`).
 - Don't add entries to `tests/units/architecture/baseline.json` — it may only shrink.
-- Don't add abstraction the code doesn't need yet; the simplest version wins.
+- Don't add abstraction the code doesn't need yet (`.cursor/01 §Minimal surface`).
 - Don't skip the changelog (`changelog` skill).
 - Don't add or leave non-English comments, logs, changelog text, audit-trail
   strings, or traces (`.cursor/05 §English-only artifacts`). Translate in place

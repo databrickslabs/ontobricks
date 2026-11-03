@@ -58,11 +58,11 @@ const KgGraphSource = (function () {
 
     function wanted(explicit, forceDefault) {
         if (explicit) return explicit;
+        // Explorer open: live inferred, not the leftover ``?simulation=`` or
+        // the last stored Query/Chat source. Inbound links pass ``simulationId``.
+        if (forceDefault) return LIVE_INFERRED;
         var fromUrl = wantedFromUrl();
         if (fromUrl) return fromUrl;
-        // ``forceDefault`` opens on the live inferred view rather than restoring
-        // the last stored source (used by the Explorer on open).
-        if (forceDefault) return LIVE_INFERRED;
         return readStored() || LIVE_INFERRED;
     }
 

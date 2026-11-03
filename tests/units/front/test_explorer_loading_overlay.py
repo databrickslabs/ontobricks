@@ -114,7 +114,7 @@ def test_render_reload_focus_and_inferred_refresh_use_overlay() -> None:
     assert "reload: async function ()" in public_api
     assert "_showGraphLoading('Loading graph data…');" in public_api
     assert "_showGraphLoading('Loading graph data…');" in js.split(
-        "function init(focusUri)", 1
+        "function init(focusUri, openOpts)", 1
     )[1].split("function _hasData", 1)[0]
     retarget = js.split("async function _retargetCurrentView()", 1)[1].split(
         "async function _onSimulationChange()", 1

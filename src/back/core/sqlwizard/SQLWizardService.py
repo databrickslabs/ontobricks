@@ -169,8 +169,6 @@ class SQLWizardService:
         if limit is None:
             limit = self.DEFAULT_LIMIT
 
-        is_mapping = mapping_type in ("entity", "relationship")
-
         # Base system instruction (general / ad-hoc queries only)
         system_instruction = (
             "You are a text-to-SQL assistant for Databricks SQL. "

@@ -102,6 +102,53 @@ def test_wizard_lists_only_properties_of_subject_class():
     assert "including inherited" in src
     assert "_renderPredicates" in src
     assert "Ontology properties of" in src
+    assert "this subject's entity type" in src
+    assert "this subject's class" not in src
+
+
+def test_wizard_entity_type_label_and_edit_selection():
+    html = _read(MODAL)
+    src = _read(JS)
+    assert ">Entity type<" in html
+    assert "Any entity type" in html
+    assert ">Class<" not in html
+    assert "Any class" not in html
+    assert "_syncEntityTypeSelect" in src
+    assert "this._syncEntityTypeSelect();" in src
+    assert "Enter a search term or pick an entity type." in src
+
+
+def test_wizard_shows_op_and_entity_type_icons():
+    html = _read(MODAL)
+    src = _read(JS)
+    assert 'id="simFactOpIcon"' in html
+    assert 'id="simFactClassIcon"' in html
+    assert "bi-arrow-repeat" in html
+    assert "_opMeta" in src
+    assert "bi-plus-circle" in src
+    assert "bi-dash-circle" in src
+    assert "_classEmoji" in src
+    assert "_syncOpIcon" in src
+    assert "_syncClassIcon" in src
+    assert "cls.emoji || cls.icon" in src
+    assert "bi-arrow-left-right" in src
+    assert "bi-tag" in src
+    assert "bi-fonts" in src
+    assert "sim-term-emoji" in src
+
+
+def test_wizard_preview_reuses_list_triple_layout():
+    html = _read(MODAL)
+    src = _read(JS)
+    wb = _read(WB_JS)
+    assert 'id="simFactPreview"' in html
+    assert 'id="simFactPreviewBody"' in html
+    assert html.index("simFactPreview") < html.index("simFactWizardTabs")
+    assert "_draftPatch" in src
+    assert "_syncPreview" in src
+    assert "SimulationWorkbench._patchFieldsHtml" in src
+    assert "_patchFieldsHtml" in wb
+    assert "data-edit" not in html.split('id="simFactPreview"', 1)[1].split("simFactWizardTabs", 1)[0]
 
 
 def test_wizard_step3_follows_attribute_vs_relationship():

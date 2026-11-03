@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, Optional, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend

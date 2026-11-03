@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
-from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
 from shared.config.constants import DEFAULT_BASE_URI
 from back.objects.ontology.ClassModel import ClassModel
 from back.objects.ontology.Editor import Editor
@@ -20,6 +19,7 @@ from back.objects.ontology.Groups import Groups
 from back.objects.ontology.Import import IndustryKind, Import
 from back.objects.ontology.Owl import Owl
 from back.objects.ontology.Rules import Rules
+from back.core.w3c.shacl.constants import QUALITY_CATEGORIES  # noqa: F401
 
 if TYPE_CHECKING:
     from agents.agent_auto_icon_assign.engine import (

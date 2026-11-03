@@ -12,7 +12,6 @@ from back.core.databricks import DatabricksClient
 from back.core.helpers import (
     get_data_plane_client,
     get_databricks_client,
-    get_databricks_credentials,
     require_domain_llm,
     resolve_warehouse_id,
     run_blocking,

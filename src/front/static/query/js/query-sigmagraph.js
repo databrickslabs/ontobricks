@@ -184,9 +184,19 @@ var SigmaGraph = (function () {
         if (typeof KgGraphSource !== 'undefined') return KgGraphSource.current();
         var sel = document.getElementById('sgSimulationSelect');
         var raw = (sel && sel.value) ? String(sel.value) : LIVE_INFERRED;
-        if (raw === LIVE_INFERRED) return { simulationId: '', includeInferred: true };
-        if (raw === LIVE_ASSERTED || raw === '') return { simulationId: '', includeInferred: false };
-        return { simulationId: raw.replace(/:asserted$/, ''), includeInferred: true };
+        if (raw === LIVE_INFERRED) return { value: LIVE_INFERRED, simulationId: '', includeInferred: true };
+        if (raw === LIVE_ASSERTED || raw === '') {
+            return { value: LIVE_ASSERTED, simulationId: '', includeInferred: false };
+        }
+        var sid = raw.replace(/:asserted$/, '');
+        return { value: sid, simulationId: sid, includeInferred: true };
+    }
+
+    function _graphSourceKey() {
+        var source = _graphSourceFromSelect();
+        return source.value || (source.simulationId
+            ? source.simulationId
+            : (source.includeInferred ? LIVE_INFERRED : LIVE_ASSERTED));
     }
 
     function _selectedSimulationId() {
@@ -268,8 +278,8 @@ var SigmaGraph = (function () {
         var sel = document.getElementById('sgSimulationSelect');
         if (!sel) return;
         var previous = sel.value || _chosenSimulationId;
-        var wanted = opts.simulationId || _urlSimulationId()
-            || (opts.forceDefault ? LIVE_INFERRED : _chosenSimulationId);
+        var wanted = opts.simulationId
+            || (opts.forceDefault ? LIVE_INFERRED : (_urlSimulationId() || _chosenSimulationId));
         try {
             var resp = await fetch('/simulation/list', { credentials: 'same-origin' });
             var data = await resp.json();
@@ -2963,13 +2973,49 @@ var SigmaGraph = (function () {
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
-    function init(focusUri) {
+    function _openOpts(raw) {
+        if (!raw || typeof raw === 'string') {
+            return { simulationId: raw || '', fromNavClick: false };
+        }
+        return {
+            simulationId: raw.simulationId || '',
+            fromNavClick: !!raw.fromNavClick
+        };
+    }
+
+    function init(focusUri, openOpts) {
         console.log('[SigmaGraph] init called, focusUri:', focusUri || 'none');
         var alreadyInitialized = _initialized;
+        var opts = _openOpts(openOpts);
+        var linkSimulationId = opts.simulationId || '';
+        var forceLiveOnOpen = !linkSimulationId && (!alreadyInitialized || opts.fromNavClick);
         _pendingFocusLoad = !!focusUri;
         _loadGraphLibs();
 
+        function applyOpenGraphSource() {
+            var before = _graphSourceKey();
+            return _loadSimulationSelect({
+                simulationId: linkSimulationId,
+                forceDefault: forceLiveOnOpen
+            }).then(function () {
+                if (alreadyInitialized && !focusUri && forceLiveOnOpen && _graphSourceKey() !== before) {
+                    return _retargetCurrentView();
+                }
+                if (!focusUri) return;
+                return _waitForGraphLibs(10000).then(function () {
+                    return SigmaGraph.focusEntityByUri(focusUri).finally(function () {
+                        _pendingFocusLoad = false;
+                    });
+                });
+            });
+        }
+
+        if (alreadyInitialized && !focusUri && !forceLiveOnOpen) {
+            return;
+        }
+
         if (alreadyInitialized && !focusUri) {
+            applyOpenGraphSource();
             return;
         }
 
@@ -2998,14 +3044,7 @@ var SigmaGraph = (function () {
         }
         _initialized = true;
 
-        _loadSimulationSelect({ simulationId: _urlSimulationId(), forceDefault: true }).then(function () {
-            if (!focusUri) return;
-            _waitForGraphLibs(10000).then(function () {
-                SigmaGraph.focusEntityByUri(focusUri).finally(function () {
-                    _pendingFocusLoad = false;
-                });
-            });
-        });
+        applyOpenGraphSource();
     }
 
     function _hasData() {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from agents.agent_simulation_facts.AgentResult import AgentResult
 from agents.agent_simulation_facts.tools import TOOL_DEFINITIONS, TOOL_HANDLERS

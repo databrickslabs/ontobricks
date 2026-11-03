@@ -13,7 +13,7 @@ use.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from back.core.graphdb.interfaces.GraphBuilder import GraphBuilder
 from back.core.logging import get_logger

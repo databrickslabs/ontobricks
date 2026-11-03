@@ -69,20 +69,25 @@ def test_simulation_select_keeps_user_choice_across_reloads() -> None:
     assert "var _chosenSimulationId = 'live:inferred'" in js
     assert "_rememberSimulationChoice(sel ? sel.value" in js
     # Legacy fallback: keep the chosen sandbox unless opening forces the default.
-    assert "opts.forceDefault ? LIVE_INFERRED : _chosenSimulationId" in js
-    # Re-entering an already-initialized Explorer (no focus) short-circuits, so the
-    # in-session choice is preserved across tab switches.
-    assert "alreadyInitialized && !focusUri" in js
+    assert "opts.forceDefault ? LIVE_INFERRED : (_urlSimulationId() || _chosenSimulationId)" in js
+    # Programmatic section switches (SPARQL overlay, load-triples) keep the canvas.
+    assert "alreadyInitialized && !focusUri && !forceLiveOnOpen" in js
 
 
 def test_explorer_open_defaults_to_live_inferred() -> None:
-    """Opening the Explorer forces the live inferred view, not the last source."""
+    """Sidebar / first open forces live inferred; inbound ``simulation=`` is kept."""
     js = SIGMA_JS.read_text(encoding="utf-8")
-    assert (
-        "_loadSimulationSelect({ simulationId: _urlSimulationId(), forceDefault: true })"
-        in js
+    query = (REPO_ROOT / "src/front/static/query/js/query.js").read_text(encoding="utf-8")
+    assert "forceLiveOnOpen" in js
+    assert "fromNavClick: !!raw.fromNavClick" in js
+    assert "forceDefault: forceLiveOnOpen" in js
+    assert "urlParams.get('simulation')" in query
+    assert "fromNavClick: !!(nav && nav.isTrusted)" in query
+    assert "pendingSimulation = null" in query
+    nav = (REPO_ROOT / "src/front/static/global/js/sidebar-nav.js").read_text(
+        encoding="utf-8"
     )
-    assert "forceDefault: opts.forceDefault" in js
+    assert "isTrusted: !!e.isTrusted" in nav
 
 
 def test_results_open_in_explorer() -> None:

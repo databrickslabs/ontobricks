@@ -56,7 +56,8 @@ def test_graph_source_module_persists_and_applies_payload() -> None:
     )[0]
     assert wanted.index("wantedFromUrl()") < wanted.index("readStored()")
     assert "if (!stored || stored === LIVE_INFERRED)" not in wanted
-    # forceDefault skips the stored value and opens on the live inferred view.
+    # forceDefault skips both leftover ``?simulation=`` and the stored source.
+    assert wanted.index("forceDefault") < wanted.index("wantedFromUrl()")
     assert wanted.index("forceDefault") < wanted.index("readStored()")
 
 
