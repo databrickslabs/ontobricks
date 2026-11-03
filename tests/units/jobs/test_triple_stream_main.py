@@ -364,6 +364,18 @@ class TestSink:
         sink.process(change | {"seq": 4})
         assert len(connection.cursor_.executed) == 2
 
+    def test_a_real_time_mode_row_arrives_as_a_tuple_in_column_order(self):
+        """Under the real-time trigger ``foreach`` hands the writer plain tuples (measured live)."""
+        connection = _Connection()
+        sink = LiveSink(lambda: connection, "g_v3_live")
+        change = {column: f"v-{column}" for column in LIVE_COLUMNS} | {"deleted": True, "seq": 7}
+        sink.open(0, 1)
+
+        sink.process(tuple(change[c] for c in LIVE_COLUMNS))
+
+        assert connection.cursor_.executed[-1][1] == tuple(change[c] for c in LIVE_COLUMNS)
+        assert LiveSink.values(tuple(change[c] for c in LIVE_COLUMNS))[6:] == (True, 7)
+
     def test_close_releases_the_connection(self):
         connection = _Connection()
         sink = LiveSink(lambda: connection, "g_v3_live")

@@ -747,11 +747,11 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ◐ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace. Live at the service layer (`tests/external/test_incremental_readiness_live.py`, nightly): the `_slots` / `_data` catalog lookups, the slot-pipeline lookup, `freshness_lag_s` and `lakebase_sync` for a fixture domain; the card itself needs a deployed app |
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh. Live: `drift: false`, identical counts and `xxhash64` sums after bootstrap and after mutations |
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | ○ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
-| 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ✅ | ◐ | `jobs/triple_stream` (`main.py`, `processor.py`); the diff logic is property-tested without Spark. Live on Spark (serverless, `availableNow`): the processor under `transformWithState` + `LiveSink` into `_live` — 40 upserts → 80 live rows, then state restored from the checkpoint, 10 renames + 5 deletes → 70 live rows / 10 tombstones, no stale labels. Real-Time Mode itself (continuous trigger, p99 < 1 s) needs classic DBR 19 compute: serverless refuses it (`INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED`) |
+| 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ✅ | ✅ | `jobs/triple_stream` (`main.py`, `processor.py`); the diff logic is property-tested without Spark. Live in Real-Time Mode on a classic DBR 19 cluster (`ontobricks-rtm`): Kafka → envelope explode → processor under `transformWithState` → `LiveSink` → `_live`, **p99 244 ms** end to end over 2 982 events (the serverless `availableNow` run before it verified state restore and tombstones). The explode must be Spark-native — RTM refuses `mapInPandas` — and the sink / processor must accept the tuples RTM hands over (both fixed) |
 | 3 P2 | Serving: Lakebase `_live`, union view, tombstone purge | ✅ | ✅ | `_companion_ddl`, `LakebaseLiveTable`, `TwinLiveServing`: seeded from `_slots` at a pinned version the stream starts from (topic replayed from just before it), in the union view only while served, retired on stop / a non-realtime build / a dead stream (tick), tombstones purged by the tick; deletes and updates reach readers once `_sync` syncs them. Live: DDL, `seq` guard, tombstone, purge, detach on `ontobricks-int`; sink upsert p50 105 ms / p99 218 ms |
 | 3 P2 | Operations: job deployment, start/stop, status, `_live` reconciliation; the slot pipeline consumes the same topic | ✅ | ○ | `resources/triple_rtm.job.yml`, `TwinRealtimeStream`, status card; the slot pipeline reads the topic (`TwinSlotFeed.topic`; a Kinesis stream keeps the change feed); one stream per domain and per deployment at a time. The topic-fed pipeline SQL validates in Lakeflow; cluster sizing and run-as grants need a classic-compute workspace with a topic |
 | Verif. | Unit · property (slot fold, slot diff) · external (EXPLAIN plan) | ✅ | ✅ | `tests/units/…`, `tests/property/test_slot_fold.py`, `tests/property/test_slot_diff_property.py`, `tests/external/…` |
-| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; **`microbatch` through Lakehouse//RT 14.0 s p50 / 22.9 s p95 (n = 10) — the ≤ 30 s p95 KPI is met ✅**; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; `incremental` source → `_data` 82 s; `realtime` p99 < 1 s ○ — needs a topic and classic compute, which this workspace cannot offer (serverless refuses continuous triggers); the processing leg is verified functionally on Spark (`availableNow`, two waves) and the sink's share, Lakebase upsert p99 218 ms, is measured |
+| Verif. | KPIs: `microbatch` ≤ 30 s p95 via Lakehouse//RT, `realtime` p99 < 1 s via `_live`, drift 0 | ✅ | ◐ | `scripts/measure_freshness.py` + nightly step for the deployed app. Live (fixtures, serverless): drift 0 ✅; **`microbatch` through Lakehouse//RT 14.0 s p50 / 22.9 s p95 (n = 10) — the ≤ 30 s p95 KPI is met ✅**; `microbatch` source → `_slots` 8.1 s p50 / 11.9 s max (n = 8), source → `_graph` through the views 217–383 s; `incremental` source → `_data` 82 s; **`realtime` through Real-Time Mode p50 185 ms / p95 234 ms / p99 244 ms (n = 198) — the p99 < 1 s KPI is met ✅** (on the classic workspace `ontobricks-rtm`; serverless refuses the trigger) |
 | Verif. | KPIs: domains per mode, fallback events by reason, build DBUs | ✅ | ○ | `GET /dtwin/incremental/overview` (admin): `domains_per_mode`, `fallbacks_by_reason`, per-domain rows; DBUs are not computed by the app — the trace's pipeline id, `slot_update_id` and `warehouse_id` join to `system.billing.usage` |
 
 ## Known limitations
@@ -979,9 +979,31 @@ supported"):
   labels, 0 stale labels, 0 deleted keys still live. State init / restore, the slot diff, delete
   → tombstone, `seq` handling and the sink's guarded upserts behave on real Spark as the property
   tests say.
-- **Not measured.** Real-Time-Mode latency (the design's p99 < 1 s; the sink's share is the
-  Lakebase upsert p99 218 ms above) and a Kafka / Event Hubs source — both need a classic DBR 19
-  cluster and a topic, which this workspace cannot offer.
+- **Real-Time Mode, measured** (2026-11-03, on `ontobricks-rtm`, an FEVM `aws_sandbox_classic`
+  workspace in us-east-1: a classic DBR 19 cluster, `m5d.xlarge` × 2 workers,
+  `spark.databricks.streaming.realTimeMode.enabled`, a single-node KRaft Kafka 4.3 broker on the
+  driver standing in for the customer's topic, a Lakebase instance in that workspace for `_live`).
+  Debezium-style envelopes keyed by the source id → Kafka source → a Spark-native envelope explode
+  → `SlotDiffStatefulProcessor` under `transformWithState` → `LiveSink` (`foreach`) → `_live`,
+  `trigger(realTime="1 minute")`, 20 events/s for 150 s (2 982 events, 28 deletes, 200 keys):
+  three real-time batches ran back to back (781 / 1 218 / 983 rows), 400 live rows (two slots per
+  key) and 4 tombstones landed, and the end-to-end latency from the event's `ts_ms` to the Postgres
+  `updated_at` was **p50 185 ms, p95 234 ms, p99 244 ms, max 246 ms** (n = 198). **The design's
+  `realtime` KPI (p99 < 1 s) is met.** Found on the way, and fixed or recorded:
+  - Real-Time Mode refuses the `mapInPandas` envelope explode of `jobs/triple_stream/main.py`
+    (`STREAMING_REAL_TIME_MODE.OPERATOR_OR_SINK_NOT_IN_ALLOWLIST: MapInPandasExec`); with the
+    allowlist check bypassed it fails inside the operator (`ClassCastException … RealTimeIterator`).
+    The explode has to be Spark-native (`from_json`, `get_json_object`, the compiler's key cast) —
+    the harness ran that shape; `main.py` carries it from this release ([Realtime](#realtime)).
+  - Under the real-time trigger `foreach` hands the writer, and `transformWithState` the processor,
+    plain tuples rather than `Row` objects: `LiveSink.values` and the processor's row decoding
+    accept both (the sink's `dict(tuple)` was the first live failure).
+  - Real-Time Mode schedules every stage at once and needs *source partitions + shuffle partitions*
+    free task slots (`CONCURRENT_SCHEDULER_INSUFFICIENT_SLOT: 204 required` with the default 200
+    shuffle partitions on a 4-slot cluster): `spark.sql.shuffle.partitions` must be sized to the
+    cluster, and a stream a failed notebook left running keeps its slots until the cluster restarts.
+  - Serverless compute refuses the real-time trigger (`INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED`),
+    which is why the earlier serverless attempts could only run `availableNow`.
 
 Lakehouse//RT is no longer blocked either: RT warehouses are created in the UI — Compute → SQL
 Warehouses → Create → Real-Time; the SDK's warehouse types are still `CLASSIC` / `PRO` only and the

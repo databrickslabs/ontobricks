@@ -183,8 +183,11 @@ class SlotDiffStatefulProcessor(StatefulProcessor):
 
     @staticmethod
     def _as_dict(row: Any) -> dict:
+        """A ``Row``, a mapping, or — as Real-Time Mode hands rows over — a plain tuple in :data:`ENVELOPE_FIELDS` order."""
         if hasattr(row, "asDict"):
             return row.asDict()
         if isinstance(row, Mapping):
             return dict(row)
+        if isinstance(row, (tuple, list)):
+            return dict(zip(ENVELOPE_FIELDS, row, strict=False))
         raise TypeError(f"Cannot read a stream row of type {type(row).__name__}")

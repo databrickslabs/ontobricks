@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 #: Columns of a ``_live`` row, in insert order.
@@ -60,8 +60,19 @@ class LiveSink:
 
     @staticmethod
     def values(change: Any) -> tuple:
-        """The row's values in :data:`LIVE_COLUMNS` order (a Spark ``Row`` or a mapping)."""
-        record = change.asDict() if hasattr(change, "asDict") else dict(change)
+        """The row's values in :data:`LIVE_COLUMNS` order.
+
+        A micro-batch hands the writer a Spark ``Row`` (or a mapping); Real-Time
+        Mode hands it a plain tuple in the output schema's column order, which is
+        :data:`LIVE_COLUMNS` (measured live: ``dict(tuple)`` was the sink's first
+        failure under the real-time trigger).
+        """
+        if hasattr(change, "asDict"):
+            record = change.asDict()
+        elif isinstance(change, Mapping):
+            record = dict(change)
+        else:
+            record = dict(zip(LIVE_COLUMNS, tuple(change), strict=False))
         return tuple(record.get(column) for column in LIVE_COLUMNS)
 
     def open(self, partition_id: int, epoch_id: int) -> bool:

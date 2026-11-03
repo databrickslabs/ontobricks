@@ -128,6 +128,25 @@ class TestHandleInputRows:
         assert list(rows[0]) == [name for name, _type in adapter.OUTPUT_FIELDS]
         assert handle.state.data[(_LABEL,)] == ("http://ex.org/Customer/1", "Ann", 3)
 
+    def test_a_real_time_mode_row_is_a_plain_tuple_in_envelope_order(self):
+        """Real-Time Mode hands ``handleInputRows`` tuples, not ``Row`` objects (measured live)."""
+        proc, _handle = _processor()
+        envelope = _envelope("upsert", 3, {"id": 1, "name": "Ann"})
+        as_tuple = tuple(envelope[name] for name in adapter.ENVELOPE_FIELDS)
+
+        rows = list(proc.handleInputRows(_KEY, iter([as_tuple]), None))
+
+        assert [(r["predicate"], r["object"], r["seq"]) for r in rows] == [
+            (_RDF_TYPE, _CUSTOMER, 3),
+            (_LABEL, "Ann", 3),
+        ]
+
+    def test_an_unreadable_row_type_is_refused(self):
+        proc, _handle = _processor()
+
+        with pytest.raises(TypeError, match="Cannot read a stream row"):
+            list(proc.handleInputRows(_KEY, iter([42]), None))
+
     def test_the_rows_of_a_batch_are_applied_in_seq_order(self):
         proc, _handle = _processor()
         batch = [

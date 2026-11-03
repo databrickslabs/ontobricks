@@ -41,3 +41,53 @@ Modified files:
 Test result: `uv run --frozen pytest -q tests/units/graphdb/delta
 tests/units/objects/test_build_pipeline_modes.py tests/units/registry` —
 1408 passed, 8 skipped (full suite in the roll-up).
+
+================================================================================
+## Live Real-Time Mode run: realtime p99 244 ms; the sink and processor accept RTM's tuple rows
+================================================================================
+
+Context: the design's `realtime` KPI (Kafka event → Lakebase p99 < 1 s) needed
+classic DBR 19 compute and a topic. An FEVM `aws_sandbox_classic` workspace
+(`ontobricks-rtm`, us-east-1, created with the user's go-ahead) with a classic
+cluster, a KRaft Kafka broker on the driver and a Lakebase instance of its own
+ran the processing leg in Real-Time Mode.
+
+Measured (2026-11-03): 20 events/s for 150 s (2 982 events, 28 deletes, 200
+keys), `trigger(realTime="1 minute")`, three real-time batches back to back,
+400 live rows + 4 tombstones; end-to-end latency (event `ts_ms` → Postgres
+`updated_at`) **p50 185 ms, p95 234 ms, p99 244 ms, max 246 ms** (n = 198).
+The KPI is met.
+
+Found live, fixed here:
+
+1. src/jobs/triple_stream/LiveSink.py — under the real-time trigger `foreach`
+   hands the writer a plain tuple in the output schema's column order
+   (`LIVE_COLUMNS`), not a `Row`: `values` accepts a `Row`, a mapping or a
+   tuple (the live failure was `dict(tuple)`:
+   "dictionary update sequence element #0 has length 16").
+2. src/jobs/triple_stream/processor.py — `_as_dict` accepts a tuple in
+   `ENVELOPE_FIELDS` order for the same reason.
+3. tests/units/jobs/test_triple_stream_processor.py,
+   tests/units/jobs/test_triple_stream_main.py — tuple rows through the
+   processor and the sink; an unreadable row type is refused.
+4. docs/incremental-materialization.md — Live verification (the run, the
+   numbers, the platform findings below), traceability (Processing row live,
+   KPI row realtime ✅).
+
+Found live, recorded (fixed in the next section): Real-Time Mode refuses the
+`mapInPandas` envelope explode of `main.py`
+(`STREAMING_REAL_TIME_MODE.OPERATOR_OR_SINK_NOT_IN_ALLOWLIST: MapInPandasExec`;
+with the allowlist check off it fails with `ClassCastException …
+RealTimeIterator`), and it schedules every stage at once, so the cluster needs
+source + shuffle partitions free task slots (`CONCURRENT_SCHEDULER_INSUFFICIENT_SLOT`
+with the default 200 shuffle partitions).
+
+Modified files:
+- src/jobs/triple_stream/LiveSink.py
+- src/jobs/triple_stream/processor.py
+- tests/units/jobs/test_triple_stream_processor.py
+- tests/units/jobs/test_triple_stream_main.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: `uv run --frozen pytest -q tests/units/jobs` — 114 passed.
