@@ -1,0 +1,56 @@
+================================================================================
+## Clear new Dependabot alerts: pyasn1, graphql-core, joserfc
+================================================================================
+
+Context: New Dependabot alerts appeared on `uv.lock` / `src/mcp-server/uv.lock`
+— pyasn1 0.6.4 (#313-#316, #320-#323, quadratic BER/CER/DER, BIT STRING, REAL,
+and ANY decoding DoS), graphql-core 3.3.0 (#319, memory leak on aborted
+validations), and joserfc 1.6.8 / 1.7.1 (#309-#312, unbounded JWE
+`recipients` array CPU exhaustion + compact-JWS size-guard allocation before
+rejection). All three are transitive (pyasn1 via pyasn1-modules/rsa/
+google-auth; graphql-core via strawberry-graphql; joserfc via
+authlib/fastmcp-slim) and had no explicit floor yet (pyasn1 was floored at
+the previous, now-insufficient, patched version). Ported the same fix applied
+to the `0.9.2` branch. `oauthlib>=4.0.0` (#175/#176/#282/#318) remains
+blocked: `databricks-sql-connector` 4.4–4.6 pins `oauthlib>=3.1.0,<4.0.0`,
+so it cannot be raised without breaking the Databricks SQL connector; left as
+a documented accepted risk.
+
+Changes:
+
+1. pyproject.toml
+   Raise `pyasn1` floor to `>=0.6.5`; add `graphql-core>=3.3.1` and
+   `joserfc>=1.7.6` constraint floors with Dependabot alert references.
+2. src/mcp-server/pyproject.toml
+   Same `pyasn1>=0.6.5` raise and new `joserfc>=1.7.6` floor (no
+   graphql-core/strawberry-graphql dependency in this subpackage).
+3. uv.lock
+   Regenerated against the Databricks PyPI proxy (`pypi.org` is not reachable
+   from this sandbox network), then rewrote `registry =
+   "https://pypi-proxy.dev.databricks.com/simple"` → `"https://pypi.org/simple"`
+   and `https://pypi-proxy.dev.databricks.com/packages/` →
+   `https://files.pythonhosted.org/packages/` across the file (the proxy
+   mirrors PyPI's own `/packages/<hash>/<hash>/filename` layout 1:1, so the
+   rewrite is a pure identity substitution — confirmed by `uv sync --frozen`
+   downloading and installing the rewritten URLs successfully). Verified zero
+   `pypi-proxy` references remain and `UV_INDEX_URL=https://pypi.org/simple
+   uv lock --check` passes.
+4. src/mcp-server/uv.lock
+   Same regeneration + URL rewrite for the standalone MCP graph.
+5. docs/development.md
+   Add `pyasn1>=0.6.5`, `graphql-core>=3.3.1`, `joserfc>=1.7.6` to the
+   current explicit security floors list.
+
+Modified files:
+- pyproject.toml
+- src/mcp-server/pyproject.toml
+- uv.lock
+- src/mcp-server/uv.lock
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9865 passed, 326 skipped, 8 deselected, 39 warnings in 55.64s
+
+Still open (blocked upstream):
+- oauthlib 4.0.0 (#175/#176/#282/#318) — databricks-sql-connector pins oauthlib<4
+- nltk GHSA-8mgp-746c-j5xp — no patched release yet

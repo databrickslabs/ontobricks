@@ -31,7 +31,10 @@ constraint-dependencies = [
     # mcp>=1.30.0: unbounded StreamableHTTP session accumulation
     # (GHSA-84m7-p3x7-pcfv / CVE-2026-59951, Dependabot #201).
     "mcp>=1.30.0",
-    "pyasn1>=0.6.4",
+    # pyasn1>=0.6.5: quadratic CPU/memory decoding BIT STRING, REAL, ANY and
+    # schemaless BER/CER/DER containers (Dependabot #313-#316). Transitive
+    # via pyasn1-modules/rsa (google-auth).
+    "pyasn1>=0.6.5",
     # fastmcp-slim>=3.4.10: post-transform component authorization was
     # skipped on direct calls (GHSA-7xgj-8392-5q4r, Dependabot #246).
     # Transitive alt distribution of fastmcp.
@@ -51,6 +54,12 @@ constraint-dependencies = [
     "authlib>=1.9.1",
     # dnspython>=2.9.0: from_wire_parser() excessive CPU (GHSA-45c3-73f7-pv4m).
     "dnspython>=2.9.0",
+    # joserfc>=1.7.6: unbounded JWE General JSON `recipients` array causes
+    # CPU exhaustion via repeated RSA private-key decryption (Dependabot
+    # #309, high) and a compact-JWS size guard that allocated
+    # attacker-controlled segments before rejecting them (Dependabot #310,
+    # medium). Transitive via authlib/fastmcp-slim.
+    "joserfc>=1.7.6",
 ]
 
 [project.scripts]

@@ -158,7 +158,10 @@ constraint-dependencies = [
     # Python 3.10, so the project runtime floor is Python 3.11.
     "pillow>=13.0.0",
     "pip>=26.2.0",
-    "pyasn1>=0.6.4",
+    # pyasn1>=0.6.5: quadratic CPU/memory decoding BIT STRING, REAL, ANY and
+    # schemaless BER/CER/DER containers (GHSA-fbr3-g8q5-cx3h and related,
+    # Dependabot #320-#323). Transitive via pyasn1-modules/rsa (google-auth).
+    "pyasn1>=0.6.5",
     # setuptools>=84.1.0: Windows path escape via namespace_packages.txt
     # during legacy wheel installation (GHSA-xmj3-9gf7-h52w, Dependabot #264).
     "setuptools>=84.1.0",
@@ -185,8 +188,19 @@ constraint-dependencies = [
     # anyio 4.14.2: TLSStream IDNA 2003 spoofing (GHSA-82r6-8w77-94w6) and
     # process-pool stderr stall (GHSA-5p39-cfhj-2xmp).
     "anyio>=4.14.2",
-    # oauthlib 4.0.0 (GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v) cannot be
-    # applied: databricks-sql-connector 4.4–4.6 pins oauthlib>=3.1.0,<4.0.0.
+    # graphql-core>=3.3.1: denial of service via memory leak in aborted
+    # validations (GHSA-9p9j-3q6j-9j2c, Dependabot #319). Transitive via
+    # strawberry-graphql (which pins graphql-core<3.4.0,>=3.2.0 — satisfied).
+    "graphql-core>=3.3.1",
+    # joserfc>=1.7.6: unbounded JWE General JSON `recipients` array causes
+    # CPU exhaustion via repeated RSA private-key decryption (Dependabot
+    # #311, high) and a compact-JWS size guard that allocated
+    # attacker-controlled segments before rejecting them (Dependabot #312,
+    # medium). Transitive via authlib/fastmcp-slim.
+    "joserfc>=1.7.6",
+    # oauthlib 4.0.0 (GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v, Dependabot
+    # #175/#176/#282/#318) cannot be applied: databricks-sql-connector
+    # 4.4–4.6 pins oauthlib>=3.1.0,<4.0.0.
     # idna 3.13 closes bypass of CVE-2024-3651 mitigation (GHSA-65pc-fj4g-8rjx):
     #   specially crafted inputs to idna.encode() could still reach quadratic-time path.
     "idna>=3.13",
