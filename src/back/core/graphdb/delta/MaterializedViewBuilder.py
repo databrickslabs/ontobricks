@@ -18,11 +18,17 @@ logger = get_logger(__name__)
 
 _REFRESH_POLICIES = ("AUTO", "INCREMENTAL", "INCREMENTAL STRICT", "FULL")
 
+#: ``pipelines.externalMetadata.enabled`` is what lets ``table_changes`` / a change-feed
+#: stream read the view (Databricks "external data access to streaming tables and
+#: materialized views"; the change feed on a materialized view is a Beta behind it).
+#: It costs nothing where the workspace does not produce the metadata yet — the
+#: feed stays unreadable and the callers fall back as documented.
 _MV_HEADER = (
     "CREATE OR REPLACE MATERIALIZED VIEW {fqn}\n"
     "  CLUSTER BY (predicate, subject)\n"
     "  REFRESH POLICY {policy}\n"
     "  TBLPROPERTIES ('pipelines.channel' = 'preview', "
+    "'pipelines.externalMetadata.enabled' = 'true', "
     "'delta.enableRowTracking' = 'true'{extra})\n"
 )
 

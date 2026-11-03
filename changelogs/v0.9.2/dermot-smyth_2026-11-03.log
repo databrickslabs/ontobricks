@@ -1,0 +1,43 @@
+================================================================================
+## Materialized views carry `pipelines.externalMetadata.enabled` (MV change feed enabler)
+================================================================================
+
+Context: the public docs now describe the materialized-view change feed as a
+Beta enabled by a table property rather than a private-preview enrolment:
+`'pipelines.externalMetadata.enabled' = 'true'` in the view's TBLPROPERTIES
+("external data access to streaming tables and materialized views"). The
+`_data` and `_graph` views are what the net-change apply and an MV-sourced
+Lakebase synced table read the change feed of, so they carry the property.
+
+Changes:
+
+1. src/back/core/graphdb/delta/MaterializedViewBuilder.py — `_MV_HEADER`
+   adds `'pipelines.externalMetadata.enabled' = 'true'` next to the preview
+   channel and row tracking (the definition fingerprint does not cover
+   properties, so existing views are not recreated for it; they get it on
+   their next `CREATE OR REPLACE`).
+2. tests/units/graphdb/delta/test_materialized_view_builder.py — the pinned
+   DDL carries the property.
+3. docs/incremental-materialization.md — Preview enrolment: the property, and
+   the live result.
+
+Live (2026-11-03, fevm-ontobricks-int, fixture view dropped afterwards): with
+the property, `REPAIR TABLE … SYNC METADATA` succeeds (it was refused with
+`REPAIR_TABLE_REQUIRES_EXTERNAL_METADATA` without it), so the flag is honoured;
+`SHOW TBLPROPERTIES` does not echo it; `DESCRIBE HISTORY` / `DESCRIBE DETAIL`
+still answer `EXPECT_TABLE_NOT_VIEW`, and `table_changes` fails with
+`DELTA_LOG_FILE_NOT_FOUND … _external_metadata/_delta_log` for the full ten
+minutes of polling with refreshes and repairs — the external metadata is not
+produced on that workspace yet (the view's DBSQL pipeline cannot be
+reconfigured: "Pipeline type 'DBSQL' is not supported"). The feed therefore
+stays unreadable there and every caller falls back as documented.
+
+Modified files:
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: `uv run --frozen pytest -q tests/units/graphdb/delta
+tests/units/objects/test_build_pipeline_modes.py tests/units/registry` —
+1408 passed, 8 skipped (full suite in the roll-up).

@@ -594,9 +594,20 @@ Three Databricks previews are assumed on the workspace; without them the modes
 degrade as described above:
 
 - **Enzyme incremental materialized views** on the `PREVIEW` pipeline channel,
-  and the **materialized-view change data feed** (`table_changes` on an MV; the
-  Databricks preview notes ask for a one-time `REPAIR TABLE … SYNC METADATA`,
-  which the app does not run — live-unverified) used by the net-change apply.
+  and the **materialized-view change data feed** (`table_changes` on an MV, a Beta)
+  used by the net-change apply and by an MV-sourced triggered / continuous synced
+  table. Its documented enabler is the table property
+  `'pipelines.externalMetadata.enabled' = 'true'` ("external data access to
+  streaming tables and materialized views"), which the `_data` and `_graph` views
+  carry from this release; the build also runs `REPAIR TABLE … SYNC METADATA`
+  after creating a view (best-effort). Measured live on the integration workspace:
+  with the property, `REPAIR TABLE … SYNC METADATA` is accepted (it was refused
+  without it) but the external metadata is never materialised — `DESCRIBE HISTORY`
+  and `table_changes` keep failing with `DELTA_LOG_FILE_NOT_FOUND` at the view's
+  `_external_metadata/_delta_log` after ten minutes of polling, refreshes and
+  repairs — so the feed stays unreadable there and the callers fall back as
+  described. An existing view gets the property on its next `CREATE OR REPLACE`
+  (a definition change), not on a refresh.
 - **Materialized view → Lakebase triggered/continuous synced tables** — the same
   external-metadata preview: the synced-table pipeline reads the MV's change feed
   (measured live, [Live verification](#known-limitations)). Not needed when the slots

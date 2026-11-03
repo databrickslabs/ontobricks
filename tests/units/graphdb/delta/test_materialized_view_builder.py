@@ -38,6 +38,7 @@ def _header(fqn: str, policy: str = "INCREMENTAL", sha: str | None = None) -> st
         "  CLUSTER BY (predicate, subject)\n"
         f"  REFRESH POLICY {policy}\n"
         "  TBLPROPERTIES ('pipelines.channel' = 'preview', "
+        "'pipelines.externalMetadata.enabled' = 'true', "
         f"'delta.enableRowTracking' = 'true'{extra})\n"
     )
 
