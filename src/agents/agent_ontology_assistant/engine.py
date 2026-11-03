@@ -9,7 +9,6 @@ along with the mutated ontology state.
 import json
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
@@ -58,24 +57,6 @@ class AgentResult:
 # System prompt
 # =====================================================
 
-_PITFALL_RULES_PATH = Path(__file__).parent.parent / "PITFALL_RULES.md"
-
-
-def _load_pitfall_rules() -> str:
-    """Load pitfall rules from the sibling PITFALL_RULES.md file.
-
-    Raises FileNotFoundError at import time if the file is missing so the
-    misconfiguration is caught immediately rather than silently producing a
-    prompt without quality rules.
-    """
-    if not _PITFALL_RULES_PATH.exists():
-        raise FileNotFoundError(
-            f"Pitfall rules file not found: {_PITFALL_RULES_PATH}. "
-            "Ensure PITFALL_RULES.md is present in the agent_ontology_assistant package."
-        )
-    return _PITFALL_RULES_PATH.read_text(encoding="utf-8")
-
-
 SYSTEM_PROMPT = """\
 You are an expert ontology assistant for OntoBricks. \
 You help users modify their ontology through natural language instructions.
@@ -100,18 +81,11 @@ You have tools to read and modify the ontology:
   • update_relationship      – modify a relationship's fields
   • set_inheritance          – set or change an entity's parent class
 
-  QUALITY:
-  • check_pitfalls           – verify the ontology against structural/logical pitfall rules
-
 WORKFLOW
 1. When the user asks to modify the ontology, FIRST call get_ontology_classes \
 and/or get_ontology_properties to understand the current state.
 2. Apply the requested changes using the appropriate mutation tools.
-3. Call check_pitfalls to verify the result is free of structural/logical issues.
-4. If check_pitfalls returns issues_found, fix every reported issue using the \
-mutation tools, then call check_pitfalls again.
-5. Repeat steps 3–4 until check_pitfalls returns status "clean" (total_issues = 0).
-6. Reply with a concise summary of what was changed and confirm 0 pitfalls remain.
+3. Reply with a concise summary of what was changed.
 
 RULES
 • Always inspect the current state before making changes (call the read tools first).
@@ -129,7 +103,7 @@ FORMATTING
 • Use **bold** for entity/relationship names.
 • Use bullet lists for short summaries of changes.
 
-""" + _load_pitfall_rules()
+"""
 
 
 # =====================================================
@@ -197,7 +171,6 @@ def run_agent(
         if on_step:
             on_step(f"Iteration {iteration + 1}…")
 
-        t0 = time.time()
         try:
             llm_response = call_serving_endpoint(
                 host,
@@ -218,8 +191,6 @@ def run_agent(
             )
             result.error = error_msg
             return result
-
-        elapsed = int((time.time() - t0) * 1000)
 
         accumulate_usage(result.usage, llm_response.get("usage", {}))
 

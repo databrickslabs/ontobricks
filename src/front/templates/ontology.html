@@ -16,7 +16,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-wizard.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-groups.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-assistant.css') }}?v={{ asset_version }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-pitfalls.css') }}?v={{ asset_version }}">
 {% endblock %}
 
 {% block content %}
@@ -95,11 +94,6 @@
                 {% include "partials/ontology/_ontology_owl_content.html" %}
             </div>
 
-            <!-- Pitfalls Section (D2KLab ontology quality checks) -->
-            <div id="pitfalls-section" class="sidebar-section">
-                {% include "partials/ontology/_pitfalls.html" %}
-            </div>
-            
             <!-- Shared Edit Panels (Entity & Relationship) - positioned within sidebar-content -->
             {% include "partials/ontology/_ontology_shared_panels.html" %}
         </div>
@@ -133,8 +127,6 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-wizard-review.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-wizard.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-assistant.js') }}?v={{ asset_version }}"></script>
-
-<script src="{{ url_for('static', filename='ontology/js/ontology-pitfalls.js') }}?v={{ asset_version }}"></script>
 
 <!-- Ontology page initialization (extracted from template) -->
 <script src="{{ url_for('static', filename='ontology/js/ontology-init.js') }}?v={{ asset_version }}"></script>

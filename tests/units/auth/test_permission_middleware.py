@@ -1408,7 +1408,6 @@ class TestIsStatusGatedEdit:
         "/ontology/entities/generate",
         "/ontology/validate",
         "/mapping/assignments/analyze",
-        "/ontology/pitfalls/analyze",
         "/ontology/chat",
     ])
     def test_open_suffixes_exempt_from_gate(self, path):

@@ -283,8 +283,6 @@
             '<div class="d-flex gap-2 mt-3">' +
             '<a class="btn btn-sm btn-outline-secondary" href="/domain/?section=validation">' +
             '<i class="bi bi-speedometer2 me-1"></i>Open Cockpit</a>' +
-            '<a class="btn btn-sm btn-outline-secondary" href="/ontology/?section=pitfalls">' +
-            '<i class="bi bi-bug me-1"></i>Run Pitfalls</a>' +
             '</div></div></div>';
     }
 

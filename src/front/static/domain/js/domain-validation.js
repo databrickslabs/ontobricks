@@ -25,7 +25,6 @@ async function loadValidationDetails() {
         updateMappingCard(data);
         updateDtwinCard(data);
         updateMissingItems(data);
-        loadPrecisionScore();
         loadGraphMetricsSummary();
         loadMaterializedInferenceCount();
     } catch (error) {
@@ -57,17 +56,6 @@ async function loadMaterializedInferenceCount() {
         target.textContent = count.toLocaleString();
     } catch (error) {
         target.textContent = 'N/A';
-    }
-}
-
-/* ── Ontology precision score ─────────────────── */
-async function loadPrecisionScore() {
-    try {
-        const resp = await fetch('/domain/info', { credentials: 'same-origin' });
-        const data = await resp.json();
-        renderPrecisionScore(data && data.success ? data.precision_score : null);
-    } catch (e) {
-        renderPrecisionScore(null);
     }
 }
 
@@ -121,42 +109,6 @@ async function loadGraphMetricsSummary() {
         if (errorEl) errorEl.classList.remove('d-none');
         if (badge) { badge.textContent = 'Error'; badge.className = 'badge bg-danger'; }
         console.warn('[GraphStructure] Could not load metrics summary:', e);
-    }
-}
-
-function renderPrecisionScore(score) {
-    const bar = document.getElementById('domainPrecisionBar');
-    const label = document.getElementById('domainPrecisionLabel');
-    const hint = document.getElementById('domainPrecisionHint');
-    if (!bar || !label) return;
-
-    if (score === null || score === undefined) {
-        bar.style.width = '0%';
-        bar.setAttribute('aria-valuenow', 0);
-        bar.className = 'progress-bar bg-secondary';
-        label.textContent = 'Not analyzed';
-        label.style.color = '';
-        if (hint) {
-            hint.innerHTML = '<i class="bi bi-info-circle me-1"></i>No precision ' +
-                'score yet — run a <strong>Pitfalls</strong> analysis to compute it.';
-        }
-        return;
-    }
-
-    const pct = Math.max(0, Math.min(100, score));
-    bar.style.width = pct + '%';
-    bar.setAttribute('aria-valuenow', pct);
-
-    let colour = 'bg-success';
-    if (pct < 50) colour = 'bg-danger';
-    else if (pct < 80) colour = 'bg-warning';
-    bar.className = 'progress-bar ' + colour;
-
-    label.textContent = pct + ' / 100';
-    label.style.color = pct < 50 ? '#dc3545' : pct < 80 ? '#fd7e14' : '#198754';
-    if (hint) {
-        hint.innerHTML = '<i class="bi bi-info-circle me-1"></i>Last score from the ' +
-            '<strong>Pitfalls</strong> analysis. Run an analysis to refresh.';
     }
 }
 

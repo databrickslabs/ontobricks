@@ -597,7 +597,7 @@ class TestDomainPage:
         assert _find(_tags(html), id_="domainKpiPanel") is not None
         for kpi_id in (
             "kpiEntities", "kpiRelationships", "kpiMappings",
-            "kpiQuality", "kpiStatus", "kpiVersion",
+            "kpiStatus", "kpiVersion",
         ):
             assert _find(_tags(html), id_=kpi_id) is not None
 

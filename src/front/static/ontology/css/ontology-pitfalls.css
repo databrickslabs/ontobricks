@@ -1,4 +1,0 @@
-.pitfall-tooltip .tooltip-inner { max-width: 320px; text-align: left; font-size: .8rem; }
-#pitfallsTabContent { flex: 1; min-height: 0; overflow-y: auto; }
-#pitfalls-results-pane { overflow-y: visible; max-height: none; }
-.pf-progress-md { height: 20px; }

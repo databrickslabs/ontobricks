@@ -4,8 +4,8 @@ Regression guard for drift found during the 2026-08-05 Help Center review:
 the Step-by-Step Workflow accordion referenced menu items ("Graph Viewer",
 "GraphQL", Registry's "Schedule"/"API") that had been renamed or moved
 (Explorer/Query, Settings) without the Help Center copy being updated, and
-missed newer sections entirely (Chat, Cohorts, Analytics, Build/Runs,
-Pitfalls). These tests lock in the current, correct labels.
+missed newer sections entirely (Chat, Cohorts, Analytics, Build/Runs).
+These tests lock in the current, correct labels.
 """
 
 import html

@@ -161,9 +161,8 @@ class TestDetectEntities:
             "get_metadata",
             "get_table_detail",
         }
-        # Never the parser or the pitfall-rewrite tool.
+        # Never the parser.
         assert "ai_parse_document" not in names
-        assert "check_owl_pitfalls" not in names
 
     def test_finalization_truncation_fails_without_reprompt(self):
         # Reject-only, per this revision's transport-level fix: a
@@ -758,16 +757,13 @@ class TestNoOneShotDefault:
         source = inspect.getsource(staged)
         assert "run_agent" not in source
 
-    def test_staged_functions_do_not_reference_pitfall_rewrite_loop(self):
-        # Review fix (item 4): the legacy one-shot bridge's post-generation
-        # check_owl_pitfalls -> fix rewrite loop (agent_owl_generator.engine)
-        # must never be reachable from the staged path, even indirectly.
+    def test_staged_functions_do_not_reference_one_shot_eval_loop(self):
+        # The one-shot generator's Stage-1 evaluator must never be reachable
+        # from the staged path, even indirectly.
         import inspect
 
         source = inspect.getsource(staged)
         for banned in (
-            "tool_check_owl_pitfalls",
-            "check_owl_pitfalls",
             "_evaluate_ontology_stage",
             "owl_eval_max_rounds",
             "MAX_OWL_EVAL_ROUNDS",
@@ -805,7 +801,7 @@ class TestNoOneShotDefault:
 
 
 # ---------------------------------------------------------------------------
-# Prompt-first pitfalls + lexical alternate labels
+# Prompt-first naming rules + lexical alternate labels
 # ---------------------------------------------------------------------------
 
 
@@ -859,9 +855,7 @@ class TestPrompts:
         assert "paraphrase" in lowered
         assert "active voice" in lowered
 
-    def test_prompts_carry_pitfall_naming_rules_up_front(self):
-        # Prompt-first: naming rules live in the stage prompt, not in a
-        # post-generation rewrite loop.
+    def test_prompts_carry_naming_rules_up_front(self):
         text = prompts.build_relations_system_prompt()
         assert "lowerCamelCase" in text
 

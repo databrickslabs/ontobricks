@@ -231,7 +231,6 @@ DEAD_FUNCTIONS = {
     "global/js/utils.js": ["loadVolumes"],
     "ontology/js/ontology-information.js": ["showValidationSummary"],
     "query/js/query-sync.js": ["checkConfigChanges"],
-    "ontology/js/ontology-pitfalls.js": ["_showDepsWarning"],
     "global/js/comments-panel.js": ["userIsComposing"],
 }
 

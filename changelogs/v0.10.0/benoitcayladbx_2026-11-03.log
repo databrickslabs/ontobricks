@@ -136,3 +136,161 @@ Modified files:
 
 Tests: docs/rules-only. Import-boundary test previously green; full suite not
 re-run for this alignment.
+
+================================================================================
+## Remove Ontology Pitfalls feature
+================================================================================
+
+Context: Drop the Ontology sidebar Pitfalls panel (D2KLab detector), its REST
+routes, agent tools (`check_pitfalls` / `check_owl_pitfalls`), precision-score
+session field, and the optional `[pitfalls]` extra. The extra was the only
+reason OntoBricks pulled sentence-transformers, NLTK, torch, and transformers;
+scikit-learn and SciPy remain as MLflow transitives.
+
+Changes:
+
+1. src/back/core/external/
+   Delete the vendored pitfalls package (`PitfallsService`, runner, utils).
+2. src/api/routers/internal/ontology.py
+   Remove `/ontology/pitfalls/taxonomy|analyze|results` routes.
+3. src/front/config/menu_config.json, src/front/templates/ontology.html
+   Remove the Pitfalls sidebar section and its CSS/JS includes.
+4. src/agents/tools/pitfalls.py, src/agents/PITFALL_RULES.md
+   Delete the shared pitfall tool and rules file.
+5. src/agents/agent_owl_generator/engine.py
+   Remove the post-generation pitfall-fix loop; keep the PGE evaluator.
+6. src/agents/agent_ontology_assistant/engine.py, tools.py
+   Drop `check_pitfalls` from the prompt, tool list, and handlers.
+7. src/back/objects/session/DomainSession.py, Domain.py
+   Remove unused `precision_score` session field and `/domain/info` payload.
+8. pyproject.toml, uv.lock, requirements.txt, Makefile, scripts/start.sh, scripts/setup.sh
+   Remove the `[pitfalls]` extra and lock entries unique to it (NLTK,
+   sentence-transformers, torch, transformers, CUDA/nvidia wheels).
+9. licenses/README.md
+   Drop D2KLab/NLTK/sentence-transformers license rows; keep sklearn/SciPy as
+   MLflow transitives.
+10. tests/units/architecture/baseline.json
+    Shrink-only ratchet after deleting oversized pitfalls modules.
+
+Modified files:
+- Makefile
+- README.md
+- docs/deployment.md
+- docs/development.md
+- docs/getting-started.md
+- docs/user-guide.md
+- licenses/README.md
+- licenses/python/d2klab-ontology-pitfalls-detector-LICENSE.txt
+- licenses/python/nltk-LICENSE.txt
+- licenses/python/sentence-transformers-LICENSE.txt
+- pyproject.toml
+- requirements.txt
+- scripts/setup.sh
+- scripts/start.sh
+- src/agents/PITFALL_RULES.md
+- src/agents/agent_ontology_assistant/engine.py
+- src/agents/agent_ontology_assistant/tools.py
+- src/agents/agent_owl_generator/__init__.py
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_owl_generator/prompts.py
+- src/agents/agent_owl_generator/tools.py
+- src/agents/agent_supervisor/engine.py
+- src/agents/tools/pitfalls.py
+- src/api/routers/internal/ontology.py
+- src/back/core/agents/AgentClient.py
+- src/back/core/external/__init__.py
+- src/back/core/external/pitfalls/PitfallsService.py
+- src/back/core/external/pitfalls/__init__.py
+- src/back/core/external/pitfalls/runner.py
+- src/back/core/external/pitfalls/utils.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/front/config/menu_config.json
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain-review.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/global/css/permissions.css
+- src/front/static/ontology/css/ontology-pitfalls.css
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/js/ontology-pitfalls.js
+- src/front/templates/ontology.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/ontology/_pitfalls.html
+- tests/eval/staged_contract.py
+- tests/units/agents/test_agent_ontology_assistant_engine.py
+- tests/units/agents/test_agent_owl_generator_class_cap.py
+- tests/units/agents/test_agent_owl_generator_truncation.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/architecture/baseline.json
+- tests/units/auth/test_permission_middleware.py
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_frontend_xss_hardening.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/ontology/test_pitfalls_service.py
+- uv.lock
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 3 failed, 9848 passed, 326 skipped, 8 deselected, 39 warnings in 46.74s. The 3 failures are pre-existing (deploy INSTANCE_ID 10x vs fixture 09x, app.yaml user_api_scopes) and unrelated to this removal.
+
+================================================================================
+## Strip leftover pitfalls dead code and unused imports
+================================================================================
+
+Context: After removing the Ontology Pitfalls feature, a few leftovers remained:
+`AgentResult.iteration_summary` was never written, OWL-generator tests still
+passed the obsolete `generation_max_iterations` option, and ruff flagged unused
+symbols in files touched by the removal. Packaging is already clean — `pyproject.toml`
+has only the `lakebase` extra, and `uv.lock` no longer lists NLTK,
+sentence-transformers, torch, or transformers. scikit-learn and SciPy stay as
+MLflow transitives.
+
+Changes:
+
+1. src/agents/agent_owl_generator/engine.py
+   Drop unused `AgentResult.iteration_summary`.
+2. src/agents/agent_ontology_assistant/engine.py
+   Remove unused LLM-call elapsed-time locals (F841).
+3. src/back/objects/session/DomainSession.py
+   Drop unused `DEFAULT_GRAPH_NAME` import (F401).
+4. tests/units/agents/test_agent_owl_generator_class_cap.py
+   Stop passing the no-op `generation_max_iterations` option.
+5. tests/units/agents/test_agent_owl_generator_truncation.py
+   Same option cleanup.
+
+Modified files:
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_ontology_assistant/engine.py
+- src/back/objects/session/DomainSession.py
+- tests/units/agents/test_agent_owl_generator_class_cap.py
+- tests/units/agents/test_agent_owl_generator_truncation.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 3 failed, 9848 passed, 326 skipped, 8 deselected, 39 warnings in 50.07s. The 3 failures are pre-existing (deploy INSTANCE_ID 10x vs fixture 09x, app.yaml user_api_scopes) and unrelated to this cleanup.
+
+================================================================================
+## Stop hard-coding deploy INSTANCE_ID in tests
+================================================================================
+
+Context: `test_deploy_instance_id.py` asserted the previous line default (`09x`).
+Bump `DEFAULT_INSTANCE_ID` in `scripts/deploy.config.sh` (now `10x`) and those
+tests fail even though derivation is correct. Tests must read the config
+fallback and check the naming contract against it.
+
+Changes:
+
+1. tests/units/settings/test_deploy_instance_id.py
+   Parse `DEFAULT_INSTANCE_ID` from `deploy.config.sh`; assert app name, MCP
+   name, and DAB target as `ontobricks-<id>` / `mcp-ontobricks-<id>` /
+   `dev-lakebase-<id>`. Synthetic override `080` stays as a fixture, not a
+   product default.
+
+Modified files:
+- tests/units/settings/test_deploy_instance_id.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9852 passed, 326 skipped, 8 deselected, 39 warnings in 52.05s. Remaining failure is `test_each_app_declares_user_api_scopes_for_obo` (bundle lists only `sql`; test still requires the identity scopes the Apps create API rejects).

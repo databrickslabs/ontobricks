@@ -13,7 +13,6 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 import requests
@@ -24,7 +23,6 @@ from agents.agent_owl_generator.tools import (
     TOOL_DEFINITIONS,
     TOOL_HANDLERS,
 )
-from agents.tools.pitfalls import tool_check_owl_pitfalls
 from agents.engine_base import (
     AgentStep,
     call_serving_endpoint,
@@ -54,10 +52,6 @@ MAX_OWL_EVAL_ROUNDS = 2
 _GEN_MAX_TOKENS = 8192
 
 _TRACE_NAME = "owl_generator"
-
-# Max pitfall-fix rounds the agent may consume (overridable via options dict).
-# The agent drives the quality loop itself via check_owl_pitfalls tool calls.
-_DEFAULT_MAX_FIX_ROUNDS = 5
 
 # Over-generation guard. An over-decomposed ontology (one class per column or
 # per attribute value) explodes the downstream auto-mapping cost — the mapper
@@ -92,25 +86,11 @@ class AgentResult:
     iterations: int = 0
     error: str = ""
     usage: Dict[str, int] = field(default_factory=dict)
-    iteration_summary: List[Dict] = field(default_factory=list)
 
 
 # =====================================================
 # System prompt
 # =====================================================
-
-_PITFALL_RULES_PATH = Path(__file__).parent.parent / "PITFALL_RULES.md"
-
-
-def _load_pitfall_rules() -> str:
-    """Load pitfall rules from the shared agents/PITFALL_RULES.md file."""
-    if not _PITFALL_RULES_PATH.exists():
-        raise FileNotFoundError(
-            f"Pitfall rules file not found: {_PITFALL_RULES_PATH}. "
-            "Ensure PITFALL_RULES.md is present in src/agents/."
-        )
-    return _PITFALL_RULES_PATH.read_text(encoding="utf-8")
-
 
 SYSTEM_PROMPT = """\
 
@@ -140,7 +120,7 @@ You have four tools:
 • NO spaces, underscores or hyphens in local names.
 • Convert: street_address → streetAddress, Sales Order → SalesOrder
 
-# PROPERTY NAMING — CRITICAL – NO EXCEPTIONS (violations = P3.2 / P3.3 pitfalls)
+# PROPERTY NAMING — CRITICAL – NO EXCEPTIONS
 • NEVER embed the range class name inside a property name.
   ❌ WRONG: hasPersonName, containsEvent, hasOrderDate, includesProduct
   ✅ RIGHT:  hasName, contains, hasDate, includes
@@ -149,7 +129,7 @@ You have four tools:
   ✅ RIGHT:  hasName, containsItem, hasAddress
 • The domain/range are declared separately; the name must express only the relationship verb.
 
-# PROPERTY HIERARCHY RULES (violations = P2.6 pitfall)
+# PROPERTY HIERARCHY RULES
 • If you create two properties where one is a specialisation of the other
   (e.g., hasAddress + hasBillingAddress), you MUST either:
   (a) Declare rdfs:subPropertyOf (hasBillingAddress rdfs:subPropertyOf hasAddress), OR
@@ -293,20 +273,12 @@ If you detect a likely inconsistency or anti-pattern, correct it before output a
 ## 7. In general
 - Avoid orphans entities (try to have entities with relationships)
 
-""" + _load_pitfall_rules()
+"""
 
 
 # =====================================================
 # Internal helpers
 # =====================================================
-
-def _parse_pitfall_tool_result(tool_result_json: str) -> Optional[Dict]:
-    """Parse the JSON returned by the check_owl_pitfalls tool.  Returns None on error."""
-    try:
-        return json.loads(tool_result_json)
-    except Exception:
-        return None
-
 
 # Stage-1 absolute (Tier-1) ontology defects that the Evaluator forces a
 # retry on.  Coverage ratios are computed and logged but are advisory at the
@@ -332,7 +304,7 @@ def _evaluate_ontology_stage(
     PGE loop.  Returns ``None`` when the ontology is structurally clean.
 
     Fails open: any parse/dep error returns ``None`` so a check failure
-    never blocks OWL delivery (mirrors the pitfall-tool check).
+    never blocks OWL delivery.
     """
     try:
         from back.core.w3c.owl.OntologyParser import OntologyParser
@@ -492,15 +464,10 @@ def run_agent(
 
     result = AgentResult(success=False)
 
-    # Generation-quality loop configuration (from options with defaults).
-    # The agent drives its own check_owl_pitfalls → fix loop; max_fix_rounds
-    # is the Python-side budget cap after which we force a final text output.
-    max_fix_rounds = int(options.get("generation_max_iterations", _DEFAULT_MAX_FIX_ROUNDS))
     max_classes = int(options.get("max_classes", _DEFAULT_MAX_CLASSES))
     max_eval_rounds = int(options.get("owl_eval_max_rounds", MAX_OWL_EVAL_ROUNDS))
     logger.info(
-        "run_agent: quality loop config — max_fix_rounds=%d, max_classes=%d, max_eval_rounds=%d",
-        max_fix_rounds,
+        "run_agent: quality loop config — max_classes=%d, max_eval_rounds=%d",
         max_classes,
         max_eval_rounds,
     )
@@ -587,7 +554,6 @@ def run_agent(
     # Agent loop
     # ------------------------------------------------------------------
     tools_supported = True
-    _owl_fix_rounds = 0        # pitfall-fix rounds consumed so far
     _consolidate_rounds = 0    # over-generation consolidation rounds consumed
     _owl_eval_rounds = 0       # Evaluator (Stage-1 PGE) retry rounds consumed
 
@@ -915,76 +881,13 @@ def run_agent(
                     })
                     continue
 
-            # ── External pitfall check (fast, no extra LLM call) ─────────────
-            if starts_with_prefix and _owl_fix_rounds < max_fix_rounds:
-                notify("Checking ontology quality…")
-                pf_result_json = tool_check_owl_pitfalls(ctx, turtle_text=content)
-                pf_data = _parse_pitfall_tool_result(pf_result_json)
-
-                if pf_data and "error" not in pf_data:
-                    _owl_fix_rounds += 1
-                    score = pf_data.get("score", 0)
-                    warnings = pf_data.get("warnings", [])
-                    pitfall_ids = [w["id"] for w in warnings]
-                    critical_count = sum(
-                        w["count"] for w in warnings if w["id"].startswith("P1.")
-                    )
-                    is_clean = pf_data.get("is_clean", False)
-                    round_status = "passed" if is_clean else (
-                        "challenged" if _owl_fix_rounds < max_fix_rounds
-                        else "max_rounds_reached"
-                    )
-
-                    result.iteration_summary.append({
-                        "round": _owl_fix_rounds,
-                        "score": score,
-                        "critical_count": critical_count,
-                        "pitfalls": pitfall_ids,
-                        "status": round_status,
-                    })
-                    notify(f"__iter__:{json.dumps({'round': _owl_fix_rounds, 'score': score, 'critical': critical_count, 'pitfalls': pitfall_ids, 'status': round_status, 'warnings': warnings})}")
-
-                    if not is_clean and round_status == "challenged":
-                        fix_instruction = pf_data.get("fix_instruction", "")
-                        notify(
-                            f"Fix round {_owl_fix_rounds}/{max_fix_rounds} — "
-                            f"score {score}/100, {len(warnings)} warning(s)…"
-                        )
-                        logger.info(
-                            "Iteration %d: pitfall check — score=%d, %d warning(s) → injecting fix",
-                            iteration + 1, score, len(warnings),
-                        )
-                        messages.append({"role": "assistant", "content": content})
-                        messages.append({
-                            "role": "user",
-                            "content": (
-                                f"{fix_instruction}\n\n"
-                                "Output ONLY the corrected Turtle. "
-                                "Start with @prefix. No prose, no code fences."
-                            ),
-                        })
-                        continue  # next loop iteration asks the LLM to fix
-
-                    if not is_clean:
-                        notify(
-                            f"Max fix rounds ({max_fix_rounds}) reached — "
-                            "accepting best available ontology."
-                        )
-                    else:
-                        notify(f"Ontology is clean — score {score}/100 ✓")
-                    logger.info(
-                        "Iteration %d: pitfall check — score=%d, is_clean=%s, fix_round=%d/%d",
-                        iteration + 1, score, is_clean,
-                        _owl_fix_rounds, max_fix_rounds,
-                    )
-
             # --------------------------------------------------------------
-            # Evaluator stage (PGE loop) — after the pitfall-tool loop is
-            # clean/maxed, run the Stage-1 deterministic ontology checks (§3.2).
-            # On a Tier-1 structural defect, feed concrete retry_hints back to
-            # the generator, bounded by MAX_OWL_EVAL_ROUNDS. Only retry when
-            # there's another iteration left, so a usable ontology is never
-            # discarded by exhausting MAX_ITERATIONS.
+            # Evaluator stage (PGE loop) — run the Stage-1 deterministic
+            # ontology checks (§3.2). On a Tier-1 structural defect, feed
+            # concrete retry_hints back to the generator, bounded by
+            # MAX_OWL_EVAL_ROUNDS. Only retry when there's another iteration
+            # left, so a usable ontology is never discarded by exhausting
+            # MAX_ITERATIONS.
             # --------------------------------------------------------------
             eval_feedback = _evaluate_ontology_stage(content, ctx.metadata, iteration + 1)
             if (
@@ -1020,16 +923,10 @@ def run_agent(
             result.iterations = iteration + 1
             result.usage = total_usage
 
-            final_score = (
-                result.iteration_summary[-1]["score"]
-                if result.iteration_summary else None
-            )
             logger.info(
-                "===== AGENT COMPLETE ===== iterations=%d, fix_rounds=%d, final_score=%s, "
+                "===== AGENT COMPLETE ===== iterations=%d, "
                 "prompt_tokens=%d, completion_tokens=%d, owl_chars=%d",
                 result.iterations,
-                _owl_fix_rounds,
-                final_score,
                 total_usage["prompt_tokens"],
                 total_usage["completion_tokens"],
                 len(content),

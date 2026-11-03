@@ -43,7 +43,7 @@ if [ ! -f ".venv/bin/python" ]; then
 fi
 
 echo "Using virtual environment Python..."
-uv sync --frozen --extra lakebase --extra pitfalls --quiet 2>/dev/null || true
+uv sync --frozen --extra lakebase --quiet 2>/dev/null || true
 
 # ── Load .env ──────────────────────────────────────────────────────────────
 if [ -f ".env" ]; then

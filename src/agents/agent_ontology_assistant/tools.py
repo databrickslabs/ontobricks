@@ -683,109 +683,6 @@ _SET_INHERITANCE_DEF = {
 
 
 # =====================================================
-# Pitfall check tool
-# =====================================================
-
-# Pitfalls that do not require ML (sentence-transformers) — fast and safe to
-# run inside the agent loop after every mutation.
-_NON_ML_PATTERNS = [
-    "P1.1", "P1.2", "P1.3",
-    "P2.1", "P2.2", "P2.3", "P2.4", "P2.5", "P2.6",
-    "P3.1", "P3.2", "P3.3",
-    "P4.1",
-]
-
-
-def tool_check_pitfalls(ctx: ToolContext, *, patterns: list = None, **_kwargs) -> str:
-    """Build a temporary OWL graph from the current ontology and run pitfall checks.
-
-    Defaults to the non-ML subset (P1.x, P2.x, P3.x, P4.1).  Pass
-    patterns=["all"] to include semantic/ML checks (P4.2–P4.7), which are
-    slower and require the ``pitfalls`` optional extra.
-    """
-    try:
-        from back.core.w3c.owl import OntologyGenerator
-        from back.core.external.pitfalls import PitfallsService
-    except ImportError as exc:
-        return json.dumps({"error": f"Required modules not available: {exc}"})
-
-    if patterns is None:
-        patterns = _NON_ML_PATTERNS
-
-    try:
-        gen = OntologyGenerator(
-            base_uri=ctx.ontology_base_uri or "http://ontobricks.io/",
-            ontology_name="ontology",
-            classes=ctx.ontology_classes,
-            properties=ctx.ontology_properties,
-        )
-        gen.generate()
-
-        svc = PitfallsService()
-        result = svc.run_analysis(gen.graph, patterns=patterns)
-
-        issues: dict = {}
-        total = 0
-        for pid, r in result["results"].items():
-            count = r.get("count", 0) if isinstance(r.get("count"), int) else 0
-            if count > 0:
-                issues[pid] = {
-                    "title": r.get("title", pid),
-                    "count": count,
-                    "items": r.get("items", [])[:10],
-                }
-                total += count
-
-        return json.dumps({
-            "total_issues": total,
-            "checked_patterns": patterns,
-            "issues": issues,
-            "status": "clean" if total == 0 else "issues_found",
-        })
-
-    except ImportError as exc:
-        return json.dumps({
-            "error": f"Pitfall detection dependencies not installed: {exc}",
-            "hint": "Install with: pip install .[pitfalls]",
-        })
-    except Exception as exc:
-        logger.exception("tool_check_pitfalls failed: %s", exc)
-        return json.dumps({"error": f"Pitfall check failed: {exc}"})
-
-
-_CHECK_PITFALLS_DEF = {
-    "type": "function",
-    "function": {
-        "name": "check_pitfalls",
-        "description": (
-            "Build a temporary OWL graph from the current ontology state and run "
-            "structural/logical pitfall checks (P1.x, P2.x, P3.x, P4.1 by default — "
-            "no ML required, fast). Returns a JSON summary with total_issues and a "
-            "per-pitfall breakdown of what is wrong and which classes/properties are "
-            "affected. MUST be called after every mutation batch and before replying "
-            "to the user. If issues_found, fix them and call check_pitfalls again until "
-            "status is 'clean'."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "patterns": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": (
-                        "Pitfall IDs to check (e.g. ['P1.1', 'P2.2']). "
-                        "Omit for the default non-ML set. Pass ['all'] for the full "
-                        "19-pitfall suite including semantic/ML checks (slower)."
-                    ),
-                }
-            },
-            "required": [],
-        },
-    },
-}
-
-
-# =====================================================
 # Aggregated lists for the engine
 # =====================================================
 
@@ -802,7 +699,6 @@ TOOL_DEFINITIONS: List[dict] = [
     _REMOVE_RELATIONSHIP_DEF,
     _UPDATE_RELATIONSHIP_DEF,
     _SET_INHERITANCE_DEF,
-    _CHECK_PITFALLS_DEF,
 ]
 
 TOOL_HANDLERS: Dict[str, Callable] = {
@@ -818,5 +714,4 @@ TOOL_HANDLERS: Dict[str, Callable] = {
     "remove_relationship": tool_remove_relationship,
     "update_relationship": tool_update_relationship,
     "set_inheritance": tool_set_inheritance,
-    "check_pitfalls": tool_check_pitfalls,
 }

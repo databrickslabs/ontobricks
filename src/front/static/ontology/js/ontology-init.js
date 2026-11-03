@@ -55,8 +55,6 @@ function _initSectionByName(section) {
         autoGenerateOwl();
     } else if (section === 'groups' && typeof OntologyGroups !== 'undefined') {
         OntologyGroups.init();
-    } else if (section === 'pitfalls' && typeof PitfallsModule !== 'undefined') {
-        PitfallsModule.init();
     }
 }
 

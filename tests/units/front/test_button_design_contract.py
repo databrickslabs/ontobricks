@@ -279,7 +279,6 @@ def test_section_header_primary_cta_is_the_right_most_button():
         "partials/ontology/_ontology_wizard.html": "wizardTopGenerateBtn",
         "partials/domain/_domain_metadata.html": "loadMetadataBtn",
         "partials/mapping/_mapping_diagnostics.html": "runDiagnosticsBtn",
-        "partials/ontology/_pitfalls.html": "pitfallsRunBtn",
         "partials/ontology/_ontology_cohorts.html": "cohortSaveBtn",
     }
 

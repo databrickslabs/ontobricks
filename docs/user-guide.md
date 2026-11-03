@@ -1462,8 +1462,7 @@ you back to **Domain → General → AI** and does not start an LLM request.
 The AI tab and **Browse** picker remain usable. Select and save an AI Gateway
 model service or Model Serving endpoint to make the LLM actions available
 again without reloading the page. Deterministic features remain available with
-No LLM, including ontology pitfalls, OWL/SWRL reasoning, SHACL validation, and
-cohort operations.
+No LLM, including OWL/SWRL reasoning, SHACL validation, and cohort operations.
 
 #### Triple Store Tab
 
@@ -1723,7 +1722,7 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
   and opens its Validation workspace.
 - **Domain → Validation** — the per-version review workspace:
   - **Consistency checks** — a soft readiness summary (ontology valid, mapping complete,
-    warehouse configured, Knowledge Graph built) with shortcuts to the Cockpit and Pitfalls.
+    warehouse configured, Knowledge Graph built) with a shortcut to the Cockpit.
     These checks are advisory and never block publishing.
   - **Your actions** — context-aware buttons: Submit for review, **Approve** / **Request
     changes** (with an optional comment for the audit trail), Publish, or Reopen.
@@ -3038,7 +3037,6 @@ After import you can:
 - **Decision Tables & Aggregate Rules**: Both editors explain each field and show a live plain-English preview of what the rule does, with warnings for combinations the engine cannot apply. In a decision table, each column reads one attribute and each row is an AND of conditions. A cell only requires its attribute when it holds a condition, so instances missing that attribute still match *any* or empty cells. The output either **sets a value** (`riskTier = high`) or **assigns an entity** (types the instance, e.g. `HighRiskCustomer`). The hit policy decides what happens when several OR rows match the same instance: *First* keeps the first row, *All* fires every row, and *Unique* reports a conflict and applies no output.
 - **Conditional data quality rules**: Guard a conformance or consistency rule with an optional IF block — *IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*. Conditions use the same property/operator/value rows as the Business Rules decision table, plus `exists` / `does not exist` on relationships, and compile to a SHACL-AF `sh:SPARQLTarget` on export.
 - **OWL Axioms**: Express class relationships, property chains, and complex expressions (equivalent, disjoint, union, intersection).
-- **Ontology Pitfalls Detector**: Detect 19 structural, logical, and semantic pitfalls (P1.1–P4.7) in four categories via the **Ontology → Pitfalls** sidebar panel. Fast/graph-only checks run immediately; ML-heavy checks (semantic similarity, NLP naming) require the optional `[pitfalls]` extra (`uv sync --frozen --extra pitfalls`). Each check shows a description tooltip and ⚡/💻 speed indicator. Results group by category with an accordion display.
 - **OWL Generation**: Automatic generation of W3C-compliant OWL/Turtle from visual design. **Ontology → Generate** also reads Unity Catalog **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Domain → Metadata.
 - **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the LLM saved in **Domain → General → AI** (Ontology Studio toolbar). Entities that still use the default icon are mapped immediately; if every entity already has a custom icon, the toolbar asks for confirmation before remapping all of them. Unavailable when **No LLM** is selected.
 - **Ontology Studio (D3 Graph)**: Force-directed graph view of the full ontology under **Ontology → Studio**. Click an entity to select it, open its panel, and highlight its 1-hop neighbourhood (connected links + neighbours dimmed). The toolbar **Select** toggle (bounding-box icon) turns click-to-toggle and empty-canvas marquee on without holding a modifier; Ctrl/Cmd-click and Ctrl/Cmd-drag still work when the toggle is off. Ctrl/Cmd-click toggles an entity in a multi-selection without opening the panel. Ctrl/Cmd-drag on empty canvas draws a marquee that replaces the selection with every entity inside the rectangle (an empty marquee leaves the current set). Plain drag on empty canvas still pans; Escape clears a multi-selection (after connection mode, if any). Dragging one selected node moves the whole set. Right-click a multi-selection offers **Create Business View** and **Delete N entities** only — Create Business View writes `Auto_Selection` (numeric suffix on collision) with exactly the selected entities plus object-property/inheritance links whose both endpoints are selected, then opens Business Views. Single-entity right-click still creates `Auto_<entity>` plus the 1-hop neighbourhood. Click a relationship to highlight its two endpoints. Subclasses show dashed inherited outgoing relations from ancestor object-properties (read-only; Mapping reuses the declaring class’s mapping). Toggle inheritance links and the OntoViz-style dotted canvas grid (both persisted). Search any entity by name to pan/zoom to it with neighbourhood highlight. Metadata-only saves (label, icon, reference, relationship direction) refresh visible nodes in place; topology changes still rebuild the map.

@@ -29,10 +29,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
-from shared.config.constants import (
-    DEFAULT_BASE_URI,
-    DEFAULT_GRAPH_NAME,
-)
+from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 
@@ -865,16 +862,6 @@ class DomainSession:
     @ontology_changed.setter
     def ontology_changed(self, value: bool):
         self._data["domain"]["ontology_changed"] = value
-
-    @property
-    def precision_score(self) -> Optional[int]:
-        """Last computed ontology precision score (0–100), or None if not yet analyzed."""
-        val = self._data["domain"].get("precision_score")
-        return int(val) if val is not None else None
-
-    @precision_score.setter
-    def precision_score(self, value: Optional[int]) -> None:
-        self._data["domain"]["precision_score"] = value
 
     @property
     def assignment_changed(self) -> bool:

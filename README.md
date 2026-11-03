@@ -105,8 +105,8 @@ Selecting **No LLM** is a strict domain-level opt-out. LLM actions remain
 visible but unavailable and direct API calls are rejected with guidance to
 select a model in **Domain → General → AI**. Select and save an LLM there to
 make those actions available again without reloading the page. Deterministic
-reasoning and validation, including OWL/SWRL inference, ontology pitfalls, and
-SHACL data-quality checks, remain available while No LLM is selected.
+reasoning and validation, including OWL/SWRL inference and SHACL data-quality
+checks, remain available while No LLM is selected.
 
 ## What's inside
 
@@ -114,8 +114,7 @@ SHACL data-quality checks, remain available while No LLM is selected.
 Drag-and-drop entities, relationships and inheritance on the **OntoViz** canvas,
 or import industry standards in one click (FIBO, CDISC, IOF, HL7 FHIR
 R4/R4B/R5) and your own OWL/RDFS. A floating **AI Assistant** edits your
-ontology through natural language. Catch design issues early with the built-in
-**Ontology Pitfalls Detector** (19 structural, logical and semantic checks).
+ontology through natural language.
 
 **Generate** drives that AI design through a resumable, human-in-the-loop
 wizard — **Detect** candidate entities from metadata and your parsed document

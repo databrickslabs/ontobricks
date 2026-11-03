@@ -435,7 +435,6 @@ other graph backends retain their native or iterative traversal.
 | **Data Quality** | SHACL shape-based data quality rules |
 | **Business Rules** | Define SWRL inference rules (graphical D3 editor) |
 | **Expr. & Axioms** | OWL class expressions and axioms |
-| **Pitfalls** | Automated ontology pitfall detection |
 
 > **Tip**: The **Generate** wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in `src/shared/config/constants.py` and can be customised or extended.
 

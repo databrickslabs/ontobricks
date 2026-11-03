@@ -27,8 +27,7 @@ class AgentClient:
         result = client.run_mapping_pge(host=..., token=..., ...)
 
     Note: the one-shot ``run_owl_generator`` bridge to
-    ``agents.agent_owl_generator.engine.run_agent`` (the deprecated,
-    pitfall-rewrite-loop OWL generator) has been removed — see the
+    ``agents.agent_owl_generator.engine.run_agent`` has been removed — see the
     three-stage Generate design
     (``docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md``).
     Ontology generation now goes through the staged workflow

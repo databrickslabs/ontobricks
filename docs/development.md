@@ -360,8 +360,7 @@ and source downloads used by `uv run --frozen` in Databricks Apps. Never commit
 commands, always pass `--frozen` so uv cannot rewrite the lock.
 
 Current explicit security floors include
-`databricks-sql-connector>=4.4.0`, `mlflow>=3.17.2`, `nltk>=3.10.4`,
-`sentence-transformers>=5.6.0`, `pip>=26.2.0`, `transformers>=5.10.0`,
+`databricks-sql-connector>=4.4.0`, `mlflow>=3.17.2`, `pip>=26.2.0`,
 `gitpython>=3.2.1`, `pyjwt>=2.15.0`, `urllib3>=2.8.0`, `anyio>=4.14.2`,
 `authlib>=1.9.1`, `dnspython>=2.9.0`, `msgpack>=1.2.3`, `pillow>=13.0.0`,
 `filelock>=4.2.1`, `certifi>=2026.10.19`, `cryptography>=50.0.0`,
@@ -766,7 +765,7 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
 | Registry modal (`/?open=registry`) | Navbar boxes icon (`bi-boxes`) → Browse + Bridges modal |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
-| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms, Pitfalls); Studio **Export** (OWL); section divs, OntoViz script |
+| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms); Studio **Export** (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with section links (General, Import, Studio, Manual, Auto-Map, Diagnostics, Spark SQL), Studio **Export** (R2RML), mapping-core.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Knowledge Store, My Tasks, Discussions, Cockpit, Audit trail, OWL, R2RML), section divs |
 | Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Explorer, Query, Chat), Build, Advanced (Data Quality, Inference, Analytics); Sigma.js script |

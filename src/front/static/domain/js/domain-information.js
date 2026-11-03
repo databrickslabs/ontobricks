@@ -536,7 +536,7 @@ function refreshDtNamesFromForm() {
 /* ──────────────────────────────────────────────────────────────────────────
    Current-domain KPI / health band (moved here from the Home page).
    Populates the #kpi* tiles rendered at the top of Domain → General:
-   entities, relationships, mappings, quality, status, version.
+   entities, relationships, mappings, status, version.
    Self-contained (IIFE) to avoid leaking generic helper names as globals.
    ────────────────────────────────────────────────────────────────────────── */
 (function () {
@@ -565,22 +565,6 @@ function refreshDtNamesFromForm() {
             ? 'In Review'
             : (key.charAt(0) + key.slice(1).toLowerCase());
         return '<span class="badge border ' + cls + '">' + esc(label) + '</span>';
-    }
-
-    function renderQuality(score) {
-        const valueEl = document.getElementById('kpiQuality');
-        const tileEl = document.getElementById('kpiQualityTile');
-        if (!valueEl || !tileEl) return;
-        if (score == null) {
-            valueEl.textContent = '-';
-            tileEl.className = 'ob-kpi-tile tile-muted';
-            return;
-        }
-        valueEl.textContent = score;
-        let variant = 'tile-danger';
-        if (score >= 80) variant = 'tile-success';
-        else if (score >= 50) variant = 'tile-warning';
-        tileEl.className = 'ob-kpi-tile ' + variant;
     }
 
     function renderStatus(status) {
@@ -625,7 +609,6 @@ function refreshDtNamesFromForm() {
             setTile('kpiEntities', 'kpiEntitiesTile', entityCount, entityCount > 0);
             setTile('kpiRelationships', 'kpiRelationshipsTile', relationshipCount, relationshipCount > 0);
             setTile('kpiMappings', 'kpiMappingsTile', mappingCount, mappingCount > 0);
-            renderQuality(info ? info.precision_score : null);
             renderStatus(meta.status || 'DRAFT');
             renderVersion(meta.version || session.version || '1');
         } catch (error) {

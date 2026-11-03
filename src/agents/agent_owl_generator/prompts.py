@@ -1,11 +1,9 @@
 """Prompt-first stage prompts for the staged owl-generator.
 
-Per the design's *Prompt-First Pitfall Handling (Rewrite Loop Removed)*
-section and SPEC §6a: pitfall constraints (naming rules, orphan avoidance,
-domain/range completeness, class-count guidance) are stated **up front** in
-each stage's system prompt instead of being corrected after the fact by a
-post-generation rewrite loop. Deterministic validation still runs afterwards
-but is reject-only (see :mod:`agents.agent_owl_generator.schemas` and
+Naming rules, orphan avoidance, domain/range completeness, and class-count
+guidance are stated **up front** in each stage's system prompt. Deterministic
+validation still runs afterwards but is reject-only (see
+:mod:`agents.agent_owl_generator.schemas` and
 :meth:`GenerateDraft.validate_references`).
 
 Every prompt is JSON-output only — the staged agent produces bounded
