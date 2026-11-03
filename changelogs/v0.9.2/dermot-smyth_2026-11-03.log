@@ -243,8 +243,13 @@ Changes:
    history (`EXPECT_TABLE_NOT_VIEW`), so `version` / `committed_at` are `null`
    with an `error` and `freshness_lag_s` is `null`; traceability header names
    the `ontobricks-rtm` sandbox as the second live workspace; traceability rows
-   for the per-mapping class card line, the Lakehouse//RT readiness facts and
-   the observability card flip to Live ✅; Live verification: the deployed-app
+   for the per-mapping class card line, the Lakehouse//RT readiness facts, the
+   observability card, "compute the source once" (`triples_source: …_data`) and
+   the `_inferred` reset on both paths flip to Live ✅; the `realtime`
+   prerequisites row and the overview-KPIs row to ◐ with the live facts
+   (`realtime` readiness facts; `domains_per_mode` / `fallbacks_by_reason`);
+   the KPI row says what keeps it ◐ (the committed `measure_freshness.py` not
+   yet run against a deployed domain); Live verification: the deployed-app
    journey.
 
 Live (2026-11-03, `ontobricks-rtm`, the apps redeployed with every fix above):
