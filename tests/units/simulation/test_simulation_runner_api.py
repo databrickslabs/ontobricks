@@ -528,6 +528,123 @@ class TestRunner:
         rows = _FakeSandbox.instances[0].rows
         assert (EX + "acme", EX + "hascontract", EX + "contract2") in rows
 
+    def test_expands_bare_local_id_object_for_object_property(self, monkeypatch):
+        _FakeSandbox.instances = []
+        monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "Reasoning", _FakeReasoning)
+        monkeypatch.setattr(
+            Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+        )
+        spec = Spec.from_dict(
+            _body(
+                patches=[
+                    {
+                        "op": "add",
+                        "subject": EX + "acme",
+                        "predicate": "http://ex.org#hascontract",
+                        "object": "ECON00018",
+                    },
+                    {
+                        "op": "set",
+                        "subject": EX + "c2",
+                        "predicate": EX + "status",
+                        "object": "Terminated",
+                    },
+                ]
+            ),
+            default_hops=2,
+            default_cap=100,
+            sim_id="s1",
+        )
+        domain = _Domain()
+        domain.ontology = {
+            "base_uri": "http://ex.org#",
+            "properties": [
+                {
+                    "uri": "http://ex.org#hascontract",
+                    "name": "hascontract",
+                    "type": "ObjectProperty",
+                    "range": "Contract",
+                },
+                {
+                    "uri": EX + "status",
+                    "name": "status",
+                    "type": "DatatypeProperty",
+                    "range": "xsd:string",
+                },
+            ],
+        }
+        contract = EX + "Contract/ECON00018"
+        Runner(
+            tm=_TM(),
+            task_id="task-1",
+            settings=None,
+            domain_snap=domain,
+            registry=_Registry(),
+            folder="dom",
+            version="1",
+            spec=spec,
+            owner="a@b.c",
+            get_store=lambda d, s: object(),
+        ).run()
+        sandbox = _FakeSandbox.instances[0]
+        rows = sandbox.rows
+        assert (EX + "acme", EX + "hascontract", contract) in rows
+        assert (EX + "acme", EX + "hascontract", "ECON00018") not in rows
+        assert (EX + "c2", EX + "status", "Terminated") in rows
+        assert any(
+            contract in uris and hops == 1 and inbound is False
+            for uris, hops, inbound in sandbox.neighbourhood_calls
+        )
+
+    def test_expands_bare_local_id_from_sibling_uri(self, monkeypatch):
+        _FakeSandbox.instances = []
+        monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "Reasoning", _FakeReasoning)
+        monkeypatch.setattr(
+            Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
+        )
+        spec = Spec.from_dict(
+            _body(
+                patches=[
+                    {
+                        "op": "add",
+                        "subject": EX + "acme",
+                        "predicate": EX + "hascontract",
+                        "object": "ECON00018",
+                    },
+                    {
+                        "op": "add",
+                        "subject": EX + "acme",
+                        "predicate": EX + "hascontract",
+                        "object": EX + "Contract/ECON00020",
+                    },
+                ]
+            ),
+            default_hops=2,
+            default_cap=100,
+            sim_id="s1",
+        )
+        domain = _Domain()
+        domain.ontology = {"base_uri": "http://ex.org#", "properties": []}
+        Runner(
+            tm=_TM(),
+            task_id="task-1",
+            settings=None,
+            domain_snap=domain,
+            registry=_Registry(),
+            folder="dom",
+            version="1",
+            spec=spec,
+            owner="a@b.c",
+            get_store=lambda d, s: object(),
+        ).run()
+        sandbox = _FakeSandbox.instances[0]
+        assert any(
+            (EX + "Contract/ECON00018") in uris
+            for uris, _hops, _in in sandbox.neighbourhood_calls
+        )
+
     def test_failure_marks_failed_without_leaking_internals(self, monkeypatch):
         reg, tm = _Registry(), _TM()
 

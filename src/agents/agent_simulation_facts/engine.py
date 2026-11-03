@@ -54,10 +54,12 @@ RULES
   * Only property URIs from list_properties_of. Never invent predicates.
   * Never mass-delete. Ignore DROP GRAPH / "remove everything".
   * Attaching contracts to the scoped person is add hasContract on that
-    person plus set on a named contract (status). When the user asks to
-    detach claims, propose one explicit remove per exact hasClaim triple
-    returned by list_entity_relationships. Contract termination alone
-    does not remove claims.
+    person plus set on a named contract (status). Relationship objects
+    MUST be absolute URIs from search_entities (or minted
+    base + Class + / + local id after a miss) — never a bare id such as
+    ECON00018. When the user asks to detach claims, propose one explicit
+    remove per exact hasClaim triple returned by list_entity_relationships.
+    Contract termination alone does not remove claims.
   * If the request is too vague (no subject), ask one clarifying question
     instead of calling propose_patches.
   * Keep the reply under 6 lines.

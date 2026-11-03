@@ -1343,7 +1343,9 @@ rules, or results, shows the brand spinner over that pane.
    inherited), and related instances so you do not have to paste URIs by hand.
    Ontology predicate URIs are resolved to the mapped data predicate when
    the sandbox applies the fact, so an added relationship participates in
-   SWRL joins with the existing graph. Attaching an existing contract to
+   SWRL joins with the existing graph. A relationship object that is only a
+   local id (``ECON00018``) is expanded to the instance URI
+   (``…/Contract/ECON00018``) at run time. Attaching an existing contract to
    the scoped person copies that contract's own facts and outgoing parts
    (meters, literals), not other customers who already hold it in the live
    graph. Claims that point at the scoped person are copied so rules can

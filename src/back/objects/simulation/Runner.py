@@ -88,9 +88,9 @@ class Runner:
         return list(
             dict.fromkeys(
                 uri
-                for p in self._spec.patches
+                for p in self._sandbox_patches()
                 for uri in (p.subject, p.object)
-                if uri and (uri == p.subject or is_uri(uri))
+                if uri and is_uri(uri)
             )
         )
 
@@ -100,11 +100,28 @@ class Runner:
         The fact picker supplies ontology URIs (normally ``...#hascontract``),
         while mapped triples use ``.../hascontract``. Applying the raw URI
         creates a disconnected sandbox edge that SWRL cannot join.
+
+        Bare local ids on object properties (``ECON00018``) are expanded to
+        ``{data_ns}{Range}/{id}`` so the link is a real entity, not a literal.
         """
+        aliases, ranges, data_ns = self._predicate_index()
+        return [
+            Patch(
+                op=patch.op,
+                subject=patch.subject,
+                predicate=aliases.get(patch.predicate.lower(), patch.predicate),
+                object=self._canonical_object(patch, ranges, data_ns),
+                datatype=patch.datatype,
+            )
+            for patch in self._spec.patches
+        ]
+
+    def _predicate_index(self) -> tuple[Dict[str, str], Dict[str, str], str]:
         ontology = getattr(self._domain, "ontology", None) or {}
         base_uri = str(ontology.get("base_uri") or "")
         data_ns = base_uri.rstrip("#/") + "/" if base_uri else ""
         aliases: Dict[str, str] = {}
+        ranges: Dict[str, str] = {}
         for prop in ontology.get("properties") or []:
             if not isinstance(prop, dict):
                 continue
@@ -112,20 +129,50 @@ class Runner:
             uri = str(prop.get("uri") or "").strip()
             if not name and not uri:
                 continue
-            canonical = data_ns + extract_local_name(uri or name) if data_ns else (uri or name)
-            for key in (name, uri, extract_local_name(uri) if uri else ""):
-                if key:
-                    aliases[key.lower()] = canonical
-        return [
-            Patch(
-                op=patch.op,
-                subject=patch.subject,
-                predicate=aliases.get(patch.predicate.lower(), patch.predicate),
-                object=patch.object,
-                datatype=patch.datatype,
+            canonical = (
+                data_ns + extract_local_name(uri or name) if data_ns else (uri or name)
             )
-            for patch in self._spec.patches
-        ]
+            keys = [k for k in (name, uri, extract_local_name(uri) if uri else "") if k]
+            for key in keys:
+                aliases[key.lower()] = canonical
+            if not self._is_object_property(prop):
+                continue
+            rng = extract_local_name(str(prop.get("range") or "").strip())
+            if not rng:
+                continue
+            for key in keys:
+                ranges[key.lower()] = rng
+        return aliases, ranges, data_ns
+
+    @staticmethod
+    def _is_object_property(prop: Dict[str, Any]) -> bool:
+        kind = str(prop.get("type") or prop.get("kind") or "").replace("owl:", "").lower()
+        if "datatype" in kind:
+            return False
+        if "object" in kind:
+            return True
+        rng = str(prop.get("range") or "").lower()
+        return bool(rng) and not rng.startswith("xsd:")
+
+    def _canonical_object(
+        self, patch: Patch, ranges: Dict[str, str], data_ns: str
+    ) -> str:
+        obj = str(patch.object or "").strip()
+        if not obj or is_uri(obj) or not data_ns:
+            return patch.object
+        pred = str(patch.predicate or "")
+        rng = ranges.get(pred.lower()) or ranges.get(extract_local_name(pred).lower())
+        if rng:
+            return f"{data_ns}{rng}/{obj}"
+        stem = extract_local_name(pred).lower()
+        for other in self._spec.patches:
+            other_obj = str(other.object or "").strip()
+            if not is_uri(other_obj):
+                continue
+            if extract_local_name(other.predicate).lower() != stem:
+                continue
+            return f"{other_obj.rsplit('/', 1)[0]}/{obj}"
+        return patch.object
 
     def _seed_hypothesis(self, sandbox: Any, skip: Any = None) -> None:
         """Copy patched entities not already in the scope, plus one live hop.

@@ -469,3 +469,35 @@ def test_eval_dataset_patches_are_valid():
     assert all(score_dataset_row(row) == 1.0 for row in rows)
     with pytest.raises(ValidationError):
         Patch.from_dict({"op": "set", "subject": "s", "predicate": "p"})
+
+
+def test_system_prompt_forbids_bare_relationship_ids():
+    text = facts_engine.SYSTEM_PROMPT
+    assert "ECON00018" in text
+    assert "absolute URIs" in text
+
+
+def test_eval_regression_contract_objects_are_uris():
+    from pathlib import Path
+
+    from back.core.helpers import is_uri
+    from tests.eval.judges.simulation_facts import score_dataset_row
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "eval/datasets/agent_simulation_facts/regression.jsonl"
+    )
+    rows = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(rows) >= 3
+    assert all(score_dataset_row(row) == 1.0 for row in rows)
+    objects = [
+        patch.get("object")
+        for row in rows
+        for patch in (row.get("expected") or {}).get("patches") or []
+        if str((patch or {}).get("op") or "") == "add"
+    ]
+    assert objects and all(is_uri(obj) for obj in objects)

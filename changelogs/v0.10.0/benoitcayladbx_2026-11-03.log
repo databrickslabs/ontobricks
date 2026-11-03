@@ -393,3 +393,38 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9852 passed, 326 skipped, 8 deselected, 39 warnings in 52.05s. Remaining failure is `test_each_app_declares_user_api_scopes_for_obo` (bundle lists only `sql`; test still requires the identity scopes the Apps create API rejects).
+
+================================================================================
+## Expand bare contract ids when applying simulation patches
+================================================================================
+
+Context: Scenario `se81746b730` asked to add contract ECON00018. Propose facts
+stored the object as the literal `ECON00018` instead of
+`…/Contract/ECON00018`, so the after-picture had a disconnected hascontract
+edge and the contract (and its meters) were not seeded. Expand bare local ids
+on object properties at run time, and tell the facts agent never to emit them.
+
+Changes:
+
+1. src/back/objects/simulation/Runner.py
+   Expand non-URI object-property objects to `{data_ns}{Range}/{id}`, with a
+   sibling-URI fallback when range is missing.
+2. src/agents/agent_simulation_facts/engine.py
+   Prompt: relationship objects must be absolute URIs, never a bare local id.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Cover range expansion and sibling-URI fallback (ECON00018).
+4. tests/eval/datasets/agent_simulation_facts/regression.jsonl
+   Three GH-style cases that require a Contract URI for ECON00018.
+5. docs/user-guide.md
+   Note that local ids on relationship objects are expanded at run time.
+
+Modified files:
+- src/back/objects/simulation/Runner.py
+- src/agents/agent_simulation_facts/engine.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/eval/datasets/agent_simulation_facts/regression.jsonl
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9856 passed, 326 skipped, 8 deselected, 39 warnings in 47.58s. Remaining failure is `test_each_app_declares_user_api_scopes_for_obo` (pre-existing).
