@@ -325,15 +325,17 @@ const SimulationWorkbench = {
             });
             if (data.description) this._set('simWbDescription', data.description);
             const rows = data.patches || [];
+            const replyHtml = this._factReplyHtml(data.reply);
             if (!rows.length) {
                 showNotification(
-                    data.reply || 'No facts proposed. Try a more specific description.',
+                    replyHtml || 'No facts proposed. Try a more specific description.',
                     'warning',
+                    10000,
                 );
             } else {
                 rows.forEach((row) => this.patches.push({ ...row }));
                 await this._resolvePatchLabels();
-                if (data.reply) showNotification(data.reply, 'success');
+                if (replyHtml) showNotification(replyHtml, 'success', 10000);
             }
             await this._persistLastFactPrompt();
         } catch (err) {
@@ -354,6 +356,15 @@ const SimulationWorkbench = {
         try {
             await this._putSave(body, { quiet: true });
         } catch (_) { /* textarea still holds the last prompt */ }
+    },
+
+    _factReplyHtml(reply) {
+        const src = (reply == null ? '' : String(reply)).trim();
+        if (!src) return '';
+        const html = (typeof renderMarkdown === 'function')
+            ? renderMarkdown(src)
+            : SimulationPage.esc(src).replace(/\n/g, '<br>');
+        return `<div class="oc-md">${html}</div>`;
     },
 
     addPatch(patch) {
@@ -382,12 +393,7 @@ const SimulationWorkbench = {
         body.innerHTML = this.patches.map((p, i) => `<article class="card sim-patch-card">
             <div class="card-body">
                 <div class="d-flex align-items-center gap-2">
-                    ${this._opIcon(p.op)}
-                    <div class="row g-2 sim-patch-fields">
-                        <div class="col-12 col-lg-4">${this._termCell('subject', i, p, 'Subject')}</div>
-                        <div class="col-12 col-lg-4">${this._termCell('predicate', i, p, 'Predicate')}</div>
-                        <div class="col-12 col-lg-4">${this._termCell('object', i, p, 'Object / value')}</div>
-                    </div>
+                    ${this._patchFieldsHtml(p, i)}
                     <div class="d-flex gap-1 flex-shrink-0">
                         <button type="button" class="btn btn-sm btn-outline-secondary" data-edit="${i}"
                                 title="Edit fact" aria-label="Edit fact">
@@ -401,6 +407,15 @@ const SimulationWorkbench = {
                 </div>
             </div>
         </article>`).join('');
+    },
+
+    _patchFieldsHtml(p, i) {
+        return `${this._opIcon(p.op)}
+                    <div class="row g-2 sim-patch-fields">
+                        <div class="col-12 col-lg-4">${this._termCell('subject', i, p, 'Subject')}</div>
+                        <div class="col-12 col-lg-4">${this._termCell('predicate', i, p, 'Predicate')}</div>
+                        <div class="col-12 col-lg-4">${this._termCell('object', i, p, 'Object / value')}</div>
+                    </div>`;
     },
 
     _opIcon(op) {

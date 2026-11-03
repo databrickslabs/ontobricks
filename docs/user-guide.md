@@ -1339,7 +1339,9 @@ rules, or results, shows the brand spinner over that pane.
    in plain language and click **Propose facts** to the right of the box.
    An agent looks up classes, properties, and live-graph entities, then
    fills the S/P/O cards below and rewrites **General → Description** as a
-   complete what-if (existing text plus the new facts). The last prompt
+   complete what-if (existing text plus the new facts). The toast that
+   follows the proposal renders the agent's short summary as HTML (bold,
+   italic, lists), not as raw Markdown asterisks. The last prompt
    stays in the textarea and is stored with the scenario, so reopening it
    restores the wording you proposed. Review both before you save or run.
    **Add fact** (or **Edit** on a card) opens the wizard: pick an existing subject, then

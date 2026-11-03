@@ -187,6 +187,14 @@ def test_hypothetical_facts_prompt_uses_agent():
     assert "justify-content-end mt-2" not in pane
     assert "proposeFacts" in wb
     assert "/simulation/facts/agent" in wb
+    assert "_factReplyHtml" in wb
+    assert "renderMarkdown(" in wb
+    assert "class=\"oc-md\"" in wb or "class='oc-md'" in wb
+    pages_css = _read(FRONT / "static/global/css/pages.css")
+    assert ".success-toast-popup:has(.oc-md)" in pages_css
+    assert ".success-toast-popup .oc-md blockquote" in pages_css
+    utils_js = _read(FRONT / "static/global/js/utils.js")
+    assert "fade show d-flex align-items-start" in utils_js
     assert "description: this._val('simWbDescription')" in wb
     assert "this._set('simWbDescription', data.description)" in wb
     assert "fact_prompt: this._val('simWbFactPrompt')" in wb

@@ -29,6 +29,7 @@ MARKDOWN_CONSUMERS = [
     "query/js/query-chat.js",
     "ontology/js/ontology-assistant.js",
     "domain/js/domain-audit.js",
+    "simulation/js/simulation-workbench.js",
 ]
 
 MARKED_URL = "https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"

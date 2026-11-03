@@ -682,3 +682,42 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9859 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Render Propose-facts agent reply as HTML in the toast
+================================================================================
+
+Context: After **Propose facts**, the success/warning toast showed the agent's
+Markdown summary literally (`**Jacob Martin**`, `*Terminated*`, `>` quotes)
+instead of bold/italic/lists. The shared toast already injects HTML; the
+reply just needed the sanitised Markdown renderer.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Convert the agent reply with `renderMarkdown`, wrap it in `.oc-md`, and
+   keep the toast on screen for 10s so the summary is readable.
+2. src/front/static/global/js/utils.js
+   Top-align toast icon and body (`align-items-start`) so multi-line
+   Markdown summaries do not vertically center the check icon.
+3. src/front/static/global/css/pages.css
+   Toast-specific `.oc-md` contrast for blockquotes and `code` on green /
+   yellow / red toasts.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract: reply HTML helper, shared renderer, toast alignment, CSS hooks.
+5. tests/units/front/test_frontend_xss_hardening.py
+   Treat the workbench as a Markdown consumer of `renderMarkdown`.
+6. docs/user-guide.md
+   Note that the proposal toast renders HTML, not raw Markdown asterisks.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/global/js/utils.js
+- src/front/static/global/css/pages.css
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_frontend_xss_hardening.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9863 passed, 326 skipped, 8 deselected.
+
