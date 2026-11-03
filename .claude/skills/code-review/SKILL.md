@@ -14,8 +14,11 @@ sequences the work and adds Claude-Code-specific tooling notes.
 Create a TodoWrite with one item per `.cursorrules` review step, in order:
 
 0. **Guardrails** — `uv run --frozen pytest -q tests/units/architecture`
-   (class per file, size budget, redefinitions, re-exports). A red test is a
-   finding; never "fix" it by adding to `baseline.json`.
+   (class per file, size budget, redefinitions, re-exports, graph-backend
+   import boundary). A red test is a finding; never "fix" a class/size
+   offender by adding to `baseline.json`. The import boundary has **no**
+   baseline: zero `from back.core.graphdb.{lakebase,delta,neo4j}` outside
+   `graphdb/`.
 1. **Rule compliance** — walk changed files, flag every violation. Cite the
    specific canonical file and section (e.g. "violates `.cursor/05 §Error
    Handling`"). The most common violations are listed at the bottom of this
@@ -63,6 +66,7 @@ the canonical files, not here.
 - Class with more than one purpose, class > 400 LOC or method > 50 LOC, grab-bag `models.py` → `.cursor/07 §Class-First Policy`
 - Facade whose methods only forward (Middle Man), subclass overriding most of its base (Refused Bequest) → `.cursor/05 §Code Smells`
 - New backward-compat wrapper, alias, or shim module after a move → `.cursor/07 §Package Organisation`
+- `from back.core.graphdb.{lakebase,delta,neo4j}` outside `graphdb/` → `.cursor/07 §graphdb/`, `test_backend_import_boundary.py`
 - Abstraction with a single user or a hook "for later" (Speculative Generality) → `.cursor/01 §Key Principles`
 - Non-English comments, `/changelogs/` prose, `logger.*` templates, audit-trail
   strings, or traces → `.cursor/05 §English-only artifacts`, `src/.coding_rules.md §3`

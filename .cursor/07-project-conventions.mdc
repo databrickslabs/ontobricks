@@ -25,7 +25,7 @@ scope:
 6. **Size budget**: a class stays ≤ 400 LOC (hard ceiling 800), a method ≤ 50 LOC (hard ceiling 100). Bigger means Extract Class / Extract Method.
 7. **Records** (dataclasses, Pydantic models, enums): one file per **aggregate root**, named after it. Value objects that only exist inside that root share its file (`ConflictReport.py` holds `ConflictReport` + `ConflictItem`); records used on their own get their own file (`TaskStatus.py`). No grab-bag `models.py`. Shared constants go in `constants.py`.
 8. **Decomposing a class** puts its collaborators in a sub-package named after the concept (`mapping/diagnostics/`), re-exported from `__init__.py`.
-9. **Inheritance only for a real "is-a" with shared behaviour**: Template Method (agents, build phases, health checks), an abstract interface plus default implementation (graph backends), polymorphic strategies replacing an `if/elif` ladder. Everything else uses composition. Mixins are fine for splitting a large interface (precedent: `LakebaseRegistryStore`); they hold no state and define no `__init__`.
+9. **Inheritance only for a real "is-a" with shared behaviour**: Template Method (agents, build phases, health checks), shared read root + hat interfaces (graph backends: `GraphBackend` → `MaterializedGraphBackend` / `VirtualBackend`), polymorphic strategies replacing an `if/elif` ladder. Everything else uses composition. Mixins are fine for splitting a large interface (precedent: `LakebaseRegistryStore`); they hold no state and define no `__init__`.
 10. **No pass-through facades.** A method whose body only forwards to another class is a Middle Man: callers import the real class instead.
 11. These rules are enforced by `tests/units/architecture/` with shrink-only baselines (`baseline.json`). Fix new offenders; never add them to the baseline. After a refactor, tighten it with `uv run --frozen python -m tests.units.architecture.ratchet`.
 
@@ -87,10 +87,11 @@ scope:
 - `TripleStoreFactory.py` — `get_triplestore()`. For `backend="graph"` delegates to `GraphDBFactory`.
 - `delta/DeltaTripleStore.py` — SQL Warehouse backend.
 
-**`graphdb/`** — Pluggable graph DB engine abstraction:
-- `GraphDBBackend.py` — abstract, extends `TripleStoreBackend` with capability flags.
-- `GraphDBFactory.py` — `get_graphdb()`. `engine` parameter is the extension point.
-- When adding a new graph DB engine: create subdirectory (e.g. `neo4j/`), extend `GraphDBBackend`, register in `GraphDBFactory`, update `__init__.py`.
+**`graphdb/`** — Pluggable graph DB engine abstraction. Backend packages (`lakebase/`, `delta/`, `neo4j/`) are **cloisonnés**: no module outside `back/core/graphdb/` may import them (enforced by `tests/units/architecture/test_backend_import_boundary.py`).
+- `interfaces/` — contract only. Shared read root `GraphBackend`; hats `MaterializedGraphBackend` (copy-owning: Lakebase, Delta `table`, Neo4j) and `VirtualBackend` (read-only no-copy: Delta `view`); capability ABCs `GraphBuilder`, `GraphHealthProbe`, `GraphProvisioner`, `GraphSimulation`.
+- `GraphDBFactory.py` — `get_graphdb()` plus capability accessors (`get_builder`, `get_health_probe`, `get_provisioner`, `get_simulation`). `engine` is the extension point.
+- Shared utilities (`constants`, `engine_config`, `search_cache`) stay public — they are not hidden behind the factory.
+- When adding a new engine: create `graphdb/<engine>/`, subclass the right hat (**never** `GraphBackend` directly), implement the capability ABCs you need, register `_create_<engine>` + accessors in `GraphDBFactory`. Callers outside `graphdb/` must never `from back.core.graphdb.<engine> import …` — add a factory accessor instead. Full guide: `docs/backend.md` § Engine integration.
 
 **`databricks/`** — One service class per API surface. `DatabricksClient` is a thin Facade composing all services. When adding new Databricks functionality: new API surface → new PascalCase file + wire into `DatabricksClient`; existing surface → add methods to existing class.
 

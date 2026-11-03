@@ -96,3 +96,43 @@ freeing service-principal quota (50k users+SP account cap).
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9865 passed, 326 skipped,
 8 deselected, 39 warnings in 55.06s (EXIT=0).
+
+================================================================================
+## Align agent rules with graph-backend cloisonnement
+================================================================================
+
+Context: The graph-backend refactor (hats + factory-vended capabilities +
+import boundary) had landed in code, the coding_rules inheritance table, and
+`docs/backend.md`, but Cursor rules and Claude skills still described the
+removed `GraphDBBackend` god-base. Agents adding a new engine would have
+followed the stale pattern.
+
+Changes:
+
+1. .cursor/07-project-conventions.mdc
+   Replace the `graphdb/` subpackage pattern with hats, capability accessors,
+   and the cloisonnement rule; update the inheritance bullet.
+2. .cursor/04-project-structure.mdc
+   Note `interfaces/` plus cloisonned `lakebase`/`delta`/`neo4j` engines.
+3. .cursor/08-testing-and-deployment.mdc
+   Document that `test_backend_import_boundary.py` is zero-offender, not a
+   shrinking baseline.
+4. .claude/skills/adding-subpackage/SKILL.md
+   Engine-add procedure: right hat, factory registration, no cross-package
+   backend imports.
+5. .claude/skills/code-review/SKILL.md
+   Guardrails + quick-reference for the import boundary.
+6. src/.coding_rules.md
+   Layering rule, "where new code goes" row, and code-review check #1.
+
+Modified files:
+- .cursor/07-project-conventions.mdc
+- .cursor/04-project-structure.mdc
+- .cursor/08-testing-and-deployment.mdc
+- .claude/skills/adding-subpackage/SKILL.md
+- .claude/skills/code-review/SKILL.md
+- src/.coding_rules.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: docs/rules-only. Import-boundary test previously green; full suite not
+re-run for this alignment.
