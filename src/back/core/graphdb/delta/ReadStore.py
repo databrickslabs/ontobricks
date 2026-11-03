@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from back.core.graphdb.adjacency import expand_and_fetch_sql
+from back.core.graphdb.adjacency import entity_cap_ctes, expand_and_fetch_sql
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming
 from back.core.graphdb.delta.OverviewStats import OverviewStats
@@ -367,27 +367,7 @@ class ReadStore:
             )
             ctes = [f"level_0(entity) AS (VALUES {seed_values})"]
             ctes.extend(self._expansion_level_ctes(relation, depth, max_entities))
-
-            levels = " UNION ALL ".join(
-                f"SELECT entity FROM level_{level}" for level in range(depth + 1)
-            )
-            ctes.extend(
-                [
-                    (
-                        "entity_probe AS ("
-                        f"SELECT DISTINCT entity FROM ({levels}) discovered "
-                        f"LIMIT {max_entities + 1})"
-                    ),
-                    (
-                        "entities AS ("
-                        f"SELECT entity FROM entity_probe LIMIT {max_entities})"
-                    ),
-                    (
-                        "entity_stats AS ("
-                        "SELECT COUNT(*) AS _ob_expanded_count FROM entity_probe)"
-                    ),
-                ]
-            )
+            ctes.extend(entity_cap_ctes(depth, max_entities))
             sql = (
                 "WITH "
                 + ", ".join(ctes)

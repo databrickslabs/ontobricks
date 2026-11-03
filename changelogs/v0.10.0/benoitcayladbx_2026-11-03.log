@@ -915,6 +915,44 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9863 passed, 326 skipped, 8 deselected.
 
+================================================================================
+## Keep Explorer neighbourhood connected when the entity cap hits
+================================================================================
+
+Context: Searching Jacob Martin at depth 2 on the large customer graph painted
+many Interaction nodes with no edges. Undirected hop-2 walks through high-degree
+Contracts, then an unordered LIMIT on the union of BFS levels dropped the seeds
+and kept random hop-2 subjects whose linking triples (and the Contract/Agent
+they hang off) never made the cut. The renderer also kept every typed subject
+even with zero remaining links.
+
+Changes:
+
+1. src/back/core/graphdb/adjacency.py
+   Cap the expanded entity set by hop distance (`ORDER BY lvl`) so seeds and
+   hop-1 neighbours are kept before hop-2 fill.
+2. src/back/core/graphdb/delta/ReadStore.py
+   Use the same hop-ordered cap on the SPO fallback expand path.
+3. src/front/static/query/js/query-d3graph.js
+   When the subgraph has any edges, drop nodes that participate in none of them.
+4. tests/units/graphdb/test_adjacency_sql.py
+   Contract: ranked entity cap SQL.
+5. tests/units/front/test_explorer_unlinked_nodes.py
+   Contract: unlinked typed nodes are filtered out when edges exist.
+6. tests/units/architecture/baseline.json
+   Drop ``ReadStore.expand_and_fetch_subgraph`` now under the 100-LOC cap.
+
+Modified files:
+- src/back/core/graphdb/adjacency.py
+- src/back/core/graphdb/delta/ReadStore.py
+- src/front/static/query/js/query-d3graph.js
+- tests/units/graphdb/test_adjacency_sql.py
+- tests/units/front/test_explorer_unlinked_nodes.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9865 passed, 326 skipped, 8 deselected.
+
 
 
 

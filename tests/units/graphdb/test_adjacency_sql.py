@@ -137,6 +137,23 @@ def test_depth_zero_filters_payload_by_subject_in():
     assert "1 AS _ob_expanded_count" in sql
 
 
+def test_entity_cap_keeps_closer_hops_first():
+    sql = expand_and_fetch_sql(
+        flavor="spark",
+        adj_out="o",
+        adj_in="i",
+        spo="g",
+        selected_uris=["http://ex/a"],
+        depth=2,
+        max_entities=10,
+        max_triples=100,
+        escape=lambda s: s.replace("'", "''"),
+    )
+    assert "ranked_entities AS (" in sql
+    assert "ORDER BY lvl, entity LIMIT 11" in sql
+    assert "SELECT DISTINCT entity FROM (" not in sql
+
+
 def test_spark_payload_join_broadcasts_entities():
     sql = expand_and_fetch_sql(
         flavor="spark",
