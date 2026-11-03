@@ -137,9 +137,12 @@ class RegistryDomainSettings:
             svc = _ss.RegistryService.from_context(domain, settings)
             if not svc.cfg.is_configured:
                 raise ValidationError("Registry not configured")
+            # The registry stores the sanitised folder; a caller may pass the
+            # display name (a row never matches it and nothing is deleted).
+            folder = _ss.sanitize_domain_folder(domain_name)
 
             with github_mirror.paused():
-                errors = svc.delete_domain(domain_name)
+                errors = svc.delete_domain(folder)
 
             if errors:
                 joined = "; ".join(errors)
@@ -148,7 +151,7 @@ class RegistryDomainSettings:
                     detail=joined,
                 )
             RegistryDomainSettings._delete_github_mirror(
-                domain_name,
+                folder,
                 session_mgr,
                 settings,
                 delete_github=delete_github,
@@ -182,7 +185,8 @@ class RegistryDomainSettings:
             if not svc.cfg.is_configured:
                 raise ValidationError("Registry not configured")
 
-            listed, versions, list_message = svc.list_versions(domain_name)
+            folder = _ss.sanitize_domain_folder(domain_name)  # the registry key, not the display name
+            listed, versions, list_message = svc.list_versions(folder)
             if not listed:
                 raise InfrastructureError(
                     "Failed to list registry versions", detail=list_message
@@ -196,7 +200,7 @@ class RegistryDomainSettings:
                 raise NotFoundError(
                     f'Version {version} not found in "{domain_name}"'
                 )
-            ok, data, message = svc.read_version(domain_name, version)
+            ok, data, message = svc.read_version(folder, version)
             if not ok:
                 raise InfrastructureError(
                     "Failed to read registry version", detail=message
@@ -206,7 +210,7 @@ class RegistryDomainSettings:
                 user_role=user_role,
                 status=status,
                 is_loaded=(
-                    domain.domain_folder == domain_name
+                    domain.domain_folder == folder
                     and domain.current_version == version
                 ),
                 version_count=len(versions),
@@ -216,10 +220,10 @@ class RegistryDomainSettings:
             pause = github_mirror.paused() if last_version else nullcontext()
             try:
                 with pause:
-                    deleted, delete_message = svc.delete_version(domain_name, version)
+                    deleted, delete_message = svc.delete_version(folder, version)
                     domain_deleted = False
                     if last_version:
-                        domain_errors = svc.delete_domain(domain_name)
+                        domain_errors = svc.delete_domain(folder)
                         if domain_errors:
                             raise InfrastructureError(
                                 "Version was deleted but the empty domain could not be removed",
@@ -238,7 +242,7 @@ class RegistryDomainSettings:
                 )
             if domain_deleted:
                 RegistryDomainSettings._delete_github_mirror(
-                    domain_name,
+                    folder,
                     session_mgr,
                     settings,
                     delete_github=delete_github,

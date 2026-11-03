@@ -1079,6 +1079,26 @@ class TestSourceOverwriteDetection:
         assert pipe.slot_refresh_facts["source_versions"] == {self._SOURCE: 7}
         assert pipe.slot_refresh_facts["slot_full_refresh_pending"] is False
 
+    def test_a_failed_update_owes_the_next_one_a_full_refresh(self, registry):
+        """Nothing was owed, the update failed (a change feed unreadable over a version
+        range, say): resuming from the same checkpoint fails again, so the next update
+        starts over — recorded as ``slot_update_failed``, pending (live: sandbox run 6)."""
+        pipe, starts, _ = self._build(
+            registry,
+            runs=[_slot_run(source_versions={self._SOURCE: 5})],
+            history=[{"version": 6, "operation": "MERGE"}, {"version": 7, "operation": "DELETE"}],
+            script_kw={"fail_on": "wait"},
+        )
+
+        assert starts == [("start", "pipe-1", False)]
+        assert pipe.mode_decision.reason == "incremental_failed:InfrastructureError"
+        assert pipe.slot_refresh_facts == {
+            "source_versions": {self._SOURCE: 5},
+            "source_table_ids": {},
+            "slot_full_refresh_pending": True,
+            "slot_full_refresh_reason": "slot_update_failed",
+        }
+
     def test_a_failed_update_carries_the_previous_versions_and_keeps_the_refresh_pending(
         self, registry
     ):

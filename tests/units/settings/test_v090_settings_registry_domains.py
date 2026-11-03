@@ -149,6 +149,14 @@ class TestDeleteRegistryDomain:
         assert result == {"success": True, "message": 'Domain "claims" deleted from registry'}
         svc.delete_domain.assert_called_once_with("claims")
 
+    def test_a_display_name_is_deleted_under_its_registry_folder(self, svc):
+        """The registry stores the sanitised folder; the URL may carry the display name."""
+        svc.delete_domain.return_value = []
+        RegistryDomainSettings.delete_registry_domain_result(
+            "Zz Incremental-Live", MagicMock(), MagicMock()
+        )
+        svc.delete_domain.assert_called_once_with("zz_incremental_live")
+
     def test_opt_in_github_delete_runs_after_registry_delete(self, svc, monkeypatch):
         svc.delete_domain.return_value = []
         called = []
@@ -233,6 +241,32 @@ class TestDeleteRegistryVersion:
         assert result["domain_deleted"] is True
         gh.assert_called_once()
         assert gh.call_args.args[0] == "claims"
+
+    def test_a_display_name_addresses_the_registry_folder(self, svc, monkeypatch):
+        """Every store call uses the sanitised folder, whatever the URL carried."""
+        svc.list_versions.return_value = (True, ["1"], "")
+        svc.read_version.return_value = (True, {"info": {"status": "DRAFT"}}, "")
+        svc.delete_version.return_value = (True, "")
+        svc.delete_domain.return_value = []
+        monkeypatch.setattr(_ss, "check_version_deletion", lambda **_k: None)
+        RegistryDomainSettings.delete_registry_version_result(
+            "Zz Incremental-Live",
+            "1",
+            user_role="admin",
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+        assert (
+            svc.list_versions.call_args.args,
+            svc.read_version.call_args.args,
+            svc.delete_version.call_args.args,
+            svc.delete_domain.call_args.args,
+        ) == (
+            ("zz_incremental_live",),
+            ("zz_incremental_live", "1"),
+            ("zz_incremental_live", "1"),
+            ("zz_incremental_live",),
+        )
 
 
 # ---------------------------------------------------------------------------

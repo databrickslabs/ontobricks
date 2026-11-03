@@ -151,3 +151,207 @@ Modified files:
 Test result: full suite `uv run --frozen pytest -q -m "not scenario"`
 (readiness-route test deselected) — 11547 passed, 346 skipped, 9 deselected;
 `tests/units/jobs` 127 passed.
+
+================================================================================
+## Readiness / reconciliation / realtime start regenerate the session-only R2RML first
+================================================================================
+
+Context: the first run of the live incremental journey (scenario 06, below)
+against the sandbox app reported `sources: []`, `mappings: []`, `compile_error:
+""` for a domain with a saved row-local mapping. The R2RML is session-only
+(`DomainSession.generated["r2rml"]`, not persisted with the domain): every build
+and query path calls `ensure_generated_content()` to regenerate it from the
+saved mappings before reading it, but `TwinIncrementalBuild.mappings_for` — the
+derivation the readiness preflight, the slot reconciliation and the `realtime`
+start share — read `get_r2rml()` directly, so a domain opened from the registry
+(the normal way a user reaches the Domain page's readiness card) looked unmapped
+to all three. The scheduled tick was unaffected (`TaskContext` ensures first).
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py — `mappings_for`
+   calls `ensure_generated_content()` when the domain has it (test doubles
+   without it still work), then reads the R2RML; docstring says why.
+2. tests/units/objects/test_mappings_for.py — a registry-opened domain (saved
+   mappings, empty R2RML until regenerated) yields its mappings.
+3. tests/e2e/scenarios/test_scenario_06_incremental_live.py (new, opt-in
+   `scenario` marker, `ONTOBRICKS_SCENARIO_LIVE=1`) — the deterministic
+   incremental journey on a deployed app: Lakehouse domain in `incremental`
+   mode over a row-tracked table, one-class ontology, row-local mapping,
+   `/mapping/generate`, readiness (sources, per-mapping class, decision,
+   `lakehouse_rt`, `read_relation`), optional untracked source +
+   `enable-row-tracking`, the Domain page readiness card (screenshot),
+   `/dtwin/sync/start` polled to completion, `/dtwin/incremental/status`,
+   `/domain/build-runs` trace facts, `/dtwin/incremental/overview`, the Query
+   page status card (screenshot). Env: `ONTOBRICKS_SCENARIO_CATALOG/SCHEMA`,
+   `ONTOBRICKS_SCENARIO6_TABLE`, `ONTOBRICKS_SCENARIO6_UNTRACKED`,
+   `ONTOBRICKS_SCENARIO6_BUILD_TIMEOUT`.
+4. docs/incremental-materialization.md — Readiness preflight: the derivation
+   regenerates the session-only R2RML first.
+
+Modified files:
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- tests/units/objects/test_mappings_for.py
+- tests/e2e/scenarios/test_scenario_06_incremental_live.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: `uv run --frozen pytest -q tests/units/objects tests/units/dtwin
+tests/units/graphdb/delta` — 1668 passed; the `mappings_for` / readiness /
+realtime / renderer / scheduled-build sets — 193 passed. Full suite after every
+section of this day's log: `uv run --frozen pytest -q -m "not scenario"` —
+11552 passed, 346 skipped, 9 deselected.
+
+================================================================================
+## Registry delete by display name addresses the sanitised folder
+================================================================================
+
+Context: found by scenario 06's cleanup on the sandbox app. `DELETE
+/settings/registry/domains/ZzIncrementalLive` answered 200 "deleted from
+registry" and the domain stayed listed: the registry stores the sanitised
+folder (`zzincrementallive`, `sanitize_domain_folder`), the Lakebase `DELETE …
+WHERE folder = 'ZzIncrementalLive'` matched no row and the Volume path with the
+display name did not exist, so nothing was deleted and no error was raised
+(`recursive_delete: … /domains/ZzIncrementalLive does not exist, skipping` in
+the app log). The registry UI passes the folder and never hit it; API callers
+and the campaign suites pass the name.
+
+Changes:
+
+1. src/back/objects/domain/settings/RegistryDomainSettings.py —
+   `delete_registry_domain_result` and `delete_registry_version_result`
+   resolve `sanitize_domain_folder(domain_name)` once (idempotent on a folder)
+   and use it for every store call (`list_versions`, `read_version`,
+   `delete_version`, `delete_domain`, the loaded-domain check, the GitHub
+   mirror); messages keep the name the caller sent.
+2. tests/units/settings/test_v090_settings_registry_domains.py — a display
+   name with a space and a dash deletes `zz_incremental_live`; the version
+   delete addresses every store call with the folder.
+3. tests/units/settings/test_bundle_job_resource.py — the "no deployable slot
+   pipeline resource" guard exempts the deploy-time, git-ignored per-version
+   render `resources/_generated_triple_slots.yml` (it failed on any machine that
+   had run `make deploy`; the static template is still refused).
+4. tests/e2e/scenarios/test_scenario_06_incremental_live.py — the cleanup
+   deletes by the folder key the listing returns, checks the status and waits
+   until the domain is no longer listed; the Domain page step opens the Backend
+   tab and waits for the readiness card's mappings line ("… row-local …"); the
+   Query page step waits for the Build section's status card ("Slot pipeline:",
+   "_data:"); the status assertion accepts the documented `data.kind` values
+   (`mv`, or `table` for the MERGE fallback) and checks `_slots` is a streaming
+   table with a slot pipeline.
+5. docs/incremental-materialization.md — Status: an MV `_data` has no readable
+   history (`EXPECT_TABLE_NOT_VIEW`), so `version` / `committed_at` are `null`
+   with an `error` and `freshness_lag_s` is `null`; traceability header names
+   the `ontobricks-rtm` sandbox as the second live workspace; traceability rows
+   for the per-mapping class card line, the Lakehouse//RT readiness facts and
+   the observability card flip to Live ✅; Live verification: the deployed-app
+   journey.
+
+Live (2026-11-03, `ontobricks-rtm`, the apps redeployed with every fix above):
+scenario 06 PASSED in 300 s — readiness `row_tracking_missing` → `full` for the
+untracked source, two `slot` mappings, `lakehouse_rt` facts; enable-row-tracking
+flips the decision to `incremental`; the Domain › Backend card reads "incremental
+runs as incremental · Mappings: 2 row-local (microbatch-eligible), 0
+batch-incremental · Lakehouse//RT: query warehouse not set · RT reads off"; the
+build (slot pipeline on the PREVIEW channel, `_slots` 6 upserted, `_data` MV)
+completes in 243.5 s with `materialization_mode_effective: incremental`,
+`strategy: mv`, no fallback; status lists the pipeline `IDLE`, `_slots` as a
+streaming table, `_data` as `mv`; the overview counts the domain under
+`incremental` with `fallbacks_by_reason: {}`; the Knowledge Graph › Build card
+reads "Slot pipeline: IDLE · _data: mv · lag unknown · _slots: streaming_table
+v5 · Last build: success (session) · mv / NO_OP / none · slots changed: 6
+upserted, 0 deleted (full refresh)". Screenshots in `artifacts/scenarios/`
+(git-ignored).
+
+Modified files:
+- src/back/objects/domain/settings/RegistryDomainSettings.py
+- tests/units/settings/test_v090_settings_registry_domains.py
+- tests/units/settings/test_bundle_job_resource.py
+- tests/e2e/scenarios/test_scenario_06_incremental_live.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: `uv run --frozen pytest -q tests/units/settings` — 1073 passed
+(`test_bundle_job_resource.py` 48 passed with `databricks.yml` as committed).
+
+================================================================================
+## A failed slot update owes the next one a full refresh (`slot_update_failed`)
+================================================================================
+
+Context: scenario 06's second journey on the sandbox app re-created
+`ZzIncrementalLive` V1 after the registry delete, which keeps the graph
+artefacts: the build adopted the former slot pipeline (same SQL fingerprint)
+and its update resumed the old checkpoint. Between the two incarnations the
+`untracked` fixture's row tracking had been turned off and on again, so the
+change-feed stream failed on that version range
+(`DELTA_MISSING_ROW_TRACKING_FOR_CDC … ontobricks_rtm_catalog.rtm.untracked`,
+flow failed more than 2 times, update FAILED) and the build fell back as
+designed (`mode_fallback_reason: incremental_failed:InfrastructureError`,
+`strategy: merge`, effective `incremental`, 6 triples). But the run recorded
+`slot_full_refresh_pending: false`, so every later build would resume the same
+checkpoint and fall back again — a sticky failure.
+
+Changes:
+
+1. src/back/objects/digitaltwin/build/TwinIncrementalBuild.py — `_build` wraps
+   the slot update: an `OntoBricksError` from it marks the recorded facts
+   `slot_full_refresh_pending: true`, `slot_full_refresh_reason:
+   slot_update_failed` (an already-owed reason stays), then re-raises into the
+   fallback ladder; `TwinSlotRefreshPlan.owed` already honours any recorded
+   reason, so the next update runs as a full refresh.
+2. src/back/objects/digitaltwin/build/TwinSlotRefreshPlan.py —
+   `REASON_SLOT_UPDATE_FAILED`; the reasons docstring.
+3. tests/units/objects/test_build_pipeline_net_apply.py — a failed update with
+   nothing owed records `slot_update_failed`, pending; the existing test keeps
+   `source_overwritten` when that was already owed.
+4. docs/incremental-materialization.md — the reason in the Reconciliation text
+   and the trace-row table; Known limitations: a re-created domain adopts its
+   former pipeline and checkpoint (drop the pipeline first for a clean first
+   build; follow-up: delete a domain's pipeline and tables with the domain).
+
+Not done, on purpose: forcing a full refresh whenever a pipeline is adopted
+without slot history in the domain's runs — some twenty-five build tests encode
+"an adopted pipeline running the current SQL resumes incrementally", and the
+proper fix is the artefact cleanup on domain delete.
+
+Modified files:
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinSlotRefreshPlan.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: `uv run --frozen pytest -q tests/units/objects tests/units/dtwin
+tests/units/registry` — 2013 passed.
+
+================================================================================
+## Sandbox deploy notes (`ontobricks-rtm`, no code change)
+================================================================================
+
+Context: the UI and MCP apps were deployed to the FEVM `aws_sandbox_classic`
+workspace `ontobricks-rtm` (profile `ontobricks-rtm`, `DEFAULT_INSTANCE_ID=rtm`,
+registry `ontobricks_rtm_catalog.ontobricks_rtm_registry`, Lakebase project
+`ontobricks-rtm`) to run the deployed-app journey (scenario 06). Recorded for
+whoever deploys to a sandbox again; nothing in the repository changed for it.
+
+1. The sandbox rejects `user_api_scopes` on apps: the two blocks were removed
+   from a working copy of `databricks.yml` for the deploy and restored
+   afterwards (`git checkout databricks.yml`); the rendered `app.yaml` files
+   were reused with `--skip-app-yaml`.
+2. `scripts/deploy.sh --no-bootstrap` (psql is not installed here) leaves the
+   apps' own service principals without `CAN_MANAGE` on themselves after every
+   deploy — the bundle's `permissions` block replaces the ACL — so every page
+   answers `/access-denied?reason=bootstrap` until `databricks apps
+   update-permissions <app> --json '{"access_control_list":[{"service_principal_name":
+   "<app client id>","permission_level":"CAN_MANAGE"}]}'` is run for both apps
+   (what `make bootstrap-perms` does).
+3. New managed tables on that workspace carry `delta.enableRowTracking=true` by
+   default: the "untracked" fixture of scenario 06 has to be set to `false`
+   explicitly before a run, and the readiness probe then reports it as untracked.
+4. `databricks apps logs <app> --tail-lines 0 --search <build id>` recovers a
+   build's full log after the default 200-line window has moved on.
+
+Modified files:
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: not applicable (no code change).

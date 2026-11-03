@@ -61,6 +61,23 @@ def test_a_domain_without_r2rml_has_no_mappings():
     assert TwinIncrementalBuild.mappings_for(_Domain(r2rml="")) is None
 
 
+class _RegistryDomain(_Domain):
+    """A domain opened from the registry: mappings saved, session-only R2RML not yet regenerated."""
+
+    def ensure_generated_content(self):
+        self.r2rml = "<r2rml/>"
+        self.ensured = True
+        return {"owl": False, "r2rml": True}
+
+
+def test_the_session_only_r2rml_is_regenerated_first_as_the_build_does(derivation):
+    domain = _RegistryDomain(r2rml="", ontology={"base_uri": "http://ex.org/"}, assignment={"a": 1})
+
+    ent, _rels, base_uri = TwinIncrementalBuild.mappings_for(domain)
+
+    assert (domain.ensured, ent, base_uri) == (True, {"C": {}}, "http://ex.org/")
+
+
 def test_the_scheduled_tick_derives_its_mappings_the_same_way(monkeypatch):
     from back.core.w3c import sparql
     from back.objects.registry.schedule import build as scheduled_build

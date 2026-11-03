@@ -175,6 +175,12 @@ source`, `relationship (several objects per subject share one slot key)`, `no
 table`, ...). `slot_mappings` / `batch_mappings` count them; mappings that do not
 compile give `[]` and `null` counts. The counts are per class, so a TriplesMap
 with two classes counts twice here and once in the trace's `batch_mappings`.
+The mappings are derived as a build derives them
+(`TwinIncrementalBuild.mappings_for`): the R2RML is session-only, so a domain
+opened from the registry has none until it is regenerated from the saved
+mappings — the derivation regenerates it first (`ensure_generated_content`, as
+every build and query path does), so the preflight, the reconciliation and a
+`realtime` start never report a mapped domain as having no mappings.
 `lakehouse_rt` (Lakehouse engine only, `null` on the others) is
 `{query_warehouse_configured, use_sea, fast_path}`: whether
 `graph_engine_config.lakehouse.warehouse_id` names a query warehouse, whether "Use
@@ -212,7 +218,9 @@ change feed the pipeline reads, so the update runs as a **full refresh in the sa
 mode**. A topic-fed `realtime` pipeline reads no change feed (and a full refresh
 would replay its topic), so its sources' history is not read. A reconciliation drift (see [Reconciliation](#reconciliation)) does too,
 and also refreshes `_data` with `REFRESH MATERIALIZED VIEW … FULL`. The reason is
-recorded as `slot_full_refresh_reason` (`source_overwritten` / `reconcile_drift`);
+recorded as `slot_full_refresh_reason` (`source_overwritten` / `reconcile_drift` /
+`slot_update_failed` — a slot update that failed would resume from the same
+checkpoint and fail again, so the next one starts over);
 `mode_fallback_reason` keeps the first downgrade. The refresh is **sticky**:
 `slot_full_refresh_pending` is recorded true before the update and false only once
 it and the `_data` refresh completed, and a run whose update did not complete
@@ -457,7 +465,7 @@ Every build run persists `stats.materialization` (registry `build_runs.stats`):
 | `apply_mode`, `apply_fallback_reason` | `net_changes`, `full_stream`, `lakeflow_sync`, `none`; why a net apply was not done |
 | `data_table_version`, `data_table_id`, `fingerprint` | the `_data` version/table id the store matches; the MERGE fingerprint |
 | `source_versions`, `source_table_ids` | each slot-pipeline source's Delta version and table id read before the last completed update (only on runs that reached a slot update) |
-| `slot_full_refresh_pending`, `slot_full_refresh_reason` | a full refresh owed until an update completes it; `source_overwritten` / `reconcile_drift` (only on runs that reached a slot update) |
+| `slot_full_refresh_pending`, `slot_full_refresh_reason` | a full refresh owed until an update completes it; `source_overwritten` / `reconcile_drift` / `slot_update_failed` (only on runs that reached a slot update) |
 | `reconcile_drift` | a scheduled tick's reconciliation found drift (tick runs only) |
 | `live_drift` | a realtime tick found `_live` and the slots apart (tick runs only; restart the stream) |
 | `realtime_run_id`, `realtime_state` | the stream job run a `realtime` build started (or a later build stopped), its state (`PENDING`, `RUNNING`, `CANCELLING`, `failed:<Error>`); `""` otherwise |
@@ -501,8 +509,8 @@ says where an incremental domain stands now, without writing anything:
 | `mode_requested` | The domain's materialization mode |
 | `read_relation` | What Lakehouse graph reads take now: `slots_live` ([Lakehouse//RT fast path](#lakehousert)) or `graph` (also for a `full` domain and every other engine, answered without a lookup) |
 | `slot_pipeline` | `{name, id, state}` of this version's slot pipeline (`SlotPipelineRunner.get_state`; `absent` without one) |
-| `data`, `slots` | `{table, kind, version, committed_at}`: kind `mv` / `table` / `streaming_table` / `view` / `absent` from `information_schema.tables`, last commit from `DESCRIBE HISTORY … LIMIT 1` |
-| `freshness_lag_s` | Now minus the last `_data` commit (`null` when unknown) |
+| `data`, `slots` | `{table, kind, version, committed_at}`: kind `mv` / `table` / `streaming_table` / `view` / `absent` from `information_schema.tables`, last commit from `DESCRIBE HISTORY … LIMIT 1`. A materialized view's history cannot be read (`EXPECT_TABLE_NOT_VIEW`), so an MV `_data` answers `version` / `committed_at` `null` with an `error` saying so; `_slots` (a streaming table) and a MERGE-fallback `_data` table carry their commit |
+| `freshness_lag_s` | Now minus the last `_data` commit (`null` when unknown — always for an MV `_data`, see above) |
 | `lakebase_sync` | `{synced_table, state, message}` of a `managed_synced` store (`null` otherwise) |
 | `last_build` | `{status, build_kind, finished_at, materialization}` of the newest build run |
 
@@ -723,7 +731,8 @@ libpq DSN for `sync` / `live`). An empty variable reads as unset.
 Requirements of the design document (`[Design] Incremental Triple Materialization | OntoBricks`)
 against this release. Two facts per row, kept apart: **Built** — ✅ as designed · ◐ with a
 documented deviation · ⛔ deferred; **Live** — whether the row was exercised on the integration
-workspace `fevm-ontobricks-int` (✅ verified · ○ unit/property-tested only · — nothing to run).
+workspace `fevm-ontobricks-int` or the classic sandbox `ontobricks-rtm` (Real-Time Mode, the
+deployed-app journey) (✅ verified · ○ unit/property-tested only · — nothing to run).
 The live evidence is under [Known limitations](#known-limitations) › Live verification.
 
 | Phase | Requirement | Built | Live | Where |
@@ -736,15 +745,15 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 1 P0 | Readiness preflight, admin "enable row tracking", missing tracking degrades to `full` | ✅ | ✅ | `GET /dtwin/incremental/readiness`, `POST /dtwin/incremental/enable-row-tracking`, `row_tracking_missing`. Live: the probe (`SourceReadiness.check`) reads `row_tracking = true` on the fixture tables and `false` on one replaced by `CREATE OR REPLACE TABLE AS SELECT` (its properties are gone), which is what degrades the mode; the enable statement was run on every fixture |
 | 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ✅ | ✅ | both sources: `_slots` (slot key) when the slots carry the whole graph, else `_data`; asserted-only readers go through a `DISTINCT` non-blank Postgres view; capped by `sync_table_mode`. Live: TRIGGERED from `_slots` online in 57 s; TRIGGERED from the `_data` MV registers and snapshots but its updates fail on `MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA` (private preview) → the build falls back to a snapshot registration and records `mv_change_feed_unavailable` |
 | 1 P0 | Build-run trace: mode, refresh technique, fallback reason, slot counts changed | ✅ | ✅ | `stats.materialization`; cockpit column, details and status card; `slots_changed` from the update's `flow_progress` metrics (`SlotUpdateMetrics`), with `slot_update_id` / `warehouse_id` for the DBU join on `system.billing.usage`. Live: a bootstrap reported 9 upserted slots against 9 slot rows, a one-row source update 3 (every slot of the row) — one RUNNING event carries the totals, no double count |
-| 1 exp. | Per-mapping freshness class: the UI shows which mappings are row-local (`microbatch`-eligible) and which are batch-incremental | ✅ | ◐ | readiness `mappings` (`kind` = `slot` / `batch` with the compiler's reason) + counts; "Mappings: n row-local, m batch-incremental" line on the readiness card. Live at the service layer: the fixture mappings read `slot` (Customer) / `batch` (Account, `sql_query source`), counts (1, 1); the card line needs a deployed app |
+| 1 exp. | Per-mapping freshness class: the UI shows which mappings are row-local (`microbatch`-eligible) and which are batch-incremental | ✅ | ✅ | readiness `mappings` (`kind` = `slot` / `batch` with the compiler's reason) + counts; "Mappings: n row-local, m batch-incremental" line on the readiness card. Live at the service layer: the fixture mappings read `slot` (Customer) / `batch` (Account, `sql_query source`), counts (1, 1); on the deployed sandbox app (scenario 06) the Domain › Backend card reads "incremental runs as incremental · Mappings: 2 row-local (microbatch-eligible), 0 batch-incremental" |
 | 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | ○ | `TwinNetChangeApply`; Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`); the MV change feed needs external metadata (private preview) — until then the apply falls back to a full stream as designed; the MERGE-table feed is live-verified (`table_changes` on the MERGE table lists exactly the merged change) |
 | 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | ✅ | `DeltaMergeMaterializer`, `TwinMergeFallback`. Live: the first build creates `_data` with row tracking / deletion vectors / change feed and merges 3 rows; an unchanged source merges 0 rows; one changed row → 1 delete + 1 insert; one deleted row → 1 delete; `table_changes` on the MERGE table lists exactly that change |
 | 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh. Live: the continuous pipeline lands a source change in `_slots` after 8.1 s median / 11.9 s max (n = 8) |
 | 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | ✅ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline. Live: a plain `UPDATE` is not a rewrite; `INSERT OVERWRITE` and `CREATE OR REPLACE TABLE AS SELECT` are detected |
 | 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ✅ | query warehouse + "Use Lakehouse//RT"; `DeltaFlatStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Live: the app's `use_sea` client on the RT warehouse `realtime` runs the fingerprint probe and every store read shape over the relation; recursive CTEs are refused there and take the build-warehouse fallback; point reads p50 216 ms through the SEA from a laptop |
-| 2 P1 | Lakehouse//RT offered only where available, and only for tables without row filters / column masks | ✅ | ○ | readiness `lakehouse_rt` facts (query warehouse configured, RT reads on, fast path) + card line; `_slots` / `_data` / `_graph` / `_inferred` are app-created without filters or masks, so nothing to check |
+| 2 P1 | Lakehouse//RT offered only where available, and only for tables without row filters / column masks | ✅ | ✅ | readiness `lakehouse_rt` facts (query warehouse configured, RT reads on, fast path) + card line; `_slots` / `_data` / `_graph` / `_inferred` are app-created without filters or masks, so nothing to check. Live: the deployed sandbox app (no RT warehouse) answers `{query_warehouse_configured: false, use_sea: false, fast_path: "graph"}` and the card line reads "Lakehouse//RT: query warehouse not set · RT reads off" |
 | 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | ✅ | `ContinuousSyncWait`; Postgres union view. Live: CONTINUOUS from `_slots` online in 56 s, a source change visible in Postgres after 45.8 s (target < 60 s) |
-| 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ◐ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace. Live at the service layer (`tests/external/test_incremental_readiness_live.py`, nightly): the `_slots` / `_data` catalog lookups, the slot-pipeline lookup, `freshness_lag_s` and `lakebase_sync` for a fixture domain; the card itself needs a deployed app |
+| 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ✅ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace. Live at the service layer (`tests/external/test_incremental_readiness_live.py`, nightly): the `_slots` / `_data` catalog lookups, the slot-pipeline lookup, `freshness_lag_s` and `lakebase_sync` for a fixture domain; on the deployed sandbox app (scenario 06) the Knowledge Graph › Build card reads "Slot pipeline: IDLE · _data: mv · lag unknown · _slots: streaming_table v5 · Last build: success (session) · mv / NO_OP / none · slots changed: 6 upserted, 0 deleted (full refresh)", and after the fallback build it listed `_data: table` with its commit and `freshness_lag_s: 9` |
 | 2 P0 | Reconciliation: count + hash of `_slots`, `_data`, Lakebase, batch recompute; re-backfill on drift | ✅ | ✅ | `POST /dtwin/incremental/reconcile` (+ `recompute`), tick reconciliation, `reconcile_drift` → full refresh. Live: `drift: false`, identical counts and `xxhash64` sums after bootstrap and after mutations |
 | 3 P2 | Prerequisites: topic config, readiness, resolver | ✅ | ○ | `RealtimeSource`, `realtime_topic_available`, readiness `realtime` facts, domain panel fields |
 | 3 P2 | Processing: RTM + `transformWithState` + `SlotDiffProcessor` | ✅ | ✅ | `jobs/triple_stream` (`main.py`, `processor.py`); the diff logic is property-tested without Spark. Live in Real-Time Mode on a classic DBR 19 cluster (`ontobricks-rtm`): Kafka → envelope explode → processor under `transformWithState` → `LiveSink` → `_live`, **p99 244 ms** end to end over 2 982 events (the serverless `availableNow` run before it verified state restore and tombstones). The explode must be Spark-native — RTM refuses `mapInPandas` — and the sink / processor must accept the tuples RTM hands over (both fixed) |
@@ -788,6 +797,15 @@ Behaviour in this release:
   entity, so most real mappings classify as batch; the slot pipeline engages only
   for table-based mappings and `incremental` is then the `_data` MV over the batch
   branch. Follow-up: treat single-table `SELECT … FROM t` queries as row-local.
+- A domain deleted from the registry keeps its graph artefacts, its slot pipeline
+  among them. A domain re-created under the same name and version adopts that
+  pipeline (same SQL fingerprint), and its first update resumes the old checkpoint —
+  if the sources' change feed is no longer readable from there (seen live: row
+  tracking toggled off and on between the two incarnations,
+  `DELTA_MISSING_ROW_TRACKING_FOR_CDC`), that build falls back to a full one and
+  records `slot_update_failed`, so the next build's update starts over. To start
+  clean on the first build, drop the former pipeline (`ontobricks-slots-<folder>-v<n>`)
+  before rebuilding. Follow-up: delete a domain's pipeline and tables with the domain.
 - `microbatch` freshness between builds is the `_data` view's own refresh: on every
   source update (at most once a minute) for at most ten sources, otherwise every 15
   minutes — and every domain with a `sql_query` or join mapping (most real ones,
@@ -1009,6 +1027,34 @@ supported"):
     cluster, and a stream a failed notebook left running keeps its slots until the cluster restarts.
   - Serverless compute refuses the real-time trigger (`INFINITE_STREAMING_TRIGGER_NOT_SUPPORTED`),
     which is why the earlier serverless attempts could only run `availableNow`.
+- **The deployed-app journey** (2026-11-03, the UI and MCP apps deployed to `ontobricks-rtm` by
+  `scripts/deploy.sh`; `tests/e2e/scenarios/test_scenario_06_incremental_live.py`, opt-in, no LLM):
+  a Lakehouse domain in `incremental` mode over two fixture tables, a one-class-per-table
+  ontology and two row-local mappings, all through the app's own routes. Readiness answered
+  `decision: {effective: full, reason: row_tracking_missing}` for the untracked source, two `slot`
+  mappings, `read_relation: graph`, `lakehouse_rt: {query_warehouse_configured: false, use_sea:
+  false, fast_path: graph}`; `POST /dtwin/incremental/enable-row-tracking` on that table flipped
+  the probe and the decision to `incremental`. The Domain › Backend card read "incremental runs as
+  incremental · Mappings: 2 row-local (microbatch-eligible), 0 batch-incremental · Lakehouse//RT:
+  query warehouse not set · RT reads off". The build created the slot pipeline
+  (`ontobricks-slots-zzincrementallive-v1`, PREVIEW channel), bootstrapped `_slots` (6 upserted
+  slots, `slots_changed.full_refresh: true`), created the `_data` MV, and the trace carried
+  `materialization_mode_effective: incremental`, `slot_update_id`, `source_versions` /
+  `source_table_ids` per source, `inferred_reset: true`; `GET /dtwin/incremental/status` listed the
+  pipeline `IDLE`, `_slots` as a `streaming_table` with its last commit and `_data` as `mv` without a
+  readable history. Re-run after dropping the former pipeline and tables (a clean first build):
+  `strategy: mv`, `graph_relation: mv`, 6 upserted slots, `refresh_technique: NO_OP` for the
+  freshly created `_data`, 192.5 s end to end, and the overview's `fallbacks_by_reason: {}`; the
+  Knowledge Graph › Build status card read "Slot pipeline: IDLE · _data: mv · lag unknown ·
+  _slots: streaming_table v5 · Last build: success (session) · mv / NO_OP / none · slots changed:
+  6 upserted, 0 deleted (full refresh)" and the whole journey passed in 300 s. The
+  journey also found three defects, fixed in this release: the readiness
+  preflight (and the reconciliation and `realtime` start) read the session-only R2RML without
+  regenerating it, so a domain opened from the registry reported no mappings; the registry
+  delete by display name deleted nothing and reported success; and a slot update that fails
+  did not owe the next build a full refresh (re-creating the domain adopted the former pipeline,
+  whose stream failed on the fixture's toggled row tracking and fell back to a MERGE build,
+  `strategy: merge`, effective `incremental`, `freshness_lag_s: 9`, as the ladder promises).
 
 Lakehouse//RT is no longer blocked either: RT warehouses are created in the UI — Compute → SQL
 Warehouses → Create → Real-Time; the SDK's warehouse types are still `CLASSIC` / `PRO` only and the

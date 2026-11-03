@@ -53,6 +53,7 @@ from back.objects.digitaltwin.build.TwinSlotFeed import TwinSlotFeed
 from back.objects.digitaltwin.build.TwinSlotPipeline import TwinSlotPipeline
 from back.objects.digitaltwin.build.TwinSlotRefreshPlan import (
     REASON_RECONCILE_DRIFT,
+    REASON_SLOT_UPDATE_FAILED,
     TwinSlotRefreshPlan,
 )
 
@@ -214,13 +215,18 @@ class TwinIncrementalBuild:
         The R2RML extracted and augmented from the mapping configuration, the
         base URI from the ontology (``DEFAULT_BASE_URI`` when it has none) —
         the one derivation the readiness preflight, the reconciliation and the
-        scheduled tick share with the main build's plan. ``None`` when the
-        domain has no R2RML yet.
+        scheduled tick share with the main build's plan. The R2RML is
+        session-only (a domain opened from the registry has none until it is
+        regenerated from the saved mappings), so it is ensured first, as the
+        build does. ``None`` when the domain has no R2RML even then.
         """
         from back.core.w3c import sparql
         from back.objects.digitaltwin.DigitalTwin import DigitalTwin
         from shared.config.constants import DEFAULT_BASE_URI
 
+        ensure = getattr(domain, "ensure_generated_content", None)
+        if callable(ensure):
+            ensure()
         r2rml = domain.get_r2rml() if hasattr(domain, "get_r2rml") else ""
         if not r2rml:
             return None
@@ -289,7 +295,19 @@ class TwinIncrementalBuild:
         )
         pipe.slot_refresh_facts = dict(plan["before"])
         if slots:
-            TwinSlotPipeline.run(pipe, spec, force_full_refresh=bool(plan["reason"]))
+            try:
+                TwinSlotPipeline.run(pipe, spec, force_full_refresh=bool(plan["reason"]))
+            except OntoBricksError:
+                # A stream that failed (a source whose change feed cannot be
+                # read over some version range, say) fails again from the same
+                # checkpoint: the next update owes a full refresh — unless one
+                # was already owed, whose reason stays.
+                if not pipe.slot_refresh_facts.get("slot_full_refresh_pending"):
+                    pipe.slot_refresh_facts.update(
+                        slot_full_refresh_pending=True,
+                        slot_full_refresh_reason=REASON_SLOT_UPDATE_FAILED,
+                    )
+                raise
         TwinIncrementalBuild._apply_views(
             pipe, definition, full_refresh=plan["reason"] == REASON_RECONCILE_DRIFT
         )

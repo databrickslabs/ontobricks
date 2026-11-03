@@ -14,6 +14,7 @@ logger = get_logger(__name__)
 #: ``slot_full_refresh_reason`` values.
 REASON_SOURCE_OVERWRITTEN = "source_overwritten"
 REASON_RECONCILE_DRIFT = "reconcile_drift"
+REASON_SLOT_UPDATE_FAILED = "slot_update_failed"
 
 
 class TwinSlotRefreshPlan:
@@ -30,8 +31,10 @@ class TwinSlotRefreshPlan:
       forward unchanged by a run whose update did not complete);
     * ``slot_full_refresh_pending``: true from the moment a full refresh is
       owed until an update with it completed — sticky across failures;
-    * ``slot_full_refresh_reason``: ``source_overwritten`` or
-      ``reconcile_drift``, kept apart from the mode's ``mode_fallback_reason``.
+    * ``slot_full_refresh_reason``: ``source_overwritten``, ``reconcile_drift``
+      or ``slot_update_failed`` (a slot update that failed resumes from the
+      same checkpoint and fails again — the next one starts over), kept apart
+      from the mode's ``mode_fallback_reason``.
 
     Runs that did not reach a slot update (full builds, MERGE builds, older
     runs) record none of these and are passed over.

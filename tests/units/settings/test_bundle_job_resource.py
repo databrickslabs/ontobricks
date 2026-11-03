@@ -253,9 +253,11 @@ class TestSlotPipelineTemplateIsNotAutoIncluded:
     suffix that the glob does not match."""
 
     def test_no_deployable_slot_pipeline_resource_exists(self):
+        """Only the deploy-time, git-ignored per-version render
+        (``_generated_triple_slots.yml``) may name the slot pipeline."""
         assert not (REPO_ROOT / "resources/triple_slots.pipeline.yml").exists()
         assert all(
-            "triple_slots" not in path.name
+            "triple_slots" not in path.name or path.name.startswith("_generated_")
             for path in (REPO_ROOT / "resources").glob("*.yml")
         )
 
