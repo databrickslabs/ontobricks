@@ -19,6 +19,7 @@ from back.objects.simulation import (
     Scope,
     Spec,
 )
+from back.objects.simulation.overlay import overlay_relation
 
 pytestmark = pytest.mark.unit
 
@@ -52,6 +53,14 @@ class TestSimPhy:
         assert not _companion_ddl.is_sim_phy("g_v1")
         assert not _companion_ddl.is_sim_phy("g_v1__app")
         assert not _companion_ddl.is_sim_phy("g_v1__smu_s1")
+        assert not _companion_ddl.is_sim_phy("g_v1__smp_s1")
+        assert _companion_ddl.is_sim_overlay_phy("g_v1__smp_s1")
+        assert _companion_ddl.sim_overlay_phy("MyDomain_V3", "sAbc") == "mydomain_v3__smp_sabc"
+        assert _companion_ddl.overlay_phy_from("g_v1__sim_s1") == "g_v1__smp_s1"
+        assert _companion_ddl.overlay_phy_from("g_v1__smu_s1") == "g_v1__smp_s1"
+        assert overlay_relation("g_v1__sim_s1") == "g_v1__smp_s1"
+        assert overlay_relation("cat.sch.g__smu_s1") == "cat.sch.g__smp_s1"
+        assert overlay_relation("live") == ""
 
     def test_sim_union_phy_marker(self):
         inferred = _companion_ddl.sim_union_phy("MyDomain_V3", "sAbc")
@@ -77,16 +86,53 @@ class TestSimPhy:
 
     def test_sim_union_view_sql_overlays_sandbox_subjects(self):
         cur = _Cursor()
-        _companion_ddl.ensure_sim_union_view(cur, "g__smu_s1", "g_v1", "g__sim_s1")
+        _companion_ddl.ensure_sim_union_view(
+            cur, "g__smu_s1", "g_v1", "g__sim_s1", "g__smp_s1"
+        )
         sql = cur.calls[0][0]
         assert "CREATE OR REPLACE VIEW g__smu_s1 AS" in sql
         assert "FROM g_v1 l" in sql
         assert (
-            "FROM g__sim_s1 s "
-            "WHERE s.subject = l.subject AND s.predicate = l.predicate"
+            "FROM g__smp_s1 k "
+            "WHERE k.subject = l.subject AND k.predicate = l.predicate"
         ) in sql
         assert "UNION ALL" in sql
         assert "FROM g__sim_s1 s" in sql
+
+    def test_sim_union_view_hides_last_removed_predicate_value(self):
+        import sqlite3
+
+        db = sqlite3.connect(":memory:")
+        db.executescript(
+            """
+            CREATE TABLE live(subject, predicate, object);
+            CREATE TABLE sim(subject, predicate, object);
+            CREATE TABLE smp(subject, predicate, object);
+            INSERT INTO live VALUES
+              ('ex:A','ex:hasContract','ex:X'),
+              ('ex:A','ex:name','A');
+            INSERT INTO sim VALUES ('ex:A','ex:name','A');
+            INSERT INTO smp VALUES
+              ('ex:A','ex:hasContract',''),
+              ('ex:A','ex:name','');
+            CREATE VIEW smu AS
+              SELECT l.subject, l.predicate, l.object FROM live l
+              WHERE NOT EXISTS (
+                SELECT 1 FROM smp k
+                WHERE k.subject = l.subject AND k.predicate = l.predicate
+              )
+              UNION ALL SELECT subject, predicate, object FROM sim;
+            """
+        )
+        assert db.execute(
+            "SELECT * FROM sim WHERE predicate='ex:hasContract'"
+        ).fetchall() == []
+        assert db.execute(
+            "SELECT * FROM smu WHERE predicate='ex:hasContract'"
+        ).fetchall() == []
+        assert db.execute(
+            "SELECT object FROM smu WHERE predicate='ex:name'"
+        ).fetchall() == [("A",)]
 
     def test_sandbox_name_matches_physical_resolution(self):
         name = SimulationStore.sandbox_table_name("Dom_V1", "s1")
@@ -148,6 +194,9 @@ class TestSimulationStoreGuard:
         assert sql.startswith("INSERT INTO dom_v1__sim_s1 ")
         assert "FROM dom_v1 WHERE subject = ANY(%s)" in sql
         assert params == (["a", "b"],)
+        overlay_sql = cur.calls[1][0]
+        assert "INSERT INTO dom_v1__smp_s1" in overlay_sql
+        assert "FROM dom_v1__sim_s1" in overlay_sql
 
     @pytest.mark.parametrize("bad", ["dom_v1; DROP TABLE x", "other__sim_s2", ""])
     def test_copy_rejects_unsafe_or_sandbox_sources(self, bad):

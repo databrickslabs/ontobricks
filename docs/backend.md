@@ -1223,7 +1223,7 @@ any caller reaches into a backend package directly.
 | `GraphBuilder` | `GraphDBFactory.get_builder(domain, settings, engine=…)` | Triple materialize / build-pipeline / sync-view naming / engine-specific naming helpers | Your engine participates in Build or needs naming helpers used by callers |
 | `GraphHealthProbe` | `get_health_probe(domain, settings, engine=…)` | Health / quality / object-listing probes (or vends a raw driver handle) | Settings/health pages probe your engine |
 | `GraphProvisioner` | `get_provisioner(domain, settings, engine=…)` | Config validation, schema/instance provisioning, credential helpers | Your engine has provisioning or config-validation surface |
-| `GraphSimulation` | `get_simulation(kind)` | Sandbox write store, `__sim_`/`__smu_` naming, Explorer union-view lifecycle | Your engine supports simulations |
+| `GraphSimulation` | `get_simulation(kind)` | Sandbox write store, `__sim_`/`__smu_`/`__smp_` naming, Explorer union-view lifecycle | Your engine supports simulations |
 
 Each is a small facade that delegates to your backend package's internals. The
 method surface is engine-specific — look at the Delta, Lakebase and Neo4j impls

@@ -1229,7 +1229,9 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
 2. **Copy into sandbox**: every triple whose subject is one of those entities
    (its attributes and its outgoing relationships) is copied into a separate
    table named `<graph>__sim_<scenario id>` (a Unity Catalog Delta table for
-   Lakehouse, or an isolated marker-labelled graph for Neo4j). This copy is
+   Lakehouse, or an isolated marker-labelled graph for Neo4j). Overlay keys
+   (`<graph>__smp_<scenario id>`) remember every `(subject, predicate)` the
+   sandbox has owned, including predicates emptied by Remove. This copy is
    the **before** picture.
 3. **Apply your facts**: your hypothetical facts are applied in the order you
    listed them, inside the sandbox only.
@@ -2048,11 +2050,11 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 **Settings → Lakebase → Objects** groups each domain/version's reader view,
 `_sync` bulk table, `__app` writable companion, `_adj_in`, `_adj_out`,
 `_entity_search`, and `_props` tables into one collapsible card. Simulation
-sandbox tables (`__sim_<id>`) and Explorer overlay views (`__smu_<id>`)
-fold into that same card under a **Simulations** subsection, keyed by
-scenario id — they are not listed as extra domain cards. Each scenario row
-has **Delete**, which drops that sandbox and its overlay views together
-(views first). Its count includes every listed storage, index, and
+sandbox tables (`__sim_<id>`), Explorer overlay views (`__smu_<id>`),
+and overlay-key companions (`__smp_<id>`) fold into that same card under
+a **Simulations** subsection, keyed by scenario id — they are not listed
+as extra domain cards. Each scenario row has **Delete**, which drops that
+sandbox, its overlay keys, and its overlay views together (views first). Its count includes every listed storage, index, and
 simulation object. Individual **Drop** actions remain available; **Delete
 all objects for this domain** removes the whole group, including the four
 rebuildable graph-index tables and any simulation sandboxes.

@@ -18,15 +18,15 @@ _ANALYTICS_SUFFIXES = ("_type_predicates", "_type_profiles", "_summary")
 _WORK_RE = re.compile(r"_work(?:_.*)?$")
 
 _VIEW_NAME_RE = re.compile(r"^triplestore_(?P<safe>.+)_V(?P<version>[^_]+)$", re.I)
-_SIM_LEAF_RE = re.compile(r"__(?P<marker>sim|smu|sms)_(?P<id>[a-z0-9]+)$", re.I)
+_SIM_LEAF_RE = re.compile(r"__(?P<marker>sim|smu|sms|smp)_(?P<id>[a-z0-9]+)$", re.I)
 
 
 def object_base(name: str) -> str:
     """Strip a companion suffix to get the domain group key.
 
     Simulation sandboxes (``__sim_<id>``) and Explorer overlays
-    (``__smu_<id>``, leftover ``__sms_<id>``) fold into the same card as
-    the live graph. Other companions go through
+    (``__smu_<id>``, ``__smp_<id>``, leftover ``__sms_<id>``) fold into the
+    same card as the live graph. Other companions go through
     :func:`strip_graph_leaf_suffix` (adjacency, entity-search, props).
     """
     stem = _SIM_LEAF_RE.sub("", name or "")
@@ -53,6 +53,8 @@ def _drop_sort_key(name: str, kind: str) -> tuple:
         marker = match.group("marker").lower()
     if marker in {"smu", "sms"}:
         return (0, -1, name)
+    if marker == "smp":
+        return (1, -2, name)
     if kind == "view":
         if name.endswith("_graph"):
             order = 0

@@ -43,6 +43,7 @@ class _FakeCursor:
 class _FakeStore:
     def __init__(self, cur: _FakeCursor):
         self._cur = cur
+        self._schema = "graphs"
 
     def _cursor(self):
         @contextmanager

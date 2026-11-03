@@ -81,13 +81,17 @@ class SimulationStore(FlatStore):
 
     def create_table(self, table_name: str) -> None:
         phy = self.sandbox_table_id(table_name)
+        overlay = _companion_ddl.overlay_phy_from(phy)
         with self._cursor() as cur:
             _companion_ddl.ensure_sim_table(cur, self._schema, phy)
+            _companion_ddl.ensure_sim_table(cur, self._schema, overlay)
         logger.info("Simulation sandbox ready: %s.%s", self._schema, phy)
 
     def drop_table(self, table_name: str) -> None:
         phy = self.sandbox_table_id(table_name)
+        overlay = _companion_ddl.overlay_phy_from(phy)
         with self._cursor() as cur:
+            _companion_ddl.drop_sim_table(cur, overlay)
             _companion_ddl.drop_sim_table(cur, phy)
         logger.info("Dropped simulation sandbox %s.%s", self._schema, phy)
 
@@ -135,12 +139,22 @@ class SimulationStore(FlatStore):
             f"ON CONFLICT DO NOTHING"
         )
         copied = 0
+        overlay = _companion_ddl.overlay_phy_from(phy)
         with self._cursor() as cur:
             for i in range(0, len(subjects), batch_size):
                 cur.execute(sql, (list(subjects[i : i + batch_size]),))
                 copied += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            _companion_ddl.backfill_sim_overlay_keys(cur, phy, overlay)
         logger.info("Seeded sandbox %s with %d triples", phy, copied)
         return copied
+
+    def sync_overlay_keys(self, table_name: str) -> None:
+        """Append current sandbox ``(subject, predicate)`` pairs into ``__smp_``."""
+        phy = self.sandbox_table_id(table_name)
+        overlay = _companion_ddl.overlay_phy_from(phy)
+        with self._cursor() as cur:
+            _companion_ddl.ensure_sim_table(cur, self._schema, overlay)
+            _companion_ddl.backfill_sim_overlay_keys(cur, phy, overlay)
 
     def delete_subject_predicate(self, table_name: str, pairs: List[Dict[str, str]]) -> int:
         """Delete every ``(s, p, *)`` triple for the given subject/predicate pairs."""

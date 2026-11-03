@@ -14,6 +14,7 @@ from back.core.helpers import is_uri
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.objects.digitaltwin.constants import RDF_TYPE
+from back.objects.simulation.overlay import load_overlay_preds
 
 logger = get_logger(__name__)
 
@@ -27,6 +28,7 @@ def _overlay_live_neighbourhood(
     store: Any,
     live_table: str,
     *,
+    sandbox_relation: str,
     sandbox_rows: List[Any],
     sandbox_subjects: List[str],
     depth: int,
@@ -37,15 +39,12 @@ def _overlay_live_neighbourhood(
 ) -> tuple[List[Any], bool]:
     """Union live neighbourhood triples with the sandbox after-picture.
 
-    Sandbox (subject, predicate) pairs overlay live ones; other live facts
-    of the same entity stay visible. Neighbours come from a live expand
-    around sandbox subjects and the URI objects they point at.
+    Overlay keys (``__smp_``) hide live facts for predicates the sandbox has
+    owned, including last-value removes. Other live facts of the same entity
+    stay visible. Neighbours come from a live expand around sandbox subjects
+    and the URI objects they point at.
     """
-    overlay_preds = {
-        ((row or {}).get("subject") or "", (row or {}).get("predicate") or "")
-        for row in sandbox_rows
-        if (row or {}).get("subject") and (row or {}).get("predicate")
-    }
+    overlay_preds = load_overlay_preds(store, sandbox_relation, sandbox_rows)
     seeds: List[str] = []
     seen: Set[str] = set()
     for uri in sandbox_subjects:
@@ -433,6 +432,7 @@ class GraphFilter:
             results, live_capped = _overlay_live_neighbourhood(
                 store,
                 live_table,
+                sandbox_relation=graph_name,
                 sandbox_rows=results,
                 sandbox_subjects=subjects,
                 depth=depth,

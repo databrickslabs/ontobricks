@@ -36,7 +36,17 @@ class SimulationUnion:
             # 400 so the UI can tell the user to re-run the simulation.
             if not _companion_ddl.relation_exists(cur, sandbox_id):
                 raise ValidationError(_SANDBOX_MISSING_MESSAGE)
-            _companion_ddl.ensure_sim_union_view(cur, view_id, live_id, sandbox_id)
+            overlay_id = _companion_ddl.overlay_phy_from(sandbox_id)
+            if not overlay_id:
+                raise ValidationError(_SANDBOX_MISSING_MESSAGE)
+            if not _companion_ddl.relation_exists(cur, overlay_id):
+                _companion_ddl.ensure_sim_table(
+                    cur, self._store._schema, overlay_id
+                )
+            _companion_ddl.backfill_sim_overlay_keys(cur, sandbox_id, overlay_id)
+            _companion_ddl.ensure_sim_union_view(
+                cur, view_id, live_id, sandbox_id, overlay_id
+            )
         return view_id
 
     def drop_all(self, graph_name: str, sim_id: str) -> None:

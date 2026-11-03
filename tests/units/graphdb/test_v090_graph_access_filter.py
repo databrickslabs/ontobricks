@@ -327,6 +327,43 @@ class TestSandboxSlice:
         assert ("http://ex/org", rdf, "http://ex/Org") in spo
         assert ("http://ex/paris", rdf, "http://ex/City") in spo
 
+    def test_last_value_remove_stays_hidden_when_overlay_keys_exist(self):
+        rdf = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        sandbox = [
+            {"subject": "ex:A", "predicate": rdf, "object": "ex:Person"},
+            {"subject": "ex:A", "predicate": "ex:name", "object": "A"},
+        ]
+        overlay = [
+            {"subject": "ex:A", "predicate": rdf, "object": ""},
+            {"subject": "ex:A", "predicate": "ex:name", "object": ""},
+            {"subject": "ex:A", "predicate": "ex:hasContract", "object": ""},
+        ]
+
+        class Store(_SliceStore):
+            def query_triples(self, graph_name):
+                if graph_name.endswith("__smp_s1"):
+                    return list(overlay)
+                return list(self.triples)
+
+            def expand_and_fetch_subgraph(self, table, uris, depth, max_e, max_t):
+                return {
+                    "results": [
+                        {"subject": "ex:A", "predicate": rdf, "object": "ex:Person"},
+                        {"subject": "ex:A", "predicate": "ex:name", "object": "A"},
+                        {"subject": "ex:A", "predicate": "ex:hasContract", "object": "ex:X"},
+                    ],
+                    "count": 3,
+                    "capped": False,
+                    "expanded_count": 1,
+                }
+
+        out = GraphFilter.sandbox_slice(
+            Store(sandbox), "g__sim_s1", live_table="g_live", depth=1
+        )
+        spo = {(t["subject"], t["predicate"], t["object"]) for t in out["results"]}
+        assert ("ex:A", "ex:hasContract", "ex:X") not in spo
+        assert ("ex:A", "ex:name", "A") in spo
+
 
 # ---------------------------------------------------------------------------
 # Find paging (has_more)

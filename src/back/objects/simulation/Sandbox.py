@@ -11,6 +11,7 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.constants import RDF_TYPE
 from back.objects.simulation.Diff import Diff, TripleKey
 from back.objects.simulation.Patch import Patch
+from back.objects.simulation.overlay import overlay_relation
 
 logger = get_logger(__name__)
 
@@ -49,6 +50,9 @@ class _LakebaseSandbox:
 
     def ensure_explorer_views(self, live_union: str) -> None:
         """Materialise the Explorer union view (live inferred ∪ sandbox) after a run."""
+        sync = getattr(self.store, "sync_overlay_keys", None)
+        if callable(sync):
+            sync(self.table)
         view = self._sim.sim_union_view_name(self._graph_name, self._sim_id)
         self._sim.ensure_union(self._live, view, live_union, self.table)
 
@@ -285,9 +289,18 @@ class _StoreSandbox:
     def reset(self) -> None:
         self.drop()
         self.store.create_table(self.table)
+        overlay = overlay_relation(self.table)
+        if overlay:
+            self.store.create_table(overlay)
 
     def drop(self) -> None:
         self._drop_explorer_views()
+        overlay = overlay_relation(self.table)
+        if overlay:
+            try:
+                self.store.drop_table(overlay)
+            except Exception:  # noqa: BLE001
+                pass
         self.store.drop_table(self.table)
 
     def _drop_explorer_views(self) -> None:
@@ -302,6 +315,7 @@ class _StoreSandbox:
             return 0
         triples = self._live.get_triples_for_subjects(self._graph_name, unique)
         copied = self.store.insert_triples(self.table, triples) if triples else 0
+        self.sync_overlay_keys()
         if self.store.count_triples(self.table) > self.MAX_TRIPLES:
             self.drop()
             raise ValidationError(
@@ -406,7 +420,35 @@ class _StoreSandbox:
             else:
                 self.store.delete_triples(self.table, [patch.triple()])
                 asserted.discard(Diff.key(patch.triple()))
+        self.sync_overlay_keys()
         return asserted
+
+    def sync_overlay_keys(self) -> None:
+        """Remember every current sandbox ``(subject, predicate)`` (append-only)."""
+        overlay = overlay_relation(self.table)
+        if not overlay:
+            return
+        self.store.create_table(overlay)
+        have: Set[tuple] = set()
+        try:
+            have = {
+                (row.get("subject", ""), row.get("predicate", ""))
+                for row in (self.store.query_triples(overlay) or [])
+                if row.get("subject") and row.get("predicate")
+            }
+        except Exception:  # noqa: BLE001
+            have = set()
+        missing = [
+            {"subject": subject, "predicate": predicate, "object": ""}
+            for subject, predicate in {
+                (row.get("subject", ""), row.get("predicate", ""))
+                for row in self.triples()
+                if row.get("subject") and row.get("predicate")
+            }
+            if (subject, predicate) not in have
+        ]
+        if missing:
+            self.store.insert_triples(overlay, missing)
 
 
 class _DeltaSandbox(_StoreSandbox):
@@ -424,16 +466,23 @@ class _DeltaSandbox(_StoreSandbox):
     def _view_name(self) -> str:
         return self.table.replace("__sim_", "__smu_")
 
+    def _overlay_name(self) -> str:
+        return overlay_relation(self.table)
+
     def _drop_explorer_views(self) -> None:
         self.store._client.execute_statement(f"DROP VIEW IF EXISTS {self._view_name()}")
 
     def ensure_explorer_views(self, live_union: str) -> None:
+        self.sync_overlay_keys()
+        overlay = self._overlay_name()
+        if not overlay:
+            raise ValidationError("Simulation overlay-key table name is missing")
         view = self._view_name()
         self.store._client.execute_statement(
             f"CREATE OR REPLACE VIEW {view} AS "
             f"SELECT l.subject, l.predicate, l.object FROM {live_union} l "
-            f"WHERE NOT EXISTS (SELECT 1 FROM {self.table} s "
-            f"WHERE s.subject = l.subject AND s.predicate = l.predicate) "
+            f"WHERE NOT EXISTS (SELECT 1 FROM {overlay} k "
+            f"WHERE k.subject = l.subject AND k.predicate = l.predicate) "
             f"UNION ALL SELECT subject, predicate, object FROM {self.table}"
         )
 

@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Analytics groups whose slug matches no domain, keyed by that slug.
     let _dtOrphanRegistry = {};
     function simulationSuffix(name) {
-        const match = String(name || '').match(/__(sim|smu|sms)_([a-z0-9]+)$/i);
+                const match = String(name || '').match(/__(sim|smu|sms|smp)_([a-z0-9]+)$/i);
         if (!match) return null;
         return { marker: match[1].toLowerCase(), id: match[2].toLowerCase() };
     }
@@ -3191,9 +3191,9 @@ document.addEventListener('DOMContentLoaded', function () {
             //         "{base}_entity_search", and "{base}_props" → base
             // Views:  "{base}"                          → base
             // Simulations: "{base}__sim_<id>", "{base}__smu_<id>",
-            //              leftover "{base}__sms_<id>" → base
+            //              "{base}__smp_<id>", leftover "{base}__sms_<id>" → base
             function simulationSuffix(name) {
-                const match = String(name || '').match(/__(sim|smu|sms)_([a-z0-9]+)$/i);
+                const match = String(name || '').match(/__(sim|smu|sms|smp)_([a-z0-9]+)$/i);
                 if (!match) return null;
                 return { marker: match[1].toLowerCase(), id: match[2].toLowerCase() };
             }

@@ -75,6 +75,7 @@ def view_phy(name: str) -> str:
 
 SIM_TABLE_MARKER = "__sim_"
 SIM_UNION_INFERRED_MARKER = "__smu_"
+SIM_OVERLAY_MARKER = "__smp_"
 _PG_IDENTIFIER_MAX_BYTES = 63
 
 
@@ -106,9 +107,32 @@ def sim_union_phy(name: str, sim_id: str) -> str:
     return _sim_named(name, sim_id, SIM_UNION_INFERRED_MARKER)
 
 
+def sim_overlay_phy(name: str, sim_id: str) -> str:
+    """Companion of ``(subject, predicate)`` pairs the sandbox has owned."""
+    return _sim_named(name, sim_id, SIM_OVERLAY_MARKER)
+
+
+def overlay_phy_from(relation: str) -> str:
+    """Map a ``__sim_`` / ``__smu_`` identifier to its ``__smp_`` companion."""
+    name = relation or ""
+    leaf = name.split(".")[-1].strip('"')
+    if SIM_OVERLAY_MARKER in leaf:
+        return name
+    if SIM_UNION_INFERRED_MARKER in name:
+        return name.replace(SIM_UNION_INFERRED_MARKER, SIM_OVERLAY_MARKER, 1)
+    if SIM_TABLE_MARKER in name:
+        return name.replace(SIM_TABLE_MARKER, SIM_OVERLAY_MARKER, 1)
+    return ""
+
+
 def is_sim_phy(table: str) -> bool:
     """True when *table* is a simulation sandbox table name."""
     return SIM_TABLE_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def is_sim_overlay_phy(table: str) -> bool:
+    """True when *table* is a simulation overlay-key companion."""
+    return SIM_OVERLAY_MARKER in (table or "").split(".")[-1].strip('"')
 
 
 def ensure_sim_table(cur: Any, schema: str, table: str) -> None:
@@ -121,12 +145,22 @@ def drop_sim_table(cur: Any, table: str) -> None:
     cur.execute(f"DROP TABLE IF EXISTS {table}")
 
 
-def ensure_sim_union_view(cur: Any, view: str, live: str, sandbox: str) -> None:
-    """Live graph UNION sandbox, overlaying only predicates the sandbox wrote.
+def backfill_sim_overlay_keys(cur: Any, sandbox: str, overlay: str) -> None:
+    """Append-only: remember every ``(subject, predicate)`` currently in *sandbox*."""
+    cur.execute(
+        f"INSERT INTO {overlay} (subject, predicate, object) "
+        f"SELECT DISTINCT subject, predicate, '' FROM {sandbox} "
+        f"ON CONFLICT DO NOTHING"
+    )
 
-    Subject-level replace hid every live fact as soon as a patch mentioned the
-    entity (e.g. a new type triple). Predicate-level overlay keeps existing
-    properties and relations, and lets SET/ADD replace that predicate.
+
+def ensure_sim_union_view(
+    cur: Any, view: str, live: str, sandbox: str, overlay: str
+) -> None:
+    """Live graph UNION sandbox, overlaying predicates the sandbox has owned.
+
+    Overlay keys live in *overlay* (``__smp_``), not remaining sandbox rows, so
+    a last-value ``remove`` still hides the live triple.
     """
     sql = (
         f"CREATE OR REPLACE VIEW {view} AS "
@@ -134,8 +168,8 @@ def ensure_sim_union_view(cur: Any, view: str, live: str, sandbox: str) -> None:
         f"NULL::TEXT AS datatype, NULL::TEXT AS lang "
         f"FROM {live} l "
         f"WHERE NOT EXISTS ("
-        f"SELECT 1 FROM {sandbox} s "
-        f"WHERE s.subject = l.subject AND s.predicate = l.predicate"
+        f"SELECT 1 FROM {overlay} k "
+        f"WHERE k.subject = l.subject AND k.predicate = l.predicate"
         f") "
         f"UNION ALL "
         f"SELECT s.subject, s.predicate, s.object, s.datatype, s.lang "

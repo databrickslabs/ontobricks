@@ -73,6 +73,7 @@ class TestDeltaObjectHelpers:
         assert object_base("triplestore_foo_V1__sim_s1") == "triplestore_foo_V1"
         assert object_base("triplestore_foo_V1__smu_s1") == "triplestore_foo_V1"
         assert object_base("triplestore_foo_V1__sms_s1") == "triplestore_foo_V1"
+        assert object_base("triplestore_foo_V1__smp_s1") == "triplestore_foo_V1"
 
     def test_group_folds_simulation_objects(self):
         raw = [

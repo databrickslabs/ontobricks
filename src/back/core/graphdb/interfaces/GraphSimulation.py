@@ -3,8 +3,8 @@
 Factory-vended via :meth:`GraphDBFactory.get_simulation` so the ``simulation/**``
 package never imports a backend package directly. It groups the backend-specific
 touch-points the sandbox lifecycle needs: the write store that isolates sandbox
-mutations, the physical names of the ``__sim_`` table / ``__smu_`` union view, and
-the Explorer union-view lifecycle.
+mutations, the physical names of the ``__sim_`` table / ``__smu_`` union view /
+``__smp_`` overlay keys, and the Explorer union-view lifecycle.
 
 Backends diverge sharply (Lakebase overlays through Postgres union views; Delta
 builds a UC view in the sandbox class itself; Neo4j isolates by marker label), so

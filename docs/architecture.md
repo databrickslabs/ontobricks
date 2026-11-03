@@ -1347,7 +1347,8 @@ domains redirect to Domain, other backends show a disabled page.
 2. **Seed** (`Sandbox`) creates a standalone table
    `<graph>__sim_<id>` and copies every live triple whose *subject* is in scope
    with one `INSERT … SELECT … WHERE subject = ANY(…)` (datatype / lang kept).
-   Slices above 250k triples are rejected.
+   Distinct `(subject, predicate)` pairs are recorded in `<graph>__smp_<id>`
+   (append-only overlay keys). Slices above 250k triples are rejected.
 3. **Patch** applies the hypothetical facts in order: `add`, `remove`, or `set`
    (delete every `(s, p, *)` then assert the new value).
 4. **Reason** with `Reasoning`, a `ReasoningService` subclass
@@ -1383,9 +1384,11 @@ ontology/mapping leaves the simulation tables alone. Sandbox triples stay
 in the graph schema and are rebuilt by the next run. Runs execute as
 `TaskManager` background tasks.
 `Artifacts` names the physical objects of a scenario — sandbox
-table (Lakebase/Delta), Explorer overlay view (`__smu_`), or
-the isolated Neo4j graph — and the last-run item counts. The scenario
-editor shows that catalog in a third column.
+table (Lakebase/Delta), Explorer overlay view (`__smu_`), overlay-key
+companion (`__smp_`), or the isolated Neo4j graph — and the last-run
+item counts. The scenario editor shows that catalog in a third column.
+Explorer union views hide live triples whose `(subject, predicate)` is
+in `__smp_`, so a last-value `remove` does not resurrect the live fact.
 
 | Endpoint | Purpose |
 |----------|---------|

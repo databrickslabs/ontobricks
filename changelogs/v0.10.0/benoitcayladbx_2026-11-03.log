@@ -593,3 +593,92 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9857 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Keep last-value simulation removes out of the Explorer overlay
+================================================================================
+
+Context: GitHub #215 — after `remove` of a predicate's last object, the
+Explorer union inferred "untouched" from remaining sandbox rows and let
+the live triple show through. Diff and SWRL on the sandbox were already
+correct. Overlay keys (`__smp_<id>`) now record every `(subject,
+predicate)` the sandbox has owned, append-only.
+
+Changes:
+
+1. src/back/objects/simulation/overlay.py
+   Map `__sim_` / `__smu_` names to `__smp_` and merge persisted overlay
+   keys with remaining sandbox rows.
+2. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Overlay naming, append-only backfill, union view anti-join on keys.
+3. src/back/core/graphdb/lakebase/SimulationStore.py
+   Create/drop overlay with the sandbox; record keys on seed.
+4. src/back/core/graphdb/lakebase/SimulationUnion.py
+   Ensure overlay keys exist, backfill, then build the view.
+5. src/back/objects/simulation/Sandbox.py
+   Delta/Neo4j seed+apply append overlay keys; Delta view uses `__smp_`.
+6. src/back/objects/digitaltwin/explorer/GraphFilter.py
+   Python live overlay uses persisted keys so last-value remove stays gone.
+7. src/front/static/config/js/settings.js
+   Fold `__smp_` companions into the same simulation object group.
+8. tests/units/simulation/test_simulation_core.py
+   SQLite last-value remove, overlay SQL, seed backfill.
+9. tests/units/graphdb/test_v090_graph_access_filter.py
+   GraphFilter last-value remove with overlay keys.
+10. docs/architecture.md, docs/user-guide.md, docs/backend.md
+    Document `__smp_` overlay keys.
+
+Modified files:
+- src/back/objects/simulation/overlay.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/SimulationStore.py
+- src/back/core/graphdb/lakebase/SimulationUnion.py
+- src/back/core/graphdb/delta/objects.py
+- src/back/core/graphdb/interfaces/GraphSimulation.py
+- src/back/objects/digitaltwin/explorer/GraphFilter.py
+- src/front/static/config/js/settings.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/graphdb/test_v090_graph_access_filter.py
+- tests/units/graphdb/test_lakebase_sim_union_guard.py
+- tests/units/settings/test_delta_objects.py
+- tests/units/front/test_lakebase_object_grouping.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/backend.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9859 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Document the Minimal surface checklist for agents
+================================================================================
+
+Context: Class-first and LOC budgets were more concrete than YAGNI, so agents
+extracted files and layers too early. Canonicalise an eight-point Minimal
+surface checklist under the existing simplest-code principle; skills cite it
+instead of restating it.
+
+Changes:
+
+1. .cursor/01-expertise-and-principles.mdc
+   Add §Minimal surface (ticket-only code, reuse first, no premature files,
+   no pass-through wrappers, drop dead surface, behaviour-level tests).
+2. src/.coding_rules.md
+   Mirror §2; point code-review item 2 at the short form.
+3. .claude/skills/code-review/SKILL.md
+   Duplication step and speculative-generality grep cite §Minimal surface.
+4. .claude/skills/refactoring/SKILL.md
+   Extraction gate and Don't line cite §Minimal surface.
+5. .cursor/08-testing-and-deployment.mdc
+   Refactor working-style "simplest result" line cites §Minimal surface.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- src/.coding_rules.md
+- .claude/skills/code-review/SKILL.md
+- .claude/skills/refactoring/SKILL.md
+- .cursor/08-testing-and-deployment.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9859 passed, 326 skipped, 8 deselected.
