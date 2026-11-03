@@ -515,3 +515,21 @@ class TestTypedBgpValueFiltersReachSql:
         )
         with pytest.raises(ValidationError, match="FILTER"):
             _translate(query, mappings)
+
+
+def test_get_table_source_rewrites_collapsed_uc_fqn():
+    source = SparqlTranslator._get_table_source(
+        {
+            "sql_query": (
+                "SELECT id FROM "
+                "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+                "hd_activity_participant`"
+            )
+        },
+        alias="e",
+    )
+    assert "`catalog_poc_dard`.`anonym_bcp_ddv_lyt_modeloloyalty`" in source
+    assert (
+        "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+        "hd_activity_participant`"
+    ) not in source

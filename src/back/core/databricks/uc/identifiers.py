@@ -38,3 +38,39 @@ def quote_uc_fqn(
     if table is not None:
         parts.append(quote_uc_identifier(table, role="table"))
     return ".".join(parts)
+
+
+# Spark treats `` `catalog.schema.table` `` as one identifier. Match that
+# illegal form after FROM / JOIN so column names like `` `customer.id` ``
+# are left alone.
+_COLLAPSED_UC_FQN_RE = re.compile(
+    r"(?i)(\b(?:FROM|JOIN)\s+)`("
+    r"[A-Za-z0-9_][A-Za-z0-9_-]*"
+    r"\.[A-Za-z0-9_][A-Za-z0-9_-]*"
+    r"\.[A-Za-z0-9_][A-Za-z0-9_-]*"
+    r")`"
+)
+
+
+def find_collapsed_uc_fqn(sql: str) -> list[str]:
+    """Return illegal single-backtick three-level names in *sql*."""
+    if not sql:
+        return []
+    return [f"`{m.group(2)}`" for m in _COLLAPSED_UC_FQN_RE.finditer(sql)]
+
+
+def rewrite_collapsed_uc_fqn(sql: str) -> str:
+    """Rewrite ``FROM `a.b.c` `` to ``FROM `a`.`b`.`c` ``.
+
+    Leaves bare ``catalog.schema.table`` and already-split
+    `` `catalog`.`schema`.`table` `` unchanged.
+    """
+    if not sql:
+        return sql
+
+    def _replace(match: re.Match[str]) -> str:
+        prefix, fqn = match.group(1), match.group(2)
+        catalog, schema, table = fqn.split(".")
+        return f"{prefix}{quote_uc_fqn(catalog, schema, table)}"
+
+    return _COLLAPSED_UC_FQN_RE.sub(_replace, sql)

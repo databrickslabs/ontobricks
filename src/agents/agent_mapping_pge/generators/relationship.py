@@ -235,6 +235,10 @@ expr> AS target_id`` (Trap 1 + Trap 3).
 table, no join. Cross-source: a UNION ALL of per-source SELECTs (each source \
 that holds both cores), or a JOIN on the shared canonical key.
 • No LIMIT, no ORDER BY. Always full table names (catalog.schema.table).
+• Quote each Unity Catalog segment separately, never wrap the full \
+catalog.schema.table in one pair of backticks: FROM `catalog.schema.table` \
+is illegal Spark SQL. Write FROM catalog.schema.table or \
+FROM `catalog`.`schema`.`table`.
 
 WORKFLOW
 1. Read BOTH entity SQLs. Extract each entity's id EXPRESSION (the \

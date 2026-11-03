@@ -115,6 +115,34 @@ class SQLHelpers:
         return quote_uc_fqn(catalog, schema, table)
 
     @staticmethod
+    def find_collapsed_uc_fqn(sql: str) -> list[str]:
+        from back.core.databricks.uc.identifiers import find_collapsed_uc_fqn
+
+        return find_collapsed_uc_fqn(sql)
+
+    @staticmethod
+    def rewrite_collapsed_uc_fqn(sql: str) -> str:
+        from back.core.databricks.uc.identifiers import rewrite_collapsed_uc_fqn
+
+        return rewrite_collapsed_uc_fqn(sql)
+
+    @staticmethod
+    def collapsed_uc_fqn_check(sql: str) -> dict | None:
+        """Diagnostic row when *sql* wraps a three-level name in one backtick pair."""
+        hits = SQLHelpers.find_collapsed_uc_fqn(sql)
+        if not hits:
+            return None
+        return {
+            "check": "uc_fqn_quoting",
+            "status": "error",
+            "detail": (
+                "Unity Catalog three-level names must not be wrapped in a "
+                f"single pair of backticks (found {hits[0]}). Use "
+                "catalog.schema.table or `catalog`.`schema`.`table`."
+            ),
+        }
+
+    @staticmethod
     def validate_table_name(table_name: str) -> None:
         """Raise :class:`~back.core.errors.ValidationError` if *table_name* is empty.
 

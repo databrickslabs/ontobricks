@@ -1335,8 +1335,9 @@ rules, or results, shows the brand spinner over that pane.
    in plain language and click **Propose facts** to the right of the box.
    An agent looks up classes, properties, and live-graph entities, then
    fills the S/P/O cards below and rewrites **General → Description** as a
-   complete what-if (existing text plus the new facts). Review both before
-   you save or run.
+   complete what-if (existing text plus the new facts). The last prompt
+   stays in the textarea and is stored with the scenario, so reopening it
+   restores the wording you proposed. Review both before you save or run.
    **Fact wizard** (or the search icon on a cell) looks up existing graph
    entities, ontology predicates declared on the subject's class (including
    inherited), and related instances so you do not have to paste URIs by hand.
@@ -1837,7 +1838,8 @@ Domains are saved as versioned documents in the Lakebase registry. Use the **Sav
 4. **Use Consistent Column Types**: Source/target columns should match entity IDs
 5. **Exclude Irrelevant Attributes Early**: Before running Auto-Map, open each entity's Status tab and uncheck attributes you don't need. Auto-Map will skip excluded attributes, producing leaner SQL with no extra columns.
 6. **Quote Special Column Names**: If a source column contains spaces, hyphens, or dots, use backtick quoting in your SQL (`` `column name` AS column_name ``) so the mapping and R2RML export work correctly.
-7. **Use Metadata Quality Warning**: Check the Auto-Map page for the metadata quality warning before running Auto-Map — adding table and column descriptions in Domain → Metadata significantly improves mapping accuracy.
+7. **Quote Unity Catalog tables per segment**: Write `catalog.schema.table` or `` `catalog`.`schema`.`table` ``. A single pair of backticks around the whole three-level name is illegal Spark SQL; Mapping save, Auto-Map, and Diagnostics rewrite or flag it.
+8. **Use Metadata Quality Warning**: Check the Auto-Map page for the metadata quality warning before running Auto-Map — adding table and column descriptions in Domain → Metadata significantly improves mapping accuracy.
 
 ### Knowledge Graph Tips
 
@@ -3057,6 +3059,7 @@ After import you can:
 - **Metadata Quality Warning**: The Auto-Map page detects tables and columns with missing `COMMENT` descriptions and displays a collapsible warning. Poor metadata quality reduces LLM mapping accuracy; a direct link opens the Domain → Metadata editor.
 - **Re-Assign Missing Attributes**: Targeted re-mapping for entities that have some included attributes unmapped (excluded attributes are ignored by this check).
 - **Column Names with Spaces / Special Characters**: The auto-mapping agent is instructed to backtick-quote unsafe column names and alias them to safe `snake_case` names. The R2RML generator double-quotes column names (per R2RML spec §7.4) in `rr:column` values and `rr:template` column references whenever a name is not a plain SQL identifier.
+- **Unity Catalog table names**: Mapping SQL must use `catalog.schema.table` or separately quoted segments (`` `catalog`.`schema`.`table` ``). A single pair of backticks around the full three-level name is rewritten on save/submit and flagged by Mapping → Diagnostics (`uc_fqn_quoting`).
 - **Preview Limit**: Control the number of preview rows displayed in the Mapping grid; SQL is stored without LIMIT clause.
 - **Unified Panel UI**: Studio and Manual views share the same panel design (tabs, forms, tables) for a consistent experience.
 - **SQL Query Testing**: Test and validate SQL queries directly in the mapping interface before saving.

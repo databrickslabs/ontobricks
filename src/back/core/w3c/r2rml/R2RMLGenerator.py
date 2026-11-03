@@ -7,6 +7,7 @@ from rdflib.namespace import RDF, RDFS, XSD
 import re
 
 from back.core.logging import get_logger
+from back.core.helpers.SQLHelpers import SQLHelpers
 from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
@@ -14,6 +15,10 @@ logger = get_logger(__name__)
 # Characters safe to leave unencoded in IRI path/fragment segments.
 # Spaces and other illegal IRI chars are percent-encoded by _safe_uri.
 _IRI_SAFE = "/:@-._~!$&'()*+,;=%"
+
+
+def _mapping_sql(sql: str) -> str:
+    return SQLHelpers.rewrite_collapsed_uc_fqn(sql or "").strip()
 
 
 class R2RMLGenerator:
@@ -216,7 +221,7 @@ class R2RMLGenerator:
             - schema: str
             - table: str (or table_name)
         """
-        sql_query = config.get("sql_query", "").strip()
+        sql_query = _mapping_sql(config.get("sql_query", ""))
         catalog = config.get("catalog", "")
         schema = config.get("schema", "")
         table = config.get("table") or config.get("table_name", "")
@@ -365,7 +370,7 @@ class R2RMLGenerator:
         target_column = config.get("target_column") or config.get(
             "target_id_column", ""
         )
-        sql_query = config.get("sql_query", "").strip()
+        sql_query = _mapping_sql(config.get("sql_query", ""))
         source_class_label = config.get("source_class_label", "")
         target_class_label = config.get("target_class_label", "")
         # Also get class URIs (from auto-assign)
@@ -461,7 +466,7 @@ class R2RMLGenerator:
             g.add((logical_table, self.rr.sqlQuery, Literal(sql_query)))
         else:
             # Fallback to source entity's SQL or table if no SQL query
-            source_sql = source_entity.get("sql_query", "").strip()
+            source_sql = _mapping_sql(source_entity.get("sql_query", ""))
             if source_sql:
                 g.add((logical_table, self.rr.sqlQuery, Literal(source_sql)))
             else:

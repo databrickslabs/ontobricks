@@ -108,6 +108,48 @@ class TestSQLHelpers:
             == "`main`.`default`.`5_g_subscribers`"
         )
 
+    def test_rewrite_collapsed_uc_fqn_from_clause(self):
+        sql = (
+            "SELECT id AS ID, name AS Label FROM "
+            "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty.hd_activity_participant` "
+            "WHERE id IS NOT NULL"
+        )
+        rewritten = SQLHelpers.rewrite_collapsed_uc_fqn(sql)
+        assert (
+            "`catalog_poc_dard`.`anonym_bcp_ddv_lyt_modeloloyalty`"
+            ".`hd_activity_participant`"
+        ) in rewritten
+        assert (
+            "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+            "hd_activity_participant`"
+        ) not in rewritten
+
+    def test_rewrite_collapsed_uc_fqn_join_clause(self):
+        sql = (
+            "SELECT a.id FROM `cat.sch.left` a "
+            "JOIN `cat.sch.right` b ON a.id = b.id"
+        )
+        rewritten = SQLHelpers.rewrite_collapsed_uc_fqn(sql)
+        assert "`cat`.`sch`.`left`" in rewritten
+        assert "`cat`.`sch`.`right`" in rewritten
+        assert "`cat.sch.left`" not in rewritten
+        assert "`cat.sch.right`" not in rewritten
+
+    def test_rewrite_leaves_per_segment_quotes_and_bare_fqn(self):
+        already_split = "SELECT * FROM `cat`.`sch`.`tbl`"
+        bare = "SELECT * FROM cat.sch.tbl"
+        assert SQLHelpers.rewrite_collapsed_uc_fqn(already_split) == already_split
+        assert SQLHelpers.rewrite_collapsed_uc_fqn(bare) == bare
+
+    def test_rewrite_leaves_dotted_column_quotes(self):
+        sql = "SELECT `customer.id` AS ID FROM cat.sch.tbl"
+        assert SQLHelpers.rewrite_collapsed_uc_fqn(sql) == sql
+
+    def test_find_collapsed_uc_fqn(self):
+        sql = "SELECT 1 FROM `a.b.c` JOIN `x`.`y`.`z`"
+        hits = SQLHelpers.find_collapsed_uc_fqn(sql)
+        assert hits == ["`a.b.c`"]
+
     def test_effective_view_table_from_domain(self):
         class FakeDomain:
             delta = {"catalog": "cat", "schema": "sch"}

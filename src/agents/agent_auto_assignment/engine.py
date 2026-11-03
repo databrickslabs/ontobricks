@@ -92,6 +92,10 @@ WORKFLOW
 
 SQL RULES FOR ENTITIES (CRITICAL)
 • Always use full table names from get_metadata (catalog.schema.table).
+• Quote each Unity Catalog segment separately, never wrap the full \
+catalog.schema.table in one pair of backticks: FROM `catalog.schema.table` \
+is illegal Spark SQL. Write FROM catalog.schema.table or \
+FROM `catalog`.`schema`.`table`.
 • The FIRST column MUST be aliased AS ID (the entity identifier).
 • The SECOND column MUST be aliased AS Label (human-readable name).
 • If the entity has attributes (non-empty "attributes" list), add one column per \

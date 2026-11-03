@@ -35,6 +35,23 @@ class TestBuildEntityMapping:
         assert m["id_column"] == "id"
         assert "excluded" not in m
 
+    def test_rewrites_collapsed_uc_fqn(self):
+        m = Mapping.build_entity_mapping(
+            {
+                "ontology_class": "http://t/A",
+                "sql_query": (
+                    "SELECT id AS ID FROM "
+                    "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+                    "hd_activity_participant`"
+                ),
+            }
+        )
+        assert "`catalog_poc_dard`.`anonym_bcp_ddv_lyt_modeloloyalty`" in m["sql_query"]
+        assert (
+            "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+            "hd_activity_participant`"
+        ) not in m["sql_query"]
+
     def test_excluded_flag(self):
         data = {"ontology_class": "A", "excluded": True}
         m = Mapping.build_entity_mapping(data)
@@ -42,6 +59,16 @@ class TestBuildEntityMapping:
 
 
 class TestBuildRelationshipMapping:
+    def test_rewrites_collapsed_uc_fqn(self):
+        m = Mapping.build_relationship_mapping(
+            {
+                "property": "http://t/p",
+                "sql_query": "SELECT a AS source_id, b AS target_id FROM `cat.sch.edges`",
+            }
+        )
+        assert "`cat`.`sch`.`edges`" in m["sql_query"]
+        assert "`cat.sch.edges`" not in m["sql_query"]
+
     def test_basic(self):
         data = {
             "property": "http://t/p",
@@ -515,6 +542,59 @@ class TestProbeQueryRows:
         check, count = Mapping._probe_query_rows("SELECT * FROM t", client)
         assert count is None
         assert check["status"] == "error"
+
+    def test_rewrites_collapsed_uc_fqn_before_execute(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"cnt": 1}]
+        Mapping._probe_query_rows(
+            "SELECT id FROM `cat.sch.tbl`",
+            client,
+        )
+        sql = client.execute_query.call_args[0][0]
+        assert "`cat`.`sch`.`tbl`" in sql
+        assert "`cat.sch.tbl`" not in sql
+
+
+class TestCollapsedUcFqnDiagnostics:
+    def test_entity_flags_single_backtick_three_level_name(self):
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/A",
+                    "ontology_class_label": "A",
+                    "sql_query": (
+                        "SELECT id AS ID, name AS Label FROM "
+                        "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+                        "hd_activity_participant`"
+                    ),
+                    "id_column": "ID",
+                    "label_column": "Label",
+                }
+            ]
+        )
+        result = Mapping(domain).run_diagnostics()
+        checks = result["entities"][0]["checks"]
+        quoting = [c for c in checks if c["check"] == "uc_fqn_quoting"]
+        assert quoting and quoting[0]["status"] == "error"
+        assert "single" in quoting[0]["detail"].lower() or "backtick" in quoting[0][
+            "detail"
+        ].lower()
+        assert result["entities"][0]["status"] == "error"
+
+    def test_ok_when_segments_are_quoted_separately(self):
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/A",
+                    "ontology_class_label": "A",
+                    "sql_query": "SELECT id AS ID FROM `cat`.`sch`.`tbl`",
+                    "id_column": "ID",
+                }
+            ]
+        )
+        result = Mapping(domain).run_diagnostics()
+        checks = result["entities"][0]["checks"]
+        assert not any(c["check"] == "uc_fqn_quoting" for c in checks)
 
 
 class TestRunDiagnosticsExcludedEntityRelationships:

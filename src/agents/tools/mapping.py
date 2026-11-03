@@ -9,6 +9,7 @@ import re
 from typing import Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
+from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.sqlwizard.SQLWizardService import SQLWizardService
 from agents.tools.context import ToolContext
 
@@ -49,7 +50,7 @@ def _metric_view_sql_error(ctx: ToolContext, sql: str) -> Optional[str]:
 
 def _prepare_mapping_sql(ctx: ToolContext, sql: str, mapping_type: str):
     """Strip LIMIT, dedupe select-list aliases, then reject illegal metric SQL."""
-    clean_sql = (
+    clean_sql = SQLHelpers.rewrite_collapsed_uc_fqn(
         re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql, flags=re.IGNORECASE)
         .strip()
         .rstrip(";")

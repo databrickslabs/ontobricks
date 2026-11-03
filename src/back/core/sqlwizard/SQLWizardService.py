@@ -10,6 +10,7 @@ import hashlib
 from typing import Dict, List, Any, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.errors import OntoBricksError, ValidationError, InfrastructureError
 from shared.llm_target import build_llm_request
 
@@ -461,7 +462,7 @@ class SQLWizardService:
 
         is_mapping = mapping_type in ("entity", "relationship")
 
-        corrected_sql = sql
+        corrected_sql = SQLHelpers.rewrite_collapsed_uc_fqn(sql)
         issues = []
 
         sql_upper = sql.upper().strip()
@@ -526,7 +527,7 @@ class SQLWizardService:
             )
         else:
             if "LIMIT" not in sql_upper:
-                corrected_sql = f"{sql} LIMIT {limit}"
+                corrected_sql = f"{corrected_sql} LIMIT {limit}"
                 logger.info("[SQLWizard] validate_sql_static: added LIMIT %d", limit)
 
         if corrected_sql != sql:

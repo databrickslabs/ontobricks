@@ -98,6 +98,70 @@ Tests: uv run --frozen pytest -q -m "not scenario" → 9865 passed, 326 skipped,
 8 deselected, 39 warnings in 55.06s (EXIT=0).
 
 ================================================================================
+## Rewrite collapsed Unity Catalog FQNs in mapping SQL
+================================================================================
+
+Context: Auto-map / mapping assistants quoted a full catalog.schema.table
+name as one identifier (FROM `a.b.c` instead of `a`.`b`.`c`). Spark treats
+that as a single name and fails to resolve the source table (GH #214, BCP
+loyalty mapping). The LLM was following a "always backtick-quote columns"
+habit. Add a deterministic rewrite, diagnostics, prompt guard, and eval
+regression so it cannot regress.
+
+Changes:
+
+1. src/back/core/databricks/uc/identifiers.py
+   Detect and rewrite `FROM`/`JOIN` `` `a.b.c` `` to `` `a`.`b`.`c` ``.
+2. src/back/core/helpers/SQLHelpers.py
+   Expose rewrite/find helpers and a Mapping diagnostics check dict.
+3. src/agents/tools/mapping.py, src/agents/tools/sql.py
+   Rewrite on Auto-Map submit and execute_sql before the warehouse sees SQL.
+4. src/back/objects/mapping/Mapping.py
+   Rewrite on persist and diagnostics probe; flag remaining collapsed FQNs.
+5. src/back/core/sqlwizard/SQLWizardService.py,
+   src/back/core/w3c/sparql/SparqlTranslator.py,
+   src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Rewrite on wizard correction, SPARQL subquery, and R2RML rr:sqlQuery.
+6. src/agents/agent_auto_assignment/engine.py,
+   src/agents/agent_mapping_pge/generators/entity.py,
+   src/agents/agent_mapping_pge/generators/relationship.py
+   Prompt: never wrap the full catalog.schema.table in one pair of backticks.
+7. tests/eval/datasets/agent_auto_assignment/regression.jsonl,
+   tests/eval/datasets/agent_mapping_pge/regression.jsonl
+   Three GH #214 regression examples per agent.
+8. docs/user-guide.md
+   Document per-segment UC quoting vs the illegal collapsed form.
+
+Modified files:
+- src/back/core/databricks/uc/identifiers.py
+- src/back/core/databricks/uc/__init__.py
+- src/back/core/helpers/SQLHelpers.py
+- src/agents/tools/mapping.py
+- src/agents/tools/sql.py
+- src/back/objects/mapping/Mapping.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/agents/agent_auto_assignment/engine.py
+- src/agents/agent_mapping_pge/generators/entity.py
+- src/agents/agent_mapping_pge/generators/relationship.py
+- tests/units/core/test_uri_sql_helpers.py
+- tests/units/mapping/test_mapping_service.py
+- tests/units/agents/test_mapping_tools.py
+- tests/units/agents/test_collapsed_uc_fqn.py
+- tests/units/core/test_sql_wizard.py
+- tests/back/core/w3c/sparql/test_sparql_translator_units.py
+- tests/eval/datasets/agent_auto_assignment/regression.jsonl
+- tests/eval/datasets/agent_mapping_pge/regression.jsonl
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9879 passed, 3 failed
+(pre-existing local deploy.config: INSTANCE_ID 10x vs fixture 09x, and
+app.yaml user_api_scopes sql-only), 326 skipped, 8 deselected, 39 warnings
+in 52.06s. Targeted UC-FQN + size-budget: 208 passed.
+
+================================================================================
 ## Align agent rules with graph-backend cloisonnement
 ================================================================================
 
@@ -271,6 +335,41 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 3 failed, 9848 passed, 326 skipped, 8 deselected, 39 warnings in 50.07s. The 3 failures are pre-existing (deploy INSTANCE_ID 10x vs fixture 09x, app.yaml user_api_scopes) and unrelated to this cleanup.
+
+================================================================================
+## Persist last hypothetical-facts prompt on the scenario
+================================================================================
+
+Context: Simulation → Scenarios → Hypothetical facts has a "Describe the facts"
+textarea used by Propose facts. The agent rewrote General → Description, but the
+prompt itself was never stored on the spec, so reopening a scenario left the box
+empty (or showed another scenario's leftover text). Persist `fact_prompt` with
+the spec, restore it on load, and quiet-save after a propose when the scenario
+already exists.
+
+Changes:
+
+1. src/back/objects/simulation/Spec.py
+   Add `fact_prompt` (max 4000 chars) to parse/serialize; omitted/empty stays "".
+2. src/front/static/simulation/js/simulation-workbench.js
+   Collect and restore `fact_prompt`; after Propose facts, quiet-save the last
+   prompt (and current spec) when the scenario already has an id.
+3. tests/units/simulation/test_simulation_core.py
+   Round-trip and length-cap coverage for `fact_prompt`.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract that load/collect/persist wire `simWbFactPrompt`.
+5. docs/user-guide.md
+   Note that the last proposed wording is stored with the scenario.
+
+Modified files:
+- src/back/objects/simulation/Spec.py
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 3 failed, 9850 passed, 326 skipped, 8 deselected, 39 warnings in 53.78s. The 3 failures are pre-existing (deploy INSTANCE_ID 10x vs fixture 09x, app.yaml user_api_scopes) and unrelated to this change.
 
 ================================================================================
 ## Stop hard-coding deploy INSTANCE_ID in tests
