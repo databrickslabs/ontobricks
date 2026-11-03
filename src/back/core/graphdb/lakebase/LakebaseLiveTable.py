@@ -7,6 +7,7 @@ from contextlib import AbstractContextManager
 from itertools import islice
 from typing import Any
 
+from back.core.errors import InfrastructureError
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.logging import get_logger
 
@@ -56,9 +57,16 @@ class LakebaseLiveTable:
         statements = _companion_ddl.live_table_ddl(table)
         if writer_role:
             statements += _companion_ddl.live_grants_sql(table, self._schema, writer_role)
-        with self._cursor() as cur:
-            for statement in statements:
-                cur.execute(statement)
+        try:
+            with self._cursor() as cur:
+                for statement in statements:
+                    cur.execute(statement)
+        except Exception as exc:  # noqa: BLE001 — the driver's error, e.g. a writer role that does not exist
+            raise InfrastructureError(
+                f"Could not prepare the live table {self._schema}.{table}"
+                + (f" for role {writer_role!r}" if writer_role else ""),
+                detail=str(exc),
+            ) from exc
         logger.info("Live serving table %s.%s ensured", self._schema, table)
         return table
 

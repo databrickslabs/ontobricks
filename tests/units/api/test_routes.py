@@ -29,8 +29,14 @@ class TestHealthRoutes:
         assert data["status"] in ("ok", "warning", "error")
         assert data["service"] == "OntoBricks"
 
-    def test_readiness_route_returns_checks(self, client):
-        # The test env resolves the caller as admin (local mode).
+    def test_readiness_route_returns_checks(self, client, monkeypatch):
+        # The test env resolves the caller as admin (local mode). No probe may
+        # reach a workspace from a unit test: without a client every
+        # warehouse-side check answers "not probed" (with the developer's
+        # default CLI profile the real connect could block on an OAuth flow).
+        from shared.fastapi import health
+
+        monkeypatch.setattr(health, "_build_health_client", lambda settings=None: None)
         response = client.get("/settings/diagnostics/readiness")
         assert response.status_code == 200
         data = response.json()

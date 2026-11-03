@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from back.core.errors import ValidationError
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graphdb.lakebase import LakebaseLiveTable, _companion_ddl
 from back.core.streaming.SlotChange import SlotChange
 
@@ -154,6 +154,20 @@ class TestLakebaseLiveTable:
     def test_an_unsafe_role_name_is_refused(self):
         with pytest.raises(ValidationError):
             _live(_Cursor()).ensure("Sales_V3", writer_role='x"; DROP TABLE y; --')
+
+    def test_a_driver_error_is_an_infrastructure_error(self):
+        """A writer role that does not exist fails the GRANT inside the driver (live: a raw
+        ``psycopg.errors.UndefinedObject`` surfaced as a 500); it is the hierarchy's error."""
+
+        class _Failing(_Cursor):
+            def execute(self, statement, params=None):
+                if statement.startswith("GRANT"):
+                    raise RuntimeError('role "ontobricks_rtm_live" does not exist')
+                super().execute(statement, params)
+
+        with pytest.raises(InfrastructureError, match="live table .* for role 'ontobricks_rtm_live'") as exc_info:
+            _live(_Failing()).ensure("Sales_V3", writer_role="ontobricks_rtm_live")
+        assert "does not exist" in exc_info.value.detail
 
     def test_attach_empties_seeds_the_snapshot_and_serves(self):
         cur = _Cursor()

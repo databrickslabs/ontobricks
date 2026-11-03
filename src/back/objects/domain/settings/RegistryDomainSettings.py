@@ -343,11 +343,11 @@ class RegistryDomainSettings:
             if not svc.cfg.is_configured:
                 raise ValidationError("Registry not configured")
 
-            sorted_versions = svc.list_versions_sorted(domain_name)
+            sorted_versions = svc.list_versions_sorted(folder := _ss.sanitize_domain_folder(domain_name))
             if version not in sorted_versions:
                 raise NotFoundError(f'Version {version} not found in "{domain_name}"')
 
-            ok, data, msg = svc.read_version(domain_name, version)
+            ok, data, msg = svc.read_version(folder, version)
             if not ok:
                 raise InfrastructureError("Failed to read registry version", detail=msg)
 
@@ -367,7 +367,7 @@ class RegistryDomainSettings:
                 has_ontology=has_ontology,
             )
 
-            ok, set_msg = svc.set_version_status(domain_name, version, new_status)
+            ok, set_msg = svc.set_version_status(folder, version, new_status)
             if not ok:
                 raise InfrastructureError(
                     "Failed to update version status", detail=set_msg
@@ -382,7 +382,7 @@ class RegistryDomainSettings:
                     _ss.STATUS_DRAFT: "reopened",
                 }.get(new_status, "commented")
                 svc.record_review_event(
-                    domain_name,
+                    folder,
                     version,
                     actor_email or "",
                     action,

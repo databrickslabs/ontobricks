@@ -360,3 +360,128 @@ Modified files:
 - changelogs/v0.9.2/dermot-smyth_2026-11-03.log
 
 Test result: not applicable (no code change).
+
+================================================================================
+## Build DBU join verified on `system.billing.usage`; MV change feed unavailable on the sandbox too
+================================================================================
+
+Context: two traceability rows were still ◐/○ for want of a live check that
+needed no new infrastructure.
+
+1. docs/incremental-materialization.md — KPI row "domains per mode, fallback
+   events, build DBUs" → Live ✅: on `ontobricks-rtm`, `system.billing.usage`
+   rows carry `usage_metadata.dlt_update_id` equal to the trace's
+   `slot_update_id` for all three builds of the journey (`9d65e179…` 0.095
+   DBU, `e9116038…` 0.112 DBU, `26aef202…` 0.108 DBU, jobs serverless
+   compute), `dlt_pipeline_id` equal to `slot_pipeline_id`, and
+   `usage_metadata.warehouse_id` equal to the trace's `warehouse_id` (the
+   build warehouse's serverless SQL rows) — the join the design asks for.
+2. docs/incremental-materialization.md — net-change row: the MV change feed
+   was also tried on the sandbox against the deployed domain's own `_data`
+   MV (created with `pipelines.externalMetadata.enabled`): `table_changes`
+   fails with the same `DELTA_LOG_FILE_NOT_FOUND … _external_metadata` as on
+   the integration workspace; the row stays ○ with that evidence.
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: not applicable (docs only).
+
+================================================================================
+## Realtime operations exercised through the deployed app; a missing `_live` writer role is an InfrastructureError; version status by display name
+================================================================================
+
+Context: the two realtime traceability rows were ◐/○ because `TwinRealtimeStream`
+had only been unit-tested. The sandbox apps were redeployed with
+`ONTOBRICKS_REALTIME_ENABLED=true`, the DAB-deployed job name
+(`[dev dermot_smyth] ontobricks-rtm-triple-rtm`), a Lakebase writer role
+(`ontobricks_rtm_live`, created in the app's database, password in the secret
+`ontobricks-rtm/lakebase`) and a UC-volume checkpoint root. A Lakebase domain
+`ZzRealtimeLive` in `realtime` mode was built through the app while its topic
+was still unset (the ladder ran it as `microbatch`: `mode_fallback_reason:
+realtime_not_available`, change-feed slot pipeline, `_slots` 6 rows), then got
+a Kafka topic config (names only; the broker is unreachable on purpose) and
+was published (`DRAFT → IN-REVIEW → PUBLISHED` via `/domain/set-version-status`).
+
+Live (2026-11-04, `ontobricks-rtm`): readiness `realtime: {enabled: true,
+backend_eligible: true, source_configured: true, kind: kafka, topic: …}`,
+`decision.effective: realtime`; `POST /dtwin/incremental/realtime/start` →
+`{run_id: 79867546816814, state: PENDING, reused: false, seeded: 6,
+slots_version: 9}` (`_live` seeded from the `_slots` snapshot, the job run
+launched with the domain's parameters); `GET /dtwin/incremental/status` →
+`realtime: {run_id, state: RUNNING}`; `POST /dtwin/incremental/reconcile` →
+`live: {rows: 6}`, `pairs.live_slots: false`; `POST …/realtime/stop` →
+`CANCELLING`, then `not_running`, the run `TERMINATED / CANCELED`.
+
+Found on the way, fixed here:
+
+1. src/back/core/graphdb/lakebase/LakebaseLiveTable.py — `ensure` wraps the
+   driver's error in `InfrastructureError` ("Could not prepare the live table
+   <schema>.<table> for role '<role>'", detail = the driver message). Live it
+   was a raw `psycopg.errors.UndefinedObject: role "ontobricks_rtm_live" does
+   not exist` answered as a 500 `internal_error` by `realtime/start`.
+2. src/back/objects/domain/settings/RegistryDomainSettings.py —
+   `set_registry_version_status_result` resolves the sanitised folder once and
+   uses it for `list_versions_sorted`, `read_version`, `set_version_status` and
+   the review-event audit row (the same display-name defect as the deletes:
+   `set-version-status` with the name answered 404 for an existing version).
+3. tests/units/graphdb/test_lakebase_live_table.py — a failing GRANT is an
+   `InfrastructureError` naming the role, with the driver's detail.
+4. tests/units/settings/test_v090_settings_registry_domains.py — a display
+   name with a space and a dash addresses `zz_realtime_live` in every store call.
+5. docs/incremental-materialization.md — traceability rows "Prerequisites" and
+   "Operations" of the realtime phase → Live ✅ with the facts above; the
+   per-mapping and KPI rows updated (see the next section for the freshness run).
+6. tests/units/api/test_routes.py — the readiness-route test patches
+   `health._build_health_client` to `None`: the route's probes built a real
+   `DatabricksClient` from the developer's default CLI profile and
+   `databricks.sql.connect` blocked the whole suite (an OAuth flow waiting for
+   a browser; found by `-o faulthandler_timeout=180`). A unit test reaches no
+   workspace; every warehouse-side check answers "not probed".
+
+Modified files:
+- src/back/core/graphdb/lakebase/LakebaseLiveTable.py
+- src/back/objects/domain/settings/RegistryDomainSettings.py
+- tests/units/graphdb/test_lakebase_live_table.py
+- tests/units/settings/test_v090_settings_registry_domains.py
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: `uv run --frozen pytest -q tests/units/graphdb/test_lakebase_live_table.py
+tests/units/settings/test_v090_settings_registry_domains.py
+tests/units/objects/test_realtime_stream.py` — 94 passed. Full suite
+`uv run --frozen pytest -q -m "not scenario" -o faulthandler_timeout=240` —
+11553 passed, 346 skipped, 9 deselected (one size-budget finding on
+`set_registry_version_status_result`, +1 line over its baseline, fixed in place;
+`tests/units/architecture` 151 passed with the settings / live-table / routes
+files afterwards).
+
+================================================================================
+## The committed freshness harness ran against a deployed domain (no code change)
+================================================================================
+
+Context: the KPI traceability row was ◐ only because `scripts/measure_freshness.py`
+had never been run against a deployed domain. `ZzIncrementalLive` v1 on the
+sandbox app was switched to `microbatch` through the app (`/domain/info`,
+build: slot pipeline re-created and left RUNNING, `_data` MV, 6 slots) and the
+harness run with `--mode microbatch --allow-pattern '*rtm.customers*'` (the
+pattern guard refuses non-fixture tables), 3 markers 20 s apart, 480 s timeout,
+the build warehouse as the reader (the sandbox has no Lakehouse//RT warehouse).
+
+Result (2026-11-04): `_data` seen 3/3, p50 386 s / p95 399 s — the MV's own
+`TRIGGER ON UPDATE` cadence; `_graph` (chained trigger) not within 480 s;
+closing reconciliation `slots_data` / `view_data` drift 0. The ≤ 30 s p95 KPI
+is the Lakehouse//RT fast-path KPI (met on the integration workspace, 22.9 s
+p95); without an RT warehouse a `microbatch` read shows the MV cadence, which
+the harness reported as the expected `graph p95 not seen > 30s` violation.
+
+1. docs/incremental-materialization.md — KPI row → Live ✅ with the run; Live
+   verification bullet; the mid-run `slots_data: true` the realtime exercise
+   saw explained (the marker in `_slots`, `_data` one refresh behind).
+
+Modified files:
+- docs/incremental-materialization.md
+- changelogs/v0.9.2/dermot-smyth_2026-11-03.log
+
+Test result: not applicable (docs only).

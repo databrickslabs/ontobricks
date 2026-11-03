@@ -371,6 +371,27 @@ class TestSetRegistryVersionStatus:
         with pytest.raises(InfrastructureError, match="Failed to read registry version"):
             self._call()
 
+    def test_a_display_name_addresses_the_registry_folder(self, svc):
+        """The URL may carry the display name; the store is keyed by the sanitised folder
+        (live: ``set-version-status`` with the name answered 404 for an existing version)."""
+        self._ready(svc)
+        RegistryDomainSettings.set_registry_version_status_result(
+            "Zz Realtime-Live",
+            "2",
+            "PUBLISHED",
+            user_role="builder",
+            user_domain_role="builder",
+            actor_email="a@b.c",
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+        assert (
+            svc.list_versions_sorted.call_args.args,
+            svc.read_version.call_args.args,
+            svc.set_version_status.call_args.args,
+            svc.record_review_event.call_args.args[0],
+        ) == (("zz_realtime_live",), ("zz_realtime_live", "2"), ("zz_realtime_live", "2", "PUBLISHED"), "zz_realtime_live")
+
     def test_set_status_failure_raises_infrastructure(self, svc):
         self._ready(svc)
         svc.set_version_status.return_value = (False, "conflict")
