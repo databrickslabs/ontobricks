@@ -171,6 +171,9 @@ def test_hypothetical_facts_prompt_uses_agent():
     assert "/simulation/facts/agent" in wb
     assert "description: this._val('simWbDescription')" in wb
     assert "this._set('simWbDescription', data.description)" in wb
+    assert "fact_prompt: this._val('simWbFactPrompt')" in wb
+    assert "this._set('simWbFactPrompt', spec.fact_prompt || '')" in wb
+    assert "_persistLastFactPrompt" in wb
     assert "onclick=" not in html
     assert "style=" not in html
 

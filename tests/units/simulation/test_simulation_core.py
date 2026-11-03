@@ -238,6 +238,27 @@ class TestSpec:
         again = Spec.from_dict(spec.to_dict(), default_hops=2, default_cap=10, sim_id=spec.id)
         assert again.to_dict() == spec.to_dict()
 
+    def test_fact_prompt_round_trips_and_defaults_empty(self):
+        empty = Spec.from_dict(self._body(), default_hops=2, default_cap=10)
+        assert empty.fact_prompt == ""
+        assert empty.to_dict()["fact_prompt"] == ""
+        spec = Spec.from_dict(
+            self._body(fact_prompt="  Jacob's score dropped to 420  "),
+            default_hops=2,
+            default_cap=10,
+        )
+        assert spec.fact_prompt == "Jacob's score dropped to 420"
+        again = Spec.from_dict(spec.to_dict(), default_hops=2, default_cap=10, sim_id=spec.id)
+        assert again.fact_prompt == spec.fact_prompt
+
+    def test_fact_prompt_too_long(self):
+        with pytest.raises(ValidationError):
+            Spec.from_dict(
+                self._body(fact_prompt="x" * (Spec.MAX_FACT_PROMPT + 1)),
+                default_hops=2,
+                default_cap=10,
+            )
+
     def test_selected_rule_names_filter_reasoning_options(self):
         spec = Spec.from_dict(
             self._body(

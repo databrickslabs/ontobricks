@@ -254,6 +254,7 @@ const SimulationWorkbench = {
             this.currentId = sim.id;
             this._set('simWbLabel', spec.label || sim.label);
             this._set('simWbDescription', spec.description || '');
+            this._set('simWbFactPrompt', spec.fact_prompt || '');
             this._set('simWbScopeType', scope.type || 'entity');
             this._syncScopeUi();
             if (scope.type === 'cohort') {
@@ -335,11 +336,12 @@ const SimulationWorkbench = {
                     data.reply || 'No facts proposed. Try a more specific description.',
                     'warning',
                 );
-                return;
+            } else {
+                rows.forEach((row) => this.patches.push({ ...row }));
+                await this._resolvePatchLabels();
+                if (data.reply) showNotification(data.reply, 'success');
             }
-            rows.forEach((row) => this.patches.push({ ...row }));
-            await this._resolvePatchLabels();
-            if (data.reply) showNotification(data.reply, 'success');
+            await this._persistLastFactPrompt();
         } catch (err) {
             showNotification(err.message, 'error');
         } finally {
@@ -349,6 +351,15 @@ const SimulationWorkbench = {
                 btn.innerHTML = idle;
             }
         }
+    },
+
+    async _persistLastFactPrompt() {
+        if (!this.currentId) return;
+        const body = this.collect();
+        if (this._validate(body)) return;
+        try {
+            await this._putSave(body, { quiet: true });
+        } catch (_) { /* textarea still holds the last prompt */ }
     },
 
     addPatch(patch) {
@@ -746,6 +757,7 @@ const SimulationWorkbench = {
         return {
             label: this._val('simWbLabel'),
             description: this._val('simWbDescription'),
+            fact_prompt: this._val('simWbFactPrompt'),
             scope: {
                 type,
                 focus: type === 'cohort' ? this._val('simWbCohort') : this._val('simWbFocus'),

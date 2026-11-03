@@ -37,6 +37,7 @@ class Spec:
     }
     MAX_PATCHES = 500
     MAX_LABEL_LEN = 200
+    MAX_FACT_PROMPT = 4000
     MAX_RULE_NAMES = 500
 
     id: str
@@ -46,6 +47,7 @@ class Spec:
     phases: Dict[str, bool] = field(default_factory=dict)
     rule_names: Dict[str, List[str]] = field(default_factory=dict)
     description: str = ""
+    fact_prompt: str = ""
 
     @staticmethod
     def new_id() -> str:
@@ -86,6 +88,7 @@ class Spec:
             id=sim_id or cls.new_id(),
             label=label,
             description=str(data.get("description", "") or "").strip(),
+            fact_prompt=cls._parse_fact_prompt(data.get("fact_prompt")),
             scope=Scope.from_dict(
                 data.get("scope"), default_hops=default_hops, default_cap=default_cap
             ),
@@ -98,6 +101,7 @@ class Spec:
         return {
             "label": self.label,
             "description": self.description,
+            "fact_prompt": self.fact_prompt,
             "scope": self.scope.to_dict(),
             "patches": [p.to_dict() for p in self.patches],
             "phases": dict(self.phases),
@@ -113,6 +117,15 @@ class Spec:
             if names and opts.get(phase):
                 opts[option_key] = set(names)
         return opts
+
+    @classmethod
+    def _parse_fact_prompt(cls, raw: Any) -> str:
+        text = str(raw or "").strip()
+        if len(text) > cls.MAX_FACT_PROMPT:
+            raise ValidationError(
+                f"Fact prompt must be at most {cls.MAX_FACT_PROMPT} characters"
+            )
+        return text
 
     @classmethod
     def _parse_rule_names(cls, raw: Any) -> Dict[str, List[str]]:
