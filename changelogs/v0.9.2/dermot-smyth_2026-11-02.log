@@ -521,7 +521,7 @@ Context: per-domain materialization modes `full` / `incremental` / `microbatch`
 9. Task 8 — `SlotReconciler` + `POST /dtwin/incremental/reconcile`, the docs
    guide, the DAB template and the cockpit badge.
 
-Final test result (after the Lakebase `_slots` sync and MV-feed fallback rounds): 11531 passed, 341 skipped, 9 deselected
+Final test result (after the Real-Time-Mode rounds of 2026-11-03): 11547 passed, 346 skipped, 9 deselected
 (`uv run --frozen pytest -q -m "not scenario"` with the readiness-route test
 deselected); architecture suite green; `tests/units/architecture/baseline.json`
 unchanged.
