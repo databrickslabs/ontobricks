@@ -24,6 +24,6 @@ def test_search_fallback_is_starts() -> None:
 
 def test_programmatic_local_name_search_keeps_contains() -> None:
     sigma = SIGMA_JS.read_text(encoding="utf-8")
-    assert "match_type: 'contains'" in sigma
+    assert "isFullUri ? 'exact' : 'contains'" in sigma
     reasoning = REASONING_JS.read_text(encoding="utf-8")
     assert "matchSel.value = 'contains'" in reasoning

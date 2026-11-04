@@ -125,6 +125,34 @@ class SQLHelpers:
         return f"sha2({expr}, 256)"
 
     @staticmethod
+    def find_collapsed_uc_fqn(sql: str) -> list[str]:
+        from back.core.databricks.uc.identifiers import find_collapsed_uc_fqn
+
+        return find_collapsed_uc_fqn(sql)
+
+    @staticmethod
+    def rewrite_collapsed_uc_fqn(sql: str) -> str:
+        from back.core.databricks.uc.identifiers import rewrite_collapsed_uc_fqn
+
+        return rewrite_collapsed_uc_fqn(sql)
+
+    @staticmethod
+    def collapsed_uc_fqn_check(sql: str) -> dict | None:
+        """Diagnostic row when *sql* wraps a three-level name in one backtick pair."""
+        hits = SQLHelpers.find_collapsed_uc_fqn(sql)
+        if not hits:
+            return None
+        return {
+            "check": "uc_fqn_quoting",
+            "status": "error",
+            "detail": (
+                "Unity Catalog three-level names must not be wrapped in a "
+                f"single pair of backticks (found {hits[0]}). Use "
+                "catalog.schema.table or `catalog`.`schema`.`table`."
+            ),
+        }
+
+    @staticmethod
     def validate_table_name(table_name: str) -> None:
         """Raise :class:`~back.core.errors.ValidationError` if *table_name* is empty.
 
@@ -169,9 +197,11 @@ class SQLHelpers:
     @staticmethod
     def effective_databricks_table(domain, settings=None) -> str:
         """Fully-qualified materialized Delta TABLE (``…_data``) for Databricks backend."""
-        from back.core.graphdb.delta import _table_naming
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        return _table_naming.data_table_fqn(domain, settings)
+        return GraphDBFactory.get_builder(
+            domain, settings, engine="delta"
+        ).data_table_fqn()
 
     @staticmethod
     def effective_graph_name(domain) -> str:
@@ -204,9 +234,11 @@ class SQLHelpers:
         backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
         if backend == "databricks":
             if include_inferred:
-                from back.core.graphdb.delta import _table_naming
+                from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-                table = _table_naming.graph_view_fqn(domain, settings)
+                table = GraphDBFactory.get_builder(
+                    domain, settings, engine="delta"
+                ).graph_view_fqn()
             else:
                 table = SQLHelpers.effective_databricks_table(domain, settings)
             if not table:

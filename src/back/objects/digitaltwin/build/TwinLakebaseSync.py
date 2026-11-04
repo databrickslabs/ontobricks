@@ -280,7 +280,7 @@ class TwinLakebaseSync:
     @staticmethod
     def _schedule(mode_effective: str, configured: Any) -> str:
         """The mode's schedule, capped by *configured* (unreadable → ``snapshot``)."""
-        from back.core.graphdb.lakebase.LakebaseBase import SYNC_TABLE_MODES
+        from back.core.graphdb.lakebase import SYNC_TABLE_MODES
 
         cap = configured.strip().lower() if isinstance(configured, str) else ""
         if cap not in SYNC_TABLE_MODES:

@@ -29,6 +29,7 @@ MARKDOWN_CONSUMERS = [
     "query/js/query-chat.js",
     "ontology/js/ontology-assistant.js",
     "domain/js/domain-audit.js",
+    "simulation/js/simulation-workbench.js",
 ]
 
 MARKED_URL = "https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"
@@ -231,7 +232,6 @@ DEAD_FUNCTIONS = {
     "global/js/utils.js": ["loadVolumes"],
     "ontology/js/ontology-information.js": ["showValidationSummary"],
     "query/js/query-sync.js": ["checkConfigChanges"],
-    "ontology/js/ontology-pitfalls.js": ["_showDepsWarning"],
     "global/js/comments-panel.js": ["userIsComposing"],
 }
 

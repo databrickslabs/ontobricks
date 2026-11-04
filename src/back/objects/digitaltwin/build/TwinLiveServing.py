@@ -32,9 +32,9 @@ class TwinLiveServing:
     @staticmethod
     def live(store: Any) -> Any:
         """The store's ``_live`` table, or ``ValidationError`` for a store without one."""
-        from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        if not isinstance(store, LakebaseBase):
+        if GraphDBFactory.classify_store(store) != "lakebase":
             raise ValidationError("Realtime serving needs the Lakebase graph backend")
         return store.live_table()
 
@@ -149,13 +149,13 @@ class TwinLiveServing:
     def _synced_phy_override(store: Any, graph: str, domain: Any, settings: Any) -> str:
         """The synced table's Postgres name when a fallback registration is in use, else ``""``."""
         try:
-            from back.core.graphdb.lakebase.LakebaseFlatStore import (
-                resolve_sync_uc_fallback_catalog,
-            )
+            from back.core.graphdb.GraphDBFactory import GraphDBFactory
             from back.core.graphdb.lakebase.SyncedTableName import SyncedTableName
 
-            fallback = resolve_sync_uc_fallback_catalog(
-                domain, settings, getattr(domain, "delta", None) or {}
+            fallback = GraphDBFactory.get_builder(
+                domain, settings, engine="lakebase"
+            ).resolve_sync_uc_fallback_catalog(
+                getattr(domain, "delta", None) or {}
             )
             primary = store.synced_uc_name(graph, fallback_catalog=fallback)
             registered = SyncedTableName.registered(store.synced_manager(), primary)

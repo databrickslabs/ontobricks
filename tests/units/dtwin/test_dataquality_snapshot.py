@@ -28,7 +28,7 @@ def test_successful_ctas_yields_the_snapshot_and_drops_it(monkeypatch):
     statements = []
     client = SimpleNamespace(execute_statement=statements.append)
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: client,
     )
     monkeypatch.setattr(
@@ -52,7 +52,7 @@ def test_snapshot_is_dropped_when_the_run_raises(monkeypatch):
     dropped = []
     client = SimpleNamespace(execute_statement=lambda sql: None)
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: client,
     )
     monkeypatch.setattr(
@@ -73,7 +73,7 @@ def test_snapshot_is_dropped_when_the_run_raises(monkeypatch):
 
 def test_ctas_failure_falls_back_to_the_live_view(monkeypatch):
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: SimpleNamespace(),
     )
     monkeypatch.setattr(
@@ -94,7 +94,7 @@ def test_ctas_failure_falls_back_to_the_live_view(monkeypatch):
 
 def test_missing_warehouse_falls_back_to_the_live_view(monkeypatch):
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings=None, *, for_write=False: None,
     )
     with DataQualitySnapshot(_domain(), None, "cat.sch.v", "t9", enabled=True) as snap:

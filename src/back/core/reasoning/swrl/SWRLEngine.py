@@ -4,7 +4,7 @@ Translates SWRL rules to SQL via the backend-provided translator and
 executes inference (producing inferred triples) against the active
 triple store.  All currently supported backends are SQL-based; a
 future Cypher / Gremlin engine would supply its own translator via
-:meth:`GraphDBBackend.get_query_translator`.
+:meth:`GraphBackend.get_query_translator`.
 
 Violation detection for SWRL rules is handled separately by the
 Data Quality runner (see ``run_sql_checks`` in
@@ -15,7 +15,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from back.core.logging import get_logger
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
@@ -44,7 +44,7 @@ class SWRLEngine:
         Args:
             rules: List of rule dicts with ``name``, ``antecedent``,
                    ``consequent``, and optionally ``description``.
-            store: A :class:`GraphDBBackend` instance.
+            store: A :class:`GraphBackend` instance.
             table_name: The logical triple-store table/graph name.
             materialize: If True, also insert inferred triples into the store.
             inference_limit: Max inferred triples per rule (None = unlimited).
@@ -62,6 +62,7 @@ class SWRLEngine:
 
         translator = self._get_translator(store, table_name)
         errors = 0
+        failed: List[str] = []
 
         enabled_rules = [r for r in rules if r.get("enabled", True)]
         total = len(enabled_rules)
@@ -104,6 +105,7 @@ class SWRLEngine:
             except Exception as e:
                 logger.error("SWRL rule '%s' failed: %s", name, e)
                 errors += 1
+                failed.append(f"{name}: {e}")
 
         duration = time.time() - t0
         result.stats = {
@@ -112,6 +114,7 @@ class SWRLEngine:
             "rules_total": len(rules),
             "inferred_count": len(result.inferred_triples),
             "errors": errors,
+            "error_details": "; ".join(failed)[:2000],
             "duration_seconds": round(duration, 3),
         }
         logger.info(
@@ -150,7 +153,10 @@ class SWRLEngine:
 
         t_rule = time.time()
         count = 0
-        rows = store.execute_query(query) or []
+        execute = store.execute_query
+        if getattr(store, "query_dialect", "") == "cypher":
+            execute = getattr(store, "execute_reasoning_query", execute)
+        rows = execute(query) or []
         for row in rows:
             result.inferred_triples.append(
                 InferredTriple(
@@ -253,10 +259,10 @@ class SWRLEngine:
     def _get_translator(store, table_name: str = ""):
         """Return the SWRL→SQL translator for the backend.
 
-        Backends override :meth:`GraphDBBackend.get_query_translator` to plug
+        Backends override :meth:`GraphBackend.get_query_translator` to plug
         in their own translator (e.g. a future Cypher engine).
         """
-        if isinstance(store, GraphDBBackend):
+        if isinstance(store, GraphBackend):
             return store.get_query_translator(table_name)
         from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 

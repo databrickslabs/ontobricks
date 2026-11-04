@@ -25,7 +25,7 @@ from rdflib import OWL, RDF, RDFS, Graph, Namespace, URIRef
 
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.helpers import extract_local_name as _extract_local_name
-from back.core.industry.constants import FHIR_BASE_URL, FHIR_NS
+from back.core.industry.constants import FHIR_NS
 from back.core.logging import get_logger
 from shared.config.constants import HTTP_USER_AGENT
 

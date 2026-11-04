@@ -1,0 +1,36 @@
+<div class="modal fade" id="sgCanvasHelpModal" tabindex="-1" aria-labelledby="sgCanvasHelpModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sgCanvasHelpModalLabel">
+                    <i class="bi bi-sliders me-2"></i>Canvas view
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Scroll to zoom, drag to pan, click an entity for details, and right-click the canvas to find or group.
+                </p>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="sgShowLabels" checked data-sg-change="toggleLabels">
+                    <label class="form-check-label" for="sgShowLabels">Entity labels</label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="sgShowEdgeLabels" checked data-sg-change="toggleEdgeLabels">
+                    <label class="form-check-label" for="sgShowEdgeLabels">Relationship labels</label>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="sgHideOrphans" data-sg-change="refresh">
+                    <label class="form-check-label" for="sgHideOrphans">Hide orphans</label>
+                </div>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="sgShowQualityRings" checked data-sg-change="toggleQualityRings">
+                    <label class="form-check-label" for="sgShowQualityRings">Quality rings</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

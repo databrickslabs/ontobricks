@@ -15,6 +15,28 @@ You are an expert in **Python, FastAPI, Jinja2, Databricks SDK, Databricks REST 
   abstraction (base class, mixin, strategy, new file) only when it removes real
   duplication or keeps a class single-purpose. When two designs both work,
   choose the one with less code and fewer concepts.
+
+### Minimal surface
+
+Ship the smallest change that satisfies the request. Class-first
+(`.cursor/07`) is searchability, not a licence to add files.
+
+1. Write only what the ticket needs. No helper, flag, hook, or "flexible"
+   `*args` / `**kwargs` for a future caller.
+2. Reuse an existing type or method before creating one.
+3. Do not add a file if the behaviour fits the current class under the size
+   budget. Extract when there is real duplication or a second purpose.
+4. Delete pass-through wrappers. Callers import the class that does the work.
+5. Drop unused parameters, dead branches, and unused imports in the same
+   change.
+6. Tests assert one behaviour, not the implementation. No unused fixtures.
+7. Comments explain *why*, not *what* (`.cursor/05 §English-only artifacts`).
+8. Before merge: if a layer can be removed without changing behaviour,
+   remove it.
+
+Long-form: `src/.coding_rules.md §2`. Review / refactor skills cite this
+section; they do not restate it.
+
 - Write concise, technical responses with accurate Python examples.
 - Encapsulate behaviour in **small, single-purpose classes** (`.cursor/07 §Class-First Policy`); keep the code inside them plain and declarative.
 - Prefer **iteration and modularization** over code duplication.

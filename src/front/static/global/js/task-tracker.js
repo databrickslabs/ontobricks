@@ -31,8 +31,20 @@ const TASK_TYPE_URLS = {
     'registry_archive': '/dtwin#sync',
     'quality_checks': '/dtwin#quality',
     'graph_analytics': '/dtwin#analytics',
-    'entity_job_action': '/dtwin'
+    'entity_job_action': '/dtwin',
+    'simulation': '/simulation/?section=scenarios'
 };
+
+function taskOpenUrl(task) {
+    const type = (task && task.task_type) || '';
+    const base = TASK_TYPE_URLS[type] || '';
+    if (type !== 'simulation') return base;
+    const sid = task.result && task.result.simulation_id;
+    if (!sid) return base;
+    let url = '/simulation/?section=scenarios&simulation=' + encodeURIComponent(sid);
+    if (task.status === 'completed') url += '&tab=results';
+    return url;
+}
 
 // =====================================================
 // INITIALIZATION
@@ -69,6 +81,15 @@ function setupTaskTrackerEvents() {
         if (dropdown && toggle && !dropdown.contains(e.target) && !toggle.contains(e.target)) {
             dropdown.classList.remove('show');
         }
+        const item = e.target.closest('.task-item[data-open-url]');
+        if (item && dropdown && dropdown.contains(item) && !e.target.closest('button, a')) {
+            window.location.href = item.getAttribute('data-open-url');
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const item = e.target.closest && e.target.closest('.task-item[data-open-url]');
+        if (item) window.location.href = item.getAttribute('data-open-url');
     });
 }
 
@@ -136,9 +157,12 @@ function notifyTaskTransition(task) {
     let type = 'info';
     let body;
     const runUrl = task.result && task.result.run_page_url;
+    const followUrl = taskOpenUrl(task);
     const runLink = runUrl
         ? ` <a href="${escapeHtml(runUrl)}" target="_blank" rel="noopener">Open run</a>`
-        : '';
+        : (followUrl
+            ? ` <a href="${escapeHtml(followUrl)}">Open</a>`
+            : '');
     if (task.status === 'completed') {
         type = 'success';
         body = `Task <strong>${name}</strong> completed${durSuffix}${runLink}`;
@@ -310,6 +334,7 @@ function renderTaskItem(task) {
         ? `<a class="small d-inline-block mt-1" href="${escapeAttr(runUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right me-1"></i>Open run in Databricks</a>`
         : '';
 
+    const openUrl = taskOpenUrl(task);
     const actionsHtml = task.status === 'running'
         ? `<button class="btn btn-link btn-sm p-0 text-danger" onclick="event.stopPropagation(); cancelTask('${task.id}')" title="Cancel">
             <i class="bi bi-x-circle"></i>
@@ -328,7 +353,7 @@ function renderTaskItem(task) {
     }
 
     return `
-        <div class="task-item px-3 py-2 border-bottom" data-task-id="${task.id}">
+        <div class="task-item px-3 py-2 border-bottom${openUrl ? ' task-item-clickable' : ''}" data-task-id="${task.id}"${openUrl ? ` role="link" tabindex="0" data-open-url="${escapeAttr(openUrl)}"` : ''}>
             <div class="d-flex justify-content-between align-items-start">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center gap-2">

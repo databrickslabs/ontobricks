@@ -4,8 +4,8 @@ Regression guard for drift found during the 2026-08-05 Help Center review:
 the Step-by-Step Workflow accordion referenced menu items ("Graph Viewer",
 "GraphQL", Registry's "Schedule"/"API") that had been renamed or moved
 (Explorer/Query, Settings) without the Help Center copy being updated, and
-missed newer sections entirely (Chat, Cohorts, Analytics, Build/Runs,
-Pitfalls). These tests lock in the current, correct labels.
+missed newer sections entirely (Chat, Cohorts, Analytics, Build/Runs).
+These tests lock in the current, correct labels.
 """
 
 import html
@@ -182,6 +182,20 @@ def test_ontology_entities_uses_list_nested_icon():
         '<i class="bi bi-list-nested me-2"></i>Entities (Hierarchy)'
         in _ONTOLOGY_ENTITIES.read_text(encoding="utf-8")
     )
+
+
+def test_simulation_workflow_follows_menu_order():
+    page = _help_html()
+    labels = [
+        item["label"]
+        for group in _menus()["simulation"]["groups"]
+        for item in group["items"]
+    ]
+    hw6_start = page.index('id="hw6"')
+    hw6_end = page.index("</div>\n                                </div>", hw6_start)
+    hw6_body = page[hw6_start:hw6_end]
+    positions = [hw6_body.index(f"<strong>{html.escape(label)}</strong>") for label in labels]
+    assert positions == sorted(positions)
 
 
 def test_ontology_advanced_list_matches_menu_items():

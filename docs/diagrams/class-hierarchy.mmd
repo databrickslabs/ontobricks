@@ -9,7 +9,7 @@ classDiagram
     class ValidationError
     class InfrastructureError
     class OperationCancelledError
-    class LakebaseGraphPoolError
+    class PoolError
     class StoreError
 
     Exception    <|-- OntoBricksError
@@ -19,12 +19,12 @@ classDiagram
     OntoBricksError <|-- ValidationError
     OntoBricksError <|-- InfrastructureError
     OntoBricksError <|-- OperationCancelledError
-    RuntimeError <|-- LakebaseGraphPoolError
+    RuntimeError <|-- PoolError
     RuntimeError <|-- StoreError
 
-    %% ─── Storage / Backend Hierarchy ───────────────────────────────────────────
+    %% ─── Storage / Backend Hierarchy (two hats over a shared read root) ─────────
     class ABC
-    class GraphDBBackend {
+    class GraphBackend {
         <<ABC>>
         +create_table()
         +insert_triples()
@@ -33,31 +33,96 @@ classDiagram
         +query_dialect()
         +get_connection()
     }
-    class DeltaFlatStore {
+    class MaterializedGraphBackend {
+        <<ABC>>
+        +delete_triples()
+        +sync_to_remote()
+        +rebuild_adjacency()
+    }
+    class VirtualBackend {
+        <<ABC>>
+        +read-only, no-copy
+    }
+    class dReadStore["delta.ReadStore"] {
+        +expand_and_fetch_subgraph()
+        +execute_query()
+    }
+    class dMaterializedStore["delta.MaterializedStore"] {
         +create_table()
         +insert_triples()
-        +get_inferred_triple_count()
     }
-    class LakebaseBase {
+    class dViewStore["delta.ViewStore"] {
+        +pass-through view
+    }
+    class lBase["lakebase.Base"] {
         +physical_table_id()
         +get_node_table()
         +get_query_translator()
     }
-    class LakebaseFlatStore {
+    class lFlatStore["lakebase.FlatStore"] {
         +sync_mode()
         +is_synced()
         +sync_uc_catalog()
     }
-    class ExampleStore {
+    class nStore["neo4j.Store"] {
         +get_connection()
-        +close()
     }
 
-    ABC              <|-- GraphDBBackend
-    GraphDBBackend   <|-- DeltaFlatStore
-    GraphDBBackend   <|-- LakebaseBase
-    GraphDBBackend   <|-- ExampleStore
-    LakebaseBase     <|-- LakebaseFlatStore
+    ABC                      <|-- GraphBackend
+    GraphBackend             <|-- MaterializedGraphBackend
+    GraphBackend             <|-- VirtualBackend
+    MaterializedGraphBackend <|-- lBase
+    MaterializedGraphBackend <|-- dMaterializedStore
+    MaterializedGraphBackend <|-- nStore
+    VirtualBackend           <|-- dViewStore
+    dReadStore               <|-- dMaterializedStore
+    dReadStore               <|-- dViewStore
+    lBase                    <|-- lFlatStore
+
+    %% ─── Graph DB Capabilities (factory-vended, per backend) ────────────────────
+    class GraphBuilder { <<ABC>> }
+    class GraphHealthProbe { <<ABC>> }
+    class GraphProvisioner { <<ABC>> }
+    class GraphSimulation {
+        <<ABC>>
+        +simulation_store()
+    }
+    class GraphDBFactory {
+        +get_graphdb()
+        +get_builder()
+        +get_health_probe()
+        +get_provisioner()
+        +get_simulation()
+        +classify_store()
+    }
+
+    class dBuilder["delta.Builder"]
+    class lBuilder["lakebase.Builder"]
+    class nBuilder["neo4j.Builder"]
+    class dHealthProbe["delta.HealthProbe"]
+    class lHealthProbe["lakebase.HealthProbe"]
+    class nHealthProbe["neo4j.HealthProbe"]
+    class lProvisioner["lakebase.Provisioner"]
+    class nProvisioner["neo4j.Provisioner"]
+    class dSimulation["delta.Simulation"]
+    class lSimulation["lakebase.Simulation"]
+    class nSimulation["neo4j.Simulation"]
+
+    GraphBuilder     <|-- dBuilder
+    GraphBuilder     <|-- lBuilder
+    GraphBuilder     <|-- nBuilder
+    GraphHealthProbe <|-- dHealthProbe
+    GraphHealthProbe <|-- lHealthProbe
+    GraphHealthProbe <|-- nHealthProbe
+    GraphProvisioner <|-- lProvisioner
+    GraphProvisioner <|-- nProvisioner
+    GraphSimulation  <|-- dSimulation
+    GraphSimulation  <|-- lSimulation
+    GraphSimulation  <|-- nSimulation
+    GraphDBFactory ..> GraphBuilder : vends
+    GraphDBFactory ..> GraphHealthProbe : vends
+    GraphDBFactory ..> GraphProvisioner : vends
+    GraphDBFactory ..> GraphSimulation : vends
 
     %% ─── Registry Store Hierarchy ───────────────────────────────────────────────
     class RegistryStore {

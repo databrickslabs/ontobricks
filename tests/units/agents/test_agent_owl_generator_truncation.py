@@ -7,9 +7,8 @@ ontology (0 classes), which the generation wizard polled on until timeout.
 
 ``call_serving_endpoint`` is patched to return scripted responses carrying a
 ``finish_reason`` so we can drive the guard without a live endpoint. The
-generation-quality (pitfall) loop is disabled via
-``options={"generation_max_iterations": 0, "owl_eval_max_rounds": 0}`` so a
-complete Turtle answer is accepted directly without the pitfall or PGE loops.
+PGE evaluator is disabled via ``options={"owl_eval_max_rounds": 0}`` so a
+complete Turtle answer is accepted directly.
 """
 
 from __future__ import annotations
@@ -69,7 +68,7 @@ def _run(responses):
             registry={"catalog": "main", "schema": "ob", "volume": "documents"},
             metadata={"tables": []},
             guidelines=_CRM_GUIDELINE,
-            options={"generation_max_iterations": 0, "owl_eval_max_rounds": 0},
+            options={"owl_eval_max_rounds": 0},
             base_uri="http://ex.org/crm#",
         )
 

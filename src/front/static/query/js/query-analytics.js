@@ -188,7 +188,7 @@
             cls  = 'alert-info';
             icon = 'bi-info-circle-fill';
             body = 'Graph Analytics runs on a Databricks job. '
-                + 'Run <strong>Knowledge Graph &rarr; Build</strong> first if the graph has not been built yet, '
+                + 'Run <strong>Graph &rarr; Build</strong> first if the graph has not been built yet, '
                 + 'or enable <strong>Compute large-graph metrics on Databricks</strong> in '
                 + '<strong>Settings &rarr; Global</strong> (admin only) to enable Run Analysis.';
         }

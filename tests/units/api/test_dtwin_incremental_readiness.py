@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 def route(monkeypatch):
     import back.core.helpers as helpers_pkg
     from api.routers.internal import dtwin
-    from back.core.graphdb.delta import DeltaBase
+    from back.core.graphdb.delta import Base as DeltaBase
 
     domain = object()
     seen: dict = {}

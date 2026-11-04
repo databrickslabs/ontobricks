@@ -29,7 +29,7 @@ _pool_mod = importlib.import_module("back.core.graphdb.lakebase.pool")
 _dbx_pkg = importlib.import_module("back.core.databricks")
 _lb_pkg = importlib.import_module("back.core.databricks.lakebase")
 _synced_mod = importlib.import_module("back.core.graphdb.lakebase.SyncedTableManager")
-_prov_mod = importlib.import_module("back.core.graphdb.lakebase.LakebaseGraphProvisioner")
+_prov_mod = importlib.import_module("back.core.graphdb.lakebase.InstanceProvisioner")
 _tm_pkg = importlib.import_module("back.core.task_manager")
 
 REG = {"catalog": "cat", "schema": "sch", "volume": "vol"}
@@ -440,7 +440,7 @@ class TestLakebaseProvision:
         ), patch.object(
             _ss, "resolve_mcp_app_name", return_value="ontobricks-mcp"
         ) as mcp, patch.object(_tm_pkg, "get_task_manager", return_value=tm), patch.object(
-            _prov_mod, "LakebaseGraphProvisioner"
+            _prov_mod, "InstanceProvisioner"
         ) as prov, patch("threading.Thread", _SyncThread):
             out = self._run(self._params(mcp_app_name=" explicit "), settings)
 
@@ -468,7 +468,7 @@ class TestLakebaseProvision:
             _ss.permission_service, "is_admin", return_value=True
         ), patch.object(_ss, "resolve_mcp_app_name", return_value="ontobricks"), patch.object(
             _tm_pkg, "get_task_manager", return_value=tm
-        ), patch.object(_prov_mod, "LakebaseGraphProvisioner") as prov, patch(
+        ), patch.object(_prov_mod, "InstanceProvisioner") as prov, patch(
             "threading.Thread", _SyncThread
         ):
             self._run(self._params(), SimpleNamespace(ontobricks_app_name="ontobricks"))

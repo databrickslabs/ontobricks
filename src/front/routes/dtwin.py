@@ -34,6 +34,12 @@ async def query_page(
         return redirect
     if is_graphless_backend((domain_session.info or {}).get("graph_backend")):
         return RedirectResponse("/domain/?section=information", status_code=303)
+    if request.query_params.get("section") == "cohorts":
+        dest = "/simulation/?section=cohort-run"
+        rule = request.query_params.get("rule")
+        if rule:
+            dest += f"&rule={rule}"
+        return RedirectResponse(dest, status_code=303)
 
     ont = domain_session.ontology or {}
     props = ont.get("properties", [])

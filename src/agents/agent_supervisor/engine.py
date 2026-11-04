@@ -17,13 +17,11 @@ routing decision).
 
 An ``"ontology"`` task used to dispatch to the deprecated one-shot
 ``agent_owl_generator`` bridge (``AgentClient.run_owl_generator`` ->
-``agents.agent_owl_generator.engine.run_agent``). That bridge contained the
-post-generation pitfall-rewrite loop the three-stage Generate design
-(``docs/superpowers/specs/2026-09-20-three-stage-ontology-generate-design.md``)
-replaces; it was never wired to a production Model Serving endpoint (only
-``task="mapping"`` is exposed via ``responses_agent.py``) and has been removed
-outright rather than left dormant. Ontology generation now goes exclusively
-through the staged workflow (``back.objects.ontology.generate.GenerateWorkflow`` +
+``agents.agent_owl_generator.engine.run_agent``). It was never wired to a
+production Model Serving endpoint (only ``task="mapping"`` is exposed via
+``responses_agent.py``) and has been removed. Ontology generation now goes
+exclusively through the staged workflow
+(``back.objects.ontology.generate.GenerateWorkflow`` +
 ``agents.agent_owl_generator.staged``), which this supervisor does not front.
 """
 

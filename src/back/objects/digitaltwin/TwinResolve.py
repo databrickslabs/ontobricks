@@ -95,15 +95,17 @@ class TwinResolve:
         ``read_only`` (default ``False``) tunes the resolve for read-only
         query paths (status / stats / triples-find / GraphQL reads):
 
-        * the PUBLISHED document is served from a TTL cache
-          (:meth:`RegistryService.load_published_domain_data_cached`),
-          skipping the newest→oldest version scan;
+        * the numeric-latest version (any lifecycle status) is loaded via
+          :meth:`RegistryService.load_latest_domain_data` when
+          ``domain_version`` is omitted;
         * OWL/R2RML are **not** regenerated (read paths never consume
           generated content); and
         * the session is **not** persisted (``save()`` skipped).
 
         Write/generation paths (build, ontology/R2RML export,
         design-status) must keep the default ``read_only=False``.
+        An explicit ``domain_version`` is loaded regardless of DRAFT /
+        IN-REVIEW / PUBLISHED.
         """
         from back.objects.registry import RegistryCfg, RegistryService
 
@@ -127,18 +129,9 @@ class TwinResolve:
                 if "not found" in msg.lower():
                     raise NotFoundError(msg)
                 raise InfrastructureError(msg)
-            if data.get("info", {}).get("status") != "PUBLISHED":
-                raise ValidationError(
-                    f"Version {domain_version} of domain '{domain_name}' is not "
-                    f"PUBLISHED; the API only serves PUBLISHED versions"
-                )
             version = domain_version
-        elif read_only:
-            ok, data, version, err = svc.load_published_domain_data_cached(domain_name)
-            if not ok:
-                raise NotFoundError(err)
         else:
-            ok, data, version, err = svc.load_published_domain_data(domain_name)
+            ok, data, version, err = svc.load_latest_domain_data(domain_name)
             if not ok:
                 raise NotFoundError(err)
         t_registry = time.perf_counter()

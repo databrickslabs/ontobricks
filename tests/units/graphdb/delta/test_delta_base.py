@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-import back.core.graphdb.delta.DeltaBase as delta_base
+import back.core.graphdb.delta.Base as delta_base
 
 
 class TestCreateDatabricksClientUseSea:

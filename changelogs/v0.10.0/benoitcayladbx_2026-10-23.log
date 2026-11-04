@@ -1,0 +1,290 @@
+================================================================================
+## Speed bulk Data Quality with a VIEW-sourced snapshot and a live log
+================================================================================
+
+Context: Knowledge Graph → Data Quality re-expanded the R2RML gateway VIEW
+on every check, so a multi-rule run scanned source mappings N times.
+Keep that VIEW as the only source: CTAS it once into a task-scoped Delta
+table, run checks (up to 4 workers) against the copy, then drop it.
+Show task.log_entries in a scrollable activity log while the run executes.
+
+Changes:
+
+1. src/back/core/graphdb/delta/_table_naming.py
+   Add dq_snapshot_fqn(domain, settings, task_id) off the gateway stem.
+2. src/back/objects/digitaltwin/quality/DataQualitySnapshot.py
+   New context manager: CTAS from the VIEW, drop in finally, fall back
+   to the live VIEW (sequential) if CTAS fails.
+3. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   Wrap the bulk DQ worker; skip snapshot when total < 2.
+4. src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+   ThreadPoolExecutor(max_workers=4) only when a snapshot exists; keep
+   result order; serial path unchanged for the live VIEW.
+5. src/front/templates/partials/dtwin/_query_dataquality.html
+   Add #dqExecProgressLog with class task-activity-log.
+6. src/front/static/query/js/query-dataquality.js
+   Render task.log_entries on poll (TaskProgressUI.renderActivityLog).
+7. src/front/templates/dtwin.html
+   Load task-progress-ui.js before query-dataquality.js.
+8. tests/units/architecture/baseline.json
+   Shrink-only ratchet: SqlQualityChecks.run_sql_checks left the
+   oversized-function list.
+
+Modified files:
+- src/back/core/graphdb/delta/_table_naming.py
+- src/back/objects/digitaltwin/quality/DataQualitySnapshot.py
+- src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+- src/back/objects/digitaltwin/quality/__init__.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/__init__.py
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-dataquality.js
+- tests/units/architecture/baseline.json
+- tests/units/dtwin/test_dataquality_snapshot.py
+- tests/units/dtwin/test_v090_dq_sql_checks.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/front/test_dq_progress_log.py
+- tests/units/front/test_dq_run_payload.py
+- tests/units/graphdb/delta/test_delta_package.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9531 passed, 326 skipped, 8 deselected, 40 warnings in 48.66s
+
+================================================================================
+## Keep the Data Quality activity log visible and actually scrollable
+================================================================================
+
+Context: The execution log never showed a scrollbar. Polling started only
+after 1.5s, completion hid the progress card, and macOS overlay scrollbars
+made an empty 200px well look like a single status line.
+
+Changes:
+
+1. src/front/static/query/css/query-dataquality.css
+   Pin #dqExecProgressLog to 6.5–9.5rem with overflow-y auto, stable gutter,
+   and a visible webkit thumb.
+2. src/front/static/query/js/query-dataquality.js
+   Poll immediately; keep the log after success/failure; stop hiding the card.
+3. tests/units/front/test_dq_progress_log.py
+   Contract for overflow CSS, keepProgress, and immediate tick().
+
+Modified files:
+- src/front/static/query/css/query-dataquality.css
+- src/front/static/query/js/query-dataquality.js
+- tests/units/front/test_dq_progress_log.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9531 passed, 326 skipped, 8 deselected, 40 warnings in 50.39s
+
+================================================================================
+## Show a live activity log on entity Data Quality Checks
+================================================================================
+
+Context: Explorer still showed only "Running data quality checks…" with a
+spinner. That popup waited on a single GET /dtwin/nodes/shacl, so the
+Knowledge Graph tab log could not appear. Start the entity check as a
+TaskManager job, poll log_entries into a scrollable well, and keep the
+synchronous GET for MCP and the public API.
+
+Changes:
+
+1. src/back/objects/digitaltwin/node/NodeShaclService.py
+   Optional progress callback; per-shape queries after a DQ snapshot.
+2. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   run_node_shacl_task wraps evaluate and completes with the facet payload.
+3. src/api/routers/internal/dtwin.py
+   POST /dtwin/nodes/shacl/start returns a task_id.
+4. src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+   Dedicated #shaclFacetsProgressLog in the popup.
+5. src/front/static/query/js/query-shacl-facets.js
+   POST start, poll /tasks/{id}, render TaskProgressUI activity log.
+6. src/front/static/query/css/query-shacl-facets.css
+   6.5–9.5rem overflow-y auto scrollport with a visible thumb.
+
+Modified files:
+- src/back/objects/digitaltwin/models.py
+- src/back/objects/digitaltwin/node/NodeShaclService.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_shacl_facets_modal.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-shacl-facets.js
+- src/front/static/query/css/query-shacl-facets.css
+- tests/units/dtwin/test_node_shacl_service.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/api/test_node_shacl_endpoint.py
+- tests/units/front/test_shacl_facets_ui.py
+- tests/units/front/test_dq_progress_log.py
+- docs/api.md
+- docs/user-guide.md
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9538 passed, 326 skipped, 8 deselected, 40 warnings in 48.44s
+
+================================================================================
+## Raise dependency floors for Pillow and certifi advisories
+================================================================================
+
+Context: Dependabot reported 28 Pillow advisories, including three critical
+image-decoder issues, plus a critical certifi compromised-root advisory in
+both application lockfiles. Pillow 13 is the first patched release and drops
+end-of-life Python 3.10, so the supported runtime floor moves to Python 3.11.
+
+Changes:
+
+1. pyproject.toml and uv.lock
+   Require Python 3.11, Pillow 13.0.0, and certifi 2026.10.19; refresh the
+   frozen security entries without downgrading matplotlib.
+2. src/mcp-server/pyproject.toml and src/mcp-server/uv.lock
+   Apply the certifi 2026.10.19 security floor to the standalone MCP graph.
+3. README.md and docs/
+   Align installation, deployment, development, architecture, product, and
+   contribution guidance with the Python 3.11 runtime floor.
+
+Modified files:
+- README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-23.log
+- docs/architecture.md
+- docs/contributing.md
+- docs/deployment.md
+- docs/development.md
+- docs/getting-started.md
+- docs/product.md
+- pyproject.toml
+- src/mcp-server/pyproject.toml
+- src/mcp-server/uv.lock
+- uv.lock
+
+Tests: uv run --frozen pytest -q -m "not scenario" stalled in the pre-existing
+live readiness probe; rerun with
+`-k "not readiness_route_returns_checks"` → 9530 passed, 338 skipped,
+9 deselected, 40 warnings in 38.39s. Frozen root and MCP dependency syncs
+installed Pillow 13.0.0 and certifi 2026.10.19 successfully.
+
+================================================================================
+## Teach Auto-Map to emit Unity Catalog metric-view SQL
+================================================================================
+
+Context: Mapping → Auto-Map already received metric views from get_metadata
+(object_kind + column roles) but the agent prompt never mentioned MEASURE()
+or GROUP BY, so the LLM treated them as tables. Align Auto-Map with the PGE
+generator: prompt rules plus a submit-time check_metric_view_sql guard.
+
+Changes:
+
+1. src/agents/agent_auto_assignment/engine.py
+   METRIC VIEW SOURCES rule: dimensions, MEASURE(measure), GROUP BY; ID is a dimension.
+2. src/agents/tools/mapping.py
+   Reject SELECT * / unwrapped measures / missing GROUP BY when the SQL hits a metric view.
+3. tests/eval/datasets/agent_auto_assignment/metric_view.jsonl
+   10-row contract dataset (happy / ambiguous / adversarial).
+4. tests/eval/run_agent_auto_assignment_metric.py
+   Dry-run judge (aggregate 1.000 vs threshold 0.95).
+5. .planning/agents/agent_auto_assignment/SPEC.md
+   metric_view_sql_correctness dimension, failure mode, dataset pointer.
+
+Modified files:
+- src/agents/agent_auto_assignment/engine.py
+- src/agents/tools/mapping.py
+- tests/units/agents/test_auto_assignment_metric_views.py
+- tests/units/agents/test_metric_view_eval_contract.py
+- tests/eval/datasets/agent_auto_assignment/metric_view.jsonl
+- tests/eval/run_agent_auto_assignment_metric.py
+- tests/eval/thresholds.yaml
+- .planning/agents/agent_auto_assignment/SPEC.md
+- .planning/agents/agent_auto_assignment/eval/metric_view.jsonl
+- docs/architecture.md
+- docs/user-guide.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" tests/units/agents/test_auto_assignment_metric_views.py tests/units/agents/test_metric_view_eval_contract.py tests/units/agents/test_mapping_tools.py tests/units/architecture/test_size_budget.py → 19 passed; eval dry-run aggregate 1.000
+
+
+================================================================================
+## Simulation menu (what-if sandbox) — v1
+================================================================================
+
+Context: New 5th workspace "Simulation" (after Domain, Ontology, Mapping,
+Knowledge Graph). Users assert hypothetical facts on a sandbox copy of a graph
+slice (entity neighbourhood, cohort, or class population capped at 5000),
+re-run reasoning there, and compare before/after. The live knowledge graph is
+never written. Lakebase backend only; graphless domains are redirected.
+
+Changes:
+
+1. src/front/config/menu_config.json, src/front/templates/base.html,
+   src/front/templates/partials/layout/_workspace_map_modal.html,
+   src/front/static/global/css/components.css, src/front/static/global/js/breadcrumb.js,
+   src/front/templates/partials/layout/help_modal.html
+   Simulation menu (bi-sliders2-vertical): 5th ordinal subnav item, 5-column
+   workspace map, breadcrumb entry, help pipeline/workflow/glossary entries.
+2. src/front/routes/simulation.py, src/front/templates/simulation.html,
+   src/front/templates/partials/simulation/*.html,
+   src/front/static/simulation/{js,css}/*
+   Page with Scenarios, Workbench, Results, Runs sections; task polling.
+3. src/front/static/query/js/query-entity-details.js
+   "Simulate from here" button in the KG entity panel (Lakebase only).
+4. src/back/core/graphdb/lakebase/_companion_ddl.py,
+   src/back/core/graphdb/lakebase/LakebaseSimulationStore.py
+   sim_phy/is_sim_phy helpers and a sandbox-pinned store that refuses any
+   non "__sim_" table on reads, writes, DDL and generated SQL.
+5. src/back/objects/registry/store/lakebase/Simulations.py, store.py, schema.sql,
+   src/back/objects/registry/store/base.py
+   simulations / simulation_runs tables (lazy-created) and store defaults.
+6. src/back/objects/simulation/
+   Simulation facade, SimulationSpec/Patch/Scope, SimulationSandbox,
+   SimulationReasoningService (retargets every phase), SimulationDiff,
+   SimulationRunner (scope → seed → patch → reason → diff → persist).
+7. src/api/routers/internal/simulation.py
+   list/create/get/update/delete/run/diff/runs; writes are Builder-only.
+8. src/shared/fastapi/main.py, src/front/fastapi/dependencies.py, routers __init__
+   Route registration and domain-scoped prefix.
+9. docs/user-guide.md ("Step 4: Simulation" incl. "How it works"),
+   docs/architecture.md, docs/product.md, README.md, .cursor/11-frontend-design.mdc
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/simulation/_sim_results.html
+- src/front/templates/partials/simulation/_sim_runs.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/simulation/js/simulation.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-results.js
+- src/front/static/simulation/css/simulation.css
+- src/front/static/global/css/components.css
+- src/front/static/global/js/breadcrumb.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/routes/simulation.py
+- src/front/routes/__init__.py
+- src/front/fastapi/dependencies.py
+- src/shared/fastapi/main.py
+- src/api/routers/internal/simulation.py
+- src/api/routers/internal/__init__.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseSimulationStore.py
+- src/back/core/graphdb/lakebase/__init__.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/Simulations.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/lakebase/__init__.py
+- src/back/objects/simulation/*.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_workspace_map_modal.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/product.md
+- README.md
+- .cursor/11-frontend-design.mdc
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9607 passed, 326 skipped,
+8 deselected.

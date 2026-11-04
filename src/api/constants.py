@@ -38,6 +38,7 @@ OPENAPI_PATH_PREFIX: str = EXTERNAL_API_MOUNT_PREFIX
 
 API_V1_PREFIX: str = f"/{API_URL_PATH_VERSION}"
 API_DIGITALTWIN_PREFIX: str = f"/{API_URL_PATH_VERSION}/digitaltwin"
+API_SIMULATIONS_PREFIX: str = f"/{API_URL_PATH_VERSION}/simulations"
 API_GRAPHQL_PREFIX: str = f"/{API_URL_PATH_VERSION}/graphql"
 
 EXTERNAL_GRAPHQL_PUBLIC_PREFIX: str = (
@@ -89,7 +90,13 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
     {
         "name": "Knowledge Graph",
         "description": "**Knowledge Graph API** — Registry discovery, triple store "
-        "status, build trigger, and triple retrieval.",
+        "status, build trigger, and triple retrieval. Pass ``simulation_id`` "
+        "to read a ready what-if sandbox (same overlay as Explorer).",
+    },
+    {
+        "name": "Simulation",
+        "description": "**Simulation API** — Create, run, and inspect what-if "
+        "scenarios. Ready sandboxes are selectable on graph queries.",
     },
     {
         "name": "Cohort",
@@ -122,6 +129,7 @@ __all__ = [
     "OPENAPI_PATH_PREFIX",
     "API_V1_PREFIX",
     "API_DIGITALTWIN_PREFIX",
+    "API_SIMULATIONS_PREFIX",
     "API_GRAPHQL_PREFIX",
     "EXTERNAL_GRAPHQL_PUBLIC_PREFIX",
     "EXTERNAL_API_TITLE",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,21 @@ ROOT = Path(__file__).resolve().parents[3]
 CONFIG = ROOT / "scripts" / "deploy.config.sh"
 ENSURE = ROOT / "scripts" / "_internal" / "_ensure-instance-target.sh"
 GENERATED = ROOT / "resources" / "_generated_instance_target.yml"
+
+# The product default lives in deploy.config.sh and moves every line
+# (07x → 08x → 09x → 10x…). Tests must not freeze a suffix.
+_DEFAULT_INSTANCE_ID_RE = re.compile(
+    r'^DEFAULT_INSTANCE_ID="\$\{DEFAULT_INSTANCE_ID:-([^}]+)\}"\s*$',
+    re.MULTILINE,
+)
+
+
+def _config_default_instance_id() -> str:
+    match = _DEFAULT_INSTANCE_ID_RE.search(CONFIG.read_text())
+    assert match, "DEFAULT_INSTANCE_ID fallback missing from deploy.config.sh"
+    instance_id = match.group(1)
+    assert instance_id, "DEFAULT_INSTANCE_ID fallback is empty"
+    return instance_id
 
 
 def _source_config(env: dict | None = None) -> dict[str, str]:
@@ -63,11 +79,12 @@ def _source_config(env: dict | None = None) -> dict[str, str]:
 
 class TestInstanceIdDerivation:
     def test_default_id_yields_suffixed_lakebase_target(self):
+        instance_id = _config_default_instance_id()
         got = _source_config()
-        assert got["INSTANCE_ID"] == "09x"
-        assert got["APP_NAME"] == "ontobricks-09x"
-        assert got["MCP_APP_NAME"] == "mcp-ontobricks-09x"
-        assert got["DAB_TARGET"] == "dev-lakebase-09x"
+        assert got["INSTANCE_ID"] == instance_id
+        assert got["APP_NAME"] == f"ontobricks-{instance_id}"
+        assert got["MCP_APP_NAME"] == f"mcp-ontobricks-{instance_id}"
+        assert got["DAB_TARGET"] == f"dev-lakebase-{instance_id}"
         # Resource keys stay static — isolation is the target, not the key.
         assert got["APP_RESOURCE_KEY"] == "ontobricks_dev_app"
         assert got["MCP_APP_RESOURCE_KEY"] == "mcp_ontobricks_app"
@@ -78,9 +95,10 @@ class TestInstanceIdDerivation:
         assert got["DAB_TARGET"] == "dev-lakebase-080"
 
     def test_legacy_target_override_keeps_unsuffixed_name(self):
+        instance_id = _config_default_instance_id()
         got = _source_config(env={"DEFAULT_DAB_TARGET": "dev-lakebase"})
         assert got["DAB_TARGET"] == "dev-lakebase"
-        assert got["APP_NAME"] == "ontobricks-09x"
+        assert got["APP_NAME"] == f"ontobricks-{instance_id}"
 
     def test_dab_backend_knob_is_gone(self):
         assert "DEFAULT_DAB_BACKEND" not in CONFIG.read_text()

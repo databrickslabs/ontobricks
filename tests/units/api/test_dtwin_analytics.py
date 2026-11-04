@@ -62,7 +62,7 @@ def test_data_table_probe_uses_delta_sql_client_builder(monkeypatch):
     builder_calls = []
 
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings, *, for_write=False: (
             builder_calls.append((domain, settings, for_write)) or client
         ),

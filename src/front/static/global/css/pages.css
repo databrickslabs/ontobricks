@@ -484,6 +484,29 @@
 }
 .warning-toast-popup:not(.show) { opacity: 0; }
 
+.success-toast-popup:has(.oc-md),
+.warning-toast-popup:has(.oc-md),
+.error-toast-popup:has(.oc-md) {
+    align-items: flex-start;
+}
+
+.success-toast-popup .oc-md blockquote,
+.error-toast-popup .oc-md blockquote {
+    color: inherit;
+    border-left-color: rgba(255, 255, 255, 0.45);
+}
+
+.warning-toast-popup .oc-md blockquote {
+    color: inherit;
+    border-left-color: rgba(0, 0, 0, 0.25);
+}
+
+.success-toast-popup .oc-md code,
+.error-toast-popup .oc-md code {
+    background: rgba(255, 255, 255, 0.2);
+    color: inherit;
+}
+
 /* ==========================================================================
    Utility Classes - File Lists
    ========================================================================== */

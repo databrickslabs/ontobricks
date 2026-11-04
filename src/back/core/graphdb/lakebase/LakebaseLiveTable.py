@@ -21,7 +21,7 @@ _SEED_BATCH = 2000
 class LakebaseLiveTable:
     """Create, seed, serve, retire, purge and count a graph's ``g_<dom>_v<n>_live`` table.
 
-    A collaborator of the Lakebase store (``LakebaseBase.live_table``): it runs
+    A collaborator of the Lakebase store (``Base.live_table``): it runs
     on the store's pooled cursor (search path = the graph schema). The union
     view reads the table only while it is *served* (a table comment,
     ``_companion_ddl.LIVE_SERVING_COMMENT``): :meth:`attach` seeds it from the

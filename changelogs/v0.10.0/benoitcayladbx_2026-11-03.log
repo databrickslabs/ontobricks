@@ -1,0 +1,958 @@
+================================================================================
+## Clear new Dependabot alerts: pyasn1, graphql-core, joserfc
+================================================================================
+
+Context: New Dependabot alerts appeared on `uv.lock` / `src/mcp-server/uv.lock`
+— pyasn1 0.6.4 (#313-#316, #320-#323, quadratic BER/CER/DER, BIT STRING, REAL,
+and ANY decoding DoS), graphql-core 3.3.0 (#319, memory leak on aborted
+validations), and joserfc 1.6.8 / 1.7.1 (#309-#312, unbounded JWE
+`recipients` array CPU exhaustion + compact-JWS size-guard allocation before
+rejection). All three are transitive (pyasn1 via pyasn1-modules/rsa/
+google-auth; graphql-core via strawberry-graphql; joserfc via
+authlib/fastmcp-slim) and had no explicit floor yet (pyasn1 was floored at
+the previous, now-insufficient, patched version). Ported the same fix applied
+to the `0.9.2` branch. `oauthlib>=4.0.0` (#175/#176/#282/#318) remains
+blocked: `databricks-sql-connector` 4.4–4.6 pins `oauthlib>=3.1.0,<4.0.0`,
+so it cannot be raised without breaking the Databricks SQL connector; left as
+a documented accepted risk.
+
+Changes:
+
+1. pyproject.toml
+   Raise `pyasn1` floor to `>=0.6.5`; add `graphql-core>=3.3.1` and
+   `joserfc>=1.7.6` constraint floors with Dependabot alert references.
+2. src/mcp-server/pyproject.toml
+   Same `pyasn1>=0.6.5` raise and new `joserfc>=1.7.6` floor (no
+   graphql-core/strawberry-graphql dependency in this subpackage).
+3. uv.lock
+   Regenerated against the Databricks PyPI proxy (`pypi.org` is not reachable
+   from this sandbox network), then rewrote `registry =
+   "https://pypi-proxy.dev.databricks.com/simple"` → `"https://pypi.org/simple"`
+   and `https://pypi-proxy.dev.databricks.com/packages/` →
+   `https://files.pythonhosted.org/packages/` across the file (the proxy
+   mirrors PyPI's own `/packages/<hash>/<hash>/filename` layout 1:1, so the
+   rewrite is a pure identity substitution — confirmed by `uv sync --frozen`
+   downloading and installing the rewritten URLs successfully). Verified zero
+   `pypi-proxy` references remain and `UV_INDEX_URL=https://pypi.org/simple
+   uv lock --check` passes.
+4. src/mcp-server/uv.lock
+   Same regeneration + URL rewrite for the standalone MCP graph.
+5. docs/development.md
+   Add `pyasn1>=0.6.5`, `graphql-core>=3.3.1`, `joserfc>=1.7.6` to the
+   current explicit security floors list.
+
+Modified files:
+- pyproject.toml
+- src/mcp-server/pyproject.toml
+- uv.lock
+- src/mcp-server/uv.lock
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9865 passed, 326 skipped, 8 deselected, 39 warnings in 55.64s
+
+Still open (blocked upstream):
+- oauthlib 4.0.0 (#175/#176/#282/#318) — databricks-sql-connector pins oauthlib<4
+- nltk GHSA-8mgp-746c-j5xp — no patched release yet
+
+================================================================================
+## Fix Apps deploy: drop default identity scopes from user_api_scopes
+================================================================================
+
+Context: `make deploy` of a fresh instance failed at app creation with
+`POST /api/2.0/apps → 400 INVALID_PARAMETER_VALUE: The specified scope
+iam.current-user:read is not a valid scope`. Databricks Apps now treats the two
+identity scopes (`iam.current-user:read`, `iam.access-control:read`) as
+non-selectable platform defaults — they are auto-assigned when no scopes are
+requested and the create API rejects them when listed explicitly (confirmed in
+the AWS/Azure "Configure authorization in a Databricks app" docs). Only
+additional scopes such as `sql` may be declared. Removed the two identity
+scopes from every `user_api_scopes` declaration, keeping just `sql` (admin
+group checks / MCP OBO, #208); the identity defaults are still applied
+automatically.
+
+Changes:
+
+1. databricks.yml
+   Both app resources (`ontobricks_dev_app`, `mcp_ontobricks_app`):
+   `user_api_scopes` reduced to `[sql]` (dropped the two identity scopes),
+   with an explaining comment.
+2. app.yaml.template
+   `authorization.user.scopes` reduced to `[sql]`; comment rewritten to note
+   the identity scopes are platform defaults that must not be declared.
+   (`app.yaml` itself is generated from this template and gitignored.)
+
+Modified files:
+- databricks.yml
+- app.yaml.template
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Deployment: `make deploy` (target dev-lakebase-10x) succeeded end-to-end after
+the fix — both apps RUNNING/ACTIVE, `/healthz` → 200, Lakebase schema
+`ontobricks_demo_10_registry_sc` initialized and UC/Lakebase grants applied to
+both app service principals. Also required an unrelated environment fix
+(re-auth of the expired `DEFAULT` OAuth CLI profile) and the account admin
+freeing service-principal quota (50k users+SP account cap).
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9865 passed, 326 skipped,
+8 deselected, 39 warnings in 55.06s (EXIT=0).
+
+================================================================================
+## Rewrite collapsed Unity Catalog FQNs in mapping SQL
+================================================================================
+
+Context: Auto-map / mapping assistants quoted a full catalog.schema.table
+name as one identifier (FROM `a.b.c` instead of `a`.`b`.`c`). Spark treats
+that as a single name and fails to resolve the source table (GH #214, BCP
+loyalty mapping). The LLM was following a "always backtick-quote columns"
+habit. Add a deterministic rewrite, diagnostics, prompt guard, and eval
+regression so it cannot regress.
+
+Changes:
+
+1. src/back/core/databricks/uc/identifiers.py
+   Detect and rewrite `FROM`/`JOIN` `` `a.b.c` `` to `` `a`.`b`.`c` ``.
+2. src/back/core/helpers/SQLHelpers.py
+   Expose rewrite/find helpers and a Mapping diagnostics check dict.
+3. src/agents/tools/mapping.py, src/agents/tools/sql.py
+   Rewrite on Auto-Map submit and execute_sql before the warehouse sees SQL.
+4. src/back/objects/mapping/Mapping.py
+   Rewrite on persist and diagnostics probe; flag remaining collapsed FQNs.
+5. src/back/core/sqlwizard/SQLWizardService.py,
+   src/back/core/w3c/sparql/SparqlTranslator.py,
+   src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Rewrite on wizard correction, SPARQL subquery, and R2RML rr:sqlQuery.
+6. src/agents/agent_auto_assignment/engine.py,
+   src/agents/agent_mapping_pge/generators/entity.py,
+   src/agents/agent_mapping_pge/generators/relationship.py
+   Prompt: never wrap the full catalog.schema.table in one pair of backticks.
+7. tests/eval/datasets/agent_auto_assignment/regression.jsonl,
+   tests/eval/datasets/agent_mapping_pge/regression.jsonl
+   Three GH #214 regression examples per agent.
+8. docs/user-guide.md
+   Document per-segment UC quoting vs the illegal collapsed form.
+
+Modified files:
+- src/back/core/databricks/uc/identifiers.py
+- src/back/core/databricks/uc/__init__.py
+- src/back/core/helpers/SQLHelpers.py
+- src/agents/tools/mapping.py
+- src/agents/tools/sql.py
+- src/back/objects/mapping/Mapping.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/agents/agent_auto_assignment/engine.py
+- src/agents/agent_mapping_pge/generators/entity.py
+- src/agents/agent_mapping_pge/generators/relationship.py
+- tests/units/core/test_uri_sql_helpers.py
+- tests/units/mapping/test_mapping_service.py
+- tests/units/agents/test_mapping_tools.py
+- tests/units/agents/test_collapsed_uc_fqn.py
+- tests/units/core/test_sql_wizard.py
+- tests/back/core/w3c/sparql/test_sparql_translator_units.py
+- tests/eval/datasets/agent_auto_assignment/regression.jsonl
+- tests/eval/datasets/agent_mapping_pge/regression.jsonl
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9879 passed, 3 failed
+(pre-existing local deploy.config: INSTANCE_ID 10x vs fixture 09x, and
+app.yaml user_api_scopes sql-only), 326 skipped, 8 deselected, 39 warnings
+in 52.06s. Targeted UC-FQN + size-budget: 208 passed.
+
+================================================================================
+## Align agent rules with graph-backend cloisonnement
+================================================================================
+
+Context: The graph-backend refactor (hats + factory-vended capabilities +
+import boundary) had landed in code, the coding_rules inheritance table, and
+`docs/backend.md`, but Cursor rules and Claude skills still described the
+removed `GraphDBBackend` god-base. Agents adding a new engine would have
+followed the stale pattern.
+
+Changes:
+
+1. .cursor/07-project-conventions.mdc
+   Replace the `graphdb/` subpackage pattern with hats, capability accessors,
+   and the cloisonnement rule; update the inheritance bullet.
+2. .cursor/04-project-structure.mdc
+   Note `interfaces/` plus cloisonned `lakebase`/`delta`/`neo4j` engines.
+3. .cursor/08-testing-and-deployment.mdc
+   Document that `test_backend_import_boundary.py` is zero-offender, not a
+   shrinking baseline.
+4. .claude/skills/adding-subpackage/SKILL.md
+   Engine-add procedure: right hat, factory registration, no cross-package
+   backend imports.
+5. .claude/skills/code-review/SKILL.md
+   Guardrails + quick-reference for the import boundary.
+6. src/.coding_rules.md
+   Layering rule, "where new code goes" row, and code-review check #1.
+
+Modified files:
+- .cursor/07-project-conventions.mdc
+- .cursor/04-project-structure.mdc
+- .cursor/08-testing-and-deployment.mdc
+- .claude/skills/adding-subpackage/SKILL.md
+- .claude/skills/code-review/SKILL.md
+- src/.coding_rules.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: docs/rules-only. Import-boundary test previously green; full suite not
+re-run for this alignment.
+
+================================================================================
+## Remove Ontology Pitfalls feature
+================================================================================
+
+Context: Drop the Ontology sidebar Pitfalls panel (D2KLab detector), its REST
+routes, agent tools (`check_pitfalls` / `check_owl_pitfalls`), precision-score
+session field, and the optional `[pitfalls]` extra. The extra was the only
+reason OntoBricks pulled sentence-transformers, NLTK, torch, and transformers;
+scikit-learn and SciPy remain as MLflow transitives.
+
+Changes:
+
+1. src/back/core/external/
+   Delete the vendored pitfalls package (`PitfallsService`, runner, utils).
+2. src/api/routers/internal/ontology.py
+   Remove `/ontology/pitfalls/taxonomy|analyze|results` routes.
+3. src/front/config/menu_config.json, src/front/templates/ontology.html
+   Remove the Pitfalls sidebar section and its CSS/JS includes.
+4. src/agents/tools/pitfalls.py, src/agents/PITFALL_RULES.md
+   Delete the shared pitfall tool and rules file.
+5. src/agents/agent_owl_generator/engine.py
+   Remove the post-generation pitfall-fix loop; keep the PGE evaluator.
+6. src/agents/agent_ontology_assistant/engine.py, tools.py
+   Drop `check_pitfalls` from the prompt, tool list, and handlers.
+7. src/back/objects/session/DomainSession.py, Domain.py
+   Remove unused `precision_score` session field and `/domain/info` payload.
+8. pyproject.toml, uv.lock, requirements.txt, Makefile, scripts/start.sh, scripts/setup.sh
+   Remove the `[pitfalls]` extra and lock entries unique to it (NLTK,
+   sentence-transformers, torch, transformers, CUDA/nvidia wheels).
+9. licenses/README.md
+   Drop D2KLab/NLTK/sentence-transformers license rows; keep sklearn/SciPy as
+   MLflow transitives.
+10. tests/units/architecture/baseline.json
+    Shrink-only ratchet after deleting oversized pitfalls modules.
+
+Modified files:
+- Makefile
+- README.md
+- docs/deployment.md
+- docs/development.md
+- docs/getting-started.md
+- docs/user-guide.md
+- licenses/README.md
+- licenses/python/d2klab-ontology-pitfalls-detector-LICENSE.txt
+- licenses/python/nltk-LICENSE.txt
+- licenses/python/sentence-transformers-LICENSE.txt
+- pyproject.toml
+- requirements.txt
+- scripts/setup.sh
+- scripts/start.sh
+- src/agents/PITFALL_RULES.md
+- src/agents/agent_ontology_assistant/engine.py
+- src/agents/agent_ontology_assistant/tools.py
+- src/agents/agent_owl_generator/__init__.py
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_owl_generator/prompts.py
+- src/agents/agent_owl_generator/tools.py
+- src/agents/agent_supervisor/engine.py
+- src/agents/tools/pitfalls.py
+- src/api/routers/internal/ontology.py
+- src/back/core/agents/AgentClient.py
+- src/back/core/external/__init__.py
+- src/back/core/external/pitfalls/PitfallsService.py
+- src/back/core/external/pitfalls/__init__.py
+- src/back/core/external/pitfalls/runner.py
+- src/back/core/external/pitfalls/utils.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/front/config/menu_config.json
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain-review.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/global/css/permissions.css
+- src/front/static/ontology/css/ontology-pitfalls.css
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/js/ontology-pitfalls.js
+- src/front/templates/ontology.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/ontology/_pitfalls.html
+- tests/eval/staged_contract.py
+- tests/units/agents/test_agent_ontology_assistant_engine.py
+- tests/units/agents/test_agent_owl_generator_class_cap.py
+- tests/units/agents/test_agent_owl_generator_truncation.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/architecture/baseline.json
+- tests/units/auth/test_permission_middleware.py
+- tests/units/front/test_button_design_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_frontend_xss_hardening.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/ontology/test_pitfalls_service.py
+- uv.lock
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 3 failed, 9848 passed, 326 skipped, 8 deselected, 39 warnings in 46.74s. The 3 failures are pre-existing (deploy INSTANCE_ID 10x vs fixture 09x, app.yaml user_api_scopes) and unrelated to this removal.
+
+================================================================================
+## Strip leftover pitfalls dead code and unused imports
+================================================================================
+
+Context: After removing the Ontology Pitfalls feature, a few leftovers remained:
+`AgentResult.iteration_summary` was never written, OWL-generator tests still
+passed the obsolete `generation_max_iterations` option, and ruff flagged unused
+symbols in files touched by the removal. Packaging is already clean — `pyproject.toml`
+has only the `lakebase` extra, and `uv.lock` no longer lists NLTK,
+sentence-transformers, torch, or transformers. scikit-learn and SciPy stay as
+MLflow transitives.
+
+Changes:
+
+1. src/agents/agent_owl_generator/engine.py
+   Drop unused `AgentResult.iteration_summary`.
+2. src/agents/agent_ontology_assistant/engine.py
+   Remove unused LLM-call elapsed-time locals (F841).
+3. src/back/objects/session/DomainSession.py
+   Drop unused `DEFAULT_GRAPH_NAME` import (F401).
+4. tests/units/agents/test_agent_owl_generator_class_cap.py
+   Stop passing the no-op `generation_max_iterations` option.
+5. tests/units/agents/test_agent_owl_generator_truncation.py
+   Same option cleanup.
+
+Modified files:
+- src/agents/agent_owl_generator/engine.py
+- src/agents/agent_ontology_assistant/engine.py
+- src/back/objects/session/DomainSession.py
+- tests/units/agents/test_agent_owl_generator_class_cap.py
+- tests/units/agents/test_agent_owl_generator_truncation.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 3 failed, 9848 passed, 326 skipped, 8 deselected, 39 warnings in 50.07s. The 3 failures are pre-existing (deploy INSTANCE_ID 10x vs fixture 09x, app.yaml user_api_scopes) and unrelated to this cleanup.
+
+================================================================================
+## Persist last hypothetical-facts prompt on the scenario
+================================================================================
+
+Context: Simulation → Scenarios → Hypothetical facts has a "Describe the facts"
+textarea used by Propose facts. The agent rewrote General → Description, but the
+prompt itself was never stored on the spec, so reopening a scenario left the box
+empty (or showed another scenario's leftover text). Persist `fact_prompt` with
+the spec, restore it on load, and quiet-save after a propose when the scenario
+already exists.
+
+Changes:
+
+1. src/back/objects/simulation/Spec.py
+   Add `fact_prompt` (max 4000 chars) to parse/serialize; omitted/empty stays "".
+2. src/front/static/simulation/js/simulation-workbench.js
+   Collect and restore `fact_prompt`; after Propose facts, quiet-save the last
+   prompt (and current spec) when the scenario already has an id.
+3. tests/units/simulation/test_simulation_core.py
+   Round-trip and length-cap coverage for `fact_prompt`.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract that load/collect/persist wire `simWbFactPrompt`.
+5. docs/user-guide.md
+   Note that the last proposed wording is stored with the scenario.
+
+Modified files:
+- src/back/objects/simulation/Spec.py
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 3 failed, 9850 passed, 326 skipped, 8 deselected, 39 warnings in 53.78s. The 3 failures are pre-existing (deploy INSTANCE_ID 10x vs fixture 09x, app.yaml user_api_scopes) and unrelated to this change.
+
+================================================================================
+## Stop hard-coding deploy INSTANCE_ID in tests
+================================================================================
+
+Context: `test_deploy_instance_id.py` asserted the previous line default (`09x`).
+Bump `DEFAULT_INSTANCE_ID` in `scripts/deploy.config.sh` (now `10x`) and those
+tests fail even though derivation is correct. Tests must read the config
+fallback and check the naming contract against it.
+
+Changes:
+
+1. tests/units/settings/test_deploy_instance_id.py
+   Parse `DEFAULT_INSTANCE_ID` from `deploy.config.sh`; assert app name, MCP
+   name, and DAB target as `ontobricks-<id>` / `mcp-ontobricks-<id>` /
+   `dev-lakebase-<id>`. Synthetic override `080` stays as a fixture, not a
+   product default.
+
+Modified files:
+- tests/units/settings/test_deploy_instance_id.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9852 passed, 326 skipped, 8 deselected, 39 warnings in 52.05s. Remaining failure is `test_each_app_declares_user_api_scopes_for_obo` (bundle lists only `sql`; test still requires the identity scopes the Apps create API rejects).
+
+================================================================================
+## Expand bare contract ids when applying simulation patches
+================================================================================
+
+Context: Scenario `se81746b730` asked to add contract ECON00018. Propose facts
+stored the object as the literal `ECON00018` instead of
+`…/Contract/ECON00018`, so the after-picture had a disconnected hascontract
+edge and the contract (and its meters) were not seeded. Expand bare local ids
+on object properties at run time, and tell the facts agent never to emit them.
+
+Changes:
+
+1. src/back/objects/simulation/Runner.py
+   Expand non-URI object-property objects to `{data_ns}{Range}/{id}`, with a
+   sibling-URI fallback when range is missing.
+2. src/agents/agent_simulation_facts/engine.py
+   Prompt: relationship objects must be absolute URIs, never a bare local id.
+3. tests/units/simulation/test_simulation_runner_api.py
+   Cover range expansion and sibling-URI fallback (ECON00018).
+4. tests/eval/datasets/agent_simulation_facts/regression.jsonl
+   Three GH-style cases that require a Contract URI for ECON00018.
+5. docs/user-guide.md
+   Note that local ids on relationship objects are expanded at run time.
+
+Modified files:
+- src/back/objects/simulation/Runner.py
+- src/agents/agent_simulation_facts/engine.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/eval/datasets/agent_simulation_facts/regression.jsonl
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9856 passed, 326 skipped, 8 deselected, 39 warnings in 47.58s. Remaining failure is `test_each_app_declares_user_api_scopes_for_obo` (pre-existing).
+
+================================================================================
+## Read-only hypothetical-facts list with Edit and op icons
+================================================================================
+
+Context: The Hypothetical facts tab let users type S/P/O and change Add/Set/Remove
+inline, which produced half-edited local ids. The list is now a read-only
+preview: operation icons, an Edit button (opens the fact wizard) before row
+delete, and Add fact also opens the wizard.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Drop inline inputs; render Add/Set/Remove as icons; Edit before delete;
+   Add fact opens the wizard.
+2. src/front/static/simulation/css/simulation.css
+   Size the op icon slot instead of the old 6.75rem select.
+3. tests/units/front/test_simulation_page_contract.py
+   Contract for read-only cards, Edit-before-delete, and op icons.
+4. docs/user-guide.md
+   Describe the read-only cards and Edit → wizard flow.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9856 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Put fact type and value on one line
+================================================================================
+
+Context: Hypothetical-facts cards stacked the type/caption above the local id.
+Keep both on a single row so the list stays compact.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   `.sim-term` is a flex row; kind and id share one line.
+2. tests/units/front/test_simulation_page_contract.py
+   Assert the one-line flex layout.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Lookup moved off the list; contract now checks Edit → wizard.
+4. docs/user-guide.md
+   Type line sits on the same row as the local id.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9856 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Left-align S/P/O values in fact cards
+================================================================================
+
+Context: After putting type and local ID on one line, the type cell grew
+(`flex: 1`) and shoved the value against the right edge of each S/P/O
+column. Pack both to the left of the column.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   `.sim-term` uses `justify-content: flex-start`; `.sim-term-kind` no longer grows.
+2. tests/units/front/test_simulation_page_contract.py
+   Assert left packing and no grow on the kind cell.
+3. docs/user-guide.md
+   Type and local ID sit on the same row, packed left in the column.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9856 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Scope fact-wizard steps 2 and 3 to subject type and predicate kind
+================================================================================
+
+Context: After picking a subject, step 2 must list that class's ontology
+properties. After picking a predicate, step 3 must follow attribute vs
+relationship (literal vs range-class search).
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-fact-wizard.js
+   Label predicates with the subject class; resolve predicate kind/range;
+   hide entity search for attributes; auto-search the range class for
+   relationships; restore kind when editing a card.
+2. tests/units/front/test_simulation_fact_wizard.py
+   Contract for class-scoped predicate list and kind-aware step 3.
+3. docs/user-guide.md
+   Wizard step 2 is class-scoped; step 3 follows predicate kind.
+
+Modified files:
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9857 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Remove the duplicate Fact wizard button
+================================================================================
+
+Context: Hypothetical facts had both Fact wizard and Add fact, both opening
+the same popup. Keep Add fact (and Edit on a card).
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Drop the Fact wizard button.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Drop its click handler.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Assert the duplicate CTA is gone; Add fact still opens the wizard.
+4. tests/units/front/test_simulation_page_contract.py
+   Facts pane no longer lists simWbFactWizardBtn.
+5. docs/user-guide.md
+   Add fact / Edit open the wizard.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_fact_wizard.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9857 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Deduplicate wizard predicates and bind them to the selected class
+================================================================================
+
+Context: Step 2 listed every class's attributes unioned with the global
+property list, so the same predicate appeared twice (URI vs local name)
+and the rows did not match the class chosen on step 1.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-fact-wizard.js
+   Build the list from the selected class (dropdown, else picked type)
+   plus ancestors; dedupe by URI and local name.
+2. tests/units/front/test_simulation_fact_wizard.py
+   Contract for `_predicatesForSubject` and `_propDedupeKeys`.
+3. docs/user-guide.md
+   Predicate step lists that class's attributes and relationships once.
+
+Modified files:
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9857 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Keep last-value simulation removes out of the Explorer overlay
+================================================================================
+
+Context: GitHub #215 — after `remove` of a predicate's last object, the
+Explorer union inferred "untouched" from remaining sandbox rows and let
+the live triple show through. Diff and SWRL on the sandbox were already
+correct. Overlay keys (`__smp_<id>`) now record every `(subject,
+predicate)` the sandbox has owned, append-only.
+
+Changes:
+
+1. src/back/objects/simulation/overlay.py
+   Map `__sim_` / `__smu_` names to `__smp_` and merge persisted overlay
+   keys with remaining sandbox rows.
+2. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Overlay naming, append-only backfill, union view anti-join on keys.
+3. src/back/core/graphdb/lakebase/SimulationStore.py
+   Create/drop overlay with the sandbox; record keys on seed.
+4. src/back/core/graphdb/lakebase/SimulationUnion.py
+   Ensure overlay keys exist, backfill, then build the view.
+5. src/back/objects/simulation/Sandbox.py
+   Delta/Neo4j seed+apply append overlay keys; Delta view uses `__smp_`.
+6. src/back/objects/digitaltwin/explorer/GraphFilter.py
+   Python live overlay uses persisted keys so last-value remove stays gone.
+7. src/front/static/config/js/settings.js
+   Fold `__smp_` companions into the same simulation object group.
+8. tests/units/simulation/test_simulation_core.py
+   SQLite last-value remove, overlay SQL, seed backfill.
+9. tests/units/graphdb/test_v090_graph_access_filter.py
+   GraphFilter last-value remove with overlay keys.
+10. docs/architecture.md, docs/user-guide.md, docs/backend.md
+    Document `__smp_` overlay keys.
+
+Modified files:
+- src/back/objects/simulation/overlay.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/SimulationStore.py
+- src/back/core/graphdb/lakebase/SimulationUnion.py
+- src/back/core/graphdb/delta/objects.py
+- src/back/core/graphdb/interfaces/GraphSimulation.py
+- src/back/objects/digitaltwin/explorer/GraphFilter.py
+- src/front/static/config/js/settings.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/graphdb/test_v090_graph_access_filter.py
+- tests/units/graphdb/test_lakebase_sim_union_guard.py
+- tests/units/settings/test_delta_objects.py
+- tests/units/front/test_lakebase_object_grouping.py
+- docs/architecture.md
+- docs/user-guide.md
+- docs/backend.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9859 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Remove unused code identified by the global review
+================================================================================
+
+Context: The repository-wide review found unused imports and local assignments
+that added dead surface area. Remove only Ruff-confirmed code, while retaining
+imports that form a public re-export or an explicit test patch seam.
+
+Changes:
+
+1. src/{agents,api,back,shared}/
+   Remove unused imports and six unused local assignments across the reviewed
+   modules; preserve required re-export and test-seam imports with `noqa`.
+2. .cursor/01-expertise-and-principles.mdc
+   Restore the concise-response principle accidentally omitted by the
+   Minimal surface addition.
+3. .github/PR_REVIEW_CHECKLIST.md
+   Add Minimal surface as a class-first review gate.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- .github/PR_REVIEW_CHECKLIST.md
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/pge_eval/normalize.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/mapping.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/back/core/graph_analysis/CommunityDetector.py
+- src/back/core/graphdb/delta/BuildPipeline.py
+- src/back/core/graphdb/delta/Builder.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/core/graphdb/lakebase/Base.py
+- src/back/core/graphdb/neo4j/ReadOps.py
+- src/back/core/industry/fhir/FhirImportService.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/cache/TwinStoreCache.py
+- src/back/objects/digitaltwin/node/JobActionService.py
+- src/back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py
+- src/back/objects/mapping/Mapping.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/registry/store/lakebase/Bootstrap.py
+- src/back/objects/registry/store/lakebase/GlobalConfig.py
+- src/shared/fastapi/health.py
+- src/shared/fastapi/ui_branding.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen ruff check src --select F401,F811,F841 --exclude
+src/back/objects/domain/settings/SettingsService.py` → passed. The excluded
+module intentionally exposes compatibility symbols as test patch seams.
+`uv run --frozen pytest -q -m "not scenario"` → 2 failed, 9859 passed, 326
+skipped, 8 deselected. The OBO-scope failure was pre-existing; the simulation
+fact-wizard assertion is in a concurrently modified workspace file outside
+this cleanup.
+
+================================================================================
+## Document the Minimal surface checklist for agents
+================================================================================
+
+Context: Class-first and LOC budgets were more concrete than YAGNI, so agents
+extracted files and layers too early. Canonicalise an eight-point Minimal
+surface checklist under the existing simplest-code principle; skills cite it
+instead of restating it.
+
+Changes:
+
+1. .cursor/01-expertise-and-principles.mdc
+   Add §Minimal surface (ticket-only code, reuse first, no premature files,
+   no pass-through wrappers, drop dead surface, behaviour-level tests).
+2. src/.coding_rules.md
+   Mirror §2; point code-review item 2 at the short form.
+3. .claude/skills/code-review/SKILL.md
+   Duplication step and speculative-generality grep cite §Minimal surface.
+4. .claude/skills/refactoring/SKILL.md
+   Extraction gate and Don't line cite §Minimal surface.
+5. .cursor/08-testing-and-deployment.mdc
+   Refactor working-style "simplest result" line cites §Minimal surface.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- src/.coding_rules.md
+- .claude/skills/code-review/SKILL.md
+- .claude/skills/refactoring/SKILL.md
+- .cursor/08-testing-and-deployment.mdc
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9859 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Label Hypothetical-fact wizard filter as entity type
+================================================================================
+
+Context: The Hypothetical fact popup still said "Class" / "Any class". Operators
+asked to use entity wording, and when editing an existing fact the dropdown did
+not show the subject's selected entity type.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Relabel the subject filter to Entity type / Any entity type.
+2. src/front/static/simulation/js/simulation-fact-wizard.js
+   Preselect the subject's entity type on edit; user-facing copy now says
+   entity type instead of class.
+3. tests/units/front/test_simulation_fact_wizard.py
+   Contract for the new labels and `_syncEntityTypeSelect`.
+4. docs/user-guide.md
+   Note that Edit opens the wizard with the subject's entity type selected.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9860 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Show operation and entity-type icons in the fact wizard
+================================================================================
+
+Context: After renaming Class to Entity type, the Hypothetical fact popup still
+used plain text for operation, entity type, predicate kind, and search hits.
+Operators asked for the same icons as the fact cards.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Leading icon slots for Operation and Entity type; tab icons.
+2. src/front/static/simulation/js/simulation-fact-wizard.js
+   Sync Add/Set/Remove Bootstrap icons and ontology emojis; mark
+   relationship vs attribute and search hits the same way.
+3. src/front/static/simulation/css/simulation.css
+   Shared `.sim-fact-kind-icon` treatment for the leading addons.
+4. tests/units/front/test_simulation_fact_wizard.py
+   Contract for the icon slots and helpers.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_fact_wizard.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 2 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`, `test_render_reload_focus_and_inferred_refresh_use_overlay`), 9860 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Default Explorer to Live graph (inferred) except inbound links
+================================================================================
+
+Context: Opening Explorer from the sidebar kept the last Graph source (a
+sandbox or Live asserted), including leftover ``?simulation=`` from a
+previous Simulation → Explorer link. Sidebar open must always land on
+**Live graph (inferred)**; a real inbound link (Results → Explorer, entity
+URI) still selects that sandbox. Programmatic switches (SPARQL overlay,
+Load Triple Store) keep the current source.
+
+Changes:
+
+1. src/front/static/global/js/sidebar-nav.js
+   Pass ``isTrusted`` on section change so Explorer can tell a sidebar
+   click from ``switchTo``.
+2. src/front/static/query/js/query.js
+   Consume ``simulation`` once (same as ``focus``) and pass
+   ``fromNavClick`` into ``SigmaGraph.init``.
+3. src/front/static/query/js/query-sigmagraph.js
+   Force live inferred on first open and trusted Explorer clicks; keep
+   ``simulationId`` from the inbound link; skip reset on SPARQL/load
+   re-entry; retarget the canvas when the source actually changes.
+4. src/front/static/query/js/query-graph-source.js
+   ``forceDefault`` beats leftover URL and sessionStorage.
+5. tests/units/front/test_explorer_simulation_select.py
+   Contract for nav-click default vs inbound ``simulation``.
+6. tests/units/front/test_kg_graph_source.py
+   ``forceDefault`` precedes ``wantedFromUrl``.
+7. tests/units/front/test_explorer_loading_overlay.py
+   Init signature update.
+8. docs/user-guide.md
+   Document the Explorer Graph default.
+
+Modified files:
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/query/js/query.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-graph-source.js
+- tests/units/front/test_explorer_simulation_select.py
+- tests/units/front/test_kg_graph_source.py
+- tests/units/front/test_explorer_loading_overlay.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`; bundle lists only `sql` because Apps rejects default identity scopes), 9861 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Preview the outcome triple in the fact wizard
+================================================================================
+
+Context: Operators configuring a hypothetical fact could not see the resulting
+S/P/O card until they applied it. Show the same list layout live above the
+wizard tabs while they pick operation, subject, predicate, and object.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Add a `sim-patch-card` preview slot above the step tabs.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Extract `_patchFieldsHtml` so the list and wizard share one triple row.
+3. src/front/static/simulation/js/simulation-fact-wizard.js
+   Rebuild the preview from the current draft on every field change.
+4. tests/units/front/test_simulation_fact_wizard.py
+   Contract: preview sits above the tabs and reuses `_patchFieldsHtml`.
+5. docs/user-guide.md
+   Note the live triple card in the wizard.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9862 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Render Propose-facts agent reply as HTML in the toast
+================================================================================
+
+Context: After **Propose facts**, the success/warning toast showed the agent's
+Markdown summary literally (`**Jacob Martin**`, `*Terminated*`, `>` quotes)
+instead of bold/italic/lists. The shared toast already injects HTML; the
+reply just needed the sanitised Markdown renderer.
+
+Changes:
+
+1. src/front/static/simulation/js/simulation-workbench.js
+   Convert the agent reply with `renderMarkdown`, wrap it in `.oc-md`, and
+   keep the toast on screen for 10s so the summary is readable.
+2. src/front/static/global/js/utils.js
+   Top-align toast icon and body (`align-items-start`) so multi-line
+   Markdown summaries do not vertically center the check icon.
+3. src/front/static/global/css/pages.css
+   Toast-specific `.oc-md` contrast for blockquotes and `code` on green /
+   yellow / red toasts.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract: reply HTML helper, shared renderer, toast alignment, CSS hooks.
+5. tests/units/front/test_frontend_xss_hardening.py
+   Treat the workbench as a Markdown consumer of `renderMarkdown`.
+6. docs/user-guide.md
+   Note that the proposal toast renders HTML, not raw Markdown asterisks.
+
+Modified files:
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/global/js/utils.js
+- src/front/static/global/css/pages.css
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_frontend_xss_hardening.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9863 passed, 326 skipped, 8 deselected.
+
+================================================================================
+## Keep Explorer neighbourhood connected when the entity cap hits
+================================================================================
+
+Context: Searching Jacob Martin at depth 2 on the large customer graph painted
+many Interaction nodes with no edges. Undirected hop-2 walks through high-degree
+Contracts, then an unordered LIMIT on the union of BFS levels dropped the seeds
+and kept random hop-2 subjects whose linking triples (and the Contract/Agent
+they hang off) never made the cut. The renderer also kept every typed subject
+even with zero remaining links.
+
+Changes:
+
+1. src/back/core/graphdb/adjacency.py
+   Cap the expanded entity set by hop distance (`ORDER BY lvl`) so seeds and
+   hop-1 neighbours are kept before hop-2 fill.
+2. src/back/core/graphdb/delta/ReadStore.py
+   Use the same hop-ordered cap on the SPO fallback expand path.
+3. src/front/static/query/js/query-d3graph.js
+   When the subgraph has any edges, drop nodes that participate in none of them.
+4. tests/units/graphdb/test_adjacency_sql.py
+   Contract: ranked entity cap SQL.
+5. tests/units/front/test_explorer_unlinked_nodes.py
+   Contract: unlinked typed nodes are filtered out when edges exist.
+6. tests/units/architecture/baseline.json
+   Drop ``ReadStore.expand_and_fetch_subgraph`` now under the 100-LOC cap.
+
+Modified files:
+- src/back/core/graphdb/adjacency.py
+- src/back/core/graphdb/delta/ReadStore.py
+- src/front/static/query/js/query-d3graph.js
+- tests/units/graphdb/test_adjacency_sql.py
+- tests/units/front/test_explorer_unlinked_nodes.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 1 failed (pre-existing `test_each_app_declares_user_api_scopes_for_obo`), 9865 passed, 326 skipped, 8 deselected.
+
+
+
+

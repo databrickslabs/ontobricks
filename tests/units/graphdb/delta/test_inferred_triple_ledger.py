@@ -38,10 +38,10 @@ class _Client:
 
 @pytest.fixture
 def inline(monkeypatch):
-    """Make ``DeltaFlatStore`` insert through ``execute_statement`` (no Thrift session)."""
-    from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+    """Make ``MaterializedStore`` insert through ``execute_statement`` (no Thrift session)."""
+    from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 
-    monkeypatch.setattr(DeltaFlatStore, "_uses_inline_sql", lambda self: True)
+    monkeypatch.setattr(MaterializedStore, "_uses_inline_sql", lambda self: True)
 
 
 class TestForDomain:
@@ -100,6 +100,9 @@ class TestTheWritersListBeforeTheyWrite:
     def _store(order: list) -> MagicMock:
         store = MagicMock(supports_adjacency=False)
         store.inferred_ledger = InferredTripleLedger(lambda: None, INFERRED)
+        # The writers call the interface's ``record_inferred``; a Neo4j store forwards it
+        # to its ledger (``Store.record_inferred``), which this double mirrors.
+        store.record_inferred.side_effect = lambda triples: store.inferred_ledger.record(triples)
         store.insert_triples.side_effect = lambda *a, **kw: order.append("store") or 1
         return store
 
@@ -158,7 +161,7 @@ def test_the_neo4j_factory_hands_the_store_its_ledger():
     with (
         patch("back.core.graphdb.neo4j.NEO4J_AVAILABLE", True),
         patch("back.core.graphdb.engine_config.resolve_neo4j_connection", return_value={"uri": "bolt://x"}),
-        patch("back.core.graphdb.neo4j.Neo4jStore.Neo4jStore") as store_cls,
+        patch("back.core.graphdb.neo4j.Store.Store") as store_cls,
         patch.object(InferredTripleLedger, "for_domain", return_value=ledger),
     ):
         GraphDBFactory()._create_neo4j(domain, SimpleNamespace(), engine_config={})

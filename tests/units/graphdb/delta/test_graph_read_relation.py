@@ -4,7 +4,7 @@ A Lakehouse domain read through Lakehouse//RT whose ``…_data`` is the
 ``microbatch`` materialized view over the slots alone (its stored fingerprint
 says so) reads ``…_graph`` / ``…_data`` as inline subqueries over ``…_slots``
 (∪ ``…_inferred``); every other domain keeps the views. The swap happens in
-``DeltaFlatStore._sql_relation``, on the store's own client.
+``ReadStore._sql_relation``, on the store's own client.
 """
 
 from __future__ import annotations
@@ -16,14 +16,15 @@ import pytest
 import sqlglot
 
 from back.core.errors import InfrastructureError
-from back.core.graphdb.delta import DeltaFlatStore, GraphReadRelation, MaterializedViewBuilder
+from back.core.graphdb.delta import GraphReadRelation, MaterializedViewBuilder
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.delta.MaterializedViewBuilder import TRIGGER_ON_UPDATE
 from back.core.helpers import effective_graph_query_table
 
 pytestmark = pytest.mark.unit
 
 _MODULE = importlib.import_module("back.core.graphdb.delta.GraphReadRelation")
-_STORE_MODULE = importlib.import_module("back.core.graphdb.delta.DeltaFlatStore")
+_STORE_MODULE = importlib.import_module("back.core.graphdb.delta.ReadStore")
 _STEM = "cat.sch.triplestore_dom_V3"
 _SLOTS, _INFERRED = f"{_STEM}_slots", f"{_STEM}_inferred"
 _GRAPH, _DATA = f"{_STEM}_graph", f"{_STEM}_data"
@@ -118,7 +119,7 @@ def _decide(warehouse, domain=None):
 
 
 def _store(warehouse, domain=None):
-    return DeltaFlatStore(warehouse, domain=domain or _domain(), settings=SimpleNamespace())
+    return MaterializedStore(warehouse, domain=domain or _domain(), settings=SimpleNamespace())
 
 
 class TestDecision:
@@ -298,7 +299,7 @@ class TestStoreSwap:
         assert store._sql_relation(_GRAPH) == _GRAPH and store._sql_relation(_DATA) == _DATA
 
     def test_a_raw_store_never_swaps(self, rt):
-        store = DeltaFlatStore(_Warehouse())
+        store = MaterializedStore(_Warehouse())
 
         assert store._sql_relation(_GRAPH) == _GRAPH
 

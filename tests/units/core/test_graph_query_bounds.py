@@ -72,7 +72,9 @@ class TestWarehouseStatementTimeout:
 
 class TestDeltaStoreBoundsReads:
     def test_execute_query_passes_timeout_to_warehouse(self, monkeypatch):
-        from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+        from back.core.graphdb.delta.MaterializedStore import (
+            MaterializedStore,
+        )
 
         monkeypatch.setattr(
             "back.core.query_limits.get_graph_query_timeout_s", lambda: 42
@@ -82,7 +84,7 @@ class TestDeltaStoreBoundsReads:
         client = MagicMock()
         client.sql = sql_service
 
-        store = object.__new__(DeltaFlatStore)
+        store = object.__new__(MaterializedStore)
         store._client = client
         out = store.execute_query("SELECT 1")
 
@@ -98,9 +100,9 @@ class TestLakebaseStatementTimeoutReset:
     (a bulk write/DDL) and cancels it mid-flight."""
 
     def _store(self, cur):
-        from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+        from back.core.graphdb.lakebase.FlatStore import FlatStore
 
-        store = object.__new__(LakebaseFlatStore)
+        store = object.__new__(FlatStore)
         store._schema = "s"
         conn = MagicMock()
         conn.__enter__ = Mock(return_value=conn)

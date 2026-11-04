@@ -1,0 +1,296 @@
+# Graph DB cloisonnement — diagram refresh + hat/capability test coverage
+
+## Context
+Follow-up to the Phase 4 lock-in (see `benoitcayladbx_2026-10-31.log`). Two
+items: regenerate the class-hierarchy diagram image from the updated source, and
+close the test-coverage gaps on the seams the refactor introduced — the
+virtual/materialized **hats** and the four factory-vended **capability
+accessors**, which were previously only exercised indirectly.
+
+## Changes
+1. `docs/diagrams/class-hierarchy.png` (regenerated): rendered from the updated
+   `.mmd` (local `mmdc`/npm unavailable → rendered via mermaid.ink with pako
+   compression). Now shows the `GraphBackend` → `MaterializedGraphBackend` /
+   `VirtualBackend` hats, the Delta split, and the capability ABCs + impls.
+2. `tests/units/graphdb/test_backend_hats_and_capabilities.py` (new, 21 tests):
+   - **Hats**: a Delta `view` store is a `VirtualBackend` (and `GraphBackend`)
+     with **no** `create_table`/`drop_table`/`insert_triples` surface; a Delta
+     `table` store is a `MaterializedGraphBackend` exposing that surface. The
+     `engine="view"` factory path yields a real `DeltaViewStore` (not mocked),
+     and the virtual store keeps its companion read flags (`supports_adjacency`
+     /`entity_search`/`props` = True, inference-purge = False).
+   - **classify_store**: Delta (table + view) → `delta`, Lakebase → `lakebase`,
+     Neo4j → `neo4j`, unknown → `""`.
+   - **Capability accessors**: `get_builder` / `get_health_probe` /
+     `get_provisioner` / `get_simulation` vend the right per-engine impl for an
+     explicit `engine=`, and auto-resolve from the domain's `graph_backend`
+     (databricks→delta, lakebase→lakebase, neo4j→no auto builder/probe). Pins
+     that Delta has no provisioner and that unknown kinds return `None`.
+
+## Modified / added files
+- docs/diagrams/class-hierarchy.png (regenerated)
+- tests/units/graphdb/test_backend_hats_and_capabilities.py (new)
+
+## Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9862 passed, 326 skipped,
+8 deselected** (+21 new), on a cleared cache. Architecture suite (incl. import
+boundary) green.
+
+### Live scenario chain (explicit request)
+`ONTOBRICKS_SCENARIO_LIVE=1 ONTOBRICKS_SCENARIO_CHAIN=1 uv run --frozen pytest
+-m scenario` against `fevm-ontobricks-int` → **6 passed, 2 errors** (25m43s).
+- Passed: full_lifecycle, scenario_00_purge, scenario_01_generate_live,
+  scenario_02_collab_lifecycle, scenario_03_rules_analysis,
+  scenario_validation — the whole generate → build → collab → rules → analysis
+  journey is green live on the refactored graph backend.
+- Errored (setup fixture, not assertions, not a code regression):
+  scenario_04_metadata_integrity, scenario_05_zero_copy_entity_features —
+  both fail creating scratch UC tables under `benoit_cayla.customer` with
+  `Unauthorized access to Org: 7474660131088429` (a Unity Catalog permission
+  issue on the int workspace, unrelated to the cloisonnement work).
+
+---
+
+# Fix: Explorer sim-union crash on a missing Lakebase sandbox
+
+## Context
+Explorer search over a simulation failed with a misleading toast "Graph refresh
+failed: Graph expansion exceeded gateway time limit". Root cause (not a timeout):
+a simulation marked `ready` in the registry had lost its physical Lakebase
+sandbox table (`<graph>__sim_<id>`) — the graph was rebuilt/re-synced after the
+run. `LakebaseSimulationUnion.ensure` ran `CREATE OR REPLACE VIEW … FROM
+<sandbox>` blindly, so the missing table raised `psycopg.UndefinedTable`, wrapped
+as `InfrastructureError(502)`; the Explorer maps any such 502 to the generic
+gateway-timeout message. Not a regression from the backend cloisonnement
+refactor (the migrated `Simulation.explorer_relation` is behaviour-identical
+facade delegation).
+
+## Changes
+1. `src/back/core/graphdb/lakebase/_companion_ddl.py`: add `relation_exists(cur,
+   relation)` — a cheap `to_regclass` existence probe for a physical table/view.
+2. `src/back/core/graphdb/lakebase/LakebaseSimulationUnion.py`: `ensure()` now
+   probes the sandbox table before building the union view and raises a clear
+   `ValidationError` (400) — "re-run the simulation" — instead of letting
+   `CREATE VIEW` blow up with an opaque 502. Benefits every caller (Explorer,
+   API, GraphQL, MCP).
+3. `src/front/static/query/js/query-sigmagraph.js`: surface a structured backend
+   `data.message` before the generic 502 gateway-timeout fallback, so the real,
+   actionable error is shown (the fallback now only applies to a bodiless proxy
+   502).
+4. `tests/units/graphdb/test_lakebase_sim_union_guard.py` (new): asserts the
+   guard raises `ValidationError` with no `CREATE VIEW` when the sandbox is
+   missing, and still builds the view when it exists.
+5. `tests/units/simulation/test_simulation_runner_api.py`: updated the fake
+   cursor to answer the new existence probe.
+
+## Modified / added files
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/LakebaseSimulationUnion.py
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/graphdb/test_lakebase_sim_union_guard.py (new)
+- tests/units/simulation/test_simulation_runner_api.py
+
+## Test result
+`uv run --frozen pytest -q -m "not scenario"` → **9864 passed, 326 skipped,
+8 deselected** (+2 new).
+
+## User remediation
+For the existing broken sim (`cust360auto` V5): re-run the simulation (recreates
+the sandbox table) or delete the stale one. The guard now returns a clear
+message instead of the misleading timeout toast.
+
+### Follow-up: `relation_exists` must be row-factory-agnostic
+The first cut of `relation_exists` read `cur.fetchone()[0]`, which crashed with
+`KeyError: 0` on the Lakebase cursors — they use `row_factory=dict_row`, so rows
+are keyed by column name, not index. This surfaced at ~92% of a fresh simulation
+run (`Runner._execute` → `Sandbox.ensure_explorer_views`). Rewrote the probe as
+`SELECT 1 WHERE to_regclass(%s) IS NOT NULL` + `cur.fetchone() is not None`, which
+never indexes a row and therefore works under any row factory (matching the
+existing `cur.fetchone() is None` existence-probe convention in this module).
+Tests updated accordingly. `uv run --frozen pytest -q -m "not scenario"` →
+**9864 passed, 326 skipped**.
+
+---
+
+# Explorer defaults to the live inferred view on open
+
+## Context
+The shared graph-source picker (`KgGraphSource`) restored the last stored source
+from `sessionStorage` when the Explorer opened, so re-entering the Explorer could
+land on a sandbox/asserted view the user picked elsewhere (Query/Chat) instead of
+the live inferred graph. Requested behavior: opening the Explorer should default
+to the live inferred view, not "the last one".
+
+## Changes
+1. `src/front/static/query/js/query-graph-source.js` — `wanted(explicit,
+   forceDefault)` now returns `LIVE_INFERRED` instead of the stored value when
+   `forceDefault` is set; `populate()` forwards `opts.forceDefault`. Resolution
+   order on open becomes: explicit arg → `?simulation=` URL → **live inferred**
+   (stored value is skipped). A deep-link `?simulation=` still wins.
+2. `src/front/static/query/js/query-sigmagraph.js` — `_loadSimulationSelect`
+   forwards `forceDefault`; the Explorer `init()` open path passes
+   `forceDefault: true`. The legacy (non-`KgGraphSource`) fallback honors it too.
+   Manual refresh (`loadSimulations()`) stays unforced, preserving the current
+   selection; the Query/API page (`query-api.js`) is unchanged.
+
+## Modified files
+- `src/front/static/query/js/query-graph-source.js`
+- `src/front/static/query/js/query-sigmagraph.js`
+
+## Tests
+Updated the JS-string assertions in `tests/units/front/test_kg_graph_source.py`
+and `tests/units/front/test_explorer_simulation_select.py` (new
+`test_explorer_open_defaults_to_live_inferred`).
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**.
+
+---
+
+# Drop redundant Lakebase/Neo4j prefixes from backend classes/modules
+
+## Context
+Inside `src/back/core/graphdb/lakebase/` and `…/neo4j/` every class/module
+repeated the backend name already carried by the package path (`LakebaseFlatStore`,
+`Neo4jStore`, …). Stripped the prefix so the package path is the only namespace.
+Delta is intentionally out of scope for this pass (not requested).
+
+## Changes
+1. `git mv` + class rename for 18 modules:
+   - lakebase: `LakebaseBase→Base`, `LakebaseFlatStore→FlatStore`,
+     `LakebaseHealthProbe→HealthProbe`, `LakebaseProvisioner→Provisioner`,
+     `LakebaseGraphProvisioner→InstanceProvisioner` (the provisioning engine —
+     distinct from the `GraphProvisioner` ABC facade), `LakebaseGraphBuilder→Builder`,
+     `LakebaseSimulation→Simulation`, `LakebaseSimulationStore→SimulationStore`,
+     `LakebaseSimulationUnion→SimulationUnion`, plus `LakebaseGraphPoolError→PoolError`
+     in `pool.py`.
+   - neo4j: `Neo4jStore→Store`, `Neo4jConnection→Connection`, `Neo4jReadOps→ReadOps`,
+     `Neo4jWriteOps→WriteOps`, `Neo4jSchemaMap→SchemaMap`, `Neo4jHealthProbe→HealthProbe`,
+     `Neo4jProvisioner→Provisioner`, `Neo4jSimulation→Simulation`,
+     `Neo4jGraphBuilder→Builder`.
+   - Where a stripped name would collide with a root ABC (`GraphBuilder`,
+     `GraphProvisioner`), a distinct name was chosen (`Builder`, `InstanceProvisioner`).
+2. Rewrote all references (imports, `__all__`, `patch(...)` targets, docstrings)
+   across `src/`, `tests/`, `docs/`, `baseline.json`, and the `.mmd` diagrams.
+   Module functions keeping a backend name on purpose (`is_neo4j_password_from_secret`,
+   `resolve_lakebase_graph_schema`, `get_lakebase_graph_pool`) were left untouched.
+3. Where a single module imports both the lakebase and neo4j impl of a
+   now-identically-named capability (`Builder`/`HealthProbe`/`Provisioner`/
+   `Simulation`), imports are aliased (`… as LakebaseBuilder` / `… as Neo4jBuilder`).
+   The factory keeps them in mutually-exclusive `if` branches, so no alias needed there.
+
+## Tests
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
+(explicit `PYTEST_EXIT=0`; architecture import-boundary + ratchet baseline updated).
+
+---
+
+# GraphDB: interfaces/ package + Delta de-prefix (backend structure unification)
+
+## Context
+Follow-up to the cloisonnement + de-prefix work. The seven backend ABCs were
+loose modules at the `graphdb/` root and the `_starter_kit/` was a copy-paste
+template rather than a contract; Delta still carried its `Delta` prefix while
+Lakebase/Neo4j were already de-prefixed. Goal: one home for the contract and a
+uniform capability file set across the three backend folders. Spec:
+`docs/superpowers/specs/2026-11-02-graphdb-interfaces-package-and-structure-unification-design.md`.
+
+## Changes
+1. `src/back/core/graphdb/interfaces/` — renamed from `_starter_kit/`; deleted
+   `ExampleStore.py` and `README.md`. Moved the seven contracts here:
+   `GraphBackend`, `MaterializedGraphBackend`, `VirtualBackend`, `GraphBuilder`,
+   `GraphHealthProbe`, `GraphProvisioner`, `GraphSimulation`. New `__init__.py`
+   re-exports them.
+2. `src/back/core/graphdb/__init__.py` — dropped the ABC re-exports (kept
+   `GraphDBFactory`, `get_graphdb`, constants). Every caller now imports from
+   `back.core.graphdb.interfaces` (incl. `reasoning/swrl/SWRLEngine.py`); no shim.
+3. Delta de-prefix: `DeltaBase→Base`, `DeltaReadStore→ReadStore`,
+   `DeltaMaterializedStore→MaterializedStore`, `DeltaViewStore→ViewStore`,
+   `DeltaGraphBuilder→Builder`, `DeltaHealthProbe→HealthProbe`,
+   `DeltaSimulation→Simulation`, `DeltaOverviewStats→OverviewStats`,
+   `DeltaTripleStoreBuildPipeline→BuildPipeline`. Each backend now presents the
+   same capability files (`Builder`/`HealthProbe`/`Simulation`, plus
+   `Provisioner` for lakebase/neo4j; Delta has none by design).
+4. Collisions where one module imports two backends' same-named class are
+   aliased (`… as DeltaBuilder` / `… as LakebaseHealthProbe`) in
+   `tests/units/graphdb/test_backend_hats_and_capabilities.py`.
+5. `tests/units/architecture/baseline.json` — relocated the moved/renamed keys
+   (same LOC values); ratchet confirms shrink-only.
+6. Docs: `docs/backend.md` Engine-integration section rewritten around
+   `interfaces/` (new "5. Implementing the interfaces" folding the old
+   starter-kit README: hat choice + capability table + import boundary);
+   `docs/architecture.md` references updated; `docs/diagrams/class-hierarchy.mmd`
+   updated (backend-qualified concrete nodes) and `class-hierarchy.png`
+   regenerated.
+
+## Modified files
+- `src/back/core/graphdb/interfaces/**` (moved + new `__init__`)
+- `src/back/core/graphdb/__init__.py`, `GraphDBFactory.py`
+- `src/back/core/graphdb/delta/**` (9 modules renamed)
+- `src/back/core/reasoning/swrl/SWRLEngine.py` + ~70 import sites across `src/`/`tests/`
+- `tests/units/architecture/baseline.json`
+- `docs/backend.md`, `docs/architecture.md`, `docs/diagrams/class-hierarchy.{mmd,png}`
+
+## Tests
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
+(explicit `EXIT=0`). Architecture import-boundary + size-budget + ratchet all green.
+
+---
+
+# Decompose the GraphBackend god-class into focused mixins
+
+## Context
+`interfaces/GraphBackend.py` had grown to 1170 LOC — the single largest class in
+the graph DB layer and well over the 800-LOC architecture budget. It mixed the
+core read contract (abstract methods + capability flags + connection/schema/sync
+hooks) with a huge pile of concrete default-SQL implementations (stats,
+entity/preview lookup, traversal/reasoning, companion probing). Split the
+default implementations into four cohesive mixins so the root class carries only
+the contract, with zero behavioural change (every subclass inherits the exact
+same methods by composition).
+
+## Changes
+1. `src/back/core/graphdb/interfaces/ReadStatsMixin.py` — new. `ReadStatsMixin`:
+   `get_inferred_triple_count`, `_distinct_count_expr`, `get_aggregate_stats`,
+   `get_type_distribution`, `query_triples_for_analysis`,
+   `_filter_analysis_triples_in_python`, `get_predicate_distribution`.
+2. `src/back/core/graphdb/interfaces/EntityQueryMixin.py` — new.
+   `EntityQueryMixin`: `find_subjects_by_type`, `resolve_subject_by_id`,
+   `get_entity_metadata`, `get_triples_for_subjects`,
+   `get_triples_page_for_subjects`, `get_predicates_for_type`,
+   `paginated_triples`, `paginated_count`, `find_seed_subjects`,
+   `find_preview_seeds`, `find_subjects_by_patterns`.
+3. `src/back/core/graphdb/interfaces/TraversalMixin.py` — new. `TraversalMixin`:
+   `bfs_traversal`, `transitive_closure`, `symmetric_expand`, `shortest_path`,
+   `delete_cohort_triples`, `expand_entity_neighbors`.
+4. `src/back/core/graphdb/interfaces/SearchCacheMixin.py` — new.
+   `SearchCacheMixin`: `search_cache_mode`, `_companion_tables_exist`,
+   `set_search_cache_mode`, `_raise_if_force_on_missing`, `_props_table_for_read`,
+   `adjacency_table_ids`, `rebuild_adjacency`, `adjacency_ready`,
+   `entity_search_table_id`, `entity_search_asserted_table_id`, `props_table_id`,
+   `entity_search_ready`.
+5. `src/back/core/graphdb/interfaces/GraphBackend.py` — reduced to the read
+   contract; now `class GraphBackend(ReadStatsMixin, EntityQueryMixin,
+   TraversalMixin, SearchCacheMixin, ABC)`. Keeps the abstract methods, SQL
+   helpers (`_sql_escape`/`_sql_relation`/`sql_table_reference`/`sql_flavor`),
+   capability flags, schema/sync hooks, and `get_query_translator`. Class drops
+   out of the oversized-classes baseline entirely.
+6. The mixins are implementation detail (not exported by `interfaces/__init__.py`,
+   `Mixin` suffix, "implementation detail" docstrings). Files are named after
+   their class to satisfy the one-class-per-file architecture rule
+   (`test_class_per_file`), which overrides the underscore-private file naming.
+7. `tests/units/graphdb/test_graphdb_adjacency_contract.py` — patch target for
+   `props_page_sql` moved to the `EntityQueryMixin` module.
+8. `tests/units/architecture/baseline.json` — ratchet removed the stale
+   `GraphBackend` oversized entry (shrink-only).
+
+## Modified files
+- `src/back/core/graphdb/interfaces/GraphBackend.py`
+- `src/back/core/graphdb/interfaces/ReadStatsMixin.py` (new)
+- `src/back/core/graphdb/interfaces/EntityQueryMixin.py` (new)
+- `src/back/core/graphdb/interfaces/TraversalMixin.py` (new)
+- `src/back/core/graphdb/interfaces/SearchCacheMixin.py` (new)
+- `tests/units/graphdb/test_graphdb_adjacency_contract.py`
+- `tests/units/architecture/baseline.json`
+
+## Tests
+`uv run --frozen pytest -q -m "not scenario"` → **9865 passed, 326 skipped**
+(explicit `EXIT=0`). Architecture class-per-file + size-budget + ratchet green.

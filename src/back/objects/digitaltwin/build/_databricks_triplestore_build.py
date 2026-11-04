@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
-    DeltaTripleStoreBuildPipeline,
-)
 from back.objects.digitaltwin.models import DomainSnapshot
 
 
@@ -29,12 +26,14 @@ def run_databricks_triplestore_build(
     build_kind: str = "ui",
 ) -> None:
     """Entry point for ``POST /dtwin/databricks-build/start`` worker threads."""
-    DeltaTripleStoreBuildPipeline(
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    GraphDBFactory.get_builder(
+        domain, settings, engine="delta"
+    ).run_triplestore_build(
         tm=tm,
         task_id=task_id,
-        domain=domain,
         domain_snap=domain_snap,
-        settings=settings,
         host=host,
         token=token,
         warehouse_id=warehouse_id,
@@ -45,4 +44,4 @@ def run_databricks_triplestore_build(
         ontology_config=ontology_config,
         base_uri=base_uri,
         build_kind=build_kind,
-    ).run()
+    )

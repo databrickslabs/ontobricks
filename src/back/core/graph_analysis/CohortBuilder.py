@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 
@@ -642,8 +642,7 @@ class CohortBuilder:
         triples = self._build_cohort_triples(rule, result)
         inserted = 0
         if triples:
-            from back.core.graphdb.delta import InferredTripleLedger
-            InferredTripleLedger.record_for(self._store, triples)  # Neo4j lists them first
+            self._store.record_inferred(triples)  # Neo4j lists them first
             inserted = int(self._store.insert_triples(self._graph_name, triples))
         if (
             (deleted != 0 or inserted > 0)

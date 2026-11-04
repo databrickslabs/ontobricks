@@ -8,6 +8,14 @@
 // ENTITY DETAILS PANEL
 // =====================================================
 
+/** Simulations run on Lakebase graphs only (see back/objects/simulation). */
+function _simulationAvailable() {
+    const cfg = window.__TRIPLESTORE_CONFIG || {};
+    const backend = String(cfg.triple_store_backend || 'lakebase').toLowerCase();
+    const engine = String(cfg.graph_engine || 'lakebase').toLowerCase();
+    return backend === 'lakebase' && engine === 'lakebase';
+}
+
 async function showEntityDetails(entity) {
     const container = document.getElementById('entityDetailsContent');
     if (!container) return;
@@ -466,10 +474,12 @@ async function showEntityDetails(entity) {
         `;
     }
 
-    // Unity Catalog function actions (each takes the entity ID as its only argument)
+    // Behaviour: UC functions, jobs, SWRL rules, and what-if — one section.
     const actions = entityMapping?.actions || classInfo?.actions || [];
+    const businessRules = classInfo?.businessRules || [];
+    let behaviourBody = '';
     if (actions.length > 0) {
-        const buttons = actions.map(action => {
+        behaviourBody += actions.map(action => {
             const isJob = typeof _entityActionIsJob === 'function' && _entityActionIsJob(action);
             const fullName = action.fullName
                 || (isJob ? ('job:' + action.job_id) : [action.catalog, action.schema, action.function].filter(Boolean).join('.'));
@@ -489,21 +499,28 @@ async function showEntityDetails(entity) {
                 </div>
             `;
         }).join('');
-        html += `
-            <div class="entity-detail-section">
-                <h6><i class="bi bi-lightning-charge"></i> Actions</h6>
-                ${buttons}
+    }
+    if (businessRules.length > 0 && typeof renderBusinessRuleSection === 'function') {
+        behaviourBody += renderBusinessRuleSection(entity.id, businessRules);
+    }
+    if (entity.id && _simulationAvailable()) {
+        const simUrl = '/simulation/?section=scenarios'
+            + '&entity=' + encodeURIComponent(entity.id)
+            + '&label=' + encodeURIComponent(displayLabel || '');
+        behaviourBody += `
+            <div class="entity-detail-item">
+                <a href="${escapeHtml(simUrl)}" class="btn btn-sm btn-outline-primary w-100"
+                   title="Open a simulation sandbox seeded with this entity's neighbourhood">
+                    <i class="bi bi-sliders2-vertical me-1"></i>Simulate from here
+                </a>
             </div>
         `;
     }
-
-    // SWRL business rules declared on the class — applied to this entity only
-    const businessRules = classInfo?.businessRules || [];
-    if (businessRules.length > 0 && typeof renderBusinessRuleSection === 'function') {
+    if (behaviourBody) {
         html += `
             <div class="entity-detail-section">
-                <h6><i class="bi bi-diagram-3"></i> Inference rules</h6>
-                ${renderBusinessRuleSection(entity.id, businessRules)}
+                <h6><i class="bi bi-lightning"></i> Behaviour</h6>
+                ${behaviourBody}
             </div>
         `;
     }

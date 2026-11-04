@@ -183,6 +183,32 @@ LINKS TO THE KNOWLEDGE GRAPH (VERY IMPORTANT)
 """
 
 
+def _tool_context(
+    host: str,
+    token: str,
+    base_url: str,
+    session_cookies: dict,
+    session_headers: Optional[dict],
+    registry_params: dict,
+    domain_name: str,
+) -> ToolContext:
+    """Build the loopback ToolContext for one Graph Chat turn."""
+    params = dict(registry_params or {})
+    include_inferred = params.pop("include_inferred", True)
+    simulation_id = str(params.pop("simulation_id", "") or "").strip()
+    return ToolContext(
+        host=host.rstrip("/") if host else "",
+        token=token or "",
+        dtwin_base_url=base_url,
+        dtwin_session_cookies=session_cookies or {},
+        dtwin_session_headers=session_headers or {},
+        dtwin_registry_params=params,
+        dtwin_domain_name=domain_name or "",
+        dtwin_include_inferred=bool(include_inferred),
+        dtwin_simulation_id=simulation_id,
+    )
+
+
 @trace_agent(name="dtwin_chat")
 def run_agent(
     host: str,
@@ -228,14 +254,14 @@ def run_agent(
         base_url,
     )
 
-    ctx = ToolContext(
-        host=host.rstrip("/") if host else "",
-        token=token or "",
-        dtwin_base_url=base_url,
-        dtwin_session_cookies=session_cookies or {},
-        dtwin_session_headers=session_headers or {},
-        dtwin_registry_params=registry_params or {},
-        dtwin_domain_name=domain_name or "",
+    ctx = _tool_context(
+        host,
+        token,
+        base_url,
+        session_cookies or {},
+        session_headers,
+        registry_params or {},
+        domain_name or "",
     )
 
     result = AgentResult(success=False)

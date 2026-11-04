@@ -152,7 +152,7 @@ class TestFlatStoreSlotsView:
     @pytest.fixture
     def store(self):
         pytest.importorskip("psycopg")
-        from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+        from back.core.graphdb.lakebase.FlatStore import FlatStore as LakebaseFlatStore
 
         auth = MagicMock()
         auth.database = "appdb"

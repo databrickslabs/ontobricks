@@ -84,7 +84,7 @@ def env(monkeypatch):
     import back.core.streaming as streaming
     from back.objects.registry.RegistryService import RegistryService
 
-    flat_store = importlib.import_module("back.core.graphdb.lakebase.LakebaseFlatStore")
+    flat_store = importlib.import_module("back.core.graphdb.lakebase.FlatStore")
 
     registry = _Registry()
     _Runner.pipelines, _Runner.error = {}, None

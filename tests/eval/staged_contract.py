@@ -412,7 +412,7 @@ def _c_empty_candidates_when_fully_anchored(example, _c) -> bool:
 
 
 def _c_does_not_parse(example, constraint) -> bool:
-    banned = {"ai_parse_document", "check_owl_pitfalls"}
+    banned = {"ai_parse_document"}
     stage = example.get("input", {}).get("stage", "")
     if stage != "detect":
         # Non-detection rows (e.g. completion) never receive a tool surface

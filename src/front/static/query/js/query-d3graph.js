@@ -869,7 +869,10 @@ async function buildGraph(results, columns) {
     
     // Filter entities:
     // - If entity types selected: keep entities of those types OR involved in selected relationships
+    // - When the subgraph has edges, drop subjects with no remaining link
+    //   (capped hop-2 payloads otherwise paint unlinked Interaction nodes)
     // - Always filter out empty/invalid entities
+    const hasEdges = filteredRelationships.length > 0;
     const filteredEntities = Array.from(entities.values()).filter(entity => {
         // If Visual Search filters are active with entity types, apply type filter
         if (hasSearchFilters && selectedEntityTypes.length > 0) {
@@ -881,6 +884,13 @@ async function buildGraph(results, columns) {
                 return false;
             }
         }
+
+        if (relationshipEntityIds.has(entity.id)) return true;
+
+        if (hasEdges) {
+            console.log('Filtering out unlinked entity:', entity.id);
+            return false;
+        }
         
         // Keep if it has a real label
         if (entity.hasRealLabel && entity.label) return true;
@@ -890,9 +900,6 @@ async function buildGraph(results, columns) {
             k.toLowerCase() !== 'type' && k.toLowerCase() !== 'label'
         ).length;
         if (attrCount > 0) return true;
-        
-        // Keep if it's involved in relationships
-        if (relationshipEntityIds.has(entity.id)) return true;
         
         // Keep if it has a type (it's a real instance)
         if (entity.type) return true;

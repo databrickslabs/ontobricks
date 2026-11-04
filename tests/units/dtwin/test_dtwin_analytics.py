@@ -141,7 +141,7 @@ def test_job_metrics_readback_uses_build_warehouse_client(monkeypatch):
     client = SimpleNamespace(execute_query=lambda sql: [])
     calls = []
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings, *, for_write=False: (
             calls.append((domain, settings, for_write)) or client
         ),

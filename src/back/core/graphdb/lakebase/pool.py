@@ -24,7 +24,7 @@ from back.core.databricks.lakebase.LakebaseConnectionPool import (
 from back.core.databricks.lakebase.psycopg_gate import require_psycopg
 
 
-class LakebaseGraphPoolError(RuntimeError):
+class PoolError(RuntimeError):
     """Raised when the graph-db pool cannot serve a connection."""
 
 
@@ -44,7 +44,7 @@ def get_lakebase_graph_pool(
     """Return the shared Lakebase pool bound to the graph workload.
 
     Wraps :func:`back.core.databricks.lakebase.get_lakebase_pool` with the
-    ``ontobricks-graphdb`` application label and :class:`LakebaseGraphPoolError`
+    ``ontobricks-graphdb`` application label and :class:`PoolError`
     so graph connection failures surface as a graph-specific error. The pool
     key is the full connection identity, so the graph engine never shares a
     pool with the registry even when both point at the same Lakebase instance.
@@ -54,5 +54,5 @@ def get_lakebase_graph_pool(
         schema,
         database,
         application_name=APPLICATION_NAME_GRAPH,
-        error_factory=LakebaseGraphPoolError,
+        error_factory=PoolError,
     )

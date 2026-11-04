@@ -12,8 +12,9 @@ constructs the graph DB backend for a domain:
   SQL warehouse (health probes and quality SQL against a UC view/table;
   never the Lakehouse//RT query warehouse).
 
-New engines are pluggable — copy ``_starter_kit/`` into
-``back/core/graphdb/<engine>/`` and register a ``_create_<engine>`` branch.
+New engines are pluggable — implement the contracts in
+``back.core.graphdb.interfaces`` under ``back/core/graphdb/<engine>/`` and
+register a ``_create_<engine>`` branch.
 The *engine_config* JSON is engine-specific (admin: Settings → Graph DB).
 """
 
@@ -111,7 +112,7 @@ class GraphDBFactory:
             for_write: Use the build SQL warehouse for Delta DDL and writes.
 
         Returns:
-            GraphDBBackend instance or *None* if configuration is incomplete.
+            GraphBackend instance or *None* if configuration is incomplete.
         """
         if engine is None:
             return self._create_auto(domain, settings, for_write=for_write)
@@ -147,7 +148,7 @@ class GraphDBFactory:
         *,
         engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
-        """Instantiate :class:`Neo4jStore` against a named Settings connection.
+        """Instantiate :class:`Store` against a named Settings connection.
 
         Resolves ``domain.info.neo4j_connection`` against
         ``engine_config.connections`` (or a nested graph_engine_config root).
@@ -164,21 +165,23 @@ class GraphDBFactory:
                 resolve_neo4j_connection,
             )
             from back.core.graphdb.neo4j import NEO4J_AVAILABLE
-            from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+            from back.core.graphdb.neo4j.Store import Store
             from shared.config.constants import DEFAULT_GRAPH_NAME
         except ImportError as e:
             logger.warning("Neo4j graph engine requires the 'neo4j' driver: %s", e)
             return None
 
         if not NEO4J_AVAILABLE:
-            logger.warning("Neo4j graph backend unavailable (neo4j driver not installed)")
+            logger.warning(
+                "Neo4j graph backend unavailable (neo4j driver not installed)"
+            )
             return None
 
         info = domain.info or {}
         conn_name = str(info.get("neo4j_connection") or "").strip()
         if not conn_name:
             logger.warning(
-                "Neo4jStore: domain has no neo4j_connection — pick one in "
+                "Store: domain has no neo4j_connection — pick one in "
                 "Domain → General → Knowledge Graph"
             )
             return None
@@ -196,7 +199,7 @@ class GraphDBFactory:
             profile = resolve_neo4j_connection({"neo4j": root_or_section}, conn_name)
         if not profile:
             logger.warning(
-                "Neo4jStore: connection %r not found in Settings → Neo4j",
+                "Store: connection %r not found in Settings → Neo4j",
                 conn_name,
             )
             return None
@@ -208,16 +211,16 @@ class GraphDBFactory:
         from back.core.graphdb.delta import InferredTripleLedger
 
         try:
-            return Neo4jStore(
+            return Store(
                 db_name=db_name,
                 engine_config=cfg,
                 inferred_ledger=InferredTripleLedger.for_domain(domain, settings),
             )
         except (ValueError, NotImplementedError) as exc:
-            logger.warning("Neo4jStore configuration error: %s", exc)
+            logger.warning("Store configuration error: %s", exc)
             return None
         except Exception as e:  # noqa: BLE001
-            logger.exception("Failed to create Neo4jStore: %s", e)
+            logger.exception("Failed to create Store: %s", e)
             return None
 
     def _create_auto(
@@ -256,7 +259,9 @@ class GraphDBFactory:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _read_global_config(domain: Any, settings: Optional[Any], accessor, *, force: bool = False):
+    def _read_global_config(
+        domain: Any, settings: Optional[Any], accessor, *, force: bool = False
+    ):
         """Call *accessor(global_config_service, host, token, registry_cfg)*.
 
         Returns ``None`` on any error (registry not configured, etc.).
@@ -337,7 +342,10 @@ class GraphDBFactory:
         for it; every other combination materializes, because Lakebase and
         Neo4j domains have no other source for Graph Analytics.
         """
-        if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
+        if (
+            GraphDBFactory._resolve_triple_store_backend(domain, settings)
+            != "databricks"
+        ):
             return DEFAULT_LAKEHOUSE_MATERIALIZATION
         try:
             info = getattr(domain, "info", None)
@@ -389,7 +397,7 @@ class GraphDBFactory:
     def _create_delta_view(
         self, domain: Any, settings: Optional[Any] = None
     ) -> Optional[Any]:
-        """Instantiate a raw, read-only :class:`DeltaFlatStore` on a SQL warehouse.
+        """Instantiate a raw, read-only :class:`ViewStore` on a SQL warehouse.
 
         Bound with ``domain=None`` so it operates directly on the FQNs passed in
         (health probes against a UC view/table, SHACL/DQ SQL). Uses the Build
@@ -402,7 +410,7 @@ class GraphDBFactory:
                 resolve_build_warehouse_id,
                 resolve_use_cloud_fetch,
             )
-            from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+            from back.core.graphdb.delta.ViewStore import ViewStore
 
             if settings is not None:
                 host, token = get_databricks_host_and_token(domain, settings)
@@ -434,7 +442,7 @@ class GraphDBFactory:
                 use_sea=False,
                 use_cloud_fetch=use_cloud_fetch,
             )
-            return DeltaFlatStore(client)
+            return ViewStore(client)
         except Exception as e:
             logger.exception("Failed to create Delta view store: %s", e)
             return None
@@ -446,7 +454,7 @@ class GraphDBFactory:
         *,
         engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
-        """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance.
+        """Instantiate :class:`FlatStore` on the bound Lakebase instance.
 
         Authorization note (2026-09-26-domain-obo-graph-access-design): Lakebase
         connects as the app service principal (``PGUSER``) — there is no user
@@ -456,12 +464,12 @@ class GraphDBFactory:
         """
         try:
             from back.core.graphdb.lakebase import LAKEBASE_AVAILABLE
-            from back.core.graphdb.lakebase.LakebaseBase import (
+            from back.core.graphdb.lakebase.Base import (
                 normalize_sync_table_mode,
                 resolve_postgres_database_override,
             )
-            from back.core.graphdb.lakebase.LakebaseFlatStore import (
-                LakebaseFlatStore,
+            from back.core.graphdb.lakebase.FlatStore import (
+                FlatStore,
                 SYNC_MODE_APP,
                 SYNC_MODE_MANAGED,
                 resolve_lakebase_graph_schema,
@@ -542,9 +550,7 @@ class GraphDBFactory:
 
         synced_manager = None
         if sync_mode == SYNC_MODE_MANAGED:
-            synced_manager = self._build_synced_manager(
-                auth, database_override
-            )
+            synced_manager = self._build_synced_manager(auth, database_override)
             if synced_manager is None:
                 logger.warning(
                     "managed_synced requested but SyncedTableManager could not be built — "
@@ -553,7 +559,7 @@ class GraphDBFactory:
                 sync_mode = SYNC_MODE_APP
 
         try:
-            store = LakebaseFlatStore(
+            store = FlatStore(
                 auth,
                 schema=schema,
                 database_override=database_override,
@@ -577,10 +583,12 @@ class GraphDBFactory:
         *,
         for_write: bool = False,
     ) -> Optional[Any]:
-        """Instantiate :class:`DeltaFlatStore` on SQL Warehouse."""
+        """Instantiate :class:`MaterializedStore` on SQL Warehouse."""
         try:
-            from back.core.graphdb.delta.DeltaBase import create_databricks_client
-            from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+            from back.core.graphdb.delta.Base import create_databricks_client
+            from back.core.graphdb.delta.MaterializedStore import (
+                MaterializedStore,
+            )
         except ImportError as exc:
             logger.warning("Delta graph engine unavailable: %s", exc)
             return None
@@ -589,9 +597,9 @@ class GraphDBFactory:
         if client is None:
             return None
         try:
-            return DeltaFlatStore(client, domain=domain, settings=settings)
+            return MaterializedStore(client, domain=domain, settings=settings)
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to create DeltaFlatStore: %s", exc)
+            logger.exception("Failed to create MaterializedStore: %s", exc)
             return None
 
     @staticmethod
@@ -609,7 +617,7 @@ class GraphDBFactory:
             )
 
             project_name = auth.instance_name  # e.g. "ontobricks-app"
-            branch_name = auth.branch_name      # e.g. "demo"
+            branch_name = auth.branch_name  # e.g. "demo"
             logical_db = (database_override or auth.database or "").strip()
             logger.info(
                 "Building SyncedTableManager for project=%r branch=%r logical_db=%r",
@@ -629,6 +637,160 @@ class GraphDBFactory:
                 exc,
             )
             return None
+
+    @classmethod
+    def get_builder(
+        cls,
+        domain: Any,
+        settings: Optional[Any] = None,
+        *,
+        engine: Optional[str] = None,
+        client: Any = None,
+    ) -> Optional[Any]:
+        """Vend the :class:`GraphBuilder` for a domain (or ``None``).
+
+        ``engine="delta"`` forces the Delta/Databricks builder regardless of the
+        domain's triple-store backend — Graph Analytics materializes a Delta
+        snapshot for every backend, so analytics callers request it explicitly.
+        """
+        resolved = engine or cls._builder_engine(domain, settings)
+        if resolved == "delta":
+            from back.core.graphdb.delta.Builder import Builder
+
+            return Builder(domain, settings, client=client)
+        if resolved == "lakebase":
+            from back.core.graphdb.lakebase.Builder import (
+                Builder,
+            )
+
+            return Builder(domain, settings)
+        if resolved == "neo4j":
+            from back.core.graphdb.neo4j.Builder import Builder
+
+            return Builder()
+        return None
+
+    @classmethod
+    def _builder_engine(cls, domain: Any, settings: Optional[Any]) -> Optional[str]:
+        """Map a domain's graph backend to its builder engine key."""
+        backend = cls._resolve_graph_backend(domain)
+        if backend == "databricks":
+            return "delta"
+        if backend == "lakebase":
+            return "lakebase"
+        return None
+
+    @classmethod
+    def get_health_probe(
+        cls,
+        domain: Any,
+        settings: Optional[Any] = None,
+        *,
+        engine: Optional[str] = None,
+    ) -> Optional[Any]:
+        """Vend the :class:`GraphHealthProbe` for a domain (or ``None``).
+
+        ``engine="delta"`` / ``engine="lakebase"`` force a specific backend's
+        probe; otherwise the domain's configured graph backend decides.
+        """
+        resolved = engine or cls._builder_engine(domain, settings)
+        if resolved == "delta":
+            from back.core.graphdb.delta.HealthProbe import HealthProbe
+
+            return HealthProbe(domain, settings)
+        if resolved == "lakebase":
+            from back.core.graphdb.lakebase.HealthProbe import (
+                HealthProbe,
+            )
+
+            return HealthProbe()
+        if resolved == "neo4j":
+            from back.core.graphdb.neo4j.HealthProbe import HealthProbe
+
+            return HealthProbe()
+        return None
+
+    @classmethod
+    def get_provisioner(
+        cls,
+        domain: Any,
+        settings: Optional[Any] = None,
+        *,
+        engine: Optional[str] = None,
+    ) -> Optional[Any]:
+        """Vend the :class:`GraphProvisioner` for a domain (or ``None``)."""
+        resolved = engine or cls._builder_engine(domain, settings)
+        if resolved == "lakebase":
+            from back.core.graphdb.lakebase.Provisioner import (
+                Provisioner,
+            )
+
+            return Provisioner()
+        if resolved == "neo4j":
+            from back.core.graphdb.neo4j.Provisioner import Provisioner
+
+            return Provisioner()
+        return None
+
+    @classmethod
+    def build_warehouse_client(cls, domain: Any, settings: Any) -> Any:
+        """The domain's Delta client on the *build* warehouse, as the caller.
+
+        A read-branch client (the caller's OBO token kept) pointed at the build
+        warehouse: what the incremental readiness / status / realtime routes
+        probe and seed with, outside the graphdb layer.
+        """
+        from back.core.graphdb.delta.Base import create_databricks_client
+        from back.core.helpers import resolve_build_warehouse_id
+
+        return create_databricks_client(
+            domain, settings, warehouse_id=resolve_build_warehouse_id(domain, settings) or None
+        )
+
+    @classmethod
+    def classify_store(cls, store: Any) -> str:
+        """Map a live graph store instance to its backend kind.
+
+        Returns ``"lakebase"`` / ``"delta"`` / ``"neo4j"`` or ``""`` — used by the
+        simulation layer to pick the sandbox implementation without importing a
+        backend package.
+        """
+        from back.core.graphdb.lakebase.Base import Base as LakebaseBase
+
+        if isinstance(store, LakebaseBase):  # the Lakebase hat root: FlatStore and its test doubles
+            return "lakebase"
+        from back.core.graphdb.delta.ReadStore import ReadStore
+
+        if isinstance(store, ReadStore):
+            return "delta"
+        from back.core.graphdb.neo4j.Store import Store
+
+        if isinstance(store, Store):
+            return "neo4j"
+        return ""
+
+    @classmethod
+    def get_simulation(cls, kind: str) -> Optional[Any]:
+        """Vend the :class:`GraphSimulation` for a backend kind (or ``None``).
+
+        Accepts the sandbox dispatch keys (``lakebase`` / ``delta`` / ``neo4j``)
+        and the domain graph-backend key ``databricks`` (≡ Delta).
+        """
+        if kind == "lakebase":
+            from back.core.graphdb.lakebase.Simulation import (
+                Simulation,
+            )
+
+            return Simulation()
+        if kind in ("delta", "databricks"):
+            from back.core.graphdb.delta.Simulation import Simulation
+
+            return Simulation()
+        if kind == "neo4j":
+            from back.core.graphdb.neo4j.Simulation import Simulation
+
+            return Simulation()
+        return None
 
     @classmethod
     def get_graphdb(

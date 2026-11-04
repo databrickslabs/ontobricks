@@ -55,6 +55,8 @@ class ToolContext:
     dtwin_session_headers: dict = field(default_factory=dict)
     dtwin_registry_params: dict = field(default_factory=dict)
     dtwin_domain_name: str = ""
+    dtwin_include_inferred: bool = True
+    dtwin_simulation_id: str = ""
     dtwin_ontology_labels: dict = field(default_factory=dict)  # uri/name → display label
     dtwin_class_actions: dict = field(default_factory=dict)
     pending_action: dict | None = None

@@ -1,4 +1,4 @@
-"""Contract tests for GraphDBBackend adjacency defaults and SPO fallback."""
+"""Contract tests for GraphBackend adjacency defaults and SPO fallback."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.constants import RDF_TYPE
 from back.core.graphdb.props import (
     known_missing_props,
@@ -20,7 +20,7 @@ def setup_function() -> None:
     reset_missing_props_cache()
 
 
-class FakeStore(GraphDBBackend):
+class FakeStore(MaterializedGraphBackend):
     supports_adjacency = True
     supports_entity_search = True
 
@@ -248,8 +248,8 @@ def test_bfs_falls_back_to_spo_when_existence_probe_raises(flavor):
     assert "g_adj_out" not in store.queries[0]
 
 
-class MinimalStore(GraphDBBackend):
-    """Bare concrete subclass to exercise GraphDBBackend defaults."""
+class MinimalStore(MaterializedGraphBackend):
+    """Bare concrete subclass to exercise GraphBackend defaults."""
 
     def create_table(self, table_name: str) -> None:
         pass
@@ -467,7 +467,9 @@ def test_get_triples_page_for_subjects_ignores_placeholder_row():
 def test_get_triples_page_for_subjects_empty_subjects_short_circuits():
     store = FakeStore()
     store.supports_props = True
-    with patch("back.core.graphdb.GraphDBBackend.props_page_sql") as sql_builder:
+    with patch(
+        "back.core.graphdb.interfaces.EntityQueryMixin.props_page_sql"
+    ) as sql_builder:
         got = store.get_triples_page_for_subjects("g", [], limit=10, offset=0)
     assert got == {"rows": [], "total": 0}
     sql_builder.assert_not_called()

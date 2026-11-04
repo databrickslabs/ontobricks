@@ -105,7 +105,7 @@ def test_every_domain_tool_is_labelled_and_described() -> None:
     """The MCP settings panel renders the catalog directly."""
     from back.core.mcp_tools import MCP_DOMAIN_TOOLS
 
-    assert len(MCP_DOMAIN_TOOLS) == 11
+    assert len(MCP_DOMAIN_TOOLS) == 15
     for tool in MCP_DOMAIN_TOOLS:
         assert tool["label"].strip()
         assert tool["description"].strip()

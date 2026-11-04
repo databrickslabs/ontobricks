@@ -34,7 +34,7 @@ and the query optimizations shared by all engines.
   - [2. The Contract](#2-the-contract)
   - [3. Step-by-Step Integration](#3-step-by-step-integration)
   - [4. Reference: Lakebase Engine Structure](#4-reference-lakebase-engine-structure)
-  - [5. Starter Kit](#5-starter-kit)
+  - [5. Implementing the interfaces](#5-implementing-the-interfaces)
   - [6. Checklist](#6-checklist)
   - [7. FAQ](#7-faq)
   - [8. Lakebase build performance](#8-lakebase-build-performance)
@@ -78,7 +78,7 @@ For the developer guide on *adding a new engine*, see [Engine integration](#engi
 │  OntoBricks (FastAPI)                           │
 │                                                 │
 │  GraphDBFactory.create(engine="lakebase")       │
-│    └─ LakebaseFlatStore                          │
+│    └─ FlatStore                          │
 │              │                                  │
 │              │  COPY FROM STDIN / INSERT         │
 │              ▼                                  │
@@ -338,7 +338,7 @@ layout used by `managed_synced` is created: a `*_sync` bulk-data table, a
 R2RML view (SQL Warehouse)
     │  iter_rows batches
     ▼
-LakebaseFlatStore.bulk_load_into_sync
+FlatStore.bulk_load_into_sync
     │  COPY FROM STDIN → g_<domain>_v<n>_sync  (app-owned)
     ▼
 g_<domain>_v<n>  (UNION VIEW over _sync + __app)
@@ -426,7 +426,7 @@ together.
 
 #### 6.3 — Drop cascade (both modes)
 
-`LakebaseFlatStore.drop_table(name)` removes all three objects in order:
+`FlatStore.drop_table(name)` removes all three objects in order:
 1. `DROP VIEW IF EXISTS g_<domain>_v<n>` (UNION view)
 2. `DROP TABLE IF EXISTS g_<domain>_v<n>__app` (companion)
 3. `app_managed`: `DROP TABLE IF EXISTS g_<domain>_v<n>_sync` (sync table)
@@ -609,7 +609,7 @@ This section describes what the Lakebase engine does during a **Build** for the
 | 3 | `SyncedTableManager.ensure(...)` — idempotent `create_synced_database_table` call | `Database instance is not found` — project created via wrong API; `Not authorized` — SP missing `CAN_USE` on instance |
 | 4 | Create companion table `g_<domain>_vN__app` in Postgres | SP missing `CREATE` on graph schema |
 | 5 | `SyncedTableManager.trigger_and_wait(...)` — fires Lakeflow snapshot, waits for completion | Timeout — increase `sync_timeout_s`; pipeline stuck — check Lakeflow pipeline status in Databricks UI |
-| 6 | `LakebaseFlatStore.ensure_synced_union_view(name)` — creates the UNION view | `"<view>" is not a view` — an old table with the same name exists (auto-dropped since v0.4.1); `_sync table not found` — Lakeflow didn't materialise the table yet |
+| 6 | `FlatStore.ensure_synced_union_view(name)` — creates the UNION view | `"<view>" is not a view` — an old table with the same name exists (auto-dropped since v0.4.1); `_sync table not found` — Lakeflow didn't materialise the table yet |
 | 7 | `TRUNCATE` companion (full rebuild only) | |
 
 Build logs are streamed to the UI and to the application log. Look for lines tagged
@@ -962,8 +962,9 @@ Neo4j domain's **Neo4j connection** on Domain → General → Knowledge Graph.
 
 
 This guide walks a developer through adding support for a new graph database
-engine to OntoBricks.  It covers the architecture, the abstract contracts,
-registration in the factory and global config, and a ready-to-use starter kit.
+engine to OntoBricks.  It covers the architecture, the abstract contracts
+(the `back.core.graphdb.interfaces` package), and registration in the factory
+and global config.
 
 ---
 
@@ -983,7 +984,7 @@ Each backend's connection settings are stored in **separate** buckets under
 configure all backends independently without shared keys. Flat legacy blobs are
 migrated on read and rewritten nested on the next Save.
 
-``GraphDBFactory.create(engine=...)`` is the single decision point: only the selected engine is instantiated. The capability flags on ``GraphDBBackend`` (``supports_cypher``, ``is_cypher_backend``, ``query_dialect``) are kept as architectural seams so a future Cypher / Gremlin engine can be added without rewiring reasoning.
+``GraphDBFactory.create(engine=...)`` is the single decision point: only the selected engine is instantiated. The capability flags on ``GraphBackend`` (``supports_cypher``, ``is_cypher_backend``, ``query_dialect``) are kept as architectural seams so a future Cypher / Gremlin engine can be added without rewiring reasoning.
 
 ---
 
@@ -1014,17 +1015,22 @@ get_graphdb(domain, settings)          # engine=None → auto-resolve
            ├─ _resolve_graph_engine()          →  "lakebase" | "neo4j"
            └─ GraphDBFactory.create(domain, settings, engine="neo4j")
                   │
-                  └─ _create_neo4j(domain, settings)  →  Neo4jStore(...)
+                  └─ _create_neo4j(domain, settings)  →  Store(...)
 ```
 
 #### Key files
 
 | File | Role |
 |------|------|
-| `src/back/core/graphdb/GraphDBBackend.py` | The single abstract base — triple CRUD, named query + reasoning methods (SQL defaults), capability flags, connection management, sync. |
-| `src/back/core/graphdb/GraphDBFactory.py` | Factory — engine resolution + maps engine names to constructor methods. |
+| `src/back/core/graphdb/GraphBackend.py` | The shared **read root** — triple reads, named query + reasoning methods (SQL defaults), capability flags, connection management. |
+| `src/back/core/graphdb/MaterializedGraphBackend.py` | Hat #1 — copy-owning engines (Lakebase, Delta `table`, Neo4j): the full write / companion / sync surface. |
+| `src/back/core/graphdb/VirtualBackend.py` | Hat #2 — read-only, no-copy pass-through engines (Delta `view`). |
+| `src/back/core/graphdb/GraphBuilder.py` · `GraphHealthProbe.py` · `GraphProvisioner.py` · `GraphSimulation.py` | Factory-vended **capability interfaces** — build/materialize, health/quality probes, provisioning, and sandbox/simulation. The only way code *outside* `graphdb/` reaches backend-specific build/health/provision/sim logic. |
+| `src/back/core/graphdb/GraphDBFactory.py` | Factory — engine resolution, store construction, and the capability accessors (`get_builder`, `get_health_probe`, `get_provisioner`, `get_simulation`, `classify_store`). |
 | `src/back/core/graphdb/constants.py` | Shared RDF constants (`RDF_TYPE`, `RDFS_LABEL`). |
-| `src/back/core/graphdb/delta/DeltaFlatStore.py` | Unity Catalog Delta engine (also the raw `view` store). |
+| `src/back/core/graphdb/delta/ReadStore.py` | Shared Delta read mixin (named queries, subgraph expansion) for both the materialized and view stores. |
+| `src/back/core/graphdb/delta/MaterializedStore.py` | Unity Catalog Delta engine (`table` materialization — copy-owning). |
+| `src/back/core/graphdb/delta/ViewStore.py` | Read-only, no-copy Delta `view` store (health probes, quality SQL). |
 | `src/back/core/graphdb/delta/_table_naming.py` | FQN helpers for the R2RML VIEW, `_data`, `_inferred`, `_graph`. |
 | `src/back/core/graphdb/delta/materialize.py` | CTAS / companion / union-VIEW SQL and the triple count (`count_triples`, which raises instead of returning 0 on error) used by Build. |
 | `src/back/core/graphdb/__init__.py` | Package exports (`get_graphdb`, `GRAPHDB_AVAILABLE`). |
@@ -1128,9 +1134,20 @@ Canonical prose also lives in [`architecture.md` § Lakehouse Unity Catalog obje
 
 ### 2. The Contract
 
-A new engine implements the single `GraphDBBackend` abstraction:
+A new engine subclasses **one of the two hats** over the shared read root
+`GraphBackend`, never `GraphBackend` directly:
 
-#### 2.1 `GraphDBBackend` (core CRUD)
+- **`MaterializedGraphBackend`** — the engine owns a copy of the triples
+  (Lakebase, Delta `table`, Neo4j). It implements the full write / companion /
+  sync surface below. This is the common case.
+- **`VirtualBackend`** — a read-only, no-copy pass-through (Delta `view`). It
+  implements only the read surface and omits the write methods.
+
+`GraphBackend` holds everything a *read* needs (named queries, reasoning SQL
+defaults, capability flags); the hats add (or omit) the write surface. The
+abstract method tables below are split accordingly.
+
+#### 2.1 `GraphBackend` (core CRUD)
 
 These abstract methods **must** be implemented:
 
@@ -1161,7 +1178,7 @@ if your engine does not speak SQL:
 - `delete_triples` (raises `NotImplementedError` by default)
 - `optimize_table` (no-op by default)
 
-#### 2.2 `GraphDBBackend` (graph-specific methods)
+#### 2.2 `GraphBackend` (graph-specific methods)
 
 **Constructor parameter** — every engine receives `engine_config: Dict[str, Any]`
 (default `{}`) from the factory.  This is a free-form JSON dict set by the
@@ -1191,6 +1208,33 @@ These have sensible **defaults** that you should **override** as needed:
 | `remote_archive_path(uc_domain_path)` | `None` | Your engine has a remote archive naming convention. |
 | `get_query_translator(table_name)` | `SWRLSQLTranslator()` | Your engine needs a custom SWRL/rule translator for reasoning. |
 
+#### 2.3 Capability interfaces & the import boundary
+
+The store class (above) is only half the contract. Build, health/quality,
+provisioning and sandbox/simulation logic is **not** called on the store from
+outside — it lives behind four factory-vended capability interfaces so that **no
+module outside `back/core/graphdb/` imports a backend package**
+(`back.core.graphdb.{lakebase,delta,neo4j}.*`). This cloisonnement is enforced
+by `tests/units/architecture/test_backend_import_boundary.py` — it fails CI if
+any caller reaches into a backend package directly.
+
+| Capability | Vended by | What it covers | Implement when |
+|------------|-----------|----------------|----------------|
+| `GraphBuilder` | `GraphDBFactory.get_builder(domain, settings, engine=…)` | Triple materialize / build-pipeline / sync-view naming / engine-specific naming helpers | Your engine participates in Build or needs naming helpers used by callers |
+| `GraphHealthProbe` | `get_health_probe(domain, settings, engine=…)` | Health / quality / object-listing probes (or vends a raw driver handle) | Settings/health pages probe your engine |
+| `GraphProvisioner` | `get_provisioner(domain, settings, engine=…)` | Config validation, schema/instance provisioning, credential helpers | Your engine has provisioning or config-validation surface |
+| `GraphSimulation` | `get_simulation(kind)` | Sandbox write store, `__sim_`/`__smu_`/`__smp_` naming, Explorer union-view lifecycle | Your engine supports simulations |
+
+Each is a small facade that delegates to your backend package's internals. The
+method surface is engine-specific — look at the Delta, Lakebase and Neo4j impls
+(`Builder`, `Provisioner`, `HealthProbe`, …) for the
+shape. A capability the engine does not need simply has no impl and the factory
+accessor returns `None` for that engine.
+
+> **Rule of thumb:** if you are about to write
+> `from back.core.graphdb.<engine> import …` in a file outside `graphdb/`, stop —
+> add (or use) a capability accessor on `GraphDBFactory` instead.
+
 ---
 
 ### 3. Step-by-Step Integration
@@ -1200,10 +1244,9 @@ These have sensible **defaults** that you should **override** as needed:
 ```
 src/back/core/graphdb/
 ├── __init__.py
-├── GraphDBBackend.py
 ├── GraphDBFactory.py
+├── interfaces/         ← the backend contract (hats + capability ABCs)
 ├── lakebase/           ← existing (Postgres flat-store reference impl)
-├── _starter_kit/       ← copy-paste template (ExampleStore.py)
 └── kuzu/               ← NEW
     ├── __init__.py
     └── KuzuStore.py
@@ -1214,9 +1257,11 @@ in PascalCase.
 
 #### Step 2 — Implement the store class
 
-Create `src/back/core/graphdb/kuzu/KuzuStore.py`.  Copy it from the starter
-kit at `src/back/core/graphdb/_starter_kit/ExampleStore.py` and rename.
-See [Section 5](#5-starter-kit) for details.
+Create `src/back/core/graphdb/kuzu/KuzuStore.py` subclassing the right hat from
+`back.core.graphdb.interfaces` — `MaterializedGraphBackend` if the engine owns a
+copy of the triples, or `VirtualBackend` for a read-only no-copy pass-through
+(then drop the write methods). Implement every abstract method of the chosen
+hat. See [Section 5](#5-implementing-the-interfaces) for the capability contract.
 
 Key decisions:
 
@@ -1227,7 +1272,7 @@ Key decisions:
 
 2. **Graph model**: If your engine uses typed node/relationship tables, set
    `supports_graph_model = True` and implement `get_graph_schema()`. If it uses
-   a flat triple table (like the shipped `LakebaseFlatStore`), leave it `False`.
+   a flat triple table (like the shipped `FlatStore`), leave it `False`.
 
 3. **Reasoning translator**: Return the appropriate `SWRL*Translator` from
    `get_query_translator()`. For SQL engines, the default `SWRLSQLTranslator`
@@ -1367,8 +1412,8 @@ The built-in Lakebase Postgres engine is the reference implementation:
 ```
 graphdb/lakebase/
 ├── __init__.py           ← re-exports
-├── LakebaseBase.py       ← GraphDBBackend subclass (connection pool, capabilities)
-├── LakebaseFlatStore.py  ← Flat triple table (subject, predicate, object) on Postgres
+├── Base.py       ← GraphBackend subclass (connection pool, capabilities)
+├── FlatStore.py  ← Flat triple table (subject, predicate, object) on Postgres
 ├── SyncedTableManager.py ← Lakeflow synced-table orchestration (managed_synced mode)
 └── models.py             ← Internal dataclasses
 ```
@@ -1381,51 +1426,69 @@ Lakeflow). A simpler engine can use a single store class and skip
 
 ---
 
-### 5. Starter Kit
+### 5. Implementing the interfaces
 
-A ready-to-use starter kit lives at:
+The backend contract lives in one place — `back.core.graphdb.interfaces` — and
+every engine implements it. There is no copy-paste template; subclass the ABCs
+directly.
 
 ```
-src/back/core/graphdb/_starter_kit/
-├── README.md          ← usage instructions
-├── __init__.py        ← package re-exports (template)
-└── ExampleStore.py    ← full store class with every method stubbed
+src/back/core/graphdb/interfaces/
+├── __init__.py                   ← re-exports the seven contracts
+├── GraphBackend.py               ← shared read root (abstract)
+├── MaterializedGraphBackend.py   ← copy-owning hat (full write/companion/sync)
+├── VirtualBackend.py             ← read-only, no-copy hat
+├── GraphBuilder.py               ← capability ABC
+├── GraphHealthProbe.py           ← capability ABC
+├── GraphProvisioner.py           ← capability ABC
+└── GraphSimulation.py            ← capability ABC
 ```
 
-#### How to use
+#### The store (a hat)
 
-1. **Copy** the `_starter_kit/` directory into a new subpackage:
+Pick one hat and implement its abstract methods:
 
-   ```bash
-   cp -r src/back/core/graphdb/_starter_kit src/back/core/graphdb/kuzu
-   ```
+- `MaterializedGraphBackend` — the engine owns a copy of the triples; carries
+  the write surface (`create_table`, `drop_table`, `insert_triples`) plus
+  companion/sync helpers. This is the common case (Lakebase, Delta `table`,
+  Neo4j).
+- `VirtualBackend` — read-only, no-copy pass-through (Delta `view`). No write
+  surface.
 
-2. **Rename** `ExampleStore.py` to `KuzuStore.py` (matching your engine class).
+Both share the read contract on `GraphBackend` and the capability flags
+(`supports_cypher`, `query_dialect`, `supports_graph_model`, …). The constructor
+receives the free-form `engine_config` dict from **Settings → Back end**; define
+the keys your engine needs (an empty `{}` is fine for engines without config).
 
-3. **Find and replace** these placeholders throughout the copied files:
+#### The capabilities (import boundary)
 
-   | Placeholder | Replace with | Example |
-   |-------------|-------------|---------|
-   | `ExampleStore` | Your class name | `KuzuStore` |
-   | `example_store` | Your module name (snake_case) | `kuzu_store` |
-   | `example` | Your engine identifier (lowercase) | `kuzu` |
-   | `Example` | Your engine display name | `Kuzu` |
-   | `example_library` | The Python package to import | `kuzu` |
+The store class is only half the contract. **No code outside
+`back/core/graphdb/` may import a backend package** — build, health, provision,
+and simulation logic is reached through four factory-vended capability
+interfaces instead, enforced by
+`tests/units/architecture/test_backend_import_boundary.py`.
 
-4. **Fill in** every `TODO` marker with your engine's native API calls.
+For each capability the engine needs, add a small facade subclass and wire it
+into `GraphDBFactory`:
 
-5. **Continue from [Step 3](#step-3--create-the-package-__init__py)** above
-   to register the engine in the factory, global config, and UI.
+| Capability | Factory accessor | Covers |
+|------------|------------------|--------|
+| `GraphBuilder` | `get_builder()` | build / materialize / naming helpers |
+| `GraphHealthProbe` | `get_health_probe()` | health / quality / object-listing probes |
+| `GraphProvisioner` | `get_provisioner()` | config validation / provisioning / credentials |
+| `GraphSimulation` | `get_simulation()` | sandbox store, sim naming, union-view lifecycle |
 
-The `ExampleStore.py` template contains the full method contract with
-detailed docstrings, grouped into sections:
-- Capability flags (`supports_cypher`, `query_dialect`, …)
-- Connection management (`get_connection`, `close`)
-- Schema helpers (`get_node_table`, `get_graph_schema`)
-- Sync to/from UC Volume (`sync_to_remote`, `sync_from_remote`)
-- Reasoning support (`get_query_translator`)
-- Core CRUD (`create_table`, `insert_triples`, `query_triples`, …)
-- Named query overrides (commented stubs for non-SQL engines)
+A capability the engine does not need simply has no impl (the accessor returns
+`None` — e.g. Delta has no provisioner). Each backend folder presents the same
+predictable files for the capabilities it implements (`Builder.py`,
+`HealthProbe.py`, `Simulation.py`, and `Provisioner.py` where applicable); see
+the Delta / Lakebase / Neo4j impls for the shape.
+
+> If you are about to write `from back.core.graphdb.<engine> import …` outside
+> `graphdb/`, stop — add or use a capability accessor instead.
+
+Then **continue from [Step 3](#step-3--create-the-package-__init__py)** above to
+register the engine in the factory, global config, and UI.
 
 ---
 
@@ -1434,10 +1497,12 @@ detailed docstrings, grouped into sections:
 Use this checklist to track your progress:
 
 - [ ] Create `src/back/core/graphdb/<engine>/` package with `__init__.py`
-- [ ] Implement `<EngineName>Store(GraphDBBackend)` with all abstract methods
+- [ ] Implement `<EngineName>Store(MaterializedGraphBackend)` (copy-owning) **or** `(VirtualBackend)` (read-only, no-copy) with all abstract methods
 - [ ] Override named query methods if your engine is non-SQL
 - [ ] Register engine in `GraphDBFactory.create()` + add `_create_<engine>()` method
 - [ ] Add engine name to `GRAPH_BACKENDS` in `GraphDBFactory.py` + map it in the resolvers
+- [ ] Add the capability impls your engine needs (`<Engine>GraphBuilder` / `<Engine>HealthProbe` / `<Engine>Provisioner` / `<Engine>Simulation`) and wire them into `GraphDBFactory.get_builder` / `get_health_probe` / `get_provisioner` / `get_simulation` / `classify_store`
+- [ ] **Keep backend imports inside `graphdb/`** — no `from back.core.graphdb.<engine> import …` outside the package (enforced by `test_backend_import_boundary.py`)
 - [ ] Add `<option>` to `#domainGraphBackend` in `_domain_information.html`
 - [ ] Add optional dependency to `pyproject.toml`
 - [ ] Add tests in `tests/test_<engine>_store.py`
@@ -1450,7 +1515,7 @@ Use this checklist to track your progress:
 ### 7. FAQ
 
 **Q: Can I support both flat and graph models?**
-Yes. Create a base class extending `GraphDBBackend`, then two subclasses
+Yes. Create a base class extending `GraphBackend`, then two subclasses
 (flat and graph). Register the graph variant in the factory and have it
 fall back to flat when the ontology is not available.
 
@@ -1460,7 +1525,7 @@ connected to a remote endpoint.  `sync_to_remote` / `sync_from_remote` may
 be no-ops if data is already remote.  `local_path()` should return `None`.
 
 **Q: What about the reasoning engines?**
-Reasoning engines use `GraphDBBackend.is_cypher_backend(store)` and the
+Reasoning engines use `GraphBackend.is_cypher_backend(store)` and the
 capability flags to decide which translator to use.  If your engine speaks
 Cypher, set the flag and return the appropriate translator from
 `get_query_translator()`.  If SQL, the defaults work.
@@ -1486,7 +1551,7 @@ without ever materializing the full triple set inside the FastAPI process.
 
 #### Write side (app → Lakebase Postgres)
 
-`LakebaseFlatStore` exposes two streaming bulk paths used by the pipeline:
+`FlatStore` exposes two streaming bulk paths used by the pipeline:
 
 - `bulk_insert_iter(table, triple_iter, batch_size=5000)` — per batch:
   `CREATE TEMP TABLE _ob_copy_stage … ON COMMIT DROP`, `COPY FROM STDIN`
@@ -1590,7 +1655,7 @@ ingest in synced mode:
    See ``_sync_uc_schema.ensure_uc_schema_for_synced_table_fqn``.
 3. `SyncedTableManager.ensure(...)` -- idempotent
    `WorkspaceClient.database.create_synced_database_table` call.
-4. `LakebaseFlatStore.ensure_synced_companion(name)` — companion table only
+4. `FlatStore.ensure_synced_companion(name)` — companion table only
    (must run before Lakeflow materializes the ``_sync`` table).
 5. `SyncedTableManager.trigger_and_wait(...)` — calls `trigger_refresh`
    (`pipelines.start_update` with ``full_refresh=True``), then waits on the
@@ -1604,7 +1669,7 @@ ingest in synced mode:
    rejects deletion, it registers the replacement under the first available
    ``_b`` / ``_c`` / ``_d`` fallback suffix and returns that actual name to the
    remaining build steps.
-6. `LakebaseFlatStore.ensure_synced_union_view(name)` — union view after the ``_sync`` table
+6. `FlatStore.ensure_synced_union_view(name)` — union view after the ``_sync`` table
    exists in Postgres (``CREATE OR REPLACE VIEW`` references the synced table).
 7. On full rebuild, `TRUNCATE` the companion so reasoning + cohort start
    from a clean slate.
@@ -1619,7 +1684,7 @@ The scheduler mirrors this logic via `_apply_synced_pipeline` in
 
 #### Read paths
 
-`LakebaseFlatStore` separates the resolvers:
+`FlatStore` separates the resolvers:
 
 - `_writable_table_id(name)` -- companion in synced mode, legacy phy in
   app-managed mode (used by `insert_triples`, COPY insert, COPY delete,
@@ -1632,7 +1697,7 @@ The scheduler mirrors this logic via `_apply_synced_pipeline` in
 
 #### Lifecycle
 
-`LakebaseFlatStore.drop_table(name)` cascades in synced mode:
+`FlatStore.drop_table(name)` cascades in synced mode:
 1. `DROP VIEW IF EXISTS` for the union view.
 2. `DROP TABLE IF EXISTS` for the companion.
 3. `SyncedTableManager.delete(uc_name, purge_data=True)` to remove the
@@ -1732,7 +1797,7 @@ mode.
 Implementation:
 
 - `src/back/core/graphdb/delta/materialize.py`
-- `src/back/core/graphdb/delta/DeltaFlatStore.py`
+- `src/back/core/graphdb/delta/MaterializedStore.py`
 
 #### 3. Entity Preview index
 
@@ -1780,7 +1845,7 @@ the asserted SPO relation; unrelated SQL errors are not swallowed.
 Implementation:
 
 - `src/back/core/graphdb/entity_search.py`
-- `GraphDBBackend.find_preview_seeds`
+- `GraphBackend.find_preview_seeds`
 
 #### 4. Query-shape and round-trip reductions
 
@@ -1803,10 +1868,10 @@ Several smaller optimizations avoid unnecessary warehouse work:
 
 Implementations:
 
-- `GraphDBBackend.get_entity_metadata`
-- `DeltaFlatStore.table_exists`
-- `LakebaseFlatStore.table_exists`
-- `LakebaseFlatStore.find_subjects_by_patterns`
+- `GraphBackend.get_entity_metadata`
+- `MaterializedStore.table_exists`
+- `FlatStore.table_exists`
+- `FlatStore.find_subjects_by_patterns`
 
 #### 5. Bidirectional adjacency
 
@@ -1914,9 +1979,9 @@ in-process fallback.
 
 Implementation:
 
-- `GraphDBBackend.get_aggregate_stats`
-- `DeltaFlatStore._distinct_count_expr`
-- `GraphDBBackend.query_triples_for_analysis`
+- `GraphBackend.get_aggregate_stats`
+- `MaterializedStore._distinct_count_expr`
+- `GraphBackend.query_triples_for_analysis`
 
 #### 9. Snapshot rebuild and statistics
 
@@ -1961,15 +2026,15 @@ Post-write maintenance also preserves read performance:
 #### 10. GraphQL and MCP find read the same companions
 
 `query_graphql`'s typed list resolver (`SchemaMetadata._query_subjects` →
-`GraphDBBackend.find_subjects_by_type`) and its nested-field triple loader
-(`SchemaMetadata._load_triples` → `GraphDBBackend.get_triples_for_subjects`)
+`GraphBackend.find_subjects_by_type`) and its nested-field triple loader
+(`SchemaMetadata._load_triples` → `GraphBackend.get_triples_for_subjects`)
 read `_entity_search` and `_props` when ready, instead of the reader-facing
 SPO relation. `search` on the GraphQL list resolver then matches only
 `rdfs:label`/URI (`_entity_search`'s `label_lc`/`uri_lc`) — the same fields
 Explorer Preview searches — rather than every literal predicate.
 
 MCP's `describe_entity` and the shared `/triples/find` route
-(`DigitalTwin.find_triples_bfs` → `GraphDBBackend.bfs_traversal`) seed from
+(`DigitalTwin.find_triples_bfs` → `GraphBackend.bfs_traversal`) seed from
 `_entity_search` and walk `_adj_out`/`_adj_in` instead of a `WITH RECURSIVE`
 scan of the SPO relation, when both companions are ready. Hop endpoints then
 require both sides of an edge to have an `rdf:type` assertion, matching
@@ -1997,7 +2062,7 @@ Implementation:
   `entity_search_seed_sql`, `_entity_search_text_clause`,
   `is_missing_relation_error`.
 - `back/core/graphdb/adjacency.py`: `seeded_bfs_sql`.
-- `back/core/graphdb/GraphDBBackend.py`: `find_subjects_by_type`,
+- `back/core/graphdb/GraphBackend.py`: `find_subjects_by_type`,
   `get_triples_for_subjects`, `bfs_traversal`.
 
 #### 11. Query bounds and cancellation
@@ -2060,8 +2125,8 @@ are passed as parameters, and result limits are pushed into Cypher.
 
 Implementation:
 
-- `src/back/core/graphdb/neo4j/Neo4jWriteOps.py`
-- `src/back/core/graphdb/neo4j/Neo4jReadOps.py`
+- `src/back/core/graphdb/neo4j/WriteOps.py`
+- `src/back/core/graphdb/neo4j/ReadOps.py`
 
 #### 14. Connection and transfer efficiency
 
@@ -2200,7 +2265,7 @@ existing `materialize.drop_relation` guard. The Bloom filter warning on
 `entity_search` is a warehouse-tier limitation and does not affect search
 correctness.
 
-Implementation: `src/back/core/graphdb/delta/DeltaFlatStore.py`
+Implementation: `src/back/core/graphdb/delta/MaterializedStore.py`
 (`rebuild_adjacency`, `_rebuild_adjacency_table`, `_rebuild_props_table`,
 `_rebuild_entity_search_table`).
 

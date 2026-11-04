@@ -6,7 +6,7 @@ reasoning engine and quality-check pipeline.
 
 from typing import Dict, List, Optional
 
-from back.core.helpers import sql_escape
+from back.core.helpers import SQL_DIALECT_SPARK, sql_escape
 from back.core.logging import get_logger
 from back.core.reasoning.constants import RDF_TYPE
 from back.core.reasoning.swrl.SWRLParser import SWRLParser
@@ -18,20 +18,19 @@ logger = get_logger(__name__)
 class SWRLSQLTranslator:
     """Build SQL from SWRL rules for the flat triple-store table.
 
-    ``dialect`` selects the SQL flavour for built-in templates:
-    ``"databricks"`` (default, ``TRY_CAST``) or ``"postgres"`` (plain
-    ``CAST`` — Postgres has no ``TRY_CAST``, so Lakebase-backed stores
-    must pass ``dialect="postgres"`` or every built-in filter is a
-    syntax error). The Postgres mapping lives on
-    ``SWRLSQLBuiltinFilters`` and covers the numeric comparison and math
-    templates only.
+    ``dialect`` selects the SQL flavour of the built-in templates (see
+    ``SWRLBuiltinRegistry.sql_template_for``): Spark by default, or
+    ``"postgres"`` for Lakebase-backed stores.
     """
 
     _escape = staticmethod(sql_escape)
 
-    def __init__(self, dialect: str = "databricks") -> None:
-        self._dialect = dialect
-        self._builtin_filters = SWRLSQLBuiltinFilters(dialect)
+    def __init__(self, dialect: str = SQL_DIALECT_SPARK) -> None:
+        self._dialect = dialect or SQL_DIALECT_SPARK
+
+    def _filters(self, builtin_atoms: List[Dict], var_bindings: Dict[str, tuple]) -> List[str]:
+        """The rule's builtin atoms as SQL filters in this translator's dialect."""
+        return SWRLSQLBuiltinFilters.build(builtin_atoms, var_bindings, dialect=self._dialect)
 
     def _append_rule_filters(
         self,
@@ -44,7 +43,7 @@ class SWRLSQLTranslator:
         uri_map: Dict,
         alias_factory,
     ) -> None:
-        builtin_filters = self._builtin_filters.build(builtin_atoms, var_bindings)
+        builtin_filters = self._filters(builtin_atoms, var_bindings)
         if builtin_filters:
             where_parts.extend(builtin_filters)
         negated_sql = self._build_negated_atoms(

@@ -200,9 +200,7 @@ class TwinIncrementalStatus:
     ) -> dict | None:
         """``{synced_table, state, message}`` of a ``managed_synced`` store, else ``None``."""
         from back.core.graphdb import get_graphdb
-        from back.core.graphdb.lakebase.LakebaseFlatStore import (
-            resolve_sync_uc_fallback_catalog,
-        )
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.lakebase.SyncedTableManager import SyncedTableManager
         from back.core.helpers import effective_graph_name
 
@@ -211,9 +209,9 @@ class TwinIncrementalStatus:
             store = (get_store or get_graphdb)(domain, settings)
             if getattr(store, "is_synced", False) is not True:
                 return None
-            fallback = resolve_sync_uc_fallback_catalog(
-                domain, settings, getattr(domain, "delta", None) or {}
-            )
+            fallback = GraphDBFactory.get_builder(
+                domain, settings, engine="lakebase"
+            ).resolve_sync_uc_fallback_catalog(getattr(domain, "delta", None) or {})
             name = store.synced_uc_name(effective_graph_name(domain), fallback_catalog=fallback)
             synced = store.synced_manager().get(name)
         except Exception as exc:  # noqa: BLE001 — SDK errors arrive raw; reported in the section

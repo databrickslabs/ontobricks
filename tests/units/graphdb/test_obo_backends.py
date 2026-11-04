@@ -10,7 +10,7 @@ splits data-plane identity by backend:
   stored Bolt profile. They *never* consult the request identity; access is
   gated at the endpoint by Team membership (`assert_domain_graph_read`).
 
-These tests pin that split at the `GraphDBFactory` / `DeltaBase` construction
+These tests pin that split at the `GraphDBFactory` / `Base` construction
 layer so a future refactor can't silently start (or stop) forwarding the user
 token on the wrong backend.
 """
@@ -57,7 +57,7 @@ def obo_spy(monkeypatch):
 
 def _patch_delta(monkeypatch, *, app_mode: bool):
     """Wire ``create_databricks_client`` deps and capture the built client."""
-    import back.core.graphdb.delta.DeltaBase as dbase
+    import back.core.graphdb.delta.Base as dbase
 
     captured: dict = {}
 
@@ -85,9 +85,13 @@ def test_delta_backend_read_applies_obo(monkeypatch, obo_spy):
     import importlib
 
     captured = _patch_delta(monkeypatch, app_mode=True)
-    dfs_mod = importlib.import_module("back.core.graphdb.delta.DeltaFlatStore")
+    dfs_mod = importlib.import_module(
+        "back.core.graphdb.delta.MaterializedStore"
+    )
     monkeypatch.setattr(
-        dfs_mod, "DeltaFlatStore", lambda client, **kw: SimpleNamespace(client=client)
+        dfs_mod,
+        "MaterializedStore",
+        lambda client, **kw: SimpleNamespace(client=client),
     )
 
     store = GraphDBFactory().create(
@@ -103,7 +107,7 @@ def test_delta_backend_read_applies_obo(monkeypatch, obo_spy):
 
 def test_delta_backend_local_mode_skips_obo(monkeypatch):
     """Outside App mode the Delta read keeps the resolved SP token (no OBO)."""
-    import back.core.graphdb.delta.DeltaBase as dbase
+    import back.core.graphdb.delta.Base as dbase
 
     captured = _patch_delta(monkeypatch, app_mode=False)
 
@@ -123,7 +127,7 @@ def test_delta_backend_local_mode_skips_obo(monkeypatch):
 
 def test_delta_build_keeps_service_principal(monkeypatch, obo_spy):
     """A build (for_write) read keeps the SP credentials even with an identity bound."""
-    import back.core.graphdb.delta.DeltaBase as dbase
+    import back.core.graphdb.delta.Base as dbase
 
     captured: dict = {}
 
@@ -174,7 +178,7 @@ def test_lakebase_backend_never_consults_obo(monkeypatch, obo_spy):
             return_value=MagicMock(catalog="c", schema="s", volume="v"),
         ),
         patch(
-            "back.core.graphdb.lakebase.LakebaseFlatStore.LakebaseFlatStore",
+            "back.core.graphdb.lakebase.FlatStore.FlatStore",
         ) as mock_lb,
     ):
         mock_lb.return_value = MagicMock()
@@ -221,7 +225,7 @@ def test_neo4j_backend_never_consults_obo(monkeypatch, obo_spy):
     )
 
     assert store is not None
-    assert store.__class__.__name__ == "Neo4jStore"
+    assert store.__class__.__name__ == "Store"
     # Database comes from the named profile, not from any OBO identity…
     assert store._database == "insurbricks"
     # …and the Neo4j path never looked at the request identity.

@@ -7,8 +7,7 @@ staged flow is detect → human review → checkpointed relations/attributes/
 axioms completion, appending to (never replacing) the existing ontology.
 
 The one-shot ``run_agent`` bridge in :mod:`agents.agent_owl_generator.engine`
-is **deprecated**: it contains the post-generation pitfall-rewrite loop the
-three-stage design replaces, and every production caller
+is **deprecated**: the three-stage design replaces it, and every production caller
 (``Ontology.generate_with_agent``, ``AgentClient.run_owl_generator``, the
 supervisor's ``"ontology"`` task, and the ``/ontology/wizard/generate-async``
 route) has been removed as of Task 4 of ``staged-ontology-generate``. The

@@ -288,7 +288,6 @@ class Domain:
                 "table_name": delta.get("table_name", ""),
             },
             "stats": self.get_domain_stats(),
-            "precision_score": self._s.precision_score,
         }
 
     def get_domain_stats(self) -> Dict[str, int]:

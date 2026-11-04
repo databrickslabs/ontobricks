@@ -28,7 +28,7 @@ def test_member_allowed_on_read(monkeypatch):
 
 def test_delta_read_prefers_forwarded_user_token(monkeypatch):
     """A user-driven Delta read binds the caller's forwarded token (OBO)."""
-    import back.core.graphdb.delta.DeltaBase as db
+    import back.core.graphdb.delta.Base as db
     from back.core.databricks.request_identity import (
         RequestIdentity,
         set_request_identity,
@@ -64,7 +64,7 @@ def test_delta_read_prefers_forwarded_user_token(monkeypatch):
 
 def test_delta_build_keeps_service_principal(monkeypatch):
     """A build (for_write) read keeps the service-principal credentials."""
-    import back.core.graphdb.delta.DeltaBase as db
+    import back.core.graphdb.delta.Base as db
 
     captured = {}
 

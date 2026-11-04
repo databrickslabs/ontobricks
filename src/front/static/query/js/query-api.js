@@ -37,6 +37,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     bindQueryApiInteractions();
     syncApiDomainCapabilities();
+    if (typeof KgGraphSource !== 'undefined' && typeof KgGraphSource.populate === 'function') {
+        KgGraphSource.populate();
+    }
 });
 
 /**
@@ -130,18 +133,15 @@ async function loadApiVersions(domainSlug) {
         const data = await resp.json();
         if (!data.success || !data.versions?.length) return;
 
-        const publishedVersions = data.versions.filter(v => v.is_published);
-        if (!publishedVersions.length) return;
-
-        const latestPublished = publishedVersions[0].version;
+        const latest = data.versions[0];
+        const latestLabel = 'v' + latest.version + ' · ' + (latest.status || '');
         select.innerHTML =
-            '<option value="">latest PUBLISHED (v' +
-            escHtml(latestPublished) +
-            ')</option>';
-        for (const v of publishedVersions) {
+            '<option value="">latest (' + escHtml(latestLabel) + ')</option>';
+        for (const v of data.versions) {
             const opt = document.createElement('option');
             opt.value = v.version;
-            opt.textContent = 'v' + v.version + ' · PUBLISHED';
+            const status = v.status || (v.is_published ? 'PUBLISHED' : '');
+            opt.textContent = 'v' + v.version + (status ? ' · ' + status : '');
             select.appendChild(opt);
         }
     } catch (_) {
@@ -164,6 +164,22 @@ function appendDomainParam(path) {
     if (!parts.length) return path;
     const sep = path.includes('?') ? '&' : '?';
     return path + sep + parts.join('&');
+}
+
+function isGraphQueryPath(path) {
+    return path.indexOf('/digitaltwin/triples') >= 0
+        || path.indexOf('/digitaltwin/stats') >= 0
+        || path.indexOf('/simulations') >= 0
+        || path.indexOf('/graphql') >= 0;
+}
+
+function appendGraphSource(path) {
+    if (!isGraphQueryPath(path) || typeof KgGraphSource === 'undefined') return path;
+    const bits = path.split('?');
+    const params = new URLSearchParams(bits[1] || '');
+    KgGraphSource.applyToParams(params);
+    const qs = params.toString();
+    return qs ? bits[0] + '?' + qs : bits[0];
 }
 
 function formatGraphBackend(backend) {
@@ -259,7 +275,7 @@ async function tryApiEndpoint(path, btnEl) {
     responseDiv.classList.remove('d-none');
     responseDiv.innerHTML = '';
 
-    const fullPath = appendDomainParam(path);
+    const fullPath = appendGraphSource(appendDomainParam(path));
 
     try {
         const t0 = performance.now();
@@ -391,7 +407,12 @@ function openGraphiQL() {
         showNotification('Enter a domain name first.', 'warning');
         return;
     }
-    window.open(GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug), '_blank');
+    window.open(
+        appendDomainParam(
+            GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug)
+        ),
+        '_blank'
+    );
 }
 
 async function tryGraphqlQuery(btnEl) {
@@ -416,7 +437,9 @@ async function tryGraphqlQuery(btnEl) {
     responseDiv.classList.remove('d-none');
     responseDiv.innerHTML = '';
 
-    const url = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug);
+    const url = appendDomainParam(
+        GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug)
+    );
 
     try {
         const t0 = performance.now();
@@ -424,7 +447,11 @@ async function tryGraphqlQuery(btnEl) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({ query: queryText }),
+            body: JSON.stringify(
+                (typeof KgGraphSource !== 'undefined')
+                    ? KgGraphSource.applyToBody({ query: queryText })
+                    : { query: queryText }
+            ),
         });
         const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
         const data = await resp.json();
@@ -458,7 +485,9 @@ async function tryGraphqlSchema(btnEl) {
         showNotification('Enter a domain name first.', 'warning');
         return;
     }
-    const path = GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug) + '/schema';
+    const path = appendDomainParam(
+        GRAPHQL_EXTERNAL_PREFIX + '/' + encodeURIComponent(domainSlug) + '/schema'
+    );
 
     const card = btnEl.closest('.card-body');
     const responseDiv = card.querySelector('.ob-api-response');

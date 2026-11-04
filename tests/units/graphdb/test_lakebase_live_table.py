@@ -229,7 +229,7 @@ class TestLakebaseLiveTable:
         }
 
     def test_the_store_hands_out_its_live_table(self):
-        from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+        from back.core.graphdb.lakebase.Base import Base as LakebaseBase
 
         store = SimpleNamespace(
             _schema="ontobricks_graph",

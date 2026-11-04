@@ -32,7 +32,7 @@ def test_service_serializes_metric_series_payload(monkeypatch):
             ]
 
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         lambda domain, settings, *, for_write=False: (
             captured.update(
                 {"domain": domain, "settings": settings, "for_write": for_write}
@@ -68,7 +68,7 @@ def test_service_serializes_metric_series_payload(monkeypatch):
 def test_service_validates_metric_before_creating_client(monkeypatch):
     client_call = MagicMock()
     monkeypatch.setattr(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        "back.core.graphdb.delta.Base.create_databricks_client",
         client_call,
     )
 

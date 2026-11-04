@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.9.2</h1>
+<h1 align="center">OntoBricks 0.10.0</h1>
 
 <p align="center">
   <strong>Turn your Databricks tables into a living knowledge graph — in four clicks.</strong>
@@ -27,8 +27,9 @@
 
 ---
 
-### What's new in 0.9.2
+### What's new in 0.10.0
 
+- **Graph backend split**: the graph database layer is now a set of interfaces (`GraphBackend`, `MaterializedGraphBackend`, `VirtualBackend`, `GraphBuilder`, `GraphHealthProbe`, `GraphProvisioner`, `GraphSimulation`) implemented by the Delta and Lakebase engines; a **what-if simulation** sandbox lets you try changes before materializing them; the "Knowledge Graph" workspace is now called "Graph"; the ontology pitfalls feature was removed; deploy defaults moved to the `10x` instance and Apps `user_api_scopes` declare only `sql`.
 - **Incremental triple materialization**: per-domain `full` / `incremental` / `microbatch` modes — a Lakeflow slot pipeline over the sources' change feed, an Enzyme-refreshed `_data` materialized view, Lakebase sync schedules that follow the mode, net-change apply for app-managed Lakebase and Neo4j, a `_graph` materialized view Lakehouse//RT reads (a `microbatch` domain read through Lakehouse//RT reads `_slots` ∪ `_inferred` directly, at the pipeline's cadence — a source commit was queryable through a Lakehouse//RT warehouse after 14 s median / 23 s p95 on the integration workspace), a topic-fed `realtime` slot pipeline, a freshness / drift measurement harness, a MERGE fallback without serverless, a readiness preflight with an "enable row tracking" action, an incremental status card and a slot/`_data` reconciliation endpoint; every fallback is recorded in the build-run trace. See [docs/incremental-materialization.md](docs/incremental-materialization.md).
 - **Realtime materialization** (opt-in, `ONTOBRICKS_REALTIME_ENABLED`): a Lakebase domain with a Kafka / Event Hubs / Kinesis (experimental) change-event topic streams source changes into a `_live` table the graph reads in well under a second (Kafka event → Lakebase p99 248 ms measured in Real-Time Mode on a classic DBR 19 cluster) — a Real-Time-Mode job (`resources/triple_rtm.job.yml`, no app wheel, sized for Real-Time Mode, DBR 19) diffs each row's slots on top of the `microbatch` pipeline; started, stopped, retired and reconciled by the app, and `_live` leaves the graph whenever its stream stops. Slot pipelines are deployed per published version by DAB, which adopts a pipeline the app created first (`bundle deployment bind`).
 - **Typed SPARQL FILTERs** compile into SQL; **MCP** domain-scoped tools work without a sticky session and forward the end-user identity past the Apps proxy.
@@ -104,7 +105,7 @@ months-long integration project.
 | **1** | **Import Metadata** — Domain &gt; Metadata | Fetches table &amp; column metadata from Unity Catalog | Unity Catalog |
 | **2** | **Generate Ontology** — Ontology &gt; Wizard | The LLM designs entities, relationships &amp; attributes from your metadata | AI Gateway / Model Serving |
 | **3** | **Auto-Map** — Mapping &gt; Auto-Map | The LLM generates SQL mappings for every entity and relationship | AI Gateway / Model Serving |
-| **4** | **Synchronize** — Knowledge Graph &gt; Status | Executes the mappings and populates the triple store | SQL Warehouse |
+| **4** | **Synchronize** — Graph &gt; Build | Executes the mappings and populates the triple store | SQL Warehouse |
 
 Prefer full control? Every step is also available as a guided **manual
 workflow** — design, map, build, query, and reason at column-level precision.
@@ -116,8 +117,8 @@ Selecting **No LLM** is a strict domain-level opt-out. LLM actions remain
 visible but unavailable and direct API calls are rejected with guidance to
 select a model in **Domain Information → AI**. Select and save an LLM there to
 make those actions available again without reloading the page. Deterministic
-reasoning and validation, including OWL/SWRL inference, ontology pitfalls, and
-SHACL data-quality checks, remain available while No LLM is selected.
+reasoning and validation, including OWL/SWRL inference and SHACL data-quality
+checks, remain available while No LLM is selected.
 
 ## What's inside
 
@@ -125,8 +126,7 @@ SHACL data-quality checks, remain available while No LLM is selected.
 Drag-and-drop entities, relationships and inheritance on the **OntoViz** canvas,
 or import industry standards in one click (FIBO, CDISC, IOF, HL7 FHIR
 R4/R4B/R5) and your own OWL/RDFS. A floating **AI Assistant** edits your
-ontology through natural language. Catch design issues early with the built-in
-**Ontology Pitfalls Detector** (19 structural, logical and semantic checks).
+ontology through natural language.
 
 **Generate** drives that AI design through a resumable, human-in-the-loop
 wizard — **Detect** candidate entities from metadata and your parsed document
@@ -149,12 +149,24 @@ search, N-hop neighbour expansion, cross-domain bridge navigation, community
 detection (Louvain, Label Propagation, Greedy Modularity), and explainable
 **cohort discovery**. Lakehouse domains can optionally read from a **Lakehouse//RT**
 query warehouse while builds stay on a classic or serverless warehouse. Query
-everything through an auto-generated **GraphQL** API or open **Knowledge Graph
+everything through an auto-generated **GraphQL** API or open **Graph
 → Query → SPARQL** for read-only SELECT queries, sample queries, CSV export,
 generated SQL inspection, and triple-shaped results that open in Explorer.
 See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
 [Get Started](docs/getting-started.md), and
 [Cohort Discovery](docs/advanced_features.md#cohort-discovery).
+
+### Simulate what-if scenarios
+The **Simulation** workspace copies an entity neighbourhood, a cohort or a class
+population into a private sandbox, applies hypothetical facts ("what if this
+customer's credit score drops to 300?"), re-runs your SWRL, graph and business
+rules there, and shows exactly which triples would be added or removed — the
+live knowledge graph is never modified. Start from **Scenarios → New scenario**
+or **Simulate from here** on any Explorer entity. After a run, pick the scenario
+in Explorer's **Graph** dropdown (or Results → **Explorer**) to walk the
+sandbox. Lakebase, Lakehouse (Delta), and Neo4j backends are supported; Neo4j
+supports graph-shaped SWRL rules (class and object-property atoms). See the
+[Simulation guide](docs/user-guide.md#step-4-simulation-what-if-sandboxes).
 
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks
@@ -176,7 +188,7 @@ domains between environments with the **OBX** export/import (UI or
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
 **Lakehouse** (governed Delta triple tables, zero extra infra), **Neo4j**, or
 **No Backend** for ontology-only domains that publish their ontology with no
-graph built (Mapping and Knowledge Graph are disabled and the MCP surface
+graph built (Mapping and Graph are disabled and the MCP surface
 serves only ontology information).
 Connection config stays workspace-global. Lakehouse and Lakebase Build also
 materialise Explorer indexes (`_adj_out` / `_adj_in`, `_entity_search`,

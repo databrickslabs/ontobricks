@@ -263,10 +263,11 @@ resources:
       source_code_path: .
       # User authorization so Apps injects x-forwarded-access-token with
       # SQL + identity scopes (MCP OBO + admin group checks). Issue #208.
+      # Only non-default scopes are declared; the identity scopes
+      # (iam.current-user:read, iam.access-control:read) are platform
+      # defaults — the Apps create API rejects them if listed explicitly.
       user_api_scopes:
         - sql
-        - iam.current-user:read
-        - iam.access-control:read
       # App ACL (not top-level bundle permissions — those reject CAN_USE; see #134).
       permissions:
         - level: CAN_MANAGE
@@ -293,10 +294,11 @@ resources:
       source_code_path: ./src/mcp-server
       # Inbound MCP requests need a real user token to forward as acting
       # identity (sql for UC OBO). Default Apps scopes are identity-only.
+      # Only non-default scopes are declared; the identity scopes
+      # (iam.current-user:read, iam.access-control:read) are platform
+      # defaults — the Apps create API rejects them if listed explicitly.
       user_api_scopes:
         - sql
-        - iam.current-user:read
-        - iam.access-control:read
       # App ACL (not top-level bundle permissions — those reject CAN_USE; see #134).
       permissions:
         - level: CAN_MANAGE

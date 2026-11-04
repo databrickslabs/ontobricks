@@ -1,4 +1,4 @@
-"""Lakehouse//RT guardrail routing for ``DeltaFlatStore.execute_query``.
+"""Lakehouse//RT guardrail routing for ``ReadStore.execute_query``.
 
 A read that trips a Lakehouse//RT guardrail is retried once on the build
 warehouse; any other failure propagates unchanged and never creates the
@@ -13,16 +13,14 @@ from unittest.mock import MagicMock
 import pytest
 
 from back.core.errors import InfrastructureError
-from back.core.graphdb.delta.DeltaFlatStore import (
-    RT_FALLBACK_MARKERS,
-    DeltaFlatStore,
-)
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
+from back.core.graphdb.delta.ReadStore import RT_FALLBACK_MARKERS
 
 pytestmark = pytest.mark.unit
 
-# The package re-exports the class under the module's name, so resolve the
-# real module explicitly (a dotted-string monkeypatch would hit the class).
-_STORE_MODULE = importlib.import_module("back.core.graphdb.delta.DeltaFlatStore")
+# The fallback helpers (``create_databricks_client``, ``resolve_build_warehouse_id``,
+# ``logger``) are looked up in the module that owns ``execute_query``: ReadStore.
+_STORE_MODULE = importlib.import_module("back.core.graphdb.delta.ReadStore")
 _SQL = "SELECT subject FROM cat.sch.t_graph LIMIT 5"
 
 
@@ -70,7 +68,7 @@ def _install_factory(monkeypatch, client, *, build_warehouse_id="wh-build"):
 
 
 def _store(client, *, domain=True):
-    return DeltaFlatStore(
+    return MaterializedStore(
         client,
         domain=MagicMock() if domain else None,
         settings=MagicMock() if domain else None,

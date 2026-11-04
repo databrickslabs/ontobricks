@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
-from back.core.graphdb.lakebase.LakebaseFlatStore import LakebaseFlatStore
+from back.core.graphdb.delta.MaterializedStore import MaterializedStore
+from back.core.graphdb.lakebase.FlatStore import FlatStore
 from back.core.helpers import SQLHelpers
 from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
 from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
@@ -244,13 +244,13 @@ class TestSparqlTranslatorValueFilters:
         assert self._where("Gold") == ["TRY_CAST(tier AS STRING) = 'Gold'"]
 
 
-class TestGraphDBBackendEscape:
+class TestGraphBackendEscape:
     def test_delta_store_escapes_backslash(self):
-        store = DeltaFlatStore.__new__(DeltaFlatStore)
+        store = MaterializedStore.__new__(MaterializedStore)
         assert store._sql_escape(PAYLOAD) == SQLHelpers.sql_escape(PAYLOAD, "spark")
 
     def test_lakebase_store_keeps_backslash(self):
-        store = LakebaseFlatStore.__new__(LakebaseFlatStore)
+        store = FlatStore.__new__(FlatStore)
         assert store._sql_escape(PAYLOAD) == SQLHelpers.sql_escape(PAYLOAD, "postgres")
 
 

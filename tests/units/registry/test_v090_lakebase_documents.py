@@ -318,10 +318,12 @@ def test_copy_documents_to_version_carries_text_but_never_bytes():
     db = FakeDB()
 
     assert make_store(db).copy_documents_to_version("acme", 1, 2) == (True, "")
-    call = db.one("INSERT INTO")
+    inserts = db.sql_with("INSERT INTO")
+    call = next(c for c in inserts if "domain_documents" in c.sql)
     assert "dd.parsed_text, NULL" in call.sql, "source_bytes must not be copied"
     assert "ON CONFLICT (domain_id, version, filename) DO NOTHING" in call.sql
     assert call.params == ("2", REGISTRY_ID, "acme", "1")
+    assert any("simulations" in c.sql for c in inserts)
 
 
 def test_copy_documents_to_version_reports_error():

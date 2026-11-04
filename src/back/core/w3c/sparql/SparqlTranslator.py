@@ -11,6 +11,7 @@ from back.core.helpers import (
     extract_local_name as _extract_local,
     TripleProjectionSql,
 )
+from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.w3c.sparql.SparqlCapabilityValidator import SparqlCapabilityValidator
 from back.core.w3c.sparql.TripleSQLAssembler import TripleSQLAssembler
 from back.core.w3c.sparql.SparqlValueFilterSql import SparqlValueFilterSql
@@ -1368,7 +1369,7 @@ class SparqlTranslator:
     def _get_table_source(mapping, alias=None):
         """Get table source from mapping - either table name or sql_query as subquery."""
         table = mapping.get("table")
-        sql_query = mapping.get("sql_query", "").strip()
+        sql_query = SQLHelpers.rewrite_collapsed_uc_fqn(mapping.get("sql_query") or "").strip()
 
         if sql_query:
             # Use sql_query as a subquery with an alias

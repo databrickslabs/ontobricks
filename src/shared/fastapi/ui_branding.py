@@ -12,7 +12,6 @@ from back.core.helpers import resolve_app_registry_context
 from back.core.helpers.UIBranding import (
     DEFAULT_APP_TITLE,
     DEFAULT_AURORA_COLOR,
-    DEFAULT_LOGO_PATH,
     DEFAULT_PRIMARY_COLOR,
     normalize_ui_branding,
 )

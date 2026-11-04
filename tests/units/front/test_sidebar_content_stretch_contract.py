@@ -13,7 +13,6 @@ TEMPLATES = REPO_ROOT / "src/front/templates"
 SIDEBAR_CSS = REPO_ROOT / "src/front/static/global/css/sidebar-layout.css"
 CONFIG_CSS = REPO_ROOT / "src/front/static/global/css/config.css"
 WIZARD_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-wizard.css"
-PITFALLS_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-pitfalls.css"
 ONTOLOGY_DQ_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-dataquality.css"
 QUERY_DQ_CSS = REPO_ROOT / "src/front/static/query/css/query-dataquality.css"
 QUERY_CHAT_CSS = REPO_ROOT / "src/front/static/query/css/query-chat.css"
@@ -50,10 +49,8 @@ SECTION_INVENTORY = {
         "groups",
         "dataquality",
         "swrl",
-        "cohorts",
         "axioms",
         "owl",
-        "pitfalls",
     },
     "mapping.html": {
         "information",
@@ -71,11 +68,16 @@ SECTION_INVENTORY = {
         "insight",
         "dataquality",
         "reasoning",
-        "cohorts",
         "analytics",
         "sigmagraph",
         "graphql",
         "chat",
+    },
+    "simulation.html": {
+        "scenarios",
+        "cohorts",
+        "cohort-run",
+        "runs",
     },
     "settings.html": {
         "databricks",
@@ -124,7 +126,6 @@ STRETCH_PARTIALS = (
     "partials/ontology/_ontology_cohorts.html",
     "partials/ontology/_ontology_axioms.html",
     "partials/ontology/_ontology_owl_content.html",
-    "partials/ontology/_pitfalls.html",
     "partials/mapping/_mapping_information.html",
     "partials/mapping/_mapping_import.html",
     "partials/mapping/_mapping_design.html",
@@ -569,19 +570,6 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
                 ),
                 (
                     ".wizard-metadata-table-wrap",
-                    {"max-height": "none", "overflow-y": "visible"},
-                ),
-            ),
-        ),
-        (
-            PITFALLS_CSS,
-            (
-                (
-                    "#pitfallsTabContent",
-                    {"flex": "1", "min-height": "0", "overflow-y": "auto"},
-                ),
-                (
-                    "#pitfalls-results-pane",
                     {"max-height": "none", "overflow-y": "visible"},
                 ),
             ),

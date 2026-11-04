@@ -138,12 +138,12 @@ class TwinAnalytics:
         the job reads *source_table*, which is always the mapped snapshot.
         """
         from back.core.graph_analysis import JobMetrics, LakeflowRunner
-        from back.core.graphdb.delta.DeltaBase import create_databricks_client
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.helpers import resolve_analytics_job_name
         from back.objects.registry import RegistryCfg
 
-        client = create_databricks_client(domain, settings, for_write=True)
-        if client is None:
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        if not builder.has_client():
             raise InfrastructureError(
                 "The graph analytics job output cannot be read",
                 detail="No Build SQL Warehouse client could be created",
@@ -166,7 +166,7 @@ class TwinAnalytics:
         return JobMetrics(
             source_table,
             runner=runner,
-            query=client.execute_query,
+            query=builder.execute_query,
             output_table=_dt().analytics_output_table(
                 output_schema, domain, graph_name
             ),
@@ -190,13 +190,13 @@ class TwinAnalytics:
             sample_metric_series,
             validate_metric_series_column,
         )
-        from back.core.graphdb.delta.DeltaBase import create_databricks_client
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.objects.registry import RegistryCfg
 
         metric_name = validate_metric_series_column(metric)
 
-        client = create_databricks_client(self._domain, settings, for_write=True)
-        if client is None:
+        builder = GraphDBFactory.get_builder(self._domain, settings, engine="delta")
+        if not builder.has_client():
             raise InfrastructureError(
                 "The graph analytics metric series cannot be read",
                 detail="No Build SQL Warehouse client could be created",
@@ -213,7 +213,7 @@ class TwinAnalytics:
             output_schema, self._domain, graph_name
         )
         sql = metric_series_query(output_table, metric_name)
-        rows = client.execute_query(sql) or []
+        rows = builder.execute_query(sql) or []
         sampled_rows, ranks, sampled = sample_metric_series(rows)
         total = len(rows)
         return {

@@ -1,0 +1,119 @@
+================================================================================
+## Merge origin/0.10.0 into the incremental-materialization branch
+================================================================================
+
+Context: `origin/0.10.0` (61 commits, 504 files) brings the graph backend
+split — `GraphDBBackend.py` → the `back/core/graphdb/interfaces/` package
+(`GraphBackend`, `MaterializedGraphBackend`, `VirtualBackend`, the
+`GraphBuilder` / `GraphHealthProbe` / `GraphProvisioner` / `GraphSimulation`
+capabilities vended by `GraphDBFactory`), the delta modules renamed and split
+(`DeltaFlatStore` → `ReadStore` + `MaterializedStore` + `ViewStore`,
+`DeltaBase` → `Base`, `DeltaTripleStoreBuildPipeline` → `BuildPipeline`,
+`DeltaOverviewStats` → `OverviewStats`), the lakebase modules renamed
+(`LakebaseFlatStore` → `FlatStore`, `LakebaseBase` → `Base`,
+`LakebaseGraphProvisioner` → `InstanceProvisioner`), an import-boundary
+architecture test, the what-if simulation feature, the "Graph" workspace
+name, deploy defaults on instance `10x` and `sql`-only app scopes, the
+ontology-pitfalls removal and dependency floors — on top of this branch's
+207 commits of incremental / microbatch / realtime materialization. 36 files
+conflicted; four reviewers (docs, mcp-server, translators, data quality) and
+one store port (delta) ran in parallel on disjoint files, the core merge was
+done by hand.
+
+Resolution, by area:
+
+1. Core merge (by hand): `GraphDBFactory.py` keeps our materialization-mode
+   resolution and the Neo4j store's inferred ledger with their `Store` name,
+   builders, probes, `classify_store`; `delta/__init__.py`, `lakebase/__init__.py`
+   export both sides' classes under the new names; `_companion_ddl.py` keeps our
+   asserted / live DDL and their simulation DDL; `delta/BuildPipeline.py` uses
+   `MaterializedStore`; `_build_pipeline.py` keeps our compute-once / MERGE
+   fallback / `SyncPlan` path and gains their `_delta_write_builder` /
+   `_lakebase_builder` helpers the auto-merged call sites use;
+   `schedule/build.py` keeps our tick (`_tick_modes`, `_tick_sync_plan`);
+   `dtwin.py` keeps our routes; `pyproject.toml`, `databricks.yml` (scopes:
+   `sql` only), both `uv.lock`s take theirs; `GraphDBBackend.py` is removed and
+   its `_sql_relation` docstring note lives in `interfaces/GraphBackend.py`.
+2. Delta store port (reviewer): our Lakehouse//RT fast path (`_sql_relation`
+   via `GraphReadRelation`, `execute_query(bounded=)`, `RT_FALLBACK_MARKERS`,
+   the build-warehouse fallback) lives in `ReadStore`; our companion rebuild
+   improvements in `MaterializedStore`; `expand_and_fetch_subgraph`'s
+   recursive-CTE assembly extracted to `ReadStore._expansion_sql` (Extract
+   Method: the merged method was 114 LOC).
+3. Translators (reviewer): `SparqlTranslator` keeps our incremental SQL and
+   `TripleSQLAssembler` plus their collapsed-UC-FQN rewrite; `SWRLSQLTranslator`
+   keeps our negation / incremental filters and takes their dialect-aware
+   builtin compile (`SWRLBuiltinRegistry.sql_template_for`: Postgres `RLIKE`,
+   `DATEDIFF`, guarded `::float8` casts) — the merged class crossed the 800-LOC
+   ceiling, so the builtin compile is extracted to
+   `swrl/SWRLSQLBuiltinFilters.py` (`resolve_arg`, `build`; Extract Class) and
+   our superseded `SWRLSQLBuiltinFilters` string-rewrite module is gone;
+   `tests/units/ontology/test_swrl_builtin_defects.py` asserts the guarded
+   Postgres cast instead of `DOUBLE PRECISION`.
+4. Data quality / misc (reviewer): `DataQualitySnapshot`, `models.py`,
+   `agents/tools/mapping.py` take their factory / builder wiring; tests patch
+   `delta.Base.create_databricks_client` and `ViewStore`.
+5. mcp-server (reviewer): theirs (both sides had implemented the same two MCP
+   fixes); docs (reviewer): both sides merged, README "What's new in 0.10.0"
+   folds our 0.9.2 bullets, "Knowledge Graph" → "Graph".
+6. Rename sweep: 23 non-conflicted files still naming the old modules now
+   import `delta.Base`, `delta.MaterializedStore`, `lakebase.Base`,
+   `lakebase.FlatStore` (aliased where our identifiers stay), tests patch the
+   owning modules (`MaterializedStore.materialize`, `lakebase.Builder.Builder.
+   resolve_sync_uc_fallback_catalog`, `neo4j.Store.Store`).
+7. Import boundary (`tests/units/architecture/test_backend_import_boundary.py`):
+   the materialization orchestration (`back/objects/digitaltwin/build/`,
+   `back/objects/registry/schedule/`) is engine-aware by design and may import
+   the engines' mechanics; a second test forbids it the concrete stores and
+   backend roots. Accordingly: `TwinLiveServing`, `TwinRealtimeStream` and the
+   scheduled tick ask `GraphDBFactory.classify_store(store) == "lakebase"`
+   instead of `isinstance(store, LakebaseBase)`; `TwinIncrementalStatus` and
+   `TwinLiveServing` get the sync fallback catalog from the Lakebase `Builder`;
+   `TwinLakebaseSync` imports `SYNC_TABLE_MODES` from the `lakebase` package
+   (now exported); `dtwin.py` and `TwinRealtimeStream` take the caller's
+   build-warehouse client from the new `GraphDBFactory.build_warehouse_client`
+   (one copy of what both duplicated); `CohortBuilder` and `ReasoningService`
+   call the new interface method `GraphBackend.record_inferred(triples)`
+   (default no-op; the Neo4j `Store` forwards to its ledger) instead of
+   importing `InferredTripleLedger`; `classify_store` keys on the Lakebase
+   hat root `Base` (every Lakebase store and test double derives from it).
+   `.cursor/07-project-conventions.mdc` states the carve-out.
+8. Size baseline: resolved as a true merge — the union of both parents'
+   entries, then `python -m tests.units.architecture.ratchet` (shrink-only)
+   dropped the stale ones; the two offenders the union created were fixed
+   (items 2 and 3), not baselined.
+9. docs/incremental-materialization.md names the new store classes.
+10. Lockfiles: the merged `pyproject.toml`s are identical to 0.10.0's, but
+    0.10.0's root `uv.lock` records 3 226 `pypi-proxy.dev.databricks.com`
+    sources (the README forbids committing them; CI's public runners cannot
+    resolve them) and `uv lock --check` reported both locks stale. Both were
+    regenerated with `uv lock` against public PyPI: every package version is
+    unchanged (only `source` / artifact URLs differ), no proxy URL remains,
+    `uv lock --check` passes for both.
+11. Test seams of the merge: `tests/units/core/test_lakebase_flat_store.py`
+    constructs `FlatStore`; `tests/units/settings/test_bundle_job_resource.py`
+    expects the `sql` scope alone (their #218 rationale); the type-filter test
+    in `tests/units/dtwin/test_digitaltwin_api.py` patches their
+    `TwinGraphAccess.graph_query_table` (the resolver the route now uses); the
+    `_FakeStore` / `MagicMock(spec=…)` store doubles gain `record_inferred`;
+    `_companion_ddl.drop_view` drops the `_asserted` companion only for a
+    graph's union view — a simulation union (`__smu_`) has none (their
+    `test_simulation_union_drop_all_drops_overlay_view`).
+12. app.yaml.template / scripts/deploy.config.sh — the five realtime values
+    (`ONTOBRICKS_REALTIME_ENABLED`, `_JOB_NAME`, `_LAKEBASE_USER`,
+    `_LAKEBASE_SECRET`, `_CHECKPOINT_ROOT`) were hard-coded in the template
+    (`"false"` / `""`), so every re-render of `app.yaml` switched a streaming
+    deployment off — the sandbox deployment had to be edited by hand. They now
+    render from `APP_REALTIME_*` (defaults `false` / empty in the deploy
+    config; the empty ones are optional entries the renderer strips), as the
+    instance ids already do in 0.10.0. docs/incremental-materialization.md
+    says so in the Realtime deployment paragraph.
+
+Modified files: see `git show --stat` of the merge commit (the 36 conflicted
+files, the 23 rename-swept files, the boundary refactor files, the new
+`src/back/core/reasoning/swrl/SWRLSQLBuiltinFilters.py`, this log).
+
+Test result: `uv run --frozen pytest -q -m "not scenario" -o faulthandler_timeout=240`
+on the merged tree — 11796 passed, 335 skipped, 9 deselected; `uv lock --check`
+clean for both lockfiles; `tests/units/architecture` 11 passed (both boundary
+tests included).

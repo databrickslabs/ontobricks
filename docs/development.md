@@ -360,11 +360,11 @@ and source downloads used by `uv run --frozen` in Databricks Apps. Never commit
 commands, always pass `--frozen` so uv cannot rewrite the lock.
 
 Current explicit security floors include
-`databricks-sql-connector>=4.4.0`, `mlflow>=3.17.2`, `nltk>=3.10.4`,
-`sentence-transformers>=5.6.0`, `pip>=26.2.0`, `transformers>=5.10.0`,
+`databricks-sql-connector>=4.4.0`, `mlflow>=3.17.2`, `pip>=26.2.0`,
 `gitpython>=3.2.1`, `pyjwt>=2.15.0`, `urllib3>=2.8.0`, `anyio>=4.14.2`,
 `authlib>=1.9.1`, `dnspython>=2.9.0`, `msgpack>=1.2.3`, `pillow>=13.0.0`,
-`filelock>=4.2.1`, `certifi>=2026.10.19`, and `cryptography>=50.0.0`.
+`filelock>=4.2.1`, `certifi>=2026.10.19`, `cryptography>=50.0.0`,
+`pyasn1>=0.6.5`, `graphql-core>=3.3.1`, and `joserfc>=1.7.6`.
 `oauthlib>=4` is blocked by `databricks-sql-connector` (`oauthlib<4`).
 `pyproject.toml` remains authoritative.
 
@@ -546,7 +546,7 @@ Databricks workspace.
 
 | Test File | Module Under Test | What Is Verified |
 |-----------|-------------------|------------------|
-| `test_lakebase_flat_store.py` | `back.core.graphdb.lakebase.LakebaseFlatStore` | Table lifecycle, `insert_triples` (small + bulk paths via `bulk_insert_iter`), `query_triples`, `count_triples`, `delete_triples`, `bulk_delete_iter`, named queries (BFS, transitive closure, symmetric expansion), capability flags |
+| `test_lakebase_flat_store.py` | `back.core.graphdb.lakebase.FlatStore` | Table lifecycle, `insert_triples` (small + bulk paths via `bulk_insert_iter`), `query_triples`, `count_triples`, `delete_triples`, `bulk_delete_iter`, named queries (BFS, transitive closure, symmetric expansion), capability flags |
 | `test_synced_table_manager.py` | `back.core.graphdb.lakebase.SyncedTableManager` | Idempotent `ensure`, `_build_synced_table_payload`, refresh trigger, polling, race-handling on `ALREADY_EXISTS`, deletion |
 | `test_graphdb_factory.py` | `back.core.graphdb.GraphDBFactory` | Default engine resolution (`lakebase`), `engine_config` propagation, unknown-engine handling |
 
@@ -618,7 +618,7 @@ open htmlcov/index.html
 | `back/core/w3c/owl/OntologyGenerator.py` | 50% | Advanced OWL features (annotations, complex axioms) less covered |
 | `back/core/w3c/sparql/SparqlTranslator.py` | 41% | Large module; advanced translation paths need Databricks |
 | Routes (`front/routes/`, `api/routers/internal/`) | 11-40% | Route handlers require full app context for deeper testing |
-| `back/core/graphdb/lakebase/LakebaseFlatStore.py` | ~80% | Triple CRUD, bulk paths and named queries covered with mocked psycopg |
+| `back/core/graphdb/lakebase/FlatStore.py` | ~80% | Triple CRUD, bulk paths and named queries covered with mocked psycopg |
 | `back/core/graphdb/lakebase/SyncedTableManager.py` | ~85% | `ensure` idempotency, refresh trigger, polling and delete fully tested with mocked Databricks SDK |
 
 Modules with 0% coverage (`back/core/w3c/rdfs`, `back/core/sqlwizard`, `back/core/databricks/unity_catalog/MetadataService.py`) are either not yet tested or depend entirely on external services.
@@ -765,10 +765,11 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
 | Registry modal (`/?open=registry`) | Navbar boxes icon (`bi-boxes`) → Browse + Bridges modal |
 | Settings `/settings` | Databricks/Global/backends config; Admin → Teams; Automation (Scheduler, Runs — admin only, all domains); Developer → API |
-| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Cohorts, Expr. & Axioms, Pitfalls); Studio **Export** (OWL); section divs, OntoViz script |
+| Ontology `/ontology` | Sidebar section groups: Ontology Editor (General, Import, Generate, Studio, Groups, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms); Studio **Export** (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with section links (General, Import, Studio, Manual, Auto-Map, Diagnostics, Spark SQL), Studio **Export** (R2RML), mapping-core.js |
 | Domain `/domain` | Sidebar with section links (General, Versions, Publication, Data Assets, Knowledge Store, My Tasks, Discussions, Cockpit, Audit trail, OWL, R2RML), section divs |
-| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Graph Viewer, GraphQL), Advanced (Data Quality, Reasoning); Sigma.js script |
+| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Explorer, Query, Chat), Build, Advanced (Data Quality, Inference, Analytics); Sigma.js script |
+| Simulation `/simulation/` | Sidebar: Cohorts, Run, Scenarios, Results, Runs; scenario editor is opened from New/Open; cohort design + run partials; what-if sandbox JS |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**
@@ -1514,7 +1515,7 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 
 #### 3.4 Menu and client-side navigation
 
-- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, Knowledge Graph, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update `breadcrumb.js` `_ROUTE_MAP` (and any hardcoded labels such as the help walkthrough); `tests/units/front/test_knowledge_graph_icon.py` guards Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
+- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, Graph, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update `breadcrumb.js` `_ROUTE_MAP` (and any hardcoded labels such as the help walkthrough); `tests/units/front/test_knowledge_graph_icon.py` guards Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
 - **JavaScript:** under `src/front/static/global/js/` (sidebar, navbar, domain actions). Pages load shared layout partials from templates and drive **in-page tabs** via menu item IDs rather than full page loads for every interaction.
 
 #### 3.5 Core UI concerns (conceptual)

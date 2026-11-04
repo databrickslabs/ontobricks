@@ -238,6 +238,10 @@ succeeds, with the full mapping payload.
 
 SQL RULES FOR ENTITIES (CRITICAL)
 • Always use the full table name from the slice (catalog.schema.table).
+• Quote each Unity Catalog segment separately, never wrap the full \
+catalog.schema.table in one pair of backticks: FROM `catalog.schema.table` \
+is illegal Spark SQL. Write FROM catalog.schema.table or \
+FROM `catalog`.`schema`.`table`.
 • The FIRST column MUST be aliased AS ID — it MUST be the canonical-ID \
 column the slice specifies for the chosen table.
 • The SECOND column MUST be aliased AS Label — pick the most human-readable \

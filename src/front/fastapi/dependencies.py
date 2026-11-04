@@ -41,7 +41,7 @@ if (
     and _partials_dir not in templates.env.loader.searchpath
 ):
     templates.env.loader.searchpath.append(_partials_dir)
-    for _sub in ("layout", "ontology", "mapping", "dtwin", "domain", "registry"):
+    for _sub in ("layout", "ontology", "mapping", "dtwin", "simulation", "domain", "registry"):
         _sub_dir = os.path.join(_partials_dir, _sub)
         if os.path.isdir(_sub_dir) and _sub_dir not in templates.env.loader.searchpath:
             templates.env.loader.searchpath.append(_sub_dir)

@@ -5,10 +5,13 @@
             {% include "partials/dtwin/_kg_status_indicator.html" %}
         </h4>
         <p class="text-muted mb-0 small">
-            Query the current Knowledge Graph with GraphQL or SPARQL
+            Query the current graph with GraphQL or SPARQL
         </p>
     </div>
-    <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        {% with select_id="queryGraphSource" %}
+        {% include "partials/dtwin/_kg_graph_source.html" %}
+        {% endwith %}
         <button type="button"
                 class="btn btn-sm btn-outline-primary"
                 data-query-action="ontology"
@@ -18,7 +21,7 @@
         <button type="button"
                 class="btn btn-sm btn-outline-primary onto-discuss-btn"
                 data-query-action="discussion"
-                title="Open the Knowledge Graph discussion">
+                title="Open the Graph discussion">
             <i class="bi bi-chat-dots"></i>
         </button>
     </div>

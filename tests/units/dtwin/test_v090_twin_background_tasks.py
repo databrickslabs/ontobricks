@@ -220,7 +220,7 @@ class TestDataQualityTask:
         with patch("back.core.graphdb.get_graphdb", get_graphdb), patch.object(
             DigitalTwin, "run_sql_checks", side_effect=checks_exc
         ) as checks, patch(
-            "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+            "back.core.graphdb.delta.Base.create_databricks_client",
             _client,
         ), patch(
             "back.core.graphdb.delta.materialize.materialize_from_view",

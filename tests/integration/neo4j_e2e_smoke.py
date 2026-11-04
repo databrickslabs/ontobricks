@@ -1,4 +1,4 @@
-"""End-to-end smoke test that exercises the actual Neo4jStore class
+"""End-to-end smoke test that exercises the actual Store class
 from the feature/neo4j-graphdb-skeleton branch against the live Aura
 instance Ryan provisioned.
 
@@ -36,10 +36,10 @@ engine_config = {
     "password": creds["NEO4J_PASSWORD"],
 }
 
-# Import the actual production Neo4jStore from the PR branch
-from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore  # noqa: E402
+# Import the actual production Store from the PR branch
+from back.core.graphdb.neo4j.Store import Store  # noqa: E402
 
-store = Neo4jStore(db_name="pr47_smoke_2026_06_09", engine_config=engine_config)
+store = Store(db_name="pr47_smoke_2026_06_09", engine_config=engine_config)
 
 TABLE = "pr47_smoke_2026_06_09"
 print(f"=== E2E smoke test against {engine_config['uri']} ===")

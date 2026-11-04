@@ -143,7 +143,7 @@ class TwinRealtimeStream:
         (when the job is configured) and retires ``_live``; with realtime off
         no Postgres query is made.
         """
-        from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         decision = getattr(pipe, "mode_decision", None)
         realtime = getattr(decision, "effective", "") == "realtime"
@@ -157,7 +157,7 @@ class TwinRealtimeStream:
                 pipe.slots_seed_version = started.get("slots_version")
             elif (
                 enabled
-                and isinstance(store, LakebaseBase)
+                and GraphDBFactory.classify_store(store) == "lakebase"
                 and TwinLiveServing.serving(store, pipe.domain)
             ):
                 stopped = stream.stop_quietly(pipe.domain, store=store)
@@ -297,14 +297,9 @@ class TwinRealtimeStream:
 
     def _client(self, domain: Any) -> Any:
         """The domain's client on its build warehouse (the ``_slots`` snapshot read)."""
-        from back.core.graphdb.delta.DeltaBase import create_databricks_client
-        from back.core.helpers import resolve_build_warehouse_id
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        return create_databricks_client(
-            domain,
-            self._settings,
-            warehouse_id=resolve_build_warehouse_id(domain, self._settings) or None,
-        )
+        return GraphDBFactory.build_warehouse_client(domain, self._settings)
 
     @staticmethod
     def _mappings(domain: Any) -> tuple:

@@ -73,7 +73,7 @@ def _warehouse(log: list):
 
 def _apply(store, src, *, domain=None, settings=None, source_tables=None, mappings=None):
     with patch(
-        "back.core.graphdb.lakebase.LakebaseFlatStore.resolve_sync_uc_fallback_catalog",
+        "back.core.graphdb.lakebase.Builder.Builder.resolve_sync_uc_fallback_catalog",
         return_value="cat",
     ), patch(
         "back.core.graphdb.lakebase._sync_uc_schema.ensure_uc_schema_for_synced_table_fqn"

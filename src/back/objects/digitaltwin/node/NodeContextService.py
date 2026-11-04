@@ -647,12 +647,16 @@ class NodeContextService:
         entity_uri: str,
         rule_name: str,
         context_policy: Optional[Dict[str, str]] = None,
+        simulation_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Trigger a class-declared SWRL business rule on *entity_uri*.
 
         A domain that disabled the ``business_rules`` context element refuses
         every execution, independently of whether the
         ``run_entity_business_rule`` MCP tool is still exposed.
+
+        When *simulation_id* is set, inference reads and writes that
+        simulation's sandbox (the live graph is left untouched).
         """
         resolved = NodeContextService.resolve_business_rule(
             domain,
@@ -666,6 +670,7 @@ class NodeContextService:
             entity_uri=entity_uri,
             matched_cls=resolved["matched_cls"],
             rule_name=resolved["rule"]["name"],
+            simulation_id=simulation_id,
         )
 
     # ------------------------------------------------------------------

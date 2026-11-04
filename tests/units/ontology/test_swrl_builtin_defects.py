@@ -125,8 +125,9 @@ class TestDefect4PostgresDialect:
         sql = SWRLSQLTranslator(dialect="postgres").build_inference_sql("t", _params())
         assert sql is not None
         assert "TRY_CAST" not in sql
-        assert "CAST(" in sql
-        assert "DOUBLE PRECISION" in sql
+        # The Postgres template guards the cast (``CASE WHEN … ~ … THEN …::float8``).
+        assert "::float8" in sql
+        assert "DOUBLE PRECISION" not in sql
 
     def test_databricks_dialect_unchanged(self):
         sql = SWRLSQLTranslator(dialect="databricks").build_inference_sql(
@@ -136,7 +137,7 @@ class TestDefect4PostgresDialect:
         assert "DOUBLE PRECISION" not in sql
 
     def test_lakebase_backend_hands_out_postgres_dialect(self):
-        from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+        from back.core.graphdb.lakebase.Base import Base as LakebaseBase
 
         translator = LakebaseBase.get_query_translator(None)
         assert isinstance(translator, SWRLSQLTranslator)

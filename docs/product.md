@@ -184,6 +184,7 @@ flowchart LR
 | Quality Checks        | Async validation against ontology constraints (cardinality, orphans, value rules)    |
 | Dashboard Integration | Embed Databricks dashboards with parameter mapping to ontology entities              |
 | Triples Grid          | Sortable, searchable table view of all materialized triples                          |
+| What-if Simulation    | Assert hypothetical facts on a sandbox copy of a graph slice, re-run reasoning, compare before/after — the live graph is never touched (Lakebase) |
 
 
 #### Domain Management

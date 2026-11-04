@@ -24,11 +24,6 @@
                 <div class="ob-kpi-tile-value" id="kpiMappings">-</div>
                 <div class="ob-kpi-tile-label">Mappings</div>
             </div>
-            <div class="ob-kpi-tile tile-muted" id="kpiQualityTile">
-                <div class="ob-kpi-tile-icon"><i class="bi bi-patch-check"></i></div>
-                <div class="ob-kpi-tile-value" id="kpiQuality">-</div>
-                <div class="ob-kpi-tile-label">Quality</div>
-            </div>
             <div class="ob-kpi-tile tile-muted" id="kpiStatusTile">
                 <div class="ob-kpi-tile-icon"><i class="bi bi-flag"></i></div>
                 <div class="ob-kpi-tile-value" id="kpiStatus">-</div>
@@ -283,7 +278,7 @@
                             <div class="alert alert-info border small mt-2 py-2 mb-0 {% if domain.graph_backend != 'none' %}d-none{% endif %}" id="noBackendNotice">
                                 <i class="bi bi-diagram-2 me-1"></i>
                                 <strong>Ontology-only domain.</strong> No graph is built: the
-                                <strong>Mapping</strong> and <strong>Knowledge Graph</strong> features are disabled,
+                                <strong>Mapping</strong> and <strong>Graph</strong> features are disabled,
                                 the graph MCP tools are turned off (only <code>describe_ontology</code> is exposed),
                                 and the domain can be submitted for review and published on its ontology alone.
                             </div>

@@ -198,6 +198,9 @@ const GraphQLPlayground = (() => {
         function depthFetcher(graphQLParams, fetcherOpts) {
             var depth = parseInt((_el('graphqlDepthSelect') || {}).value || _depthDefault, 10);
             var body = Object.assign({}, graphQLParams, { depth: depth });
+            if (typeof KgGraphSource !== 'undefined') {
+                body = KgGraphSource.applyToBody(body);
+            }
             return fetch(endpointUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

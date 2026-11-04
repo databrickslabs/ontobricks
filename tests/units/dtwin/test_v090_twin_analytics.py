@@ -102,7 +102,7 @@ def _job_wiring(client):
     create = MagicMock(return_value=client)
     rcfg = SimpleNamespace(catalog="reg_cat", schema="reg_sch")
     with patch(
-        "back.core.graphdb.delta.DeltaBase.create_databricks_client", create
+        "back.core.graphdb.delta.Base.create_databricks_client", create
     ), patch("back.core.graph_analysis.LakeflowRunner") as runner, patch(
         "back.core.graph_analysis.JobMetrics"
     ) as job_metrics, patch(
@@ -125,7 +125,9 @@ class TestBuildJobMetrics:
         runner.assert_called_once_with("ob-analytics", timeout_s=3600)
         args, kwargs = job_metrics.call_args
         assert args == ("c.s.v_data",)
-        assert kwargs["query"] == client.execute_query
+        # Query routes through the Build-warehouse client vended by the builder.
+        kwargs["query"]("SELECT 1")
+        client.execute_query.assert_called_once_with("SELECT 1")
         assert kwargs["output_table"] == "reg_cat.reg_sch.graph_metrics_sales_domain_4"
         assert kwargs["top_n"] == 5
         assert kwargs["pagerank_iterations"] == 20

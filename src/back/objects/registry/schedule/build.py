@@ -90,11 +90,10 @@ def _is_managed_synced(store) -> bool:
 def _view_sql_for_graph_store(sql_text: str, store) -> str:
     """Return VIEW DDL, emitting ``object_hash`` when Lakeflow sync is active."""
     if store and _is_managed_synced(store):
-        from back.core.graphdb.lakebase._companion_ddl import (
-            wrap_triple_view_sql_for_lakeflow,
-        )
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        return wrap_triple_view_sql_for_lakeflow(sql_text)
+        builder = GraphDBFactory.get_builder(None, engine="lakebase")
+        return builder.wrap_view_sql_for_lakeflow(sql_text)
     return sql_text
 
 
@@ -130,16 +129,12 @@ def _apply_synced_pipeline(
     table's state after its refresh. Without a *domain* the
     ``…_data`` name cannot be resolved and the gateway VIEW stays the source.
     """
-    from back.core.graphdb.lakebase.LakebaseFlatStore import (
-        resolve_sync_uc_fallback_catalog,
-    )
-    from back.core.graphdb.lakebase._sync_uc_schema import (
-        ensure_uc_schema_for_synced_table_fqn,
-    )
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
+    builder = GraphDBFactory.get_builder(domain, settings, engine="lakebase")
     mgr = store.synced_manager()
     if domain is not None and settings is not None:
-        fallback_cat = resolve_sync_uc_fallback_catalog(domain, settings, delta_cfg)
+        fallback_cat = builder.resolve_sync_uc_fallback_catalog(delta_cfg)
     else:
         fallback_cat = (delta_cfg or {}).get("catalog", "")
     synced_uc = store.synced_uc_name(graph_name, fallback_catalog=fallback_cat)
@@ -152,7 +147,7 @@ def _apply_synced_pipeline(
         fallback_cat or None,
         store.graph_schema,
     )
-    ensure_uc_schema_for_synced_table_fqn(
+    builder.ensure_uc_schema_for_synced(
         src,
         synced_uc,
         task_log_prefix=f"Scheduled build [{domain_name}]",
@@ -461,13 +456,12 @@ def _realtime_tick(ctx: TaskContext, store) -> Dict[str, Any]:
     tombstones; any other domain or store records nothing.
     """
     from back.core.graphdb.GraphDBFactory import GraphDBFactory, normalize_materialization_mode
-    from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
     from back.objects.digitaltwin.build import TwinRealtimeStream
 
     mode = normalize_materialization_mode(
         GraphDBFactory.resolve_materialization_mode(ctx.domain, ctx.settings)
     )
-    if mode != "realtime" or not isinstance(store, LakebaseBase):
+    if mode != "realtime" or GraphDBFactory.classify_store(store) != "lakebase":
         return {}
     try:
         return TwinRealtimeStream(ctx.settings).after_tick(ctx.domain, store)
@@ -494,9 +488,10 @@ def _count_view_triples(src, view_table: str) -> int:
     Raises :class:`InfrastructureError` when the count cannot run, so a
     scheduled rebuild does not look like an empty mapping.
     """
-    from back.core.graphdb.delta import materialize
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    return materialize.count_triples(src, view_table)
+    builder = GraphDBFactory.get_builder(None, engine="delta", client=src)
+    return builder.count_triples(view_table)
 
 
 def _is_lakehouse(domain: Any, settings: Any) -> bool:
@@ -596,7 +591,7 @@ def _write_graph_triples(
             mappings=mappings,
         )
         try:
-            return _count_view_triples(src, view_table)
+            return _count_view_triples(src, view_table, domain, settings)
         except InfrastructureError as exc:
             logger.warning(
                 "Scheduled build [%s]: could not count the synced triples "
@@ -610,7 +605,7 @@ def _write_graph_triples(
             src, domain, settings, view_table, source_tables=source_tables, mappings=mappings
         )
 
-    triple_count = _count_view_triples(src, view_table)
+    triple_count = _count_view_triples(src, view_table, domain, settings)
     logger.info(
         "Scheduled build [%s]: %d triples reported by VIEW",
         domain_name,

@@ -207,6 +207,51 @@ CREATE INDEX IF NOT EXISTS idx_build_runs_domain_version
     ON build_runs(domain_id, version, started_at DESC);
 
 -- ----------------------------------------------------------------
+-- Simulations — named what-if sandboxes per (domain_id, version).
+-- ``spec`` holds scope / patches / phases; ``diff`` the capped
+-- added/removed triples of the last run. The sandbox triples live in
+-- the graph schema (``<graph>__sim_<id>``), never here.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS simulations (
+    domain_id           uuid NOT NULL
+                        REFERENCES domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    id                  text NOT NULL,
+    label               text NOT NULL DEFAULT '',
+    status              text NOT NULL DEFAULT 'draft',  -- draft|running|ready|failed
+    spec                jsonb NOT NULL DEFAULT '{}'::jsonb,
+    diff_summary        jsonb NOT NULL DEFAULT '{}'::jsonb,
+    diff                jsonb NOT NULL DEFAULT '{}'::jsonb,
+    owner               text NOT NULL DEFAULT '',
+    task_id             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    updated_at          timestamptz NOT NULL DEFAULT now(),
+    last_run_at         timestamptz,
+    PRIMARY KEY (domain_id, version, id)
+);
+
+CREATE TABLE IF NOT EXISTS simulation_runs (
+    id                  bigserial PRIMARY KEY,
+    domain_id           uuid NOT NULL
+                        REFERENCES domains(id) ON DELETE CASCADE,
+    version             text NOT NULL,
+    simulation_id       text NOT NULL,
+    status              text NOT NULL,                    -- success|error
+    message             text NOT NULL DEFAULT '',
+    error               text NOT NULL DEFAULT '',
+    task_id             text NOT NULL DEFAULT '',
+    started_at          timestamptz NOT NULL DEFAULT now(),
+    finished_at         timestamptz,
+    duration_s          double precision NOT NULL DEFAULT 0,
+    stats               jsonb NOT NULL DEFAULT '{}'::jsonb,
+    owner               text NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_simulation_runs_domain_version
+    ON simulation_runs(domain_id, version, started_at DESC);
+
+-- ----------------------------------------------------------------
 -- Graph analytics cache — the LAST computed knowledge-graph metrics
 -- result per (domain_id, version). Unlike build_runs this is a cache,
 -- not a trace: a single row per tuple, replaced on every successful

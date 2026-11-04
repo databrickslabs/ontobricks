@@ -41,7 +41,7 @@ def test_purge_materialized_inferences_returns_graph_and_count(api_client):
 def test_purge_materialized_inferences_rejects_unsafe_backend(api_client):
     store = MagicMock()
     store.purge_materialized_triples.side_effect = NotImplementedError(
-        "Neo4jStore cannot safely purge generated triples"
+        "Store cannot safely purge generated triples"
     )
 
     with (

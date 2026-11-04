@@ -61,7 +61,7 @@ logger = get_logger(__name__)
 
 # Dependencies are imported inside the methods, as elsewhere in this package:
 # ``back.core.graphdb.delta`` imports this build package back (through
-# ``DeltaTripleStoreBuildPipeline``) and ``back.core.streaming`` reaches it
+# ``BuildPipeline``) and ``back.core.streaming`` reaches it
 # through the SPARQL translator, so module-level imports are circular.
 
 # The translator's all-triples query; the incremental flag turns it into the
@@ -186,7 +186,7 @@ class TwinIncrementalBuild:
         """True for the Delta engine, whose ``…_data`` / ``…_graph`` already are the graph.
 
         Streaming into its store would route every triple into ``…_inferred``
-        (``DeltaFlatStore.insert_triples``) right after the build reset it.
+        (``MaterializedStore.insert_triples``) right after the build reset it.
         Records the trace's ``apply_mode``: ``none`` here, ``full_stream`` otherwise.
         """
         from back.core.graphdb.GraphDBFactory import GraphDBFactory

@@ -36,7 +36,7 @@
 # Lowercase alphanumeric + hyphens only (becomes part of the app name
 # and the DAB target: ``dev-lakebase-<id>``).
 # Env-overridable: ``DEFAULT_INSTANCE_ID=080 make deploy``.
-DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-09x}"
+DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-10x}"
 
 # Optional: force a DAB target instead of the auto ``ontobricks-<id>``.
 # Use only to keep managing a pre-INSTANCE_ID deploy whose local state
@@ -58,19 +58,19 @@ DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
 # Unity Catalog
 DEFAULT_REGISTRY_CATALOG="benoit_cayla"
 # UC schema for the registry Delta objects (Knowledge Graph builds)
-DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_09_repository"
+DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_10_repository"
 
 # Lakebase Autoscaling project + branch
-DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-09-registry"
+DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-10-registry"
 DEFAULT_LAKEBASE_BRANCH="production"
 # Postgres database (datname) on the shared Lakebase instance — the value of
 # status.postgres_database from list-databases (underscores OK). Do NOT copy the
 # hyphenated database_id from the resource path name; those differ when the
 # datname contains underscores (API uses hyphens only in database_id / RFC-1123).
 # Each app gets its own SCHEMA inside this database.
-DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_09_registry_db"
+DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_10_registry_db"
 # Postgres schema inside the Lakebase database, Each instance should have its own schema for isolation.
-DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_09_registry_sc"
+DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_10_registry_sc"
 # Example — reuse existing schema: DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
 
 # ── 0c. Derived defaults (auto-computed — do NOT edit) ────────────────
@@ -168,6 +168,17 @@ export APP_LAKEBASE_BRANCH="${APP_LAKEBASE_BRANCH:-$LAKEBASE_BRANCH}"
 # Lakebase managed-synced UC catalog (leave empty to auto-resolve).
 # Intentionally NOT using :- so stale exports never bleed through.
 export APP_SYNC_UC_CATALOG=""
+
+# Realtime materialization (ONTOBRICKS_REALTIME_* in app.yaml). Off by default;
+# a deployment that streams sets the DAB job name (a development target prefixes
+# it with "[dev <user>] "), the Postgres role the stream job writes _live as,
+# the Databricks secret ("scope/key") holding that role's password, and a UC
+# volume path for the checkpoints. See docs/incremental-materialization.md.
+export APP_REALTIME_ENABLED="${APP_REALTIME_ENABLED:-false}"
+export APP_REALTIME_JOB_NAME="${APP_REALTIME_JOB_NAME:-}"
+export APP_REALTIME_LAKEBASE_USER="${APP_REALTIME_LAKEBASE_USER:-}"
+export APP_REALTIME_LAKEBASE_SECRET="${APP_REALTIME_LAKEBASE_SECRET:-}"
+export APP_REALTIME_CHECKPOINT_ROOT="${APP_REALTIME_CHECKPOINT_ROOT:-}"
 
 # MLflow tracking URI.
 export APP_MLFLOW_TRACKING_URI="${APP_MLFLOW_TRACKING_URI:-$DEFAULT_APP_MLFLOW_TRACKING_URI}"

@@ -2003,7 +2003,6 @@ make bootstrap-perms
 
 | Item | When needed |
 |------|-------------|
-| **`uv sync --frozen --extra pitfalls`** | ML-based pitfalls detection panel |
 | **`managed_synced` graph mode** | UC catalog ALL_PRIVILEGES (`-c` / `UC_CATALOG` on bootstrap script) |
 | **Lakebase via UI “New project”** | **Avoid** for Synced Tables — use `scripts/bootstrap/setup-lakebase.sh` instead |
 | **Volume-only backend** | Deploy with `make deploy-volume` (`-t dev`) — skips Lakebase checks |

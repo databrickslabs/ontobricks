@@ -366,7 +366,7 @@ class TestReconcileRoute:
     def route(self, monkeypatch):
         from api.routers.internal import dtwin
         import back.core.helpers as helpers_pkg
-        from back.core.graphdb.delta import DeltaBase
+        from back.core.graphdb.delta import Base as DeltaBase
 
         domain = _Domain()
         seen: dict = {}

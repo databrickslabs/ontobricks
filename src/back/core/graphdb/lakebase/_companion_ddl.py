@@ -100,6 +100,122 @@ def asserted_view_phy(name: str) -> str:
 def live_phy(name: str) -> str:
     """Postgres table name of a ``realtime`` domain's ``_live`` serving table."""
     return f"{_safe(name)}_live"
+SIM_TABLE_MARKER = "__sim_"
+SIM_UNION_INFERRED_MARKER = "__smu_"
+SIM_OVERLAY_MARKER = "__smp_"
+_PG_IDENTIFIER_MAX_BYTES = 63
+
+
+def _sim_named(name: str, sim_id: str, marker: str) -> str:
+    if not (sim_id or "").strip():
+        raise ValueError("Simulation id is required")
+    sid = safe_identifier(sim_id.strip()).lower()
+    suffix = f"{marker}{sid}"
+    budget = _PG_IDENTIFIER_MAX_BYTES - len(suffix)
+    if budget < 1:
+        raise ValueError(f"Simulation id too long: {sim_id!r}")
+    stem = _safe(name)[:budget].rstrip("_") or "g"
+    return f"{stem}{suffix}"
+
+
+def sim_phy(name: str, sim_id: str) -> str:
+    """Postgres table name for one simulation sandbox of graph *name*.
+
+    The result is its own physical identifier (``physical_table_id`` maps it
+    to itself), so it can be passed to the store as a logical table name.
+    The graph stem is trimmed so the identifier stays within Postgres's
+    63-byte limit while the ``__sim_<id>`` suffix is always preserved.
+    """
+    return _sim_named(name, sim_id, SIM_TABLE_MARKER)
+
+
+def sim_union_phy(name: str, sim_id: str) -> str:
+    """Read-only view: live inferred graph with sandbox after-picture per patched predicate."""
+    return _sim_named(name, sim_id, SIM_UNION_INFERRED_MARKER)
+
+
+def sim_overlay_phy(name: str, sim_id: str) -> str:
+    """Companion of ``(subject, predicate)`` pairs the sandbox has owned."""
+    return _sim_named(name, sim_id, SIM_OVERLAY_MARKER)
+
+
+def overlay_phy_from(relation: str) -> str:
+    """Map a ``__sim_`` / ``__smu_`` identifier to its ``__smp_`` companion."""
+    name = relation or ""
+    leaf = name.split(".")[-1].strip('"')
+    if SIM_OVERLAY_MARKER in leaf:
+        return name
+    if SIM_UNION_INFERRED_MARKER in name:
+        return name.replace(SIM_UNION_INFERRED_MARKER, SIM_OVERLAY_MARKER, 1)
+    if SIM_TABLE_MARKER in name:
+        return name.replace(SIM_TABLE_MARKER, SIM_OVERLAY_MARKER, 1)
+    return ""
+
+
+def is_sim_phy(table: str) -> bool:
+    """True when *table* is a simulation sandbox table name."""
+    return SIM_TABLE_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def is_sim_overlay_phy(table: str) -> bool:
+    """True when *table* is a simulation overlay-key companion."""
+    return SIM_OVERLAY_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def ensure_sim_table(cur: Any, schema: str, table: str) -> None:
+    """Create a standalone simulation triple table + standard indexes."""
+    ensure_pgcrypto(cur)
+    _create_triple_table(cur, schema, table)
+
+
+def drop_sim_table(cur: Any, table: str) -> None:
+    cur.execute(f"DROP TABLE IF EXISTS {table}")
+
+
+def backfill_sim_overlay_keys(cur: Any, sandbox: str, overlay: str) -> None:
+    """Append-only: remember every ``(subject, predicate)`` currently in *sandbox*."""
+    cur.execute(
+        f"INSERT INTO {overlay} (subject, predicate, object) "
+        f"SELECT DISTINCT subject, predicate, '' FROM {sandbox} "
+        f"ON CONFLICT DO NOTHING"
+    )
+
+
+def ensure_sim_union_view(
+    cur: Any, view: str, live: str, sandbox: str, overlay: str
+) -> None:
+    """Live graph UNION sandbox, overlaying predicates the sandbox has owned.
+
+    Overlay keys live in *overlay* (``__smp_``), not remaining sandbox rows, so
+    a last-value ``remove`` still hides the live triple.
+    """
+    sql = (
+        f"CREATE OR REPLACE VIEW {view} AS "
+        f"SELECT l.subject, l.predicate, l.object, "
+        f"NULL::TEXT AS datatype, NULL::TEXT AS lang "
+        f"FROM {live} l "
+        f"WHERE NOT EXISTS ("
+        f"SELECT 1 FROM {overlay} k "
+        f"WHERE k.subject = l.subject AND k.predicate = l.predicate"
+        f") "
+        f"UNION ALL "
+        f"SELECT s.subject, s.predicate, s.object, s.datatype, s.lang "
+        f"FROM {sandbox} s"
+    )
+    cur.execute(sql)
+
+
+def relation_exists(cur: Any, relation: str) -> bool:
+    """True when *relation* (a physical table/view id) exists in the database.
+
+    ``to_regclass`` resolves the identifier against the session ``search_path``
+    and returns ``NULL`` when the relation is absent — a cheap existence probe
+    that works for both tables and views without catalog remapping.  The
+    ``SELECT 1 WHERE … IS NOT NULL`` shape yields a row only when it exists, so
+    the check is independent of the cursor's row factory (tuple vs dict_row).
+    """
+    cur.execute("SELECT 1 WHERE to_regclass(%s) IS NOT NULL", (relation,))
+    return cur.fetchone() is not None
 
 
 def _idx_name(table: str, suffix: str) -> str:
@@ -553,7 +669,7 @@ def build_asserted_view_sql(
     Over a ``…_slots``-sourced synced table the view de-duplicates and drops
     blank attribute objects (one row per slot otherwise); over a triples source
     it projects the three triple columns. Readers that leave inferred triples
-    out query this view (``LakebaseFlatStore.synced_table_name``).
+    out query this view (``FlatStore.synced_table_name``).
     """
     if source_kind == SOURCE_KIND_SLOTS:
         return (
@@ -629,6 +745,11 @@ def drop_companion(cur: Any, companion: str) -> None:
 
 
 def drop_view(cur: Any, view: str) -> None:
-    """Drop the union view and the asserted view next to it (both depend on the ``_sync`` table)."""
+    """Drop the union view and, for a graph's view, the asserted view next to it.
+
+    Both depend on the ``_sync`` table. A simulation union (``__smu_``) serves a
+    sandbox and has no asserted companion.
+    """
     cur.execute(f"DROP VIEW IF EXISTS {view}")
-    cur.execute(f"DROP VIEW IF EXISTS {_asserted_ref(view)}")
+    if SIM_UNION_INFERRED_MARKER not in view.split(".")[-1]:
+        cur.execute(f"DROP VIEW IF EXISTS {_asserted_ref(view)}")

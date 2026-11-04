@@ -34,7 +34,7 @@ class DataQualitySnapshot:
         self.table = self._view_fqn
         self.parallel = False
         self._created = False
-        self._client: Optional[Any] = None
+        self._builder: Optional[Any] = None
         self._snapshot = ""
 
     def __enter__(self) -> "DataQualitySnapshot":
@@ -53,31 +53,26 @@ class DataQualitySnapshot:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:
-        if self._created and self._client is not None and self._snapshot:
-            from back.core.graphdb.delta import materialize
-
+        if self._created and self._builder is not None and self._snapshot:
             logger.info("Dropping DQ snapshot %s", self._snapshot)
-            materialize.drop_relation(self._client, self._snapshot, kind="table")
+            self._builder.drop_relation(self._snapshot, kind="table")
         return False
 
     def _try_materialize(self) -> None:
-        from back.core.graphdb.delta import _table_naming, materialize
-        from back.core.graphdb.delta.DeltaBase import create_databricks_client
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        snapshot = _table_naming.dq_snapshot_fqn(
-            self._domain, self._settings, self._task_id
+        builder = GraphDBFactory.get_builder(
+            self._domain, self._settings, engine="delta"
         )
-        client = create_databricks_client(
-            self._domain, self._settings, for_write=True
-        )
-        if not snapshot or client is None:
+        snapshot = builder.dq_snapshot_fqn(self._task_id)
+        if not snapshot or not builder.has_client():
             logger.info(
                 "DQ snapshot skipped (no table name or warehouse); using live VIEW"
             )
             return
         logger.info("Materializing DQ snapshot %s from %s", snapshot, self._view_fqn)
-        materialize.materialize_from_view(client, self._view_fqn, snapshot)
-        self._client = client
+        builder.materialize_from_view(self._view_fqn, snapshot)
+        self._builder = builder
         self._snapshot = snapshot
         self._created = True
         self.table = snapshot

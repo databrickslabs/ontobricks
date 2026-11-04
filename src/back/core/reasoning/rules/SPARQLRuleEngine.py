@@ -5,7 +5,7 @@ existing graph data.  Cur­rently every supported triple store is SQL-
 based (Delta views, Lakebase Postgres) so the CONSTRUCT is translated
 to a SELECT against the flat ``(subject, predicate, object)`` table.
 A future Cypher / Gremlin backend would add its own translator branch
-here, gated by a capability flag on :class:`GraphDBBackend`.
+here, gated by a capability flag on :class:`GraphBackend`.
 """
 
 import re

@@ -139,11 +139,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialSection = urlParams.get('section');
     const initialQueryTab = urlParams.get('tab');
     const focusEntityUri = urlParams.get('focus');
+    const simulationId = urlParams.get('simulation');
     const bridgeDomain = urlParams.get('domain') || urlParams.get('project');
 
     _bindQueryShellActions();
     _bindQueryLanguageTabs();
-    _initQueryPage(initialSection, focusEntityUri, bridgeDomain, initialQueryTab);
+    _initQueryPage(initialSection, focusEntityUri, bridgeDomain, initialQueryTab, simulationId);
 });
 
 function _bindQueryLanguageTabs() {
@@ -200,22 +201,27 @@ function initQueryPlayground(tabName) {
     }
 }
 
-async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain, initialQueryTab) {
+async function _initQueryPage(initialSection, focusEntityUri, bridgeDomain, initialQueryTab, initialSimulationId) {
     if (bridgeDomain) {
         await _switchDomainForBridge(bridgeDomain, focusEntityUri);
         return;
     }
 
     var pendingFocus = focusEntityUri;
+    var pendingSimulation = initialSimulationId;
     var pendingQueryTab = initialQueryTab;
 
     SidebarNav.init({
-        onSectionChange: async function(section, targetSection) {
+        onSectionChange: async function(section, targetSection, nav) {
             if (section === 'sigmagraph') {
                 if (typeof SigmaGraph !== 'undefined') {
                     setTimeout(function () {
-                        SigmaGraph.init(pendingFocus || undefined);
+                        SigmaGraph.init(pendingFocus || undefined, {
+                            simulationId: pendingSimulation || '',
+                            fromNavClick: !!(nav && nav.isTrusted)
+                        });
                         pendingFocus = null;
+                        pendingSimulation = null;
                     }, 100);
                 }
             }

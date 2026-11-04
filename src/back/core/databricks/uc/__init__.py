@@ -3,8 +3,10 @@
 from .constants import FS_FILES_PATH, FS_DIRS_PATH
 from .identifiers import (
     UC_IDENTIFIER_RE,
+    find_collapsed_uc_fqn,
     quote_uc_fqn,
     quote_uc_identifier,
+    rewrite_collapsed_uc_fqn,
     validate_uc_identifier,
 )
 from .VolumeFileService import VolumeFileService
@@ -20,7 +22,9 @@ __all__ = [
     "FS_FILES_PATH",
     "FS_DIRS_PATH",
     "UC_IDENTIFIER_RE",
+    "find_collapsed_uc_fqn",
     "quote_uc_fqn",
     "quote_uc_identifier",
+    "rewrite_collapsed_uc_fqn",
     "validate_uc_identifier",
 ]

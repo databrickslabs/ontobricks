@@ -71,6 +71,30 @@ class TestEntityMappingLabelCollision:
         assert "viewer_id AS ID" in stored_sql
         assert "display_name AS Label" in stored_sql
 
+    def test_collapsed_uc_fqn_is_rewritten_on_submit(self, ctx):
+        sql = (
+            "SELECT participant_id AS ID, name AS Label "
+            "FROM `catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+            "hd_activity_participant` WHERE participant_id IS NOT NULL"
+        )
+        tool_submit_entity_mapping(
+            ctx,
+            class_uri="http://test.org/ontology#Participant",
+            class_name="Participant",
+            sql_query=sql,
+            id_column="ID",
+            label_column="Label",
+        )
+        stored_sql = ctx.entity_mappings[0]["sql_query"]
+        assert (
+            "`catalog_poc_dard`.`anonym_bcp_ddv_lyt_modeloloyalty`"
+            ".`hd_activity_participant`"
+        ) in stored_sql
+        assert (
+            "`catalog_poc_dard.anonym_bcp_ddv_lyt_modeloloyalty."
+            "hd_activity_participant`"
+        ) not in stored_sql
+
 
 @pytest.mark.unit
 class TestRelationshipMappingDedup:

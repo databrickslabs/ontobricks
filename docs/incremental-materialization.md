@@ -101,7 +101,7 @@ pipeline event log and recorded in the build-run trace (`refresh_technique`).
 ### The `_graph` relation
 
 `_graph` is the union of `_data` and `_inferred` that graph queries read
-(`DeltaFlatStore` reads `_graph` whenever it exists, `_data` only for asserted-only
+(`ReadStore` reads `_graph` whenever it exists, `_data` only for asserted-only
 reads; a `microbatch` domain on the [Lakehouse//RT fast path](#lakehousert) reads the
 slots instead). On the **Lakehouse engine** an `incremental` / `microbatch` build makes it
 a materialized view too, so Lakehouse//RT can read it (RT reads no plain views):
@@ -308,7 +308,7 @@ schedule (row tracking gives it a feed). Postgres gets two views over the `_sync
 table: the union view readers query (`DISTINCT` and non-blank over a slots source) and
 the **asserted view** `<graph>_asserted` — the synced triples alone, distinct and
 non-blank — which `include_inferred=False` reads, the asserted entity-search rebuild,
-BFS expansion and the reconciler use (`LakebaseFlatStore.synced_table_name`), so a
+BFS expansion and the reconciler use (`FlatStore.synced_table_name`), so a
 slots source reads like `_data` to them. A drifted registration (other source or
 schedule — including a fallback build, whose slots are not live, going back to `_data`)
 is deleted and recreated: a full resync; both views are dropped right before that
@@ -370,7 +370,7 @@ the continuous slot pipeline committed it to `_slots` (217–383 s, [Known
 limitations](#known-limitations) › Live verification). A `microbatch` domain read
 through Lakehouse//RT therefore skips both views and reads the slots, so a change is
 visible at the pipeline's commit cadence (seconds). The swap happens in the store:
-`DeltaFlatStore._sql_relation` — every read template's `FROM`, and
+`ReadStore._sql_relation` — every read template's `FROM`, and
 `sql_table_reference` for callers that build their own subquery (the `dt_triples` type
 filter, the bridge seed of the node context, the find seed) — turns this domain's
 `_graph` FQN into
@@ -441,7 +441,7 @@ counts, dumps) on its RT warehouse before turning the toggle on.
 Graph reads go to the query warehouse (`graph_engine_config.lakehouse.warehouse_id`
 plus "Use Lakehouse//RT for queries"). A heavy traversal can trip an RT guardrail
 (2-minute runtime, 300 GB shuffle, statement timeout — see the Lakehouse//RT
-documentation for the current values) and `DeltaFlatStore.execute_query` retries
+documentation for the current values) and `ReadStore.execute_query` retries
 that SELECT/WITH once on the build warehouse, as the same caller (same OBO token),
 under the graph statement timeout (a dump or count without it) — the same SQL, so a
 fast-path read reads the slots there too. Writes, other errors and a build warehouse
@@ -750,7 +750,7 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | ✅ | `DeltaMergeMaterializer`, `TwinMergeFallback`. Live: the first build creates `_data` with row tracking / deletion vectors / change feed and merges 3 rows; an unchanged source merges 0 rows; one changed row → 1 delete + 1 insert; one deleted row → 1 delete; `table_changes` on the MERGE table lists exactly that change |
 | 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh. Live: the continuous pipeline lands a source change in `_slots` after 8.1 s median / 11.9 s max (n = 8) |
 | 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | ✅ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline. Live: a plain `UPDATE` is not a rewrite; `INSERT OVERWRITE` and `CREATE OR REPLACE TABLE AS SELECT` are detected |
-| 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ✅ | query warehouse + "Use Lakehouse//RT"; `DeltaFlatStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Live: the app's `use_sea` client on the RT warehouse `realtime` runs the fingerprint probe and every store read shape over the relation; recursive CTEs are refused there and take the build-warehouse fallback; point reads p50 216 ms through the SEA from a laptop |
+| 2 P0 | Lakehouse//RT read warehouse; DDL on DBSQL; Statement Execution API; guardrail routing | ✅ | ✅ | query warehouse + "Use Lakehouse//RT"; `ReadStore` reads-only fallback as the caller; a `microbatch` domain reads `_slots` ∪ `_inferred` inline ([fast path](#lakehousert), `GraphReadRelation`). Live: the app's `use_sea` client on the RT warehouse `realtime` runs the fingerprint probe and every store read shape over the relation; recursive CTEs are refused there and take the build-warehouse fallback; point reads p50 216 ms through the SEA from a laptop |
 | 2 P1 | Lakehouse//RT offered only where available, and only for tables without row filters / column masks | ✅ | ✅ | readiness `lakehouse_rt` facts (query warehouse configured, RT reads on, fast path) + card line; `_slots` / `_data` / `_graph` / `_inferred` are app-created without filters or masks, so nothing to check. Live: the deployed sandbox app (no RT warehouse) answers `{query_warehouse_configured: false, use_sea: false, fast_path: "graph"}` and the card line reads "Lakehouse//RT: query warehouse not set · RT reads off" |
 | 2 P0 | CONTINUOUS synced tables; union view `DISTINCT`, no tombstones | ✅ | ✅ | `ContinuousSyncWait`; Postgres union view. Live: CONTINUOUS from `_slots` online in 56 s, a source change visible in Postgres after 45.8 s (target < 60 s) |
 | 2 P0 | Observability: pipeline state, last commit, freshness lag, fallback events | ✅ | ✅ | `GET /dtwin/incremental/status` + status card (incl. `read_relation`); fallback events in the trace. Live at the service layer (`tests/external/test_incremental_readiness_live.py`, nightly): the `_slots` / `_data` catalog lookups, the slot-pipeline lookup, `freshness_lag_s` and `lakebase_sync` for a fixture domain; on the deployed sandbox app (scenario 06) the Knowledge Graph › Build card reads "Slot pipeline: IDLE · _data: mv · lag unknown · _slots: streaming_table v5 · Last build: success (session) · mv / NO_OP / none · slots changed: 6 upserted, 0 deleted (full refresh)", and after the fallback build it listed `_data: table` with its commit and `freshness_lag_s: 9` |
@@ -859,7 +859,7 @@ Behaviour in this release:
 - The Lakehouse//RT fallback runs as the caller, who therefore needs CAN_USE on
   the build warehouse.
 - The standalone Delta build (`/dtwin/databricks-build/start`,
-  `DeltaTripleStoreBuildPipeline`) does not know the materialization modes: it
+  `BuildPipeline`) does not know the materialization modes: it
   rebuilds `_data` by CTAS, which drops an incremental domain's materialized view
   (the next main build recreates it), and it never stops a running `microbatch`
   slot pipeline.
@@ -1139,7 +1139,11 @@ same topic ([below](#the-slot-pipeline-in-realtime-mode)), so `_slots` / `_data`
   …`, the password in the secret): `realtime/start` grants it the `_live` table and refuses
   a role that does not exist as an `InfrastructureError` naming it. A development bundle
   target prefixes the job name (`[dev <user>] <app>-triple-rtm`), which
-  `ONTOBRICKS_REALTIME_JOB_NAME` must then carry.
+  `ONTOBRICKS_REALTIME_JOB_NAME` must then carry. `app.yaml` takes all five values
+  from `APP_REALTIME_ENABLED`, `APP_REALTIME_JOB_NAME`, `APP_REALTIME_LAKEBASE_USER`,
+  `APP_REALTIME_LAKEBASE_SECRET` and `APP_REALTIME_CHECKPOINT_ROOT` in
+  `scripts/deploy.config.sh` or the environment of `make deploy` (off by default), so a
+  re-render keeps a streaming deployment's configuration.
 - The domain: a **Lakebase** graph backend, a **published** version (row tracking on
   the sources is only needed for a Kinesis stream, whose slot pipeline keeps the
   change feed), and its `realtime_source` (Domain › Information ›

@@ -56,7 +56,7 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
     context_classes = context_li.group(0)
     assert "ob-subnav-item" in context_classes
     assert html.index(context_li.group(0)) < html.index('class="ob-subnav-workspaces"')
-    assert html.count('class="ob-subnav-ordinal"') == 4
+    assert html.count('class="ob-subnav-ordinal"') == 5
     workspace_match = re.search(
         r'<li\b[^>]*class="[^"]*\bob-subnav-workspaces\b[^"]*"[^>]*>',
         html,
@@ -71,6 +71,7 @@ def test_workspace_targets_are_grouped_before_context_and_actions():
         "subnavOntologyDropdown",
         "subnavMappingDropdown",
         "subnavKgDropdown",
+        "subnavSimDropdown",
     ]
     positions = [group.index(element_id) for element_id in ids]
 
@@ -243,6 +244,7 @@ def test_active_target_disables_only_its_dropdown():
         "subnavOntologyDropdown",
         "subnavMappingDropdown",
         "subnavKgDropdown",
+        "subnavSimDropdown",
     ):
         tag = re.search(
             rf'<a\b[^>]*id="{element_id}"[^>]*>',

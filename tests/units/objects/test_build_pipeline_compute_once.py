@@ -15,7 +15,7 @@
   reset ran.
 * **Delta is the graph.** On the Databricks backend ``…_data`` / ``…_graph``
   already are the graph, so the full rebuild counts but never streams into
-  the store (``DeltaFlatStore.insert_triples`` would refill ``…_inferred``).
+  the store (``MaterializedStore.insert_triples`` would refill ``…_inferred``).
 """
 
 from __future__ import annotations

@@ -176,7 +176,11 @@ LIMIT ${limit}`,
                 method: "POST",
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query, limit: readLimit() }),
+                body: JSON.stringify(
+                    (typeof KgGraphSource !== 'undefined')
+                        ? KgGraphSource.applyToBody({ query, limit: readLimit() })
+                        : { query, limit: readLimit() }
+                ),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok || !data.success) {

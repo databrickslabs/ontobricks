@@ -45,9 +45,6 @@ ONTOLOGY_IMPORT_TEMPLATE = (
 DOMAIN_RUNS_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/domain/_domain_runs.html"
 )
-ONTOLOGY_PITFALLS_CSS = (
-    REPO_ROOT / "src/front/static/ontology/css/ontology-pitfalls.css"
-)
 ONTOLOGY_DATAQUALITY_CSS = (
     REPO_ROOT / "src/front/static/ontology/css/ontology-dataquality.css"
 )
@@ -781,7 +778,6 @@ def test_only_the_root_shell_owns_viewport_height():
         QUERY_DATAQUALITY_CSS,
         CONFIG_CSS,
         ONTOLOGY_WIZARD_CSS,
-        ONTOLOGY_PITFALLS_CSS,
         ONTOLOGY_DATAQUALITY_CSS,
         ONTOLOGY_BUSINESS_RULES_CSS,
         REGISTRY_TEAMS_CSS,

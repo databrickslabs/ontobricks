@@ -1,4 +1,4 @@
-"""Tests for DeltaFlatStore factory registration."""
+"""Tests for MaterializedStore factory registration."""
 
 from unittest.mock import MagicMock, patch
 
@@ -11,7 +11,7 @@ class TestGraphDBFactoryDelta:
         domain = MagicMock()
         client = MagicMock()
         with patch(
-            "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+            "back.core.graphdb.delta.Base.create_databricks_client",
             return_value=client,
         ):
             store = factory.create(domain, engine="delta")
@@ -23,7 +23,7 @@ class TestGraphDBFactoryDelta:
         domain = MagicMock()
         client = MagicMock()
         with patch(
-            "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+            "back.core.graphdb.delta.Base.create_databricks_client",
             return_value=client,
         ) as create_client:
             store = factory.create(domain, engine="delta", for_write=True)

@@ -409,8 +409,18 @@ class Documents:
     def copy_documents_to_version(
         self, folder: str, from_version: str, to_version: str
     ) -> Tuple[bool, str]:
-        """Copy parsed docs forward to a new version (text, not bytes)."""
+        """Copy parsed docs forward to a new version (text, not bytes).
+
+        Also carries what-if scenario specs and run history when the
+        simulations mixin is present — new versions must not drop them.
+        """
+        def _carry_simulations() -> None:
+            copy_sims = getattr(self, "copy_simulations_to_version", None)
+            if callable(copy_sims):
+                copy_sims(folder, from_version, to_version)
+
         if not self._ensure_domain_documents_table():
+            _carry_simulations()
             return False, "domain_documents table unavailable"
         try:
             sch = self._q(self._schema)
@@ -438,6 +448,7 @@ class Documents:
                         str(from_version),
                     ),
                 )
+            _carry_simulations()
             return True, ""
         except Exception as exc:  # noqa: BLE001
             logger.warning("copy_documents_to_version(%s) failed: %s", folder, exc)

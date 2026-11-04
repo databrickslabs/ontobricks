@@ -7,7 +7,7 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 import os
 import secrets
 import time
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, Query
 from back.core.logging import get_logger
@@ -19,7 +19,7 @@ from back.core.errors import (
 from api.routers.internal._guards import require
 from api.routers.internal._graph_access import assert_domain_graph_read
 from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER
-from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
+from shared.config.constants import DEFAULT_BASE_URI
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
@@ -60,7 +60,6 @@ from back.core.helpers import (
     effective_view_table,
     get_databricks_client,
     get_triplestore_sql_credentials,
-    make_volume_file_service,
     require_domain_llm,
     run_blocking,
 )
@@ -76,9 +75,14 @@ def _graph_query_table(
     store=None,
     *,
     include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
 ) -> str:
     return TwinGraphAccess.graph_query_table(
-        domain, settings, store, include_inferred=include_inferred
+        domain,
+        settings,
+        store,
+        include_inferred=include_inferred,
+        simulation_id=simulation_id,
     )
 
 
@@ -117,8 +121,16 @@ async def execute_sparql(
     data = await request.json()
     query = sparql.require_read_only_sparql(data.get("query", ""))
     limit = data.get("limit")
+    _inferred, simulation_id = TwinGraphAccess.source_from_payload(data)
 
     domain = get_domain(session_mgr)
+    if simulation_id:
+        from back.objects.digitaltwin.query.TwinSandboxSparql import TwinSandboxSparql
+
+        return await run_blocking(
+            TwinSandboxSparql(domain, settings).execute, query, limit, simulation_id
+        )
+
     domain.ensure_generated_content()
     r2rml_content = domain.get_r2rml()
 
@@ -301,11 +313,16 @@ async def load_triplestore(
         except Exception:
             body = {}
         include_inferred = body.get("include_inferred", True)
+        simulation_id = str(body.get("simulation_id") or "").strip()
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
         query_table = _graph_query_table(
-            domain, settings, store, include_inferred=include_inferred
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=simulation_id or None,
         )
 
         try:
@@ -964,6 +981,7 @@ async def filter_triplestore(
         data = await request.json()
         phase = data.get("phase", "preview")
         include_inferred = data.get("include_inferred", True)
+        simulation_id = str(data.get("simulation_id") or "").strip()
 
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
@@ -976,10 +994,36 @@ async def filter_triplestore(
             store, domain, parse_cache_param(data.get("cache"))
         )
         query_table = _graph_query_table(
-            domain, settings, store, include_inferred=include_inferred
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=simulation_id or None,
         )
 
-        if phase == "preview":
+        if phase == "sandbox":
+            if not simulation_id:
+                raise ValidationError("simulation_id is required to load a sandbox")
+            max_depth_cap = 3 if is_databricks_app() else 5
+            depth = min(max(1, int(data.get("depth", 3))), max_depth_cap)
+            max_entities = GraphFilter.clamp_max_entities(data.get("max_entities"))
+            batch_size = 250 if is_databricks_app() else 1000
+            max_fetch_seconds = 40.0 if is_databricks_app() else 120.0
+            live_table = _graph_query_table(
+                domain, settings, store, include_inferred=include_inferred
+            )
+            payload = await run_blocking(
+                GraphFilter.sandbox_slice,
+                store,
+                query_table,
+                max_entities,
+                batch_size,
+                100_000,
+                max_fetch_seconds,
+                live_table,
+                depth,
+            )
+        elif phase == "preview":
             entity_type = (data.get("entity_type") or "").strip()
             field = data.get("field", "any")
             match_type = data.get("match_type", "contains")
@@ -1079,7 +1123,6 @@ async def sync_info(
     the values are fetched live from Databricks and then cached for the next
     request.
     """
-    import asyncio
     import time as _t
 
     t0 = _t.monotonic()
@@ -1202,12 +1245,9 @@ async def reconcile_incremental_slots(
 
 def _build_warehouse_client(domain, settings):
     """The domain's client on the build warehouse, as the caller (OBO token kept)."""
-    from back.core.graphdb.delta.DeltaBase import create_databricks_client
-    from back.core.helpers import resolve_build_warehouse_id
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-    return create_databricks_client(
-        domain, settings, warehouse_id=resolve_build_warehouse_id(domain, settings) or None
-    )
+    return GraphDBFactory.build_warehouse_client(domain, settings)
 
 
 @router.get(
@@ -1337,9 +1377,6 @@ async def databricks_build_info(
     ``materialization`` tells the page whether that relation is a Delta table
     or a pass-through view, so it can label it and explain the triple count.
     """
-    from back.core.graphdb.delta import _table_naming
-    from back.core.graphdb.delta.health import probe_from_client
-    from back.core.graphdb.delta.DeltaBase import create_databricks_client
     from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
     domain = get_domain(session_mgr)
@@ -1347,8 +1384,9 @@ async def databricks_build_info(
     readiness = HomeService.validate_status(domain)
     view_table = effective_view_table(domain)
     data_table = effective_databricks_table(domain, settings)
-    client = create_databricks_client(domain, settings)
-    data_status = probe_from_client(client, data_table) if data_table else {}
+    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+    probe = GraphDBFactory.get_health_probe(domain, settings, engine="delta")
+    data_status = probe.probe_status(data_table) if data_table else {}
     return {
         "success": True,
         "triple_store_backend": backend,
@@ -1358,7 +1396,7 @@ async def databricks_build_info(
         "readiness": readiness,
         "view_table": view_table,
         "data_table": data_table,
-        "inferred_table": _table_naming.inferred_table_fqn(domain, settings),
+        "inferred_table": builder.inferred_table_fqn(),
         "triplestore_status": data_status,
     }
 
@@ -1375,9 +1413,7 @@ async def start_databricks_triplestore_build(
     """Materialize UC Delta triple store (VIEW → TABLE); no Lakebase sync."""
     import threading
     from back.core.task_manager import get_task_manager
-    from back.core.graphdb.delta.DeltaTripleStoreBuildPipeline import (
-        lakehouse_build_steps,
-    )
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
     from back.objects.digitaltwin.build._databricks_triplestore_build import (
         run_databricks_triplestore_build,
     )
@@ -1394,11 +1430,12 @@ async def start_databricks_triplestore_build(
         is_databricks_app_fn=is_databricks_app,
     )
 
+    builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
     tm = get_task_manager()
     task = tm.create_task(
         name="Databricks Triple Store Build",
         task_type="databricks_triplestore_build",
-        steps=lakehouse_build_steps(plan.materialization),
+        steps=builder.build_steps(plan.materialization),
     )
 
     def run_build():
@@ -1456,17 +1493,26 @@ async def triplestore_stats(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
     refresh: bool = False,
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
 ):
     """Return content statistics about the triple store."""
     try:
         domain = get_domain(session_mgr)
         store = _require_graph_store(domain, settings)
-        graph_name = _graph_query_table(domain, settings, store)
+        sid = (simulation_id or "").strip() or None
+        graph_name = _graph_query_table(
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=sid,
+        )
 
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
-        if not refresh:
+        if not refresh and not sid and include_inferred:
             cached = DigitalTwin(domain).get_ts_cache("stats")
             if TwinGraphStats.cache_is_fresh(cached):
                 logger.debug("Returning cached graph stats")
@@ -1936,6 +1982,7 @@ async def dtwin_nodes_action_cancel(
 async def dtwin_nodes_business_rule_request(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
     """Validate an entity + class-declared business rule and mint a one-time token.
 
@@ -1953,6 +2000,11 @@ async def dtwin_nodes_business_rule_request(
         domain, entity_uri=entity_uri, rule_name=rule_name
     )
     rule = resolved["rule"]
+    simulation_id = TwinGraphAccess.sandbox_id(data.get("simulation_id"))
+    if simulation_id:
+        from back.objects.simulation import Simulation
+
+        Simulation(domain, settings).sandbox_relation(simulation_id)
 
     domain_key = _chat_domain_key(domain)
     cache = _chat_cache(session_mgr)
@@ -1963,6 +2015,7 @@ async def dtwin_nodes_business_rule_request(
         "domain": domain_key,
         "entity_uri": entity_uri,
         "rule": rule["name"],
+        "simulation_id": simulation_id,
         "expires_at": time.time() + _PENDING_ACTION_TTL_SEC,
         "used": False,
     }
@@ -1970,10 +2023,11 @@ async def dtwin_nodes_business_rule_request(
 
     entity_label = DigitalTwin.extract_local_id(entity_uri)
     logger.info(
-        "nodes/business-rule/request: minted token for entity=%s rule=%s domain=%s",
+        "nodes/business-rule/request: minted token for entity=%s rule=%s domain=%s sim=%s",
         entity_label,
         rule["name"],
         domain_key,
+        simulation_id or "live",
     )
     return {
         "success": True,
@@ -1982,6 +2036,7 @@ async def dtwin_nodes_business_rule_request(
             "entity_uri": entity_uri,
             "entity_label": entity_label,
             "rule": rule["name"],
+            "simulation_id": simulation_id,
             "description": rule.get("description"),
             "antecedent": rule.get("antecedent", ""),
             "consequent": rule.get("consequent", ""),
@@ -2032,6 +2087,7 @@ async def dtwin_nodes_business_rule_confirm(
         settings,
         entity_uri=entry["entity_uri"],
         rule_name=entry["rule"],
+        simulation_id=entry.get("simulation_id") or None,
     )
 
 
@@ -2194,6 +2250,21 @@ def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
     return TwinAssistantCache.chat_response_payload(agent_result, event_type)
 
 
+def _chat_forwarded_headers(request: Request) -> dict:
+    prefixes = ("x-forwarded-", "x-real-")
+    extra = {"x-csrf-token", "referer"}
+    return {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower().startswith(prefixes) or k.lower() in extra
+    }
+
+
+def _chat_graph_source_kwargs(data: dict) -> dict:
+    include_inferred, sid = TwinGraphAccess.source_from_payload(data)
+    return {"include_inferred": include_inferred, "simulation_id": sid or ""}
+
+
 @router.post("/assistant/chat")
 async def dtwin_assistant_chat(
     request: Request,
@@ -2251,6 +2322,7 @@ async def dtwin_assistant_chat(
         "registry_catalog": reg.get("catalog") or "",
         "registry_schema": reg.get("schema") or "",
         "registry_volume": reg.get("volume") or "",
+        **_chat_graph_source_kwargs(data),
     }
 
     # Build the loopback base URL used by the agent's HTTPX client to
@@ -2263,18 +2335,7 @@ async def dtwin_assistant_chat(
     # Forward the caller's session cookies so the loopback routes
     # resolve the same user session and active domain.
     session_cookies = dict(request.cookies or {})
-
-    # Forward the Databricks-Apps identity + CSRF headers so the loopback
-    # call passes PermissionMiddleware (which otherwise 302-redirects the
-    # anonymous internal request to ``/access-denied``).
-    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
-    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
-    session_headers = {
-        k: v
-        for k, v in request.headers.items()
-        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
-        or k.lower() in _FORWARDED_EXTRA_HEADERS
-    }
+    session_headers = _chat_forwarded_headers(request)
 
     domain_name = _chat_resolve_domain_name(domain)
 
@@ -2387,20 +2448,13 @@ async def dtwin_assistant_chat_stream(
         "registry_catalog": reg.get("catalog") or "",
         "registry_schema": reg.get("schema") or "",
         "registry_volume": reg.get("volume") or "",
+        **_chat_graph_source_kwargs(data),
     }
 
     app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
     base_url = f"http://localhost:{app_port}"
     session_cookies = dict(request.cookies or {})
-
-    _FORWARDED_HEADER_PREFIXES = ("x-forwarded-", "x-real-")
-    _FORWARDED_EXTRA_HEADERS = {"x-csrf-token", "referer"}
-    session_headers = {
-        k: v
-        for k, v in request.headers.items()
-        if k.lower().startswith(_FORWARDED_HEADER_PREFIXES)
-        or k.lower() in _FORWARDED_EXTRA_HEADERS
-    }
+    session_headers = _chat_forwarded_headers(request)
 
     domain_name = _chat_resolve_domain_name(domain)
 
@@ -2622,7 +2676,6 @@ async def dtwin_graphql_execute(
     to resolve the query.
     """
     from back.core.graphql import build_schema_for_domain, DEFAULT_DEPTH, MAX_DEPTH
-    from back.core.helpers import effective_graph_name
 
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
@@ -2637,6 +2690,7 @@ async def dtwin_graphql_execute(
     variables = body.get("variables") or None
     operation_name = body.get("operationName")
     depth = body.get("depth")
+    include_inferred, simulation_id = TwinGraphAccess.source_from_payload(body)
 
     ontology = domain.ontology or {}
     classes = ontology.get("classes", []) or []
@@ -2654,7 +2708,13 @@ async def dtwin_graphql_execute(
 
     context = {
         "triplestore": store,
-        "table_name": _graph_query_table(domain, settings, store),
+        "table_name": _graph_query_table(
+            domain,
+            settings,
+            store,
+            include_inferred=include_inferred,
+            simulation_id=simulation_id,
+        ),
         "base_uri": base_uri,
     }
     if depth is not None:
@@ -2690,6 +2750,8 @@ async def dtwin_triples_find(
     limit: int = 1000,
     offset: int = 0,
     cache: Optional[str] = None,
+    include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -2719,7 +2781,13 @@ async def dtwin_triples_find(
     )
 
     apply_search_cache_to_store(store, domain, parse_cache_param(cache))
-    table = _graph_query_table(domain, settings, store)
+    table = _graph_query_table(
+        domain,
+        settings,
+        store,
+        include_inferred=include_inferred,
+        simulation_id=(simulation_id or "").strip() or None,
+    )
     if not table:
         raise ValidationError("Graph name not configured")
 
@@ -2774,6 +2842,7 @@ async def dtwin_neighbors(
     depth: int = 2,
     limit: int = 2000,
     include_inferred: bool = True,
+    simulation_id: Optional[str] = None,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -2797,12 +2866,18 @@ async def dtwin_neighbors(
     store = _require_graph_store(domain, settings)
     from back.core.graphdb.search_cache import apply_search_cache_to_store
 
-    apply_search_cache_to_store(store, domain, None)
-    table = _graph_query_table(domain, settings, store)
+    sid = (simulation_id or "").strip()
+    if not sid:
+        apply_search_cache_to_store(store, domain, None)
+    table = _graph_query_table(
+        domain, settings, store, simulation_id=sid or None
+    )
     if not table:
         raise ValidationError("Graph name not configured")
 
-    query_table = table if include_inferred else store.synced_table_name(table)
+    query_table = (
+        table if (sid or include_inferred) else store.synced_table_name(table)
+    )
 
     try:
         # The BFS expansion runs one blocking SQL query per hop plus a final

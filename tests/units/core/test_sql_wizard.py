@@ -260,6 +260,13 @@ class TestSQLValidator:
 
         assert is_valid
 
+    def test_validate_rewrites_collapsed_uc_fqn(self, wizard, sample_context):
+        sql = "SELECT * FROM `main.sales.customers`"
+        is_valid, _, corrected = wizard.validate_sql_static(sql, sample_context)
+        assert is_valid
+        assert "`main`.`sales`.`customers`" in corrected
+        assert "`main.sales.customers`" not in corrected
+
     def test_validate_table_whitelist_rejects_unknown_table(
         self, wizard, sample_context
     ):

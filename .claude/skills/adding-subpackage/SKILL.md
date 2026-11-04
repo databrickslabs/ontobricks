@@ -25,7 +25,7 @@ state or session-awareness justifies it.
 
 1. Pick the parent (table above).
 2. Walk the 8 steps from `.cursor/07 §Adding a New Subpackage Checklist`. Tick each off in a TodoWrite.
-3. Pick the closest reference pattern from `.cursor/07 §Subpackage Patterns` and imitate its layout (e.g. graph DB engine → `back/core/graphdb/`).
+3. Pick the closest reference pattern from `.cursor/07 §Subpackage Patterns` and imitate its layout. For a **new graph DB engine**: copy `back/core/graphdb/` — subclass the right hat in `interfaces/` (`MaterializedGraphBackend` or `VirtualBackend`, never `GraphBackend` directly), add capability facades (`Builder`, `HealthProbe`, …), register `_create_<engine>` + accessors on `GraphDBFactory`. Do not import the new engine package from outside `graphdb/`.
 4. Update Sphinx (`docs/sphinx/api/<pkg>.rst` + parent toctree, then `scripts/build_docs.sh`).
 5. Run tests.
 6. Run the `changelog` skill.
@@ -38,6 +38,7 @@ state or session-awareness justifies it.
 - Don't put HTTP/FastAPI types in `back/core/`.
 - Don't put `Request`/`Response` in `back/objects/`.
 - Don't import from internal modules outside the package — always import from the package (`.cursor/07 §__init__.py Conventions`).
+- Don't `from back.core.graphdb.{lakebase,delta,neo4j} import …` outside `back/core/graphdb/` — route through `GraphDBFactory` (`.cursor/07 §graphdb/`, `test_backend_import_boundary.py`).
 - Don't skip the Sphinx page — `make docs` warnings will fail review.
 - Don't write comments, docstrings, logs, changelog sections, or audit-trail
   strings in a language other than English (`.cursor/05 §English-only artifacts`).

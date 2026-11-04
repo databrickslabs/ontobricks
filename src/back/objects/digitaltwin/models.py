@@ -41,6 +41,18 @@ class DomainSnapshot:
         self.expressions = list(getattr(domain, "expressions", None) or [])
         self.shacl_shapes = list(getattr(domain, "shacl_shapes", None) or [])
         self._classes = self._copy_classes(domain)
+        if not self.swrl_rules:
+            self.swrl_rules = list(self.ontology.get("swrl_rules") or [])
+        if not self.ontology.get("classes") and self._classes:
+            self.ontology["classes"] = list(self._classes)
+        getter = getattr(domain, "get_properties", None)
+        if callable(getter) and not self.ontology.get("properties"):
+            try:
+                props = getter()
+            except Exception:
+                props = []
+            if isinstance(props, list) and props:
+                self.ontology["properties"] = list(props)
 
         self._data = {
             "ontology": self.ontology,

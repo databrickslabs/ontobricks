@@ -23,6 +23,8 @@ Submodules
   — ontology/mapping change audit mixin.
 - :mod:`back.objects.registry.store.lakebase.BuildRuns`
   — Knowledge Graph build-run trace mixin.
+- :mod:`back.objects.registry.store.lakebase.Simulations`
+  — what-if simulation definitions and run trace mixin.
 - :mod:`back.objects.registry.store.lakebase.Catalog`
   — domain folders, versions, and permissions mixin.
 - :mod:`back.objects.registry.store.lakebase.Schedules`
@@ -53,6 +55,7 @@ from .EditLocks import EditLocks
 from .GlobalConfig import GlobalConfig
 from .ReviewEvents import ReviewEvents
 from .Schedules import Schedules
+from .Simulations import Simulations
 from .store import LakebaseRegistryStore
 
 __all__ = [
@@ -67,5 +70,6 @@ __all__ = [
     "GlobalConfig",
     "ReviewEvents",
     "Schedules",
+    "Simulations",
     "LakebaseRegistryStore",
 ]

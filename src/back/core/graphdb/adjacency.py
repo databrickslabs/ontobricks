@@ -12,6 +12,7 @@ Escape = Callable[[str], str]
 __all__ = [
     "Escape",
     "SqlFlavor",
+    "entity_cap_ctes",
     "expand_and_fetch_sql",
     "expand_entity_neighbors_sql",
     "seeded_bfs_sql",
@@ -90,7 +91,7 @@ def seeded_bfs_sql(
     Mirrors :func:`expand_and_fetch_sql`'s per-level CTE/anti-join shape but
     returns every discovered ``(entity, min_lvl)`` pair instead of joining a
     payload relation — the contract
-    :meth:`~back.core.graphdb.GraphDBBackend.GraphDBBackend.bfs_traversal`
+    :meth:`~back.core.graphdb.interfaces.GraphBackend.GraphBackend.bfs_traversal`
     callers expect. Unbounded by design: MCP find has no entity/triple caps
     today (only output-triple pagination happens after this query), and this
     function must not introduce a new limit that changes result sets.
@@ -133,6 +134,42 @@ def seeded_bfs_sql(
         + f"SELECT entity, MIN(lvl) AS min_lvl FROM ({levels}) all_levels "
         + "GROUP BY entity"
     )
+
+
+def entity_cap_ctes(depth: int, max_entities: int) -> list[str]:
+    """Keep closer BFS hops when the entity cap truncates the subgraph.
+
+    An unordered ``LIMIT`` on the union of all levels can drop the seeds and
+    keep only hop-2 Interaction subjects whose linking triples (and the
+    Contract/Agent they hang off) never made the cut — Explorer then paints
+    a cloud of unlinked Interaction nodes.
+    """
+    depth = max(0, int(depth))
+    max_entities = max(1, int(max_entities))
+    levels = " UNION ALL ".join(
+        f"SELECT entity, {level} AS lvl FROM level_{level}"
+        for level in range(depth + 1)
+    )
+    return [
+        (
+            "ranked_entities AS ("
+            f"SELECT entity, MIN(lvl) AS lvl FROM ({levels}) discovered "
+            f"GROUP BY entity)"
+        ),
+        (
+            "entity_probe AS ("
+            f"SELECT entity FROM ranked_entities "
+            f"ORDER BY lvl, entity LIMIT {max_entities + 1})"
+        ),
+        (
+            "entities AS ("
+            f"SELECT entity FROM entity_probe LIMIT {max_entities})"
+        ),
+        (
+            "entity_stats AS ("
+            "SELECT COUNT(*) AS _ob_expanded_count FROM entity_probe)"
+        ),
+    ]
 
 
 def expand_and_fetch_sql(
@@ -195,26 +232,7 @@ def expand_and_fetch_sql(
                 ),
             ]
         )
-    levels = " UNION ALL ".join(
-        f"SELECT entity FROM level_{level}" for level in range(depth + 1)
-    )
-    ctes.extend(
-        [
-            (
-                "entity_probe AS ("
-                f"SELECT DISTINCT entity FROM ({levels}) discovered "
-                f"LIMIT {max_entities + 1})"
-            ),
-            (
-                "entities AS ("
-                f"SELECT entity FROM entity_probe LIMIT {max_entities})"
-            ),
-            (
-                "entity_stats AS ("
-                "SELECT COUNT(*) AS _ob_expanded_count FROM entity_probe)"
-            ),
-        ]
-    )
+    ctes.extend(entity_cap_ctes(depth, max_entities))
     hint = "/*+ BROADCAST(entities) */ " if flavor == "spark" else ""
     return (
         "WITH "

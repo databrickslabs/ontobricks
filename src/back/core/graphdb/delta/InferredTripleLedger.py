@@ -35,7 +35,7 @@ class InferredTripleLedger:
         resolved. The warehouse client is created on the first record.
         """
         from back.core.graphdb.delta import _table_naming
-        from back.core.graphdb.delta.DeltaBase import create_databricks_client
+        from back.core.graphdb.delta.Base import create_databricks_client
         from back.core.graphdb.GraphDBFactory import (
             GraphDBFactory,
             normalize_materialization_mode,
@@ -63,7 +63,7 @@ class InferredTripleLedger:
         is never in the store without being listed.
         """
         from back.core.graphdb.delta import materialize
-        from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+        from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 
         client = self._client_factory()
         if client is None:
@@ -72,7 +72,7 @@ class InferredTripleLedger:
             )
         try:
             materialize.ensure_inferred_table(client, self.inferred_fqn)
-            written = DeltaFlatStore(client).insert_triples(self.inferred_fqn, triples)
+            written = MaterializedStore(client).insert_triples(self.inferred_fqn, triples)
         except OntoBricksError:
             raise
         except Exception as exc:  # noqa: BLE001 — translated, not swallowed

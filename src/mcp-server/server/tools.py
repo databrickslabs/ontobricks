@@ -1,6 +1,7 @@
 """MCP tool registration for the OntoBricks server.
 
-``register_tools(mcp, session)`` binds all 15 ``@mcp.tool`` handlers to a
+``register_tools(mcp, session)`` binds the domain/graph ``@mcp.tool`` handlers
+(simulation tools live in ``simulation_tools.register_simulation_tools``) to a
 :class:`~server.session.MCPServerSession`. The handlers are thin: they enforce
 the per-domain policy gate, issue the HTTP call through
 :mod:`server.http_client` (late-bound for monkeypatching) and hand the JSON to
@@ -9,7 +10,6 @@ the :mod:`server.formatting` renderers.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Optional
 
@@ -147,7 +147,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         for v in versions:
             ver = v.get("version", "")
             tag = " (latest)" if v.get("is_latest") else ""
-            lines.append(f"  • {ver}{tag}")
+            status = v.get("status") or ""
+            status_bit = f" [{status}]" if status else ""
+            lines.append(f"  • {ver}{status_bit}{tag}")
         return "\n".join(lines)
 
     @mcp.tool()
@@ -245,6 +247,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             # contract) and only added a wasted round trip.
             session.ontology_labels.clear()
             session.class_actions.clear()
+            session._state().class_actions_loaded = False
             # Fetch class Actions for the selected domain — reuse the same client
             try:
                 cls_data = await _http._get(
@@ -675,12 +678,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
 
         domain_name = session.selected_domain_name
 
-        body: dict = {"query": query}
-        if variables:
-            try:
-                body["variables"] = json.loads(variables)
-            except json.JSONDecodeError:
-                return "Invalid JSON in 'variables' parameter."
+        body = session.graph_query_body(query, variables)
+        if isinstance(body, str):
+            return body
 
         try:
             async with session.client() as client:
@@ -817,9 +817,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                 every virtual attribute group declared on the class is computed.
             domain_name: Registry domain name, or omit to use the selected one.
         """
-        blocked = await session.require_domain(
-            "compute_virtual_attributes", domain_name
-        )
+        blocked = await session.require_domain("compute_virtual_attributes", domain_name)
         if blocked:
             return blocked
         blocked = session.ensure_context_allowed(
@@ -896,9 +894,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             rule: Name of the business rule.
             domain_name: Registry domain name, or omit to use the selected one.
         """
-        blocked = await session.require_domain(
-            "run_entity_business_rule", domain_name
-        )
+        blocked = await session.require_domain("run_entity_business_rule", domain_name)
         if blocked:
             return blocked
         # Disabling the business_rules element also stops execution, even

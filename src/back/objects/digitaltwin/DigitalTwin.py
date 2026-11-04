@@ -15,7 +15,7 @@ from back.objects.digitaltwin.TwinBackgroundTasks import TwinBackgroundTasks
 from back.objects.digitaltwin.query.TwinMapping import TwinMapping
 from back.objects.digitaltwin.TwinAnalytics import TwinAnalytics
 from back.objects.digitaltwin.TwinResolve import TwinResolve
-from back.objects.session import get_domain  # tests patch DigitalTwin.get_domain
+from back.objects.session import get_domain  # noqa: F401 - public test seam
 
 
 class DigitalTwin:

@@ -1,26 +1,20 @@
 <!--
-    Cohort Discovery — DESIGN page (Ontology > Advanced > Cohorts).
-
-    Lets the SA design rules via the Build form (steps 1–5) → save.
-    Execution and results live in the Knowledge Graph's Cohorts section.
+    Cohort Discovery — DESIGN (Simulation → Cohorts).
+    Preview and materialise live under Simulation → Run.
 -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-people-fill me-2"></i>Cohorts</h4>
             <p class="text-muted mb-0 small">
-                Design constraint-based grouping rules — preview &amp; execute from
-                <em>Knowledge Graph → Cohorts</em><br>
-                <i class="bi bi-box"></i>
-                Domain: <code class="text-primary">{{ domain_name }}</code>
-                <span class="badge bg-secondary bg-opacity-50 cohort-fs-tiny">v{{ current_version }}</span>
-                <span class="js-version-status-badge badge border bg-warning-subtle text-dark border-warning" style="font-size:0.6rem;">Draft</span>
+                Design constraint-based grouping rules — preview and execute them from
+                <em>Simulation → Run</em>.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
                     title="Open the ontology discussion" aria-label="Open the ontology discussion"
-                    onclick="openOntologyDiscussion()">
+                    onclick="typeof openOntologyDiscussion === 'function' && openOntologyDiscussion()">
                 <i class="bi bi-chat-dots"></i>
             </button>
             <button class="btn btn-sm btn-outline-secondary" id="cohortNewBtn"
@@ -258,4 +252,3 @@
     </div><!-- /cohort-layout -->
 </div>
 
-{% include "partials/_cohort_modals.html" %}

@@ -20,6 +20,8 @@ Reviewers should walk the items in order. Items 1–10 are hard gates; CI enforc
 - New `.py` in `back/objects/` or `back/core/` with no public class? → **request changes**.
 - Public class name doesn't match filename? → **request changes**.
 - Module-level functions doing what a class should? → **request changes**.
+- Extra layer, file, parameter, or pass-through wrapper without a current use? →
+  **request changes** (`.cursor/01 §Minimal surface`).
 
 ## 3. Error handling (§ `src/.coding_rules.md` §4)
 

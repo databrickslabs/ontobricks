@@ -137,7 +137,11 @@ class ReasoningService:
                     rule_names=rn,
                 ),
                 True,
-                {"rules_count": "swrl_rules_count"},
+                {
+                    "rules_count": "swrl_rules_count",
+                    "errors": "swrl_errors",
+                    "error_details": "swrl_error_details",
+                },
             ),
             ("graph", "graph", True, lambda: self.run_graph_reasoning(opts), False, {}),
             (
@@ -522,9 +526,7 @@ class ReasoningService:
         if not triples:
             return 0
 
-        from back.core.graphdb.delta import InferredTripleLedger
-
-        InferredTripleLedger.record_for(self._store, triples)
+        self._store.record_inferred(triples)  # Neo4j lists them first
         count = self._store.insert_triples(table_name, triples)
         if count > 0:
             optimize_fn = getattr(self._store, "optimize_inferred_companion", None)
@@ -560,21 +562,15 @@ class ReasoningService:
         Returns:
             Number of triples inserted.
         """
-        from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-        store = DeltaFlatStore(client)
-        logger.info("Materialise to Delta: ensuring table %s exists", table_name)
-        store.create_table(table_name)
-
-        logger.info("Materialise to Delta: clearing existing rows in %s", table_name)
-        client.execute_statement(f"DELETE FROM {table_name}")
-
+        builder = GraphDBFactory.get_builder(None, engine="delta", client=client)
         logger.info(
-            "Materialise to Delta: inserting %d triples into %s",
+            "Materialise to Delta: writing %d triples into %s",
             len(triples),
             table_name,
         )
-        count = store.insert_triples(table_name, triples)
+        count = builder.materialize_triples(table_name, triples)
         logger.info(
             "Materialise to Delta: done — %d triples written to %s", count, table_name
         )
@@ -590,12 +586,11 @@ class ReasoningService:
         return data.get("generated", {}).get("owl", "")
 
     def _get_swrl_rules(self) -> List[Dict]:
-        if hasattr(self._domain, "swrl_rules"):
-            return self._domain.swrl_rules or []
-        ontology = getattr(self._domain, "ontology", None)
-        if isinstance(ontology, dict):
-            return ontology.get("swrl_rules", [])
-        return []
+        rules = getattr(self._domain, "swrl_rules", None)
+        if rules:
+            return list(rules)
+        ontology = self._get_ontology_dict()
+        return list(ontology.get("swrl_rules") or [])
 
     def _get_ontology_dict(self) -> Dict:
         ontology = getattr(self._domain, "ontology", None)

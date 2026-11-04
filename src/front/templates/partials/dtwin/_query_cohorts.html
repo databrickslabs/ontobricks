@@ -1,17 +1,16 @@
 <!--
-    Cohort Discovery — RUN page (Knowledge Graph > Cohorts).
+    Cohort Discovery — RUN page (Simulation → Run).
 
-    Design lives in Ontology > Advanced > Cohorts. This page picks a saved
-    rule, previews and materialises it. It deliberately does NOT show the
-    Build form or the NL Describe agent.
+    Design lives in Simulation → Cohorts. This page picks a saved rule,
+    previews and materialises it.
 -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-people-fill me-2"></i>Cohort Discovery{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
+            <h4 class="mb-1"><i class="bi bi-play-circle me-2"></i>Run cohorts{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
             <p class="text-muted mb-0 small">
-                Run a saved cohort rule and inspect its preview.
-                Design rules in <em>Ontology → Advanced → Cohorts</em>
+                Preview a saved cohort rule and write the result to the graph or a Unity Catalog table.
+                Design rules in <em>Simulation → Cohorts</em>.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -21,11 +20,6 @@
                     onclick="CohortModule.openOutputsModal()"
                     title="Configure outputs (graph triples, UC table)">
                 <i class="bi bi-sliders me-1"></i>Outputs
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
-                    title="Open the Knowledge Graph discussion" aria-label="Open the Knowledge Graph discussion"
-                    onclick="openTwinDiscussion()">
-                <i class="bi bi-chat-dots"></i>
             </button>
             <button class="btn btn-sm btn-outline-secondary"
                     id="cohortPreviewBtn"
@@ -49,14 +43,14 @@
                     <span class="small fw-semibold text-muted">
                         <i class="bi bi-list-ul me-1"></i>Saved rules
                     </span>
-                    <span class="badge bg-secondary bg-opacity-50" id="cohortRulesCount">
+                    <span class="badge bg-secondary bg-opacity-50" id="cohortRunRulesCount">
                         {{ reasoning_ctx.cohort_rules_count|default(0) }}
                     </span>
                 </div>
-                <div class="cohort-rail-body" id="cohortRulesList">
-                    <div class="text-center py-4 text-muted small" id="cohortRulesEmpty">
+                <div class="cohort-rail-body" id="cohortRunRulesList">
+                    <div class="text-center py-4 text-muted small" id="cohortRunRulesEmpty">
                         No rules yet. Design one in
-                        <em>Ontology → Advanced → Cohorts</em>.
+                        <em>Simulation → Cohorts</em>.
                     </div>
                 </div>
             </div>
@@ -113,5 +107,3 @@
         </section>
     </div><!-- /cohort-layout -->
 </div>
-
-{% include "partials/_cohort_modals.html" %}

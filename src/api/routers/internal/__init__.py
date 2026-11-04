@@ -9,6 +9,7 @@ from api.routers.internal.settings import router as settings_router
 from api.routers.internal.ontology import router as ontology_router
 from api.routers.internal.mapping import router as mapping_router
 from api.routers.internal.dtwin import router as dtwin_router
+from api.routers.internal.simulation import router as simulation_router
 from api.routers.internal.domain import router as domain_router
 from api.routers.internal.review import router as review_router
 from api.routers.internal.comments import router as comments_router
@@ -21,6 +22,7 @@ all_internal_routers = [
     ontology_router,
     mapping_router,
     dtwin_router,
+    simulation_router,
     domain_router,
     review_router,
     comments_router,

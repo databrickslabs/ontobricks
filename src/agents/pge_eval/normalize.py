@@ -18,7 +18,7 @@ Design constraints (see `.planning/agents/agent_owl_generator/SPEC.md` §6):
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, List, Optional, Set
 
 
 # =====================================================

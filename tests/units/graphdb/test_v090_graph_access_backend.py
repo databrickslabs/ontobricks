@@ -1,4 +1,4 @@
-"""0.9.0 GraphDBBackend companions: cache modes, live-graph fallback, paging."""
+"""0.9.0 GraphBackend companions: cache modes, live-graph fallback, paging."""
 
 from __future__ import annotations
 
@@ -9,13 +9,14 @@ import pytest
 
 from back.core.errors import ValidationError
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
-from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.interfaces.GraphBackend import GraphBackend
+from back.core.graphdb.interfaces.MaterializedGraphBackend import MaterializedGraphBackend
 from back.core.graphdb.search_cache import CACHE_BACKEND_MESSAGE, CACHE_MISSING_MESSAGE
 
 pytestmark = pytest.mark.unit
 
 
-class _Store(GraphDBBackend):
+class _Store(MaterializedGraphBackend):
     """Minimal SQL backend that records queries and answers via a responder."""
 
     supports_adjacency = True
@@ -86,10 +87,10 @@ class _BareStore(_Store):
     """Backend keeping the base-class companion id defaults."""
 
     def entity_search_asserted_table_id(self, table_name):
-        return GraphDBBackend.entity_search_asserted_table_id(self, table_name)
+        return GraphBackend.entity_search_asserted_table_id(self, table_name)
 
     def props_table_id(self, table_name):
-        return GraphDBBackend.props_table_id(self, table_name)
+        return GraphBackend.props_table_id(self, table_name)
 
 
 def _all_companions(table: str, props: str = "") -> set:

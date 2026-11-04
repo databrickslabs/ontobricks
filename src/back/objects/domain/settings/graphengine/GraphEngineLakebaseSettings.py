@@ -40,12 +40,10 @@ class GraphEngineLakebaseSettings:
 
         from back.core.databricks import get_lakebase_auth
         from back.core.databricks.lakebase import BranchLakebaseAuth
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.engine_config import lakebase_section
-        from back.core.graphdb.lakebase.LakebaseBase import (
-            default_schema,
-            resolve_postgres_database_override,
-            validate_graph_schema,
-        )
+
+        provisioner = GraphDBFactory.get_provisioner(None, engine="lakebase")
 
         # Resolve graph engine config first so we can pick the right auth.
         try:
@@ -68,7 +66,7 @@ class GraphEngineLakebaseSettings:
         schema_raw = ""
         branch_path = ""
         if isinstance(gcfg, dict):
-            db_override = resolve_postgres_database_override(gcfg)
+            db_override = provisioner.resolve_postgres_database_override(gcfg)
             schema_raw = (gcfg.get("schema") or "").strip()
             branch_path = (gcfg.get("lakebase_branch") or "").strip()
 
@@ -93,7 +91,9 @@ class GraphEngineLakebaseSettings:
             )
 
         try:
-            schema = validate_graph_schema(schema_raw or default_schema())
+            schema = provisioner.validate_graph_schema(
+                schema_raw or provisioner.default_schema()
+            )
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
 
@@ -101,9 +101,9 @@ class GraphEngineLakebaseSettings:
         graph_db = db_override or registry_db                    # graph_engine_config.database
 
         try:
-            from back.core.graphdb.lakebase.pool import _require_psycopg
-
-            psycopg, _ = _require_psycopg()
+            psycopg = GraphDBFactory.get_health_probe(
+                None, engine="lakebase"
+            ).psycopg()
         except ImportError as exc:
             raise InfrastructureError(
                 "Lakebase backend not installed (missing psycopg)",
@@ -313,7 +313,7 @@ class GraphEngineLakebaseSettings:
         ``branch_path`` / ``database`` from the form take priority over saved config.
         """
         try:
-            from back.core.graphdb.lakebase.pool import _require_psycopg
+            from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
             auth, effective_db = SettingsService._graph_engine_auth(
                 _session_mgr, _settings,
@@ -324,7 +324,7 @@ class GraphEngineLakebaseSettings:
                 raise ValidationError(
                     "Lakebase resource not bound (LAKEBASE_PROJECT/LAKEBASE_BRANCH/PGUSER missing)"
                 )
-            psycopg, _ = _require_psycopg()
+            psycopg = GraphDBFactory.get_health_probe(None, engine="lakebase").psycopg()
             kwargs = auth.kwargs(application_name="ontobricks-schema-list")
             if effective_db:
                 kwargs["dbname"] = effective_db
@@ -373,17 +373,10 @@ class GraphEngineLakebaseSettings:
         """
         import threading
 
-        from back.core.graphdb.lakebase.LakebaseBase import (
-            default_schema,
-            validate_graph_schema,
-        )
-        from back.core.graphdb.lakebase.LakebaseGraphProvisioner import (
-            DEFAULT_BRANCH,
-            DEFAULT_CAPACITY,
-            LakebaseGraphProvisioner,
-            provision_steps,
-        )
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.task_manager import get_task_manager
+
+        provisioner = GraphDBFactory.get_provisioner(None, engine="lakebase")
 
         SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
@@ -393,11 +386,11 @@ class GraphEngineLakebaseSettings:
         database = (params.get("database") or "").strip()
         if not database:
             raise ValidationError("A Postgres database name is required.")
-        capacity = (params.get("capacity") or DEFAULT_CAPACITY).strip()
-        branch = (params.get("branch") or DEFAULT_BRANCH).strip()
+        capacity = (params.get("capacity") or provisioner.default_capacity()).strip()
+        branch = (params.get("branch") or provisioner.default_branch()).strip()
         try:
-            schema = validate_graph_schema(
-                (params.get("schema") or "").strip() or default_schema()
+            schema = provisioner.validate_graph_schema(
+                (params.get("schema") or "").strip() or provisioner.default_schema()
             )
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
@@ -453,14 +446,14 @@ class GraphEngineLakebaseSettings:
         task = tm.create_task(
             name="Lakebase Graph DB Provision",
             task_type="lakebase_provision",
-            steps=provision_steps(
+            steps=provisioner.provision_steps(
                 grant_uc=bool(uc_catalog),
                 grant_app_permissions=app_mode,
             ),
         )
 
         def run_provision() -> None:
-            LakebaseGraphProvisioner(
+            provisioner.run_provision(
                 tm=tm,
                 task_id=task.id,
                 name=name,
@@ -473,7 +466,7 @@ class GraphEngineLakebaseSettings:
                 uc_catalog=uc_catalog,
                 pg_user=pg_user,
                 operator_email=email,
-            ).run()
+            )
 
         thread = threading.Thread(target=run_provision, daemon=True)
         thread.start()
@@ -638,9 +631,9 @@ class GraphEngineLakebaseSettings:
         config when provided.
         """
         try:
-            from back.core.graphdb.lakebase.pool import _require_psycopg
+            from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-            psycopg, _ = _require_psycopg()
+            psycopg = GraphDBFactory.get_health_probe(None, engine="lakebase").psycopg()
 
             auth, effective_db = SettingsService._graph_engine_auth(
                 _session_mgr, _settings,
@@ -825,12 +818,10 @@ class GraphEngineLakebaseSettings:
             # ── For managed_synced: probe Lakeflow state per _sync table ──
             lk_states: Dict[str, Any] = {}
             if sync_mode == "managed_synced" and uc_raw_tables:
-                from back.core.graphdb.lakebase.SyncedTableManager import (
-                    SyncedTableManager,
-                    _to_dict,
-                )
+                from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-                mgr = SyncedTableManager()
+                provisioner = GraphDBFactory.get_provisioner(None, engine="lakebase")
+                mgr = provisioner.sync_manager()
 
                 def _extract_source_table(synced: Any) -> str:
                     spec = getattr(synced, "spec", None)
@@ -838,7 +829,7 @@ class GraphEngineLakebaseSettings:
                         val = getattr(spec, "source_table_full_name", "") or ""
                         if val:
                             return str(val)
-                    d = _to_dict(synced)
+                    d = provisioner.sync_to_dict(synced)
                     return str(d.get("spec", {}).get("source_table_full_name", "") or "")
 
                 def _probe_lk(tbl_raw: Dict[str, Any]) -> None:
@@ -858,10 +849,9 @@ class GraphEngineLakebaseSettings:
                                 "source_table": "",
                             }
                         else:
-                            spec = getattr(synced, "spec", None)
                             lk_states[full_name] = {
-                                "state": SyncedTableManager._extract_state(synced) or "UNKNOWN",
-                                "pipeline_id": SyncedTableManager._extract_pipeline_id(synced),
+                                "state": provisioner.sync_state(synced) or "UNKNOWN",
+                                "pipeline_id": provisioner.sync_pipeline_id(synced),
                                 "source_table": _extract_source_table(synced),
                             }
                     except Exception as probe_exc:  # noqa: BLE001
@@ -945,9 +935,9 @@ class GraphEngineLakebaseSettings:
             ddl = f"DROP VIEW IF EXISTS {_q(schema)}.{_q(name)} CASCADE"
 
         try:
-            from back.core.graphdb.lakebase.pool import _require_psycopg
+            from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-            psycopg, _ = _require_psycopg()
+            psycopg = GraphDBFactory.get_health_probe(None, engine="lakebase").psycopg()
 
             auth, effective_db = SettingsService._graph_engine_auth(
                 _session_mgr, _settings,
@@ -1061,7 +1051,7 @@ class GraphEngineLakebaseSettings:
     ) -> Dict[str, Any]:
         """Ensure *user_email* has a Postgres OAuth role and DATABRICKS_SUPERUSER membership.
 
-        Mirrors the logic of ``LakebaseGraphProvisioner._ensure_superuser_role``
+        Mirrors the logic of ``InstanceProvisioner._ensure_superuser_role``
         but operates on the currently configured graph Lakebase branch.
         Idempotent — re-granting an existing superuser is a no-op.
         """

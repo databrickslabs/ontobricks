@@ -10,16 +10,15 @@ from pathlib import Path
 import time
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
-import requests
 
 from shared.config.settings import get_settings
 from shared.config.constants import (
     AUTO_ASSIGN_CHUNK_COOLDOWN,
     AUTO_ASSIGN_CHUNK_SIZE,
     DEFAULT_BASE_URI,
-    HTTP_USER_AGENT,
 )
 from back.core.databricks import DocumentParseService
+from back.core.helpers.SQLHelpers import SQLHelpers
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.errors import InfrastructureError, ValidationError
@@ -43,6 +42,20 @@ def _auto_assign_chunk_pct(chunk_idx: int, num_chunks: int, inner_pct: int) -> i
     """Map a per-chunk progress percentage to an overall 1-95 range."""
     chunk_span = 94.0 / max(num_chunks, 1)
     return min(1 + int(chunk_idx * chunk_span + (inner_pct / 100.0) * chunk_span), 95)
+
+
+def _source_sql_checks(
+    source: str, sql_query: str, *, empty_detail: str, ok_detail: str
+) -> List[Dict[str, str]]:
+    """Source-defined check plus illegal collapsed Unity Catalog FQN quoting."""
+    if source:
+        checks = [{"check": "source", "status": "ok", "detail": ok_detail}]
+    else:
+        checks = [{"check": "source", "status": "error", "detail": empty_detail}]
+    quoting = SQLHelpers.collapsed_uc_fqn_check(sql_query)
+    if quoting:
+        checks.append(quoting)
+    return checks
 
 
 # Change-audit action for one auto-mapping agent run. Surfaced in the Domain
@@ -711,7 +724,7 @@ class Mapping:
         mapping = {
             "ontology_class": data.get("ontology_class", ""),
             "ontology_class_label": data.get("ontology_class_label", ""),
-            "sql_query": data.get("sql_query", ""),
+            "sql_query": SQLHelpers.rewrite_collapsed_uc_fqn(data.get("sql_query") or ""),
             "id_column": data.get("id_column", ""),
             "label_column": data.get("label_column", ""),
             "catalog": data.get("catalog", ""),
@@ -730,7 +743,7 @@ class Mapping:
         mapping = {
             "property": data.get("property", ""),
             "property_label": data.get("property_label", ""),
-            "sql_query": data.get("sql_query", ""),
+            "sql_query": SQLHelpers.rewrite_collapsed_uc_fqn(data.get("sql_query") or ""),
             "source_class": data.get("source_class", ""),
             "source_class_label": data.get("source_class_label", ""),
             "target_class": data.get("target_class", ""),
@@ -1058,7 +1071,7 @@ class Mapping:
 
     @staticmethod
     def test_sql_query(client: Any, sql_query: str, limit: int = 100) -> Dict[str, Any]:
-        test_query = sql_query.strip().rstrip(";")
+        test_query = SQLHelpers.rewrite_collapsed_uc_fqn(sql_query).strip().rstrip(";")
         test_query = re.sub(
             r"\s+LIMIT\s+\d+\s*$", "", test_query, flags=re.IGNORECASE
         ).strip()
@@ -2207,7 +2220,7 @@ class Mapping:
             probe = re.sub(
                 r"\s+LIMIT\s+\d+\s*$",
                 "",
-                sql_query.strip().rstrip(";"),
+                SQLHelpers.rewrite_collapsed_uc_fqn(sql_query).strip().rstrip(";"),
                 flags=re.IGNORECASE,
             ).strip()
             rows = client.execute_query(
@@ -2469,23 +2482,15 @@ class Mapping:
         attr_map = ent.get("attribute_mappings", {})
         excluded_attrs = set(ent.get("excluded_attributes") or [])
 
-        checks: List[Dict[str, str]] = []
+        checks: List[Dict[str, str]] = _source_sql_checks(
+            source,
+            sql_query,
+            empty_detail="No SQL query or table defined",
+            ok_detail="Source defined",
+        )
         available_cols = (
             DigitalTwin._extract_select_columns(sql_query) if sql_query else None
         )
-
-        if not source:
-            checks.append(
-                {
-                    "check": "source",
-                    "status": "error",
-                    "detail": "No SQL query or table defined",
-                }
-            )
-        else:
-            checks.append(
-                {"check": "source", "status": "ok", "detail": f"Source defined"}
-            )
 
         if not id_col:
             checks.append(
@@ -2614,23 +2619,15 @@ class Mapping:
         attr_map = rel.get("attribute_mappings") or {}
         excluded_attrs = set(rel.get("excluded_attributes") or [])
 
-        checks: List[Dict[str, str]] = []
         available_cols = (
             DigitalTwin._extract_select_columns(sql_query) if sql_query else None
         )
-
-        if not sql_query:
-            checks.append(
-                {
-                    "check": "source",
-                    "status": "error",
-                    "detail": "No SQL query defined",
-                }
-            )
-        else:
-            checks.append(
-                {"check": "source", "status": "ok", "detail": "SQL query defined"}
-            )
+        checks: List[Dict[str, str]] = _source_sql_checks(
+            sql_query,
+            sql_query,
+            empty_detail="No SQL query defined",
+            ok_detail="SQL query defined",
+        )
 
         if src_id_col and src_id_col not in excluded_attrs:
             if available_cols and not Mapping._column_in_output(

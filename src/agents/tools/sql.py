@@ -9,6 +9,7 @@ import re
 from typing import Callable, Dict, List
 
 from back.core.logging import get_logger
+from back.core.helpers.SQLHelpers import SQLHelpers
 from agents.tools.context import ToolContext
 
 logger = get_logger(__name__)
@@ -28,6 +29,7 @@ def tool_execute_sql(ctx: ToolContext, *, sql: str = "", **_kwargs) -> str:
         logger.warning("tool_execute_sql: empty SQL")
         return json.dumps({"error": "sql parameter is required"})
 
+    sql = SQLHelpers.rewrite_collapsed_uc_fqn(sql)
     logger.debug("tool_execute_sql: SQL=%s", sql)
 
     stripped_sql = sql.strip().rstrip(";").strip()

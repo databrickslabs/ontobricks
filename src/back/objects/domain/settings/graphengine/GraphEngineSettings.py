@@ -29,6 +29,18 @@ _ss = importlib.import_module("back.objects.domain.settings.SettingsService")
 logger = get_logger(__name__)
 
 
+def _delta_health_probe(settings: Any) -> Any:
+    """Vend the Delta health probe (UC objects / schema permissions).
+
+    These Settings endpoints are Lakehouse-specific, so the probe is requested
+    with ``engine="delta"`` and needs no domain (its object/permission helpers
+    are pure Unity-Catalog operations).
+    """
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    return GraphDBFactory.get_health_probe(None, settings, engine="delta")
+
+
 class GraphEngineSettings:
     """Connection-tab graph engine config, health, and object listing."""
 
@@ -82,8 +94,6 @@ class GraphEngineSettings:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        from back.core.graphdb.delta.health import schema_permission_summary
-
         host, token, registry_cfg = _ss.resolve_app_registry_context(settings)
         reg = registry_cfg if isinstance(registry_cfg, dict) else {}
         catalog = (reg.get("catalog") or "").strip()
@@ -133,7 +143,9 @@ class GraphEngineSettings:
             assignments = effective.get("assignments", [])
             raw_error = effective.get("error")
             normalized_error = None if raw_error is None else str(raw_error)
-            summary = schema_permission_summary(catalog, schema, principal, assignments)
+            summary = _delta_health_probe(settings).schema_permission_summary(
+                catalog, schema, principal, assignments
+            )
             return {
                 "success": True,
                 "registry_configured": True,
@@ -159,11 +171,7 @@ class GraphEngineSettings:
         settings: Settings,
     ) -> Dict[str, Any]:
         """List Lakehouse-owned UC objects, grouped by domain version."""
-        from back.core.graphdb.delta.objects import (
-            domain_match_key,
-            fetch_uc_schema_tables,
-            group_triplestore_objects,
-        )
+        _probe = _delta_health_probe(settings)
 
         domain_obj, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
@@ -195,12 +203,12 @@ class GraphEngineSettings:
             lakehouse_keys = SettingsService._lakehouse_domain_version_keys(
                 domain_obj, settings
             )
-            raw_tables = fetch_uc_schema_tables(catalog, schema)
-            groups = group_triplestore_objects(raw_tables, catalog, schema)
+            raw_tables = _probe.fetch_schema_tables(catalog, schema)
+            groups = _probe.group_triplestore_objects(raw_tables, catalog, schema)
             domains = [
                 {
                     "base": grp["base"],
-                    "key": domain_match_key(grp["base"]),
+                    "key": _probe.domain_match_key(grp["base"]),
                     "items": [
                         {
                             "kind": item["kind"],
@@ -211,7 +219,7 @@ class GraphEngineSettings:
                     ],
                 }
                 for grp in sorted(groups.values(), key=lambda g: g["base"])
-                if domain_match_key(grp["base"]) in lakehouse_keys
+                if _probe.domain_match_key(grp["base"]) in lakehouse_keys
             ]
             analytics_location, analytics, analytics_message = (
                 SettingsService._analytics_objects(
@@ -280,10 +288,7 @@ class GraphEngineSettings:
         caller already performed. A scan that fails returns its reason instead of
         raising — the triple-store listing must still render.
         """
-        from back.core.graphdb.delta.objects import (
-            fetch_uc_schema_tables,
-            group_analytics_objects,
-        )
+        _probe = _delta_health_probe(settings)
 
         configured = (
             getattr(settings, "analytics_job_output_schema", "") or ""
@@ -301,12 +306,12 @@ class GraphEngineSettings:
             if (catalog, schema) == (registry_catalog, registry_schema):
                 raw_tables = registry_tables
             else:
-                raw_tables = fetch_uc_schema_tables(catalog, schema)
+                raw_tables = _probe.fetch_schema_tables(catalog, schema)
         except Exception as exc:
             logger.warning("analytics object listing failed for %s: %s", location, exc)
             return (location, [], f"Could not list analytics tables in {location}")
 
-        groups = group_analytics_objects(raw_tables, catalog, schema)
+        groups = _probe.group_analytics_objects(raw_tables, catalog, schema)
         analytics = [
             {
                 "key": grp["key"],
@@ -571,7 +576,7 @@ class GraphEngineSettings:
         *,
         connection_name: str = "",
     ):
-        """Build a :class:`Neo4jConnection` from a named Settings profile."""
+        """Build a :class:`Connection` from a named Settings profile."""
         from back.objects.domain.settings.graphengine.GraphEngineNeo4jSettings import (
             GraphEngineNeo4jSettings,
         )
@@ -904,10 +909,10 @@ class GraphEngineSettings:
                 raise InfrastructureError("Databricks SDK api_client unavailable")
 
             if is_sync:
-                from back.core.graphdb.lakebase.SyncedTableManager import SyncedTableManager
+                from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
-                mgr = SyncedTableManager()
-                mgr.delete(full_name, purge_data=True)
+                prov = GraphDBFactory.get_provisioner(None, engine="lakebase")
+                prov.delete_synced_table(full_name, purge_data=True)
             else:
                 api.do("DELETE", f"/api/2.1/unity-catalog/tables/{full_name}")
 

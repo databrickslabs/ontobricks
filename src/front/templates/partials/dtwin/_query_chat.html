@@ -2,19 +2,22 @@
 <!-- CSS: /static/query/css/query-chat.css -->
 <!-- JS:  /static/query/js/query-chat.js -->
 
-<div class="section-header d-flex justify-content-between align-items-start mb-2">
+<div class="section-header d-flex justify-content-between align-items-center mb-2">
     <div>
         <h4 class="mb-1"><i class="bi bi-chat-dots me-2"></i>Graph Chat{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
         <p class="text-muted mb-0 small">
             Chat with your graph viewer in natural language
         </p>
     </div>
-    <div class="graph-chat-header-actions d-flex align-items-center gap-2">
+    <div class="graph-chat-header-actions d-flex align-items-center gap-2 flex-wrap">
+        {% with select_id="chatGraphSource" %}
+        {% include "partials/dtwin/_kg_graph_source.html" %}
+        {% endwith %}
         <button id="chatClearBtnTop" class="btn btn-sm btn-outline-danger" title="Clear the current conversation">
             <i class="bi bi-trash3 me-1"></i>Clear chat
         </button>
         <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
+                title="Open the Graph discussion" onclick="openTwinDiscussion()">
             <i class="bi bi-chat-dots"></i>
         </button>
     </div>

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
-from back.core.graphdb.lakebase.LakebaseBase import LakebaseBase
+from back.core.graphdb.lakebase.Base import Base as LakebaseBase
 from back.objects.digitaltwin.build import (
     TwinIncrementalBuild,
     TwinLiveServing,

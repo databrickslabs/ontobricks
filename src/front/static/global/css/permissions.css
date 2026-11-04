@@ -227,6 +227,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #cohortAddPathBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #cohortAddConstraintBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #cohortOutputsBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #cohortMaterializeBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #cohortMaterializeNowBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .cohort-link-del,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .cohort-hop-add,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .cohort-hop-del,
@@ -303,14 +304,8 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
    The Settings page configures application-global options (warehouse,
    Lakebase engine, base URI, etc.) that are entirely independent of any
    domain version's lifecycle status; its endpoints are never status-gated.
-   Real mutations are still enforced server-side by ``PermissionMiddleware``.
-
-   ``.pitfall-chk`` (Ontology > Pitfalls pattern checkboxes) are exempt:
-   running a pitfalls analysis is a read-only operation (the backend
-   ``/ontology/pitfalls/analyze`` endpoint is status-open), so a reader on
-   a PUBLISHED/IN-REVIEW version must still be able to pick which patterns
-   to check and run the analysis. */
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not(.new-domain-field):not(.ob-confirm-check):not([data-collab]),
+   Real mutations are still enforced server-side by ``PermissionMiddleware``. */
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.new-domain-field):not(.ob-confirm-check):not([data-collab]),
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not(.new-domain-field):not([data-collab]),
 body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(.new-domain-field):not([data-collab]) {
     pointer-events: none !important;
