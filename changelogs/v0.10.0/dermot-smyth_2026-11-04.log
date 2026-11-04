@@ -349,6 +349,14 @@ session transcript:
   app principal's missing `CAN_USE` on the Lakebase project (item 6), the one
   before it on the re-saved Connection-tab config (item 6). The saved config
   was emptied again afterwards (as it was before this session).
+- Phase 3 wiring on the rebuilt app: the published `ZzRealtimeLive` answers
+  readiness `decision.effective = realtime`, `realtime = {enabled, backend_eligible,
+  source_configured: true, kind: kafka, topic: ontobricks-rtm-live}`; the realtime
+  status first reported the RTM job "was not found" — the recreated app principal
+  could not see it — and after `databricks permissions update jobs <id>`
+  (`CAN_MANAGE_RUN`, the grant `make bootstrap-perms` gives) reports
+  `state: not_running`. Not started on purpose: the exercise domain's broker is
+  unreachable by design and its `_slots` were removed with the orphaned pipeline.
 - Not available on the sandbox: Real-Time compute ("Real-Time compute is not
   enabled for this workspace") and the `_data` MV change feed (above). The
   Lakehouse//RT KPI was therefore measured again on the integration workspace
