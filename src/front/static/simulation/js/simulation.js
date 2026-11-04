@@ -173,7 +173,6 @@ const SimulationPage = {
     scopeLabel(scope) {
         const s = scope || {};
         if (s.type === 'cohort') return `Cohort · ${this.esc(s.focus)}`;
-        if (s.type === 'class') return `Class · ${this.uriCell(s.focus, s.focus_label)}`;
         return `${this.uriCell(s.focus, s.focus_label)} <span class="text-muted">· ${this.esc(s.hops)} hops</span>`;
     },
 

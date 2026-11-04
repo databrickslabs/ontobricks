@@ -289,3 +289,50 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9884 passed, 326 skipped, 8 deselected, 39 warnings in 56.69s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Remove simulation Class population scope
+================================================================================
+
+Context: Simulation scope offered three modes (entity neighbourhood, cohort,
+class population). Class population (every instance of a class, hard-fail above
+the entity cap) is removed so scenarios only scope via an entity neighbourhood
+or a saved cohort rule.
+
+Changes:
+
+1. src/back/objects/simulation/Scope.py
+   Drop ``class`` from ``TYPES`` and remove ``_class_population`` resolution.
+2. src/back/objects/simulation/Simulation.py
+   Rename ``DEFAULT_CLASS_CAP`` to ``DEFAULT_ENTITY_CAP``.
+3. src/front/routes/simulation.py
+   Expose ``entity_cap`` (was ``class_cap``) in the workbench context.
+4. src/front/templates/partials/simulation/_sim_workbench.html
+   Remove the Class population option; bind the entity-cap field to ``entity_cap``.
+5. src/front/static/simulation/js/simulation-workbench.js
+   Drop class-scope UI labels/copy; coerce legacy ``class`` scopes to entity on load.
+6. src/front/static/simulation/js/simulation.js
+   Drop Class · list label for removed scope type.
+7. tests/units/simulation/test_simulation_core.py
+   Replace class-population tests with rejection of ``type=class``; keep empty-scope via cohort.
+8. tests/units/simulation/test_simulation_runner_api.py
+   Use a generic ValidationError message in the surfaced-error test.
+9. docs/user-guide.md
+   Document entity neighbourhood and cohort only.
+10. docs/architecture.md
+    Scope pipeline no longer mentions class population / find_subjects_by_type.
+
+Modified files:
+- src/back/objects/simulation/Scope.py
+- src/back/objects/simulation/Simulation.py
+- src/front/routes/simulation.py
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9883 passed, 326 skipped, 8 deselected, 39 warnings in 46.60s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.

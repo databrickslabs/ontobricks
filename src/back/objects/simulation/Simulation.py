@@ -25,7 +25,7 @@ class Simulation:
     """
 
     DEFAULT_HOPS = 2
-    DEFAULT_CLASS_CAP = 5000
+    DEFAULT_ENTITY_CAP = 5000
     SUPPORTED_BACKENDS = frozenset({"lakebase", "databricks", "neo4j"})
 
     def __init__(self, domain: Any, settings: Any, *, registry: Any = None) -> None:
@@ -76,7 +76,7 @@ class Simulation:
         return Spec.from_dict(
             body,
             default_hops=self.DEFAULT_HOPS,
-            default_cap=self.DEFAULT_CLASS_CAP,
+            default_cap=self.DEFAULT_ENTITY_CAP,
             sim_id=sim_id,
         )
 
@@ -436,8 +436,10 @@ class Simulation:
                 raise InfrastructureError("Graph backend is not configured")
             sandbox = Sandbox(store, effective_graph_name(self._domain), sim_id)
             if not sandbox.has_before_picture():
-                empty["summary"] = row.get("diff_summary") or {}
-                return empty
+                logger.warning(
+                    "Simulation %s has no before-picture companion", sim_id
+                )
+                return self._diff_without_companion(row, kind, page, page_size, search)
             patch_added, provenance = sandbox.load_origins()
             full = Diff.compute(
                 sandbox.load_before(),
@@ -448,8 +450,7 @@ class Simulation:
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not read sandbox diff for %s: %s", sim_id, exc)
-            empty["summary"] = row.get("diff_summary") or {}
-            return empty
+            return self._diff_without_companion(row, kind, page, page_size, search)
         out = Diff.page(full, kind, page, page_size, search)
         summary = dict(full.get("summary") or {})
         stored = row.get("diff_summary") or {}
@@ -472,3 +473,23 @@ class Simulation:
                 summary[key] = stored[key]
         out["summary"] = summary
         return out
+
+    def _diff_without_companion(
+        self,
+        row: Dict[str, Any],
+        kind: str,
+        page: int,
+        page_size: int,
+        search: str,
+    ) -> Dict[str, Any]:
+        """Page stored diff rows when the ``__smb_`` companion is missing."""
+        legacy = row.get("diff") or {}
+        summary = row.get("diff_summary") or {}
+        if legacy.get("added") or legacy.get("removed"):
+            out = Diff.page(legacy, kind, page, page_size, search)
+            out["summary"] = summary
+            return out
+        empty = Diff.page({}, kind, page, page_size, search)
+        empty["summary"] = summary
+        empty["listing_unavailable"] = True
+        return empty

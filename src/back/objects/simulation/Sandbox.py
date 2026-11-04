@@ -46,6 +46,10 @@ class _CompanionMixin:
         name = self.before_table()
         if not name:
             raise ValidationError("Simulation before-picture table name is missing")
+        clone = getattr(self.store, "clone_sandbox_table", None)
+        if callable(clone):
+            clone(self.table, name)
+            return
         self._recreate_companion(name)
         if triples:
             self.store.insert_triples(name, list(triples))
@@ -122,9 +126,13 @@ class _CompanionMixin:
         if not name:
             return False
         try:
+            exists = getattr(self.store, "table_exists", None)
+            if callable(exists):
+                return bool(exists(name))
             self.store.query_triples(name)
             return True
         except Exception:  # noqa: BLE001
+            logger.warning("Could not probe before-picture table %s", name)
             return False
 
 

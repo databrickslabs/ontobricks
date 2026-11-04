@@ -1341,9 +1341,8 @@ domains redirect to Domain, other backends show a disabled page.
 
 1. **Scope** (`Scope`) resolves an entity set on the live graph
    (read-only): an entity neighbourhood (`expand_and_fetch_subgraph`, default 2
-   hops), a saved cohort rule (`CohortService.dry_run`), or a class population
-   (`find_subjects_by_type`, capped at 5000 entities — exceeding the cap fails
-   the run instead of truncating).
+   hops) or a saved cohort rule (`CohortService.dry_run`, capped at 5000
+   entities — exceeding the cap fails the run instead of truncating).
 2. **Seed** (`Sandbox`) creates a standalone table
    `<graph>__sim_<id>` and copies every live triple whose *subject* is in scope
    with one `INSERT … SELECT … WHERE subject = ANY(…)` (datatype / lang kept).

@@ -46,7 +46,7 @@ async def simulation_page(
         "aggregate_rules_count": len(ont.get("aggregate_rules", [])),
         "cohort_rules_count": len(ont.get("cohort_rules", [])),
         "default_hops": Simulation.DEFAULT_HOPS,
-        "class_cap": Simulation.DEFAULT_CLASS_CAP,
+        "entity_cap": Simulation.DEFAULT_ENTITY_CAP,
     }
 
     return templates.TemplateResponse(

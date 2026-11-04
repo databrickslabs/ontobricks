@@ -15,13 +15,13 @@ logger = get_logger(__name__)
 
 @dataclass
 class Scope:
-    """Entity neighbourhood, cohort, or class population (capped).
+    """Entity neighbourhood or cohort (capped).
 
     The slice is every live triple whose *subject* belongs to the resolved
     entity set, so outgoing links and literals of in-scope entities are kept.
     """
 
-    TYPES = ("entity", "cohort", "class")
+    TYPES = ("entity", "cohort")
     MAX_HOPS = 4
 
     type: str = "entity"
@@ -57,7 +57,7 @@ class Scope:
             )
         if not self.focus:
             raise ValidationError(f"Scope '{self.type}' requires a focus value")
-        if self.type in ("entity", "class") and not is_uri(self.focus):
+        if self.type == "entity" and not is_uri(self.focus):
             raise ValidationError("Scope focus must be a URI", detail=self.focus)
         if not 0 <= self.hops <= self.MAX_HOPS:
             raise ValidationError(f"Scope hops must be between 0 and {self.MAX_HOPS}")
@@ -84,10 +84,10 @@ class Scope:
         """Return the in-scope entity URIs (read-only on the live graph)."""
         if self.type == "entity":
             entities = self._entity_neighbourhood(store, graph_name)
-        elif self.type == "cohort":
-            entities = self._cohort_members(store, graph_name, cohort_service, cohort_rule)
         else:
-            entities = self._class_population(store, graph_name)
+            entities = self._cohort_members(
+                store, graph_name, cohort_service, cohort_rule
+            )
         if not entities:
             raise ValidationError("The simulation scope matched no entities")
         return entities
@@ -130,14 +130,3 @@ class Scope:
                 f"Cohort has {len(members)} members, above the {self.cap} simulation cap"
             )
         return list(members)
-
-    def _class_population(self, store: Any, graph_name: str) -> List[str]:
-        subjects = store.find_subjects_by_type(
-            graph_name, self.focus, limit=int(self.cap) + 1
-        ) or []
-        if len(subjects) > self.cap:
-            raise ValidationError(
-                f"Class population exceeds the {self.cap} entity simulation cap — "
-                "narrow the scope with a cohort or an entity neighbourhood"
-            )
-        return [s for s in subjects if s]

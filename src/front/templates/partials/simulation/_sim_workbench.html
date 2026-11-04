@@ -101,7 +101,6 @@
                                     <select class="form-select form-select-sm" id="simWbScopeType">
                                         <option value="entity">Entity neighbourhood</option>
                                         <option value="cohort" {% if not simulation_ctx.cohort_rules_count %}disabled{% endif %}>Cohort</option>
-                                        <option value="class">Class population</option>
                                     </select>
                                 </div>
                                 <div class="col-12 col-md-5 col-xl-6">
@@ -123,7 +122,7 @@
                                 <div class="col-6 col-md-2">
                                     <label for="simWbCap" class="form-label small">Entity cap</label>
                                     <input type="number" class="form-control form-control-sm" id="simWbCap" min="1"
-                                           max="{{ simulation_ctx.class_cap }}" value="{{ simulation_ctx.class_cap }}">
+                                           max="{{ simulation_ctx.entity_cap }}" value="{{ simulation_ctx.entity_cap }}">
                                 </div>
                             </div>
                             <div class="row">

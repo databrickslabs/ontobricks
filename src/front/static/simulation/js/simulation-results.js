@@ -133,6 +133,13 @@ const SimulationResults = {
         if (cap) cap.textContent = summary.capped ? `Showing the first ${summary.row_cap} rows per list` : '';
     },
 
+    _emptyRowsMessage(data) {
+        if (data && data.listing_unavailable) {
+            return 'Re-run the scenario to list added and removed triples from the sandbox.';
+        }
+        return 'Nothing here.';
+    },
+
     explorerHref(uri) {
         if (!this.selectedId || !SimulationPage.isUri(uri)) return '';
         return '/dtwin/?section=sigmagraph'
@@ -168,7 +175,7 @@ const SimulationResults = {
                         <td>${origin}</td>
                     </tr>`;
                 }).join('')
-                : '<tr><td colspan="4" class="text-center text-muted py-3">Nothing here.</td></tr>';
+                : `<tr><td colspan="4" class="text-center text-muted py-3">${this._emptyRowsMessage(data)}</td></tr>`;
         }
         if (info) info.textContent = `${total.toLocaleString()} rows · page ${data.page || 1} / ${pages}`;
         const prev = document.getElementById('simResultsPrev');

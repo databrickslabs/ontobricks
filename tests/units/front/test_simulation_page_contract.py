@@ -371,6 +371,12 @@ def test_workbench_general_tab_stacks_sections():
     assert "sim-artifact-name-cell" in js
 
 
+def test_results_empty_rows_mention_rerun_when_listing_unavailable():
+    res = _read(FRONT / "static/simulation/js/simulation-results.js")
+    assert "listing_unavailable" in res
+    assert "Re-run the scenario to list added and removed triples from the sandbox." in res
+
+
 def test_workbench_save_aborts_stale_run():
     js = _read(FRONT / "static/simulation/js/simulation-workbench.js")
     assert "/abort" in js

@@ -111,6 +111,26 @@ class SimulationStore(FlatStore):
                 _companion_ddl.drop_sim_table(cur, phy)
         logger.info("Dropped simulation sandbox %s.%s", self._schema, phy)
 
+    def clone_sandbox_table(self, source: str, dest: str) -> None:
+        """Replace *dest* with an in-database snapshot of *source*.
+
+        Used to persist the before-picture without round-tripping triples
+        through Python (which dropped companions that ``query_triples`` later
+        could not see as a cheap existence check).
+        """
+        src = self.sandbox_table_id(source)
+        dst = self.sandbox_table_id(dest)
+        if src == dst:
+            raise ValidationError("Cannot clone a sandbox table onto itself")
+        with self._cursor() as cur:
+            _companion_ddl.drop_sim_table(cur, dst)
+            _companion_ddl.ensure_sim_table(cur, self._schema, dst)
+            cur.execute(
+                f"INSERT INTO {dst} (subject, predicate, object, datatype, lang) "
+                f"SELECT subject, predicate, object, datatype, lang FROM {src}"
+            )
+        logger.info("Cloned simulation table %s → %s", src, dst)
+
     def truncate_companion(self, name: str) -> None:
         raise ValidationError("Simulation sandboxes have no companion table")
 

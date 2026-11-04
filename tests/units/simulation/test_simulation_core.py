@@ -154,6 +154,9 @@ class _Cursor:
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
 
+    def fetchone(self):
+        return {"ok": 1}
+
 
 def _sim_store():
     store = object.__new__(SimulationStore)
@@ -213,6 +216,66 @@ class TestSimulationStoreGuard:
         with pytest.raises(ValidationError):
             store.create_table("Dom_V1")
         assert cur.calls == []
+
+    def test_clone_sandbox_table_inserts_from_source(self):
+        store, cur = _sim_store()
+        store.clone_sandbox_table("dom_v1__sim_s1", "dom_v1__smb_s1")
+        sqls = [c[0] for c in cur.calls]
+        assert any("DROP TABLE IF EXISTS dom_v1__smb_s1" in s for s in sqls)
+        assert any(
+            "INSERT INTO dom_v1__smb_s1 (subject, predicate, object, datatype, lang)" in s
+            and "FROM dom_v1__sim_s1" in s
+            for s in sqls
+        )
+
+    def test_clone_sandbox_table_refuses_same_name(self):
+        store, _ = _sim_store()
+        with pytest.raises(ValidationError):
+            store.clone_sandbox_table("dom_v1__sim_s1", "dom_v1__sim_s1")
+
+
+class TestBeforePicture:
+    def test_persist_before_clones_when_store_supports_it(self):
+        from back.objects.simulation.Sandbox import _CompanionMixin
+
+        class Store:
+            def __init__(self):
+                self.cloned = None
+
+            def clone_sandbox_table(self, src, dst):
+                self.cloned = (src, dst)
+
+            def drop_table(self, name):
+                raise AssertionError("python recreate should not run")
+
+        class Box(_CompanionMixin):
+            def __init__(self):
+                self.table = "g__sim_s1"
+                self.store = Store()
+
+        box = Box()
+        box.persist_before([{"subject": "s", "predicate": "p", "object": "o"}])
+        assert box.store.cloned == ("g__sim_s1", "g__smb_s1")
+
+    def test_has_before_picture_uses_table_exists(self):
+        from back.objects.simulation.Sandbox import _CompanionMixin
+
+        class Store:
+            def table_exists(self, name):
+                self.probed = name
+                return True
+
+            def query_triples(self, name):
+                raise AssertionError("existence must not scan triples")
+
+        class Box(_CompanionMixin):
+            def __init__(self):
+                self.table = "g__sim_s1"
+                self.store = Store()
+
+        box = Box()
+        assert box.has_before_picture() is True
+        assert box.store.probed == "g__smb_s1"
 
 
 # -- patches / scope / spec -----------------------------------------------
@@ -330,7 +393,7 @@ class TestSpec:
         assert spec.rule_names == {}
 
     def test_cap_is_clamped_to_default(self):
-        body = self._body(scope={"type": "class", "focus": EX + "Customer", "cap": 99999})
+        body = self._body(scope={"type": "entity", "focus": EX + "Customer", "cap": 99999})
         spec = Spec.from_dict(body, default_hops=2, default_cap=5000)
         assert spec.scope.cap == 5000
 
@@ -403,18 +466,13 @@ class TestSpec:
 
 
 class _LiveStore:
-    def __init__(self, sub=None, typed=None):
+    def __init__(self, sub=None):
         self._sub = sub or []
-        self._typed = typed or []
         self.calls = []
 
     def expand_and_fetch_subgraph(self, table, uris, depth, max_entities, max_triples):
         self.calls.append(("expand", table, tuple(uris), depth, max_entities))
         return {"results": self._sub}
-
-    def find_subjects_by_type(self, table, type_uri, limit=50, offset=0, search=None):
-        self.calls.append(("typed", table, type_uri, limit))
-        return self._typed[:limit]
 
 
 class TestScope:
@@ -443,17 +501,13 @@ class TestScope:
         assert scope.resolve_entities(store, "g") == [EX + "a", EX + "b"]
         assert store.calls[0][:4] == ("expand", "g", (EX + "a",), 1)
 
-    def test_class_population_cap_exceeded(self):
-        store = _LiveStore(typed=[EX + str(i) for i in range(5)])
-        scope = Scope(type="class", focus=EX + "C", cap=3)
+    def test_class_scope_rejected(self):
         with pytest.raises(ValidationError):
-            scope.resolve_entities(store, "g")
-        assert store.calls[0][3] == 4
-
-    def test_class_population_within_cap(self):
-        store = _LiveStore(typed=[EX + "1", EX + "2"])
-        scope = Scope(type="class", focus=EX + "C", cap=3)
-        assert scope.resolve_entities(store, "g") == [EX + "1", EX + "2"]
+            Scope.from_dict(
+                {"type": "class", "focus": EX + "C", "cap": 3},
+                default_hops=2,
+                default_cap=5000,
+            )
 
     def test_cohort_members(self):
         svc = SimpleNamespace(dry_run=lambda rule, store, g: {
@@ -469,9 +523,12 @@ class TestScope:
             scope.resolve_entities(_LiveStore(), "g")
 
     def test_empty_scope_rejected(self):
-        scope = Scope(type="class", focus=EX + "C", cap=3)
+        svc = SimpleNamespace(dry_run=lambda rule, store, g: {"cohorts": []})
+        scope = Scope(type="cohort", focus="r1", cap=3)
         with pytest.raises(ValidationError):
-            scope.resolve_entities(_LiveStore(), "g")
+            scope.resolve_entities(
+                _LiveStore(), "g", cohort_service=svc, cohort_rule={"id": "r1"}
+            )
 
 
 # -- diff ---------------------------------------------------------------

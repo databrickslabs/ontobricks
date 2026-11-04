@@ -1321,9 +1321,8 @@ rules, or results, shows the brand spinner over that pane.
    of the graph:
    - *Entity neighbourhood*: an entity URI and a number of hops (default 2).
      The search button opens the same live-graph picker as the fact wizard;
-   - *Cohort*: one of the saved Cohort Discovery rules;
-   - *Class population*: every instance of a class, up to the entity cap
-     (5000). A larger population fails the run — narrow the scope instead.
+   - *Cohort*: one of the saved Cohort Discovery rules.
+     Entity sets are capped (5000); a cohort above the cap fails the run.
 2. **Hypothetical facts** — add rows of *subject / predicate / value*:
    **Set** replaces every value of the predicate on the subject (e.g. a new
    credit score), **Add** asserts an extra triple, **Remove** retracts one.

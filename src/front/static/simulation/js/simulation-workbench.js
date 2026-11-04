@@ -180,7 +180,7 @@ const SimulationWorkbench = {
         if (cohort) cohort.classList.toggle('d-none', !isCohort);
         if (hops) hops.classList.toggle('d-none', type !== 'entity');
         if (label) {
-            label.textContent = { entity: 'Entity', cohort: 'Cohort rule', class: 'Class URI' }[type];
+            label.textContent = { entity: 'Entity', cohort: 'Cohort rule' }[type];
             label.setAttribute('for', isCohort ? 'simWbCohort' : 'simWbFocus');
         }
         if (isCohort) this._loadCohorts();
@@ -234,7 +234,7 @@ const SimulationWorkbench = {
         this._set('simWbFocus', '');
         this._applyFocusLabel('', '');
         this._set('simWbHops', cfg.default_hops != null ? cfg.default_hops : 2);
-        this._set('simWbCap', cfg.class_cap || 5000);
+        this._set('simWbCap', cfg.entity_cap || 5000);
         this._applyPhases(null);
         const title = this._el('simWbTitle');
         if (title) title.textContent = '— new scenario';
@@ -261,15 +261,16 @@ const SimulationWorkbench = {
             this._set('simWbLabel', spec.label || sim.label);
             this._set('simWbDescription', spec.description || '');
             this._set('simWbFactPrompt', spec.fact_prompt || '');
-            this._set('simWbScopeType', scope.type || 'entity');
+            const scopeType = scope.type === 'cohort' ? 'cohort' : 'entity';
+            this._set('simWbScopeType', scopeType);
             this._syncScopeUi();
-            if (scope.type === 'cohort') {
+            if (scopeType === 'cohort') {
                 await this._loadCohorts();
                 this._set('simWbCohort', scope.focus);
             } else {
                 this._set('simWbFocus', scope.focus);
                 this._applyFocusLabel(scope.focus_label || '', scope.focus);
-                if (scope.type === 'entity' && !scope.focus_label) this._onFocusUriChanged();
+                if (!scope.focus_label) this._onFocusUriChanged();
             }
             this._set('simWbHops', scope.hops);
             this._set('simWbCap', scope.cap);
@@ -970,7 +971,7 @@ const SimulationWorkbench = {
 
     _validate(body) {
         if (!body.label) return 'Give the scenario a name';
-        if (!body.scope.focus) return 'Pick the scope focus (entity, cohort or class)';
+        if (!body.scope.focus) return 'Pick the scope focus (entity or cohort)';
         const bad = body.patches.find((p) => !p.subject || !p.predicate || (p.op !== 'remove' && p.object === ''));
         if (bad) return 'Every fact needs a subject, a predicate and (except Remove) a value';
         return '';

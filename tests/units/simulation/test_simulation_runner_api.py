@@ -352,7 +352,7 @@ class TestSimulationFacade:
         assert page["summary"]["added_count"] == 1
         assert page["summary"]["entity_count"] == 2
 
-    def test_diff_page_empty_without_before_companion(self, monkeypatch):
+    def test_diff_page_falls_back_to_stored_rows_without_companion(self, monkeypatch):
         reg = _Registry()
         sim = Simulation(_Domain(), None, registry=reg)
         row = sim.create(_body())
@@ -377,7 +377,37 @@ class TestSimulationFacade:
         )
         monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
         page = sim.diff_page(row["id"], "added", 1, 50)
+        assert page["total"] == 1
+        assert page["rows"][0]["object"] == "o"
+        assert page["summary"] == {"added_count": 9}
+
+    def test_diff_page_empty_without_before_companion(self, monkeypatch):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        reg.rows[row["id"]].update(
+            status="ready",
+            diff={},
+            diff_summary={"added_count": 9},
+        )
+
+        class _Sb:
+            def __init__(self, *a, **k):
+                pass
+
+            def has_before_picture(self):
+                return False
+
+        import importlib
+
+        sandbox_mod = importlib.import_module("back.objects.simulation.Sandbox")
+        monkeypatch.setattr(
+            "back.core.graphdb.get_graphdb", lambda *a, **k: object()
+        )
+        monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
+        page = sim.diff_page(row["id"], "added", 1, 50)
         assert page["total"] == 0
+        assert page["listing_unavailable"] is True
         assert page["summary"] == {"added_count": 9}
 
 
@@ -786,11 +816,11 @@ class TestRunner:
         reg, tm = _Registry(), _TM()
 
         def _cap(self, *a, **kw):
-            raise ValidationError("Class population exceeds the cap")
+            raise ValidationError("The simulation scope matched no entities")
 
         monkeypatch.setattr(Scope, "resolve_entities", _cap)
         _runner(reg, tm).run()
-        assert tm.failed == ["Class population exceeds the cap"]
+        assert tm.failed == ["The simulation scope matched no entities"]
 
 
 # -- internal API -------------------------------------------------------------
