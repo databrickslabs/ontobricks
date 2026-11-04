@@ -207,8 +207,10 @@ _PROPOSE_DEF = {
             "complete scenario_description before your final reply. op is "
             "add, set, or remove. Use ontology property URIs and instance "
             "URIs from search_entities (or a minted URI only after search "
-            "returned no hit). scenario_description merges CURRENT "
-            "DESCRIPTION with the new what-if in 1–3 short paragraphs."
+            "returned no hit). APPEND: omit triples already in EXISTING "
+            "FACTS; a new set on the same subject+predicate replaces the "
+            "old value. scenario_description is 1–3 short paragraphs of "
+            "the new what-if only."
         ),
         "parameters": {
             "type": "object",
@@ -230,8 +232,7 @@ _PROPOSE_DEF = {
                 "scenario_description": {
                     "type": "string",
                     "description": (
-                        "Complete General-tab description of this scenario. "
-                        "Keep prior intent from CURRENT DESCRIPTION."
+                        "1–3 short paragraphs of the new facts only."
                     ),
                 },
             },

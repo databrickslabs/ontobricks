@@ -41,7 +41,16 @@ def score_dataset_row(row: dict) -> float:
     expected = row.get("expected") or {}
     ok_patches = patches_are_valid(expected.get("patches"))
     ok_desc = description_needles_are_valid(expected.get("scenario_contains"))
-    return 1.0 if ok_patches and ok_desc else 0.0
+    if not ok_patches or not ok_desc:
+        return 0.0
+    merged = expected.get("merged")
+    if merged is None:
+        return 1.0
+    if not patches_are_valid(merged):
+        return 0.0
+    existing = (row.get("input") or {}).get("existing_patches") or []
+    got = Patch.append_all(existing, expected.get("patches") or [])
+    return 1.0 if got == merged else 0.0
 
 
 def score_agent_patches(patches: Iterable[Any] | None) -> float:

@@ -223,7 +223,7 @@ def run_agent(
     session_headers: Optional[dict] = None,
     on_step: Optional[Callable[[str], None]] = None,
     on_event: Optional[Callable[["AgentStep"], None]] = None,
-    describe_depth: int = 1,
+    describe_depth: int = 1, endpoint_kind: str = "",
 ) -> AgentResult:
     """Run one turn of the Graph Chat agent.
 
@@ -302,7 +302,7 @@ def run_agent(
                 max_tokens=2048,
                 temperature=0.1,
                 timeout=LLM_TIMEOUT,
-                trace_name=_TRACE_NAME,
+                trace_name=_TRACE_NAME, endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
             error_msg = f"LLM request failed: {exc}"

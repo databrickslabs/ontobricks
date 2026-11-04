@@ -1,0 +1,238 @@
+================================================================================
+## Route AI Gateway models correctly when proposing hypothetical facts
+================================================================================
+
+Context: On the deployed app, Propose facts returned "Could not propose
+hypothetical facts". App logs showed a 404 ENDPOINT_NOT_FOUND against
+``/serving-endpoints/databricks-claude-opus-4-6/invocations``. That name is an
+AI Gateway Foundation Model, not a serving endpoint. The domain picker stores
+``llm_endpoint_kind=ai_gateway``, but the simulation-facts (and Graph Chat)
+agents dropped the kind and inferred serving from the name. Production also
+strips error detail, so the UI hid the 404.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/engine.py
+   Accept ``endpoint_kind`` and pass it to ``call_serving_endpoint``.
+2. src/api/routers/internal/simulation.py
+   Forward the domain LLM kind; map missing-endpoint failures to a client-safe
+   message (detail is stripped in production).
+3. src/agents/agent_dtwin_chat/engine.py
+   Same ``endpoint_kind`` pass-through so Graph Chat uses the Gateway URL.
+4. src/api/routers/internal/dtwin.py
+   Forward the domain LLM kind on Graph Chat and Graph Chat stream.
+5. tests/units/agents/test_agent_simulation_facts.py
+   Assert the facts agent forwards ``endpoint_kind=ai_gateway``.
+6. tests/units/simulation/test_simulation_runner_api.py
+   Assert the route forwards kind and names a missing Gateway model.
+7. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Assert Graph Chat forwards ``endpoint_kind``.
+
+Modified files:
+- src/agents/agent_simulation_facts/engine.py
+- src/api/routers/internal/simulation.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Stream propose-facts agent steps into the workbench spinner
+================================================================================
+
+Context: Propose facts showed a static "Proposing…" spinner with no hint of
+what the agent was doing (listing classes, searching the graph, validating
+patches). Users waited 15–30s on a blank overlay. Stream each agent step over
+SSE and render a live checklist under the prompt.
+
+Changes:
+
+1. src/agents/agent_simulation_facts/engine.py
+   Emit thinking / tool_call / tool_result / output events via ``on_event``.
+2. src/api/routers/internal/simulation.py
+   ``POST /simulation/facts/agent/stream`` SSE; human-readable step labels.
+3. src/front/templates/partials/simulation/_sim_workbench.html
+   Progress list under the fact prompt.
+4. src/front/static/simulation/js/simulation-workbench.js
+   Consume the SSE stream and append each step next to the spinner.
+5. src/front/static/simulation/css/simulation.css
+   Checklist styling with ``--db-*`` tokens.
+6. tests/units/agents/test_agent_simulation_facts.py
+   Assert ``on_event`` receives thinking, tools, and output.
+7. tests/units/simulation/test_simulation_runner_api.py
+   Cover step labels, stream SSE, and the builder guard.
+8. tests/units/front/test_simulation_page_contract.py
+   Require the progress DOM ids and the stream URL.
+
+Modified files:
+- src/agents/agent_simulation_facts/engine.py
+- src/api/routers/internal/simulation.py
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/agents/test_agent_simulation_facts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Scroll propose-facts steps list capped at 10 items
+================================================================================
+
+Context: The live propose-facts progress list could grow arbitrarily long
+as the agent made multiple search and ontology tool calls, pushing the
+workbench layout down. Cap the visible height to approximately 10 rows
+with a vertical scrollbar, and auto-scroll to the newest step.
+
+Changes:
+
+1. src/front/static/simulation/css/simulation.css
+   Cap ``.sim-fact-progress-steps`` at ``max-height: 15rem`` with
+   ``overflow-y: auto``.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Scroll ``simWbFactProgressSteps`` to the bottom on new step additions.
+3. tests/units/front/test_simulation_page_contract.py
+   Assert ``overflow-y: auto`` and ``max-height`` in the progress steps CSS.
+
+Modified files:
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected, 39 warnings in 51.52s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Hide propose-facts steps; prompt from Describe the facts only
+================================================================================
+
+Context: The live steps box stays on screen for the whole generation. Users
+wanted a Hide control on the top right so they can dismiss it while the
+agent keeps running (next Propose shows it again). The facts agent also
+still ingested the General-tab scenario description; only the "Describe
+the facts" prompt should go to the LLM.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Add ``#simWbFactProgressHide`` in a header aligned to the top right.
+2. src/front/static/simulation/css/simulation.css
+   Flex-end header for the Hide control using ``--db-*`` tokens.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Hide the box on click; stop sending/applying the General-tab description.
+4. src/api/routers/internal/simulation.py
+   Drop CURRENT DESCRIPTION from the facts user message.
+5. src/agents/agent_simulation_facts/engine.py
+   System prompt no longer merges a General-tab description.
+6. src/agents/agent_simulation_facts/tools.py
+   ``propose_patches`` schema describes the new facts only.
+7. tests/units/front/test_simulation_page_contract.py
+   Require Hide id, handler, and header CSS.
+8. tests/units/simulation/test_simulation_runner_api.py
+   Assert the user message and fallback description omit the General tab.
+9. tests/units/agents/test_agent_simulation_facts.py
+   Assert the system prompt has no CURRENT DESCRIPTION.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-workbench.js
+- src/api/routers/internal/simulation.py
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_facts/tools.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/agents/test_agent_simulation_facts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9872 passed, 326 skipped, 8 deselected, 39 warnings in 45.17s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Append propose-facts onto existing hypothetical facts
+================================================================================
+
+Context: Each Propose facts turn pushed agent patches onto the workbench
+list with no merge, so a second prompt duplicated triples or left two
+``set`` values on the same subject+predicate. Facts must accumulate in
+append mode: keep prior facts, skip duplicates, and reconcile conflicts.
+
+Changes:
+
+1. src/back/objects/simulation/Patch.py
+   ``Patch.append_all`` drops exact duplicates, lets the latest ``set``
+   win on a predicate, and cancels matching add/remove pairs.
+2. src/api/routers/internal/simulation.py
+   Return the merged patch list for ``/facts/agent`` and the SSE stream.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Replace the workbench list with the merged payload instead of pushing.
+4. src/agents/agent_simulation_facts/engine.py
+   System prompt: append mode, skip EXISTING FACTS, replace conflicting sets.
+5. src/agents/agent_simulation_facts/tools.py
+   ``propose_patches`` schema documents append / replace behaviour.
+6. tests/eval/datasets/agent_simulation_facts/regression.jsonl
+   Ten append-mode examples with expected ``merged`` lists.
+7. tests/eval/judges/simulation_facts.py
+   Dry-run judge checks ``Patch.append_all`` against ``expected.merged``.
+8. tests/units/simulation/test_simulation_core.py
+   Cover duplicate, replace, cancel, and batch-dedup merge cases.
+9. tests/units/simulation/test_simulation_runner_api.py
+   Assert the propose-facts route returns the merged list.
+10. tests/units/front/test_simulation_page_contract.py
+    Require replace-not-push in ``proposeFacts``.
+11. tests/units/agents/test_agent_simulation_facts.py
+    Assert APPEND MODE in the system prompt; regression file ≥ 10 rows.
+12. tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+    Add ``merged`` on skip-existing and enrich-desc-003.
+
+Modified files:
+- src/back/objects/simulation/Patch.py
+- src/api/routers/internal/simulation.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/agents/agent_simulation_facts/engine.py
+- src/agents/agent_simulation_facts/tools.py
+- tests/eval/datasets/agent_simulation_facts/regression.jsonl
+- tests/eval/datasets/agent_simulation_facts/baseline.jsonl
+- tests/eval/judges/simulation_facts.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/agents/test_agent_simulation_facts.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9882 passed, 326 skipped, 8 deselected, 39 warnings in 45.48s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Workbench Purge, fact multi-select, and prompt Clear
+================================================================================
+
+Context: The workbench header Clear only closed the editor (Back already
+does that). Users need scenario Purge from the editor, bulk removal of
+hypothetical facts, and a way to empty Describe the facts without
+touching the scenario.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Replace Clear with Purge; add fact select-all / remove-selected;
+   stack Clear above Propose facts.
+2. src/front/static/simulation/js/simulation-workbench.js
+   Purge via the list helper; checkbox selection; clear the fact prompt.
+3. src/front/static/simulation/js/simulation.js
+   Reload the open workbench after purge; disable Purge while a run is live.
+4. tests/units/front/test_simulation_page_contract.py
+   Require Purge, prompt Clear, and fact multi-select ids/handlers.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9882 passed, 326 skipped, 8 deselected, 39 warnings in 53.57s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.

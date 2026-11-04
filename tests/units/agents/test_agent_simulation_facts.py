@@ -372,6 +372,17 @@ def _run(monkeypatch, llm_turns, **kwargs):
         return facts_engine.run_agent(**defaults)
 
 
+def test_run_agent_emits_thinking_and_tool_events(monkeypatch):
+    seen = []
+    result = _run(monkeypatch, _llm_ok(), on_event=seen.append)
+    kinds = [(s.step_type, s.tool_name) for s in seen]
+    assert kinds[0] == ("thinking", "")
+    assert ("tool_call", "propose_patches") in kinds
+    assert ("tool_result", "propose_patches") in kinds
+    assert kinds[-1] == ("output", "")
+    assert result.success is True
+
+
 def test_run_agent_returns_proposed_patches(monkeypatch):
     result = _run(monkeypatch, _llm_ok())
     assert result.success is True
@@ -418,6 +429,33 @@ def test_run_agent_proposes_exact_claim_removal(monkeypatch):
     )
     assert result.success is True
     assert result.proposed_patches == [_REMOVE_CLAIM]
+
+
+def test_run_agent_forwards_domain_endpoint_kind(monkeypatch):
+    """Gateway models such as databricks-claude-opus-4-6 are not serving endpoints."""
+    seen = {}
+
+    def _call_llm(*args, **kwargs):
+        seen.update(kwargs)
+        return {
+            "choices": [{"message": {"content": "Need a more specific request."}}],
+            "usage": {},
+        }
+
+    monkeypatch.setattr(facts_engine, "call_serving_endpoint", _call_llm)
+    result = facts_engine.run_agent(
+        host="https://workspace",
+        token="token",
+        endpoint_name="databricks-claude-opus-4-6",
+        endpoint_kind="ai_gateway",
+        base_url="http://loopback.invalid",
+        domain_name="demo",
+        registry_params={},
+        session_cookies={},
+        user_message="set score",
+    )
+    assert result.success is True
+    assert seen["endpoint_kind"] == "ai_gateway"
 
 
 def test_run_agent_reports_llm_failure():
@@ -475,6 +513,8 @@ def test_system_prompt_forbids_bare_relationship_ids():
     text = facts_engine.SYSTEM_PROMPT
     assert "ECON00018" in text
     assert "absolute URIs" in text
+    assert "CURRENT DESCRIPTION" not in text
+    assert "APPEND MODE" in text
 
 
 def test_eval_regression_contract_objects_are_uris():
@@ -492,7 +532,7 @@ def test_eval_regression_contract_objects_are_uris():
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert len(rows) >= 3
+    assert len(rows) >= 10
     assert all(score_dataset_row(row) == 1.0 for row in rows)
     objects = [
         patch.get("object")

@@ -38,7 +38,7 @@ PATCH
   Prefer set for a single replacement (score, status); add for extra links.
 
 WORKFLOW
-  1. Read SCOPE, CURRENT DESCRIPTION, EXISTING FACTS in the user message.
+  1. Read SCOPE and EXISTING FACTS in the user message.
   2. list_classes, then list_properties_of for the relevant class.
   3. search_entities for every named person/org/thing. Use those URIs.
      When SCOPE names a person, that URI is the subject of new links.
@@ -46,7 +46,10 @@ WORKFLOW
      list_entity_relationships on that person before proposing removes.
   4. Mint a URI only after search returned no hit, using the ontology
      base_uri + a local id (never a random host).
-  5. Skip triples already listed under EXISTING FACTS.
+  5. APPEND MODE. Propose only facts that are not already in EXISTING FACTS.
+     Skip exact duplicates. If REQUEST changes a value already set on the
+     same subject+predicate, propose the new set (it replaces the old one).
+     If REQUEST retracts a triple that EXISTING FACTS added, propose remove.
   6. Call propose_patches with the patch list AND scenario_description,
      then a short markdown reply. Do not dump JSON in the reply.
 
@@ -63,11 +66,10 @@ RULES
   * If the request is too vague (no subject), ask one clarifying question
     instead of calling propose_patches.
   * Keep the reply under 6 lines.
-  * scenario_description is the General-tab text: 1–3 short paragraphs that
-    state the complete what-if (slice + prior description + new facts).
-    Merge CURRENT DESCRIPTION; do not drop prior intent. Plain prose, no JSON.
-  * If EXISTING FACTS already cover the request, still call propose_patches
-    with patches=[] and an updated scenario_description.
+  * scenario_description is 1–3 short paragraphs of the new facts only
+    (REQUEST + EXISTING FACTS). Plain prose, no JSON.
+  * If EXISTING FACTS already cover the request, call propose_patches
+    with patches=[] and a short scenario_description.
 """
 
 
@@ -83,7 +85,19 @@ def _messages(user_message: str, history: Optional[List[dict]]) -> List[dict]:
     return messages
 
 
-def _apply_tools(ctx: ToolContext, result: AgentResult, messages: list, tool_calls: list) -> None:
+def _emit(result: AgentResult, step: AgentStep, on_event: Optional[Callable] = None) -> None:
+    result.steps.append(step)
+    if on_event:
+        on_event(step)
+
+
+def _apply_tools(
+    ctx: ToolContext,
+    result: AgentResult,
+    messages: list,
+    tool_calls: list,
+    on_event: Optional[Callable] = None,
+) -> None:
     for tc in tool_calls:
         func = tc.get("function", {})
         tool_name = func.get("name", "")
@@ -92,24 +106,42 @@ def _apply_tools(ctx: ToolContext, result: AgentResult, messages: list, tool_cal
             arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
         except json.JSONDecodeError:
             arguments = {}
-        result.steps.append(
-            AgentStep(step_type="tool_call", content=json.dumps(arguments, default=str)[:600], tool_name=tool_name)
+        _emit(
+            result,
+            AgentStep(
+                step_type="tool_call",
+                content=json.dumps(arguments, default=str)[:600],
+                tool_name=tool_name,
+            ),
+            on_event,
         )
         t0 = time.time()
         payload = dispatch_tool(TOOL_HANDLERS, ctx, tool_name, arguments, trace_name=_TRACE_NAME)
         elapsed = int((time.time() - t0) * 1000)
-        result.steps.append(
-            AgentStep(step_type="tool_result", content=payload[:500], tool_name=tool_name, duration_ms=elapsed)
+        _emit(
+            result,
+            AgentStep(
+                step_type="tool_result",
+                content=payload[:500],
+                tool_name=tool_name,
+                duration_ms=elapsed,
+            ),
+            on_event,
         )
         messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": payload})
 
 
-def _finish(result: AgentResult, ctx: ToolContext, content: str) -> AgentResult:
+def _finish(
+    result: AgentResult,
+    ctx: ToolContext,
+    content: str,
+    on_event: Optional[Callable] = None,
+) -> AgentResult:
     result.success = True
     result.reply = content
     result.proposed_patches = ctx.metadata.get("proposed_patches")
     result.proposed_description = ctx.metadata.get("proposed_description") or ""
-    result.steps.append(AgentStep(step_type="output", content=content[:500]))
+    _emit(result, AgentStep(step_type="output", content=content[:500]), on_event)
     return result
 
 
@@ -126,6 +158,8 @@ def run_agent(
     conversation_history: Optional[List[dict]] = None,
     session_headers: Optional[dict] = None,
     on_step: Optional[Callable[[str], None]] = None,
+    on_event: Optional[Callable[[AgentStep], None]] = None,
+    endpoint_kind: str = "",
 ) -> AgentResult:
     """Run one simulation-facts turn."""
     ctx = ToolContext(
@@ -144,12 +178,18 @@ def run_agent(
         result.iterations = iteration + 1
         if on_step:
             on_step(f"Iteration {iteration + 1}...")
+        _emit(
+            result,
+            AgentStep(step_type="thinking", content="Asking the model"),
+            on_event,
+        )
         try:
             llm_response = call_serving_endpoint(
                 host, token, endpoint_name, messages,
                 tools=TOOL_DEFINITIONS if iteration < MAX_ITERATIONS - 1 else None,
                 max_tokens=2048, temperature=0.1, timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,
+                endpoint_kind=endpoint_kind,
             )
         except Exception as exc:
             result.error = f"LLM request failed: {exc}"
@@ -164,9 +204,9 @@ def run_agent(
         tool_calls = message.get("tool_calls")
         if tool_calls:
             messages.append(message)
-            _apply_tools(ctx, result, messages, tool_calls)
+            _apply_tools(ctx, result, messages, tool_calls, on_event)
             continue
-        return _finish(result, ctx, message.get("content", "") or "")
+        return _finish(result, ctx, message.get("content", "") or "", on_event)
     result.error = "Max iterations reached"
     result.proposed_patches = ctx.metadata.get("proposed_patches")
     result.proposed_description = ctx.metadata.get("proposed_description") or ""

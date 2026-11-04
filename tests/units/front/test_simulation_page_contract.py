@@ -48,9 +48,11 @@ def test_workbench_is_not_a_sidebar_item():
     assert 'id="simScenariosEditor"' in html
     wb = _read(FRONT / "templates/partials/simulation/_sim_workbench.html")
     js = _read(FRONT / "static/simulation/js/simulation-workbench.js")
-    assert 'id="simWbClearBtn"' in wb
-    assert "</i>Clear" in wb
-    assert "simWbClearBtn" in js
+    assert 'id="simWbPurgeBtn"' in wb
+    assert 'id="simWbClearBtn"' not in wb
+    assert "</i>Purge" in wb
+    assert "simWbPurgeBtn" in js
+    assert "purgeScenario" in js
     assert 'id="results-section"' not in html
     nav = _read(FRONT / "static/global/js/sidebar-nav.js")
     assert "_showSection: function" in nav
@@ -181,22 +183,47 @@ def test_hypothetical_facts_prompt_uses_agent():
     pane = html.split('id="simWb-pane-facts"', 1)[1].split('id="simWb-pane-reasoning"', 1)[0]
     assert "simWbFactWizardBtn" not in pane
     assert pane.index('id="simWbAddPatchBtn"') < pane.index('id="simWbFactPrompt"')
-    assert pane.index('id="simWbFactPrompt"') < pane.index('id="simWbFactPromptBtn"')
+    assert pane.index('id="simWbFactPrompt"') < pane.index('id="simWbFactPromptClearBtn"')
+    assert pane.index('id="simWbFactPromptClearBtn"') < pane.index('id="simWbFactPromptBtn"')
     assert pane.index('id="simWbFactPromptBtn"') < pane.index('id="simWbPatchesBody"')
+    assert 'id="simWbPatchSelectAll"' in pane
+    assert 'id="simWbPatchRemoveSelectedBtn"' in pane
+    assert pane.index('id="simWbPatchSelectAll"') < pane.index('id="simWbAddPatchBtn"')
+    assert "data-select=" in wb
+    assert "_removeSelectedPatches" in wb
+    assert "simWbFactPromptClearBtn" in wb
     assert "flex-sm-row" in pane
     assert "justify-content-end mt-2" not in pane
     assert "proposeFacts" in wb
+    propose = wb.split("proposeFacts", 1)[1].split("_persistLastFactPrompt", 1)[0]
+    assert "this.patches.push" not in propose
+    assert "_samePatchList" in wb
+    assert "this.patches = merged.map" in propose
     assert "/simulation/facts/agent" in wb
+    assert "/simulation/facts/agent/stream" in wb
+    assert "simWbFactProgress" in pane
+    assert "simWbFactProgressSteps" in pane
+    assert "simWbFactProgressHide" in pane
+    assert pane.index("simWbFactProgressHide") < pane.index("simWbFactProgressSteps")
+    assert "_appendFactProgress" in wb
+    assert "_hideFactProgress" in wb
+    assert "simWbFactProgressHide" in wb
     assert "_factReplyHtml" in wb
     assert "renderMarkdown(" in wb
     assert "class=\"oc-md\"" in wb or "class='oc-md'" in wb
     pages_css = _read(FRONT / "static/global/css/pages.css")
     assert ".success-toast-popup:has(.oc-md)" in pages_css
     assert ".success-toast-popup .oc-md blockquote" in pages_css
+    sim_css = _read(FRONT / "static/simulation/css/simulation.css")
+    steps_css = sim_css.split(".sim-fact-progress-steps {", 1)[1].split("}", 1)[0]
+    assert "overflow-y: auto" in steps_css
+    assert "max-height:" in steps_css
+    head_css = sim_css.split(".sim-fact-progress-head {", 1)[1].split("}", 1)[0]
+    assert "justify-content: flex-end" in head_css
     utils_js = _read(FRONT / "static/global/js/utils.js")
     assert "fade show d-flex align-items-start" in utils_js
-    assert "description: this._val('simWbDescription')" in wb
-    assert "this._set('simWbDescription', data.description)" in wb
+    assert "description: this._val('simWbDescription')" not in wb.split("proposeFacts", 1)[1].split("_persistLastFactPrompt", 1)[0]
+    assert "this._set('simWbDescription', data.description)" not in wb
     assert "fact_prompt: this._val('simWbFactPrompt')" in wb
     assert "this._set('simWbFactPrompt', spec.fact_prompt || '')" in wb
     assert "_persistLastFactPrompt" in wb
@@ -355,6 +382,7 @@ def test_scenarios_list_has_purge_action():
     assert "purgeScenario" in js
     assert "/purge" in js
     assert "bi-eraser" in js
+    assert "SimulationWorkbench.load" in js.split("async purgeScenario", 1)[1].split("async deleteScenario", 1)[0]
 
 
 def test_open_scenario_does_not_bounce_to_list():

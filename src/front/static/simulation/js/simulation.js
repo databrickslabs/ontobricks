@@ -381,6 +381,9 @@ const SimulationPage = {
             await this.api(`/simulation/${encodeURIComponent(id)}/purge`, { method: 'POST' });
             showNotification('Simulation sandbox purged', 'success');
             this.loadScenarios();
+            if (window.SimulationWorkbench && SimulationWorkbench.currentId === id) {
+                await SimulationWorkbench.load(id);
+            }
         } catch (err) {
             showNotification(`Purge failed: ${err.message}`, 'error');
         }
@@ -416,6 +419,10 @@ const SimulationPage = {
             if (typeof refreshTasks === 'function') refreshTasks();
             showNotification('Simulation started...', 'info');
             this.loadScenarios();
+            if (window.SimulationWorkbench && SimulationWorkbench.currentId === id) {
+                SimulationWorkbench.status = 'running';
+                SimulationWorkbench._syncPurgeBtn();
+            }
         } catch (err) {
             showNotification(`Simulation could not start: ${err.message}`, 'error');
         }

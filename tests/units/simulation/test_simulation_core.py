@@ -237,6 +237,73 @@ class TestPatch:
         Patch.from_dict({"op": "remove", "subject": "s", "predicate": "p"})
 
 
+class TestPatchAppend:
+    _S = EX + "person"
+    _SCORE = EX + "score"
+    _REL = EX + "hasContract"
+    _C1 = EX + "C1"
+    _C2 = EX + "C2"
+
+    def _set(self, value):
+        return {"op": "set", "subject": self._S, "predicate": self._SCORE, "object": value}
+
+    def _add(self, obj):
+        return {"op": "add", "subject": self._S, "predicate": self._REL, "object": obj}
+
+    def _remove(self, obj):
+        return {"op": "remove", "subject": self._S, "predicate": self._REL, "object": obj}
+
+    def test_appends_new_fact(self):
+        assert Patch.append_all([self._set("410")], [self._add(self._C1)]) == [
+            self._set("410"),
+            self._add(self._C1),
+        ]
+
+    def test_skips_exact_duplicate(self):
+        existing = [self._set("420")]
+        assert Patch.append_all(existing, [self._set("420")]) == existing
+
+    def test_replaces_conflicting_set(self):
+        assert Patch.append_all([self._set("410")], [self._set("420")]) == [self._set("420")]
+
+    def test_set_replaces_adds_on_same_predicate(self):
+        assert Patch.append_all(
+            [self._add(self._C1), self._add(self._C2)],
+            [{"op": "set", "subject": self._S, "predicate": self._REL, "object": self._C1}],
+        ) == [{"op": "set", "subject": self._S, "predicate": self._REL, "object": self._C1}]
+
+    def test_remove_cancels_matching_add(self):
+        assert Patch.append_all([self._add(self._C1)], [self._remove(self._C1)]) == []
+
+    def test_add_cancels_matching_remove(self):
+        assert Patch.append_all([self._remove(self._C1)], [self._add(self._C1)]) == [
+            self._add(self._C1)
+        ]
+
+    def test_remove_of_other_set_value_is_ignored(self):
+        existing = [self._set("420")]
+        incoming = [
+            {
+                "op": "remove",
+                "subject": self._S,
+                "predicate": self._SCORE,
+                "object": "410",
+            }
+        ]
+        assert Patch.append_all(existing, incoming) == existing
+
+    def test_dedupes_incoming_batch(self):
+        assert Patch.append_all([], [self._add(self._C1), self._add(self._C1)]) == [
+            self._add(self._C1)
+        ]
+
+    def test_skips_invalid_rows(self):
+        assert Patch.append_all(
+            [{"op": "upsert", "subject": "s", "predicate": "p", "object": "o"}],
+            [self._add(self._C1)],
+        ) == [self._add(self._C1)]
+
+
 class TestSpec:
     def _body(self, **over):
         body = {

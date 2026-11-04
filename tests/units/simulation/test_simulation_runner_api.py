@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from back.core.errors import NotFoundError, ValidationError
+from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from back.objects.simulation import (
@@ -845,6 +845,56 @@ class TestSimulationApi:
         assert "score" in out["reply"]
         assert "420" in out["description"]
 
+    async def test_propose_facts_appends_without_duplicates(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        existing = {
+            "op": "set",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/score",
+            "object": "410",
+        }
+        incoming = {
+            "op": "set",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/score",
+            "object": "420",
+        }
+        extra = {
+            "op": "add",
+            "subject": "http://ex.org/p1",
+            "predicate": "http://ex.org/hasContract",
+            "object": "http://ex.org/C1",
+        }
+        fake = AgentResult(success=True, reply="ok", proposed_patches=[incoming, extra, extra])
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr("agents.agent_simulation_facts.run_agent", lambda **kwargs: fake)
+        monkeypatch.setattr(
+            self.api, "require_domain_llm", lambda domain, settings: ("h", "t", "ep", "")
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        out = await self.api.propose_facts(
+            _Req(body={"prompt": "score to 420 and add C1"}),
+            body={
+                "prompt": "score to 420 and add C1",
+                "existing_patches": [existing, extra],
+            },
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert out["patches"] == [extra, incoming]
+
     async def test_propose_facts_requires_prompt(self, monkeypatch):
         with pytest.raises(ValidationError):
             await self.api.propose_facts(
@@ -854,7 +904,7 @@ class TestSimulationApi:
                 settings=SimpleNamespace(),
             )
 
-    async def test_propose_facts_falls_back_to_merged_description(self, monkeypatch):
+    async def test_propose_facts_fallback_description_ignores_general_tab(self, monkeypatch):
         import asyncio
 
         from agents.agent_simulation_facts.AgentResult import AgentResult
@@ -891,16 +941,157 @@ class TestSimulationApi:
             session_mgr=SimpleNamespace(),
             settings=SimpleNamespace(),
         )
-        assert "Credit review on Jacob." in out["description"]
+        assert "Credit review on Jacob." not in out["description"]
         assert "score to 420" in out["description"]
 
-    def test_facts_user_message_includes_current_description(self):
+    async def test_propose_facts_forwards_gateway_endpoint_kind(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        seen = {}
+
+        def _run_agent(**kwargs):
+            seen.update(kwargs)
+            return AgentResult(success=True, reply="ok", proposed_patches=[])
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr("agents.agent_simulation_facts.run_agent", _run_agent)
+        monkeypatch.setattr(
+            self.api,
+            "require_domain_llm",
+            lambda domain, settings: ("h", "t", "databricks-claude-opus-4-6", "ai_gateway"),
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        await self.api.propose_facts(
+            _Req(body={"prompt": "set score"}),
+            body={"prompt": "set score", "description": "Credit review on Jacob."},
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert seen["endpoint_kind"] == "ai_gateway"
+        assert seen["endpoint_name"] == "databricks-claude-opus-4-6"
+        assert "Credit review on Jacob." not in seen["user_message"]
+        assert "CURRENT DESCRIPTION" not in seen["user_message"]
+
+    async def test_propose_facts_names_missing_gateway_model(self, monkeypatch):
+        import asyncio
+
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+
+        async def _inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _inline)
+        monkeypatch.setattr(
+            "agents.agent_simulation_facts.run_agent",
+            lambda **kwargs: AgentResult(
+                success=False,
+                error=(
+                    "LLM request failed: 404 Client Error: Not Found for url: "
+                    "https://ex/serving-endpoints/databricks-claude-opus-4-6/invocations "
+                    "— body: {\"error_code\":\"ENDPOINT_NOT_FOUND\","
+                    "\"message\":\"The given endpoint does not exist\"}"
+                ),
+            ),
+        )
+        monkeypatch.setattr(
+            self.api, "require_domain_llm", lambda domain, settings: ("h", "t", "ep", "ai_gateway")
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        with pytest.raises(InfrastructureError, match="LLM was not found") as exc:
+            await self.api.propose_facts(
+                _Req(body={"prompt": "set score"}),
+                body={"prompt": "set score"},
+                session_mgr=SimpleNamespace(),
+                settings=SimpleNamespace(),
+            )
+        assert "serving-endpoints" not in exc.value.message
+
+    def test_facts_step_label_explains_tools(self):
+        from agents.engine_base import AgentStep
+
+        think = AgentStep(step_type="thinking", content="Asking the model")
+        assert "model" in self.api._facts_step_label(think).lower()
+        search = AgentStep(
+            step_type="tool_call",
+            tool_name="search_entities",
+            content='{"query": "Jacob"}',
+        )
+        assert "Jacob" in self.api._facts_step_label(search)
+        done = AgentStep(
+            step_type="tool_result",
+            tool_name="list_classes",
+            content="{}",
+            duration_ms=12,
+        )
+        assert "Listed" in self.api._facts_step_label(done)
+
+    async def test_propose_facts_stream_emits_sse_steps(self, monkeypatch):
+        from agents.agent_simulation_facts.AgentResult import AgentResult
+        from agents.engine_base import AgentStep
+        from fastapi.responses import StreamingResponse
+
+        def _run_agent(**kwargs):
+            on_event = kwargs.get("on_event")
+            if on_event:
+                on_event(AgentStep(step_type="thinking", content="Asking the model"))
+                on_event(
+                    AgentStep(
+                        step_type="tool_call",
+                        tool_name="list_classes",
+                        content="{}",
+                    )
+                )
+            return AgentResult(success=True, reply="ok", proposed_patches=[])
+
+        monkeypatch.setattr("agents.agent_simulation_facts.run_agent", _run_agent)
+        monkeypatch.setattr(
+            self.api,
+            "require_domain_llm",
+            lambda domain, settings: ("h", "t", "ep", "ai_gateway"),
+        )
+        monkeypatch.setattr(
+            self.api.DigitalTwin,
+            "resolve_registry",
+            staticmethod(lambda *a, **k: {"catalog": "c", "schema": "s", "volume": "v"}),
+        )
+        monkeypatch.setattr(self.api, "get_domain", lambda mgr: _Domain())
+        resp = await self.api.propose_facts_stream(
+            _Req(body={"prompt": "set score"}),
+            session_mgr=SimpleNamespace(),
+            settings=SimpleNamespace(),
+        )
+        assert isinstance(resp, StreamingResponse)
+        chunks = []
+        async for chunk in resp.body_iterator:
+            chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+        body = "".join(chunks)
+        assert '"type": "step"' in body
+        assert "list_classes" in body
+        assert '"type": "done"' in body
+        assert '"success": true' in body
+
+    def test_facts_user_message_omits_scenario_description(self):
         msg = self.api._facts_user_message(
-            "set score", {"type": "entity", "focus": "u1"}, [], "Prior text."
+            "set score", {"type": "entity", "focus": "u1"}, []
         )
         assert "REQUEST" in msg
-        assert "CURRENT DESCRIPTION" in msg
-        assert "Prior text." in msg
+        assert "set score" in msg
+        assert "CURRENT DESCRIPTION" not in msg
 
     async def test_run_returns_task_id(self, monkeypatch):
         sim = self._sim(monkeypatch)
@@ -916,6 +1107,7 @@ class TestSimulationApi:
         }
         assert ("/simulation/create", ("POST",)) in guarded
         assert ("/simulation/facts/agent", ("POST",)) in guarded
+        assert ("/simulation/facts/agent/stream", ("POST",)) in guarded
         assert ("/simulation/{sim_id}", ("PUT",)) in guarded
         assert ("/simulation/{sim_id}", ("DELETE",)) in guarded
         assert ("/simulation/{sim_id}/run", ("POST",)) in guarded

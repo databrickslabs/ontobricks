@@ -22,9 +22,9 @@
                     {% if not simulation_ctx.supported %}disabled{% endif %}>
                 <i class="bi bi-play-fill me-1"></i>Run
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbClearBtn"
-                    title="Close this scenario">
-                <i class="bi bi-x-lg me-1"></i>Clear
+            <button type="button" class="btn btn-sm btn-outline-warning" id="simWbPurgeBtn"
+                    title="Purge sandbox" disabled>
+                <i class="bi bi-eraser me-1"></i>Purge
             </button>
         </div>
     </div>
@@ -148,20 +148,42 @@
                 </div>
 
                 <div class="tab-pane fade" id="simWb-pane-facts" role="tabpanel" aria-labelledby="simWb-tab-facts">
-                    <div class="d-flex justify-content-end gap-2 mb-2">
+                    <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" id="simWbPatchSelectAll"
+                                       disabled aria-label="Select all facts">
+                                <label class="form-check-label small" for="simWbPatchSelectAll">Select all</label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger d-none" id="simWbPatchRemoveSelectedBtn">
+                                <i class="bi bi-trash me-1"></i>Remove selected
+                                (<span id="simWbPatchSelectedCount">0</span>)
+                            </button>
+                        </div>
                         <button type="button" class="btn btn-sm btn-outline-primary" id="simWbAddPatchBtn">
                             <i class="bi bi-plus-lg me-1"></i>Add fact
                         </button>
                     </div>
                     <div class="sim-fact-prompt mb-3">
                         <label for="simWbFactPrompt" class="form-label small">Describe the facts</label>
-                        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+                        <div class="d-flex flex-column flex-sm-row align-items-stretch gap-2">
                             <textarea class="form-control form-control-sm flex-grow-1" id="simWbFactPrompt" rows="3"
                                       maxlength="4000"
                                       placeholder="e.g. Jacob Martin now has three contracts with ACME, and his credit score dropped to 420"></textarea>
-                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" id="simWbFactPromptBtn">
-                                <i class="bi bi-stars me-1"></i>Propose facts
-                            </button>
+                            <div class="d-flex flex-column gap-2 flex-shrink-0">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbFactPromptClearBtn">
+                                    <i class="bi bi-x-lg me-1"></i>Clear
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="simWbFactPromptBtn">
+                                    <i class="bi bi-stars me-1"></i>Propose facts
+                                </button>
+                            </div>
+                        </div>
+                        <div id="simWbFactProgress" class="sim-fact-progress d-none mt-2" role="status" aria-live="polite">
+                            <div class="sim-fact-progress-head">
+                                <button type="button" class="btn btn-link btn-sm py-0 px-1 text-muted" id="simWbFactProgressHide">Hide</button>
+                            </div>
+                            <ol class="sim-fact-progress-steps mb-0" id="simWbFactProgressSteps"></ol>
                         </div>
                     </div>
                     <div id="simWbPatchesBody" class="sim-patches-list d-flex flex-column gap-1"></div>

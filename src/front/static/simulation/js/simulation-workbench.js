@@ -4,6 +4,7 @@
  */
 const SimulationWorkbench = {
     currentId: null,
+    status: '',
     patches: [],
     _cohortsLoaded: false,
     _focusLabel: '',
@@ -17,14 +18,16 @@ const SimulationWorkbench = {
         };
         on('simWbAddPatchBtn', 'click', () => this.openFactWizard());
         on('simWbFactPromptBtn', 'click', () => this.proposeFacts());
+        on('simWbFactPromptClearBtn', 'click', () => this._clearFactPrompt());
+        on('simWbFactProgressHide', 'click', () => this._hideFactProgress());
         on('simWbSaveBtn', 'click', () => this.save());
         on('simWbRunBtn', 'click', () => this.run());
         on('simWbBackBtn', 'click', () => {
             if (window.SimulationPage) SimulationPage.showList();
         });
-        on('simWbClearBtn', 'click', () => {
-            if (window.SimulationPage) SimulationPage.showList();
-        });
+        on('simWbPurgeBtn', 'click', () => this.purgeScenario());
+        on('simWbPatchSelectAll', 'change', (e) => this._selectAllPatches(e.target.checked));
+        on('simWbPatchRemoveSelectedBtn', 'click', () => this._removeSelectedPatches());
         on('simWbResetBtn', 'click', () => {
             if (window.SimulationPage) SimulationPage.newScenario();
             else {
@@ -52,6 +55,13 @@ const SimulationWorkbench = {
                 if (!btn) return;
                 this.patches.splice(Number(btn.dataset.remove), 1);
                 this.renderPatches();
+            });
+            body.addEventListener('change', (e) => {
+                const cb = e.target.closest('[data-select]');
+                if (!cb) return;
+                const idx = Number(cb.dataset.select);
+                if (this.patches[idx]) this.patches[idx]._selected = cb.checked;
+                this._syncPatchSelectionUi();
             });
         }
 
@@ -213,6 +223,7 @@ const SimulationWorkbench = {
 
     reset() {
         this.currentId = null;
+        this.status = 'draft';
         this.patches = [];
         this._syncTabLoading();
         const cfg = SimulationPage.config || {};
@@ -229,7 +240,7 @@ const SimulationWorkbench = {
         if (title) title.textContent = '— new scenario';
         this._syncScopeUi();
         this.renderPatches();
-        this.paintArtifacts(null);
+        this.paintArtifacts(null, this.status);
         if (window.SimulationResults) SimulationResults.select(null);
     },
 
@@ -246,6 +257,7 @@ const SimulationWorkbench = {
             const spec = sim.spec || {};
             const scope = spec.scope || {};
             this.currentId = sim.id;
+            this.status = sim.status || 'draft';
             this._set('simWbLabel', spec.label || sim.label);
             this._set('simWbDescription', spec.description || '');
             this._set('simWbFactPrompt', spec.fact_prompt || '');
@@ -302,51 +314,162 @@ const SimulationWorkbench = {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Proposing…';
         }
-        this.setTabBusy('facts', true);
+        this._resetFactProgress();
+        this._appendFactProgress('Starting…', { current: true });
         try {
-            const data = await SimulationPage.api('/simulation/facts/agent', {
-                method: 'POST',
-                body: {
-                    prompt,
-                    simulation_id: this.currentId || '',
-                    description: this._val('simWbDescription'),
-                    scope: {
-                        type: this._val('simWbScopeType'),
-                        focus: this._val('simWbFocus') || this._val('simWbCohort'),
-                        focus_label: this._focusLabel || '',
-                    },
-                    existing_patches: this.patches.map((p) => ({
-                        op: p.op,
-                        subject: p.subject,
-                        predicate: p.predicate,
-                        object: p.object,
-                    })),
+            const data = await this._streamProposeFacts({
+                prompt,
+                simulation_id: this.currentId || '',
+                scope: {
+                    type: this._val('simWbScopeType'),
+                    focus: this._val('simWbFocus') || this._val('simWbCohort'),
+                    focus_label: this._focusLabel || '',
                 },
+                existing_patches: this.patches.map((p) => ({
+                    op: p.op,
+                    subject: p.subject,
+                    predicate: p.predicate,
+                    object: p.object,
+                })),
             });
-            if (data.description) this._set('simWbDescription', data.description);
-            const rows = data.patches || [];
+            this._completeFactProgress();
+            const merged = data.patches || [];
             const replyHtml = this._factReplyHtml(data.reply);
-            if (!rows.length) {
+            if (this._samePatchList(this.patches, merged)) {
                 showNotification(
-                    replyHtml || 'No facts proposed. Try a more specific description.',
+                    replyHtml || 'No new facts proposed. Existing facts already cover this.',
                     'warning',
                     10000,
                 );
             } else {
-                rows.forEach((row) => this.patches.push({ ...row }));
+                this.patches = merged.map((row) => ({ ...row }));
                 await this._resolvePatchLabels();
                 if (replyHtml) showNotification(replyHtml, 'success', 10000);
             }
             await this._persistLastFactPrompt();
         } catch (err) {
+            this._failFactProgress();
             showNotification(err.message, 'error');
         } finally {
-            this.setTabBusy('facts', false);
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = idle;
             }
         }
+    },
+
+    _resetFactProgress() {
+        const box = this._el('simWbFactProgress');
+        const list = this._el('simWbFactProgressSteps');
+        if (list) list.replaceChildren();
+        if (box) box.classList.remove('d-none');
+    },
+
+    _hideFactProgress() {
+        const box = this._el('simWbFactProgress');
+        if (box) box.classList.add('d-none');
+    },
+
+    _patchFactKey(patch) {
+        const row = patch || {};
+        return [row.op, row.subject, row.predicate, row.object, row.datatype || ''].join('\0');
+    },
+
+    _samePatchList(left, right) {
+        if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+            return false;
+        }
+        return left.every((row, i) => this._patchFactKey(row) === this._patchFactKey(right[i]));
+    },
+
+    _appendFactProgress(label, { current = false } = {}) {
+        const list = this._el('simWbFactProgressSteps');
+        if (!list) return;
+        const last = list.lastElementChild;
+        const same = last && last.textContent.trim() === String(label || '').trim();
+        if (same && last.classList.contains('is-current')) return;
+        this._completeFactProgress();
+        const li = document.createElement('li');
+        li.className = current ? 'is-current' : 'is-done';
+        const icon = current
+            ? '<span class="sim-fact-progress-icon spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>'
+            : '<i class="sim-fact-progress-icon bi bi-check2" aria-hidden="true"></i>';
+        li.innerHTML = `${icon}<span>${SimulationPage.esc(label)}</span>`;
+        list.appendChild(li);
+        list.scrollTop = list.scrollHeight;
+    },
+
+    _completeFactProgress() {
+        const list = this._el('simWbFactProgressSteps');
+        if (!list) return;
+        list.querySelectorAll('li.is-current').forEach((li) => {
+            li.classList.remove('is-current');
+            li.classList.add('is-done');
+            const icon = li.querySelector('.sim-fact-progress-icon');
+            if (icon) {
+                const check = document.createElement('i');
+                check.className = 'sim-fact-progress-icon bi bi-check2';
+                check.setAttribute('aria-hidden', 'true');
+                icon.replaceWith(check);
+            }
+        });
+    },
+
+    _failFactProgress() {
+        const list = this._el('simWbFactProgressSteps');
+        if (!list) return;
+        list.querySelectorAll('li.is-current').forEach((li) => {
+            li.classList.remove('is-current');
+            const icon = li.querySelector('.sim-fact-progress-icon');
+            if (icon) {
+                const fail = document.createElement('i');
+                fail.className = 'sim-fact-progress-icon bi bi-x-lg text-danger';
+                fail.setAttribute('aria-hidden', 'true');
+                icon.replaceWith(fail);
+            }
+        });
+    },
+
+    async _streamProposeFacts(body) {
+        const resp = await fetch('/simulation/facts/agent/stream', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok || !resp.body) {
+            let data = {};
+            try { data = await resp.json(); } catch (_) { data = {}; }
+            throw new Error(data.message || data.detail || `Request failed (${resp.status})`);
+        }
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop();
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (!line.startsWith('data:')) continue;
+                    let event;
+                    try { event = JSON.parse(line.slice(5).trim()); } catch (_) { continue; }
+                    if (event.type === 'step') {
+                        this._appendFactProgress(event.label || event.tool_name || 'Working', { current: true });
+                    } else if (event.type === 'done') {
+                        return event;
+                    } else if (event.type === 'error') {
+                        throw new Error(event.message || 'Could not propose hypothetical facts');
+                    }
+                }
+            }
+        } finally {
+            reader.releaseLock();
+        }
+        throw new Error('The proposal stream ended without a result.');
     },
 
     async _persistLastFactPrompt() {
@@ -388,11 +511,14 @@ const SimulationWorkbench = {
         if (!body) return;
         if (!this.patches.length) {
             body.innerHTML = '<p class="text-center text-muted py-3 small mb-0">No hypothetical facts yet — add one to describe what changes.</p>';
+            this._syncPatchSelectionUi();
             return;
         }
         body.innerHTML = this.patches.map((p, i) => `<article class="card sim-patch-card">
             <div class="card-body">
                 <div class="d-flex align-items-center gap-2">
+                    <input class="form-check-input flex-shrink-0" type="checkbox" data-select="${i}"
+                           ${p._selected ? 'checked' : ''} aria-label="Select fact">
                     ${this._patchFieldsHtml(p, i)}
                     <div class="d-flex gap-1 flex-shrink-0">
                         <button type="button" class="btn btn-sm btn-outline-secondary" data-edit="${i}"
@@ -407,6 +533,62 @@ const SimulationWorkbench = {
                 </div>
             </div>
         </article>`).join('');
+        this._syncPatchSelectionUi();
+    },
+
+    _clearFactPrompt() {
+        this._set('simWbFactPrompt', '');
+        const box = this._el('simWbFactPrompt');
+        if (box) box.focus();
+    },
+
+    _selectAllPatches(checked) {
+        this.patches.forEach((row) => { row._selected = !!checked; });
+        this.renderPatches();
+    },
+
+    _syncPatchSelectionUi() {
+        const n = this.patches.filter((row) => row._selected).length;
+        const btn = this._el('simWbPatchRemoveSelectedBtn');
+        const count = this._el('simWbPatchSelectedCount');
+        const all = this._el('simWbPatchSelectAll');
+        if (count) count.textContent = String(n);
+        if (btn) btn.classList.toggle('d-none', n === 0);
+        if (all) {
+            all.disabled = this.patches.length === 0;
+            all.checked = this.patches.length > 0 && n === this.patches.length;
+            all.indeterminate = n > 0 && n < this.patches.length;
+        }
+    },
+
+    async _removeSelectedPatches() {
+        const n = this.patches.filter((row) => row._selected).length;
+        if (!n) return;
+        const ok = await showConfirmDialog({
+            title: 'Remove selected facts?',
+            message: `Remove ${n} hypothetical fact${n === 1 ? '' : 's'} from this scenario?`,
+            confirmText: 'Remove',
+            cancelText: 'Cancel',
+            confirmClass: 'btn-danger',
+            icon: 'trash',
+        });
+        if (!ok) return;
+        this.patches = this.patches.filter((row) => !row._selected);
+        this.renderPatches();
+    },
+
+    async purgeScenario() {
+        if (!this.currentId || !window.SimulationPage) return;
+        await SimulationPage.purgeScenario(this.currentId);
+    },
+
+    _syncPurgeBtn() {
+        const btn = this._el('simWbPurgeBtn');
+        if (!btn) return;
+        const running = this.status === 'running'
+            || (window.SimulationPage && SimulationPage.runningId === this.currentId);
+        const draft = !this.currentId || this.status === 'draft' || !this.status;
+        btn.disabled = running || draft;
     },
 
     _patchFieldsHtml(p, i) {
@@ -629,6 +811,8 @@ const SimulationWorkbench = {
     },
 
     paintArtifacts(artifacts, status) {
+        if (status) this.status = status;
+        this._syncPurgeBtn();
         const box = this._el('simWbArtifacts');
         const badge = this._el('simWbArtifactStatus');
         const data = artifacts || {};
@@ -707,6 +891,7 @@ const SimulationWorkbench = {
         try {
             const data = await SimulationPage.api(`/simulation/${encodeURIComponent(this.currentId)}`);
             const sim = data.simulation || {};
+            this.status = sim.status || this.status;
             this.paintArtifacts(sim.artifacts, sim.status);
         } catch (_) {
             /* keep the last catalog if the refresh fails */

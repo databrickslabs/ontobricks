@@ -206,6 +206,65 @@ a.sim-uri-link:focus-visible {
     min-width: 4.5rem;
 }
 
+.sim-fact-progress {
+    padding: 0.35rem 0.75rem 0.5rem;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    background: var(--db-canvas-warm);
+}
+
+.sim-fact-progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.sim-fact-progress-head .btn-link {
+    color: var(--db-text-muted);
+    text-decoration: none;
+}
+
+.sim-fact-progress-head .btn-link:hover,
+.sim-fact-progress-head .btn-link:focus-visible {
+    color: var(--db-text);
+    text-decoration: underline;
+}
+
+.sim-fact-progress-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 15rem;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.sim-fact-progress-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--db-text-secondary);
+}
+
+.sim-fact-progress-steps li.is-current {
+    color: var(--db-text);
+}
+
+.sim-fact-progress-steps li.is-done {
+    color: var(--db-text-muted);
+}
+
+.sim-fact-progress-steps .sim-fact-progress-icon {
+    flex: 0 0 1rem;
+    width: 1rem;
+    text-align: center;
+    margin-top: 0.1rem;
+}
+
 .sim-tab-loading {
     position: absolute;
     inset: 0;

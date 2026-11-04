@@ -2158,7 +2158,7 @@ async def dtwin_assistant_chat(
     saved_history = chat_cache["history"].get(domain_key) or []
     history = saved_history if saved_history else client_history
 
-    host, token, llm_endpoint, _llm_endpoint_kind = require_domain_llm(
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
         domain, settings
     )
 
@@ -2196,7 +2196,7 @@ async def dtwin_assistant_chat(
             run_chat_agent,
             host=host,
             token=token,
-            endpoint_name=llm_endpoint,
+            endpoint_name=llm_endpoint, endpoint_kind=llm_endpoint_kind,
             base_url=base_url,
             domain_name=domain_name,
             registry_params=registry_params,
@@ -2284,7 +2284,7 @@ async def dtwin_assistant_chat_stream(
     saved_history = chat_cache["history"].get(domain_key) or []
     history = saved_history if saved_history else client_history
 
-    host, token, llm_endpoint, _llm_endpoint_kind = require_domain_llm(
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
         domain, settings
     )
 
@@ -2324,7 +2324,7 @@ async def dtwin_assistant_chat_stream(
                     run_chat_agent,
                     host=host,
                     token=token,
-                    endpoint_name=llm_endpoint,
+                    endpoint_name=llm_endpoint, endpoint_kind=llm_endpoint_kind,
                     base_url=base_url,
                     domain_name=domain_name,
                     registry_params=registry_params,

@@ -73,6 +73,35 @@ def _run_with_scripted_llm(llm_side_effect):
         )
 
 
+def test_run_agent_forwards_domain_endpoint_kind():
+    seen = {}
+
+    def _call_llm(*_args, **kwargs):
+        seen.update(kwargs)
+        return {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {},
+        }
+
+    with patch(
+        "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+        side_effect=_call_llm,
+    ):
+        result = run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="databricks-claude-opus-4-6",
+            endpoint_kind="ai_gateway",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="hello",
+        )
+    assert result.success is True
+    assert seen["endpoint_kind"] == "ai_gateway"
+
+
 def test_run_agent_preserves_pending_action_on_llm_error():
     def llm_side_effect(*_args, **_kwargs):
         if llm_side_effect.calls == 0:
