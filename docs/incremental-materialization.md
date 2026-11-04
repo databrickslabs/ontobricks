@@ -727,6 +727,9 @@ usage error (exit status 2, nothing written).
 A path that is not configured is not judged; an `incremental` domain only moves on a
 build, so only its drift is. With `--source-dsn` the row is updated on the Postgres
 database a `realtime` domain's Debezium connector captures instead of the warehouse.
+`--sea` talks to the warehouses through the Statement Execution API instead of the
+Thrift connector — for networks where Thrift sessions fail mid-run (seen live:
+`OpenSession` → `RequestError`); the Lakehouse//RT read warehouse always uses it.
 Every option also reads `ONTOBRICKS_FRESHNESS_<OPTION>`, with the credentials of the
 EXPLAIN test:
 
@@ -1136,6 +1139,13 @@ supported"):
   were consolidated by the slot pipeline into one visible value (1/3 seen at 87 s) — what
   the design's AUTO CDC ordering is meant to do. The next net-change build consolidated the
   probe's markers to nothing and applied the one real change (see the traceability table).
+  With `--sea` the committed harness then ran end to end on the same network (a fresh
+  `microbatch` domain, 2 markers 420 s apart, 480 s timeout): no driver failure; the markers
+  reached `_slots` (reconciliation: `slots_data` drift, slots ahead) but neither reached the
+  `_data` / `_graph` views within 480 s (0/2) — the view's `TRIGGER ON UPDATE` cadence on this
+  sandbox runs from ~5 to over 8 minutes. The MV path is the fallback the design describes;
+  the `microbatch` KPI is met on the fast path (`_slots` on Lakehouse//RT) and on the Lakebase
+  continuous sync, both measured below.
 - **Lakebase CONTINUOUS sync from `_slots`, on the sandbox the same day** (`ZzNetFeedLive`
   rebuilt with `graph_engine_config.lakebase = {sync_mode: managed_synced, sync_table_mode:
   continuous}`: `apply_mode = lakeflow_sync`, `sync_mode_effective = continuous`,

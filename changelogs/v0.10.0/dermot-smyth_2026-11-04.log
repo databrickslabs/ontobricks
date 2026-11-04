@@ -298,7 +298,20 @@ the AUTO CDC inserts, `VERSION AS OF` works). The feed now comes from there.
    update database-instances <project-name>`; the project's `uid` is what the
    error message calls the "Database instance") — one more grant for the
    bootstrap list of item 4b above.
-7. docs/incremental-materialization.md — net-change apply bullet (feed
+7. scripts/measure_freshness.py — `--sea`: both warehouse clients through the
+   Statement Execution API (`DatabricksClient(use_sea=True)`) instead of the
+   Thrift connector, for networks where Thrift sessions fail mid-run (the two
+   runs above died in `ThriftBackend` / `OpenSession`). Tests:
+   tests/units/scripts/test_measure_freshness.py `TestWarehouseClients` (the
+   flag, the forwarding to the build and read clients, the Thrift default);
+   the `TestRun` fakes accept the keyword. Run end to end on the sandbox with
+   `--sea` (fresh `microbatch` domain, 2 markers 420 s apart, 480 s timeout):
+   no driver failure; markers in `_slots` (`slots_data` drift = slots ahead),
+   `_data` / `_graph` not refreshed within 480 s for either (0/2) — the view's
+   trigger cadence here runs 5 to 8+ minutes, the MV path is the fallback; the
+   KPI holds on the fast path (RT) and the Lakebase continuous sync (both
+   measured today, below). Exit status 1 is the SLO verdict, as designed.
+8. docs/incremental-materialization.md — net-change apply bullet (feed
    relation, snapshot diff, fallback reasons), previews bullet, the microbatch
    refresh paragraph (the wait), Known limitations (the MV-fed apply of a
    `_data` with batch mappings; a registry delete leaves the slot pipeline
@@ -371,6 +384,8 @@ Modified files:
 - src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
 - src/back/objects/digitaltwin/build/TwinMergeFallback.py
 - src/back/objects/digitaltwin/build/_build_pipeline.py
+- scripts/measure_freshness.py
+- tests/units/scripts/test_measure_freshness.py
 - tests/units/graphdb/delta/test_change_feed_reader.py
 - tests/units/graphdb/delta/test_materialized_view_builder.py
 - tests/units/graphdb/test_graph_engine_config_keys.py
@@ -380,6 +395,6 @@ Modified files:
 - changelogs/v0.10.0/dermot-smyth_2026-11-04.log
 
 Test result: `uv run --frozen pytest -q -m "not scenario" -o faulthandler_timeout=240`
-on the final tree — 11827 passed, 335 skipped, 9 deselected (62 s);
+on the final tree — 11830 passed, 335 skipped, 9 deselected (63 s);
 `tests/units/architecture` 11 passed; ruff findings unchanged on every touched
 file (the three unformatted-at-HEAD files were edited without reformatting).

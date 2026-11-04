@@ -176,6 +176,52 @@ class TestVerdict:
         assert "view_data=ok" in text and text.endswith("SLOs met")
 
 
+class TestWarehouseClients:
+    """``--sea`` reaches both warehouse clients."""
+
+    @staticmethod
+    def _creds(monkeypatch):
+        monkeypatch.delenv("DATABRICKS_CONFIG_PROFILE", raising=False)
+        monkeypatch.setenv("DATABRICKS_HOST", "https://x.cloud.databricks.com")
+        monkeypatch.setenv("DATABRICKS_TOKEN", "t")
+        monkeypatch.setenv("DATABRICKS_SQL_WAREHOUSE_ID", "wh-build")
+
+    @staticmethod
+    def _record_clients(monkeypatch):
+        import back.core.databricks as databricks
+
+        made: list[dict] = []
+        monkeypatch.setattr(
+            databricks, "DatabricksClient", lambda **kw: made.append(kw) or SimpleNamespace(**kw)
+        )
+        return made
+
+    def test_the_flag_parses(self, script):
+        assert script.parse_args(["--sea"]).sea is True
+        assert script.parse_args([]).sea is False
+
+    def test_sea_is_forwarded_to_the_build_and_read_clients(self, script, monkeypatch):
+        self._creds(monkeypatch)
+        made = self._record_clients(monkeypatch)
+
+        build, read = script._warehouse_clients("wh-rt", use_sea=True)
+
+        assert [(m["warehouse_id"], m["use_sea"]) for m in made] == [
+            ("wh-build", True),
+            ("wh-rt", True),
+        ]
+        assert (build.warehouse_id, read.warehouse_id) == ("wh-build", "wh-rt")
+
+    def test_the_default_is_the_thrift_connector(self, script, monkeypatch):
+        self._creds(monkeypatch)
+        made = self._record_clients(monkeypatch)
+
+        build, read = script._warehouse_clients("")
+
+        assert made[0]["use_sea"] is False
+        assert build is read
+
+
 class TestWarehouseSQL:
     def test_the_update_casts_and_escapes_its_values(self, script):
         sql = script._Warehouse.update_sql("main.s.customers", "id", "4'2", "name", "ob-x", "string")
@@ -310,7 +356,7 @@ class TestRun:
     def test_it_reconciles_while_the_last_change_is_in_and_then_restores_the_row(self, script, monkeypatch):
         table = _OneRowTable()
         seen_at_reconcile: list = []
-        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id, **_: (table, table))
         monkeypatch.setattr(
             script._Warehouse,
             "reconcile",
@@ -339,7 +385,7 @@ class TestRun:
         )
         writes: list = []
         table.execute_statement = writes.append
-        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id, **_: (table, table))
         args = script.parse_args(
             [
                 "--stem", "main.kg.triplestore_d_V1", "--source-table", "main.ob_it.ob_it_customers",
@@ -353,7 +399,7 @@ class TestRun:
 
     def test_a_run_without_a_data_or_graph_path_warns(self, script, monkeypatch):
         table = _OneRowTable()
-        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id, **_: (table, table))
         monkeypatch.setattr(script, "_Postgres", lambda dsn: SimpleNamespace(
             reader=lambda name, **kw: (lambda shown: True), count=lambda name, **kw: 0
         ))
@@ -376,7 +422,7 @@ class TestRun:
         table.execute_query = lambda sql: [] if sql.startswith("SELECT CAST") else _OneRowTable.execute_query(table, sql)
         writes: list = []
         table.execute_statement = writes.append
-        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id: (table, table))
+        monkeypatch.setattr(script, "_warehouse_clients", lambda read_id, **_: (table, table))
         args = script.parse_args(
             [
                 "--stem", "main.kg.triplestore_d_V1", "--source-table", "main.ob_it.ob_it_customers",

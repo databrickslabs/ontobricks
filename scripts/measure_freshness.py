@@ -464,6 +464,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     option("sync-table", help="the synced table, schema.table")
     option("live-table", help="the realtime _live table, schema.table")
     option("source-dsn", help="update the source row on this Postgres instead of the warehouse")
+    parser.add_argument(
+        "--sea",
+        action="store_true",
+        help="Statement Execution API instead of the Thrift connector (networks where Thrift fails)",
+    )
     parser.add_argument("--no-recompute", action="store_true", help="skip the gateway VIEW recompute")
     parser.add_argument("--no-check", action="store_true", help="report only; exit 0")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
@@ -497,8 +502,13 @@ def guard_fixture(args: argparse.Namespace) -> None:
         )
 
 
-def _warehouse_clients(read_warehouse_id: str) -> tuple[Any, Any]:
-    """``(build client, read client)`` from a CLI profile or host + token + warehouse."""
+def _warehouse_clients(read_warehouse_id: str, *, use_sea: bool = False) -> tuple[Any, Any]:
+    """``(build client, read client)`` from a CLI profile or host + token + warehouse.
+
+    *use_sea* (``--sea``) talks to the warehouses through the Statement Execution
+    API instead of the Thrift connector — for networks where Thrift sessions
+    fail (seen live: ``OpenSession`` → ``RequestError`` mid-run).
+    """
     from back.core.databricks import DatabricksClient
 
     profile = _env("DATABRICKS_CONFIG_PROFILE")
@@ -514,10 +524,12 @@ def _warehouse_clients(read_warehouse_id: str) -> tuple[Any, Any]:
         warehouse_id = _env("DATABRICKS_SQL_WAREHOUSE_ID")
     if not (host and token and warehouse_id):
         raise SystemExit("measure_freshness: no Databricks credentials (see the module docstring)")
-    client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+    client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id, use_sea=use_sea)
     if not read_warehouse_id or read_warehouse_id == warehouse_id:
         return client, client
-    return client, DatabricksClient(host=host, token=token, warehouse_id=read_warehouse_id)
+    return client, DatabricksClient(
+        host=host, token=token, warehouse_id=read_warehouse_id, use_sea=use_sea
+    )
 
 
 def _readers(args: argparse.Namespace, paths: list[str], warehouse: _Warehouse) -> tuple[dict, Any]:
@@ -552,7 +564,7 @@ def run(args: argparse.Namespace) -> dict:
         warnings.append(
             "no data / graph path: the reconciliation may run before …_data holds the last marker"
         )
-    client, read_client = _warehouse_clients(args.read_warehouse_id)
+    client, read_client = _warehouse_clients(args.read_warehouse_id, use_sea=args.sea)
     warehouse = _Warehouse(client, read_client)
     source = _Postgres(args.source_dsn) if args.source_dsn else warehouse
     readers, lakebase = _readers(args, paths, warehouse)
