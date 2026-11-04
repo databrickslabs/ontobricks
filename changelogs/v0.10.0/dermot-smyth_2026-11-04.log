@@ -305,8 +305,13 @@ session transcript:
   `_data` 319 s (one marker not within 420 s), `_graph` 422 s / 321 s — the MV
   trigger cadence; the fast path reads `_slots` for such a graph.
 - Not available on the sandbox: Real-Time compute ("Real-Time compute is not
-  enabled for this workspace"), so the Lakehouse//RT KPI stays the integration
-  workspace's measurement; the `_data` MV change feed (above).
+  enabled for this workspace") and the `_data` MV change feed (above). The
+  Lakehouse//RT KPI was therefore measured again on the integration workspace
+  (`fevm-ontobricks-int`, its RT warehouse started for the run and stopped
+  after; the spike's own tables and continuous slot pipeline, torn down):
+  source commit → visible through the fast-path relation on RT **14.95 s
+  median, 18.3 s p95 (n = 10)** — the ≤ 30 s p95 KPI — point reads p50 181 ms /
+  p95 284 ms; recursive CTE refused by RT as the fallback expects.
 - Deploy #12 after the net-change change: the bundle's ACL reconcile dropped
   the app SP's self `CAN_MANAGE` again (every POST answered the Access Denied
   page) — re-granted with `apps update-permissions`; the MCP target episode in

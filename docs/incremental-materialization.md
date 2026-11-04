@@ -1125,6 +1125,16 @@ supported"):
   were consolidated by the slot pipeline into one visible value (1/3 seen at 87 s) — what
   the design's AUTO CDC ordering is meant to do. The next net-change build consolidated the
   probe's markers to nothing and applied the one real change (see the traceability table).
+- **Lakehouse//RT, repeated on the integration workspace the same day** (the RT warehouse
+  started for the run and stopped after it; the spike's own `itm_spike` tables and continuous
+  slot pipeline, torn down at the end): source commit → visible through the fast-path relation
+  (`_slots` ∪ `_inferred`) on the RT warehouse **14.95 s median, 18.3 s p95 / max, 10.6 s min**
+  (n = 10; samples 18.3, 14.5, 15.4, 15.2, 14.3, 15.8, 14.9, 14.0, 10.6, 15.0) — the ≤ 30 s p95
+  KPI, again; point reads p50 181 ms / p95 284 ms / max 347 ms (n = 20); every fast-path shape
+  the store emits ran (fingerprint probe, aliased and unaliased filters, self-join,
+  asserted-only, `IN` seed, `_slots` and `_data` direct, inferred visible, relation = `_data` ∪
+  `_inferred`), the recursive CTE refused (`UNSUPPORTED_FEATURE … Recursive CTEs is not
+  supported in Lakehouse//RT`) as the fallback markers expect.
 
 Lakehouse//RT is no longer blocked either: RT warehouses are created in the UI — Compute → SQL
 Warehouses → Create → Real-Time; the SDK's warehouse types are still `CLASSIC` / `PRO` only and the
