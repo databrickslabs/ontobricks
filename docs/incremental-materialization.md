@@ -636,7 +636,10 @@ degrade as described above:
   `_external_metadata/_delta_log` after ten minutes of polling, refreshes and
   repairs — so the feed stays unreadable there and the callers fall back as
   described. An existing view gets the property on its next `CREATE OR REPLACE`
-  (a definition change), not on a refresh.
+  (a definition change), not on a refresh. Enrolment is a Databricks private-preview
+  request for the workspace; there is no self-service path (the FE Vending Machine
+  addon catalogue carries none, checked 2026-11-04), which is why the net-change
+  apply of a graph the slots carry whole reads the `_slots` feed instead.
 - **Materialized view → Lakebase triggered/continuous synced tables** — the same
   external-metadata preview: the synced-table pipeline reads the MV's change feed
   (measured live, [Live verification](#known-limitations)). Not needed when the slots
@@ -876,6 +879,14 @@ Behaviour in this release:
   `RUNNING`). Stop and delete the pipeline (`databricks pipelines stop / delete`),
   then drop the relations (`_graph` is a VIEW; `_data` a MATERIALIZED VIEW or
   TABLE) and the Postgres tables by hand.
+- Settings → Graph DB → Connection shows the platform binding (`LAKEBASE_PROJECT`,
+  `LAKEBASE_BRANCH`, database) overlaid on an empty saved config. Saving that form
+  persists the *names*; the Lakebase engine used to hand the bare branch name to
+  `BranchLakebaseAuth` as if it were a `projects/<p>/branches/<b>` path, and every
+  Lakebase build then failed "Could not initialize graph backend" (seen live on the
+  sandbox after re-saving the shown config). The factory now composes the resource
+  path from the saved project and branch (`lakebase_branch_resource_path`); a bare
+  branch without a project falls back to the bound instance.
 - The first build after upgrading re-registers every managed-synced table on
   `_data` instead of the VIEW (one full resync). `SyncedTableManager.trigger_refresh`
   still starts updates with `full_refresh=True`. The drift check covers every name
@@ -1125,6 +1136,17 @@ supported"):
   were consolidated by the slot pipeline into one visible value (1/3 seen at 87 s) — what
   the design's AUTO CDC ordering is meant to do. The next net-change build consolidated the
   probe's markers to nothing and applied the one real change (see the traceability table).
+- **Lakebase CONTINUOUS sync from `_slots`, on the sandbox the same day** (`ZzNetFeedLive`
+  rebuilt with `graph_engine_config.lakebase = {sync_mode: managed_synced, sync_table_mode:
+  continuous}`: `apply_mode = lakeflow_sync`, `sync_mode_effective = continuous`,
+  `sync_source = …_slots`, the Postgres `zznetfeedlive_v1_sync` holding the 120 slot rows;
+  the recreated app principal first needed `CAN_USE` on the Lakebase project —
+  `databricks permissions update database-instances <project>` — the error names the
+  project's `uid` as the "Database instance"). Three source UPDATEs, each polled on
+  `_slots` and on the synced table from the write: `_slots` 13.5 / 10.3 / 7.5 s, **synced
+  table 34.6 / 27.1 / 22.3 s** (median 27.1 s, max 34.6 s) — the design's `sync` ≤ 60 s p95
+  KPI, 3/3. The default `sync_table_mode` is `snapshot`, which registers `_data`; the
+  continuous schedule is what reads `_slots`.
 - **Lakehouse//RT, repeated on the integration workspace the same day** (the RT warehouse
   started for the run and stopped after it; the spike's own `itm_spike` tables and continuous
   slot pipeline, torn down at the end): source commit → visible through the fast-path relation

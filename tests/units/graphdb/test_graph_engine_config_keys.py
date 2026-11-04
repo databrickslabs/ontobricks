@@ -6,6 +6,7 @@ import pytest
 
 from back.core.graphdb.engine_config import (
     is_nested_graph_engine_config,
+    lakebase_branch_resource_path,
     lakebase_section,
     lakehouse_section,
     list_neo4j_connections,
@@ -22,6 +23,29 @@ from back.core.graphdb.lakebase.Base import (
     validate_engine_config_keys,
 )
 from back.core.graphdb.neo4j.Connection import resolve_neo4j_database
+
+
+class TestLakebaseBranchResourcePath:
+    """What ``BranchLakebaseAuth`` is handed for a saved lakebase section."""
+
+    def test_the_saved_names_compose_the_resource_path(self):
+        section = {"lakebase_project": "ontobricks-rtm", "lakebase_branch": "production"}
+
+        assert lakebase_branch_resource_path(section) == (
+            "projects/ontobricks-rtm/branches/production"
+        )
+
+    def test_a_resource_path_is_kept(self):
+        section = {"lakebase_branch": "projects/p/branches/b", "lakebase_project": "other"}
+
+        assert lakebase_branch_resource_path(section) == "projects/p/branches/b"
+
+    def test_a_bare_branch_without_a_project_uses_the_bound_instance(self):
+        assert lakebase_branch_resource_path({"lakebase_branch": "production"}) == ""
+
+    @pytest.mark.parametrize("section", [None, {}, {"lakebase_branch": "  "}])
+    def test_no_branch_is_no_path(self, section):
+        assert lakebase_branch_resource_path(section) == ""
 
 
 class TestNormalizeGraphEngineConfig:

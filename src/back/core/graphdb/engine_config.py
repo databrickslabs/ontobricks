@@ -263,6 +263,25 @@ def lakebase_section(cfg: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     return dict(normalize_graph_engine_config(cfg).get("lakebase") or {})
 
 
+def lakebase_branch_resource_path(section: Optional[Mapping[str, Any]]) -> str:
+    """The branch resource path ``BranchLakebaseAuth`` takes, from a saved lakebase *section*.
+
+    The Connection tab saves the project and branch *names* (its GET overlays
+    the platform binding on empty fields, so a saved form carries them), while
+    ``BranchLakebaseAuth`` resolves ``projects/<project>/branches/<branch>``: a
+    bare branch name is composed with the project. A path already in that form
+    is kept. A bare name without a project cannot be resolved and reads as
+    ``""`` — the bound Lakebase instance is used — instead of an engine that
+    fails every build (seen live: a saved ``lakebase_branch = "production"``).
+    """
+    cfg = section or {}
+    branch = str(cfg.get("lakebase_branch") or "").strip()
+    if not branch or "/" in branch:
+        return branch
+    project = str(cfg.get("lakebase_project") or "").strip()
+    return f"projects/{project}/branches/{branch}" if project else ""
+
+
 def neo4j_section(cfg: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Return the Neo4j bucket from any stored shape (may include ``connections``)."""
     return dict(normalize_graph_engine_config(cfg).get("neo4j") or {})

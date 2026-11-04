@@ -20,6 +20,7 @@ The *engine_config* JSON is engine-specific (admin: Settings → Graph DB).
 
 from typing import Any, Dict, Optional, Tuple
 
+from back.core.graphdb.engine_config import lakebase_branch_resource_path
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -523,7 +524,7 @@ class GraphDBFactory:
         #      schema where all other graph tables live.
         sync_uc_schema = sync_uc_schema_override or schema
 
-        branch_path = str(cfg.get("lakebase_branch") or "").strip()
+        branch_path = lakebase_branch_resource_path(cfg)  # saved names → resource path
         try:
             if branch_path:
                 from back.core.databricks.lakebase import BranchLakebaseAuth
