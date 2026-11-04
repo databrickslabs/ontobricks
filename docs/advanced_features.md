@@ -800,7 +800,7 @@ The sticky **action bar** at the bottom of the form lets you:
 
 | Button | What it does |
 |---|---|
-| **Preview cohorts** | Runs `/dtwin/cohorts/dry-run` and switches to the **Preview** tab (no writes). |
+| **Preview** | Runs `/dtwin/cohorts/dry-run` and switches to the **Preview** tab (no writes). |
 | **Save rule** | `POST /dtwin/cohorts/rules` — versioned with the domain (works in both Volume and Lakebase modes). |
 | **Materialise** | Opens a small modal confirming what gets written. Idempotent per rule. |
 | **Configure outputs** | Toggle graph triples on/off and configure the optional Unity Catalog Delta target. |

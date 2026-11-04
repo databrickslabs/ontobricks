@@ -541,3 +541,31 @@ routes and URLs are not affected.
 
 ### Tests
 uv run --frozen pytest -q tests/units/front tests/units/simulation → 1852 passed.
+
+================================================================================
+## Rename cohort "Preview cohorts" button to "Preview"
+================================================================================
+
+Context: The Cohort page's run action was labelled "Preview cohorts". The
+shorter "Preview" label matches the surrounding action buttons. Helper text
+and docs that name the button are updated to match.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_cohorts.html
+   Button label now "Preview"; empty-state hint points to *Preview*.
+2. src/front/static/query/js/query-cohorts.js
+   Idle label of `cohortPreviewBtn` and the empty-preview hint now say "Preview".
+3. src/back/objects/digitaltwin/cohort/CohortService.py
+   Docstring reference updated to *Preview*.
+4. docs/advanced_features.md
+   Cohort action table row renamed to **Preview**.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_cohorts.html
+- src/front/static/query/js/query-cohorts.js
+- src/back/objects/digitaltwin/cohort/CohortService.py
+- docs/advanced_features.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 50.08s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.

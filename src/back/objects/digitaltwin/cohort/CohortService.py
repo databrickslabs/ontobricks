@@ -345,7 +345,7 @@ class CohortService:
         """Per-hop frontier diagnostic for the rule's ``links``.
 
         Honours the rule's ``compatibility`` so the starting frontier
-        matches what *Preview cohorts* sees.  Returns the structure
+        matches what *Preview* sees.  Returns the structure
         emitted by :meth:`CohortBuilder.trace_paths`.
         """
         from back.core.graph_analysis import CohortCompat, CohortLink

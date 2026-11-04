@@ -276,7 +276,7 @@ const CohortModule = {
         if (body) {
             body.innerHTML = `<div class="text-muted small fst-italic py-3">
                        Pick a rule from the left pane and click
-                       <em>Preview cohorts</em>.
+                       <em>Preview</em>.
                    </div>`;
         }
         const explainResult = document.getElementById('cohortExplainResult');
@@ -2008,7 +2008,7 @@ const CohortModule = {
     },
 
     _ACTION_IDLE: {
-        cohortPreviewBtn: '<i class="bi bi-eye me-1"></i>Preview cohorts',
+        cohortPreviewBtn: '<i class="bi bi-eye me-1"></i>Preview',
         cohortMaterializeBtn: '<i class="bi bi-cloud-upload me-1"></i>Materialise',
         cohortMaterializeNowBtn: '<i class="bi bi-cloud-upload me-1"></i>Materialise now',
     },
