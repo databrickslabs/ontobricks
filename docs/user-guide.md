@@ -1249,7 +1249,7 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
      an inferred triple shows the rule that produced it.
    - Every triple that disappeared is listed as **Removed**.
 
-**Compare with the live graph.** *Simulation → Scenarios → Compare* overlays a
+**Compare with the live graph.** *Simulation → Sandbox → Compare* overlays a
 **ready** sandbox on the live graph **as it is now**, on the same scope. Pick a
 scenario, choose *Live graph (inferred)* or *Live graph (asserted only)*, then
 press **Compare**. One graph is drawn with distinct colour-coding for entities (nodes) and relationships (links):

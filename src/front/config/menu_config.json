@@ -646,7 +646,7 @@
                 },
                 {
                     "id": "simulation-scenarios",
-                    "title": "Scenarios",
+                    "title": "Sandbox",
                     "icon": "bi-sliders2-vertical",
                     "items": [
                         {

@@ -519,3 +519,25 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 46.87s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+## Rename Simulation sidebar group "Scenarios" to "Sandbox"
+
+### Context
+The first-level sidebar group under Simulation was titled "Scenarios", the same
+word as its first item. Renamed the group title to "Sandbox" so the group reads
+as the sandbox workspace (Scenarios, Compare, Runs). Item ids are unchanged, so
+routes and URLs are not affected.
+
+### Changes
+1. src/front/config/menu_config.json
+   Group `simulation-scenarios` title changed from "Scenarios" to "Sandbox".
+2. docs/user-guide.md
+   Compare menu path updated to "Simulation → Sandbox → Compare".
+
+### Modified files
+- src/front/config/menu_config.json
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+### Tests
+uv run --frozen pytest -q tests/units/front tests/units/simulation → 1852 passed.
