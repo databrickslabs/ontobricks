@@ -68,9 +68,9 @@ DEFAULT_LAKEBASE_BRANCH="production"
 # hyphenated database_id from the resource path name; those differ when the
 # datname contains underscores (API uses hyphens only in database_id / RFC-1123).
 # Each app gets its own SCHEMA inside this database.
-DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_10_registry_db"
+DEFAULT_LAKEBASE_DATABASE="${DEFAULT_LAKEBASE_DATABASE:-ontobricks_demo_10_registry_db}"
 # Postgres schema inside the Lakebase database, Each instance should have its own schema for isolation.
-DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_10_registry_sc"
+DEFAULT_LAKEBASE_SCHEMA="${DEFAULT_LAKEBASE_SCHEMA:-ontobricks_demo_10_registry_sc}"
 # Example — reuse existing schema: DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
 
 # ── 0c. Derived defaults (auto-computed — do NOT edit) ────────────────

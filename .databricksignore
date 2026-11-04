@@ -35,6 +35,7 @@ __pycache__/
 .planning/
 .hypothesis/
 .superpowers/
+.isaac/
 .databricks/
 
 # ── Tests & coverage ─────────────────────────────────────────

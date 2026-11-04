@@ -85,6 +85,7 @@ sync:
     - .planning/
     - .hypothesis/
     - .superpowers/
+    - .isaac/
     - .pytest_cache/
     - htmlcov/
     - logs/

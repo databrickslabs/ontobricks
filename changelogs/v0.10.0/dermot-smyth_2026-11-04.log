@@ -87,9 +87,17 @@ Resolution, by area:
     0.10.0's root `uv.lock` records 3 226 `pypi-proxy.dev.databricks.com`
     sources (the README forbids committing them; CI's public runners cannot
     resolve them) and `uv lock --check` reported both locks stale. Both were
-    regenerated with `uv lock` against public PyPI: every package version is
-    unchanged (only `source` / artifact URLs differ), no proxy URL remains,
-    `uv lock --check` passes for both.
+    regenerated with `uv lock` — which on this machine resolves through its
+    configured mirror (`~/.config/uv/uv.toml`: `pypi-proxy.cloud.databricks.com`)
+    — and then rewritten to the public hosts (`files.pythonhosted.org/packages/…`
+    artifacts, `registry = "https://pypi.org/simple"`), the procedure 0.10.0's
+    own changelog describes: the mirror keeps PyPI's paths and hashes, so the
+    rewrite is mechanical. Every package version is unchanged against 0.10.0's
+    locks (only `source` / artifact URLs differ) and no proxy host remains.
+    Lesson recorded: a lock regenerated on a developer machine must be checked
+    for its `url =` hosts before it is committed or deployed — the first
+    rebuilt deployment shipped mirror URLs, and the Apps builder then fetched
+    them literally.
 11. Test seams of the merge: `tests/units/core/test_lakebase_flat_store.py`
     constructs `FlatStore`; `tests/units/settings/test_bundle_job_resource.py`
     expects the `sql` scope alone (their #218 rationale); the type-filter test
@@ -117,3 +125,85 @@ Test result: `uv run --frozen pytest -q -m "not scenario" -o faulthandler_timeou
 on the merged tree — 11796 passed, 335 skipped, 9 deselected; `uv lock --check`
 clean for both lockfiles; `tests/units/architecture` 11 passed (both boundary
 tests included).
+
+================================================================================
+## Rebuilt apps redeployed to the `ontobricks-rtm` sandbox; `.isaac/` excluded from the bundle sync
+================================================================================
+
+Context: the merged tree was deployed to the sandbox (`scripts/deploy.sh
+--no-bootstrap`, realtime env from `APP_REALTIME_*`, their `sql`-only scopes
+accepted by the Apps API as recorded). Three platform-side findings on the way:
+
+1. The first deployment's build failed: the Apps PyPI mirror
+   (`pypi-proxy.cloud.databricks.com`) answered 404 for the
+   `pyasn1-0.6.5-py3-none-any.whl` path 0.10.0's floor pins (a day-old
+   release); minutes later the mirror listed and served the same path (200),
+   so this is the mirror's first fetch of a fresh wheel, not the lockfile — a
+   retry is the remedy. Every other locked version was present on the mirror
+   (scripted check of all 236).
+2. The retry's deployment sat in "Preparing source code for new app
+   deployment" for over 80 minutes (today's earlier deploys took ~3 min);
+   `databricks bundle run` gave up at its fixed 20-minute wait while the
+   deployment stayed `IN_PROGRESS` server-side. `databricks apps stop` cleared
+   it (pending and active deployments reset), `apps start` + a fresh deploy
+   followed.
+3. databricks.yml / .databricksignore — the untracked local `.isaac/` directory
+   was part of the uploaded bundle (small, harmless, but it must never ship):
+   added to `sync.exclude` and to the human mirror.
+4. The restarted deployment hung the same way (another hour in "Preparing
+   source code" with no platform log line after "Starting Databricks Apps
+   runtime"), while the MCP app redeployed from the same bundle in minutes and
+   the shipped tree is the pre-merge size (14.5 MB): the app's deployment
+   pipeline was wedged since its failed build. The app was deleted and
+   recreated by the bundle (new service principal: self `CAN_MANAGE`, the UC
+   catalog grant and the Lakebase schema grants replayed by hand, as the first
+   deploy's `--no-bootstrap` path required).
+4b. Recreating the app deletes its service principal, which owned the slot
+    pipelines the app had created: the next `bundle deploy` renders the
+    published realtime domain's pipeline (`ontobricks-slots-zzrealtimelive-v1`)
+    and its `PUT /api/2.0/pipelines/<id>` fails with "Unable to access
+    workspace-bound securable because the user is not assigned to the
+    associated workspace" (the pipeline's creator / run-as is gone). Remedy:
+    delete the orphaned pipelines and their streaming tables (`_slots`, owned by
+    the pipeline) plus the domain's `_data` / `_graph`; the next build or bundle
+    deploy recreates them under the new identity. Worth a `scripts/bootstrap`
+    step if apps are recreated routinely.
+4d. The graph objects the old service principal created in Unity Catalog (the
+    gateway VIEW, `_data`, `_inferred`, companions) stay owned by the deleted
+    principal, and a `CREATE OR REPLACE VIEW` over one of them by the new app
+    fails with "does not have MANAGE on Table …": `MANAGE` is not part of
+    `ALL PRIVILEGES`. `GRANT MANAGE ON CATALOG ontobricks_rtm_catalog TO
+    <new sp>` (inherited by every schema and object) is the remedy; the
+    `app-permissions` bootstrap should grant it alongside `ALL PRIVILEGES`.
+4c. `src/mcp-server/app.yaml` is tracked (0.10.0 commits the `10x` render) and
+    `scripts/deploy.sh` re-renders it on every deploy: a sandbox deploy leaves
+    it modified with the sandbox's URL / warehouse / registry values — restore
+    it (`git checkout src/mcp-server/app.yaml`) before committing.
+5. scripts/deploy.config.sh — `DEFAULT_LAKEBASE_DATABASE` and
+   `DEFAULT_LAKEBASE_SCHEMA` take an environment override like the instance id
+   does (0.10.0 moved the defaults to `ontobricks_demo_10_*`; the sandbox
+   registry lives in the `09` database and schema, and the first rebuilt deploy
+   had silently created an empty `ontobricks_demo_10_registry_db` on the
+   project — deleted again).
+
+Modified files:
+- databricks.yml
+- .databricksignore
+- scripts/deploy.config.sh
+- docs/deployment.md (the two Lakebase defaults are env-overridable)
+- uv.lock, src/mcp-server/uv.lock (public hosts, see item 10 above)
+- changelogs/v0.10.0/dermot-smyth_2026-11-04.log
+
+Deploy result (2026-11-04, `ontobricks-rtm`): both apps RUNNING on the merged
+tree, `/health` → version 0.10.0; the rebuilt app sees the `09` registry (the
+three `Zz*` domains), loads the published realtime domain and answers
+`realtime: {enabled: true, source_configured: true, kind: kafka}` with
+`decision.effective: realtime`; scenario 06 PASSED in 228 s — readiness
+`row_tracking_missing → full`, enable-row-tracking → `incremental`, the
+Domain › Backend card ("incremental runs as incremental · Mappings: 2
+row-local …"), an incremental build of 6 triples in 179.7 s (`strategy: mv`,
+no fallback, slot pipeline created under the new identity), status, build-run
+facts, the overview (`domains_per_mode: {incremental: 1, microbatch: 1}`) and
+the Knowledge Graph › Build status card ("Slot pipeline: IDLE · _data: mv ·
+_slots: streaming_table v5 · … 6 upserted, 0 deleted"). Screenshots in
+`artifacts/scenarios/` (git-ignored).

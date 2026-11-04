@@ -532,9 +532,9 @@ Edit the workspace-specific defaults in `scripts/deploy.config.sh`:
 | `DEFAULT_REGISTRY_CATALOG` / `_SCHEMA` / `_VOLUME` | Bundle `volume` resource (`uc_securable: <cat>.<schema>.<volume>`) | UC namespace that hosts the binary-artefact volume + the triplestore VIEW. |
 | `DEFAULT_LAKEBASE_PROJECT` | `databricks.yml > var.lakebase_project` | Autoscaling **project id** (final segment of `projects/<id>`). |
 | `DEFAULT_LAKEBASE_BRANCH` | `databricks.yml > var.lakebase_branch` | Branch id (e.g. `production`). |
-| `DEFAULT_LAKEBASE_DATABASE` | Used by `deploy.sh` to resolve `var.lakebase_database_resource_segment` | Postgres **datname** (`status.postgres_database` from `list-databases`). Do **not** paste the `db-…` id here. |
+| `DEFAULT_LAKEBASE_DATABASE` | Used by `deploy.sh` to resolve `var.lakebase_database_resource_segment` | Postgres **datname** (`status.postgres_database` from `list-databases`). Do **not** paste the `db-…` id here. Env-overridable like `DEFAULT_INSTANCE_ID` (a sandbox keeps its existing registry database while the default moves with the release). |
 | `LAKEBASE_DATABASE_RESOURCE_SEGMENT` | `databricks.yml > var.lakebase_database_resource_segment` | Optional env override for the **`db-…` resource id**. When unset, `deploy.sh` resolves it from `DEFAULT_LAKEBASE_DATABASE` via the Postgres API. |
-| `DEFAULT_LAKEBASE_SCHEMA` | `databricks.yml > var.lakebase_registry_schema` + `LAKEBASE_SCHEMA` at runtime | Postgres schema for the registry (e.g. `ontobricks_registry`). |
+| `DEFAULT_LAKEBASE_SCHEMA` | `databricks.yml > var.lakebase_registry_schema` + `LAKEBASE_SCHEMA` at runtime | Postgres schema for the registry (e.g. `ontobricks_registry`). Env-overridable like `DEFAULT_INSTANCE_ID`. |
 | `DEFAULT_APP_TRIPLESTORE_TABLE` | `app.yaml > DATABRICKS_TRIPLESTORE_TABLE` | Fully-qualified `catalog.schema.table` fallback for MCP/session-less paths. |
 | `DEFAULT_APP_MLFLOW_TRACKING_URI` | `app.yaml > MLFLOW_TRACKING_URI` | `databricks` (persists traces to the workspace) or empty for local-only. |
 
