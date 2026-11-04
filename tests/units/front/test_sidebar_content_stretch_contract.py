@@ -77,6 +77,7 @@ SECTION_INVENTORY = {
         "scenarios",
         "cohorts",
         "cohort-run",
+        "compare",
         "runs",
     },
     "settings.html": {

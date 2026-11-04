@@ -1,0 +1,175 @@
+<!-- Compare Section - sandbox vs current live graph, same scope -->
+<div class="content-section h-100">
+    <div class="section-header d-flex justify-content-between align-items-center mb-2 flex-shrink-0">
+        <div class="me-auto">
+            <h4 class="mb-0"><i class="bi bi-columns-gap me-2"></i>Compare</h4>
+            <p class="text-muted mb-0 small">Overlay a ready sandbox on the current live graph (same scope). The live knowledge graph is never modified.</p>
+        </div>
+    </div>
+
+    <div class="sim-compare-layout d-flex gap-3 flex-grow-1 min-h-0">
+        <!-- LEFT PANE: Graph Comparison Canvas -->
+        <div class="sim-compare-left-pane flex-grow-1 d-flex flex-column min-w-0">
+            <div class="card h-100 overflow-hidden d-flex flex-column position-relative">
+                <div class="card-body p-0 d-flex flex-column flex-grow-1 position-relative min-h-0">
+                    <!-- Alerts -->
+                    <div id="simCompareError" class="alert alert-danger m-2 d-none" role="alert"></div>
+                    <div id="simCompareNote" class="alert alert-warning m-2 d-none" role="alert"></div>
+
+                    <!-- Overlay states: shown when not displaying a graph -->
+                    <div id="simCompareEmpty" class="sim-compare-overlay text-center text-muted p-4 my-auto d-none">
+                        <i class="bi bi-collection fs-1 d-block mb-2"></i>
+                        <h5 class="fw-semibold mb-1">No ready scenario to compare</h5>
+                        <p class="small text-muted mb-0">Run a scenario first: its sandbox can then be compared with the live graph.</p>
+                    </div>
+
+                    <div id="simCompareIdle" class="sim-compare-overlay text-center text-muted p-4 my-auto">
+                        <i class="bi bi-columns-gap fs-1 d-block mb-2"></i>
+                        <h5 class="fw-semibold mb-1">Select a scenario and click Compare</h5>
+                        <p class="small text-muted mb-0">Use the right pane to configure the scenario and live source, then run the comparison.</p>
+                    </div>
+
+                    <div id="simCompareLoading" class="sim-compare-overlay text-center text-muted p-4 my-auto d-none">
+                        <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
+                        <h5 class="fw-semibold mb-1">Comparing sandbox and live graph…</h5>
+                        <p class="small text-muted mb-0">Reading same-scope triples and calculating deltas.</p>
+                    </div>
+
+                    <!-- Graph Canvas: fills available area -->
+                    <div id="simCompareCanvas" class="sim-compare-canvas flex-grow-1 d-none" role="img" aria-label="Sandbox versus live graph comparison"></div>
+                </div>
+
+                <!-- Canvas Bottom Footer: Legend & Cap note -->
+                <div class="sim-compare-canvas-footer d-flex align-items-center justify-content-between px-3 py-1 border-top bg-light small flex-shrink-0">
+                    <div class="d-flex flex-wrap align-items-center gap-3 sim-compare-legend">
+                        <span title="Present in both live and sandbox with identical attributes"><span class="sim-compare-swatch sim-compare-swatch-unchanged"></span>Unchanged</span>
+                        <span title="Entity present in both with modified attributes or links"><span class="sim-compare-swatch sim-compare-swatch-changed"></span>Modified</span>
+                        <span title="Added in sandbox only"><span class="sim-compare-swatch sim-compare-swatch-added"></span>Added</span>
+                        <span title="Removed from live graph"><span class="sim-compare-swatch sim-compare-swatch-removed"></span>Removed</span>
+                        <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 text-muted" id="simCompareLegendToggle" data-bs-toggle="collapse" data-bs-target="#simCompareLegendHelp" aria-expanded="false" aria-controls="simCompareLegendHelp" title="Toggle color guide">
+                            <i class="bi bi-question-circle"></i>
+                        </button>
+                    </div>
+                    <span class="text-muted ms-auto small" id="simCompareCapNote"></span>
+                </div>
+
+                <!-- Collapsible Color Guide -->
+                <div class="collapse border-top" id="simCompareLegendHelp">
+                    <div class="card card-body p-3 bg-light border-0 rounded-0">
+                        <div class="row g-3 small">
+                            <div class="col-12 col-md-6">
+                                <h6 class="small fw-semibold mb-1 text-dark"><i class="bi bi-circle me-1"></i>Nodes (Entities)</h6>
+                                <ul class="list-unstyled mb-0 ps-1">
+                                    <li class="mb-1"><span class="sim-compare-swatch sim-compare-swatch-unchanged"></span><strong>Grey:</strong> Present in both with identical attributes and links.</li>
+                                    <li class="mb-1"><span class="sim-compare-swatch sim-compare-swatch-changed"></span><strong>Amber:</strong> Present in both, but with modified attributes, types, or links.</li>
+                                    <li class="mb-1"><span class="sim-compare-swatch sim-compare-swatch-added"></span><strong>Green:</strong> Created in sandbox only (hypothetical fact).</li>
+                                    <li class="mb-1"><span class="sim-compare-swatch sim-compare-swatch-removed"></span><strong>Red:</strong> Present in live only (removed or severed in sandbox).</li>
+                                </ul>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <h6 class="small fw-semibold mb-1 text-dark"><i class="bi bi-arrow-right me-1"></i>Links (Relationships)</h6>
+                                <ul class="list-unstyled mb-0 ps-1">
+                                    <li class="mb-1"><span class="sim-compare-swatch sim-compare-swatch-unchanged"></span><strong>Grey:</strong> Relationship present in both graphs.</li>
+                                    <li class="mb-1"><span class="sim-compare-swatch sim-compare-swatch-added"></span><strong>Green:</strong> Added in sandbox (hypothetical fact or reasoning inference).</li>
+                                    <li class="mb-1"><span class="sim-compare-swatch sim-compare-swatch-removed"></span><strong>Red:</strong> Present in live but removed or overwritten in sandbox.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANE: Setup Controls, KPIs & Details -->
+        <div class="sim-compare-right-pane d-flex flex-column flex-shrink-0">
+            <div class="card h-100 d-flex flex-column overflow-hidden">
+                <!-- Comparison Setup Controls (always visible at top of right pane) -->
+                <div class="card-header py-2 px-3 bg-light fw-semibold small flex-shrink-0 border-bottom">
+                    <i class="bi bi-sliders me-1"></i>Comparison Setup
+                </div>
+                <div class="p-3 border-bottom flex-shrink-0 bg-surface">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1 fw-semibold" for="simCompareScenario">Scenario</label>
+                        <select class="form-select form-select-sm" id="simCompareScenario" disabled>
+                            <option value="">Loading scenarios…</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small mb-1 fw-semibold" for="simCompareSource">Live graph</label>
+                        <select class="form-select form-select-sm" id="simCompareSource">
+                            <option value="inferred" selected>Live graph (inferred)</option>
+                            <option value="asserted">Live graph (asserted only)</option>
+                        </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-primary flex-grow-1" id="simCompareRunBtn" disabled>
+                            <i class="bi bi-columns-gap me-1"></i>Compare
+                        </button>
+                        <a class="btn btn-sm btn-outline-primary d-none" id="simCompareExplorerBtn"
+                           href="/dtwin/?section=sigmagraph" title="Open this sandbox in Graph Explorer">
+                            <i class="bi bi-share"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Scrollable Body: Metrics + Details -->
+                <div class="sim-compare-right-scroll flex-grow-1 overflow-y-auto">
+                    <!-- Metrics Section (shown in 'body' state) -->
+                    <div id="simCompareBody" class="sim-compare-body d-none p-3 border-bottom">
+                        <div class="fw-semibold small text-muted text-uppercase mb-2 sim-compare-section-title">
+                            <i class="bi bi-speedometer2 me-1"></i>Metrics
+                        </div>
+                        <div class="row g-2" id="simCompareKpis">
+                            <div class="col-4">
+                                <div class="sim-kpi-tile">
+                                    <div class="sim-kpi-value" data-kpi="entity_count">–</div>
+                                    <div class="sim-kpi-label">Entities</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="sim-kpi-tile">
+                                    <div class="sim-kpi-value" data-kpi="live_count">–</div>
+                                    <div class="sim-kpi-label">Live</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="sim-kpi-tile">
+                                    <div class="sim-kpi-value" data-kpi="sandbox_count">–</div>
+                                    <div class="sim-kpi-label">Sandbox</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="sim-kpi-tile sim-kpi-added">
+                                    <div class="sim-kpi-value" data-kpi="added_count">–</div>
+                                    <div class="sim-kpi-label">Added</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="sim-kpi-tile sim-kpi-removed">
+                                    <div class="sim-kpi-value" data-kpi="removed_count">–</div>
+                                    <div class="sim-kpi-label">Removed</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="sim-kpi-tile">
+                                    <div class="sim-kpi-value" data-kpi="unchanged_count">–</div>
+                                    <div class="sim-kpi-label">Unchanged</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Details Section -->
+                    <div class="p-3">
+                        <div class="fw-semibold small text-muted text-uppercase mb-2 sim-compare-section-title">
+                            <i class="bi bi-info-circle me-1"></i>Selection &amp; Guide
+                        </div>
+                        <div class="sim-compare-details" id="simCompareDetails">
+                            <p class="text-muted small mb-0">Select a node or an edge in the graph.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

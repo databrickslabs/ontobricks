@@ -657,6 +657,13 @@
                             "requires": null
                         },
                         {
+                            "id": "compare",
+                            "label": "Compare",
+                            "icon": "bi-columns-gap",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
                             "id": "runs",
                             "label": "Runs",
                             "icon": "bi-list-check",

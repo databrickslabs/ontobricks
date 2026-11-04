@@ -10,6 +10,7 @@ from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 from back.core.helpers import effective_graph_name, effective_graph_query_table
 from back.core.logging import get_logger
 from back.objects.simulation.Artifacts import Artifacts
+from back.objects.simulation.CompareGraph import CompareGraph
 from back.objects.simulation.Diff import Diff
 from back.objects.simulation.Runner import Runner
 from back.objects.simulation.Spec import Spec
@@ -473,6 +474,83 @@ class Simulation:
                 summary[key] = stored[key]
         out["summary"] = summary
         return out
+
+    COMPARE_BATCH = 400
+
+    def compare_to_live(
+        self, sim_id: str, *, include_inferred: bool = True
+    ) -> Dict[str, Any]:
+        """Compare a ready sandbox with the **current** live graph, same scope.
+
+        The scope is the set of subjects materialised in the sandbox (the
+        resolved entity slice plus hypothetical entities). The live side is
+        read for exactly those subjects, from the inferred union or from the
+        asserted-only relation depending on *include_inferred*.
+        """
+        row = self.get(sim_id)
+        scope = (row.get("spec") or {}).get("scope") or {}
+        base: Dict[str, Any] = {
+            "simulation_id": sim_id,
+            "label": row.get("label", ""),
+            "status": row.get("status", "draft"),
+            "include_inferred": bool(include_inferred),
+            "scope": scope,
+        }
+        if row.get("status") != "ready":
+            return {
+                **base,
+                "nodes": [],
+                "edges": [],
+                "summary": CompareGraph.empty_summary(),
+            }
+        self.require_supported()
+        from back.core.graphdb import get_graphdb
+        from back.objects.simulation.Sandbox import Sandbox
+
+        store = get_graphdb(self._domain, self._settings)
+        if store is None:
+            raise InfrastructureError("Graph backend is not configured")
+        sandbox = Sandbox(store, effective_graph_name(self._domain), sim_id)
+        try:
+            sandbox_rows = sandbox.triples()
+            patch_added, provenance = sandbox.load_origins()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not read sandbox %s for compare: %s", sim_id, exc)
+            raise InfrastructureError(
+                "Could not read the sandbox graph — run the scenario again",
+                detail=str(exc),
+            ) from exc
+        subjects = sorted({str(t.get("subject") or "") for t in sandbox_rows} - {""})
+        live_rows = self._read_live_triples(store, subjects, include_inferred)
+        graph = CompareGraph.build(
+            live_rows,
+            sandbox_rows,
+            patch_added=patch_added,
+            provenance=provenance,
+        )
+        return {**base, **graph}
+
+    def _read_live_triples(
+        self, store: Any, subjects: List[str], include_inferred: bool
+    ) -> List[Dict[str, Any]]:
+        """Live triples of *subjects* (inferred union or asserted only)."""
+        if not subjects:
+            return []
+        table = effective_graph_query_table(
+            self._domain,
+            self._settings,
+            include_inferred=include_inferred,
+            store=store,
+        )
+        rows: List[Dict[str, Any]] = []
+        for i in range(0, len(subjects), self.COMPARE_BATCH):
+            rows.extend(
+                store.get_triples_for_subjects(
+                    table, subjects[i : i + self.COMPARE_BATCH]
+                )
+                or []
+            )
+        return rows
 
     def _diff_without_companion(
         self,

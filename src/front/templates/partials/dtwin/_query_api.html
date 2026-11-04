@@ -1217,6 +1217,30 @@ Content-Type: application/json
             <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
                  data-action="toggle-api-card">
                 <span class="badge bg-success">GET</span>
+                <code class="flex-grow-1 api-endpoint-path">/api/v1/simulations/{sim_id}/compare</code>
+                <small class="text-muted">Compare the sandbox with the live graph</small>
+                <i class="bi bi-chevron-down ob-api-chevron"></i>
+            </div>
+            <div class="card-body px-3 py-2 d-none">
+                <p class="small mb-2">
+                    Nodes, edges and exact triple counts of a <em>ready</em> sandbox against the
+                    current live graph, restricted to the same scope. Each node and edge is tagged
+                    <code>unchanged</code>, <code>added</code> (sandbox only) or <code>removed</code> (live only).
+                </p>
+                <h6 class="small fw-semibold mb-1">Query Parameters</h6>
+                <table class="table table-sm table-borderless small mb-2">
+                    <thead class="text-muted"><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>include_inferred</code></td><td>boolean</td><td>true</td><td>Live inferred graph vs asserted triples</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card ob-api-card">
+            <div class="card-header d-flex align-items-center gap-2 py-2 px-3"
+                 data-action="toggle-api-card">
+                <span class="badge bg-success">GET</span>
                 <code class="flex-grow-1 api-endpoint-path">/api/v1/simulations/runs</code>
                 <small class="text-muted">List scenario runs</small>
                 <i class="bi bi-chevron-down ob-api-chevron"></i>

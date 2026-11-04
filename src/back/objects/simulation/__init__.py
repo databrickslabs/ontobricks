@@ -1,6 +1,7 @@
 """What-if simulations: hypothetical facts reasoned over a sandbox copy of a graph slice."""
 
 from back.objects.simulation.Artifacts import Artifacts
+from back.objects.simulation.CompareGraph import CompareGraph
 from back.objects.simulation.Patch import Patch
 from back.objects.simulation.Scope import Scope
 from back.objects.simulation.Spec import Spec
@@ -13,6 +14,7 @@ from back.objects.simulation.Simulation import Simulation
 __all__ = [
     "Simulation",
     "Artifacts",
+    "CompareGraph",
     "Diff",
     "Patch",
     "Reasoning",

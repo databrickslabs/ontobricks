@@ -434,3 +434,18 @@ async def get_simulation_diff(
     assert_domain_graph_read(request)
     data = await run_blocking(sim.diff_page, sim_id, kind, page, page_size, search)
     return {"success": True, **data}
+
+
+@router.get("/{sim_id}/compare")
+async def compare_simulation_to_live(
+    sim_id: str,
+    request: Request,
+    include_inferred: bool = Query(True),
+    sim: Simulation = Depends(_simulation),
+):
+    """Sandbox vs current live graph on the same scope, as a status-tagged graph."""
+    assert_domain_graph_read(request)
+    data = await run_blocking(
+        sim.compare_to_live, sim_id, include_inferred=include_inferred
+    )
+    return {"success": True, **data}

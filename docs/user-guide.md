@@ -1249,6 +1249,27 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
      an inferred triple shows the rule that produced it.
    - Every triple that disappeared is listed as **Removed**.
 
+**Compare with the live graph.** *Simulation → Scenarios → Compare* overlays a
+**ready** sandbox on the live graph **as it is now**, on the same scope. Pick a
+scenario, choose *Live graph (inferred)* or *Live graph (asserted only)*, then
+press **Compare**. One graph is drawn with distinct colour-coding for entities (nodes) and relationships (links):
+
+- **Nodes (Entities)**:
+  - **Grey**: unchanged — exists in both the live graph and sandbox with identical attributes and relationships;
+  - **Amber**: modified — exists in both, but has altered literal attributes, updated types (`rdf:type`), or modified links (click the entity to see the attribute diff in Details);
+  - **Green**: added — exists in the sandbox only (created by a hypothetical fact);
+  - **Red**: removed — exists in the live graph only (all relations removed or detached in the sandbox).
+- **Links (Relationships)**:
+  - **Grey**: unchanged — relationship present in both graphs;
+  - **Green**: added — relationship added in the sandbox (either asserted by a hypothetical fact patch or derived by a reasoning rule like SWRL; click to inspect the rule);
+  - **Red**: removed — relationship present in the live graph but retracted or overwritten in the sandbox.
+
+Click a node or an edge for its details (changed attributes, origin, the rule
+behind an inference). The counters above the graph are exact; the drawing is
+limited to about 400 entities and 1500 links, changes first. Unlike the
+Results tab (sandbox before vs after), Compare also shows what the live graph
+did since the run: re-run the scenario to refresh the sandbox.
+
 **Isolation.** The sandbox store refuses to write to any table that is not a
 simulation sandbox, so a run cannot touch the built graph, its inferences or
 its caches. Re-running a scenario rebuilds its sandbox from the current live

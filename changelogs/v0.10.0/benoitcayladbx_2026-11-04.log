@@ -336,3 +336,186 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9883 passed, 326 skipped, 8 deselected, 39 warnings in 46.60s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## List Results triples when the before-picture companion is missing
+================================================================================
+
+Context: The Results tab painted KPIs from the stored ``diff_summary`` but the
+Added/Removed table showed "Nothing here." ``GET /simulation/{id}/diff`` treated
+a missing ``__smb_`` companion as empty rows and still returned the last-run
+counts. Older runs never created that companion; probing it with
+``query_triples`` also hid a present empty table behind a full scan. Persist
+the before-picture with an in-database clone, and fall back to stored diff
+rows for scenarios that have not been re-run.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/SimulationStore.py
+   ``clone_sandbox_table`` copies ``__sim_`` into ``__smb_`` with INSERT…SELECT.
+2. src/back/objects/simulation/Sandbox.py
+   ``persist_before`` uses the SQL clone when the store supports it; existence
+   uses ``table_exists`` instead of loading every triple.
+3. src/back/objects/simulation/Simulation.py
+   If the companion is missing, page stored ``diff`` rows when present; otherwise
+   flag ``listing_unavailable`` instead of pairing KPIs with an empty table.
+4. src/front/static/simulation/js/simulation-results.js
+   Empty-state copy tells the user to re-run when the listing is unavailable.
+5. tests/units/simulation/test_simulation_core.py
+   Cover SQL clone, persist-before clone, and ``table_exists`` probe.
+6. tests/units/simulation/test_simulation_runner_api.py
+   Cover stored-row fallback and the unavailable-listing flag.
+7. tests/units/front/test_simulation_page_contract.py
+   Require the re-run empty-state copy.
+
+Modified files:
+- src/back/core/graphdb/lakebase/SimulationStore.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Simulation.py
+- src/front/static/simulation/js/simulation-results.js
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9889 passed, 326 skipped, 8 deselected, 39 warnings in 44.81s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+Simulation → Scenarios → Compare: sandbox vs live graph overlay
+================================================================================
+
+Context: Results only compares the sandbox before-picture with its own after-
+picture. Builders also need to see what a ready sandbox would change relative to
+the live graph as it is now, on the same scope, with the live side either
+inferred (union view) or asserted only. New "Compare" sidebar item under
+Simulation → Scenarios draws one colour-coded Sigma graph (unchanged / added
+(sandbox only) / removed (live only)) with exact KPIs and a details panel. The
+scope is the set of subjects materialised in the sandbox (resolved slice plus
+hypothetical entities), so both sides are read for exactly the same entities.
+
+Changes:
+
+1. src/back/objects/simulation/CompareGraph.py (new)
+   Projects a live-vs-sandbox triple diff (reusing ``Diff.compute``) into
+   ``{nodes, edges, summary}``. URI links become edges; ``rdf:type`` and
+   literals become node type / changed attributes. Payload capped at 400 nodes /
+   1500 edges (changed nodes first); summary counts stay exact.
+2. src/back/objects/simulation/Simulation.py
+   ``compare_to_live`` reads sandbox triples + origins, reads live triples of the
+   same subjects in batches (inferred or asserted-only relation), and returns the
+   projected graph; non-ready scenarios return an empty graph.
+3. src/back/objects/simulation/__init__.py
+   Export ``CompareGraph``.
+4. src/api/routers/internal/simulation.py, src/api/routers/simulation.py
+   ``GET /simulation/{id}/compare`` and ``GET /api/v1/simulations/{id}/compare``
+   (``include_inferred`` query flag; read-only / Viewer).
+5. src/front/config/menu_config.json, src/front/templates/simulation.html
+   New ``compare`` menu item and ``#compare-section``.
+6. src/front/templates/partials/simulation/_sim_compare.html (new)
+   Scenario / live-source pickers, KPI strip, legend, graph canvas, details panel.
+7. src/front/static/simulation/js/simulation-compare.js (new)
+   Lazy-loads graphology + Sigma, builds the overlay graph with ``--db-status-*``
+   tokens, deep link ``?section=compare&simulation=<id>&inferred=0|1``.
+8. src/front/static/simulation/css/simulation.css
+   Canvas, details panel and legend swatch styles (design tokens only).
+9. src/front/templates/partials/dtwin/_query_api.html,
+   src/front/templates/partials/layout/help_modal.html
+   OpenAPI card for the compare endpoint; Help Center lists Compare.
+10. docs/user-guide.md, docs/architecture.md, docs/development.md
+    Document the Compare section, endpoint, files and sidebar order.
+11. tests/units/simulation/test_simulation_compare.py (new)
+    ``CompareGraph`` projection (status, origin, node presence, cap) and
+    ``compare_to_live`` (not ready, inferred / asserted relation, sandbox error).
+12. tests/units/front/test_simulation_page_contract.py,
+    tests/units/front/test_sidebar_content_stretch_contract.py,
+    tests/units/front/test_settings_api_contract.py,
+    tests/units/simulation/test_simulation_runner_api.py
+    Contracts for the new section, menu order, OpenAPI card and read-only route.
+
+Modified files:
+- src/back/objects/simulation/CompareGraph.py (new)
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/__init__.py
+- src/api/routers/internal/simulation.py
+- src/api/routers/simulation.py
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_compare.html (new)
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/simulation/js/simulation-compare.js (new)
+- src/front/static/simulation/css/simulation.css
+- docs/user-guide.md
+- docs/architecture.md
+- docs/development.md
+- tests/units/simulation/test_simulation_compare.py (new)
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_settings_api_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 44.32s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+Simulation → Compare: color guide for nodes and links
+================================================================================
+
+Context: Users needed an explicit explanation of the colors used in the
+comparison graph, distinguishing node (entity) states from edge (relationship)
+states. Added an expandable color guide card and tooltip attributes to the
+legend bar, populated the Details panel with the color guide when no entity is
+selected, and expanded the user documentation.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_compare.html
+   Tooltips on legend swatches plus an expandable `#simCompareLegendHelp` guide
+   explaining grey, amber, green, and red for both nodes and links.
+2. src/front/static/simulation/js/simulation-compare.js
+   `_resetDetails` renders the color guide breakdown in the Details panel when
+   idle.
+3. docs/user-guide.md
+   Added explicit breakdown of node colors vs relationship colors in the Compare
+   documentation.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/js/simulation-compare.js
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 51.11s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+Simulation → Compare: split-pane layout (left graph, right controls/KPIs/details)
+================================================================================
+
+Context: The vertical stack previously pushed the configuration controls
+(scenario picker, live source, compare trigger) off-screen when the graph
+canvas loaded. Converted the Compare screen into a split-panel layout following
+the OntoBricks Split-Panel Canvas Layout standard: the left pane hosts the full-
+height interactive Sigma graph comparison canvas with bottom legend, while the
+right pane permanently hosts all controls (Scenario, Live source, Compare/Explorer
+actions) along with compact KPI metrics and the interactive Details panel.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_compare.html
+   Restructured into `.sim-compare-layout` containing `.sim-compare-left-pane`
+   (alerts, overlay states, Sigma canvas, legend bar) and `.sim-compare-right-pane`
+   (permanent setup header/controls, compact 3x2 KPI tiles, selection details).
+2. src/front/static/simulation/css/simulation.css
+   Added split-pane flex rules, `.sim-compare-left-pane`, `.sim-compare-right-pane`,
+   `.sim-kpi-tile`, `.sim-compare-overlay`, and mobile responsive stack.
+3. src/front/static/simulation/js/simulation-compare.js
+   Toggles canvas visibility with `isBody` state and added `ResizeObserver` on
+   the canvas container for seamless dynamic resizing.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-compare.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 46.87s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.

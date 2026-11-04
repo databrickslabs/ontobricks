@@ -1225,7 +1225,12 @@ class TestSimulationApi:
         assert ("/simulation/{sim_id}/purge", ("POST",)) in guarded
         assert ("/simulation/{sim_id}/abort", ("POST",)) in guarded
         readonly = {r.path for r in self.api.router.routes if not r.dependencies}
-        assert {"/simulation/list", "/simulation/runs", "/simulation/{sim_id}/diff"} <= readonly
+        assert {
+            "/simulation/list",
+            "/simulation/runs",
+            "/simulation/{sim_id}/diff",
+            "/simulation/{sim_id}/compare",
+        } <= readonly
 
     def test_router_is_registered(self):
         from api.routers.internal import all_internal_routers

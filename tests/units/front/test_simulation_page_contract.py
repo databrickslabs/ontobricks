@@ -400,3 +400,32 @@ def test_open_scenario_does_not_bounce_to_list():
     assert "section=scenarios&simulation=" in js
     assert "if (section === 'scenarios' && !this._openingEditor) this.showList" not in js
     assert 'data-section="scenarios"' in js
+
+
+def test_compare_section_is_a_scenarios_submenu_with_overlay_graph():
+    scenarios = next(g for g in _menu()["groups"] if g["id"] == "simulation-scenarios")
+    ids = [i["id"] for i in scenarios["items"]]
+    assert ids.index("scenarios") < ids.index("compare") < ids.index("runs")
+    html = _read(PAGE)
+    partial = _read(FRONT / "templates/partials/simulation/_sim_compare.html")
+    js = _read(FRONT / "static/simulation/js/simulation-compare.js")
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert 'id="compare-section" class="sidebar-section"' in html
+    assert "partials/simulation/_sim_compare.html" in html
+    assert "simulation/js/simulation-compare.js" in html
+    for element in (
+        "simCompareScenario",
+        "simCompareSource",
+        "simCompareRunBtn",
+        "simCompareCanvas",
+        "simCompareDetails",
+    ):
+        assert f'id="{element}"' in partial
+    assert 'value="inferred"' in partial and 'value="asserted"' in partial
+    assert "/simulation/${encodeURIComponent(id)}/compare" in js
+    assert "include_inferred" in js
+    assert "sidebarSectionChanged" in js
+    assert "--db-status-success" in js and "--db-status-danger" in js
+    assert "query-sigmagraph" not in js
+    assert ".sim-compare-canvas" in css
+    assert "var(--db-status-success)" in css

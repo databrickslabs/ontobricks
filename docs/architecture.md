@@ -1397,13 +1397,21 @@ in `__smp_`, so a last-value `remove` does not resurrect the live fact.
 | `POST /simulation/{id}/run` | Start the run; poll `GET /tasks/{task_id}` (Builder) |
 | `POST /simulation/{id}/purge` | Drop sandbox after-picture; keep spec as draft (Builder) |
 | `GET /simulation/{id}/diff?kind=added\|removed&page=&search=` | Paged diff rows + summary |
+| `GET /simulation/{id}/compare?include_inferred=true\|false` | Sandbox vs current live graph on the same scope: status-tagged nodes/edges + exact counts |
 | `GET /simulation/runs?simulation_id=` | Run history |
+
+`Simulation.compare_to_live` reads the sandbox triples, takes their subjects
+as the comparison scope, reads the live triples of exactly those subjects
+(inferred union or asserted-only relation) and hands both to `CompareGraph`,
+which classifies each triple `unchanged` / `added` / `removed` (via `Diff`)
+and projects it into a capped `{nodes, edges, summary}` payload.
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging |
+| `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging, live compare |
+| `src/back/objects/simulation/CompareGraph.py` | Sandbox-vs-live triple diff projected as a capped node/edge graph |
 | `src/back/objects/simulation/Runner.py` | Background run: scope → seed → patch → reason → diff → persist |
 | `src/back/objects/simulation/Sandbox.py` | Sandbox lifecycle and patch semantics |
 | `src/back/core/graphdb/lakebase/SimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
@@ -1411,7 +1419,8 @@ in `__smp_`, so a last-value `remove` does not resurrect the live fact.
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
 | `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
 | `src/back/objects/digitaltwin/query/TwinSandboxSparql.py` | SPARQL over a ready sandbox snapshot |
-| `src/front/templates/simulation.html` | Cohorts / Run / Scenarios / Results / Runs page (scenario editor is not a sidebar item) |
+| `src/front/templates/simulation.html` | Cohorts / Run / Scenarios / Compare / Runs page (scenario editor is not a sidebar item) |
+| `src/front/static/simulation/js/simulation-compare.js` | Compare section: scenario picker, Sigma overlay graph, details panel |
 
 Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
 (former Knowledge Graph → Cohorts) live under this menu. Bookmarks to
