@@ -361,6 +361,8 @@ def test_workbench_general_tab_stacks_sections():
     assert "Live inferred graph UNION the sandbox" in js
     assert "explorer_asserted" not in js
     assert "Private copy of the in-scope triples" in js
+    assert "before_picture" in js
+    assert "Before picture" in js
     assert "Private Neo4j graph of the in-scope triples" in js
     css = _read(FRONT / "static/simulation/css/simulation.css")
     assert ".sim-artifact-table.table-sm td" in css

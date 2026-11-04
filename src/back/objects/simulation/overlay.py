@@ -13,21 +13,37 @@ from typing import Any, Iterable, Set, Tuple
 _SIM = "__sim_"
 _SMU = "__smu_"
 _SMP = "__smp_"
+_SMB = "__smb_"
+_SMO = "__smo_"
+_FAMILY = (_SIM, _SMU, _SMP, _SMB, _SMO)
 
 OverlayPred = Tuple[str, str]
 
 
-def overlay_relation(relation: str) -> str:
-    """Physical ``__smp_`` name for a ``__sim_`` sandbox or ``__smu_`` view."""
+def _swap_marker(relation: str, marker: str) -> str:
     name = relation or ""
     leaf = name.split(".")[-1]
-    if _SMP in leaf:
+    if marker in leaf:
         return name
-    if _SMU in name:
-        return name.replace(_SMU, _SMP, 1)
-    if _SIM in name:
-        return name.replace(_SIM, _SMP, 1)
+    for current in _FAMILY:
+        if current in name:
+            return name.replace(current, marker, 1)
     return ""
+
+
+def overlay_relation(relation: str) -> str:
+    """Physical ``__smp_`` name for a ``__sim_`` sandbox or ``__smu_`` view."""
+    return _swap_marker(relation, _SMP)
+
+
+def before_relation(relation: str) -> str:
+    """Physical ``__smb_`` before-picture companion of a sandbox."""
+    return _swap_marker(relation, _SMB)
+
+
+def origin_relation(relation: str) -> str:
+    """Physical ``__smo_`` origin companion of a sandbox."""
+    return _swap_marker(relation, _SMO)
 
 
 def overlay_preds_from_rows(rows: Iterable[Any]) -> Set[OverlayPred]:

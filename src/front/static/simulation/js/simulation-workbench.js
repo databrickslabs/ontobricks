@@ -837,6 +837,14 @@ const SimulationWorkbench = {
                     ? 'Private Neo4j graph of the in-scope triples. Hypothetical facts and scenario reasoning write here. Explorer overlays this marker graph onto the live neighbourhood.'
                     : 'Private copy of the in-scope triples. Hypothetical facts and scenario reasoning write here. Explorer never reads this table directly; it uses the overlay view below.',
             },
+            before_picture: {
+                label: 'Before picture',
+                hint: () => 'Seeded sandbox triples captured before patches and reasoning. Results Added/Removed are computed against this companion.',
+            },
+            origin: {
+                label: 'Fact origins',
+                hint: () => 'Tags each added triple as your fact or a reasoning consequence for the Results badges.',
+            },
             explorer_inferred: {
                 label: 'Explorer overlay',
                 hint: () => 'Live inferred graph UNION the sandbox. Sandbox (subject, predicate) pairs replace live ones; other live facts stay visible. API, MCP and Explorer always read this view. Scenario-run inferences appear because they were written into the sandbox.',

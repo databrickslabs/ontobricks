@@ -280,7 +280,7 @@ class Runner:
                 self._entry(
                     "ready",
                     diff_summary=summary,
-                    diff={"added": result["added"], "removed": result["removed"]},
+                    diff={},
                     last_run_at=_now_iso(),
                 ),
             )
@@ -372,6 +372,9 @@ class Runner:
         self._seed_focus_referrers(sandbox)
         self._progress(38, "Recording the before-picture")
         before = sandbox.triples()
+        persist_before = getattr(sandbox, "persist_before", None)
+        if callable(persist_before):
+            persist_before(before)
 
         self._progress(40, f"Applying {len(self._spec.patches)} patches")
         asserted = sandbox.apply(self._sandbox_patches())
@@ -395,6 +398,9 @@ class Runner:
         }
         self._progress(85, f"Materialising {len(reasoning.inferred_triples)} inferred triples")
         svc.materialize_inferred(reasoning)
+        persist_origins = getattr(sandbox, "persist_origins", None)
+        if callable(persist_origins):
+            persist_origins(asserted, provenance)
 
         self._progress(92, "Computing before/after diff")
         diff = Diff.compute(
@@ -402,6 +408,7 @@ class Runner:
             sandbox.triples(),
             patch_added=asserted,
             provenance=provenance,
+            row_cap=None,
         )
         stats = reasoning.stats or {}
         diff["summary"].update(

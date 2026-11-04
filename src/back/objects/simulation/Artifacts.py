@@ -9,6 +9,8 @@ from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 from back.core.helpers import effective_graph_name
 
 _ROLE_SANDBOX = "sandbox"
+_ROLE_BEFORE = "before_picture"
+_ROLE_ORIGIN = "origin"
 _ROLE_INFERRED = "explorer_inferred"
 
 
@@ -37,8 +39,17 @@ class Artifacts:
     @classmethod
     def from_sandbox(cls, sandbox: Any, backend: str) -> List[Dict[str, str]]:
         """Exact names after a run, including the Explorer overlay view."""
+        from back.objects.simulation.overlay import before_relation, origin_relation
+
         kind = "graph" if backend == "neo4j" else "table"
-        objects = [cls._object(kind, _ROLE_SANDBOX, getattr(sandbox, "table", ""))]
+        table = getattr(sandbox, "table", "") or ""
+        objects = [cls._object(kind, _ROLE_SANDBOX, table)]
+        before = before_relation(table)
+        origin = origin_relation(table)
+        if before:
+            objects.append(cls._object(kind, _ROLE_BEFORE, before))
+        if origin:
+            objects.append(cls._object(kind, _ROLE_ORIGIN, origin))
         if backend == "neo4j":
             return objects
         graph_name = getattr(sandbox, "_graph_name", "") or ""
@@ -63,20 +74,37 @@ class Artifacts:
         """Names this scenario will allocate (draft) or has allocated (ready)."""
         if not sim_id:
             return []
+        from back.objects.simulation.overlay import before_relation, origin_relation
+
         if backend == "neo4j":
             name = sandbox_table or cls._tokenised(graph_name, sim_id)
-            return [cls._object("graph", _ROLE_SANDBOX, name)]
+            objects = [cls._object("graph", _ROLE_SANDBOX, name)]
+            before = before_relation(name)
+            origin = origin_relation(name)
+            if before:
+                objects.append(cls._object("graph", _ROLE_BEFORE, before))
+            if origin:
+                objects.append(cls._object("graph", _ROLE_ORIGIN, origin))
+            return objects
         if backend == "databricks":
             name = sandbox_table or cls._tokenised(graph_name, sim_id)
-            return [
+            objects = [
                 cls._object("table", _ROLE_SANDBOX, name),
+                cls._object("table", _ROLE_BEFORE, before_relation(name)),
+                cls._object("table", _ROLE_ORIGIN, origin_relation(name)),
                 cls._object("view", _ROLE_INFERRED, name.replace("__sim_", "__smu_")),
             ]
+            return [o for o in objects if o.get("name")]
         from back.core.graphdb import GraphDBFactory
 
         sim = GraphDBFactory.get_simulation("lakebase")
         table = sandbox_table or sim.sim_table_name(graph_name, sim_id)
-        objects = [cls._object("table", _ROLE_SANDBOX, table)]
+        objects = [
+            cls._object("table", _ROLE_SANDBOX, table),
+            cls._object("table", _ROLE_BEFORE, before_relation(table)),
+            cls._object("table", _ROLE_ORIGIN, origin_relation(table)),
+        ]
+        objects = [o for o in objects if o.get("name")]
         objects.extend(cls._lakebase_views(graph_name, sim_id))
         return objects
 

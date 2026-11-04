@@ -58,6 +58,10 @@ class TestSimPhy:
         assert _companion_ddl.sim_overlay_phy("MyDomain_V3", "sAbc") == "mydomain_v3__smp_sabc"
         assert _companion_ddl.overlay_phy_from("g_v1__sim_s1") == "g_v1__smp_s1"
         assert _companion_ddl.overlay_phy_from("g_v1__smu_s1") == "g_v1__smp_s1"
+        assert _companion_ddl.before_phy_from("g_v1__sim_s1") == "g_v1__smb_s1"
+        assert _companion_ddl.origin_phy_from("g_v1__sim_s1") == "g_v1__smo_s1"
+        assert _companion_ddl.is_sim_family_phy("g_v1__smb_s1")
+        assert _companion_ddl.is_sim_family_phy("g_v1__smo_s1")
         assert overlay_relation("g_v1__sim_s1") == "g_v1__smp_s1"
         assert overlay_relation("cat.sch.g__smu_s1") == "cat.sch.g__smp_s1"
         assert overlay_relation("live") == ""
@@ -497,6 +501,13 @@ class TestDiff:
         assert len(diff["added"]) == 4
         assert diff["summary"]["added_count"] == 10
         assert diff["summary"]["capped"] is True
+
+    def test_unlimited_row_cap(self):
+        after = [_t(str(i), "p", "o") for i in range(10)]
+        diff = Diff.compute([], after, patch_added=set(), row_cap=None)
+        assert len(diff["added"]) == 10
+        assert diff["summary"]["capped"] is False
+        assert diff["summary"]["row_cap"] is None
 
     def test_page_and_search(self):
         rows = [{"subject": f"s{i}", "predicate": "p", "object": "o"} for i in range(7)]

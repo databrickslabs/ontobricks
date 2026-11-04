@@ -38,18 +38,20 @@ class Diff:
         *,
         patch_added: Set[TripleKey],
         provenance: Dict[TripleKey, str] | None = None,
-        row_cap: int = DEFAULT_ROW_CAP,
+        row_cap: int | None = DEFAULT_ROW_CAP,
     ) -> Dict[str, Any]:
         """Return ``{"summary": {...}, "added": [...], "removed": [...]}``.
 
-        Row lists are sorted and capped at *row_cap*; ``summary`` always
-        carries the exact counts.
+        Row lists are sorted. When *row_cap* is set they are truncated;
+        ``summary`` always carries the exact counts. Pass ``row_cap=None``
+        for the Results tab (bounded by the sandbox ``MAX_TRIPLES``).
         """
         s0 = cls.keys(before)
         s2 = cls.keys(after)
         prov = provenance or {}
         added_keys = sorted(s2 - s0)
         removed_keys = sorted(s0 - s2)
+        limit = None if row_cap is None else max(0, int(row_cap))
 
         added: List[Dict[str, str]] = []
         n_patch = n_inferred = 0
@@ -59,14 +61,18 @@ class Diff:
                 n_patch += 1
             else:
                 n_inferred += 1
-            if len(added) < row_cap:
+            if limit is None or len(added) < limit:
                 row = cls._row(k, origin)
                 if origin == "inferred" and k in prov:
                     row["provenance"] = prov[k]
                 added.append(row)
 
-        removed = [cls._row(k, "patch") for k in removed_keys[:row_cap]]
+        removed_slice = removed_keys if limit is None else removed_keys[:limit]
+        removed = [cls._row(k, "patch") for k in removed_slice]
         touched = {k[0] for k in added_keys} | {k[0] for k in removed_keys}
+        capped = limit is not None and (
+            len(added_keys) > limit or len(removed_keys) > limit
+        )
         return {
             "summary": {
                 "before_count": len(s0),
@@ -76,8 +82,8 @@ class Diff:
                 "added_inferred_count": n_inferred,
                 "removed_count": len(removed_keys),
                 "touched_entity_count": len(touched),
-                "capped": len(added_keys) > row_cap or len(removed_keys) > row_cap,
-                "row_cap": row_cap,
+                "capped": capped,
+                "row_cap": limit,
             },
             "added": added,
             "removed": removed,

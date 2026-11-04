@@ -47,7 +47,7 @@ class SimulationStore(FlatStore):
         """Return the physical sandbox table for *name* or raise ValidationError."""
         validate_table_name(name)
         phy = Base.physical_table_id(name)
-        if not _companion_ddl.is_sim_phy(phy):
+        if not _companion_ddl.is_sim_family_phy(phy):
             raise ValidationError(
                 "Simulation store can only target simulation sandbox tables",
                 detail=phy,
@@ -81,18 +81,34 @@ class SimulationStore(FlatStore):
 
     def create_table(self, table_name: str) -> None:
         phy = self.sandbox_table_id(table_name)
-        overlay = _companion_ddl.overlay_phy_from(phy)
         with self._cursor() as cur:
-            _companion_ddl.ensure_sim_table(cur, self._schema, phy)
-            _companion_ddl.ensure_sim_table(cur, self._schema, overlay)
+            if _companion_ddl.is_sim_phy(phy):
+                for name in (
+                    phy,
+                    _companion_ddl.overlay_phy_from(phy),
+                    _companion_ddl.before_phy_from(phy),
+                    _companion_ddl.origin_phy_from(phy),
+                ):
+                    if name:
+                        _companion_ddl.ensure_sim_table(cur, self._schema, name)
+            else:
+                _companion_ddl.ensure_sim_table(cur, self._schema, phy)
         logger.info("Simulation sandbox ready: %s.%s", self._schema, phy)
 
     def drop_table(self, table_name: str) -> None:
         phy = self.sandbox_table_id(table_name)
-        overlay = _companion_ddl.overlay_phy_from(phy)
         with self._cursor() as cur:
-            _companion_ddl.drop_sim_table(cur, overlay)
-            _companion_ddl.drop_sim_table(cur, phy)
+            if _companion_ddl.is_sim_phy(phy):
+                for name in (
+                    _companion_ddl.origin_phy_from(phy),
+                    _companion_ddl.before_phy_from(phy),
+                    _companion_ddl.overlay_phy_from(phy),
+                    phy,
+                ):
+                    if name:
+                        _companion_ddl.drop_sim_table(cur, name)
+            else:
+                _companion_ddl.drop_sim_table(cur, phy)
         logger.info("Dropped simulation sandbox %s.%s", self._schema, phy)
 
     def truncate_companion(self, name: str) -> None:

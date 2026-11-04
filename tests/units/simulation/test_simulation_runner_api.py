@@ -314,16 +314,71 @@ class TestSimulationFacade:
         assert "FROM g_hr_v1 l" in create_view_sql
         assert f"FROM {sandbox} s" in create_view_sql
 
-    def test_diff_page(self):
+    def test_diff_page_reads_sandbox_companions(self, monkeypatch):
+        reg = _Registry()
+        sim = Simulation(_Domain(), None, registry=reg)
+        row = sim.create(_body())
+        reg.rows[row["id"]].update(status="ready", diff={}, diff_summary={"entity_count": 2})
+
+        class _Store:
+            pass
+
+        class _Sb:
+            def __init__(self, *a, **k):
+                pass
+
+            def has_before_picture(self):
+                return True
+
+            def load_before(self):
+                return [{"subject": "s", "predicate": "p", "object": "old"}]
+
+            def triples(self):
+                return [{"subject": "s", "predicate": "p", "object": "new"}]
+
+            def load_origins(self):
+                return {("s", "p", "new")}, {}
+
+        import importlib
+
+        sandbox_mod = importlib.import_module("back.objects.simulation.Sandbox")
+        monkeypatch.setattr(
+            "back.core.graphdb.get_graphdb", lambda *a, **k: _Store()
+        )
+        monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
+        page = sim.diff_page(row["id"], "added", 1, 50)
+        assert page["total"] == 1
+        assert page["rows"][0]["object"] == "new"
+        assert page["summary"]["added_count"] == 1
+        assert page["summary"]["entity_count"] == 2
+
+    def test_diff_page_empty_without_before_companion(self, monkeypatch):
         reg = _Registry()
         sim = Simulation(_Domain(), None, registry=reg)
         row = sim.create(_body())
         reg.rows[row["id"]].update(
-            diff={"added": [{"subject": "s", "predicate": "p", "object": "o", "origin": "inferred"}]},
-            diff_summary={"added_count": 1},
+            status="ready",
+            diff={"added": [{"subject": "s", "predicate": "p", "object": "o"}]},
+            diff_summary={"added_count": 9},
         )
+
+        class _Sb:
+            def __init__(self, *a, **k):
+                pass
+
+            def has_before_picture(self):
+                return False
+
+        import importlib
+
+        sandbox_mod = importlib.import_module("back.objects.simulation.Sandbox")
+        monkeypatch.setattr(
+            "back.core.graphdb.get_graphdb", lambda *a, **k: object()
+        )
+        monkeypatch.setattr(sandbox_mod, "Sandbox", _Sb)
         page = sim.diff_page(row["id"], "added", 1, 50)
-        assert page["total"] == 1 and page["summary"] == {"added_count": 1}
+        assert page["total"] == 0
+        assert page["summary"] == {"added_count": 9}
 
 
 # -- runner -------------------------------------------------------------------
@@ -374,6 +429,28 @@ class _FakeSandbox:
             self.rows[Diff.key(p.triple())] = p.triple()
             out.add(Diff.key(p.triple()))
         return out
+
+    def persist_before(self, triples):
+        self.before_rows = {Diff.key(t): dict(t) for t in triples}
+
+    def persist_origins(self, patch_added, provenance=None):
+        self.origin_patch = set(patch_added or set())
+        self.origin_prov = dict(provenance or {})
+
+    def load_before(self):
+        return list(getattr(self, "before_rows", {}).values())
+
+    def load_origins(self):
+        return set(getattr(self, "origin_patch", set())), dict(getattr(self, "origin_prov", {}))
+
+    def has_before_picture(self):
+        return hasattr(self, "before_rows")
+
+    def before_table(self):
+        return self.table.replace("__sim_", "__smb_")
+
+    def origin_table(self):
+        return self.table.replace("__sim_", "__smo_")
 
 
 class _FakeReasoning:
@@ -432,6 +509,10 @@ class TestRunner:
         names = [o["name"] for o in s["artifacts"]]
         assert "dom_v1__sim_s1" in names
         assert any(o["kind"] == "view" for o in s["artifacts"])
+        assert row["diff"] == {}
+        fake = _FakeSandbox.instances[-1]
+        assert Diff.key({"subject": EX + "acme", "predicate": EX + "score", "object": "700"}) in fake.before_rows
+        assert Diff.key({"subject": EX + "acme", "predicate": EX + "score", "object": "300"}) in fake.origin_patch
         assert reg.runs[-1]["status"] == "success"
         assert tm.completed and not tm.failed
 

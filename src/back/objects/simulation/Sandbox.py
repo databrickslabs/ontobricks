@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from back.core.errors import ValidationError
 from back.core.graphdb import GraphDBFactory
@@ -11,11 +11,124 @@ from back.core.logging import get_logger
 from back.objects.digitaltwin.constants import RDF_TYPE
 from back.objects.simulation.Diff import Diff, TripleKey
 from back.objects.simulation.Patch import Patch
-from back.objects.simulation.overlay import overlay_relation
+from back.objects.simulation.overlay import (
+    before_relation,
+    origin_relation,
+    overlay_relation,
+)
 
 logger = get_logger(__name__)
 
-class _LakebaseSandbox:
+
+class _CompanionMixin:
+    """Before-picture and origin companions shared by every sandbox backend."""
+
+    table: str
+    store: Any
+
+    def before_table(self) -> str:
+        return before_relation(self.table)
+
+    def origin_table(self) -> str:
+        return origin_relation(self.table)
+
+    def _recreate_companion(self, name: str) -> None:
+        if not name:
+            return
+        try:
+            self.store.drop_table(name)
+        except Exception:  # noqa: BLE001
+            pass
+        self.store.create_table(name)
+
+    def persist_before(self, triples: List[Dict[str, str]]) -> None:
+        """Materialise the seeded before-picture into the ``__smb_`` companion."""
+        name = self.before_table()
+        if not name:
+            raise ValidationError("Simulation before-picture table name is missing")
+        self._recreate_companion(name)
+        if triples:
+            self.store.insert_triples(name, list(triples))
+
+    def persist_origins(
+        self,
+        patch_added: Set[TripleKey],
+        provenance: Optional[Dict[TripleKey, str]] = None,
+    ) -> None:
+        """Materialise patch/inferred origin tags into the ``__smo_`` companion."""
+        name = self.origin_table()
+        if not name:
+            raise ValidationError("Simulation origin table name is missing")
+        self._recreate_companion(name)
+        rows: List[Dict[str, str]] = []
+        for key in patch_added or set():
+            rows.append(
+                {
+                    "subject": key[0],
+                    "predicate": key[1],
+                    "object": key[2],
+                    "datatype": "patch",
+                }
+            )
+        for key, text in (provenance or {}).items():
+            if key in (patch_added or set()):
+                continue
+            rows.append(
+                {
+                    "subject": key[0],
+                    "predicate": key[1],
+                    "object": key[2],
+                    "datatype": "inferred",
+                    "lang": str(text or "")[:500],
+                }
+            )
+        if rows:
+            self.store.insert_triples(name, rows)
+
+    def load_before(self) -> List[Dict[str, str]]:
+        name = self.before_table()
+        if not name:
+            return []
+        try:
+            return list(self.store.query_triples(name) or [])
+        except Exception:  # noqa: BLE001
+            return []
+
+    def load_origins(self) -> Tuple[Set[TripleKey], Dict[TripleKey, str]]:
+        """Return ``(patch_added keys, inferred provenance)`` from ``__smo_``."""
+        name = self.origin_table()
+        patch_added: Set[TripleKey] = set()
+        provenance: Dict[TripleKey, str] = {}
+        if not name:
+            return patch_added, provenance
+        try:
+            rows = self.store.query_triples(name) or []
+        except Exception:  # noqa: BLE001
+            return patch_added, provenance
+        for row in rows:
+            key = Diff.key(row)
+            origin = str(row.get("datatype") or "").strip().lower()
+            if origin == "patch":
+                patch_added.add(key)
+            elif origin == "inferred":
+                text = str(row.get("lang") or "").strip()
+                if text:
+                    provenance[key] = text
+        return patch_added, provenance
+
+    def has_before_picture(self) -> bool:
+        """True when the before companion exists (even if it has zero triples)."""
+        name = self.before_table()
+        if not name:
+            return False
+        try:
+            self.store.query_triples(name)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+
+class _LakebaseSandbox(_CompanionMixin):
     """Seed, patch and read a standalone sandbox copy of a live graph slice.
 
     The live store is only read (``copy_subjects_from``); every write goes
@@ -255,7 +368,7 @@ class _LakebaseSandbox:
         return asserted
 
 
-class _StoreSandbox:
+class _StoreSandbox(_CompanionMixin):
     """Backend-neutral copy-on-write sandbox for Delta and Neo4j.
 
     Both engines support an independently named SPO graph.  The source graph
@@ -289,19 +402,28 @@ class _StoreSandbox:
     def reset(self) -> None:
         self.drop()
         self.store.create_table(self.table)
-        overlay = overlay_relation(self.table)
-        if overlay:
-            self.store.create_table(overlay)
+        for name in (
+            overlay_relation(self.table),
+            before_relation(self.table),
+            origin_relation(self.table),
+        ):
+            if name:
+                self.store.create_table(name)
 
     def drop(self) -> None:
         self._drop_explorer_views()
-        overlay = overlay_relation(self.table)
-        if overlay:
+        for name in (
+            origin_relation(self.table),
+            before_relation(self.table),
+            overlay_relation(self.table),
+            self.table,
+        ):
+            if not name:
+                continue
             try:
-                self.store.drop_table(overlay)
+                self.store.drop_table(name)
             except Exception:  # noqa: BLE001
                 pass
-        self.store.drop_table(self.table)
 
     def _drop_explorer_views(self) -> None:
         return

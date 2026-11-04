@@ -430,7 +430,7 @@ async def get_simulation_diff(
     search: str = Query(""),
     sim: Simulation = Depends(_simulation),
 ):
-    """One page of added / removed triples from the last run."""
+    """One page of added / removed triples from the sandbox before/after companions."""
     assert_domain_graph_read(request)
     data = await run_blocking(sim.diff_page, sim_id, kind, page, page_size, search)
     return {"success": True, **data}

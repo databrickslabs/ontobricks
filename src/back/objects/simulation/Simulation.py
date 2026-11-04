@@ -421,7 +421,54 @@ class Simulation:
     def diff_page(
         self, sim_id: str, kind: str, page: int, page_size: int, search: str = ""
     ) -> Dict[str, Any]:
+        """Page Added/Removed from the materialised sandbox before/after tables."""
         row = self.get(sim_id)
-        out = Diff.page(row.get("diff") or {}, kind, page, page_size, search)
-        out["summary"] = row.get("diff_summary") or {}
+        empty = Diff.page({}, kind, page, page_size, search)
+        if row.get("status") != "ready":
+            empty["summary"] = row.get("diff_summary") or {}
+            return empty
+        try:
+            from back.core.graphdb import get_graphdb
+            from back.objects.simulation.Sandbox import Sandbox
+
+            store = get_graphdb(self._domain, self._settings)
+            if store is None:
+                raise InfrastructureError("Graph backend is not configured")
+            sandbox = Sandbox(store, effective_graph_name(self._domain), sim_id)
+            if not sandbox.has_before_picture():
+                empty["summary"] = row.get("diff_summary") or {}
+                return empty
+            patch_added, provenance = sandbox.load_origins()
+            full = Diff.compute(
+                sandbox.load_before(),
+                sandbox.triples(),
+                patch_added=patch_added,
+                provenance=provenance,
+                row_cap=None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not read sandbox diff for %s: %s", sim_id, exc)
+            empty["summary"] = row.get("diff_summary") or {}
+            return empty
+        out = Diff.page(full, kind, page, page_size, search)
+        summary = dict(full.get("summary") or {})
+        stored = row.get("diff_summary") or {}
+        for key in (
+            "entity_count",
+            "patch_count",
+            "inferred_total",
+            "swrl_inferred_count",
+            "swrl_rules_count",
+            "swrl_skipped",
+            "swrl_reason",
+            "swrl_errors",
+            "swrl_error_details",
+            "phase_errors",
+            "sandbox_table",
+            "artifacts",
+            "duration_s",
+        ):
+            if key in stored and key not in summary:
+                summary[key] = stored[key]
+        out["summary"] = summary
         return out

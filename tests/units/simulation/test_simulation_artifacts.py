@@ -18,6 +18,12 @@ class TestArtifacts:
         kinds = {o["role"]: o for o in objects}
         assert kinds["sandbox"]["kind"] == "table"
         assert kinds["sandbox"]["name"] == _companion_ddl.sim_phy("Dom_V1", "sAbc")
+        assert kinds["before_picture"]["name"] == _companion_ddl.before_phy_from(
+            kinds["sandbox"]["name"]
+        )
+        assert kinds["origin"]["name"] == _companion_ddl.origin_phy_from(
+            kinds["sandbox"]["name"]
+        )
         assert kinds["explorer_inferred"]["name"] == _companion_ddl.sim_union_phy(
             "Dom_V1", "sAbc"
         )
@@ -27,10 +33,12 @@ class TestArtifacts:
         delta = Artifacts.expected(
             "databricks", "cat.sch.tbl", "s1", sandbox_table="cat.sch.tbl__sim_s1"
         )
-        assert [o["kind"] for o in delta] == ["table", "view"]
-        assert delta[1]["name"] == "cat.sch.tbl__smu_s1"
+        roles = [o["role"] for o in delta]
+        assert roles == ["sandbox", "before_picture", "origin", "explorer_inferred"]
+        assert delta[-1]["name"] == "cat.sch.tbl__smu_s1"
         neo = Artifacts.expected("neo4j", "G_V1", "s1")
-        assert neo == [{"kind": "graph", "role": "sandbox", "name": "G_V1__sim_s1"}]
+        assert [o["role"] for o in neo] == ["sandbox", "before_picture", "origin"]
+        assert neo[0] == {"kind": "graph", "role": "sandbox", "name": "G_V1__sim_s1"}
 
     def test_describe_draft_has_names_without_counts(self):
         row = {"id": "s1", "status": "draft", "diff_summary": {}}
@@ -72,5 +80,7 @@ class TestArtifacts:
         objects = Artifacts.from_sandbox(sandbox, "databricks")
         assert [o["name"] for o in objects] == [
             "cat.sch.g__sim_s1",
+            "cat.sch.g__smb_s1",
+            "cat.sch.g__smo_s1",
             "cat.sch.g__smu_s1",
         ]

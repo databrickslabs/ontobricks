@@ -236,3 +236,56 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9882 passed, 326 skipped, 8 deselected, 39 warnings in 53.57s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Results tab reads sandbox before/after companions
+================================================================================
+
+Context: Results showed a capped registry snapshot of the last run's
+diff, which could diverge from the materialised sandbox and hid rows
+beyond 2000. Drive Added/Removed and KPIs from sandbox objects only.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   Add ``__smb_`` before-picture and ``__smo_`` origin companions.
+2. src/back/core/graphdb/lakebase/SimulationStore.py
+   Create/drop companions with the sandbox; allow family writes.
+3. src/back/objects/simulation/overlay.py
+   ``before_relation`` / ``origin_relation`` helpers.
+4. src/back/objects/simulation/Sandbox.py
+   Persist/load before-picture and origin tags on every backend.
+5. src/back/objects/simulation/Runner.py
+   Write companions during the run; stop storing diff row lists.
+6. src/back/objects/simulation/Diff.py
+   Support unlimited row lists for the Results path.
+7. src/back/objects/simulation/Simulation.py
+   ``diff_page`` recomputes from sandbox companions.
+8. src/back/objects/simulation/Artifacts.py
+   Catalog before-picture and origin objects.
+9. src/front/static/simulation/js/simulation-workbench.js
+   Label the new artifact roles.
+10. Help / Results empty copy
+    Describe sandbox-backed Results.
+11. Unit tests for companions, runner persistence, and diff_page.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/core/graphdb/lakebase/SimulationStore.py
+- src/back/objects/simulation/overlay.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Runner.py
+- src/back/objects/simulation/Diff.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/Artifacts.py
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/partials/simulation/_sim_results.html
+- src/front/templates/partials/layout/help_modal.html
+- src/api/routers/internal/simulation.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_artifacts.py
+- tests/units/simulation/test_simulation_runner_api.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9884 passed, 326 skipped, 8 deselected, 39 warnings in 56.69s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.

@@ -76,7 +76,16 @@ def view_phy(name: str) -> str:
 SIM_TABLE_MARKER = "__sim_"
 SIM_UNION_INFERRED_MARKER = "__smu_"
 SIM_OVERLAY_MARKER = "__smp_"
+SIM_BEFORE_MARKER = "__smb_"
+SIM_ORIGIN_MARKER = "__smo_"
 _PG_IDENTIFIER_MAX_BYTES = 63
+_SIM_FAMILY_MARKERS = (
+    SIM_TABLE_MARKER,
+    SIM_UNION_INFERRED_MARKER,
+    SIM_OVERLAY_MARKER,
+    SIM_BEFORE_MARKER,
+    SIM_ORIGIN_MARKER,
+)
 
 
 def _sim_named(name: str, sim_id: str, marker: str) -> str:
@@ -112,17 +121,31 @@ def sim_overlay_phy(name: str, sim_id: str) -> str:
     return _sim_named(name, sim_id, SIM_OVERLAY_MARKER)
 
 
-def overlay_phy_from(relation: str) -> str:
-    """Map a ``__sim_`` / ``__smu_`` identifier to its ``__smp_`` companion."""
+def _swap_sim_marker(relation: str, marker: str) -> str:
+    """Replace the first sim-family marker in *relation* with *marker*."""
     name = relation or ""
     leaf = name.split(".")[-1].strip('"')
-    if SIM_OVERLAY_MARKER in leaf:
+    if marker in leaf:
         return name
-    if SIM_UNION_INFERRED_MARKER in name:
-        return name.replace(SIM_UNION_INFERRED_MARKER, SIM_OVERLAY_MARKER, 1)
-    if SIM_TABLE_MARKER in name:
-        return name.replace(SIM_TABLE_MARKER, SIM_OVERLAY_MARKER, 1)
+    for current in _SIM_FAMILY_MARKERS:
+        if current in name:
+            return name.replace(current, marker, 1)
     return ""
+
+
+def overlay_phy_from(relation: str) -> str:
+    """Map a ``__sim_`` / ``__smu_`` identifier to its ``__smp_`` companion."""
+    return _swap_sim_marker(relation, SIM_OVERLAY_MARKER)
+
+
+def before_phy_from(relation: str) -> str:
+    """Map a sandbox identifier to its before-picture companion (``__smb_``)."""
+    return _swap_sim_marker(relation, SIM_BEFORE_MARKER)
+
+
+def origin_phy_from(relation: str) -> str:
+    """Map a sandbox identifier to its origin companion (``__smo_``)."""
+    return _swap_sim_marker(relation, SIM_ORIGIN_MARKER)
 
 
 def is_sim_phy(table: str) -> bool:
@@ -133,6 +156,22 @@ def is_sim_phy(table: str) -> bool:
 def is_sim_overlay_phy(table: str) -> bool:
     """True when *table* is a simulation overlay-key companion."""
     return SIM_OVERLAY_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def is_sim_before_phy(table: str) -> bool:
+    """True when *table* is a simulation before-picture companion."""
+    return SIM_BEFORE_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def is_sim_origin_phy(table: str) -> bool:
+    """True when *table* is a simulation origin companion."""
+    return SIM_ORIGIN_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def is_sim_family_phy(table: str) -> bool:
+    """True when *table* is the sandbox or any of its companions."""
+    leaf = (table or "").split(".")[-1].strip('"')
+    return any(marker in leaf for marker in _SIM_FAMILY_MARKERS)
 
 
 def ensure_sim_table(cur: Any, schema: str, table: str) -> None:
