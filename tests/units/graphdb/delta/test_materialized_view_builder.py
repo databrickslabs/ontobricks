@@ -24,8 +24,7 @@ INFERRED = "main.ob.triplestore_d_V1_inferred"
 SLOTS = "main.ob.triplestore_d_V1_slots"
 BATCH = "SELECT subject, predicate, object FROM batch_src"
 BATCH_WITH_CTE = (
-    "WITH src_0 AS (\n    SELECT * FROM people\n  )\n"
-    "SELECT subject, predicate, object FROM src_0"
+    "WITH src_0 AS (\n    SELECT * FROM people\n  )\nSELECT subject, predicate, object FROM src_0"
 )
 
 ROW_TRACKING = "(delta.enableRowTracking = true, delta.enableDeletionVectors = true)"
@@ -83,9 +82,7 @@ class TestPackageExport:
 
 class TestDataMvSql:
     def test_slots_and_batch_exact_statement(self):
-        sql = MaterializedViewBuilder.data_mv_sql(
-            DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
-        )
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH)
         assert sql == _data_mv(
             "AS SELECT subject, predicate, object, sha2(object, 256) AS object_hash\n"
             "FROM (\n"
@@ -213,9 +210,7 @@ class TestDataMvAbsorbsTheSlotShape:
         assert result == [("s1", "p", "x", "x"), ("s3", "p", "y", "y")]
 
     def test_group_by_is_outermost_and_the_filter_is_in_the_slots_select(self):
-        sql = MaterializedViewBuilder.data_mv_sql(
-            DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
-        )
+        sql = MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH)
         slots_select = sql.index(f"FROM {SLOTS}")
         blank_filter = sql.index("TRIM(object) != ''")
         union = sql.index("UNION ALL")
@@ -300,8 +295,7 @@ class TestGraphMvSql:
     def test_exact_statement(self):
         sha = MaterializedViewBuilder.graph_mv_sha(DATA, INFERRED)
         assert MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED) == (
-            _header(GRAPH, sha=sha)
-            + f"AS SELECT subject, predicate, object FROM {DATA}\n"
+            _header(GRAPH, sha=sha) + f"AS SELECT subject, predicate, object FROM {DATA}\n"
             "UNION ALL\n"
             f"SELECT subject, predicate, object FROM {INFERRED}"
         )
@@ -318,16 +312,12 @@ class TestGraphMvSql:
         assert f"\n  {_TRIGGER}\nAS SELECT" in sql
 
     def test_policy_keyword(self):
-        sql = MaterializedViewBuilder.graph_mv_sql(
-            GRAPH, DATA, INFERRED, refresh_policy="AUTO"
-        )
+        sql = MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED, refresh_policy="AUTO")
         assert "  REFRESH POLICY AUTO\n" in sql
 
     def test_unknown_policy_is_rejected(self):
         with pytest.raises(ValidationError):
-            MaterializedViewBuilder.graph_mv_sql(
-                GRAPH, DATA, INFERRED, refresh_policy="NOPE"
-            )
+            MaterializedViewBuilder.graph_mv_sql(GRAPH, DATA, INFERRED, refresh_policy="NOPE")
 
     @pytest.mark.parametrize("position", [0, 1, 2])
     def test_empty_fqn_is_rejected(self, position):
@@ -335,6 +325,79 @@ class TestGraphMvSql:
         args[position] = ""
         with pytest.raises(ValidationError):
             MaterializedViewBuilder.graph_mv_sql(*args)
+
+
+class _RefusingClient(RecordingClient):
+    """Refuses the first *refusals* statements with *error*, then accepts."""
+
+    def __init__(self, error: str, refusals: int):
+        super().__init__()
+        self._error, self._refusals = error, refusals
+
+    def execute_statement(self, sql):
+        self.statements.append(sql)
+        if len(self.statements) <= self._refusals:
+            raise RuntimeError(self._error)
+        return True
+
+
+class TestRefresh:
+    # The warehouse's answer, seen live (a microbatch view's TRIGGER ON UPDATE refresh).
+    IN_PROGRESS = (
+        "A refresh is already running in the background. You can monitor the previous "
+        "refresh by visiting the following URL:\nhttps://x.cloud.databricks.com/#joblist/"
+        "pipelines/50a256d7/updates/f38c0fb9"
+    )
+
+    def _refresh(self, client, **kw):
+        sleeps: list[float] = []
+        attempts = MaterializedViewBuilder.refresh(
+            client, DATA, wait_s=60, pause_s=20, sleep=sleeps.append, **kw
+        )
+        return attempts, sleeps
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            IN_PROGRESS,
+            "An active update 0c1d already exists for pipeline 7e2f.",
+            "Materialized view main.ob.x is currently being refreshed.",
+            "Concurrent refresh of main.ob.x detected",
+        ],
+        ids=["in-progress", "pipeline-active-update", "being-refreshed", "concurrent"],
+    )
+    def test_a_refresh_already_running_is_waited_for(self, answer):
+        client = _RefusingClient(answer, refusals=2)
+
+        attempts, sleeps = self._refresh(client)
+
+        assert attempts == 3
+        assert sleeps == [20, 20]
+        assert client.statements == [f"REFRESH MATERIALIZED VIEW {DATA}"] * 3
+
+    def test_any_other_error_propagates_at_once(self):
+        client = _RefusingClient("warehouse refused: boom", refusals=1)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            self._refresh(client)
+
+        assert len(client.statements) == 1
+
+    def test_the_wait_runs_out(self):
+        client = _RefusingClient(self.IN_PROGRESS, refusals=99)
+
+        with pytest.raises(RuntimeError, match="already running"):
+            self._refresh(client)
+
+        assert len(client.statements) == 3  # 60 s / 20 s
+
+    def test_a_full_refresh_is_forwarded(self):
+        client = RecordingClient()
+
+        attempts, sleeps = self._refresh(client, full=True)
+
+        assert (attempts, sleeps) == (1, [])
+        assert client.statements == [f"REFRESH MATERIALIZED VIEW {DATA} FULL"]
 
 
 class TestSmallStatements:
@@ -350,9 +413,7 @@ class TestSmallStatements:
         assert explain[len("EXPLAIN ") :] == sql.replace("CREATE OR REPLACE", "CREATE", 1)
 
     def test_refresh(self):
-        assert MaterializedViewBuilder.refresh_sql(DATA) == (
-            f"REFRESH MATERIALIZED VIEW {DATA}"
-        )
+        assert MaterializedViewBuilder.refresh_sql(DATA) == (f"REFRESH MATERIALIZED VIEW {DATA}")
 
     def test_full_refresh(self):
         assert MaterializedViewBuilder.refresh_sql(DATA, full=True) == (
@@ -420,10 +481,14 @@ class TestPlanIsIncremental:
     def test_the_live_eligibility_verdict_is_recognised(self):
         """The real ``EXPLAIN CREATE MATERIALIZED VIEW`` output (Databricks SQL,
         2026-11-02) opens with an eligibility section, not a technique name."""
-        rows = [{"plan": "== Incremental Update Eligibility ==\n"
-                         "The Materialized View can be incrementally refreshed.\n\n"
-                         "== Detailed Incrementalization Info ==\nNo issues detected.\n\n"
-                         "== Physical Plan ==\nExecute CreateMaterializedViewCommand ..."}]
+        rows = [
+            {
+                "plan": "== Incremental Update Eligibility ==\n"
+                "The Materialized View can be incrementally refreshed.\n\n"
+                "== Detailed Incrementalization Info ==\nNo issues detected.\n\n"
+                "== Physical Plan ==\nExecute CreateMaterializedViewCommand ..."
+            }
+        ]
         assert MaterializedViewBuilder.plan_is_incremental(rows) is True
 
     def test_complete_recompute_is_the_live_name_of_a_full_recompute(self):
@@ -431,9 +496,13 @@ class TestPlanIsIncremental:
         assert MaterializedViewBuilder.plan_is_incremental(rows) is False
 
     def test_a_not_eligible_verdict_is_not_incremental(self):
-        rows = [{"plan": "== Incremental Update Eligibility ==\n"
-                         "The Materialized View cannot be incrementally refreshed.\n"
-                         "== Detailed Incrementalization Info ==\nstack() is not supported ..."}]
+        rows = [
+            {
+                "plan": "== Incremental Update Eligibility ==\n"
+                "The Materialized View cannot be incrementally refreshed.\n"
+                "== Detailed Incrementalization Info ==\nstack() is not supported ..."
+            }
+        ]
         assert MaterializedViewBuilder.plan_is_incremental(rows) is False
         assert MaterializedViewBuilder.plan_is_incremental([{"p": "full_recompute"}]) is False
 
@@ -463,9 +532,7 @@ class TestApply:
         statements += [
             f"DROP VIEW IF EXISTS {DATA}",
             f"DROP VIEW IF EXISTS {GRAPH}",
-            MaterializedViewBuilder.data_mv_sql(
-                DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH
-            ),
+            MaterializedViewBuilder.data_mv_sql(DATA, slots_fqn=SLOTS, batch_branch_sql=BATCH),
             f"REPAIR TABLE {DATA} SYNC METADATA",
             materialize.build_ensure_inferred_sql(INFERRED),
             f"ALTER TABLE {INFERRED} SET TBLPROPERTIES {ROW_TRACKING}",
@@ -512,9 +579,7 @@ class TestApply:
         """A view-mode domain has ``_data`` as a VIEW, which an MV cannot replace."""
         for drop_table in (True, False):
             client = RecordingClient()
-            MaterializedViewBuilder.apply(
-                client, drop_existing_table=drop_table, **self.KWARGS
-            )
+            MaterializedViewBuilder.apply(client, drop_existing_table=drop_table, **self.KWARGS)
             data_mv = next(
                 i
                 for i, s in enumerate(client.statements)
@@ -526,9 +591,7 @@ class TestApply:
         with_drop = RecordingClient()
         without_drop = RecordingClient()
         MaterializedViewBuilder.apply(with_drop, drop_existing_table=True, **self.KWARGS)
-        MaterializedViewBuilder.apply(
-            without_drop, drop_existing_table=False, **self.KWARGS
-        )
+        MaterializedViewBuilder.apply(without_drop, drop_existing_table=False, **self.KWARGS)
         assert f"DROP TABLE IF EXISTS {DATA}" in with_drop.statements
         assert f"DROP TABLE IF EXISTS {DATA}" not in without_drop.statements
 
@@ -604,8 +667,7 @@ class TestApplyKeepsTheGraphView:
         client = RecordingClient()
         MaterializedViewBuilder.apply(client, drop_existing_table=True, **self.KWARGS)
         assert not any(
-            s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {GRAPH}")
-            for s in client.statements
+            s.startswith(f"CREATE OR REPLACE MATERIALIZED VIEW {GRAPH}") for s in client.statements
         )
 
     def test_the_graph_view_goes_through_ensure_graph_view(self):
@@ -650,9 +712,7 @@ class TestLastRefreshTechnique:
 
     def test_parses_full_recompute(self):
         client = RecordingClient(rows=[self._message("FULL_RECOMPUTE")])
-        assert (
-            MaterializedViewBuilder.last_refresh_technique(client, DATA) == "FULL_RECOMPUTE"
-        )
+        assert MaterializedViewBuilder.last_refresh_technique(client, DATA) == "FULL_RECOMPUTE"
 
     def test_issues_the_event_log_query(self):
         client = RecordingClient(rows=[self._message("NO_OP")])
@@ -702,7 +762,9 @@ class TestSyncExternalMetadata:
         )
 
         create = next(
-            i for i, q in enumerate(client.statements) if q.startswith("CREATE OR REPLACE MATERIALIZED VIEW")
+            i
+            for i, q in enumerate(client.statements)
+            if q.startswith("CREATE OR REPLACE MATERIALIZED VIEW")
         )
         repair = client.statements.index(f"REPAIR TABLE {DATA} SYNC METADATA")
         assert repair == create + 1

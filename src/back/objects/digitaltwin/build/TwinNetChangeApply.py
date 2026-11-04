@@ -16,6 +16,14 @@ and writes only the net deletes, then the net inserts:
   ``<graph>_sync``, the asserted table (never the ``__app`` companion);
 * Neo4j: ``delete_triples`` / ``insert_triples``.
 
+The feed read is ``…_data``'s, except when the slot pipeline carries the whole
+graph (every mapping row-local, ``batch_mappings == 0``) and ``…_data`` is a
+materialized view: ``…_data`` is then the ``…_slots`` streaming table
+deduplicated, and the table's automatic change feed is readable on every
+workspace, where the view's needs the external-metadata preview. The relation
+read (``feed_relation``: ``data`` / ``slots``) is recorded with the version it
+was read at, and a base run that read the other one is no base.
+
 The store's inferences are purged, as the full stream (which drops the graph)
 would have discarded them: Lakebase afterwards, on its own
 (``purge_materialized_triples``); Neo4j, which cannot mark a triple as
@@ -84,6 +92,21 @@ class TwinNetChangeApply:
         return GraphDBFactory._resolve_graph_backend(pipe.domain) in _APP_WRITTEN_BACKENDS
 
     @staticmethod
+    def feed(pipe: Any) -> tuple[str, str]:
+        """``(relation, fqn)`` of the change feed to read: ``("slots", …_slots)`` or ``("data", …_data)``.
+
+        The slots when the build's slot pipeline carried the whole graph
+        (``batch_mappings == 0``) into a materialized ``…_data`` (strategy
+        ``mv``); a MERGE table, or an ``…_data`` with batch mappings, is read
+        itself.
+        """
+        slots, batch = getattr(pipe, "slots_table", None), getattr(pipe, "batch_mappings", None)
+        whole_graph = isinstance(batch, int) and not isinstance(batch, bool) and batch == 0
+        if slots and whole_graph and TwinBuildRunHistory.strategy(pipe) == "mv":
+            return "slots", slots
+        return "data", pipe.data_table
+
+    @staticmethod
     def apply(pipe: Any) -> bool:
         """Apply the net changes; ``False`` (reason recorded) means "stream the whole graph".
 
@@ -93,18 +116,19 @@ class TwinNetChangeApply:
         from back.core.graphdb.delta import ChangeFeedReader
 
         t0 = time.time()
-        client, data = pipe.source_client, pipe.data_table
+        client = pipe.source_client
+        pipe.feed_relation, feed = TwinNetChangeApply.feed(pipe)
         ledger = TwinNetChangeApply._ledger(pipe.store)
         pipe.inferred_listed = ledger is not None  # recorded: a base run for a listing store
         purges_itself = getattr(pipe.store, "supports_materialized_inference_purge", False) is True
         if ledger is None and not purges_itself:
             return TwinNetChangeApply._fall_back(pipe, "inferred_not_separable")
         try:
-            latest = ChangeFeedReader.latest_version(client, data)
+            latest = ChangeFeedReader.latest_version(client, feed)
         except InfrastructureError as exc:
             return TwinNetChangeApply._fall_back(pipe, "cdf_unavailable", exc)
         pipe.data_table_version = latest
-        pipe.data_table_id = ChangeFeedReader.table_id(client, data)
+        pipe.data_table_id = ChangeFeedReader.table_id(client, feed)
         since = TwinNetChangeApply._base_version(pipe)
         if since is None:
             return TwinNetChangeApply._fall_back(pipe, "no_previous_version")
@@ -125,7 +149,7 @@ class TwinNetChangeApply:
         logger.info(
             "[DT-BUILD %s] applied the net changes of %s v%d..v%d to %s (%d triples)",
             pipe.task_id,
-            data,
+            feed,
             since,
             latest,
             pipe.graph_name,
@@ -139,16 +163,18 @@ class TwinNetChangeApply:
 
     @staticmethod
     def _base_version(pipe: Any) -> int | None:
-        """The ``…_data`` version the store was brought to, or ``None`` (no usable base).
+        """The feed version the store was brought to, or ``None`` (no usable base).
 
         The base must come from the same relation: dropping an MV for a MERGE
         table (or the reverse) restarts the Delta history at version 0, so its
-        strategy, and its table id when both runs know one, must match. ``None``
-        too when the store reports its graph missing (dropped outside a build);
-        a store without that probe is trusted. A store that lists its
-        inferences (``inferred_listed``) needs a base that did too: inferences
-        written before the list existed are not on it, and only the full
-        stream such a build falls back to removes them.
+        strategy, its feed relation (``…_slots`` / ``…_data``; a run recorded
+        before the relation was, ``…_data``) and its table id when both runs
+        know one, must match. ``None`` too when the store reports its graph
+        missing (dropped outside a build); a store without that probe is
+        trusted. A store that lists its inferences (``inferred_listed``) needs
+        a base that did too: inferences written before the list existed are
+        not on it, and only the full stream such a build falls back to removes
+        them.
         """
         facts = TwinBuildRunHistory.previous_materialization_stats(pipe)
         version = facts.get("data_table_version")
@@ -156,12 +182,17 @@ class TwinNetChangeApply:
             return None
         if facts.get("strategy") != TwinBuildRunHistory.strategy(pipe):
             return None
+        if (facts.get("feed_relation") or "data") != pipe.feed_relation:
+            return None
         base_id, current_id = facts.get("data_table_id") or "", pipe.data_table_id or ""
         if base_id and current_id and base_id != current_id:
             return None
         if hasattr(pipe.store, "table_exists") and not pipe.store.table_exists(pipe.graph_name):
             return None
-        if getattr(pipe, "inferred_listed", False) is True and facts.get("inferred_listed") is not True:
+        if (
+            getattr(pipe, "inferred_listed", False) is True
+            and facts.get("inferred_listed") is not True
+        ):
             return None  # the base predates the list: inferences written then are not listed
         return version
 
@@ -178,9 +209,16 @@ class TwinNetChangeApply:
         """The changeset of ``(since, latest]`` is within :data:`MAX_CHANGESET_RATIO`; else a fallback."""
         from back.core.graphdb.delta import ChangeFeedReader
 
-        client, data = pipe.source_client, pipe.data_table
+        relation, feed = TwinNetChangeApply.feed(pipe)
         try:
-            ratio = ChangeFeedReader.changeset_ratio(client, data, since, latest, pipe.triple_count)
+            ratio = ChangeFeedReader.changeset_ratio(
+                pipe.source_client,
+                feed,
+                since,
+                latest,
+                pipe.triple_count,
+                distinct_rows=relation == "data",
+            )
         except InfrastructureError as exc:
             return TwinNetChangeApply._fall_back(pipe, "cdf_unavailable", exc)
         if ratio > MAX_CHANGESET_RATIO:
@@ -205,11 +243,13 @@ class TwinNetChangeApply:
         """
         from back.core.graphdb.delta import ChangeFeedReader
 
-        client, data = pipe.source_client, pipe.data_table
+        relation, feed = TwinNetChangeApply.feed(pipe)
         pipe.tm.update_progress(
-            pipe.task_id, 50, f"Applying the net changes of {data} since v{since}..."
+            pipe.task_id, 50, f"Applying the net changes of {feed} since v{since}..."
         )
-        changes = ChangeFeedReader.iter_net_changes(client, data, since, latest)
+        changes = ChangeFeedReader.iter_net_changes(
+            pipe.source_client, feed, since, latest, distinct_rows=relation == "data"
+        )
         try:
             TwinNetChangeApply._write(pipe, TwinNetChangeApply._read_errors_tagged(changes))
         except _ChangeFeedReadError as exc:

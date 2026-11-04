@@ -54,6 +54,7 @@ _TRACE_KEYS = {
 _FACT_KEYS = {
     "data_table_version",
     "data_table_id",
+    "feed_relation",
     "realtime_run_id",
     "realtime_state",
     "slots_seed_version",
@@ -162,6 +163,7 @@ class TestBuildRunStats:
         assert {key: facts[key] for key in _FACT_KEYS} == {
             "data_table_version": None,
             "data_table_id": "",
+            "feed_relation": "",
             "realtime_run_id": "",
             "realtime_state": "",
             "slots_seed_version": None,
@@ -225,6 +227,13 @@ class TestBuildRunStats:
         facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
 
         assert (facts["slot_update_id"], facts["warehouse_id"]) == ("upd-9", "wh-build")
+
+    def test_the_relation_the_feed_was_read_from_is_recorded(self):
+        pipe = SimpleNamespace(view_table=_VIEW, feed_relation="slots")
+
+        facts = TwinBuildRunHistory.build_run_stats(pipe)["materialization"]
+
+        assert facts["feed_relation"] == "slots"
 
     @pytest.mark.parametrize("value", [True, "7", 7.0, MagicMock()])
     def test_a_version_that_is_not_an_integer_is_dropped(self, value):
@@ -510,9 +519,7 @@ class TestNetChangeAppliesTo:
     @staticmethod
     def _pipe(**attrs):
         pipe = _bare_pipeline(info={"graph_backend": attrs.pop("backend", "lakebase")})
-        pipe.mode_decision = attrs.pop(
-            "decision", ModeDecision("incremental", "incremental", "")
-        )
+        pipe.mode_decision = attrs.pop("decision", ModeDecision("incremental", "incremental", ""))
         pipe.data_table = attrs.pop("data_table", _DATA)
         pipe.data_relation_mode = attrs.pop("data_relation_mode", "materialized_view")
         for key, value in attrs.items():
@@ -546,6 +553,98 @@ class TestNetChangeAppliesTo:
     )
     def test_not_for(self, attrs):
         assert TwinNetChangeApply.applies(self._pipe(**attrs)) is False
+
+
+class TestNetChangeFeed:
+    @staticmethod
+    def _pipe(**attrs):
+        pipe = _bare_pipeline(info={"graph_backend": "lakebase"})
+        pipe.data_table, pipe.data_relation_mode = _DATA, "materialized_view"
+        pipe.slots_table, pipe.batch_mappings = _modes._SLOTS, 0
+        for key, value in attrs.items():
+            setattr(pipe, key, value)
+        return pipe
+
+    def test_the_slots_when_they_carry_the_whole_graph_into_a_materialized_view(self):
+        assert TwinNetChangeApply.feed(self._pipe()) == ("slots", _modes._SLOTS)
+
+    @pytest.mark.parametrize(
+        "attrs",
+        [
+            {"batch_mappings": 1},
+            {"batch_mappings": None},
+            {"slots_table": None},
+            {"data_relation_mode": "table", "strategy": "merge"},
+        ],
+        ids=["batch-mappings", "no-slot-step", "no-slots-table", "merge-table"],
+    )
+    def test_the_data_relation_otherwise(self, attrs):
+        assert TwinNetChangeApply.feed(self._pipe(**attrs)) == ("data", _DATA)
+
+
+def _slot_fed_pipeline(registry, *, feed_relation="slots"):
+    """A row-local-only incremental build: its slot pipeline carries the whole graph.
+
+    The previous run left the store at version 5 of *feed_relation*.
+    """
+    pipe = _modes._pipeline(
+        "incremental", backend="lakebase", entities={_modes._CUSTOMER: _modes._row_local()}
+    )
+    pipe.data_table_version, pipe.apply_mode, pipe.apply_fallback_reason = None, "", ""
+    pipe.data_table_id, pipe.feed_relation = "", ""
+    del pipe._complete_task
+    pipe._graph_engine = "lakebase"
+    pipe.store.supports_materialized_inference_purge = True
+    run = _run_record(version=5, graph_engine="lakebase")
+    run["stats"]["materialization"]["feed_relation"] = feed_relation
+    registry.load_build_runs.return_value = [run]
+    return pipe
+
+
+class TestSlotFedNetApply:
+    def test_the_slots_feed_is_read_when_they_carry_the_whole_graph(self, registry):
+        pipe = _slot_fed_pipeline(registry)
+
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=9, changes=_TWO_CHANGES)
+        )
+
+        feed_reads = [s for s in warehouse.calls if "table_changes(" in s]
+        assert len(feed_reads) == 2
+        assert all(f"table_changes('{_modes._SLOTS}', 6, 9)" in s for s in feed_reads)
+        assert all(f"{_modes._SLOTS} VERSION AS OF 9" in s for s in feed_reads)
+        assert not any(f"table_changes('{_DATA}'" in s for s in warehouse.calls)
+
+    def test_the_relation_read_and_its_version_are_the_recorded_base(self, registry):
+        pipe = _slot_fed_pipeline(registry)
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=9, changes=_TWO_CHANGES))
+
+        assert (pipe.feed_relation, pipe.apply_mode, pipe.data_table_version) == (
+            "slots",
+            "net_changes",
+            9,
+        )
+
+    def test_a_base_that_read_the_data_relation_is_no_base(self, registry):
+        """The versions of two relations do not compare: the store is streamed once more."""
+        pipe = _slot_fed_pipeline(registry, feed_relation="data")
+
+        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], version=9, changes=_TWO_CHANGES))
+
+        assert _streamed(log)
+        assert (pipe.apply_mode, pipe.apply_fallback_reason) == (
+            "full_stream",
+            "no_previous_version",
+        )
+
+    def test_a_build_with_batch_mappings_reads_the_data_relation(self, registry):
+        """The default fixtures hold a batch mapping; a base recorded before the relation was is ``data``."""
+        pipe = _net_pipeline(registry)
+
+        _modes._run(pipe, warehouse=_CDFWarehouse([], version=9, changes=_TWO_CHANGES))
+
+        assert (pipe.feed_relation, pipe.apply_mode) == ("data", "net_changes")
 
 
 class TestLakebaseNetApply:
@@ -724,8 +823,14 @@ class TestNeo4jNetApply:
         assert [(name, rows) for name, _, rows, _ in writes] == [
             ("delete_triples", _LISTED),
             ("insert_triples", _SHADOWED),
-            ("delete_triples", [{"subject": "http://ex.org/old", "predicate": "http://ex.org/p", "object": "o"}]),
-            ("insert_triples", [{"subject": "http://ex.org/new", "predicate": "http://ex.org/p", "object": "o"}]),
+            (
+                "delete_triples",
+                [{"subject": "http://ex.org/old", "predicate": "http://ex.org/p", "object": "o"}],
+            ),
+            (
+                "insert_triples",
+                [{"subject": "http://ex.org/new", "predicate": "http://ex.org/p", "object": "o"}],
+            ),
         ]
         assert {size for *_, size in writes} == {500}
         assert not _streamed(log)
@@ -759,7 +864,9 @@ class TestNeo4jNetApply:
         log, _, warehouse = _modes._run(pipe, warehouse=_ListedWarehouse([], changes=_TWO_CHANGES))
 
         assert [name for name, *_ in writes] == ["delete_triples", "insert_triples"]
-        assert not any("EXCEPT" in s or s.startswith(f"DELETE FROM {_INFERRED}") for s in warehouse.calls)
+        assert not any(
+            "EXCEPT" in s or s.startswith(f"DELETE FROM {_INFERRED}") for s in warehouse.calls
+        )
         assert not _streamed(log)
 
     def test_the_listed_inferences_are_purged_without_a_new_data_version(self, registry):
@@ -774,7 +881,9 @@ class TestNeo4jNetApply:
         """Inferences written before the list existed are not on it: the full stream removes them."""
         pipe = _neo4j_pipeline(registry, listed_base=False)
 
-        log, _, _ = _modes._run(pipe, warehouse=_ListedWarehouse([], listed=_LISTED, changes=_TWO_CHANGES))
+        log, _, _ = _modes._run(
+            pipe, warehouse=_ListedWarehouse([], listed=_LISTED, changes=_TWO_CHANGES)
+        )
 
         assert _streamed(log)
         assert pipe.apply_fallback_reason == "no_previous_version"
@@ -785,14 +894,19 @@ class TestNeo4jNetApply:
 
         _modes._run(pipe, warehouse=_ListedWarehouse([], changes=_TWO_CHANGES))
 
-        assert TwinBuildRunHistory.build_run_stats(pipe)["materialization"]["inferred_listed"] is True
+        assert (
+            TwinBuildRunHistory.build_run_stats(pipe)["materialization"]["inferred_listed"] is True
+        )
 
     def test_the_rewrite_reads_data_at_the_version_the_net_changes_reach(self, registry):
         pipe = _neo4j_pipeline(registry)
         _store_writes(pipe.store, "delete_triples", "insert_triples")
 
         _, _, warehouse = _modes._run(
-            pipe, warehouse=_ListedWarehouse([], listed=_LISTED, shadowed=_SHADOWED, changes=_TWO_CHANGES)
+            pipe,
+            warehouse=_ListedWarehouse(
+                [], listed=_LISTED, shadowed=_SHADOWED, changes=_TWO_CHANGES
+            ),
         )
 
         [shadowed] = [s for s in warehouse.calls if "LEFT SEMI JOIN" in s]
@@ -905,7 +1019,9 @@ class TestNetApplyFallsBackToTheFullStream:
         registry.load_build_runs.return_value[0]["stats"]["materialization"]["data_table_id"] = "a"
         _store_writes(pipe.store, "delete_from_sync_iter", "bulk_load_into_sync")
 
-        log, _, _ = _modes._run(pipe, warehouse=_CDFWarehouse([], table_id="a", changes=_TWO_CHANGES))
+        log, _, _ = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], table_id="a", changes=_TWO_CHANGES)
+        )
 
         assert not _streamed(log)
         assert pipe.data_table_id == "a"
@@ -1036,9 +1152,7 @@ class TestSourceOverwriteDetection:
 
     def test_another_table_id_is_a_rewrite(self, registry):
         runs = [
-            _slot_run(
-                source_versions={self._SOURCE: 7}, source_table_ids={self._SOURCE: "id-old"}
-            )
+            _slot_run(source_versions={self._SOURCE: 7}, source_table_ids={self._SOURCE: "id-old"})
         ]
 
         _, starts, _ = self._build(registry, runs=runs, version=7, table_id="id-new")
@@ -1296,7 +1410,10 @@ class TestMergeAppliesTo:
     @pytest.mark.parametrize(
         ("decision", "detail"),
         [
-            (ModeDecision("incremental", "full", "incremental_failed:InfrastructureError"), "quota"),
+            (
+                ModeDecision("incremental", "full", "incremental_failed:InfrastructureError"),
+                "quota",
+            ),
             (ModeDecision("incremental", "full", "incremental_failed:ValidationError"), "pipeline"),
             (ModeDecision("incremental", "full", "row_tracking_missing"), ""),
             (ModeDecision("microbatch", "full", "serverless_unavailable"), ""),
@@ -1343,10 +1460,14 @@ class TestMergeInsteadOfCtas:
 
         log, _, warehouse = _modes._run(pipe)
 
-        ensure = next(i for i, s in enumerate(warehouse.calls) if s.startswith(
-            f"CREATE TABLE IF NOT EXISTS {_DATA} "
-        ))
-        merge = next(i for i, s in enumerate(warehouse.calls) if s.startswith(f"MERGE INTO {_DATA}"))
+        ensure = next(
+            i
+            for i, s in enumerate(warehouse.calls)
+            if s.startswith(f"CREATE TABLE IF NOT EXISTS {_DATA} ")
+        )
+        merge = next(
+            i for i, s in enumerate(warehouse.calls) if s.startswith(f"MERGE INTO {_DATA}")
+        )
         assert ensure < merge
         assert not _ctas(warehouse)
         assert ("apply_full_rebuild",) in log
@@ -1429,7 +1550,9 @@ class TestMergeInsteadOfCtas:
         pipe = _merge_pipeline()
 
         with patch("back.objects.digitaltwin.build.TwinMergeFallback.logger") as logger:
-            _, _, warehouse = _modes._run(pipe, warehouse=_modes._Warehouse([], fail_on="MERGE INTO"))
+            _, _, warehouse = _modes._run(
+                pipe, warehouse=_modes._Warehouse([], fail_on="MERGE INTO")
+            )
 
         assert _ctas(warehouse)
         assert pipe.mode_decision == ModeDecision("incremental", "full", "serverless_unavailable")
@@ -1526,7 +1649,9 @@ class TestMergeSkipsAnUnchangedBuild:
         self._base(registry)
         pipe = self._pipeline()
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=5, data_version=7, data_exists=True))
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=5, data_version=7, data_exists=True)
+        )
 
         assert _merged(warehouse)
 
@@ -1534,7 +1659,9 @@ class TestMergeSkipsAnUnchangedBuild:
         self._base(registry)
         pipe = self._pipeline()
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=False))
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=False)
+        )
 
         assert _merged(warehouse)
 
@@ -1568,7 +1695,9 @@ class TestMergeSkipsAnUnchangedBuild:
         pipe = _merge_pipeline(entities={_modes._CUSTOMER: _modes._row_local()})
         pipe.store.table_exists.return_value = False
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True))
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_exists=True)
+        )
 
         assert not _merged(warehouse)
         assert pipe.tm.messages == [_SKIPPED]
@@ -1577,7 +1706,9 @@ class TestMergeSkipsAnUnchangedBuild:
         self._base(registry, strategy="mv")
         pipe = self._pipeline()
 
-        _, _, warehouse = _modes._run(pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True))
+        _, _, warehouse = _modes._run(
+            pipe, warehouse=_CDFWarehouse([], version=4, data_version=7, data_exists=True)
+        )
 
         assert _merged(warehouse)
 

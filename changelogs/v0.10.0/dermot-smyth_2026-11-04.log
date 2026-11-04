@@ -207,3 +207,138 @@ facts, the overview (`domains_per_mode: {incremental: 1, microbatch: 1}`) and
 the Knowledge Graph › Build status card ("Slot pipeline: IDLE · _data: mv ·
 _slots: streaming_table v5 · … 6 upserted, 0 deleted"). Screenshots in
 `artifacts/scenarios/` (git-ignored).
+
+================================================================================
+## Net changes from the `_slots` change feed; a running MV refresh is waited for
+================================================================================
+
+Context: the design's P1 "net changes for app-managed Lakebase / Neo4j" read the
+`_data` materialized view's change feed, which needs the external-metadata
+private preview — `table_changes` on the MV fails `DELTA_LOG_FILE_NOT_FOUND`
+on both reachable workspaces (re-checked on the sandbox today after
+`REPAIR TABLE … SYNC METADATA`; `DESCRIBE HISTORY` on the MV is refused outright),
+so every app-written store fell back to the full stream (`cdf_unavailable`).
+When the slot pipeline carries the whole graph (`batch_mappings = 0`) the view
+is the `_slots` streaming table deduplicated, and a streaming table's automatic
+change feed is GA — verified on the sandbox (`table_changes('…_slots', 1)` lists
+the AUTO CDC inserts, `VERSION AS OF` works). The feed now comes from there.
+
+1. src/back/core/graphdb/delta/ChangeFeedReader.py — `net_changes_sql`,
+   `iter_net_changes`, `changeset_ratio` take `distinct_rows` (default `True`,
+   the `_data` sum-of-signs reduction). `False` (`_slots`, several slots per
+   triple) emits `_snapshot_diff_select`: the triples the feed touched in the
+   window whose presence differs between `SELECT DISTINCT … VERSION AS OF
+   since` and `… VERSION AS OF until` — a slot deleted while another still
+   carries the triple is no change, an update spread over several commits is
+   one delete + one insert, a duplicate insert of a present triple is nothing.
+2. src/back/objects/digitaltwin/build/TwinNetChangeApply.py — `feed(pipe)`
+   returns `("slots", …_slots)` for strategy `mv` with `batch_mappings == 0`
+   and a slots table, else `("data", …_data)`; `apply` reads the version /
+   table id / ratio / window from that relation and records it as
+   `pipe.feed_relation`; `_base_version` rejects a base recorded on the other
+   relation (runs from before the fact default to `data`); the log line names
+   the feed. Module docstring explains the choice.
+3. src/back/objects/digitaltwin/build/TwinBuildRunHistory.py — materialization
+   fact `feed_relation` (docstring: `data_table_version` is the feed relation's
+   version); build/_build_pipeline.py declares `feed_relation` next to
+   `data_table_id` (no growth of the frozen `_BuildPipeline`);
+   TwinMergeFallback `_complete_skipped` carries the base's `feed_relation`.
+4. src/back/core/graphdb/delta/MaterializedViewBuilder.py — `refresh(client,
+   fqn, *, full, wait_s=600, pause_s=20, sleep)`: `REFRESH MATERIALIZED VIEW`
+   retried while the warehouse answers that a refresh is already running
+   (`_REFRESH_IN_PROGRESS`: the live "A refresh is already running in the
+   background. You can monitor the previous refresh …", the pipelines API's
+   "An active update … already exists", in-progress / being-refreshed /
+   concurrent wordings); any other error or the wait running out propagates.
+   TwinIncrementalBuild `_apply_views` refreshes through it. Found live: a
+   `microbatch` build started 50 s after a source change met the view's
+   `TRIGGER ON UPDATE` refresh, failed `incremental_failed:InfrastructureError`
+   and fell back to a CTAS — dropping the materialized view, stopping the
+   continuous pipeline and losing the net-change base (reproduced twice:
+   builds 2 and 6 of the evidence domain; a build 5 s after the change was
+   fine, its own refresh ran first with `GROUP_AGGREGATE`).
+5. Tests — tests/units/graphdb/delta/test_change_feed_reader.py: the exact
+   slot statement, ratio / stream use it, five SQLite reductions (cross-slot
+   duplicate, update order, insert-then-delete, several commits of one slot,
+   duplicate insert); tests/units/objects/test_build_pipeline_net_apply.py:
+   `TestNetChangeFeed` (slots when the slots carry the whole graph into an MV;
+   `_data` for batch mappings / no slot step / no slots table / MERGE),
+   `TestSlotFedNetApply` (a row-local-only build reads `table_changes('…_slots',
+   6, 9)` + `VERSION AS OF 9` and never the `_data` feed; the relation and its
+   version are the recorded base; a base that read `_data` is no base; the
+   default fixtures with a batch mapping still read `_data`), the fact in
+   `build_run_stats`; tests/units/graphdb/delta/test_materialized_view_builder.py:
+   `TestRefresh` (waited for across four wordings, other errors at once, the
+   wait running out, FULL forwarded). tests/units/settings/test_deploy_instance_id.py:
+   `TestEnsureInstanceTarget` puts a deploy's `resources/_generated_instance_target.yml`
+   back after each test — the full suite run concurrently with deploy #12 had
+   deleted the target between the two `bundle run` steps, so the MCP app's
+   start failed `dev-lakebase-rtm: no such target` (regenerated by hand with
+   `ensure_instance_target` + `bundle run mcp_ontobricks_app`; both apps on the
+   new deployment).
+6. docs/incremental-materialization.md — net-change apply bullet (feed
+   relation, snapshot diff, fallback reasons), previews bullet, the microbatch
+   refresh paragraph (the wait), Known limitations (the MV-fed apply of a
+   `_data` with batch mappings; a registry delete leaves the slot pipeline
+   running and every graph object in place — seen live, manual cleanup
+   recipe), live verification (the sandbox freshness measurement), the P1
+   traceability row (Live ✅ with the figures below).
+
+Sandbox evidence (`ontobricks-rtm`, rebuilt 0.10.0 apps, 2026-11-04), in the
+session transcript:
+- `tests/external/test_mv_incremental_plan.py::test_the_data_view_plans_an_incremental_refresh`
+  PASSED against the sandbox warehouse (the CI `EXPLAIN` check).
+- `ZzNetFeedLive` (app-managed Lakebase, `microbatch`, fixture
+  `rtm.customers_many` = 60 rows / 120 triples; a 3-row fixture cannot show the
+  10 % threshold — one update is 33 %): build 1 full stream, base
+  `feed_relation = slots` v5 → (build 2: the refresh race above, CTAS) →
+  build 3 full stream, base v8 → one UPDATE → build 4 **`apply_mode =
+  net_changes`, `table_changes('…_slots', 9, 12)`, 1 delete + 1 insert, 50 s**
+  (full streams of the same graph: 95–180 s); Lakebase `zznetfeedlive_v1_sync`
+  120 triples, the new label, zero stale markers; `POST /dtwin/incremental/reconcile`
+  → `drift: false`, equal `_slots` / `_data` hashes; build 5 (update 5 s before)
+  net_changes v12..v13 with `refresh_technique = GROUP_AGGREGATE`; build 6
+  (update 50 s before) reproduced the race.
+- Freshness: `scripts/measure_freshness.py` died twice in the Thrift driver on
+  this network (`I/O operation on closed file`; `RequestError` on `OpenSession`);
+  the same probe over the Statement Execution API: `_slots` 13.2 s / 13.5 s,
+  `_data` 319 s (one marker not within 420 s), `_graph` 422 s / 321 s — the MV
+  trigger cadence; the fast path reads `_slots` for such a graph.
+- Not available on the sandbox: Real-Time compute ("Real-Time compute is not
+  enabled for this workspace"), so the Lakehouse//RT KPI stays the integration
+  workspace's measurement; the `_data` MV change feed (above).
+- Deploy #12 after the net-change change: the bundle's ACL reconcile dropped
+  the app SP's self `CAN_MANAGE` again (every POST answered the Access Denied
+  page) — re-granted with `apps update-permissions`; the MCP target episode in
+  item 5. Deleting the first evidence domain left its continuous pipeline
+  RUNNING and all UC / Lakebase objects (item 6) — stopped / dropped by hand.
+- Deploy #13 with the refresh wait (both apps RUNNING on it; `/health` 0.10.0;
+  the SP re-grant again). Build 7 re-created the MV after build 6's CTAS (full
+  stream, base `feed_relation = slots` v14). Build 8, started 50 s after a
+  source UPDATE exactly as builds 2 and 6: `MaterializedViewBuilder.refresh`
+  logged "A refresh of …_data is already running; waiting 20s (attempt 1/30 …
+  9/30)" against the view's trigger refresh, the tenth attempt went through,
+  the build stayed `microbatch` (`strategy = mv`, no fallback reason) and
+  applied the net changes of `_slots` v14..v16 — 1 delete + 1 insert — in 329 s
+  instead of demoting the domain to a CTAS. The evidence domain, its pipeline,
+  UC relations, Lakebase objects and the fixture table were removed afterwards
+  (`/tmp` scripts, not committed).
+
+Modified files:
+- src/back/core/graphdb/delta/ChangeFeedReader.py
+- src/back/core/graphdb/delta/MaterializedViewBuilder.py
+- src/back/objects/digitaltwin/build/TwinNetChangeApply.py
+- src/back/objects/digitaltwin/build/TwinIncrementalBuild.py
+- src/back/objects/digitaltwin/build/TwinBuildRunHistory.py
+- src/back/objects/digitaltwin/build/TwinMergeFallback.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- tests/units/graphdb/delta/test_change_feed_reader.py
+- tests/units/graphdb/delta/test_materialized_view_builder.py
+- tests/units/objects/test_build_pipeline_net_apply.py
+- tests/units/settings/test_deploy_instance_id.py
+- docs/incremental-materialization.md
+- changelogs/v0.10.0/dermot-smyth_2026-11-04.log
+
+Test result: `uv run --frozen pytest -q -m "not scenario" -o faulthandler_timeout=240`
+on the final tree — 11821 passed, 335 skipped, 9 deselected (62 s);
+`tests/units/architecture` 11 passed; ruff clean on every touched file.

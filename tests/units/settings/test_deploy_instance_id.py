@@ -106,19 +106,21 @@ class TestInstanceIdDerivation:
 
 
 class TestEnsureInstanceTarget:
+    """Runs the script in the repository; a deploy's generated target is put back afterwards."""
+
     def setup_method(self):
+        self._deployed = GENERATED.read_text() if GENERATED.exists() else None
         if GENERATED.exists():
             GENERATED.unlink()
 
     def teardown_method(self):
         if GENERATED.exists():
             GENERATED.unlink()
+        if self._deployed is not None:
+            GENERATED.write_text(self._deployed)
 
     def _ensure(self, target: str) -> subprocess.CompletedProcess[str]:
-        script = (
-            f"source '{ENSURE}'\n"
-            f"ensure_instance_target '{target}'\n"
-        )
+        script = f"source '{ENSURE}'\nensure_instance_target '{target}'\n"
         return subprocess.run(
             ["bash", "-c", script],
             cwd=ROOT,

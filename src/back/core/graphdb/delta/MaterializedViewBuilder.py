@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterator, Mapping
+import time
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from back.core.errors import ValidationError
@@ -17,6 +18,27 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 _REFRESH_POLICIES = ("AUTO", "INCREMENTAL", "INCREMENTAL STRICT", "FULL")
+
+#: The warehouse's answer to ``REFRESH MATERIALIZED VIEW`` while the view's own
+#: refresh (its ``TRIGGER ON UPDATE`` / schedule, or another caller's) still runs —
+#: seen live: "A refresh is already running in the background. You can monitor the
+#: previous refresh by visiting the following URL: …" — plus the pipelines API's
+#: "An active update … already exists" (the wording :class:`SlotPipelineRunner`
+#: adopts an update on) and refresh / update reported as in progress. A build
+#: waits for that refresh instead of failing over to a full rebuild.
+_REFRESH_IN_PROGRESS = re.compile(
+    r"refresh (is |was )?(already )?(in progress|running|ongoing)"
+    r"|(already|currently) (being )?refresh"
+    r"|being refreshed"
+    r"|concurrent(ly)? refresh"
+    r"|active update .* already exists"
+    r"|update .* (is )?(already )?(in progress|active)",
+    re.IGNORECASE,
+)
+#: How long :meth:`MaterializedViewBuilder.refresh` waits for a running refresh, and the pause
+#: between its attempts (a ``microbatch`` view's trigger refresh has taken minutes live).
+REFRESH_WAIT_S = 600.0
+REFRESH_PAUSE_S = 20.0
 
 #: ``pipelines.externalMetadata.enabled`` is what lets ``table_changes`` / a change-feed
 #: stream read the view (Databricks "external data access to streaming tables and
@@ -64,9 +86,7 @@ _FULL_RECOMPUTE = re.compile(r"\b(?:FULL|COMPLETE)_RECOMPUTE\b", re.IGNORECASE)
 #: below are what a *refresh* reports afterwards.
 _ELIGIBLE = re.compile(r"can be incrementally refreshed", re.IGNORECASE)
 _NOT_ELIGIBLE = re.compile(r"can\s*not be incrementally refreshed", re.IGNORECASE)
-_OR_REPLACE_MV = re.compile(
-    r"\A\s*CREATE\s+OR\s+REPLACE\s+MATERIALIZED\s+VIEW\b", re.IGNORECASE
-)
+_OR_REPLACE_MV = re.compile(r"\A\s*CREATE\s+OR\s+REPLACE\s+MATERIALIZED\s+VIEW\b", re.IGNORECASE)
 _PLANNED_TECHNIQUE = re.compile(r"executed as ([A-Z_]+)")
 UNKNOWN_TECHNIQUE = "UNKNOWN"
 
@@ -264,6 +284,44 @@ class MaterializedViewBuilder:
         return f"REFRESH MATERIALIZED VIEW {fqn}" + (" FULL" if full else "")
 
     @staticmethod
+    def refresh(
+        client: Any,
+        fqn: str,
+        *,
+        full: bool = False,
+        wait_s: float = REFRESH_WAIT_S,
+        pause_s: float = REFRESH_PAUSE_S,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> int:
+        """Run :meth:`refresh_sql`, waiting for a refresh that already runs; the attempts made.
+
+        A ``microbatch`` view refreshes on its own (``TRIGGER ON UPDATE``) when the
+        slots change, and the warehouse refuses a second refresh while one runs
+        (:data:`_REFRESH_IN_PROGRESS`). That answer is retried every *pause_s*
+        seconds for up to *wait_s*; any other error, or the wait running out,
+        propagates (the caller's fallback decides).
+        """
+        sql = MaterializedViewBuilder.refresh_sql(fqn, full=full)
+        attempts = max(1, int(wait_s // pause_s))
+        for attempt in range(1, attempts + 1):
+            try:
+                materialize.run_sql(client, sql)
+                return attempt
+            except Exception as exc:  # noqa: BLE001 — only the in-progress answer is retried
+                if attempt == attempts or not _REFRESH_IN_PROGRESS.search(str(exc)):
+                    raise
+                logger.info(
+                    "A refresh of %s is already running; waiting %.0fs (attempt %d/%d): %s",
+                    fqn,
+                    pause_s,
+                    attempt,
+                    attempts,
+                    exc,
+                )
+                sleep(pause_s)
+        return attempts
+
+    @staticmethod
     def refresh_technique_sql(fqn: str) -> str:
         """Latest ``planning_information`` event of the view's event log."""
         validate_table_name(fqn)
@@ -426,15 +484,13 @@ class MaterializedViewBuilder:
         batch = (batch_branch_sql or "").strip()
         if slots_fqn is None and not batch:
             raise ValidationError(
-                "A data materialized view needs a slots table, a batch branch, "
-                "or both"
+                "A data materialized view needs a slots table, a batch branch, or both"
             )
         branches = []
         if slots_fqn is not None:
             validate_table_name(slots_fqn)
             branches.append(
-                f"  SELECT subject, predicate, object FROM {slots_fqn}\n"
-                f"  {_NON_BLANK_OBJECT}"
+                f"  SELECT subject, predicate, object FROM {slots_fqn}\n  {_NON_BLANK_OBJECT}"
             )
         if batch:
             branches.append(f"  ({batch})" if slots_fqn is not None else f"  {batch}")

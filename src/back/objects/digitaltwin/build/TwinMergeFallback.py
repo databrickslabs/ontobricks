@@ -253,6 +253,7 @@ class TwinMergeFallback:
         TwinMergeFallback._record(pipe, data, fingerprint)
         pipe.data_table_version = base.get("data_table_version")
         pipe.data_table_id = str(base.get("data_table_id") or "")
+        pipe.feed_relation = str(base.get("feed_relation") or "")
         pipe.apply_mode = "none"
         pipe.triple_count = pipe._count_source_triples()
         logger.info(

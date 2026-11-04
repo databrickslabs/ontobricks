@@ -299,7 +299,7 @@ class _BuildPipeline:
         self.mode_fallback_detail: str = ""  # message of the incremental fallback, if any
         # Persisted under build_runs.stats["materialization"] (build_run_stats).
         self.data_table_version: Optional[int] = None
-        self.data_table_id: str = ""
+        self.data_table_id, self.feed_relation = "", ""  # table id + relation (slots / data) of it
         self.slot_refresh_facts: Dict[str, Any] = {}
         self.slot_update_id: str = ""  # the slot pipeline update slots_changed describes
         self.slots_changed: dict | None = None  # rows that update wrote

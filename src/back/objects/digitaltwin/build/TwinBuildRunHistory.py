@@ -41,9 +41,11 @@ class TwinBuildRunHistory:
         ``materialization`` persists :meth:`TwinBuildPostMaterialize.trace_fields`
         and the facts a later build continues from
         (:meth:`previous_materialization_stats`):
-        ``data_table_version`` (the ``…_data`` version the store matches, or
-        ``None``), ``fingerprint`` (MERGE sources + mapping), ``strategy``
-        (``mv`` / ``merge`` / ``ctas`` / ``""``), ``apply_mode``
+        ``data_table_version`` (the version of the change feed's relation the
+        store matches, or ``None``), ``feed_relation`` (that relation:
+        ``data`` / ``slots``, ``TwinNetChangeApply.feed``; ``""`` when no net
+        change apply ran), ``fingerprint`` (MERGE sources + mapping),
+        ``strategy`` (``mv`` / ``merge`` / ``ctas`` / ``""``), ``apply_mode``
         (``net_changes`` / ``full_stream`` / ``lakeflow_sync`` / ``none``;
         ``""`` when the apply phase was never reached),
         ``apply_fallback_reason``, ``data_table_id`` (the Delta table id the
@@ -86,6 +88,7 @@ class TwinBuildRunHistory:
             "apply_mode": text(pipe, "apply_mode"),
             "apply_fallback_reason": text(pipe, "apply_fallback_reason"),
             "data_table_id": text(pipe, "data_table_id"),
+            "feed_relation": text(pipe, "feed_relation"),
             "realtime_run_id": text(pipe, "realtime_run_id"),
             "realtime_state": text(pipe, "realtime_state"),
             "slots_seed_version": TwinBuildRunHistory._version_or_none(
@@ -225,7 +228,9 @@ class TwinBuildRunHistory:
                 if facts.get("apply_mode") == "":
                     continue
                 return {}
-            same_graph = all(run.get(key) == identity[key] for key in ("graph_engine", "graph_name"))
+            same_graph = all(
+                run.get(key) == identity[key] for key in ("graph_engine", "graph_name")
+            )
             if same_graph and run.get("sync_mode") != identity["sync_mode"]:
                 return {}
             if same_graph and facts.get("apply_mode") in accepted:
@@ -275,13 +280,10 @@ class TwinBuildRunHistory:
                 pipe.domain.last_build = datetime.now(timezone.utc).isoformat()
 
             svc = RegistryService.from_context(pipe.domain, pipe.settings)
-            ok, msg = svc._store.stamp_last_build(
-                folder, str(version), pipe.domain.last_build
-            )
+            ok, msg = svc._store.stamp_last_build(folder, str(version), pipe.domain.last_build)
             if ok:
                 logger.info(
-                    "[DT-BUILD %s] stamped last_build=%s in registry "
-                    "(folder=%s version=%s)",
+                    "[DT-BUILD %s] stamped last_build=%s in registry (folder=%s version=%s)",
                     pipe.task_id,
                     pipe.domain.last_build,
                     folder,
@@ -289,8 +291,7 @@ class TwinBuildRunHistory:
                 )
             else:
                 logger.error(
-                    "[DT-BUILD %s] stamp_last_build failed when persisting "
-                    "last_build: %s",
+                    "[DT-BUILD %s] stamp_last_build failed when persisting last_build: %s",
                     pipe.task_id,
                     msg,
                 )
@@ -362,4 +363,3 @@ class TwinBuildRunHistory:
     def _version_or_none(value: Any) -> int | None:
         """*value* when it is an ``int`` (a version or a count), else ``None``."""
         return value if isinstance(value, int) and not isinstance(value, bool) else None
-

@@ -29,6 +29,14 @@ class ChangeFeedReader:
     post-images +1, deletes and pre-images -1), so each triple appears at most
     once, as an ``insert`` or a ``delete``.
 
+    That sum is right when every row of the relation is one triple
+    (``…_data``). In ``…_slots`` several slots may carry the same triple
+    (``distinct_rows=False``): the net change is then the set of triples the
+    feed touched whose presence differs between the deduplicated snapshots at
+    the two ends of the window (``VERSION AS OF``), so a slot deleted while
+    another still carries its triple is no change, and an update that lands
+    in several commits is one delete and one insert.
+
     The only I/O is the warehouse ``client`` (``execute_query`` /
     ``iter_rows``). Driver errors become :class:`InfrastructureError` so a
     caller can fall back to a full read.
@@ -70,9 +78,7 @@ class ChangeFeedReader:
         """
         WarehouseStatements.require_fqn(fqn)
         try:
-            rows = WarehouseStatements.query(
-                client, f"DESCRIBE DETAIL {fqn}", f"describe {fqn}"
-            )
+            rows = WarehouseStatements.query(client, f"DESCRIBE DETAIL {fqn}", f"describe {fqn}")
         except InfrastructureError as exc:
             logger.debug("No table id for %s: %s", fqn, exc)
             return ""
@@ -80,8 +86,14 @@ class ChangeFeedReader:
         return str(row.get("id") or "")
 
     @staticmethod
-    def net_changes_sql(fqn: str, since_version: int, until_version: int) -> str:
+    def net_changes_sql(
+        fqn: str, since_version: int, until_version: int, *, distinct_rows: bool = True
+    ) -> str:
         """The net changes in ``(since_version, until_version]``, deletes first.
+
+        *distinct_rows*: every row of *fqn* is one triple (``…_data``), so the
+        feed's signs are summed per triple; ``False`` for ``…_slots`` (see the
+        class docstring).
 
         ``'delete' < 'insert'``: deletes stream before inserts.
 
@@ -89,15 +101,23 @@ class ChangeFeedReader:
         stores (Neo4j properties): an updated value arrives as the delete of
         the old triple and the insert of the new one.
         """
-        net = ChangeFeedReader._net_select(fqn, since_version, until_version)
+        net = ChangeFeedReader._net_select(fqn, since_version, until_version, distinct_rows)
         return net + "\nORDER BY op"
 
     @staticmethod
     def iter_net_changes(
-        client: Any, fqn: str, since_version: int, until_version: int, batch_size: int = 5000
+        client: Any,
+        fqn: str,
+        since_version: int,
+        until_version: int,
+        batch_size: int = 5000,
+        *,
+        distinct_rows: bool = True,
     ) -> Iterator[dict]:
         """Stream :meth:`net_changes_sql` rows (``subject``, ``predicate``, ``object``, ``op``)."""
-        sql = ChangeFeedReader.net_changes_sql(fqn, since_version, until_version)
+        sql = ChangeFeedReader.net_changes_sql(
+            fqn, since_version, until_version, distinct_rows=distinct_rows
+        )
         try:
             yield from client.iter_rows(sql, batch_size=batch_size)
         except OntoBricksError:
@@ -109,13 +129,19 @@ class ChangeFeedReader:
 
     @staticmethod
     def changeset_ratio(
-        client: Any, fqn: str, since_version: int, until_version: int, total_rows: int
+        client: Any,
+        fqn: str,
+        since_version: int,
+        until_version: int,
+        total_rows: int,
+        *,
+        distinct_rows: bool = True,
     ) -> float:
         """Net changes in ``(since_version, until_version]`` as a fraction of *total_rows*.
 
         An empty total makes any change infinitely large (and no change 0.0).
         """
-        net = ChangeFeedReader._net_select(fqn, since_version, until_version)
+        net = ChangeFeedReader._net_select(fqn, since_version, until_version, distinct_rows)
         rows = WarehouseStatements.query(
             client,
             f"SELECT COUNT(*) AS cnt FROM (\n{net}\n) n",
@@ -131,10 +157,14 @@ class ChangeFeedReader:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _net_select(fqn: str, since_version: int, until_version: int) -> str:
+    def _net_select(
+        fqn: str, since_version: int, until_version: int, distinct_rows: bool = True
+    ) -> str:
         WarehouseStatements.require_fqn(fqn)
         ChangeFeedReader._require_version(since_version, minimum=0)
         ChangeFeedReader._require_version(until_version, minimum=since_version + 1)
+        if not distinct_rows:
+            return ChangeFeedReader._snapshot_diff_select(fqn, since_version, until_version)
         return (
             "SELECT subject, predicate, object, "
             "CASE WHEN net_change > 0 THEN 'insert' ELSE 'delete' END AS op\n"
@@ -146,6 +176,28 @@ class ChangeFeedReader:
             "  GROUP BY subject, predicate, object\n"
             ") c\n"
             "WHERE net_change <> 0"
+        )
+
+    @staticmethod
+    def _snapshot_diff_select(fqn: str, since_version: int, until_version: int) -> str:
+        """Touched triples whose presence differs between the deduplicated snapshots."""
+        on = "ON {s}.subject = t.subject AND {s}.predicate = t.predicate AND {s}.object = t.object"
+        return (
+            "WITH touched AS (\n"
+            "  SELECT DISTINCT subject, predicate, object\n"
+            f"  FROM table_changes('{fqn}', {since_version + 1}, {until_version})\n"
+            f"  WHERE _change_type IN {_ALL_CHANGES}\n"
+            "), at_since AS (\n"
+            f"  SELECT DISTINCT subject, predicate, object FROM {fqn} VERSION AS OF {since_version}\n"
+            "), at_until AS (\n"
+            f"  SELECT DISTINCT subject, predicate, object FROM {fqn} VERSION AS OF {until_version}\n"
+            ")\n"
+            "SELECT t.subject, t.predicate, t.object, "
+            "CASE WHEN u.subject IS NULL THEN 'delete' ELSE 'insert' END AS op\n"
+            "FROM touched t\n"
+            f"LEFT JOIN at_since s {on.format(s='s')}\n"
+            f"LEFT JOIN at_until u {on.format(s='u')}\n"
+            "WHERE (s.subject IS NULL) <> (u.subject IS NULL)"
         )
 
     @staticmethod

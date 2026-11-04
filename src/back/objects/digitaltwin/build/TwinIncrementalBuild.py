@@ -266,7 +266,9 @@ class TwinIncrementalBuild:
         if not slots_fqn:
             raise ValidationError("Could not resolve the slots table name")
         entity_mappings, relationship_mappings = entity_mappings or {}, relationship_mappings or []
-        row_local = SlotProjectionCompiler.row_local_mappings(entity_mappings, relationship_mappings)
+        row_local = SlotProjectionCompiler.row_local_mappings(
+            entity_mappings, relationship_mappings
+        )
         return SlotProjectionCompiler.compile(
             entity_mappings,
             relationship_mappings,
@@ -403,7 +405,7 @@ class TwinIncrementalBuild:
         Once the definition is in place, reads re-decide their Lakehouse//RT
         fast path from it (``GraphReadRelation.clear_cache``, this process only).
         """
-        from back.core.graphdb.delta import GraphReadRelation, _table_naming, materialize
+        from back.core.graphdb.delta import GraphReadRelation, _table_naming
         from back.core.graphdb.delta.MaterializedViewBuilder import MaterializedViewBuilder
 
         data = _table_naming.data_table_fqn(pipe.domain, pipe.settings)
@@ -424,11 +426,10 @@ class TwinIncrementalBuild:
             )
         GraphReadRelation.clear_cache()
         pipe.tm.update_progress(pipe.task_id, 32, f"Refreshing materialized view {data}...")
+        # A microbatch view's own trigger refresh may be running: waited for, not failed over.
         WarehouseStatements.step(
             f"refresh {data}",
-            lambda: materialize.run_sql(
-                client, MaterializedViewBuilder.refresh_sql(data, full=full_refresh)
-            ),
+            lambda: MaterializedViewBuilder.refresh(client, data, full=full_refresh),
         )
         pipe.refresh_technique = MaterializedViewBuilder.last_refresh_technique(client, data)
         pipe.data_table = data

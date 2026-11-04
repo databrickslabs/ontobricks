@@ -114,7 +114,16 @@ reference accepts materialized views as upstreams). A build whose definition did
 not change keeps it (`GraphRelation.ensure_materialized`, dropping a union VIEW
 first, `TwinGraphRelation.after_data`); the build's inferred reset, which follows the
 `_data` refresh, refreshes it — once per build. A scheduled tick that refreshes
-`_data` in place refreshes it next. Every write to `_inferred` — the store's app
+`_data` in place refreshes it next. A `REFRESH MATERIALIZED VIEW` the warehouse
+refuses because the view's own trigger refresh is still running ("A refresh is
+already running in the background …") is **waited for** — `MaterializedViewBuilder.refresh`
+retries every 20 s for up to 10 min — instead of failing the incremental build over
+to a full rebuild (seen live on the sandbox: a `microbatch` build started 50 s after a
+source change met the `TRIGGER ON UPDATE` refresh of `_data`, fell back to a CTAS,
+dropped the materialized view, stopped the continuous pipeline and lost the
+net-change base; the next build started from scratch. With the wait, the same
+build waited 9 × 20 s for the trigger refresh and then applied its net changes
+from the `_slots` feed). Every write to `_inferred` — the store's app
 writes (reasoning, cohorts), the inferred purge, `ReasoningService.materialize_to_delta`
 into the companion — runs a synchronous `REFRESH MATERIALIZED VIEW` through one
 method, `GraphRelation.refresh_after_write`, before it returns, so the graph caches the
@@ -246,16 +255,27 @@ Two further fallbacks apply after the mode is decided:
   recorded as a success with the message "no source changes (skipped)". The
   skip never fires when batch mappings exist (their tables are not in the
   fingerprint). A MERGE that fails degrades to the CTAS.
-- **Net-change apply** (`apply_mode`). For Neo4j and app-managed Lakebase, an
-  incremental `_data` (MV or MERGE table) is consumed through its change feed:
-  `table_changes('<data>', since + 1, latest)` reduced to net inserts/deletes
-  since the `_data` version the store was last brought to, deletes first. The
+- **Net-change apply** (`apply_mode`). For Neo4j and app-managed Lakebase, the
+  incremental graph is consumed through a change feed (`TwinNetChangeApply.feed`,
+  recorded as `feed_relation`): when the slot pipeline carries the whole graph
+  (`batch_mappings = 0`) into a materialized `_data`, the **`_slots` streaming
+  table's** — `_data` is then the slots deduplicated, and a streaming table's
+  automatic change feed is readable on every workspace, where the view's needs
+  the external-metadata preview — otherwise **`_data`'s** (MV or MERGE table).
+  `table_changes('<feed>', since + 1, latest)` is reduced to net inserts/deletes
+  since the feed version the store was last brought to, deletes first: for
+  `_data` (one row per triple) by the sign of the feed's changes per triple; for
+  `_slots`, where several slots can carry one triple, as the triples the feed
+  touched whose presence differs between the deduplicated snapshots at the two
+  versions (`VERSION AS OF`), so a slot deleted while another still carries its
+  triple is no change and an update that landed in several commits is one
+  delete and one insert (`ChangeFeedReader`, `distinct_rows`). The
   store falls back to the full stream (`apply_mode = full_stream`) with
   `apply_fallback_reason` = `no_previous_version` (no matching base run, the
-  base came from a different `_data` relation kind / table id, or the store no
-  longer holds the graph), `changeset_too_large` (more than 10 % of the current
-  `_data` rows), `cdf_unavailable` (any change-feed read error, before or during
-  the stream, or a base version newer than `_data`), `inferred_unreadable` (the
+  base came from a different relation kind / feed relation / table id, or the
+  store no longer holds the graph), `changeset_too_large` (more than 10 % of the
+  current `_data` rows), `cdf_unavailable` (any change-feed read error, before or
+  during the stream, or a base version newer than the feed), `inferred_unreadable` (the
   Neo4j inference list below could not be read) or `inferred_not_separable` (a
   store with neither way to purge its inferences). The store's inferred triples
   are purged, so reasoning starts from a clean slate exactly as after a full
@@ -603,8 +623,9 @@ degrade as described above:
 
 - **Enzyme incremental materialized views** on the `PREVIEW` pipeline channel,
   and the **materialized-view change data feed** (`table_changes` on an MV, a Beta)
-  used by the net-change apply and by an MV-sourced triggered / continuous synced
-  table. Its documented enabler is the table property
+  used by the net-change apply of a `_data` with batch mappings and by an MV-sourced
+  triggered / continuous synced table (a graph the slots carry whole is net-applied
+  from the `_slots` streaming table's feed and needs neither). Its documented enabler is the table property
   `'pipelines.externalMetadata.enabled' = 'true'` ("external data access to
   streaming tables and materialized views"), which the `_data` and `_graph` views
   carry from this release; the build also runs `REPAIR TABLE … SYNC METADATA`
@@ -746,7 +767,7 @@ The live evidence is under [Known limitations](#known-limitations) › Live veri
 | 1 P0 | Lakebase `managed_synced` triggered from `_slots` / `_data` | ✅ | ✅ | both sources: `_slots` (slot key) when the slots carry the whole graph, else `_data`; asserted-only readers go through a `DISTINCT` non-blank Postgres view; capped by `sync_table_mode`. Live: TRIGGERED from `_slots` online in 57 s; TRIGGERED from the `_data` MV registers and snapshots but its updates fail on `MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA` (private preview) → the build falls back to a snapshot registration and records `mv_change_feed_unavailable` |
 | 1 P0 | Build-run trace: mode, refresh technique, fallback reason, slot counts changed | ✅ | ✅ | `stats.materialization`; cockpit column, details and status card; `slots_changed` from the update's `flow_progress` metrics (`SlotUpdateMetrics`), with `slot_update_id` / `warehouse_id` for the DBU join on `system.billing.usage`. Live: a bootstrap reported 9 upserted slots against 9 slot rows, a one-row source update 3 (every slot of the row) — one RUNNING event carries the totals, no double count |
 | 1 exp. | Per-mapping freshness class: the UI shows which mappings are row-local (`microbatch`-eligible) and which are batch-incremental | ✅ | ✅ | readiness `mappings` (`kind` = `slot` / `batch` with the compiler's reason) + counts; "Mappings: n row-local, m batch-incremental" line on the readiness card. Live at the service layer: the fixture mappings read `slot` (Customer) / `batch` (Account, `sql_query source`), counts (1, 1); on the deployed sandbox app (scenario 06) the Domain › Backend card reads "incremental runs as incremental · Mappings: 2 row-local (microbatch-eligible), 0 batch-incremental" |
-| 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | ○ | `TwinNetChangeApply`; Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`); the MV change feed needs external metadata (private preview) — until then the apply falls back to a full stream as designed; the MERGE-table feed is live-verified (`table_changes` on the MERGE table lists exactly the merged change). The MV feed was tried on both reachable workspaces — `fevm-ontobricks-int` (serverless) and the classic sandbox `ontobricks-rtm` (the deployed domain's own `_data` MV, created with `pipelines.externalMetadata.enabled`) — and `table_changes` fails on both with `DELTA_LOG_FILE_NOT_FOUND … _external_metadata`: the metadata is not produced on either |
+| 1 P1 | Net changes for app-managed Lakebase and Neo4j (~10 % threshold) | ✅ | ✅ | `TwinNetChangeApply` reads the **`_slots` streaming table's change feed** (GA automatic CDF, `feed_relation = slots`) when the slots carry the whole graph and `_data`'s otherwise; the net change of the slots is the difference between the deduplicated snapshots at the two versions, restricted to the touched triples (`ChangeFeedReader`, `distinct_rows=False`). Neo4j purges the inferences its writers list in `_inferred` (`InferredTripleLedger`, `_inferred EXCEPT _data`). Live (`ontobricks-rtm`, app-managed Lakebase `microbatch` domain over a 60-row fixture, 120 triples, 2026-11-04): the base build streams in full and records `feed_relation = slots`, `data_table_version = 8`; after one source UPDATE (and two probe markers on the same row, consolidated away) the next build applies `table_changes` of `_slots` v8..v12 as **1 delete + 1 insert** in 50 s (`apply_mode = net_changes`; a full stream of the same graph took 95–180 s), the Lakebase asserted table holds the new label and no stale marker, `POST /dtwin/incremental/reconcile` reports `drift: false` with identical `_slots` / `_data` hashes. The MERGE-table feed is live-verified as before. The `_data` MV feed itself stays behind the external-metadata private preview on both reachable workspaces (`DELTA_LOG_FILE_NOT_FOUND … _external_metadata`, re-checked on the sandbox after `REPAIR TABLE … SYNC METADATA` the same day), so a domain with batch mappings still falls back `cdf_unavailable` → full stream as designed |
 | 1 P1 | MERGE fallback with row tracking and a no-op skip | ✅ | ✅ | `DeltaMergeMaterializer`, `TwinMergeFallback`. Live: the first build creates `_data` with row tracking / deletion vectors / change feed and merges 3 rows; an unchanged source merges 0 rows; one changed row → 1 delete + 1 insert; one deleted row → 1 delete; `table_changes` on the MERGE table lists exactly that change |
 | 2 P0 | `microbatch` = continuous pipeline; mode switch without backfill | ✅ | ✅ | triggered bootstrap then continuous; fingerprint decides a full refresh. Live: the continuous pipeline lands a source change in `_slots` after 8.1 s median / 11.9 s max (n = 8) |
 | 2 P0 | Source overwrites detected from `DESCRIBE HISTORY` → fall back | ✅ | ✅ | `SourceReadiness.source_overwritten_since`; `source_versions` / table ids in the trace; full refresh of the slot pipeline. Live: a plain `UPDATE` is not a rewrite; `INSERT OVERWRITE` and `CREATE OR REPLACE TABLE AS SELECT` are detected |
@@ -847,7 +868,14 @@ Behaviour in this release:
   are passed over in the base search, so after 50 consecutive skips one full
   stream runs. The empty-graph completion keeps its own "Full rebuild" message.
 - Slot pipelines of earlier versions keep running after a version bump; only the
-  current version's pipeline is stopped.
+  current version's pipeline is stopped. Deleting a domain or a version from the
+  registry leaves its graph in place as well — the slot pipeline (a `microbatch` /
+  `realtime` one keeps running and billing), the UC relations (`_slots`, `_data`,
+  `_graph`, `_inferred`, the gateway VIEW) and the Lakebase graph tables (seen
+  live on the sandbox, 2026-11-04: the deleted domain's continuous pipeline stayed
+  `RUNNING`). Stop and delete the pipeline (`databricks pipelines stop / delete`),
+  then drop the relations (`_graph` is a VIEW; `_data` a MATERIALIZED VIEW or
+  TABLE) and the Postgres tables by hand.
 - The first build after upgrading re-registers every managed-synced table on
   `_data` instead of the VIEW (one full resync). `SyncedTableManager.trigger_refresh`
   still starts updates with `full_refresh=True`. The drift check covers every name
@@ -889,8 +917,10 @@ scratch schema `ontobricks_int_catalog.itm_spike`, everything dropped afterwards
   with `MATERIALIZED_VIEW_CDF_REQUIRES_EXTERNAL_METADATA` / `EXPECT_TABLE_NOT_VIEW`, and
   `REPAIR TABLE … SYNC METADATA` with `REPAIR_TABLE_REQUIRES_EXTERNAL_METADATA` (external
   metadata for pipeline tables is a private preview). The build now runs the REPAIR after
-  creating a view (best-effort); until the workspace is enrolled the MV-fed net-change apply
-  falls back as designed (`cdf_unavailable` → full stream) while the MERGE-table feed works.
+  creating a view (best-effort); until the workspace is enrolled the net-change apply of a
+  `_data` with batch mappings falls back as designed (`cdf_unavailable` → full stream), while
+  a graph the slots carry whole is net-applied from the `_slots` feed and the MERGE-table
+  feed works.
   `ALTER MATERIALIZED VIEW … SET TBLPROPERTIES` is not supported (properties come from the
   definition).
 
@@ -1083,6 +1113,18 @@ supported"):
   (14 s p50 / 23 s p95 on the integration workspace). The reconciliation drift the realtime
   exercise saw mid-run (`slots_data: true`, equal counts) was this lag: `_slots` carried the
   marker, `_data` not yet.
+- **The same measurement on the rebuilt 0.10.0 apps** (2026-11-04, `ZzNetFeedLive`, app-managed
+  Lakebase `microbatch` over a 60-row fixture). The harness itself did not complete on the
+  network the measurement ran from: two runs died in the Thrift driver (`ThriftBackend …
+  I/O operation on closed file`, then `RequestError: Error during request to server` on
+  `OpenSession`, after the first marker was written), so the same probe was replayed over
+  the SQL Statement Execution API — UPDATE one row, poll `_slots`, `_data` and `_graph`
+  every 3 s: `_slots` **13.2 s / 13.5 s** (the continuous pipeline), `_data` 319 s (the
+  first marker not within 420 s), `_graph` 422 s / 321 s (the MV `TRIGGER ON UPDATE` cadence,
+  5–7 min here against ~6.5 min above). Three markers 10 s apart in the first harness run
+  were consolidated by the slot pipeline into one visible value (1/3 seen at 87 s) — what
+  the design's AUTO CDC ordering is meant to do. The next net-change build consolidated the
+  probe's markers to nothing and applied the one real change (see the traceability table).
 
 Lakehouse//RT is no longer blocked either: RT warehouses are created in the UI — Compute → SQL
 Warehouses → Create → Real-Time; the SDK's warehouse types are still `CLASSIC` / `PRO` only and the
