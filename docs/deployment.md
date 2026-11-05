@@ -317,7 +317,7 @@ Implications for Layer 2:
   the UI hop from the M2M bearer, so those names cannot carry the user. The
   UI applies the acting headers **only** when the proxy identity is the MCP
   app service principal (`MCP_SP_CLIENT_ID`). Both apps declare `user_api_scopes`
-  (`sql`, `iam.current-user:read`, `iam.access-control:read`) so the inbound
+  (`sql`; identity scopes are platform defaults and must not be listed) so the inbound
   MCP request has a user token to forward. Granting the MCP SP a domain role
   in Teams is an emergency workaround only — it collapses per-user gating.
 - **Local dev is unchanged** — OBO and the Team gate are no-ops outside App mode

@@ -205,7 +205,9 @@ class TestAppPermissionsInBundle:
     def test_each_app_declares_user_api_scopes_for_obo(self):
         data = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
         apps = data["resources"]["apps"]
-        needed = {"sql", "iam.current-user:read", "iam.access-control:read"}
+        # Identity scopes are platform defaults and must not be listed
+        # (Apps API rejects iam.current-user:read / iam.access-control:read).
+        needed = {"sql"}
         for key in ("ontobricks_dev_app", "mcp_ontobricks_app"):
             scopes = set(apps[key].get("user_api_scopes") or [])
             assert needed <= scopes, f"{key} missing user_api_scopes {needed - scopes}"

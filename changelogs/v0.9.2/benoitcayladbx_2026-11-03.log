@@ -54,3 +54,36 @@ Tests: uv run --frozen pytest -q -m "not scenario" → 9653 passed, 326 skipped,
 Still open (blocked upstream, unchanged from 2026-10-30):
 - oauthlib 4.0.0 (#175/#176/#282/#318) — databricks-sql-connector pins oauthlib<4
 - nltk GHSA-8mgp-746c-j5xp — no patched release yet
+
+================================================================================
+## Fix Apps deploy: drop default identity scopes from user_api_scopes
+================================================================================
+
+Context: `make deploy` of instance 09x failed at app update with
+`POST /api/2.0/apps → 400 INVALID_PARAMETER_VALUE: The specified scope
+iam.current-user:read is not a valid scope`. Databricks Apps now treats the two
+identity scopes (`iam.current-user:read`, `iam.access-control:read`) as
+non-selectable platform defaults — they are auto-assigned and the create/update
+API rejects them when listed explicitly. Same fix already applied on 0.10.0
+(PR #218). Only additional scopes such as `sql` may be declared.
+
+Changes:
+
+1. databricks.yml
+   Both app resources (`ontobricks_dev_app`, `mcp_ontobricks_app`):
+   `user_api_scopes` reduced to `[sql]`.
+2. app.yaml.template
+   `authorization.user.scopes` reduced to `[sql]`.
+3. tests/units/settings/test_bundle_job_resource.py
+   Assert only `sql` is required; identity scopes must not be listed.
+4. docs/deployment.md
+   Document that identity scopes are platform defaults.
+
+Modified files:
+- databricks.yml
+- app.yaml.template
+- tests/units/settings/test_bundle_job_resource.py
+- docs/deployment.md
+- changelogs/v0.9.2/benoitcayladbx_2026-11-03.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9653 passed, 326 skipped, 8 deselected, 39 warnings in 51.77s
