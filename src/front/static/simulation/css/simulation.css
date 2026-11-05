@@ -277,6 +277,12 @@ a.sim-uri-link:focus-visible {
     background: var(--db-surface-warm);
 }
 
+/* Shared Scenario + Live graph row under the Compare subtitle */
+.sim-compare-sources .sim-compare-source-field {
+    min-width: 220px;
+    max-width: 420px;
+}
+
 /* Compare section (sandbox vs live overlay graph) */
 .sim-compare-layout {
     display: flex;
@@ -391,6 +397,53 @@ a.sim-uri-link:focus-visible {
 
 .sim-compare-swatch-removed {
     background-color: var(--db-status-danger);
+}
+
+/* Compare tabs (Graphs / Evaluate): the active pane fills the section height */
+#simCompareTabContent {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#simCompareTabContent > .tab-pane.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.sim-eval-output {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 160px;
+    overflow-y: auto;
+    padding: 0.75rem;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+}
+
+.sim-eval-steps summary {
+    cursor: pointer;
+}
+
+.sim-eval-step-list {
+    margin-top: 0.35rem;
+    padding-left: 1.25rem;
+    color: var(--db-text-secondary);
+}
+
+.sim-eval-step-list li + li {
+    margin-top: 0.2rem;
+}
+
+.sim-eval-step-args {
+    display: block;
+    color: var(--db-text-muted);
+    overflow-wrap: anywhere;
 }
 
 @media (max-width: 991.98px) {

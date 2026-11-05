@@ -101,6 +101,8 @@ const SimulationCompare = {
     _toggleRun() {
         const run = document.getElementById('simCompareRunBtn');
         if (run) run.disabled = !this._selectedId();
+        // Evaluate tab shares the scenario picker: keep its Ask button in sync.
+        if (window.SimulationEvaluate) SimulationEvaluate.refresh();
     },
 
     _paintExplorerLink() {

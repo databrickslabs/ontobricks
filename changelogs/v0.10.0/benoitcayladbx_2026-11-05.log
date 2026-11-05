@@ -192,3 +192,208 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9912 passed, 326 skipped, 8 deselected, 39 warnings in 44.00s
+
+================================================================================
+## Allow multiple UC datasets (incl. metric views) per class
+================================================================================
+
+Context: Issue #221 — Ontology Studio only allowed one linked dataset per class,
+and the picker excluded Unity Catalog metric views. Classes can now link several
+tables/views/metric views as equal peers; runtime context (MCP, Graph Explorer,
+Graph Chat) resolves all of them, with metric-aware SQL for metric views.
+
+Changes:
+
+1. src/back/objects/ontology/ClassModel.py
+   Add ``normalize_datasets`` / ``primary_dataset``; class field becomes
+   ``datasets`` list with legacy singular ``dataset`` back-compat.
+2. src/back/core/w3c/owl/OntologyParser.py / OntologyGenerator.py
+   Parse/emit ``ontobricks:dataset`` as a JSON array; normalize legacy object.
+3. src/back/objects/ontology/EntityImport.py
+   Treat ``datasets`` as a domain-bound field on import.
+4. src/back/core/databricks/uc/metric_sql.py
+   Add ``build_metric_view_entity_sql`` (WHERE key + MEASURE/GROUP BY + LIMIT).
+5. src/back/objects/digitaltwin/node/NodeDatasetService.py
+   New service resolving N datasets (table/view SELECT * or metric-view SQL).
+6. src/back/objects/digitaltwin/node/NodeContextService.py
+   Emit ``datasets`` plus singular ``dataset`` (first) for one-release back-compat.
+7. src/front/static/ontology/js/ontology-shared-panels.js
+   Multi-item Datasets Links panel; picker badges for TABLE/VIEW/METRIC_VIEW;
+   dimension-preferring key columns for metric views.
+8. src/front/static/query/js/query-*.js + ontology-map.js
+   Graph Explorer/Chat loaders, details, preview, and badges handle ``datasets[]``.
+9. src/api/routers/{digitaltwin,domains,internal/dtwin}.py
+   REST models/payloads expose ``datasets`` (keep singular ``dataset``).
+10. src/mcp-server/server/{formatting,session,tools}.py + agents formatting
+    MCP/Graph Chat inventory and context text list all linked datasets.
+11. docs/advanced_features.md, docs/user-guide.md
+    Document multi-dataset + metric-view linking.
+12. tests (units for ClassModel, OWL round-trip, metric SQL, front contracts, API)
+
+Modified files:
+- src/back/objects/ontology/ClassModel.py
+- src/back/objects/ontology/EntityImport.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/databricks/uc/metric_sql.py
+- src/back/objects/digitaltwin/node/NodeDatasetService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/digitaltwin/node/__init__.py
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/api/routers/digitaltwin.py
+- src/api/routers/domains.py
+- src/api/routers/internal/dtwin.py
+- src/mcp-server/server/formatting.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/tools.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/tools/graph_formatting.py
+- docs/advanced_features.md
+- docs/user-guide.md
+- tests/units/ontology/test_class_model_datasets.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/core/test_metric_sql.py
+- tests/units/front/test_ontology_dataset_key_dropdown.py
+- tests/units/front/test_ontology_dataset_description.py
+- tests/units/front/test_query_dataset_description.py
+- tests/units/front/test_entity_panel_sections.py
+- tests/units/front/test_ontology_map_external_badge.py
+- tests/units/api/test_node_context_endpoint.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9923 passed, 326 skipped, 8 deselected, 39 warnings in 44.68s
+
+=== Simulation → Compare: Graphs / Evaluate tabs ===
+
+Context:
+Compare page gets two OntoBricks tabs. "Graphs" keeps the existing overlay canvas and Comparison Setup unchanged. "Evaluate" asks one prompt of the Graph Chat agent twice, against the live graph and against the selected scenario sandbox, and shows both replies side by side (plain readonly text areas, no diff). Design: docs/superpowers/specs/2026-11-05-compare-evaluate-tab-design.md.
+
+1. src/front/templates/partials/simulation/_sim_compare.html: wrapped in canonical card-integrated page-tabs structure (`card h-100` > `card-body p-0 ob-tabs-wrap` > `nav nav-tabs ob-tabs nav-fill`, with standard `section-header ... mb-4`), matching Workbench and Settings. Graphs pane keeps every existing `simCompare*` id. New Evaluate pane: prompt, "Ask both" button, hint, and two columns (Live / Sandbox) with spinner, inline error, and readonly output.
+2. src/front/static/simulation/js/simulation-evaluate.js (new): SimulationEvaluate. Runs both Graph Chat turns in parallel via POST /dtwin/assistant/chat with history [] and persist false. Live uses the Comparison Setup source; Sandbox uses inferred plus the scenario id. Per-side loading/error/ok states, stale-run guard, Ctrl/Cmd+Enter to submit.
+3. src/front/static/simulation/js/simulation-compare.js: `_toggleRun()` also refreshes the Evaluate Ask button (shared scenario picker).
+4. src/front/static/simulation/css/simulation.css: tab panes fill the section height; `.sim-eval-output` min height, no resize.
+5. src/front/templates/simulation.html: loads simulation-evaluate.js.
+6. src/api/routers/internal/dtwin.py: `POST /dtwin/assistant/chat` accepts optional `persist` (default true). When false, saved domain history is not read and the exchange is not written to the session cache. Write-back extracted to `_chat_record_turn` to keep `dtwin_assistant_chat` within the size budget. Streaming route unchanged.
+7. tests/units/api/test_dtwin_chat_persist_flag.py (new): persist false ignores saved history and writes nothing; default still persists and uses saved history.
+8. tests/units/front/test_simulation_page_contract.py: contracts for the tab skeleton, Evaluate pane ids, graphs ids kept, stateless Graph Chat payloads, script include, and CSS hook.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/templates/simulation.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-compare.js
+- src/front/static/simulation/js/simulation-evaluate.js (new)
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_chat_persist_flag.py (new)
+- tests/units/front/test_simulation_page_contract.py
+- docs/superpowers/specs/2026-11-05-compare-evaluate-tab-design.md (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9931 passed, 326 skipped, 8 deselected, 39 warnings (run after the size-budget refactor). Browser check (desktop/mobile) not run yet.
+
+=== Simulation → Compare → Evaluate: rendered answers, live thinking, named panes ===
+
+Context:
+Feedback on the Evaluate tab: answers showed raw Markdown, the agent's progress was invisible until the end, and the panes were labelled "Live graph" / "Sandbox" instead of the actual source and scenario names.
+
+1. src/front/templates/partials/simulation/_sim_compare.html: each pane's readonly textarea replaced by a bordered panel holding a live status line, a collapsible "Thinking process" step list, an inline error, and an `.oc-md` answer area. Pane titles are now a text slot filled by JS.
+2. src/front/static/simulation/js/simulation-evaluate.js: switched to the streaming endpoint POST /dtwin/assistant/chat/stream (still `persist: false`, `history: []`). Each tool call is appended live with its arguments (truncated), tool results add a ✓ and duration, the status line follows the agent ("Calling X…", "Writing the answer…"). The final reply is rendered with the shared sanitising `renderMarkdown`. The step list collapses once the answer arrives. Titles use the selected live source label (e.g. "Live graph (inferred)") and the scenario name.
+3. src/front/static/simulation/css/simulation.css: `.sim-eval-output` is now a scrollable warm-surface panel; step list and argument preview styles.
+4. src/api/routers/internal/dtwin.py: `POST /dtwin/assistant/chat/stream` honours `persist` like the blocking route (no saved-history read or write when false); its write-back now reuses `_chat_record_turn`.
+5. tests/units/api/test_dtwin_chat_persist_flag.py: stream route with `persist: false` streams steps and the reply and leaves the saved history untouched.
+6. tests/units/front/test_simulation_page_contract.py: contracts updated for the stream endpoint, step handling, Markdown rendering, step/status ids, and named titles.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/js/simulation-evaluate.js
+- src/front/static/simulation/css/simulation.css
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_chat_persist_flag.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings. Browser check not run.
+
+=== Simulation → Compare: shared sources row + bottom pane ===
+
+Context:
+Graph sources (Scenario + Live graph) move out of the Graphs tab into a one-line row under the page subtitle, shared by Graphs and Evaluate. The Graphs side panel becomes a bottom pane under the canvas; Compare stays in that pane.
+
+1. src/front/templates/partials/simulation/_sim_compare.html: `.sim-compare-sources` row with Scenario and Live graph selects above the tabs card. Graphs layout is column: canvas pane on top, bottom pane with Compare / Explorer, KPI strip, and Selection details. Idle copy updated.
+2. src/front/static/simulation/css/simulation.css: source-row field widths; canvas/bottom pane layout; horizontal `.sim-compare-kpi-row`; removed right-pane rules.
+3. src/front/static/simulation/js/simulation-evaluate.js: hint points at the shared sources row above the tabs.
+4. tests/units/front/test_simulation_page_contract.py: sources above tabs; canvas above bottom pane; no right pane / Comparison Setup.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-evaluate.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings.
+
+=== Simulation → Compare: roll back bottom pane to right pane ===
+
+Context:
+Rollback of the last layout change only. The Graphs side panel (Compare action, KPIs, Selection & Guide) goes back to a right-hand column beside the canvas. The tabs, the Evaluate tab and the shared Scenario / Live graph sources row stay as they are.
+
+1. src/front/templates/partials/simulation/_sim_compare.html: Graphs layout back to a row: left canvas pane (`.sim-compare-left-pane`) and right pane (`.sim-compare-right-pane`) holding the Compare button, the scrollable metrics and details (`.sim-compare-right-scroll`). Idle copy points to the right pane.
+2. src/front/static/simulation/css/simulation.css: restored the right-pane rules (360px column, scrollable body) and removed the bottom-pane and horizontal KPI rules. Responsive block stacks the panes below 992px.
+3. tests/units/front/test_simulation_page_contract.py: `test_compare_graph_sources_sit_above_the_tabs` now asserts the right pane (and no bottom pane).
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings. Markup nesting checked (no unclosed tags; Compare, KPIs and details sit in the right pane). Browser check not run.
+
+=== Simulation → Compare: sources row order (Live graph first) ===
+
+Context:
+Requested swap of the shared sources row: the Live graph dropdown now comes before the Scenario dropdown.
+
+1. src/front/templates/partials/simulation/_sim_compare.html: Live graph select moved before the Scenario select in `.sim-compare-sources`. Ids and behaviour unchanged.
+2. tests/units/front/test_simulation_page_contract.py: asserts Live graph precedes Scenario in the sources row.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings.
+
+=== Simulation → Compare: button renamed to "View difference" ===
+
+Context:
+The Graphs-tab run button is renamed from "Compare" to "View difference". The page section title, the Graphs tab label and the help text stay as they are.
+
+1. src/front/templates/partials/simulation/_sim_compare.html: run button label changed to "View difference" (ids, icon and behaviour unchanged).
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_compare.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings.
+
+=== Simulation → Evaluate: Enter submits the prompt ===
+
+Context:
+In the Evaluate prompt textarea, pressing Enter now runs "Ask both". Shift+Enter still inserts a newline for multi-line prompts (replacing the previous Ctrl/Cmd+Enter shortcut).
+
+1. src/front/static/simulation/js/simulation-evaluate.js: keydown handler submits on Enter without Shift.
+2. tests/units/front/test_simulation_page_contract.py: asserts the Enter-without-Shift submit contract.
+
+Modified files:
+- src/front/static/simulation/js/simulation-evaluate.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings.

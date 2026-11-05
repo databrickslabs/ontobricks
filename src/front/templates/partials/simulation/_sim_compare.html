@@ -1,22 +1,59 @@
 <!-- Compare Section - sandbox vs current live graph, same scope -->
-<div class="content-section h-100">
-    <div class="section-header d-flex justify-content-between align-items-center mb-2 flex-shrink-0">
-        <div class="me-auto">
-            <h4 class="mb-0"><i class="bi bi-columns-gap me-2"></i>Compare</h4>
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-columns-gap me-2"></i>Compare</h4>
             <p class="text-muted mb-0 small">Overlay a ready sandbox on the current live graph (same scope). The live knowledge graph is never modified.</p>
         </div>
     </div>
 
-    <div class="sim-compare-layout d-flex gap-3 flex-grow-1 min-h-0">
+    <!-- Shared graph sources: used by Graphs (Compare) and Evaluate (Ask both) -->
+    <div class="sim-compare-sources d-flex flex-wrap align-items-end gap-3 mb-3 flex-shrink-0">
+        <div class="sim-compare-source-field flex-grow-1">
+            <label class="form-label small mb-1 fw-semibold" for="simCompareSource">Live graph</label>
+            <select class="form-select form-select-sm" id="simCompareSource">
+                <option value="inferred" selected>Live graph (inferred)</option>
+                <option value="asserted">Live graph (asserted only)</option>
+            </select>
+        </div>
+        <div class="sim-compare-source-field flex-grow-1">
+            <label class="form-label small mb-1 fw-semibold" for="simCompareScenario">Scenario</label>
+            <select class="form-select form-select-sm" id="simCompareScenario" disabled>
+                <option value="">Loading scenarios…</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="simCompareTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="simCompare-tab-graphs" data-bs-toggle="tab"
+                            data-bs-target="#simCompare-pane-graphs" type="button" role="tab"
+                            aria-controls="simCompare-pane-graphs" aria-selected="true">
+                        <i class="bi bi-columns-gap me-1"></i>Graphs
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="simCompare-tab-evaluate" data-bs-toggle="tab"
+                            data-bs-target="#simCompare-pane-evaluate" type="button" role="tab"
+                            aria-controls="simCompare-pane-evaluate" aria-selected="false">
+                        <i class="bi bi-chat-square-text me-1"></i>Evaluate
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content p-3 position-relative" id="simCompareTabContent">
+                <div class="tab-pane fade show active" id="simCompare-pane-graphs" role="tabpanel"
+                     aria-labelledby="simCompare-tab-graphs">
+                    <div class="sim-compare-layout d-flex gap-3 flex-grow-1 min-h-0">
         <!-- LEFT PANE: Graph Comparison Canvas -->
         <div class="sim-compare-left-pane flex-grow-1 d-flex flex-column min-w-0">
             <div class="card h-100 overflow-hidden d-flex flex-column position-relative">
                 <div class="card-body p-0 d-flex flex-column flex-grow-1 position-relative min-h-0">
-                    <!-- Alerts -->
                     <div id="simCompareError" class="alert alert-danger m-2 d-none" role="alert"></div>
                     <div id="simCompareNote" class="alert alert-warning m-2 d-none" role="alert"></div>
 
-                    <!-- Overlay states: shown when not displaying a graph -->
                     <div id="simCompareEmpty" class="sim-compare-overlay text-center text-muted p-4 my-auto d-none">
                         <i class="bi bi-collection fs-1 d-block mb-2"></i>
                         <h5 class="fw-semibold mb-1">No ready scenario to compare</h5>
@@ -26,7 +63,7 @@
                     <div id="simCompareIdle" class="sim-compare-overlay text-center text-muted p-4 my-auto">
                         <i class="bi bi-columns-gap fs-1 d-block mb-2"></i>
                         <h5 class="fw-semibold mb-1">Select a scenario and click Compare</h5>
-                        <p class="small text-muted mb-0">Use the right pane to configure the scenario and live source, then run the comparison.</p>
+                        <p class="small text-muted mb-0">Pick the scenario and live source above the tabs, then press Compare in the right pane.</p>
                     </div>
 
                     <div id="simCompareLoading" class="sim-compare-overlay text-center text-muted p-4 my-auto d-none">
@@ -35,11 +72,9 @@
                         <p class="small text-muted mb-0">Reading same-scope triples and calculating deltas.</p>
                     </div>
 
-                    <!-- Graph Canvas: fills available area -->
                     <div id="simCompareCanvas" class="sim-compare-canvas flex-grow-1 d-none" role="img" aria-label="Sandbox versus live graph comparison"></div>
                 </div>
 
-                <!-- Canvas Bottom Footer: Legend & Cap note -->
                 <div class="sim-compare-canvas-footer d-flex align-items-center justify-content-between px-3 py-1 border-top bg-light small flex-shrink-0">
                     <div class="d-flex flex-wrap align-items-center gap-3 sim-compare-legend">
                         <span title="Present in both live and sandbox with identical attributes"><span class="sim-compare-swatch sim-compare-swatch-unchanged"></span>Unchanged</span>
@@ -53,7 +88,6 @@
                     <span class="text-muted ms-auto small" id="simCompareCapNote"></span>
                 </div>
 
-                <!-- Collapsible Color Guide -->
                 <div class="collapse border-top" id="simCompareLegendHelp">
                     <div class="card card-body p-3 bg-light border-0 rounded-0">
                         <div class="row g-3 small">
@@ -80,30 +114,13 @@
             </div>
         </div>
 
-        <!-- RIGHT PANE: Setup Controls, KPIs & Details -->
+        <!-- RIGHT PANE: Compare action, KPIs & Details -->
         <div class="sim-compare-right-pane d-flex flex-column flex-shrink-0">
             <div class="card h-100 d-flex flex-column overflow-hidden">
-                <!-- Comparison Setup Controls (always visible at top of right pane) -->
-                <div class="card-header py-2 px-3 bg-light fw-semibold small flex-shrink-0 border-bottom">
-                    <i class="bi bi-sliders me-1"></i>Comparison Setup
-                </div>
                 <div class="p-3 border-bottom flex-shrink-0 bg-surface">
-                    <div class="mb-2">
-                        <label class="form-label small mb-1 fw-semibold" for="simCompareScenario">Scenario</label>
-                        <select class="form-select form-select-sm" id="simCompareScenario" disabled>
-                            <option value="">Loading scenarios…</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small mb-1 fw-semibold" for="simCompareSource">Live graph</label>
-                        <select class="form-select form-select-sm" id="simCompareSource">
-                            <option value="inferred" selected>Live graph (inferred)</option>
-                            <option value="asserted">Live graph (asserted only)</option>
-                        </select>
-                    </div>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-sm btn-primary flex-grow-1" id="simCompareRunBtn" disabled>
-                            <i class="bi bi-columns-gap me-1"></i>Compare
+                            <i class="bi bi-columns-gap me-1"></i>View difference
                         </button>
                         <a class="btn btn-sm btn-outline-primary d-none" id="simCompareExplorerBtn"
                            href="/dtwin/?section=sigmagraph" title="Open this sandbox in Graph Explorer">
@@ -170,6 +187,66 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- EVALUATE PANE: one prompt, asked of the live graph and the sandbox -->
+    <div class="tab-pane fade" id="simCompare-pane-evaluate" role="tabpanel"
+         aria-labelledby="simCompare-tab-evaluate">
+        <div class="sim-eval d-flex flex-column gap-3 flex-grow-1 min-h-0">
+            <div>
+                <label class="form-label small fw-semibold mb-1" for="simEvalPrompt">Prompt</label>
+                <textarea class="form-control" id="simEvalPrompt" rows="3"
+                          placeholder="Ask the graph a question, e.g. Which customers have an open contract?"></textarea>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <button type="button" class="btn btn-sm btn-primary" id="simEvalRunBtn" disabled>
+                    <i class="bi bi-send me-1"></i>Ask both
+                </button>
+                <span class="small text-muted" id="simEvalHint"></span>
+            </div>
+            <div class="row g-3 flex-grow-1 min-h-0">
+                <div class="col-12 col-lg-6 d-flex flex-column min-h-0">
+                    <div class="small fw-semibold mb-1 text-truncate" id="simEvalLiveTitle">
+                        <i class="bi bi-diagram-3 me-1"></i><span data-role="title">Live graph (inferred)</span>
+                    </div>
+                    <div class="sim-eval-output flex-grow-1" aria-labelledby="simEvalLiveTitle">
+                        <div class="small text-muted d-none" id="simEvalLiveStatus" role="status">
+                            <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span><span data-role="status-text">Thinking…</span>
+                        </div>
+                        <details class="sim-eval-steps d-none" id="simEvalLiveSteps" open>
+                            <summary class="small text-muted">Thinking process <span data-role="count"></span></summary>
+                            <ol class="sim-eval-step-list small mb-0" data-role="list"></ol>
+                        </details>
+                        <div class="alert alert-danger small py-2 mb-0 d-none" id="simEvalLiveError" role="alert"></div>
+                        <div class="oc-md sim-eval-answer" id="simEvalLiveOutput" aria-live="polite">
+                            <p class="text-muted small mb-0">The answer will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6 d-flex flex-column min-h-0">
+                    <div class="small fw-semibold mb-1 text-truncate" id="simEvalSandboxTitle">
+                        <i class="bi bi-box me-1"></i><span data-role="title">Scenario</span>
+                    </div>
+                    <div class="sim-eval-output flex-grow-1" aria-labelledby="simEvalSandboxTitle">
+                        <div class="small text-muted d-none" id="simEvalSandboxStatus" role="status">
+                            <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span><span data-role="status-text">Thinking…</span>
+                        </div>
+                        <details class="sim-eval-steps d-none" id="simEvalSandboxSteps" open>
+                            <summary class="small text-muted">Thinking process <span data-role="count"></span></summary>
+                            <ol class="sim-eval-step-list small mb-0" data-role="list"></ol>
+                        </details>
+                        <div class="alert alert-danger small py-2 mb-0 d-none" id="simEvalSandboxError" role="alert"></div>
+                        <div class="oc-md sim-eval-answer" id="simEvalSandboxOutput" aria-live="polite">
+                            <p class="text-muted small mb-0">The answer will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
         </div>
     </div>
 </div>

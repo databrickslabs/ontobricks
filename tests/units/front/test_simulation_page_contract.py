@@ -429,3 +429,91 @@ def test_compare_section_is_a_scenarios_submenu_with_overlay_graph():
     assert "query-sigmagraph" not in js
     assert ".sim-compare-canvas" in css
     assert "var(--db-status-success)" in css
+
+
+def test_compare_has_graphs_and_evaluate_ob_tabs():
+    partial = _read(FRONT / "templates/partials/simulation/_sim_compare.html")
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in partial
+    assert 'class="card h-100"' in partial
+    assert "card-body p-0 ob-tabs-wrap" in partial
+    assert 'id="simCompareTabs"' in partial
+    for tab, pane in (
+        ("simCompare-tab-graphs", "simCompare-pane-graphs"),
+        ("simCompare-tab-evaluate", "simCompare-pane-evaluate"),
+    ):
+        assert f'id="{tab}"' in partial
+        assert f'id="{pane}"' in partial
+        assert f'data-bs-target="#{pane}"' in partial
+        assert f'aria-controls="{pane}"' in partial
+    assert 'class="bi bi-columns-gap me-1"' in partial
+    assert 'class="bi bi-chat-square-text me-1"' in partial
+    assert "ob-tabs-wrap" in partial
+
+
+def test_compare_evaluate_pane_has_prompt_and_two_side_by_side_outputs():
+    partial = _read(FRONT / "templates/partials/simulation/_sim_compare.html")
+    for element in (
+        "simEvalPrompt",
+        "simEvalRunBtn",
+        "simEvalLiveOutput",
+        "simEvalSandboxOutput",
+        "simEvalLiveError",
+        "simEvalSandboxError",
+        "simEvalLiveSteps",
+        "simEvalSandboxSteps",
+        "simEvalLiveStatus",
+        "simEvalSandboxStatus",
+    ):
+        assert f'id="{element}"' in partial, element
+    assert partial.count('class="col-12 col-lg-6') == 2
+    # Answers are rendered Markdown (shared .oc-md), not raw text areas.
+    assert partial.count('class="oc-md sim-eval-answer"') == 2
+    assert 'id="simEvalLiveOutput"' in partial and "<textarea" not in partial.split('id="simEvalHint"')[1]
+    assert partial.count("Thinking process") == 2
+
+
+def test_compare_graph_sources_sit_above_the_tabs():
+    partial = _read(FRONT / "templates/partials/simulation/_sim_compare.html")
+    above, tabs = partial.split('id="simCompareTabs"', 1)
+    for element in ("simCompareScenario", "simCompareSource"):
+        assert f'id="{element}"' in above, element
+        assert f'id="{element}"' not in tabs, element
+    assert 'class="sim-compare-sources' in above
+    # Live graph comes first, Scenario second.
+    assert above.index('id="simCompareSource"') < above.index('id="simCompareScenario"')
+    graphs = tabs.split('id="simCompare-pane-evaluate"')[0]
+    assert 'id="simCompareCanvas"' in graphs
+    assert 'id="simCompareRunBtn"' in graphs
+    assert "Comparison Setup" not in partial
+    # Compare action and details live in the right-hand pane beside the canvas.
+    assert "sim-compare-right-pane" in graphs
+    assert "sim-compare-bottom-pane" not in partial
+    assert graphs.index('id="simCompareCanvas"') < graphs.index('id="simCompareRunBtn"')
+
+
+def test_evaluate_asks_both_graphs_statelessly_via_graph_chat():
+    js = _read(FRONT / "static/simulation/js/simulation-evaluate.js")
+    html = _read(PAGE)
+    assert "simulation/js/simulation-evaluate.js" in html
+    assert "'/dtwin/assistant/chat/stream'" in js
+    assert "persist: false" in js
+    assert "history: []" in js
+    assert "include_inferred: includeInferred, simulation_id: ''" in js
+    assert "include_inferred: true, simulation_id: scenario.id" in js
+    assert "SimulationCompare._includeInferred()" in js
+    # Live agent steps are streamed; replies go through the sanitising renderer.
+    assert "event.type === 'step'" in js
+    assert "step_type === 'tool_call'" in js and "step_type === 'tool_result'" in js
+    assert "renderMarkdown(text)" in js
+    assert "innerHTML = text" not in js
+    # Titles name the live source and the scenario, not "Sandbox".
+    assert "_liveLabel()" in js and "scenario.label" in js
+    # Enter submits the prompt; Shift+Enter keeps a newline.
+    assert "e.key === 'Enter' && !e.shiftKey" in js
+    assert "SimulationEvaluate.refresh()" in _read(FRONT / "static/simulation/js/simulation-compare.js")
+
+
+def test_evaluate_css_fills_the_tab_height():
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert "#simCompareTabContent > .tab-pane.active" in css
+    assert ".sim-eval-output" in css

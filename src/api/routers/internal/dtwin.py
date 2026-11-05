@@ -2095,6 +2095,27 @@ def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
     return TwinAssistantCache.chat_response_payload(agent_result, event_type)
 
 
+def _chat_record_turn(
+    session_mgr: SessionManager,
+    domain_key: str,
+    history: list,
+    user_message: str,
+    reply: str | None,
+    limit: int,
+) -> None:
+    """Append one exchange to the per-domain saved history, trimmed to ``limit``."""
+    prior = list(history)
+    if prior and prior[-1].get("role") == "user" and (
+        prior[-1].get("content") or ""
+    ).strip() == user_message.strip():
+        prior = prior[:-1]
+    prior.append({"role": "user", "content": user_message})
+    prior.append({"role": "assistant", "content": reply or ""})
+    chat_cache = _chat_cache(session_mgr)
+    chat_cache["history"][domain_key] = _chat_trim(prior, limit)
+    _chat_save_cache(session_mgr, chat_cache)
+
+
 def _chat_forwarded_headers(request: Request) -> dict:
     prefixes = ("x-forwarded-", "x-real-")
     extra = {"x-csrf-token", "referer"}
@@ -2153,9 +2174,13 @@ async def dtwin_assistant_chat(
     chat_cache = _chat_cache(session_mgr)
     limit = _chat_clamp_limit(chat_cache.get("limit", _CHAT_DEFAULT_LIMIT))
 
+    # ``persist: false`` makes the turn stateless (used by Compare → Evaluate,
+    # which fires two parallel turns): no saved history is read or written.
+    persist = data.get("persist", True) is not False
+
     # Prefer the server-side persisted history (survives page navigation)
     # but fall back to whatever the client sent (legacy / cache miss).
-    saved_history = chat_cache["history"].get(domain_key) or []
+    saved_history = (chat_cache["history"].get(domain_key) or []) if persist else []
     history = saved_history if saved_history else client_history
 
     host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
@@ -2225,16 +2250,10 @@ async def dtwin_assistant_chat(
     # (e.g. ``POST /dtwin/nodes/action/request``) and may have minted a
     # ``pending_actions`` token into the session while ``run_agent`` was
     # running. Saving the stale snapshot would clobber that token.
-    prior = list(history)
-    if prior and prior[-1].get("role") == "user" and (
-        prior[-1].get("content") or ""
-    ).strip() == user_message.strip():
-        prior = prior[:-1]
-    prior.append({"role": "user", "content": user_message})
-    prior.append({"role": "assistant", "content": agent_result.reply or ""})
-    chat_cache = _chat_cache(session_mgr)
-    chat_cache["history"][domain_key] = _chat_trim(prior, limit)
-    _chat_save_cache(session_mgr, chat_cache)
+    if persist:
+        _chat_record_turn(
+            session_mgr, domain_key, history, user_message, agent_result.reply, limit
+        )
 
     return _chat_response_payload(agent_result)
 
@@ -2281,7 +2300,8 @@ async def dtwin_assistant_chat_stream(
     chat_cache = _chat_cache(session_mgr)
     limit = _chat_clamp_limit(chat_cache.get("limit", _CHAT_DEFAULT_LIMIT))
 
-    saved_history = chat_cache["history"].get(domain_key) or []
+    persist = data.get("persist", True) is not False
+    saved_history = (chat_cache["history"].get(domain_key) or []) if persist else []
     history = saved_history if saved_history else client_history
 
     host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(
@@ -2355,16 +2375,11 @@ async def dtwin_assistant_chat_stream(
                         # snapshot: the agent's tool calls loop back into this
                         # same process and may have minted a pending_actions
                         # token into the session while run_agent was running.
-                        prior = list(history)
-                        if prior and prior[-1].get("role") == "user" and (
-                            prior[-1].get("content") or ""
-                        ).strip() == user_message.strip():
-                            prior = prior[:-1]
-                        prior.append({"role": "user", "content": user_message})
-                        prior.append({"role": "assistant", "content": agent_result.reply or ""})
-                        fresh_cache = _chat_cache(session_mgr)
-                        fresh_cache["history"][domain_key] = _chat_trim(prior, limit)
-                        _chat_save_cache(session_mgr, fresh_cache)
+                        if persist:
+                            _chat_record_turn(
+                                session_mgr, domain_key, history,
+                                user_message, agent_result.reply, limit,
+                            )
 
                         yield "data: " + _json.dumps(
                             _chat_response_payload(agent_result, event_type="done")
