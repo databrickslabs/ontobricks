@@ -305,7 +305,8 @@ Implementation: `OntologyRdfExtras` (`CONSUMED_PREDICATES` +
   minted OWL `name`, and unique normalized labels.
 - **Industry import** (FIBO / CDISC / IOF / FHIR) goes through the same
   parser; conflict merge keys are **URI then name**.
-- **Cross-domain import** rewrites IRIs to the target `base_uri`, keeps
+- **Cross-domain import** keeps source IRIs (rename rewrites the local
+  name under the source namespace), skips name collisions, keeps
   icon/description/parent, records `importedFrom`. Mappings, rules,
   constraints, and groups are **not** copied.
 - **Class actions and virtual attributes** take exactly one parameter: the

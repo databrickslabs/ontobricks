@@ -104,3 +104,63 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9907 passed, 326 skipped, 8 deselected, 39 warnings in 53.13s
+
+================================================================================
+## Keep source URIs on Studio entity import
+================================================================================
+
+Context: Studio Import entity rebased every class, attribute, and relationship
+IRI onto the target domain ``base_uri``. Generated OWL then lost the source
+identity (``OntologyGenerator._effective_uri`` only emits a stored URI when
+the local name matches). Import now copies the source IRI; a rename rewrites
+the local name under the source namespace so OWL stays consistent. Name
+collisions still skip the copy.
+
+Changes:
+
+1. src/back/objects/ontology/EntityImport.py
+   Keep source URIs; on rename use ``source_base + new_name``; skip
+   relationships by name (``name_exists``); extract class/relationship copy.
+2. tests/units/ontology/test_entity_import.py
+   Expect source IRIs, rename-under-source-base, empty-URI fallback, OWL
+   smoke, and name-based relationship skip.
+3. docs/user-guide.md
+   Document that imported entities keep source URIs and skip on name collision.
+4. docs/advanced_features.md
+   Cross-domain import keeps source IRIs instead of rebasing to target
+   ``base_uri``.
+
+Modified files:
+- src/back/objects/ontology/EntityImport.py
+- tests/units/ontology/test_entity_import.py
+- docs/user-guide.md
+- docs/advanced_features.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9907 passed, 326 skipped, 8 deselected, 39 warnings in 48.13s
+
+================================================================================
+## Show entity and relationship URIs in Ontology Studio side panels
+================================================================================
+
+Context: Showing URIs under labels on the Studio canvas was too noisy. The
+canvas changes were rolled back; the URI now appears only in the right-hand
+entity and relationship panels, under the name field.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Entity panel: read-only ``URI: <cls.uri>`` line under the icon/name row.
+   Relationship panel: read-only ``URI: <prop.uri>`` line under the name field.
+2. tests/units/front/test_ontology_panel_uri_display.py
+   Contract tests for the panel URI lines; asserts the canvas does not render URIs.
+3. docs/user-guide.md
+   Studio section: selecting an entity or relationship shows its URI in the side panel.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_panel_uri_display.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9910 passed, 326 skipped, 8 deselected, 39 warnings in 50.46s

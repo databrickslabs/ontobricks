@@ -4,6 +4,7 @@ import pytest
 
 from back.core.errors import ValidationError
 from back.objects.ontology.EntityImport import EntityImport
+from back.objects.ontology.Owl import Owl
 
 pytestmark = pytest.mark.unit
 
@@ -67,17 +68,22 @@ class TestCatalog:
 
 
 class TestClassCopy:
-    def test_copies_with_rebased_uris_and_provenance(self, target):
+    def test_copies_with_source_uris_and_provenance(self, target):
         result = _run(target, ["Order"])
         assert result["imported"] == ["Order"]
         order = _cls(target, "Order")
-        assert order["uri"] == "http://tgt.org/onto#Order"
+        assert order["uri"] == f"{SRC}Order"
         assert order["importedFrom"] == {"domain": "Sales", "version": "3", "uri": f"{SRC}Order"}
 
-    def test_attribute_uris_rebased_and_mapping_fields_dropped(self, target):
+    def test_generated_owl_keeps_source_iri(self, target):
+        _run(target, ["Order"])
+        turtle = Owl.generate_owl(target.ontology)
+        assert f"{SRC}Order" in turtle
+
+    def test_attribute_uris_kept_and_mapping_fields_dropped(self, target):
         _run(target, ["Customer"])
         customer = _cls(target, "Customer")
-        assert customer["dataProperties"][0]["uri"] == "http://tgt.org/onto#email"
+        assert customer["dataProperties"][0]["uri"] == f"{SRC}email"
         for field in ("dataset", "bridges", "actions", "dashboard", "dashboardParams"):
             assert field not in customer
 
@@ -93,16 +99,16 @@ class TestClassCopy:
             source, ["Order"], {}, source_domain="Sales", source_version="3"
         )
         attrs = _cls(target, "Order")["dataProperties"]
-        assert [(a["name"], a["uri"]) for a in attrs] == [("amount", "http://tgt.org/onto#amount")]
+        assert [(a["name"], a["uri"]) for a in attrs] == [("amount", f"{SRC}amount")]
 
-    @pytest.mark.parametrize("base, expected", [
-        ("http://tgt.org/onto/", "http://tgt.org/onto/Order"),
-        ("http://tgt.org/onto", "http://tgt.org/onto#Order"),
-    ])
-    def test_base_uri_separator(self, target, base, expected):
-        target.ontology["base_uri"] = base
-        _run(target, ["Order"])
-        assert _cls(target, "Order")["uri"] == expected
+    def test_empty_source_uri_falls_back_to_target_base(self, target):
+        source = _source()
+        order = next(c for c in source["classes"] if c["name"] == "Order")
+        order["uri"] = ""
+        EntityImport(target).import_entities(
+            source, ["Order"], {}, source_domain="Sales", source_version="3"
+        )
+        assert _cls(target, "Order")["uri"] == "http://tgt.org/onto#Order"
 
     def test_parent_kept_when_imported(self, target):
         _run(target, ["Customer", "Person"])
@@ -119,7 +125,7 @@ class TestRelationships:
         assert result["relationships"] == ["places"]
         rel = next(p for p in target.ontology["properties"] if p["name"] == "places")
         assert (rel["domain"], rel["range"]) == ("Customer", "Order")
-        assert rel["uri"] == "http://tgt.org/onto#places"
+        assert rel["uri"] == f"{SRC}places"
 
     def test_to_existing_same_name_class_not_selected(self, target):
         result = _run(target, ["Person"])
@@ -135,12 +141,12 @@ class TestRelationships:
         assert result["imported"] == []
         assert result["relationships"] == []
 
-    def test_skipped_when_uri_already_used(self, target):
+    def test_skipped_when_name_already_used(self, target):
         target.ontology["properties"] = [
             {"name": "places", "uri": "http://tgt.org/onto#places", "domain": "Address", "range": "Address"},
         ]
         result = _run(target, ["Customer", "Order"])
-        assert result["skipped_relationships"] == [{"name": "places", "reason": "uri_exists"}]
+        assert result["skipped_relationships"] == [{"name": "places", "reason": "name_exists"}]
 
 
 class TestConflicts:
@@ -154,7 +160,9 @@ class TestConflicts:
     def test_rename_imports_under_new_name_and_remaps_relationships(self, target):
         result = _run(target, ["Address", "Person"], {"Address": "SalesAddress"})
         assert set(result["imported"]) == {"SalesAddress", "Person"}
-        assert _cls(target, "SalesAddress")["uri"] == "http://tgt.org/onto#SalesAddress"
+        sales = _cls(target, "SalesAddress")
+        assert sales["uri"] == f"{SRC}SalesAddress"
+        assert sales["importedFrom"]["uri"] == f"{SRC}Address"
         rel = next(p for p in target.ontology["properties"] if p["name"] == "livesAt")
         assert rel["range"] == "SalesAddress"
 

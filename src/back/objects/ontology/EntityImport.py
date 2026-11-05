@@ -29,6 +29,44 @@ def _uri_base(base_uri: str) -> str:
     return base if base.endswith(("#", "/")) else base + "#"
 
 
+def _local_name(uri: str) -> str:
+    value = uri or ""
+    if "#" in value:
+        return value.rsplit("#", 1)[-1]
+    return value.rsplit("/", 1)[-1]
+
+
+def _source_base(src_uri: str, source: Dict[str, Any]) -> str:
+    base = (source.get("base_uri") or "").strip()
+    if base:
+        return _uri_base(base)
+    value = (src_uri or "").strip()
+    local = _local_name(value)
+    if value and local and value.endswith(local):
+        return value[: -len(local)]
+    return ""
+
+
+def _imported_uri(
+    src_uri: str,
+    name: str,
+    original_name: str,
+    source: Dict[str, Any],
+    target_base: str,
+) -> str:
+    """Keep the source IRI; on rename, rewrite the local name under the source base."""
+    src_uri = (src_uri or "").strip()
+    name = (name or "").strip()
+    original_name = (original_name or "").strip()
+    if name and original_name and name != original_name:
+        src_base = _source_base(src_uri, source)
+        if src_base:
+            return src_base + name
+    if src_uri.startswith(("http://", "https://")):
+        return src_uri
+    return target_base + name
+
+
 def _normalized(source: Dict[str, Any]) -> Dict[str, Any]:
     """Deep copy of *source* with top-level datatype properties folded into classes."""
     source = copy.deepcopy(source)
@@ -97,47 +135,15 @@ class EntityImport:
         existing = {c["name"].lower(): c["name"] for c in classes if c.get("name")}
         renames = {k: (v or "").strip() for k, v in (renames or {}).items() if k in names}
         self._validate_renames(renames, existing)
-        selected = set(names)
-
-        def resolve(name: str) -> Tuple[Optional[str], bool]:
-            if name in renames:
-                return renames[name], True
-            if name.lower() in existing:
-                return existing[name.lower()], False
-            if name in selected:
-                return name, True
-            return None, False
-
+        resolve = self._resolver(renames, existing, set(names))
         base = _uri_base(s.ontology.get("base_uri") or "")
-        imported: List[str] = []
-        skipped: List[Dict[str, str]] = []
-        for name in names:
-            new_name, is_new = resolve(name)
-            if not is_new:
-                skipped.append({"name": name, "reason": "exists"})
-                continue
-            classes.append(self._copy_class(
-                source_by_name[name], new_name, base, resolve, source_domain, source_version
-            ))
-            imported.append(new_name)
-
-        used_uris = {p.get("uri") for p in properties if p.get("uri")}
-        relationships: List[str] = []
-        skipped_relationships: List[Dict[str, str]] = []
-        for prop in _relationships(source):
-            domain, domain_new = resolve(prop["domain"])
-            range_, range_new = resolve(prop["range"])
-            if not domain or not range_ or not (domain_new or range_new):
-                continue
-            uri = base + prop["name"]
-            if uri in used_uris:
-                skipped_relationships.append({"name": prop["name"], "reason": "uri_exists"})
-                continue
-            new_prop = copy.deepcopy(prop)
-            new_prop.update(domain=domain, range=range_, uri=uri)
-            properties.append(new_prop)
-            used_uris.add(uri)
-            relationships.append(prop["name"])
+        imported, skipped = self._import_classes(
+            names, source_by_name, source, base, resolve,
+            source_domain, source_version, classes,
+        )
+        relationships, skipped_relationships = self._import_relationships(
+            source, base, resolve, properties,
+        )
 
         if imported or relationships:
             s.ontology["classes"] = classes
@@ -171,6 +177,77 @@ class EntityImport:
         }
 
     @staticmethod
+    def _resolver(
+        renames: Dict[str, str], existing: Dict[str, str], selected: set
+    ) -> Resolver:
+        def resolve(name: str) -> Tuple[Optional[str], bool]:
+            if name in renames:
+                return renames[name], True
+            if name.lower() in existing:
+                return existing[name.lower()], False
+            if name in selected:
+                return name, True
+            return None, False
+
+        return resolve
+
+    def _import_classes(
+        self,
+        names: List[str],
+        source_by_name: Dict[str, Dict[str, Any]],
+        source: Dict[str, Any],
+        base: str,
+        resolve: Resolver,
+        source_domain: str,
+        source_version: str,
+        classes: List[Dict[str, Any]],
+    ) -> Tuple[List[str], List[Dict[str, str]]]:
+        imported: List[str] = []
+        skipped: List[Dict[str, str]] = []
+        for name in names:
+            new_name, is_new = resolve(name)
+            if not is_new:
+                skipped.append({"name": name, "reason": "exists"})
+                continue
+            classes.append(self._copy_class(
+                source_by_name[name],
+                new_name,
+                source,
+                base,
+                resolve,
+                source_domain,
+                source_version,
+            ))
+            imported.append(new_name)
+        return imported, skipped
+
+    @staticmethod
+    def _import_relationships(
+        source: Dict[str, Any],
+        base: str,
+        resolve: Resolver,
+        properties: List[Dict[str, Any]],
+    ) -> Tuple[List[str], List[Dict[str, str]]]:
+        used_names = {p.get("name") for p in properties if p.get("name")}
+        relationships: List[str] = []
+        skipped_relationships: List[Dict[str, str]] = []
+        for prop in _relationships(source):
+            domain, domain_new = resolve(prop["domain"])
+            range_, range_new = resolve(prop["range"])
+            if not domain or not range_ or not (domain_new or range_new):
+                continue
+            if prop["name"] in used_names:
+                skipped_relationships.append({"name": prop["name"], "reason": "name_exists"})
+                continue
+            uri = _imported_uri(prop.get("uri", ""), prop["name"], prop["name"], source, base)
+            new_prop = copy.deepcopy(prop)
+            new_prop.update(domain=domain, range=range_, uri=uri)
+            properties.append(new_prop)
+            used_names.add(prop["name"])
+            relationships.append(prop["name"])
+        return relationships, skipped_relationships
+
+    @staticmethod
     def _validate_renames(renames: Dict[str, str], existing: Dict[str, str]) -> None:
         seen = set()
         for source_name, new_name in renames.items():
@@ -185,6 +262,7 @@ class EntityImport:
     def _copy_class(
         src: Dict[str, Any],
         new_name: str,
+        source: Dict[str, Any],
         base: str,
         resolve: Resolver,
         source_domain: str,
@@ -198,12 +276,14 @@ class EntityImport:
             cls["label"] = new_name
         cls["name"] = new_name
         cls["localName"] = new_name
-        cls["uri"] = base + new_name
+        cls["uri"] = _imported_uri(src.get("uri", ""), new_name, src["name"], source, base)
         parent = src.get("parent") or src.get("parentClass") or ""
         cls["parent"] = (resolve(parent)[0] or "") if parent else ""
         for attr in cls.get("dataProperties") or []:
             if attr.get("name"):
-                attr["uri"] = base + attr["name"]
+                attr["uri"] = _imported_uri(
+                    attr.get("uri", ""), attr["name"], attr["name"], source, base
+                )
         cls["importedFrom"] = {
             "domain": source_domain,
             "version": source_version,

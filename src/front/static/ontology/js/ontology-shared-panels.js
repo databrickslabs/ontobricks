@@ -769,6 +769,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <input type="text" class="form-control form-control-sm" id="sharedEntityName" value="${escapeHtml(cls?.name || '')}" ${disabled} required>
                     </div>
                     <div id="sharedEntityEmojiPickerMount"></div>
+                    ${cls?.uri ? `<div class="form-text small text-break">URI: ${escapeHtml(cls.uri)}</div>` : ''}
                 </div>
                 <div class="mb-3">
                     <label for="sharedEntityLabel" class="form-label">Label</label>
@@ -3595,6 +3596,7 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                 <div class="mb-3">
                     <label for="sharedRelName" class="form-label">Name <span class="text-danger">*</span></label>
                     <input type="text" class="form-control form-control-sm" id="sharedRelName" value="${escapeHtml(prop?.name || '')}" ${disabled} required>
+                    ${prop?.uri ? `<div class="form-text small text-break">URI: ${escapeHtml(prop.uri)}</div>` : ''}
                 </div>
                 <div class="mb-3">
                     <label for="sharedRelLabel" class="form-label">Label</label>
