@@ -195,7 +195,9 @@ class Base(MaterializedGraphBackend):
     def get_query_translator(self, table_name: str = "") -> Any:
         from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 
-        return SWRLSQLTranslator()
+        # Lakebase is Postgres: without the dialect, builtin filters emit
+        # Spark TRY_CAST, which is a syntax error on the default backend.
+        return SWRLSQLTranslator(dialect="postgres")
 
     def get_connection(self) -> Any:
         raise InfrastructureError(

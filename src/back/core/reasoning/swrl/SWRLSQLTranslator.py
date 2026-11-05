@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from back.core.helpers import SQL_DIALECT_SPARK, sql_escape
 from back.core.logging import get_logger
 from back.core.reasoning.constants import RDF_TYPE
+from back.core.reasoning.swrl.SWRLAtomPartition import SWRLAtomPartition
 from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
 from back.core.reasoning.swrl.SWRLParser import SWRLParser
 
@@ -79,6 +80,24 @@ class SWRLSQLTranslator:
         return self._build_builtin_filters(
             builtin_atoms, var_bindings, dialect=self._dialect
         )
+
+    def _rule_filters(
+        self,
+        part: SWRLAtomPartition,
+        table: str,
+        var_bindings: Dict[str, tuple],
+        base_uri: str,
+        uri_map: Dict,
+        alias_factory,
+    ) -> List[str]:
+        """WHERE filters for an antecedent: builtins plus ``NOT EXISTS`` for negated atoms."""
+        filters = self._filters(part.builtin_atoms, var_bindings)
+        filters.extend(
+            SWRLSQLTranslator._build_negated_atoms(
+                part.negated_atoms, table, var_bindings, base_uri, uri_map, alias_factory
+            )
+        )
+        return filters
 
     @staticmethod
     def _build_focus_filter(focus: Optional[Dict], var_bindings: Dict[str, tuple]):
@@ -487,20 +506,17 @@ class SWRLSQLTranslator:
         Finds rows where the antecedent matches AND the consequent is
         missing, then inserts the missing consequent triples.
         """
-        antecedent = params.get("antecedent", "")
-        consequent = params.get("consequent", "")
         base_uri = params.get("base_uri", "")
         uri_map = params.get("uri_map") or {}
 
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
-        if not ante_atoms or not cons_atoms:
+        # Same partition as build_violation_sql (builtins and negated atoms
+        # must not be joined as predicates).
+        part = SWRLParser.partition_rule_atoms(params)
+        if part is None:
             return None
-
-        class_atoms = [a for a in ante_atoms if a["arity"] == 1]
-        prop_atoms = [a for a in ante_atoms if a["arity"] == 2]
-        if not class_atoms:
-            return None
+        class_atoms = part.class_atoms
+        prop_atoms = part.prop_atoms
+        cons_atoms = part.consequent_atoms
 
         var_class: Dict[str, str] = {}
         for a in class_atoms:
@@ -557,6 +573,8 @@ class SWRLSQLTranslator:
                 var_bindings[obj_var] = (a_cls, "subject")
             else:
                 var_bindings[obj_var] = (a_prop, "object")
+
+        where_parts.extend(self._rule_filters(part, table, var_bindings, base_uri, uri_map, _next))
 
         stmts: List[str] = []
         for atom in cons_atoms:
@@ -617,20 +635,12 @@ class SWRLSQLTranslator:
         base_uri = params.get("base_uri", "")
         uri_map = params.get("uri_map") or {}
 
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
-        if not ante_atoms or not cons_atoms:
+        part = SWRLParser.partition_rule_atoms(params)
+        if part is None:
             return None
-
-        class_atoms = [
-            a for a in ante_atoms if a["arity"] == 1 and not a.get("builtin")
-        ]
-        prop_atoms = [
-            a for a in ante_atoms if a["arity"] == 2 and not a.get("builtin")
-        ]
-        builtin_atoms = [a for a in ante_atoms if a.get("builtin")]
-        if not class_atoms:
-            return None
+        class_atoms = part.class_atoms
+        prop_atoms = part.prop_atoms
+        cons_atoms = part.consequent_atoms
 
         var_class: Dict[str, str] = {}
         for a in class_atoms:
@@ -709,9 +719,7 @@ class SWRLSQLTranslator:
                 else:
                     var_bindings[new_var] = (a_prop, new_col)
 
-        builtin_filters = self._filters(builtin_atoms, var_bindings)
-        if builtin_filters:
-            where_parts.extend(builtin_filters)
+        where_parts.extend(self._rule_filters(part, table, var_bindings, base_uri, uri_map, _next))
 
         focus_filter = self._build_focus_filter(params.get("focus"), var_bindings)
         if focus_filter is False:

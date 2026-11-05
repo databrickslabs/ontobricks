@@ -453,3 +453,80 @@ Modified files:
 
 Tests: not run (documentation-only change, no application code touched).
 
+================================================================================
+## Fix SWRL builtin atoms over datatype properties (inference, materialization, Lakebase)
+================================================================================
+
+Context: Editor-generated SWRL rules with ``swrlb:`` builtins over datatype
+properties (e.g. ``nights(?x, ?n) ∧ swrlb:greaterThanOrEqual(?n, 10)``) inferred
+zero triples without any error. Four defects contributed (issue #171; original
+patch #172 by @rickynho-rccl, rebased onto 0.10.0 as a targeted fix):
+
+1. ``SWRLBuiltinRegistry`` did not accept the ``swrlb:`` prefix or a full IRI.
+2. ``SWRLEngine._build_uri_map`` skipped class ``dataProperties``, so datatype
+   predicates resolved to the ontology ``#`` namespace and matched nothing.
+3. ``build_materialization_sql`` never emitted builtin WHERE filters, and
+   builtins / negated atoms in inference were joined as predicates.
+4. The Lakebase (Postgres) backend built its translator without a dialect, so
+   builtin filters emitted Spark ``TRY_CAST`` (a syntax error on Postgres).
+
+Changes:
+
+1. src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+   Add ``_normalize()`` (local name after the last ``#``/``/``, known
+   ``swrlb:``/``swrl:`` prefixes stripped, case-folded); ``get`` and
+   ``is_builtin`` use it.
+2. src/back/core/reasoning/swrl/SWRLEngine.py
+   ``_build_uri_map`` folds class ``dataProperties`` into the property map;
+   object properties are written last so they win a same-name clash.
+3. src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+   - ``build_inference_sql`` and ``build_materialization_sql`` use
+     ``SWRLParser.partition_rule_atoms`` (same partition as the violation SQL).
+   - New ``_rule_filters()`` helper: builtin WHERE filters plus ``NOT EXISTS``
+     for negated atoms; used by both builders.
+4. src/back/core/graphdb/lakebase/Base.py
+   ``get_query_translator()`` passes ``dialect="postgres"``.
+5. tests/units/ontology/test_swrl_builtin_defects.py
+   Regression coverage per defect (registry prefix/IRI, uri_map datatype
+   properties, builtin filters and NOT EXISTS in both builders, Postgres dialect
+   without TRY_CAST, Databricks dialect unchanged, Lakebase hands out the
+   postgres translator).
+
+Known gaps (unchanged, documented): ``matches``, ``dateDiff`` and
+``CURRENT_TIMESTAMP()`` templates remain Spark-shaped on Lakebase;
+``build_materialization_sql`` still joins only direct properties of the primary
+variable; ``build_antecedent_count_sql`` still hand-rolls the atom split.
+
+Pre-existing, not touched: importing ``back.core.reasoning`` before
+``back.objects`` hits a circular import (``reasoning`` <-> ``w3c``); the new
+test file imports ``back.objects`` first to work around it when collected alone.
+
+Modified files:
+- src/back/core/reasoning/swrl/SWRLBuiltinRegistry.py
+- src/back/core/reasoning/swrl/SWRLEngine.py
+- src/back/core/reasoning/swrl/SWRLSQLTranslator.py
+- src/back/core/graphdb/lakebase/Base.py
+- tests/units/ontology/test_swrl_builtin_defects.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9970 passed, 327 skipped, 8 deselected, 39 warnings (test_swrl_builtin_defects.py: 13 passed; architecture size budget green, baseline unchanged).
+
+================================================================================
+## Credit contributor @rickynho-rccl in CONTRIBUTORS.md
+================================================================================
+
+Context: The SWRL builtin fix (#222, closing #171) builds on the diagnosis and
+patch from @rickynho-rccl (#172). The contributor was credited in the commit
+trailer and PR description but not in the project contributor list.
+
+Changes:
+
+1. CONTRIBUTORS.md
+   Add Ricky Cruz (@rickynho-rccl) to the Community Contributors table with a
+   short description of the SWRL builtin contribution.
+
+Modified files:
+- CONTRIBUTORS.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: not run (documentation-only change, no application code touched).
