@@ -1836,21 +1836,34 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-speedometer2', 'Dashboard', dashBody);
         }
 
-        var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
-        if (dataset && (dataset.fullName || dataset.asset)) {
-            var dsFullName = dataset.fullName
-                || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
-            var hasKeyCol = Boolean(dataset.key_column);
-            var dsBody = '<div class="entity-detail-item"><span class="detail-key">Table</span>' +
-                '<span class="detail-value"><code>' + esc(dsFullName) + '</code></span></div>';
-            if (dataset.key_column) {
-                dsBody += '<div class="entity-detail-item"><span class="detail-key">Key</span>' +
-                    '<span class="detail-value"><code>' + esc(dataset.key_column) + '</code></span></div>';
-            }
-            if (dataset.description) {
-                dsBody += '<div class="entity-detail-item"><span class="detail-key">Description</span>' +
-                    '<span class="detail-value">' + esc(dataset.description) + '</span></div>';
-            }
+        var datasets = (entityMapping && entityMapping.datasets)
+            || (classInfo && classInfo.datasets)
+            || null;
+        if (!datasets || !datasets.length) {
+            var one = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+            datasets = one ? [one] : [];
+        }
+        datasets = datasets.filter(function (d) { return d && (d.fullName || d.asset); });
+        if (datasets.length) {
+            var hasKeyCol = datasets.some(function (d) { return Boolean(d.key_column); });
+            var dsBody = datasets.map(function (dataset) {
+                var dsFullName = dataset.fullName
+                    || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
+                var kind = String(dataset.type || '').toUpperCase();
+                var kindLabel = kind === 'METRIC_VIEW' ? 'Metric View'
+                    : (kind === 'VIEW' ? 'View' : 'Table');
+                var block = '<div class="entity-detail-item"><span class="detail-key">' + esc(kindLabel) + '</span>' +
+                    '<span class="detail-value"><code>' + esc(dsFullName) + '</code></span></div>';
+                if (dataset.key_column) {
+                    block += '<div class="entity-detail-item"><span class="detail-key">Key</span>' +
+                        '<span class="detail-value"><code>' + esc(dataset.key_column) + '</code></span></div>';
+                }
+                if (dataset.description) {
+                    block += '<div class="entity-detail-item"><span class="detail-key">Description</span>' +
+                        '<span class="detail-value">' + esc(dataset.description) + '</span></div>';
+                }
+                return block;
+            }).join('');
             if (hasKeyCol) {
                 dsBody += '<div class="entity-detail-item"><button type="button" onclick="openDatasetPreviewModal(\'' +
                     esc(entity.id) + '\', \'' + esc(ontologyTypeName) + '\', \'' + esc(actualIdValue || '') +
@@ -1861,7 +1874,7 @@ var SigmaGraph = (function () {
                     'class="btn btn-sm btn-outline-info w-100" title="Key column is not configured — preview unavailable">' +
                     '<i class="bi bi-table me-1"></i>Preview rows</button></div>';
             }
-            html += _sec('bi bi-table', 'Dataset', dsBody);
+            html += _sec('bi bi-table', 'Datasets', dsBody);
         }
 
         // Behaviour: UC functions, jobs, and SWRL rules — one section.
@@ -2659,13 +2672,20 @@ var SigmaGraph = (function () {
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
         var dashboardUrl = (entityMapping && entityMapping.dashboard) || (classInfo && classInfo.dashboard) || null;
         var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
-        var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+        var datasets = (entityMapping && entityMapping.datasets)
+            || (classInfo && classInfo.datasets)
+            || null;
+        if (!datasets || !datasets.length) {
+            var oneDs = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
+            datasets = oneDs ? [oneDs] : [];
+        }
+        var dataset = datasets[0] || null;
         var actions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
         var businessRules = (classInfo && classInfo.businessRules) || [];
         var virtualAttributes = (entityMapping && entityMapping.virtualAttributes) || (classInfo && classInfo.virtualAttributes) || [];
         var shaclShapeCount = (classInfo && classInfo.shaclShapeCount) || 0;
 
-        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, businessRules: businessRules, virtualAttributes: virtualAttributes, shaclShapeCount: shaclShapeCount, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, datasets: datasets, dataset: dataset, actions: actions, businessRules: businessRules, virtualAttributes: virtualAttributes, shaclShapeCount: shaclShapeCount, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
     }
 
     function _showNodeContextMenu(nodeId, mouseEvent) {
@@ -2712,11 +2732,16 @@ var SigmaGraph = (function () {
                 '<i class="bi bi-speedometer2"></i> View Dashboard</div>';
         }
 
-        var dataset = meta.dataset;
-        if (dataset && (dataset.fullName || dataset.asset) && meta.entity && meta.entity.id) {
+        var menuDatasets = (meta.datasets || []).filter(function (d) {
+            return d && (d.fullName || d.asset);
+        });
+        if (!menuDatasets.length && meta.dataset && (meta.dataset.fullName || meta.dataset.asset)) {
+            menuDatasets = [meta.dataset];
+        }
+        if (menuDatasets.length && meta.entity && meta.entity.id) {
             var dsClassName = (meta.classInfo && (meta.classInfo.label || meta.classInfo.name)) || (meta.entityMapping && meta.entityMapping.className) || '';
             if (items) items += '<div class="ctx-divider"></div>';
-            items += '<div class="ctx-header">Dataset</div>';
+            items += '<div class="ctx-header">Datasets</div>';
             items += '<div class="ctx-item" data-sg-node-action="dataset-preview" data-uri="' + esc(meta.entity.id) +
                 '" data-class="' + esc(dsClassName) + '" data-id="' + esc(meta.actualIdValue || '') + '">' +
                 '<i class="bi bi-table"></i> Dataset preview</div>';

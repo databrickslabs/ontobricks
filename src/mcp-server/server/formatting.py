@@ -81,26 +81,29 @@ def _hint(
     return directive if _preferred(context_policy, feature) else neutral
 
 
-def _format_class_context_block(
-    local_id: str, cls_actions: dict, context_policy: Optional[dict] = None
-) -> str:
-    """Append a [Context] block for a node's class Actions metadata."""
-    dataset = cls_actions.get("dataset")
-    bridges = cls_actions.get("bridges") or []
-    actions = cls_actions.get("actions") or []
-    business_rules = cls_actions.get("business_rules") or []
-    virtual = cls_actions.get("virtualAttributes") or []
-    shacl_count = cls_actions.get("shacl_shape_count") or 0
-    if not (dataset or bridges or actions or business_rules or virtual or shacl_count):
-        return ""
+def _normalize_datasets(payload: dict) -> list:
+    """Return ``datasets`` list, falling back to legacy singular ``dataset``."""
+    return payload.get("datasets") or (
+        [payload["dataset"]] if payload.get("dataset") else []
+    )
 
+
+def _class_dataset_lines(
+    local_id: str, datasets: list, context_policy: Optional[dict]
+) -> list[str]:
+    """Format class-linked datasets for a describe_entity [Context] block."""
     lines: list[str] = []
-    lines.append(f"  [Context — class: {cls_actions.get('name', '')}]")
-
-    if dataset and dataset.get("fullName"):
+    for dataset in datasets:
+        if not dataset.get("fullName"):
+            continue
+        kind = (dataset.get("type") or "").strip()
+        kind_suffix = f" [{kind}]" if kind else ""
         key_col = dataset.get("key_column")
         if key_col:
-            lines.append(f"  Dataset: {dataset['fullName']}  (key: {key_col} = '{local_id}')")
+            lines.append(
+                f"  Dataset: {dataset['fullName']}{kind_suffix}  "
+                f"(key: {key_col} = '{local_id}')"
+            )
             lines.append(
                 _hint(
                     context_policy,
@@ -114,10 +117,57 @@ def _format_class_context_block(
                 )
             )
         else:
-            lines.append(f"  Dataset: {dataset['fullName']}  (key_column not configured)")
+            lines.append(
+                f"  Dataset: {dataset['fullName']}{kind_suffix}  "
+                "(key_column not configured)"
+            )
         purpose = (dataset.get("description") or "").strip()
         if purpose:
             lines.append(f"  Description: {purpose}")
+    return lines
+
+
+def _node_dataset_lines(local_id: str, datasets: list) -> list[str]:
+    """Format resolved datasets (with optional rows) for get_entity_context."""
+    lines: list[str] = []
+    for dataset in datasets:
+        kind = (dataset.get("type") or "").strip()
+        kind_suffix = f" [{kind}]" if kind else ""
+        lines.append(f"Dataset: {dataset.get('fullName', '')}{kind_suffix}")
+        key_col = dataset.get("key_column")
+        if key_col:
+            lines.append(f"  Key: {key_col} = '{local_id}'")
+        purpose = (dataset.get("description") or "").strip()
+        if purpose:
+            lines.append(f"  Description: {purpose}")
+        if dataset.get("key_column_missing"):
+            lines.append("  ⚠ key_column not configured — row fetch skipped")
+        rows = dataset.get("rows")
+        if rows:
+            lines.append(f"  Rows ({len(rows)}):")
+            for row in rows:
+                lines.append(
+                    "    " + "  |  ".join(f"{k}: {v}" for k, v in row.items())
+                )
+        lines.append("")
+    return lines
+
+
+def _format_class_context_block(
+    local_id: str, cls_actions: dict, context_policy: Optional[dict] = None
+) -> str:
+    """Append a [Context] block for a node's class Actions metadata."""
+    datasets = _normalize_datasets(cls_actions)
+    bridges = cls_actions.get("bridges") or []
+    actions = cls_actions.get("actions") or []
+    business_rules = cls_actions.get("business_rules") or []
+    virtual = cls_actions.get("virtualAttributes") or []
+    shacl_count = cls_actions.get("shacl_shape_count") or 0
+    if not (datasets or bridges or actions or business_rules or virtual or shacl_count):
+        return ""
+
+    lines: list[str] = [f"  [Context — class: {cls_actions.get('name', '')}]"]
+    lines.extend(_class_dataset_lines(local_id, datasets, context_policy))
 
     if bridges:
         lines.append("  Bridges:")
@@ -231,23 +281,7 @@ def _format_node_context_response(
         "",
     ]
 
-    dataset = data.get("dataset")
-    if dataset:
-        lines.append(f"Dataset: {dataset.get('fullName', '')}")
-        key_col = dataset.get("key_column")
-        if key_col:
-            lines.append(f"  Key: {key_col} = '{local_id}'")
-        purpose = (dataset.get("description") or "").strip()
-        if purpose:
-            lines.append(f"  Description: {purpose}")
-        if dataset.get("key_column_missing"):
-            lines.append("  ⚠ key_column not configured — row fetch skipped")
-        rows = dataset.get("rows")
-        if rows:
-            lines.append(f"  Rows ({len(rows)}):")
-            for row in rows:
-                lines.append("    " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
-        lines.append("")
+    lines.extend(_node_dataset_lines(local_id, _normalize_datasets(data)))
 
     bridges = data.get("bridges") or []
     if bridges:
