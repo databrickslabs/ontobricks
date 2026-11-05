@@ -15,9 +15,9 @@ def _source() -> str:
 
 def test_dataset_key_column_uses_select_not_text_input():
     source = _source()
-    assert 'id="datasetKeyColumnSelect"' in source
+    assert 'id="datasetKeyColumnSelect-${idx}"' in source
     assert 'id="datasetKeyColumnInput"' not in source
-    assert 'onchange="onDatasetKeyColumnChange(this.value)"' in source
+    assert "onchange=\"onDatasetKeyColumnChange(${idx}, this.value)\"" in source
 
 
 def test_dataset_columns_use_existing_mapping_endpoint_and_memory_cache():
@@ -43,27 +43,27 @@ def test_dataset_column_states_and_missing_saved_key_are_rendered():
 
 def test_dataset_column_fetch_has_retry_and_stale_response_guard():
     source = _source()
-    assert "function retryDatasetKeyColumns()" in source
-    assert "_loadDatasetKeyColumns(sharedPanelDataset, true)" in source
-    assert "_isCurrentDataset(datasetKey)" in source
+    assert "function retryDatasetKeyColumns(index)" in source
+    assert "_loadDatasetKeyColumns(index, ds, true)" in source
+    assert "_datasetKey(sharedPanelDatasets[index]) === datasetKey" in source
     assert "_datasetColumnCache.set(datasetKey, columns)" in source
 
 
 def test_key_column_change_keeps_existing_dirty_state_contract():
     source = _source()
     start = source.index("function onDatasetKeyColumnChange")
-    body = source[start : start + 250]
-    assert "sharedPanelDataset.key_column = value || null;" in body
+    body = source[start : start + 280]
+    assert "ds.key_column = value || null;" in body
     assert "markPanelDirty();" in body
 
 
 def test_empty_column_list_is_not_cached_and_offers_retry():
     """HTTP 200 + columns=[] must not poison the cache; empty state is retryable."""
     source = _source()
-    assert "_setDatasetKeyColumnState('No columns found', true)" in source
+    assert '_setDatasetKeyColumnState(index, \'No columns found\', true)' in source
 
     load_start = source.index("async function _loadDatasetKeyColumns")
-    load_body = source[load_start : load_start + 1600]
+    load_body = source[load_start : load_start + 1800]
     set_idx = load_body.index("_datasetColumnCache.set(datasetKey, columns)")
     guard_window = load_body[max(0, set_idx - 160) : set_idx]
     assert "columns.length" in guard_window
@@ -73,10 +73,17 @@ def test_dataset_key_column_options_built_with_dom_apis():
     """Column names may contain quotes; build options via DOM, not HTML interpolation."""
     source = _source()
     start = source.index("function _populateDatasetKeyColumnSelect")
-    end = source.index("async function _loadDatasetKeyColumns")
+    end = source.index("async function _enrichMetricViewColumns")
     body = source[start:end]
     assert "new Option(" in body
     assert "replaceChildren" in body
     assert '`<option value="' not in body
     assert "Select a key column…" in body
     assert "(missing)" in body
+
+
+def test_metric_view_key_columns_prefer_dimensions():
+    source = _source()
+    assert "METRIC_VIEW" in source
+    assert 'String(c.role).toLowerCase() !== \'measure\'' in source
+    assert "function _enrichMetricViewColumns" in source

@@ -128,7 +128,9 @@ function _resolveLinkEndpoint(endpoint) {
 }
 
 function _classHasExternalConfig(cls) {
-    return !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length);
+    const hasDatasets = (Array.isArray(cls.datasets) && cls.datasets.length)
+        || !!cls.dataset;
+    return !!(cls.dashboard || hasDatasets || (cls.actions || []).length || (cls.bridges || []).length);
 }
 
 function _appendMapExternalBadge(nodeSelection) {

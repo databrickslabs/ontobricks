@@ -19,7 +19,14 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_DOMAIN_BOUND_FIELDS = ("dataset", "bridges", "actions", "dashboard", "dashboardParams")
+_DOMAIN_BOUND_FIELDS = (
+    "datasets",
+    "dataset",
+    "bridges",
+    "actions",
+    "dashboard",
+    "dashboardParams",
+)
 
 Resolver = Callable[[str], Tuple[Optional[str], bool]]
 

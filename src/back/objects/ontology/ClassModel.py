@@ -244,6 +244,51 @@ class ClassModel:
         return modified
 
     @staticmethod
+    def normalize_datasets(raw: Any) -> List[Dict[str, Any]]:
+        """Normalize legacy singular ``dataset`` or a list into ``datasets``.
+
+        Accepts a class dict (reads ``datasets`` then ``dataset``), a list of
+        dataset dicts, a single dataset dict, JSON-decoded annotation values,
+        or ``None``. Returns a list of dict entries; non-dict items are dropped.
+        """
+        if raw is None:
+            return []
+
+        if isinstance(raw, dict):
+            if "datasets" in raw:
+                value = raw.get("datasets")
+            elif "dataset" in raw and not (
+                raw.get("fullName") or raw.get("asset")
+            ):
+                # Class-shaped dict with legacy singular field only.
+                value = raw.get("dataset")
+            elif raw.get("fullName") or raw.get("asset"):
+                return [raw]
+            else:
+                return []
+        else:
+            value = raw
+
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            return [value] if value.get("fullName") or value.get("asset") else []
+        if isinstance(value, list):
+            return [
+                item
+                for item in value
+                if isinstance(item, dict)
+                and (item.get("fullName") or item.get("asset"))
+            ]
+        return []
+
+    @staticmethod
+    def primary_dataset(raw: Any) -> Optional[Dict[str, Any]]:
+        """Return the first linked dataset, or ``None`` (API back-compat)."""
+        datasets = ClassModel.normalize_datasets(raw)
+        return datasets[0] if datasets else None
+
+    @staticmethod
     def build_class_from_data(
         data: Dict[str, Any], existing: Dict[str, Any] = None
     ) -> Dict[str, Any]:
@@ -257,6 +302,16 @@ class ClassModel:
             dict: Built class
         """
         existing = existing or {}
+        # Prefer explicit datasets from the request; otherwise merge legacy
+        # singular dataset from data/existing via normalize_datasets.
+        if "datasets" in data:
+            datasets = ClassModel.normalize_datasets(data.get("datasets"))
+        elif "dataset" in data:
+            datasets = ClassModel.normalize_datasets(data.get("dataset"))
+        elif "datasets" in existing or "dataset" in existing:
+            datasets = ClassModel.normalize_datasets(existing)
+        else:
+            datasets = []
         return {
             "uri": data.get("uri", existing.get("uri", "")),
             "name": data.get("name", existing.get("name", "")),
@@ -273,7 +328,9 @@ class ClassModel:
                 "dashboardParams", existing.get("dashboardParams", {})
             ),
             "bridges": data.get("bridges", existing.get("bridges", [])),
-            "dataset": data.get("dataset", existing.get("dataset", None)),
+            "datasets": datasets,
+            # One-release back-compat for callers still reading singular dataset.
+            "dataset": datasets[0] if datasets else None,
             "actions": data.get("actions", existing.get("actions", [])),
             "business_rules": data.get(
                 "business_rules", existing.get("business_rules", [])
