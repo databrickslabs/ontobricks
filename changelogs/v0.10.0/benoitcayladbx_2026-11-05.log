@@ -510,3 +510,23 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9970 passed, 327 skipped, 8 deselected, 39 warnings (test_swrl_builtin_defects.py: 13 passed; architecture size budget green, baseline unchanged).
+
+================================================================================
+## Credit contributor @rickynho-rccl in CONTRIBUTORS.md
+================================================================================
+
+Context: The SWRL builtin fix (#222, closing #171) builds on the diagnosis and
+patch from @rickynho-rccl (#172). The contributor was credited in the commit
+trailer and PR description but not in the project contributor list.
+
+Changes:
+
+1. CONTRIBUTORS.md
+   Add Ricky Cruz (@rickynho-rccl) to the Community Contributors table with a
+   short description of the SWRL builtin contribution.
+
+Modified files:
+- CONTRIBUTORS.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: not run (documentation-only change, no application code touched).

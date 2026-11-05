@@ -22,6 +22,7 @@ Thank you to everyone who has contributed to OntoBricks!
 | lrubakhin | [@lrubakhin](https://github.com/lrubakhin) | Lakebase credential minting fix and improved bootstrap diagnostics ([#157](https://github.com/databrickslabs/ontobricks/pull/157)) |
 | Ulrik Møller | [@ulsmo](https://github.com/ulsmo) | Contributor |
 | Mitul | [@kmitul](https://github.com/kmitul) | Contributor |
+| Ricky Cruz | [@rickynho-rccl](https://github.com/rickynho-rccl) | Diagnosis and patch for SWRL builtin atoms silently inferring zero triples ([#171](https://github.com/databrickslabs/ontobricks/issues/171), [#172](https://github.com/databrickslabs/ontobricks/pull/172); landed via [#222](https://github.com/databrickslabs/ontobricks/pull/222)) |
 
 ## How to Contribute
 
