@@ -1,0 +1,225 @@
+================================================================================
+## Paged completion review fixes — emitted-key continuations, duplicate-page
+## stall, discarded-work errors (PR #206 review, issue #173)
+================================================================================
+
+Context: maintainer review of PR #206 (the paged Stage-3 completion fix for
+issue #173). Three orchestrator defects had to be addressed before merge:
+(1) `_queue_next_page` re-injected each page's raw JSON into the message
+history — worst case 16 x ~8k completion tokens on top of the schema
+prompt, dying on the INPUT cap the same way the single-shot answer died on
+the output cap; (2) a `has_more` page contributing zero new items ended the
+substage as success, silently dropping items the model still claimed to
+have; (3) a ghost-ref/malformed page deep in the run discarded up to 16 LLM
+calls of paid work with no indication in the error.
+
+Changes:
+
+1. `src/agents/agent_owl_generator/prompts.py`
+   `build_continuation_user_prompt` now takes `emitted_keys` (sequence of
+   compact per-item key strings) and embeds them via the new
+   `_emitted_keys_block` helper (capped at 400 keys, beyond which dedupe is
+   the backstop) so the model knows exactly what NOT to re-emit — instead
+   of the previous "none of the N already emitted" with no list.
+   `build_truncated_page_retry_prompt` docstring notes the truncated blob
+   is no longer re-injected either.
+2. `src/agents/agent_owl_generator/staged.py`
+   - `_queue_next_page` / `_queue_truncation_retry` no longer append the
+     assistant page payload — the continuation is a single user message
+     carrying the emitted-key list; history stays O(keys) not O(pages).
+   - `_run_completion` takes a `label_fn` per substage formatting emitted
+     keys (`domain --label--> range` for relations, `domain.label` for
+     attributes, `subject --kind--> object` for axioms).
+   - Duplicate-page handling: a `has_more` page adding zero NEW items is
+     tolerated once; `_MAX_DUPLICATE_PAGES` (2) consecutive duplicates fail
+     the substage with a "stalled" error instead of a silent early success.
+   - `_gathered_note` appends "(<N> <items> gathered over <P> accepted
+     page(s) are not checkpointed — the whole substage must be re-run)" to
+     every mid-substage failure (truncation, rejection, stall, budget), so
+     discarded paid work is visible in the user-facing error while pages
+     intentionally stay un-checkpointed.
+   - Extracted `_completion_call` (LLM call + usage/step bookkeeping) and
+     `_continuation_error` (dup-stall vs page-budget reason) to keep
+     `_run_completion` at 119 LOC = the shrink-only baseline.
+3. `tests/units/agents/test_owl_generator_staged.py`
+   `test_continuation_lists_emitted_keys_not_raw_pages` (key list present,
+   no assistant turn echoes raw page JSON),
+   `test_single_duplicate_page_is_tolerated_then_paging_continues`,
+   `test_duplicate_page_streak_fails_instead_of_silent_data_loss`,
+   `test_rejection_error_reports_discarded_pages`; the old
+   zero-new-items-stops-paging test was replaced by the stall semantics.
+4. `tests/eval/datasets/agent_owl_generator/baseline.jsonl`
+   `staged-paged-attributes-repeat-stops-003` replaced by
+   `staged-paged-attributes-repeat-stalled-003` (3 duplicate `has_more`
+   pages -> failure) + new `staged-paged-attributes-repeat-tolerated-011`
+   (one dup page tolerated, next page still delivers); 42 staged rows >=
+   the 41 floor.
+5. Local SPEC.md (gitignored `.planning/` since upstream 6cf90c3e)
+   §3a paged-completion paragraph updated (emitted-key continuations,
+   dup-streak, `_gathered_note` discarded-work reporting); §5 contract row
+   and §6 failure-mode row updated for 11 `paged_completion` rows and the
+   new stall semantics.
+
+Files modified:
+- src/agents/agent_owl_generator/prompts.py
+- src/agents/agent_owl_generator/staged.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- changelogs/v0.9.0/Cactusquill_2026-10-31.log (this file)
+
+Tests (frozen env):
+- pytest tests/units/agents/test_owl_generator_staged.py
+  tests/units/architecture/test_size_budget.py
+  tests/eval/test_staged_contract.py
+  tests/eval/test_staged_dataset_metadata_shape.py
+  tests/units/agents/test_owl_generator_schemas.py
+  tests/units/ontology/test_generate_workflow.py -q
+  -> 212 passed (includes _run_completion == 119-LOC baseline).
+
+Not run: full `not scenario` suite and live MLflow eval — same env limits
+as the 2026-10-24 entry (no Foundation Model access; the full suite's 21
+known Windows-only failures in untouched deploy/template/script tests are
+pre-existing). Live Generate on a >100-column table remains the follow-up
+required before closing issue #173.
+
+================================================================================
+## Paged completion follow-up — constant-size page requests, user-visible
+## paging failures (self-review of the PR #206 review fixes)
+================================================================================
+
+Context: re-checking the review fixes above against the reviewer's intent
+found two gaps. (a) Continuations were APPENDED: raw pages were gone, but
+every page added another user message holding the full key list so far, so
+history still grew quadratically (300 attributes / 12 pages: 34,707 chars
+on the last call) and produced 12 consecutive user turns, which some
+gateway-served models reject. (b) The "discarded work" note only reached
+the user for rejected pages; truncation / stall / page-budget failures put
+it in `InfrastructureError.detail`, which is stripped in production — the
+task UI only shows `exc.message`.
+
+Changes:
+
+1. `src/agents/agent_owl_generator/staged.py`
+   - New `_request_page` / `_set_page_request`: every page request is a
+     stateless `[system, user_prompt + current instruction]`; the
+     continuation or smaller-page instruction REPLACES the previous one.
+     Same 300-attribute run: the request for page 12 is 7,231 chars total
+     and roles are strictly `system, user`.
+   - `CompletionResult.user_message`: orchestrator-authored, user-safe
+     failure text, set via `_completion_failure(..., safe=True)` for
+     truncation, stall and page-budget failures only (never raw HTTP or
+     model text).
+2. `src/agents/agent_owl_generator/prompts.py`
+   - `build_truncated_page_retry_prompt(substage, emitted_keys)` now says
+     the last page "exceeded the output limit and was discarded" (the
+     model can no longer see it) and lists the emitted keys.
+   - Continuation wording no longer says "Continue" (single-turn request).
+   - Emitted-key cap raised 400 -> `_MAX_EMITTED_KEYS = 1000` (~7k input
+     tokens; a 40-entity draft fits whole) and keeps the MOST RECENT keys.
+3. `src/back/objects/ontology/generate/GenerateWorkflow.py`
+   Substage failure handling extracted to `_record_substage_failure`; the
+   `InfrastructureError` message becomes
+   "Ontology <substage> inference failed: <user_message>" when the agent
+   marked a safe reason; raw errors stay in `detail`.
+4. `tests/units/architecture/baseline.json`
+   Ratchet: `GenerateWorkflow.run_completion` 139 -> 124 LOC.
+5. Tests:
+   `test_history_stays_constant_size_across_many_pages` (per-call
+   snapshots — the loop reuses one list object, so `call_args` alone only
+   shows the final state), `test_truncation_retry_lists_emitted_keys_and_
+   says_discarded`, `test_emitted_key_list_is_bounded`,
+   `test_paging_failures_carry_a_user_safe_message`,
+   `test_request_errors_are_not_marked_user_safe`; workflow:
+   `test_paging_failure_reason_reaches_user_visible_message`,
+   `test_raw_infrastructure_error_stays_out_of_user_message`.
+
+Files modified:
+- src/agents/agent_owl_generator/prompts.py
+- src/agents/agent_owl_generator/staged.py
+- src/back/objects/ontology/generate/GenerateWorkflow.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/units/ontology/test_generate_workflow.py
+- tests/units/architecture/baseline.json
+
+Tests (frozen env):
+- pytest tests/units/agents/ tests/units/ontology/
+  tests/units/api/test_generate_routes.py tests/eval tests/units/architecture
+  -> 1490 passed, 11 skipped.
+
+Still open for #173 (not addressed by this PR): early `has_more=false`
+returns an incomplete success (no completeness check vs source columns);
+Stage-1 detection limits (40-candidate cap, summarized schema context);
+no live Generate run against a Foundation Model endpoint yet.
+
+================================================================================
+## Large-schema stress harness for the staged Generate flow (issue #173)
+================================================================================
+
+Context: PR #206 review asked for a live Generate on a wide table before
+#173 can close, and the author has no Foundation Model access. Re-reading
+the flow also showed the PR's wide-table claim was too broad: Stage-3
+completion only receives the closed entity catalog (ids, labels,
+descriptions, prior relations) — never table columns — so paging fixes
+"too many entities x items for one answer", while the wide-table and
+100-table reports most plausibly fail in Stage-1 detection, the only stage
+that reads metadata. A one-command live harness lets a maintainer with FM
+access locate the failing stage instead of guessing.
+
+Changes:
+
+1. `tests/eval/large_schema_stress.py` (new)
+   Runs the real `detect_entities` -> `infer_relations` ->
+   `infer_attributes` -> `infer_axioms` chain (checkpointed like
+   `GenerateWorkflow.run_completion`) on synthetic schemas shaped like the
+   #173 reports: `wide_table_164`, `wide_table_360`, `many_tables_100x18`.
+   The LLM call is only observed (wrapped, never altered): per stage it
+   reports items, LLM calls, truncated calls, largest request size, message
+   count and token usage, plus the failing stage, raw error and the
+   user-visible message. `detection_visibility` measures, with the real
+   `get_metadata` tool, how much of the schema the Stage-1 overview shows.
+   `--mlflow-experiment` logs metrics + the JSON report to one MLflow run
+   and prints its URI; exit code is non-zero on any failed scenario. Host
+   and token are never logged.
+2. `tests/eval/test_large_schema_stress.py` (new)
+   Offline coverage with a scripted LLM: schema shapes, the visibility
+   caps, a full chain observing 3 attribute pages in single
+   `[system, user]` requests, and failure-stage / user-message reporting.
+3. `tests/eval/README.md`
+   "Large-schema stress run" section with the live command.
+
+Measured offline (real `get_metadata` tool, no LLM): the Stage-1 overview
+shows 80/164 and 80/360 columns of a single wide table, and 50/100 tables
+(900/1800 columns, an ~87k-char tool result) for the 100-table schema; the
+rest is only reachable if the model calls `get_table_detail`.
+
+Files modified:
+- tests/eval/large_schema_stress.py (new)
+- tests/eval/test_large_schema_stress.py (new)
+- tests/eval/README.md
+
+Tests (frozen env):
+- pytest tests/eval -q -> 45 passed (5 new).
+
+================================================================================
+## Rename the per-page truncation retry budget (PR #206 review nit)
+================================================================================
+
+Context: review nit on PR #206 — `_MAX_COMPLETION_ATTEMPTS = 2` really
+meant "one smaller-page retry per truncated page", which read as a total
+attempt budget.
+
+Changes:
+
+1. `src/agents/agent_owl_generator/staged.py`
+   `_MAX_COMPLETION_ATTEMPTS = 2` -> `_MAX_PAGE_TRUNCATION_RETRIES = 1`;
+   the check is now `page_trunc_retries < _MAX_PAGE_TRUNCATION_RETRIES`
+   (same behaviour). The comment states the counter resets on every
+   accepted page.
+
+Files modified:
+- src/agents/agent_owl_generator/staged.py
+
+Tests (frozen env):
+- pytest tests/units/agents/ tests/units/ontology/
+  tests/units/api/test_generate_routes.py tests/eval tests/units/architecture
+  -> 1495 passed, 11 skipped.

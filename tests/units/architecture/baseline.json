@@ -185,7 +185,7 @@
     "back/objects/ontology/Import.py::Import.analyze_import": 107,
     "back/objects/ontology/Import.py::Import.merge_parsed_owl_to_domain": 136,
     "back/objects/ontology/generate/GenerateWorkflow.py::GenerateWorkflow.merge_draft_into_ontology": 233,
-    "back/objects/ontology/generate/GenerateWorkflow.py::GenerateWorkflow.run_completion": 139,
+    "back/objects/ontology/generate/GenerateWorkflow.py::GenerateWorkflow.run_completion": 124,
     "back/objects/ontology/generate/GenerateWorkflow.py::GenerateWorkflow.run_detection": 106,
     "back/objects/registry/PermissionService.py::PermissionService.save_domain_permissions_batch": 102,
     "back/objects/registry/RegistryCfg.py::RegistryCfg.from_domain": 127,

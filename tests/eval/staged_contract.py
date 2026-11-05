@@ -810,6 +810,73 @@ def _c_drops_extra_subclassof(_e, constraint) -> bool:
     return got == value["expect"]
 
 
+def _c_paged_completion(example, constraint) -> bool:
+    """Paged Stage-3 completion (issue #173): a substage answer too large for
+    one ~8k-token completion (a wide table's attributes, a large draft's
+    relations) must arrive across ``has_more``-flagged pages that the
+    orchestrator merges into one validated result — instead of dying on a
+    hopeless "re-emit concisely" loop after ``finish_reason=length``.
+
+    ``value`` = ``{"substage": "relations"|"attributes"|"axioms",
+    "pages": [{"items": [...], "has_more": bool, "truncated": bool?}],
+    "outcome": "success"|"failure"|"rejected", "expect_labels": [...]?}``.
+    Deterministic — scripts the real ``infer_*`` orchestrator, no live
+    endpoint. A ``truncated`` page is answered with ``finish_reason=length``;
+    the next page is the smaller-page retry."""
+    value = constraint["value"]
+    substage = str(value["substage"])
+    draft_cfg = example.get("input", {}).get("draft", {})
+    anchors = [
+        _anchor(a["id"], a.get("canonical_label", a["id"]))
+        for a in draft_cfg.get("existing_anchors", [])
+    ]
+    candidates = [
+        _candidate(
+            c.get("canonical_label", c["id"]), c["id"], included=c.get("included", True)
+        )
+        for c in draft_cfg.get("candidate_entities", [])
+    ]
+    draft = GenerateDraft.new(
+        source_fingerprint="s", existing_anchors=anchors, candidate_entities=candidates
+    )
+    for predecessor in _SUBSTAGE_ORDER[: _SUBSTAGE_ORDER.index(substage)]:
+        draft = draft.with_checkpoint(predecessor, CHECKPOINT_DONE, result={})
+    runner = {
+        "relations": staged.infer_relations,
+        "attributes": staged.infer_attributes,
+        "axioms": staged.infer_axioms,
+    }[substage]
+    def _page_answer(page: dict) -> dict:
+        resp = _answer(
+            json.dumps(
+                {
+                    substage: page.get("items", []),
+                    "has_more": bool(page.get("has_more")),
+                }
+            )
+        )
+        if page.get("truncated"):
+            resp["choices"][0]["finish_reason"] = "length"
+        return resp
+
+    responses = [_page_answer(page) for page in value["pages"]]
+    with patch.object(staged, "call_serving_endpoint") as mock_llm:
+        mock_llm.side_effect = responses
+        result = runner(host="h", token="t", endpoint_name="e", draft=draft)
+    outcome = str(value.get("outcome", "success"))
+    if outcome == "failure":
+        return not result.success
+    if outcome == "rejected":
+        return result.rejected and not result.success
+    expect = value.get("expect_labels")
+    if expect is not None:
+        got = [it.get("label", it.get("kind")) for it in result.result.get(substage, [])]
+        return result.success and got == expect
+    return result.success and len(result.result.get(substage, [])) == sum(
+        len(p.get("items", [])) for p in value["pages"]
+    )
+
+
 _CHECKS: Dict[str, Callable[[dict, dict], bool]] = {
     "all_candidates_included_by_default": _c_all_included,
     "excludes_existing_anchor_as_new": _c_excludes_anchor,
@@ -851,6 +918,7 @@ _CHECKS: Dict[str, Callable[[dict, dict], bool]] = {
     "keeps_distinct_predicates_same_pair": _c_relation_dedup,
     "keeps_existing_ontology_relation": _c_relation_dedup,
     "drops_extra_subclassof": _c_drops_extra_subclassof,
+    "paged_completion": _c_paged_completion,
 }
 
 

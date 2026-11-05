@@ -119,6 +119,34 @@ _SUBSTAGE_REF_EXTRACTORS: Dict[str, Callable[[Dict[str, Any]], Set[str]]] = {
 }
 
 
+def _record_substage_failure(store, draft: GenerateDraft, substage: str, result) -> Exception:
+    """Checkpoint a failed completion substage; return the error to raise.
+
+    A rejected output raises :class:`DraftValidationError` with the
+    rejection reason. Any other failure raises :class:`InfrastructureError`
+    whose user-visible message carries ``result.user_message`` when the
+    staged agent marked one as safe (paging truncation / stall / page
+    budget plus the discarded-work note) — ``detail`` is stripped in
+    production, so without it the user only saw "inference failed".
+    """
+    store.save(
+        draft.with_checkpoint(
+            substage,
+            CHECKPOINT_FAILED,
+            result={"error": result.error, "rejected": result.rejected},
+        )
+    )
+    if result.rejected:
+        return DraftValidationError(
+            result.rejection_reason or result.error or f"{substage} output rejected"
+        )
+    reason = getattr(result, "user_message", "") or ""
+    return InfrastructureError(
+        f"Ontology {substage} inference failed" + (f": {reason}" if reason else ""),
+        detail=result.error,
+    )
+
+
 def _document_folder(domain) -> str:
     """Registry folder for the domain's Knowledge Store, or '' when unsaved."""
     return (
@@ -489,22 +517,7 @@ class GenerateWorkflow:
             )
 
             if not result.success:
-                store.save(
-                    draft.with_checkpoint(
-                        substage,
-                        CHECKPOINT_FAILED,
-                        result={"error": result.error, "rejected": result.rejected},
-                    )
-                )
-                if result.rejected:
-                    raise DraftValidationError(
-                        result.rejection_reason
-                        or result.error
-                        or f"{substage} output rejected"
-                    )
-                raise InfrastructureError(
-                    f"Ontology {substage} inference failed", detail=result.error
-                )
+                raise _record_substage_failure(store, draft, substage, result)
 
             # Entity-closure re-check at the persistence boundary (see the
             # module-level comment on ``_SUBSTAGE_REF_EXTRACTORS``): a

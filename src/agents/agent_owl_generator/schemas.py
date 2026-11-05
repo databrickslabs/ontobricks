@@ -331,6 +331,19 @@ def _closed_id_enum(closed_ids: Iterable[str]) -> Dict[str, Any]:
     return {"type": "string", "enum": sorted({str(i) for i in closed_ids})}
 
 
+def _has_more_property() -> Dict[str, Any]:
+    """The pagination flag every completion page must carry.
+
+    Paged completion (issue #173): a substage's full answer can exceed the
+    endpoint's ~8k-token output budget (a 360-column table's attributes, a
+    40-entity draft's relations). The model therefore emits one bounded page
+    at a time and sets ``has_more`` when items remain; ``staged.py`` keeps
+    asking for the next page until it is false. The field is REQUIRED on an
+    honoured strict schema so the page boundary is explicit, never implied.
+    """
+    return {"type": "boolean"}
+
+
 def build_relations_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]:
     """Strict ``json_schema`` for Stage-3 relations: ``domain``/``range`` are
     each constrained to the exact closed entity id set — see module note
@@ -357,9 +370,10 @@ def build_relations_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]
                             "required": ["label", "domain", "range", "evidence"],
                             "additionalProperties": False,
                         },
-                    }
+                    },
+                    "has_more": _has_more_property(),
                 },
-                "required": ["relations"],
+                "required": ["relations", "has_more"],
                 "additionalProperties": False,
             },
         },
@@ -392,9 +406,10 @@ def build_attributes_response_format(closed_ids: Iterable[str]) -> Dict[str, Any
                             "required": ["label", "domain", "datatype", "evidence"],
                             "additionalProperties": False,
                         },
-                    }
+                    },
+                    "has_more": _has_more_property(),
                 },
-                "required": ["attributes"],
+                "required": ["attributes", "has_more"],
                 "additionalProperties": False,
             },
         },
@@ -427,9 +442,10 @@ def build_axioms_response_format(closed_ids: Iterable[str]) -> Dict[str, Any]:
                             "required": ["kind", "subject", "object"],
                             "additionalProperties": False,
                         },
-                    }
+                    },
+                    "has_more": _has_more_property(),
                 },
-                "required": ["axioms"],
+                "required": ["axioms", "has_more"],
                 "additionalProperties": False,
             },
         },
@@ -464,6 +480,21 @@ def _require_fields(item: Dict[str, Any], fields: Sequence[str], kind: str) -> N
             raise SchemaValidationError(f"{kind} is missing required '{field_name}'")
 
 
+def _coerce_has_more(raw: Any) -> bool:
+    """Read the ``has_more`` pagination flag (paged completion, issue #173).
+
+    Tolerant by design: a missing field means "no more pages" (single-page
+    back-compat), and a stray ``"true"``/``"false"`` string is coerced —
+    endpoints under ``response_format`` occasionally stringify bools the same
+    way they double-encode lists (see ``_unwrap_double_encoded``).
+    """
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().casefold() == "true"
+    return False
+
+
 def drop_inverse_relations(
     relations: List[Dict[str, Any]],
     existing: Sequence[Dict[str, Any]] = (),
@@ -475,7 +506,7 @@ def drop_inverse_relations(
 def parse_relations_payload(
     text: str, existing: Sequence[Dict[str, Any]] = ()
 ) -> Dict[str, Any]:
-    """Parse a Stage-3 relations answer: ``{"relations": [{label, domain, range}]}``.
+    """Parse a Stage-3 relations page: ``{"relations": [...], "has_more": bool}``.
 
     Paraphrases, inverses, and restatements of ``existing`` relations are
     dropped; distinct predicates on the same entity pair are kept.
@@ -484,16 +515,22 @@ def parse_relations_payload(
     relations = _require_list(data, "relations")
     for rel in relations:
         _require_fields(rel, ("label", "domain", "range"), "relation")
-    return {"relations": drop_inverse_relations(relations, existing)}
+    return {
+        "relations": drop_inverse_relations(relations, existing),
+        "has_more": _coerce_has_more(data.get("has_more")),
+    }
 
 
 def parse_attributes_payload(text: str) -> Dict[str, Any]:
-    """Parse a Stage-3 attributes answer: ``{"attributes": [{label, domain, datatype}]}``."""
+    """Parse a Stage-3 attributes page: ``{"attributes": [...], "has_more": bool}``."""
     data = parse_json_object(text)
     attributes = _require_list(data, "attributes")
     for attr in attributes:
         _require_fields(attr, ("label", "domain", "datatype"), "attribute")
-    return {"attributes": attributes}
+    return {
+        "attributes": attributes,
+        "has_more": _coerce_has_more(data.get("has_more")),
+    }
 
 
 def drop_multi_parent_subclass_axioms(
@@ -546,7 +583,8 @@ def parse_axioms_payload(
     for axiom in axioms:
         _require_fields(axiom, ("kind", "subject", "object"), "axiom")
     return {
-        "axioms": drop_multi_parent_subclass_axioms(axioms, existing_parents)
+        "axioms": drop_multi_parent_subclass_axioms(axioms, existing_parents),
+        "has_more": _coerce_has_more(data.get("has_more")),
     }
 
 

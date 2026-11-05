@@ -712,6 +712,332 @@ class TestInferAxioms:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Paged Stage-3 completion (issue #173)
+#
+# A single completion call cannot emit more items than fit in the ~8k-token
+# output budget — e.g. attributes for a 360-column table, or attributes/
+# relations across a 40-entity draft. The substage answer is therefore PAGED:
+# the model emits a bounded page and sets ``has_more`` when more items remain;
+# the orchestrator asks for the next page until ``has_more`` is false. Pages
+# are merged and deduped; schema + entity-closure validation still run on
+# every page — reject-only, never a rewrite.
+# ---------------------------------------------------------------------------
+
+
+class TestCompletionPagination:
+    def _run_attributes(self, responses, draft=None, options=None):
+        draft = draft or _draft(relations_done=True)
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = responses
+            result = staged.infer_attributes(
+                host="h", token="t", endpoint_name="e", draft=draft, options=options
+            )
+        return result, mock_llm
+
+    def test_paged_attributes_merge_across_pages(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        page2 = (
+            '{"attributes": [{"label": "carrierName", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": false}'
+        )
+        result, mock_llm = self._run_attributes([_answer(page1), _answer(page2)])
+        assert result.success is True
+        labels = [a["label"] for a in result.result["attributes"]]
+        assert labels == ["orderDate", "carrierName"]
+        assert mock_llm.call_count == 2
+
+    def test_paged_attributes_dedupe_repeats_across_pages(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        page2 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}, {"label": "orderTotal", '
+            '"domain": "cand-6", "datatype": "xsd:double"}], "has_more": false}'
+        )
+        result, _ = self._run_attributes([_answer(page1), _answer(page2)])
+        assert result.success is True
+        labels = [a["label"] for a in result.result["attributes"]]
+        assert labels == ["orderDate", "orderTotal"]
+
+    def test_continuation_message_asks_for_next_page(self):
+        page1 = (
+            '{"attributes": [{"label": "a", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": true}'
+        )
+        page2 = '{"attributes": [], "has_more": false}'
+        _, mock_llm = self._run_attributes([_answer(page1), _answer(page2)])
+        cont = mock_llm.call_args_list[1].args[3][-1]
+        assert cont["role"] == "user"
+        assert "next page" in cont["content"].lower()
+
+    def test_continuation_lists_emitted_keys_not_raw_pages(self):
+        # Review on #173: re-injecting each page's raw JSON would hit the
+        # INPUT cap (16 pages x ~8k tokens). The continuation must carry a
+        # compact emitted-key list instead — and no assistant turn may echo
+        # the previous page payload back.
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        page2 = '{"attributes": [], "has_more": false}'
+        _, mock_llm = self._run_attributes([_answer(page1), _answer(page2)])
+        messages = mock_llm.call_args_list[1].args[3]
+        assert "cand-6.orderDate" in messages[-1]["content"]
+        assert all(
+            m["role"] != "assistant" for m in messages
+        ), "raw page JSON must never be re-injected as an assistant turn"
+        assert '"datatype"' not in messages[-1]["content"]
+
+    def test_history_stays_constant_size_across_many_pages(self):
+        # Each page request is stateless [system, user]: the continuation
+        # REPLACES the previous one, so history holds ONE key list — not one
+        # per page (quadratic growth) — and no consecutive user turns.
+        def page(i, more):
+            attrs = [
+                {"label": f"col{i}_{j}", "domain": "cand-6", "datatype": "xsd:string"}
+                for j in range(25)
+            ]
+            return _answer(json.dumps({"attributes": attrs, "has_more": more}))
+
+        responses = iter([page(i, i < 11) for i in range(12)])
+        sent = []  # snapshot per call — the loop reuses one list object
+
+        def _llm(_host, _token, _ep, messages, **_kw):
+            sent.append([dict(m) for m in messages])
+            return next(responses)
+
+        with patch.object(staged, "call_serving_endpoint", side_effect=_llm):
+            result = staged.infer_attributes(
+                host="h", token="t", endpoint_name="e",
+                draft=_draft(relations_done=True),
+            )
+        assert result.success is True
+        assert len(result.result["attributes"]) == 300
+        assert len(sent) == 12
+        first_user = sent[0][1]["content"]
+        assert "Items already emitted" not in first_user
+        for messages in sent:
+            assert [m["role"] for m in messages] == ["system", "user"]
+            assert messages[1]["content"].startswith(first_user)
+            assert messages[1]["content"].count("Items already emitted") <= 1
+        # Size grows only by the current key list: the request for page 12
+        # carries 275 keys once, not 11 accumulated continuations.
+        last = sent[-1][1]["content"]
+        assert last.count("cand-6.col0_0") == 1
+        assert "cand-6.col10_24" in last and "cand-6.col11_0" not in last
+        tail_sizes = [len(m[1]["content"]) - len(first_user) for m in sent[1:]]
+        assert tail_sizes == sorted(tail_sizes)
+        assert tail_sizes[-1] < 12 * tail_sizes[0]
+
+    def test_truncation_retry_lists_emitted_keys_and_says_discarded(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        truncated = _answer('{"attributes": [{"label": "cu', "length")
+        page3 = '{"attributes": [], "has_more": false}'
+        responses = iter([_answer(page1), truncated, _answer(page3)])
+        sent = []
+
+        def _llm(_host, _token, _ep, messages, **_kw):
+            sent.append([dict(m) for m in messages])
+            return next(responses)
+
+        with patch.object(staged, "call_serving_endpoint", side_effect=_llm):
+            result = staged.infer_attributes(
+                host="h", token="t", endpoint_name="e",
+                draft=_draft(relations_done=True),
+            )
+        assert result.success is True
+        messages = sent[2]
+        assert [m["role"] for m in messages] == ["system", "user"]
+        retry = messages[1]["content"]
+        assert "discarded" in retry
+        assert "cand-6.orderDate" in retry
+        assert '{"label": "cu' not in retry  # truncated blob never re-sent
+
+    def test_emitted_key_list_is_bounded(self):
+        from agents.agent_owl_generator import prompts
+
+        keys = [f"cand-6.a{i}" for i in range(prompts._MAX_EMITTED_KEYS + 50)]
+        text = prompts.build_continuation_user_prompt("attributes", keys)
+        assert "50 earlier items" in text
+        assert "cand-6.a49\n" not in text and "cand-6.a50\n" in text
+        assert keys[-1] in text
+
+    def test_paging_failures_carry_a_user_safe_message(self):
+        repeats = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        result, _ = self._run_attributes([_answer(repeats)] * 5)
+        assert "stalled" in result.user_message
+        assert "not checkpointed" in result.user_message
+
+    def test_request_errors_are_not_marked_user_safe(self):
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = requests.exceptions.ConnectionError("raw http")
+            result = staged.infer_attributes(
+                host="h", token="t", endpoint_name="e",
+                draft=_draft(relations_done=True),
+            )
+        assert result.success is False
+        assert result.user_message == ""
+
+    def test_single_duplicate_page_is_tolerated_then_paging_continues(self):
+        # One page that only restates emitted keys is tolerated — the next
+        # page may still produce NEW items (the emitted-key list gives the
+        # model something to avoid).
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        page_dup = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        page3 = (
+            '{"attributes": [{"label": "carrierName", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": false}'
+        )
+        result, mock_llm = self._run_attributes(
+            [_answer(page1), _answer(page_dup), _answer(page3)]
+        )
+        assert result.success is True
+        labels = [a["label"] for a in result.result["attributes"]]
+        assert labels == ["orderDate", "carrierName"]
+        assert mock_llm.call_count == 3
+
+    def test_duplicate_page_streak_fails_instead_of_silent_data_loss(self):
+        # Review on #173: a has_more page contributing zero NEW items must
+        # NOT end the substage as success — the model still claims more
+        # items exist, so stopping would silently drop them. Two consecutive
+        # duplicate pages (despite the emitted-key list) fail clearly.
+        repeats = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        result, mock_llm = self._run_attributes([_answer(repeats)] * 5)
+        assert result.success is False
+        assert "stalled" in result.error
+        # 1 new page + _MAX_DUPLICATE_PAGES duplicate pages, then stop.
+        assert mock_llm.call_count == 1 + staged._MAX_DUPLICATE_PAGES
+        # The error must say how much paid work is being discarded.
+        assert "not checkpointed" in result.error
+
+    def test_rejection_error_reports_discarded_pages(self):
+        # Review on #173 ("one bad page discards paid work"): a rejected
+        # page 12 must say how much accepted work the substage loses —
+        # pages stay intentionally un-checkpointed, but visibly so.
+        page1 = (
+            '{"attributes": [{"label": "a", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": true}'
+        )
+        page2 = (
+            '{"attributes": [{"label": "b", "domain": "cand-ghost", '
+            '"datatype": "xsd:string"}], "has_more": false}'
+        )
+        result, _ = self._run_attributes([_answer(page1), _answer(page2)])
+        assert result.success is False
+        assert result.rejected is True
+        assert "cand-ghost" in result.rejection_reason
+        assert "not checkpointed" in result.rejection_reason
+
+    def test_page_budget_exhausted_fails_clearly(self):
+        page = (
+            '{"attributes": [{"label": "a%d", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": true}'
+        )
+        responses = [_answer(page % i) for i in range(40)]
+        result, _ = self._run_attributes(responses)
+        assert result.success is False
+        assert "page" in result.error.lower()
+
+    def test_truncated_page_retries_with_a_smaller_page(self):
+        # A page that ignores the bounded-page contract and still truncates
+        # gets ONE retry asking for a smaller page — then fails clearly.
+        truncated = _answer('{"attributes": [{"label": "cu', "length")
+        page = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": false}'
+        )
+        result, mock_llm = self._run_attributes([truncated, _answer(page)])
+        assert result.success is True
+        assert mock_llm.call_count == 2
+        retry_msg = mock_llm.call_args_list[1].args[3][-1]["content"].lower()
+        assert "fewer" in retry_msg or "smaller" in retry_msg
+
+    def test_truncated_page_that_never_fits_fails(self):
+        truncated = _answer('{"attributes": [{"label": "cu', "length")
+        result, _ = self._run_attributes([truncated, truncated])
+        assert result.success is False
+        assert "truncated" in result.error.lower()
+
+    def test_page_with_out_of_closure_reference_is_rejected(self):
+        page1 = (
+            '{"attributes": [{"label": "a", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": true}'
+        )
+        page2 = (
+            '{"attributes": [{"label": "b", "domain": "cand-ghost", '
+            '"datatype": "xsd:string"}], "has_more": false}'
+        )
+        result, mock_llm = self._run_attributes([_answer(page1), _answer(page2)])
+        assert result.success is False
+        assert result.rejected is True
+        assert "cand-ghost" in result.rejection_reason
+
+    def test_paged_relations_merge_and_dedupe_semantic_inverse(self):
+        draft = _draft(
+            anchors=[
+                GenerateEntity.locked_anchor("cls-Customer-a1", "Customer"),
+            ],
+            candidates=[GenerateEntity.new_candidate("Carrier", entity_id="cand-6")],
+        )
+        page1 = (
+            '{"relations": [{"label": "handles", "domain": "cand-6", '
+            '"range": "cls-Customer-a1"}], "has_more": true}'
+        )
+        # Page 2 restates the same fact as a passive inverse — dropped by the
+        # semantic dedupe applied over the merged pages.
+        page2 = (
+            '{"relations": [{"label": "handled", "domain": '
+            '"cls-Customer-a1", "range": "cand-6"}], "has_more": false}'
+        )
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = [_answer(page1), _answer(page2)]
+            result = staged.infer_relations(
+                host="h", token="t", endpoint_name="e", draft=draft
+            )
+        assert result.success is True
+        assert [r["label"] for r in result.result["relations"]] == ["handles"]
+
+    def test_missing_has_more_means_single_page(self):
+        # Back-compat: an endpoint/model that ignores the pagination field
+        # still completes in one call when has_more is absent.
+        payload = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}]}'
+        )
+        result, mock_llm = self._run_attributes([_answer(payload)])
+        assert result.success is True
+        assert mock_llm.call_count == 1
+
+    def test_attributes_schema_requires_has_more(self):
+        draft = _draft(relations_done=True)
+        _, mock_llm = self._run_attributes([_answer('{"attributes": []}')], draft)
+        rf = mock_llm.call_args_list[0].kwargs["response_format"]
+        schema = rf["json_schema"]["schema"]
+        assert schema["properties"]["has_more"]["type"] == "boolean"
+        assert "has_more" in schema["required"]
+
+
 class TestCompletionResponseFormatFallbackIntegration:
     def test_infer_relations_succeeds_when_response_format_unsupported(self):
         rejection = MagicMock()
