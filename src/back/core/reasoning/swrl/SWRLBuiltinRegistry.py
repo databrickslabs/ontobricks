@@ -290,15 +290,29 @@ class SWRLBuiltinRegistry:
             .replace("CURRENT_TIMESTAMP()", "CURRENT_TIMESTAMP")
         )
 
+    @staticmethod
+    def _normalize(name: str) -> str:
+        """Case-fold *name* and drop its namespace.
+
+        Accepts the bare name, the editor's ``swrlb:``/``swrl:`` prefix and a
+        full IRI (``http://www.w3.org/2003/11/swrlb#greaterThanOrEqual``).
+        The local name is the part after the last ``#`` or ``/``.
+        """
+        local = re.split(r"[#/]", name)[-1].lower()
+        for prefix in ("swrlb:", "swrl:"):
+            if local.startswith(prefix):
+                return local[len(prefix) :]
+        return local
+
     @classmethod
     def get(cls, name: str) -> Optional[SWRLBuiltin]:
-        """Look up a built-in by name (case-insensitive)."""
-        return cls._BUILTINS.get(name.lower())
+        """Look up a built-in by name (case-insensitive, prefix-tolerant)."""
+        return cls._BUILTINS.get(cls._normalize(name))
 
     @classmethod
     def is_builtin(cls, name: str) -> bool:
         """Return True if *name* is a registered built-in."""
-        return name.lower() in cls._BUILTINS
+        return cls._normalize(name) in cls._BUILTINS
 
     @classmethod
     def all(cls) -> Dict[str, SWRLBuiltin]:

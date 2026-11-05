@@ -225,7 +225,16 @@ class SWRLEngine:
             if name:
                 uri_map[name.lower()] = uri
 
-        for prop in self._ontology.get("properties", []):
+        # Datatype properties live on the classes; fold them in so that
+        # ``nights(?x, ?n)`` resolves to the data namespace like object
+        # properties do. Object properties come last so they win a same-name
+        # clash, as in AggregateRuleEngine._build_uri_map.
+        data_props = [
+            p
+            for cls_def in self._ontology.get("classes", [])
+            for p in cls_def.get("dataProperties", []) or []
+        ]
+        for prop in data_props + list(self._ontology.get("properties", [])):
             name = prop.get("name", "") or prop.get("localName", "")
             uri = prop.get("uri", "")
             if data_ns and uri and not uri.startswith(data_ns):
