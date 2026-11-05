@@ -1,0 +1,24 @@
+================================================================================
+## Fix decision-table editor column removal
+================================================================================
+
+Context: In the Decision Table edit popup, after adding a second input column
+there was no way to remove it. ``_dtRemoveColumn`` already existed and correctly
+spliced columns/conditions, but the grid header never rendered a remove control
+and the modal click handler only wired row removal.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-business-rules.js
+   Render a remove-column control on each header when more than one column is
+   present, and wire ``data-dt-remove-col`` clicks to ``_dtRemoveColumn``.
+2. tests/units/front/test_decision_table_editor_help.py
+   Assert the remove-column UI is present and that removing a column splices
+   both headers and row conditions.
+
+Modified files:
+- src/front/static/ontology/js/ontology-business-rules.js
+- tests/units/front/test_decision_table_editor_help.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9907 passed, 326 skipped, 8 deselected, 39 warnings in 49.39s

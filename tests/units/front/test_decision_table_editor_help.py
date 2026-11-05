@@ -83,6 +83,42 @@ def test_modal_has_live_preview_region():
     assert "An instance matches only if it satisfies <strong>every</strong> row" in js
 
 
+def test_editor_can_remove_added_columns():
+    """Added input columns must expose a remove control wired to _dtRemoveColumn."""
+    js = JS.read_text(encoding="utf-8")
+    assert "data-dt-remove-col=" in js
+    assert "closest('[data-dt-remove-col]')" in js
+    assert "this._dtRemoveColumn(" in js
+    assert "this._dtColumns.splice(ci, 1)" in js
+
+
+@needs_node
+def test_remove_column_splices_header_and_row_conditions():
+    harness = """
+const fs = require('fs');
+global.window = {};
+global.document = {
+  addEventListener: () => {},
+  getElementById: () => ({ value: '', classList: { toggle() {}, add() {}, remove() {} }, replaceChildren() {}, checked: false }),
+};
+eval(fs.readFileSync(__SOURCE__, 'utf8'));
+const BR = window.BusinessRulesModule;
+BR._dtColumns = [{ property: 'income' }, { property: 'country' }];
+BR._dtRows = [{ conditions: [{ op: 'gt', value: '1' }, { op: 'eq', value: 'FR' }], action_value: '' }];
+BR._dtRenderGrid = () => {};
+BR._dtRemoveColumn(1);
+process.stdout.write(JSON.stringify({
+  columns: BR._dtColumns,
+  conditions: BR._dtRows[0].conditions,
+}));
+""".replace("__SOURCE__", json.dumps(str(JS)))
+    done = subprocess.run(["node", "-e", harness], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0, done.stderr
+    out = json.loads(done.stdout)
+    assert out["columns"] == [{"property": "income"}]
+    assert out["conditions"] == [{"op": "gt", "value": "1"}]
+
+
 @needs_node
 def test_describe_requires_target():
     out = _describe()

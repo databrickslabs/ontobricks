@@ -123,6 +123,11 @@ window.BusinessRulesModule = {
         });
 
         modal.addEventListener('click', (e) => {
+            const rmCol = e.target.closest('[data-dt-remove-col]');
+            if (rmCol && modal.contains(rmCol)) {
+                this._dtRemoveColumn(parseInt(rmCol.getAttribute('data-dt-remove-col'), 10));
+                return;
+            }
             const rm = e.target.closest('[data-dt-remove-row]');
             if (rm && modal.contains(rm)) {
                 this._dtRemoveRow(parseInt(rm.getAttribute('data-dt-remove-row'), 10));
@@ -480,13 +485,18 @@ window.BusinessRulesModule = {
         let hdr = '<tr><th class="text-center small text-muted dt-grid-num-col">#</th>';
         this._dtColumns.forEach((col, ci) => {
             hdr += `<th class="dt-col-header">` +
+                `<div class="d-flex align-items-center gap-1">` +
                 `<select class="form-select form-select-sm" data-dt-hdr-col="${ci}">` +
                 `<option value="">Property…</option>`;
             for (const p of filteredProps) {
                 const pName = p.name || p.label || '';
                 hdr += `<option value="${this._esc(pName)}" ${pName === col.property ? 'selected' : ''}>${this._esc(pName)}</option>`;
             }
-            hdr += `</select></th>`;
+            hdr += `</select>`;
+            if (this._dtColumns.length > 1) {
+                hdr += `<i class="bi bi-x-circle dt-remove-btn" data-dt-remove-col="${ci}" title="Remove column" role="button" tabindex="0"></i>`;
+            }
+            hdr += `</div></th>`;
         });
         hdr += '<th class="dt-grid-action-col"></th></tr>';
         thead.innerHTML = hdr;
