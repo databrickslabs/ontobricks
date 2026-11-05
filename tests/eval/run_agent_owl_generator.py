@@ -76,7 +76,9 @@ THRESHOLDS = ROOT / "tests/eval/thresholds.yaml"
 # prove a substage answer that exceeds the output budget completes across
 # `has_more`-flagged pages — merged, deduped, smaller-page truncation retry,
 # page-budget failure, and per-page closure rejection — see SPEC.md §3a/§6.
-_MIN_STAGED_EXAMPLES = 41
+# Raised 41 -> 43: extra-parent axioms across pages and case-folded attribute
+# keys must stay in the dataset so those merge/dedupe paths cannot regress.
+_MIN_STAGED_EXAMPLES = 43
 _REQUIRED_STAGED_CONSTRAINT_FIELDS = {"kind", "value"}
 
 # Every required staged topic must be exercised by at least one staged

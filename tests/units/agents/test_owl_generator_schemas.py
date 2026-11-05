@@ -596,6 +596,87 @@ class TestAttributesResponseFormat:
         assert set(item["required"]) == {"label", "domain", "datatype", "evidence"}
 
 
+class TestCompletionHasMoreFlag:
+    """Paged Stage-3 completion (issue #173): every page must carry
+    ``has_more`` so the orchestrator can stop without implying a boundary.
+    """
+
+    @pytest.mark.parametrize(
+        "builder",
+        [
+            schemas.build_relations_response_format,
+            schemas.build_attributes_response_format,
+            schemas.build_axioms_response_format,
+        ],
+    )
+    def test_response_format_requires_boolean_has_more(self, builder):
+        schema = builder({"cand-6"})["json_schema"]["schema"]
+        assert schema["properties"]["has_more"] == {"type": "boolean"}
+        assert "has_more" in schema["required"]
+
+    def test_parse_attributes_reads_native_bool(self):
+        payload = json.dumps(
+            {
+                "attributes": [
+                    {"label": "x", "domain": "cand-6", "datatype": "xsd:string"}
+                ],
+                "has_more": True,
+            }
+        )
+        assert schemas.parse_attributes_payload(payload)["has_more"] is True
+
+    def test_parse_attributes_coerces_stringified_bool(self):
+        # Endpoints under response_format occasionally stringify booleans
+        # the same way they double-encode lists.
+        payload = json.dumps(
+            {
+                "attributes": [
+                    {"label": "x", "domain": "cand-6", "datatype": "xsd:string"}
+                ],
+                "has_more": "true",
+            }
+        )
+        assert schemas.parse_attributes_payload(payload)["has_more"] is True
+        payload_false = json.dumps(
+            {
+                "attributes": [
+                    {"label": "x", "domain": "cand-6", "datatype": "xsd:string"}
+                ],
+                "has_more": "FALSE",
+            }
+        )
+        assert schemas.parse_attributes_payload(payload_false)["has_more"] is False
+
+    def test_parse_missing_has_more_is_single_page(self):
+        payload = json.dumps(
+            {
+                "relations": [
+                    {
+                        "label": "handles",
+                        "domain": "cand-6",
+                        "range": "cls-Customer-a1",
+                    }
+                ]
+            }
+        )
+        assert schemas.parse_relations_payload(payload)["has_more"] is False
+
+    def test_parse_axioms_returns_has_more(self):
+        payload = json.dumps(
+            {
+                "axioms": [
+                    {
+                        "kind": "subClassOf",
+                        "subject": "cand-6",
+                        "object": "cls-Customer-a1",
+                    }
+                ],
+                "has_more": False,
+            }
+        )
+        assert schemas.parse_axioms_payload(payload)["has_more"] is False
+
+
 class TestAxiomsResponseFormat:
     def test_subject_and_object_are_enum_constrained_to_closed_ids(self):
         rf = schemas.build_axioms_response_format({"cls-Customer-a1", "cand-6"})

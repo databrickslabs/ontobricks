@@ -1037,6 +1037,176 @@ class TestCompletionPagination:
         assert schema["properties"]["has_more"]["type"] == "boolean"
         assert "has_more" in schema["required"]
 
+    def test_stringified_has_more_true_keeps_paging(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": "true"}'
+        )
+        page2 = (
+            '{"attributes": [{"label": "carrierName", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": "false"}'
+        )
+        result, mock_llm = self._run_attributes([_answer(page1), _answer(page2)])
+        assert result.success is True
+        assert mock_llm.call_count == 2
+        labels = [a["label"] for a in result.result["attributes"]]
+        assert labels == ["orderDate", "carrierName"]
+
+    def test_attribute_keys_are_casefolded_when_deduping(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        page2 = (
+            '{"attributes": [{"label": "OrderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}, {"label": "orderTotal", '
+            '"domain": "cand-6", "datatype": "xsd:double"}], "has_more": false}'
+        )
+        result, _ = self._run_attributes([_answer(page1), _answer(page2)])
+        assert result.success is True
+        labels = [a["label"] for a in result.result["attributes"]]
+        assert labels == ["orderDate", "orderTotal"]
+
+    def test_max_completion_pages_option_overrides_default_budget(self):
+        page = (
+            '{"attributes": [{"label": "a%d", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": true}'
+        )
+        result, mock_llm = self._run_attributes(
+            [_answer(page % i) for i in range(10)],
+            options={"max_completion_pages": 2},
+        )
+        assert result.success is False
+        assert "2-page" in result.error
+        assert result.user_message
+        assert mock_llm.call_count == 2
+
+    def test_page_budget_failure_is_user_safe(self):
+        page = (
+            '{"attributes": [{"label": "a%d", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": true}'
+        )
+        result, _ = self._run_attributes(
+            [_answer(page % i) for i in range(20)],
+            options={"max_completion_pages": 3},
+        )
+        assert "not checkpointed" in result.user_message
+        assert "3 attributes gathered over 3 accepted page(s)" in result.user_message
+
+    def test_truncation_retry_budget_resets_on_an_accepted_page(self):
+        # Each truncated PAGE gets one smaller-page retry; an accepted page
+        # must reset that counter so a later truncated page is still retried.
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        truncated = _answer('{"attributes": [{"label": "cu', "length")
+        page3 = (
+            '{"attributes": [{"label": "carrierName", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": false}'
+        )
+        result, mock_llm = self._run_attributes(
+            [_answer(page1), truncated, _answer(page3)]
+        )
+        assert result.success is True
+        assert mock_llm.call_count == 3
+        labels = [a["label"] for a in result.result["attributes"]]
+        assert labels == ["orderDate", "carrierName"]
+
+    def test_truncation_after_accepted_pages_reports_discarded_work(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        truncated = _answer('{"attributes": [{"label": "cu', "length")
+        result, _ = self._run_attributes([_answer(page1), truncated, truncated])
+        assert result.success is False
+        assert result.user_message
+        assert "truncated" in result.user_message
+        assert "1 attributes gathered over 1 accepted page(s)" in result.user_message
+
+    def test_malformed_later_page_reports_discarded_accepted_pages(self):
+        page1 = (
+            '{"attributes": [{"label": "a", "domain": "cand-6", '
+            '"datatype": "xsd:string"}], "has_more": true}'
+        )
+        result, _ = self._run_attributes(
+            [_answer(page1), _answer("not json at all {{{")]
+        )
+        assert result.success is False
+        assert result.rejected is True
+        assert "not checkpointed" in result.rejection_reason
+        assert "1 attributes gathered over 1 accepted page(s)" in result.rejection_reason
+
+    def test_paged_axioms_merge_and_drop_extra_subclassof(self):
+        draft = _draft(
+            anchors=[
+                GenerateEntity.locked_anchor("cls-Customer-a1", "Customer"),
+            ],
+            candidates=[
+                GenerateEntity.new_candidate("Carrier", entity_id="cand-6"),
+                GenerateEntity.new_candidate("Insurer", entity_id="cand-9"),
+            ],
+            relations_done=True,
+            attributes_done=True,
+        )
+        page1 = (
+            '{"axioms": [{"kind": "subClassOf", "subject": "cand-6", '
+            '"object": "cls-Customer-a1"}], "has_more": true}'
+        )
+        page2 = (
+            '{"axioms": [{"kind": "subClassOf", "subject": "cand-6", '
+            '"object": "cand-9"}, {"kind": "disjointWith", '
+            '"subject": "cand-9", "object": "cand-6"}], "has_more": false}'
+        )
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = [_answer(page1), _answer(page2)]
+            result = staged.infer_axioms(
+                host="h", token="t", endpoint_name="e", draft=draft
+            )
+        assert result.success is True
+        kinds = [(a["kind"], a["subject"], a["object"]) for a in result.result["axioms"]]
+        assert kinds == [
+            ("subClassOf", "cand-6", "cls-Customer-a1"),
+            ("disjointWith", "cand-9", "cand-6"),
+        ]
+
+    def test_relations_and_axioms_schemas_require_has_more(self):
+        draft = _draft(relations_done=True, attributes_done=True)
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = [_answer('{"relations": []}')]
+            staged.infer_relations(host="h", token="t", endpoint_name="e", draft=_draft())
+        rel_schema = mock_llm.call_args_list[0].kwargs["response_format"][
+            "json_schema"
+        ]["schema"]
+        assert "has_more" in rel_schema["required"]
+
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = [_answer('{"axioms": []}')]
+            staged.infer_axioms(host="h", token="t", endpoint_name="e", draft=draft)
+        ax_schema = mock_llm.call_args_list[0].kwargs["response_format"][
+            "json_schema"
+        ]["schema"]
+        assert "has_more" in ax_schema["required"]
+
+    def test_progress_callback_reports_item_count_between_pages(self):
+        page1 = (
+            '{"attributes": [{"label": "orderDate", "domain": "cand-6", '
+            '"datatype": "xsd:date"}], "has_more": true}'
+        )
+        page2 = '{"attributes": [], "has_more": false}'
+        steps = []
+        with patch.object(staged, "call_serving_endpoint") as mock_llm:
+            mock_llm.side_effect = [_answer(page1), _answer(page2)]
+            staged.infer_attributes(
+                host="h",
+                token="t",
+                endpoint_name="e",
+                draft=_draft(relations_done=True),
+                on_step=steps.append,
+            )
+        assert any("1 items so far" in s for s in steps)
+
 
 class TestCompletionResponseFormatFallbackIntegration:
     def test_infer_relations_succeeds_when_response_format_unsupported(self):
@@ -1227,6 +1397,16 @@ class TestPrompts:
         # counter-example, so the model can't misinterpret "no brackets"
         # as merely stylistic.
         assert "[agent]" in lowered
+
+    def test_completion_system_prompts_require_paged_output(self):
+        for builder in (
+            prompts.build_relations_system_prompt,
+            prompts.build_attributes_system_prompt,
+            prompts.build_axioms_system_prompt,
+        ):
+            text = builder()
+            assert "PAGED OUTPUT" in text
+            assert '"has_more": false' in text
 
     def test_axioms_prompt_forbids_multiple_inheritance(self):
         draft = _draft(

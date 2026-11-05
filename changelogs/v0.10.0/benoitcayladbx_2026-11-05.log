@@ -397,3 +397,38 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings.
+
+================================================================================
+## Add regression tests for paged Stage-3 completion
+================================================================================
+
+Context: PR #206 (paged completion, issue #173) landed on 0.10.0 with
+orchestrator coverage, but several contracts from the review were only
+exercised on the attributes path or not at all: stringified ``has_more``,
+case-folded attribute keys, ``max_completion_pages``, truncation retry
+reset, discarded-work counts, extra ``subClassOf`` across axiom pages, and
+the pagination rule in all three completion prompts.
+
+Changes:
+
+1. tests/units/agents/test_owl_generator_schemas.py
+   Require ``has_more`` on the three completion ``response_format`` builders
+   and pin parse-time bool / string / missing-field coercion.
+2. tests/units/agents/test_owl_generator_staged.py
+   Cover stringified paging, casefold dedupe, page-budget override, user-safe
+   truncation and budget errors, axiom extra-parent merge, and prompt paging.
+3. tests/eval/datasets/agent_owl_generator/baseline.jsonl
+   Add ``staged-paged-axioms-extra-parent-012`` and
+   ``staged-paged-attributes-casefold-013``.
+4. tests/eval/run_agent_owl_generator.py
+   Raise ``_MIN_STAGED_EXAMPLES`` 41 → 43 so the new rows cannot disappear.
+
+Modified files:
+- tests/units/agents/test_owl_generator_schemas.py
+- tests/units/agents/test_owl_generator_staged.py
+- tests/eval/datasets/agent_owl_generator/baseline.jsonl
+- tests/eval/run_agent_owl_generator.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9976 passed, 326 skipped, 8 deselected, 39 warnings in 51.09s
+
