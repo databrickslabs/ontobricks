@@ -74,12 +74,17 @@ class TestDeltaObjectHelpers:
         assert object_base("triplestore_foo_V1__smu_s1") == "triplestore_foo_V1"
         assert object_base("triplestore_foo_V1__sms_s1") == "triplestore_foo_V1"
         assert object_base("triplestore_foo_V1__smp_s1") == "triplestore_foo_V1"
+        assert object_base("triplestore_foo_V1__smb_s1") == "triplestore_foo_V1"
+        assert object_base("triplestore_foo_V1__smo_s1") == "triplestore_foo_V1"
 
     def test_group_folds_simulation_objects(self):
         raw = [
             {"name": "triplestore_a_V1", "table_type": "VIEW"},
             {"name": "triplestore_a_V1__smu_s1", "table_type": "VIEW"},
             {"name": "triplestore_a_V1__sim_s1", "table_type": "MANAGED"},
+            {"name": "triplestore_a_V1__smb_s1", "table_type": "MANAGED"},
+            {"name": "triplestore_a_V1__smo_s1", "table_type": "MANAGED"},
+            {"name": "triplestore_a_V1__smp_s1", "table_type": "MANAGED"},
         ]
         groups = group_triplestore_objects(raw, "reg_cat", "reg_sch")
         assert set(groups) == {"triplestore_a_V1"}
@@ -87,6 +92,9 @@ class TestDeltaObjectHelpers:
         assert names == [
             "triplestore_a_V1__smu_s1",
             "triplestore_a_V1",
+            "triplestore_a_V1__smb_s1",
+            "triplestore_a_V1__smo_s1",
+            "triplestore_a_V1__smp_s1",
             "triplestore_a_V1__sim_s1",
         ]
 

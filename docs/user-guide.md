@@ -2073,12 +2073,13 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 **Settings → Lakebase → Objects** groups each domain/version's reader view,
 `_sync` bulk table, `__app` writable companion, `_adj_in`, `_adj_out`,
-`_entity_search`, and `_props` tables into one collapsible card. Simulation
+`_entity_search`, `_entity_search_asserted`, and `_props` tables into one collapsible card. Simulation
 sandbox tables (`__sim_<id>`), Explorer overlay views (`__smu_<id>`),
-and overlay-key companions (`__smp_<id>`) fold into that same card under
+overlay-key companions (`__smp_<id>`), before-picture companions (`__smb_<id>`),
+and origin companions (`__smo_<id>`) fold into that same card under
 a **Simulations** subsection, keyed by scenario id — they are not listed
 as extra domain cards. Each scenario row has **Delete**, which drops that
-sandbox, its overlay keys, and its overlay views together (views first). Its count includes every listed storage, index, and
+sandbox, its companions, and its overlay views together (views first). Its count includes every listed storage, index, and
 simulation object. Individual **Drop** actions remain available; **Delete
 all objects for this domain** removes the whole group, including the four
 rebuildable graph-index tables and any simulation sandboxes.

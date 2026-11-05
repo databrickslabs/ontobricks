@@ -203,12 +203,21 @@ class TestAppPermissionsInBundle:
             assert any(p.get("group_name") == "users" for p in perms)
 
     def test_each_app_declares_user_api_scopes_for_obo(self):
+        """Only the non-default ``sql`` scope is declared (MCP OBO, #208).
+
+        The identity scopes are platform defaults; the Apps create API rejects
+        them when listed explicitly (see changelog 2026-11-03).
+        """
         data = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
         apps = data["resources"]["apps"]
-        needed = {"sql", "iam.current-user:read", "iam.access-control:read"}
+        needed = {"sql"}
+        forbidden = {"iam.current-user:read", "iam.access-control:read"}
         for key in ("ontobricks_dev_app", "mcp_ontobricks_app"):
             scopes = set(apps[key].get("user_api_scopes") or [])
             assert needed <= scopes, f"{key} missing user_api_scopes {needed - scopes}"
+            assert not (forbidden & scopes), (
+                f"{key} declares platform-default scopes {forbidden & scopes}"
+            )
 
 
 class TestAnalyticsJobPermissionBootstrap:

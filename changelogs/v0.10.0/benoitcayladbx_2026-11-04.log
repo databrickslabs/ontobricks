@@ -569,3 +569,73 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9902 passed, 326 skipped, 8 deselected, 39 warnings in 50.08s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Group __smb_, __smo_, and _entity_search_asserted in Settings Lakebase & Lakehouse
+================================================================================
+
+Context: Settings → Lakebase and Settings → Lakehouse listed ``__smb_``
+(before-picture) and ``__smo_`` (origin) companions as separate domain cards
+instead of folding them under their simulation scenario. Similarly,
+``_entity_search_asserted`` tables (such as ``cust360auto_v5_entity_search_asserted``)
+were detached from their domain card because ``objectBase`` only stripped
+``_entity_search``.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Expand ``simulationSuffix`` to match ``__smb_`` and ``__smo_`` in addition to
+   ``__sim_``, ``__smu_``, ``__sms_``, and ``__smp_``. Add
+   ``_entity_search_asserted`` to ``domainSuffixes`` in ``objectBase`` ahead of
+   ``_entity_search`` to ensure longest-suffix matching.
+2. src/back/core/graphdb/delta/objects.py
+   Update ``_SIM_LEAF_RE`` to recognise ``smb`` and ``smo`` markers. In
+   ``_drop_sort_key``, order ``smb`` and ``smo`` companion tables to drop with
+   ``smp`` before the sandbox table. Update ``object_base`` docstring.
+3. tests/units/front/test_lakebase_object_grouping.py
+   Assert ``__(sim|smu|sms|smp|smb|smo)_`` pattern in ``settings.js``, verify all
+   marker suffixes match the simulation regex, and assert
+   ``_entity_search_asserted`` is recognized before ``_entity_search``.
+4. tests/units/settings/test_delta_objects.py
+   Add tests verifying ``object_base`` strips ``__smb_`` and ``__smo_`` and
+   ``group_triplestore_objects`` groups and sorts companions before the sandbox.
+5. docs/user-guide.md
+   Document ``__smb_<id>``, ``__smo_<id>``, and ``_entity_search_asserted`` in
+   the Lakebase physical objects reference.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- src/back/core/graphdb/delta/objects.py
+- tests/units/front/test_lakebase_object_grouping.py
+- tests/units/settings/test_delta_objects.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 1 failed, 9904 passed, 326 skipped, 8 deselected, 39 warnings in 49.41s. Remaining failure is pre-existing ``test_each_app_declares_user_api_scopes_for_obo``.
+
+================================================================================
+## Align test_each_app_declares_user_api_scopes_for_obo with sql-only scopes
+================================================================================
+
+Context: The only remaining failure in `uv run --frozen pytest -q -m "not scenario"`
+was `test_each_app_declares_user_api_scopes_for_obo`. It still required the
+identity scopes (`iam.current-user:read`, `iam.access-control:read`) that were
+intentionally removed from `databricks.yml` and `app.yaml.template` on
+2026-11-03: the Databricks Apps create API rejects them as explicit scopes
+(platform defaults). The test was stale, not the bundle.
+
+Changes:
+
+1. tests/units/settings/test_bundle_job_resource.py
+   `test_each_app_declares_user_api_scopes_for_obo` now requires `sql` and
+   asserts the identity scopes are NOT declared on either app.
+2. docs/deployment.md
+   MCP section: `user_api_scopes` lists only `sql`; identity scopes are
+   documented as platform defaults that must not be declared.
+
+Modified files:
+- tests/units/settings/test_bundle_job_resource.py
+- docs/deployment.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-04.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9905 passed, 326 skipped, 8 deselected, 39 warnings in 54.18s (0 failed).

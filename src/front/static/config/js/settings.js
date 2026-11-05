@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Analytics groups whose slug matches no domain, keyed by that slug.
     let _dtOrphanRegistry = {};
     function simulationSuffix(name) {
-                const match = String(name || '').match(/__(sim|smu|sms|smp)_([a-z0-9]+)$/i);
+        const match = String(name || '').match(/__(sim|smu|sms|smp|smb|smo)_([a-z0-9]+)$/i);
         if (!match) return null;
         return { marker: match[1].toLowerCase(), id: match[2].toLowerCase() };
     }
@@ -3188,12 +3188,14 @@ document.addEventListener('DOMContentLoaded', function () {
             // Strip graph-storage and index suffixes to get the common base shared
             // by every physical object belonging to one domain/version card.
             // Tables: "{base}_sync", "{base}__app", "{base}_adj_*",
-            //         "{base}_entity_search", and "{base}_props" → base
+            //         "{base}_entity_search", "{base}_entity_search_asserted",
+            //         and "{base}_props" → base
             // Views:  "{base}"                          → base
             // Simulations: "{base}__sim_<id>", "{base}__smu_<id>",
-            //              "{base}__smp_<id>", leftover "{base}__sms_<id>" → base
+            //              "{base}__smp_<id>", "{base}__smb_<id>",
+            //              "{base}__smo_<id>", leftover "{base}__sms_<id>" → base
             function simulationSuffix(name) {
-                const match = String(name || '').match(/__(sim|smu|sms|smp)_([a-z0-9]+)$/i);
+                const match = String(name || '').match(/__(sim|smu|sms|smp|smb|smo)_([a-z0-9]+)$/i);
                 if (!match) return null;
                 return { marker: match[1].toLowerCase(), id: match[2].toLowerCase() };
             }
@@ -3205,6 +3207,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 if (kind === 'table') {
                     const domainSuffixes = [
+                        '_entity_search_asserted',
                         '_entity_search',
                         '_props',
                         '_adj_out',
