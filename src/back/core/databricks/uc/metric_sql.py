@@ -11,6 +11,11 @@ from typing import Any, Dict, List, Optional
 from .identifiers import quote_uc_fqn, quote_uc_identifier
 
 
+def _escape_sql_literal(value: str) -> str:
+    """Escape a single-quoted SQL string literal (double any quotes)."""
+    return str(value).replace("'", "''")
+
+
 def build_metric_view_base_sql(
     entry: Dict[str, Any], *, selected_columns: Optional[List[str]] = None
 ) -> str:
@@ -52,3 +57,27 @@ def build_metric_view_base_sql(
             quote_uc_identifier(d, role="column") for d in dims
         )
     return sql
+
+
+def build_metric_view_entity_sql(
+    entry: Dict[str, Any],
+    *,
+    key_column: str,
+    key_value: str,
+    limit: int = 5,
+    selected_columns: Optional[List[str]] = None,
+) -> str:
+    """Build metric-view SQL filtered to one entity key, with a row limit.
+
+    Inserts ``WHERE <key_column> = '<key_value>'`` after ``FROM`` (before any
+    ``GROUP BY``) so the key is applied as a dimension predicate. Callers must
+    pass a validated ``key_column`` identifier.
+    """
+    base = build_metric_view_base_sql(entry, selected_columns=selected_columns)
+    key_ident = quote_uc_identifier(key_column, role="column")
+    where = f"WHERE {key_ident} = '{_escape_sql_literal(key_value)}'"
+    if "\nGROUP BY" in base:
+        sql = base.replace("\nGROUP BY", f"\n{where}\nGROUP BY", 1)
+    else:
+        sql = f"{base}\n{where}"
+    return f"{sql}\nLIMIT {max(0, int(limit))}"
