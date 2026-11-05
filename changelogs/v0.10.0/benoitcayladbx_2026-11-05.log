@@ -453,6 +453,7 @@ Modified files:
 
 Tests: not run (documentation-only change, no application code touched).
 
+================================================================================
 ## Fix SWRL builtin atoms over datatype properties (inference, materialization, Lakebase)
 ================================================================================
 
