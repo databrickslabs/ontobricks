@@ -139,8 +139,7 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9907 passed, 326 skipped, 8 deselected, 39 warnings in 48.13s
 
-================================================================================
-## Show entity and relationship URIs in Ontology Studio side panels
+
 ================================================================================
 
 Context: Showing URIs under labels on the Studio canvas was too noisy. The
@@ -164,3 +163,32 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9910 passed, 326 skipped, 8 deselected, 39 warnings in 50.46s
+
+================================================================================
+## Show Studio panel URI under the pane title
+================================================================================
+
+Context: The URI belonged under the entity/relationship pane title, not under
+the Icon and name form field. It is now rendered in ``#sharedPanelUri``
+directly under ``#sharedPanelTitle``, in smaller muted normal-weight text.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Add ``#sharedPanelUri`` in the panel header and ``setSharedPanelHeader``;
+   openers pass ``cls.uri`` / ``prop.uri``; remove URI lines from form fields.
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   Style ``.panel-header-uri`` at 0.65rem, font-weight 400, muted colour.
+3. tests/units/front/test_ontology_panel_uri_display.py
+   Contract tests for header URI slot, opener wiring, and no form-field URI.
+4. tests/units/front/test_ontology_split_panel_layout.py
+   Expect ``setSharedPanelHeader`` for placeholder and edit titles.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_ontology_panel_uri_display.py
+- tests/units/front/test_ontology_split_panel_layout.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9912 passed, 326 skipped, 8 deselected, 39 warnings in 44.00s

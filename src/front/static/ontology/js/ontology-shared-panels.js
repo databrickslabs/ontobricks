@@ -184,7 +184,10 @@ function createDetailPanel(panelContainer) {
 
     panelDiv.innerHTML = `
         <div class="panel-header">
-            <h6 id="sharedPanelTitle"><span id="sharedPanelItemName">Select Item</span></h6>
+            <div class="panel-header-identity">
+                <h6 id="sharedPanelTitle"><span id="sharedPanelItemName">Select Item</span></h6>
+                <div id="sharedPanelUri" class="panel-header-uri" hidden></div>
+            </div>
         </div>
         <div class="panel-body" id="sharedPanelBody"></div>
     `;
@@ -218,6 +221,28 @@ function ensureDetailPanels() {
 }
 
 /**
+ * Set the side-panel title and optional URI subtitle under it.
+ * @param {Element} panel
+ * @param {string} titleHtml - Trusted HTML for ``#sharedPanelTitle``
+ * @param {string} [uri]
+ */
+function setSharedPanelHeader(panel, titleHtml, uri) {
+    if (!panel) return;
+    const heading = panel.querySelector('#sharedPanelTitle');
+    if (heading) heading.innerHTML = titleHtml;
+    const uriEl = panel.querySelector('#sharedPanelUri');
+    if (!uriEl) return;
+    const value = (uri || '').trim();
+    if (value) {
+        uriEl.textContent = value;
+        uriEl.hidden = false;
+    } else {
+        uriEl.textContent = '';
+        uriEl.hidden = true;
+    }
+}
+
+/**
  * Reset a panel to its "nothing selected" state.
  */
 function renderPanelPlaceholder(panel) {
@@ -226,10 +251,7 @@ function renderPanelPlaceholder(panel) {
 
     target.classList.add('is-empty');
 
-    const heading = target.querySelector('#sharedPanelTitle');
-    if (heading) {
-        heading.innerHTML = '<span id="sharedPanelItemName">Select Item</span>';
-    }
+    setSharedPanelHeader(target, '<span id="sharedPanelItemName">Select Item</span>', '');
 
     const body = target.querySelector('#sharedPanelBody');
     if (body) {
@@ -590,7 +612,11 @@ async function openEntityPanel(options = {}) {
         return;
     }
     
-    panel.querySelector('#sharedPanelTitle').innerHTML = '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Entity</span>';
+    setSharedPanelHeader(
+        panel,
+        '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Entity</span>',
+        ''
+    );
     await renderEntityForm(panel, null);
     attachDirtyTracking();
 }
@@ -648,7 +674,11 @@ async function openEntityPanelForEdit(idx, options = {}) {
     }
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
-    panel.querySelector('#sharedPanelTitle').innerHTML = `${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
+    setSharedPanelHeader(
+        panel,
+        `${emoji} <span id="sharedPanelItemName">${escapeHtml(cls.name)}</span>`,
+        cls.uri || ''
+    );
     await renderEntityForm(panel, cls);
     attachDirtyTracking();
 }
@@ -687,7 +717,11 @@ async function openEntityPanelForView(idx, options = {}) {
     if (!panel) return;
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
-    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> ${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
+    setSharedPanelHeader(
+        panel,
+        `<i class="bi bi-eye"></i> ${emoji} <span id="sharedPanelItemName">${escapeHtml(cls.name)}</span>`,
+        cls.uri || ''
+    );
     await renderEntityForm(panel, cls, true);
 }
 
@@ -769,7 +803,6 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <input type="text" class="form-control form-control-sm" id="sharedEntityName" value="${escapeHtml(cls?.name || '')}" ${disabled} required>
                     </div>
                     <div id="sharedEntityEmojiPickerMount"></div>
-                    ${cls?.uri ? `<div class="form-text small text-break">URI: ${escapeHtml(cls.uri)}</div>` : ''}
                 </div>
                 <div class="mb-3">
                     <label for="sharedEntityLabel" class="form-label">Label</label>
@@ -3427,7 +3460,11 @@ async function openRelationshipPanel(options = {}) {
         return;
     }
     
-    panel.querySelector('#sharedPanelTitle').innerHTML = '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Relationship</span>';
+    setSharedPanelHeader(
+        panel,
+        '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Relationship</span>',
+        ''
+    );
     await renderRelationshipForm(panel, null);
     attachDirtyTracking();
 }
@@ -3464,7 +3501,11 @@ async function openRelationshipPanelForEdit(idx, options = {}) {
         return;
     }
     
-    panel.querySelector('#sharedPanelTitle').innerHTML = `<span id="sharedPanelItemName">${prop.name}</span>`;
+    setSharedPanelHeader(
+        panel,
+        `<span id="sharedPanelItemName">${escapeHtml(prop.name)}</span>`,
+        prop.uri || ''
+    );
     await renderRelationshipForm(panel, prop);
     attachDirtyTracking();
 }
@@ -3487,7 +3528,11 @@ async function openRelationshipPanelForView(idx, options = {}) {
     const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
     if (!panel) return;
     
-    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> <span id="sharedPanelItemName">${prop.name}</span>`;
+    setSharedPanelHeader(
+        panel,
+        `<i class="bi bi-eye"></i> <span id="sharedPanelItemName">${escapeHtml(prop.name)}</span>`,
+        prop.uri || ''
+    );
     await renderRelationshipForm(panel, prop, true);
 }
 
@@ -3596,7 +3641,6 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                 <div class="mb-3">
                     <label for="sharedRelName" class="form-label">Name <span class="text-danger">*</span></label>
                     <input type="text" class="form-control form-control-sm" id="sharedRelName" value="${escapeHtml(prop?.name || '')}" ${disabled} required>
-                    ${prop?.uri ? `<div class="form-text small text-break">URI: ${escapeHtml(prop.uri)}</div>` : ''}
                 </div>
                 <div class="mb-3">
                     <label for="sharedRelLabel" class="form-label">Label</label>

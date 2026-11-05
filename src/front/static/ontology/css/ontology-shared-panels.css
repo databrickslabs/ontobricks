@@ -169,11 +169,16 @@
 .shared-detail-panel .panel-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     padding: 0.6rem 0.75rem;
     background: #ffffff;
     border-bottom: 1px solid var(--db-border);
     flex-shrink: 0;
+}
+
+.shared-detail-panel .panel-header-identity {
+    min-width: 0;
+    flex: 1;
 }
 
 .shared-detail-panel .panel-header h6 {
@@ -184,6 +189,17 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.shared-detail-panel .panel-header-uri {
+    margin-top: 0.1rem;
+    color: var(--db-text-muted);
+    font-size: 0.65rem;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-all;
 }
 
 /* Panel Body */
