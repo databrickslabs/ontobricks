@@ -1,4 +1,4 @@
-"""Load the standalone ``examples/`` MCP scripts as modules for unit tests."""
+"""Load the standalone ``resources/examples/`` MCP scripts as modules for unit tests."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-EXAMPLES_DIR = REPO_ROOT / "examples"
+EXAMPLES_DIR = REPO_ROOT / "resources" / "examples"
 MCP_SRC = REPO_ROOT / "src" / "mcp-server"
 
 for _path in (EXAMPLES_DIR, MCP_SRC):

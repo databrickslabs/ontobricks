@@ -686,8 +686,8 @@ deployed Databricks App:
 Five optimizations that cut latency by **51%** and token use by **52%** without any
 loss of answer quality, verified on a Databricks-hosted Claude deployment (Haiku 4.5).
 
-See [`examples/mcp_client.py`](../examples/mcp_client.py) for a reference implementation
-and [`examples/mcp_bench.py`](../examples/mcp_bench.py) to reproduce the numbers.
+See [`resources/examples/mcp_client.py`](../resources/examples/mcp_client.py) for a reference implementation
+and [`resources/examples/mcp_bench.py`](../resources/examples/mcp_bench.py) to reproduce the numbers.
 
 ### Why it matters
 
@@ -871,15 +871,15 @@ export OBX_LLM_ENDPOINT="databricks-claude-haiku-4-5"   # or sonnet-5
 export OBX_PROFILE="default"
 
 # Ask a question with all optimizations (default)
-python3 examples/mcp_client.py --domain <domain-name> -q "your question"
+python3 resources/examples/mcp_client.py --domain <domain-name> -q "your question"
 
 # Disable specific optimizations for comparison
-python3 examples/mcp_client.py --domain <name> --no-compress -q "..."
+python3 resources/examples/mcp_client.py --domain <name> --no-compress -q "..."
 
 # Benchmark: baseline vs optimized
-python3 examples/mcp_bench.py --baseline --output before.json \
+python3 resources/examples/mcp_bench.py --baseline --output before.json \
     --questions "What entity types exist?" "Show me 5 recent orders"
-python3 examples/mcp_bench.py --domain <name> --output after.json \
+python3 resources/examples/mcp_bench.py --domain <name> --output after.json \
     --questions "What entity types exist?" "Show me 5 recent orders"
 ```
 

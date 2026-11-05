@@ -22,3 +22,85 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9907 passed, 326 skipped, 8 deselected, 39 warnings in 49.39s
+
+================================================================================
+## Move MCP example scripts under resources/examples
+================================================================================
+
+Context: The standalone MCP client and benchmark scripts lived in a top-level
+``examples/`` folder. They are developer tools rather than app code, so they
+are moved under ``resources/examples/``. ``resources/`` is excluded from the
+Apps workspace sync in ``databricks.yml`` and only ``*.yml`` files there are
+read by DAB, so the scripts are not uploaded to the workspace and do not affect
+the bundle.
+
+Changes:
+
+1. resources/examples/mcp_client.py (moved from examples/mcp_client.py)
+   Generic OntoBricks MCP client; moved with ``git mv``, content unchanged.
+2. resources/examples/mcp_bench.py (moved from examples/mcp_bench.py)
+   MCP benchmark harness; moved with ``git mv``, content unchanged.
+3. tests/units/examples/conftest.py
+   ``EXAMPLES_DIR`` now points at ``resources/examples``.
+4. tests/units/examples/test_mcp_client_example.py
+   Docstring path updated to ``resources/examples/mcp_client.py``.
+5. tests/units/examples/test_mcp_bench_example.py
+   Docstring path updated to ``resources/examples/mcp_bench.py``.
+6. docs/mcp.md
+   Link targets and ``python3`` command examples updated to
+   ``resources/examples/``.
+
+Modified files:
+- resources/examples/mcp_client.py (renamed from examples/mcp_client.py)
+- resources/examples/mcp_bench.py (renamed from examples/mcp_bench.py)
+- tests/units/examples/conftest.py
+- tests/units/examples/test_mcp_client_example.py
+- tests/units/examples/test_mcp_bench_example.py
+- docs/mcp.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9907 passed, 326 skipped, 8 deselected, 39 warnings in 44.52s
+
+================================================================================
+## Update third-party licenses and documentation
+================================================================================
+
+Context: Audited the ``licenses/`` inventory against dependencies in
+``pyproject.toml``, ``src/mcp-server/pyproject.toml``, and client CDN assets
+in ``src/front/``. Added missing licenses for newly added core/optional
+dependencies and front-end sanitization libraries, added local license files,
+updated pinned version constraints in the README, and synced
+``docs/development.md``.
+
+Changes:
+
+1. licenses/python/neo4j-LICENSE.txt
+   Added Apache 2.0 / PSFv2 license file for the Neo4j Python driver
+   (``neo4j>=5.0`` core dependency).
+2. licenses/python/psycopg-LICENSE.txt
+   Added LGPL-3.0 license file for Psycopg 3 / psycopg-pool (``psycopg[binary]>=3.2.0``,
+   ``psycopg-pool>=3.2.0`` optional dependency used for Lakebase registry/storage).
+3. licenses/python/cryptography-LICENSE.txt
+   Added Apache 2.0 / BSD 3-Clause license file for cryptography (``cryptography>=50.0.0``
+   security constraint floor).
+4. licenses/javascript/dompurify-LICENSE.txt
+   Added Apache 2.0 / MPL 2.0 license file for DOMPurify 3.4.17 (loaded in
+   ``base.html`` and used in ``utils.js`` for XSS sanitization of markdown).
+5. licenses/README.md
+   Added entries for DOMPurify, neo4j, psycopg, and cryptography; updated version
+   floors for MLflow (>=3.17.2), Strawberry GraphQL (>=0.327.2), FastMCP (>=3.4.10),
+   and Marked (15.0.12); updated License Summary table with LGPL-3.0 and additions.
+6. docs/development.md
+   Updated dependency reference tables: added neo4j, DOMPurify, and Marked; updated
+   version numbers for MLflow, FastMCP, and black.
+
+Modified files:
+- licenses/python/neo4j-LICENSE.txt
+- licenses/python/psycopg-LICENSE.txt
+- licenses/python/cryptography-LICENSE.txt
+- licenses/javascript/dompurify-LICENSE.txt
+- licenses/README.md
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9907 passed, 326 skipped, 8 deselected, 39 warnings in 53.13s

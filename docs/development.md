@@ -82,13 +82,14 @@ This document describes all external dependencies used by OntoBricks, including 
 | **RDFLib** | ≥7.6.0 | Python library for working with RDF (Resource Description Framework) | BSD-3-Clause | [rdflib.readthedocs.io](https://rdflib.readthedocs.io/) |
 | **python-dotenv** | ≥1.2.2 | Load environment variables from `.env` files | BSD-3-Clause | [pypi.org/project/python-dotenv](https://pypi.org/project/python-dotenv/) |
 | **requests** | ≥2.33.0 | HTTP library for Python | Apache-2.0 | [requests.readthedocs.io](https://requests.readthedocs.io/) |
+| **neo4j** | ≥5.0 | Neo4j Bolt driver — connects OntoBricks to external Neo4j graph instances | Apache-2.0 | [neo4j.com/docs/python-manual](https://neo4j.com/docs/python-manual/) |
 | **psycopg[binary,pool]** | ≥3.2.0 | Postgres driver + connection pool used by the Lakebase Graph DB engine and the Lakebase registry backend | LGPL-3.0 | [psycopg.org/psycopg3](https://www.psycopg.org/psycopg3/) |
 | **APScheduler** | ≥3.10.0 | Advanced Python Scheduler for background jobs (used by BuildScheduler for scheduled triple store builds) | MIT | [pypi.org/project/APScheduler](https://pypi.org/project/APScheduler/) |
 | **owlrl** | ≥7.0.0 | OWL 2 RL forward-chaining reasoner — performs deductive closure on RDFLib graphs for ontology-level inference | W3C | [owl-rl.readthedocs.io](https://owl-rl.readthedocs.io/) |
 | **pyshacl** | ≥0.26.0 | W3C SHACL validator for RDFLib graphs — validates RDF data against SHACL shapes for data quality checks | Apache-2.0 | [github.com/RDFLib/pySHACL](https://github.com/RDFLib/pySHACL) |
 | **NetworkX** | ≥3.0 | Graph analysis library — server-side community detection (Louvain, Label Propagation, Greedy Modularity) on the full graph viewer | BSD-3-Clause | [networkx.org](https://networkx.org/) |
 | **strawberry-graphql[fastapi]** | ≥0.327.2 | GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI | MIT | [strawberry.rocks](https://strawberry.rocks/) |
-| **MLflow** | ≥3.16.1 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
+| **MLflow** | ≥3.17.2 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
 
 ##### MCP Server Additional Dependencies
 
@@ -96,7 +97,7 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 
 | Package | Version | Description | License | Link |
 |---------|---------|-------------|---------|------|
-| **fastmcp** | ≥2.3.1 | Model Context Protocol (MCP) server SDK for exposing tools to LLMs | Apache-2.0 | [gofastmcp.com](https://gofastmcp.com/) |
+| **fastmcp** | ≥3.4.10 | Model Context Protocol (MCP) server SDK for exposing tools to LLMs | Apache-2.0 | [gofastmcp.com](https://gofastmcp.com/) |
 | **httpx** | ≥0.25.0 | Async HTTP client (used by MCP server to call the main app REST API) | BSD-3-Clause | [www.python-httpx.org](https://www.python-httpx.org/) |
 | **cryptography** | ≥50.0.0 | MCP transitive security floor (PKCS#7 oracle fix) | Apache-2.0 / BSD-3-Clause | [cryptography.io](https://cryptography.io/) |
 
@@ -110,7 +111,7 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 | **httpx** | ≥0.25.0 | HTTP client for testing FastAPI applications | BSD-3-Clause | [www.python-httpx.org](https://www.python-httpx.org/) |
 | **responses** | ≥0.24.0 | Mock HTTP request/response library for unit tests | Apache-2.0 | [pypi.org/project/responses](https://pypi.org/project/responses/) |
 | **playwright** | ≥1.40.0 | Browser automation for end-to-end tests | Apache-2.0 | [playwright.dev/python](https://playwright.dev/python/) |
-| **black** | ≥26.3.1 | Python code formatter | MIT | [black.readthedocs.io](https://black.readthedocs.io/) |
+| **black** | ≥26.10.1 | Python code formatter | MIT | [black.readthedocs.io](https://black.readthedocs.io/) |
 | **flake8** | ≥6.0.0 | Python style guide enforcer | MIT | [flake8.pycqa.org](https://flake8.pycqa.org/) |
 | **Sphinx** | ≥7.0.0 | Documentation generator from docstrings (API reference) | BSD-2-Clause | [sphinx-doc.org](https://www.sphinx-doc.org/) |
 | **myst-parser** | ≥3.0.0 | Markdown support for Sphinx (MyST flavour) | MIT | [myst-parser.readthedocs.io](https://myst-parser.readthedocs.io/) |
@@ -133,6 +134,8 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 |---------|---------|-------------|---------|-----|
 | **Bootstrap Bundle** | 5.3.2 | JavaScript plugins for Bootstrap (includes Popper.js) | MIT | [cdn.jsdelivr.net/npm/bootstrap@5.3.2](https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js) |
 | **D3.js** | 7.x | Data-driven document manipulation and graph data processing | ISC | [d3js.org/d3.v7.min.js](https://d3js.org/d3.v7.min.js) |
+| **DOMPurify** | 3.4.17 | XSS sanitizer for HTML/Markdown output across templates and client UI | Apache-2.0 / MPL-2.0 | [cdn.jsdelivr.net/npm/dompurify@3.4.17](https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js) |
+| **Marked** | 15.0.12 | Markdown parser and compiler for client-side rendering | MIT | [cdn.jsdelivr.net/npm/marked@15.0.12](https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js) |
 | **Sigma.js** | 3.0.2 | WebGL-powered graph visualization library for large-scale networks | MIT | [cdnjs.com/libraries/sigma.js](https://cdnjs.com/libraries/sigma.js/) |
 | **Graphology** | 0.26.0 | Robust graph data model and algorithm library (used with Sigma.js) | MIT | [graphology.github.io](https://graphology.github.io/) |
 | **Graphology Library** | 0.8.0 | Standard library bundle for Graphology (includes ForceAtlas2 layout and Louvain community detection) | MIT | [cdn.jsdelivr.net/npm/graphology-library](https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/) |

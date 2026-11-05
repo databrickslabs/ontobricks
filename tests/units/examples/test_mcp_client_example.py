@@ -1,4 +1,4 @@
-"""Unit tests for ``examples/mcp_client.py`` (reference MCP client, PR #193)."""
+"""Unit tests for ``resources/examples/mcp_client.py`` (reference MCP client, PR #193)."""
 
 from __future__ import annotations
 
