@@ -116,6 +116,10 @@ or import industry standards in one click (FIBO, CDISC, IOF, HL7 FHIR
 R4/R4B/R5) and your own OWL/RDFS. A floating **AI Assistant** edits your
 ontology through natural language.
 
+<p align="center">
+  <img src="docs/screenshots/Ontology-design.png" alt="Ontology Studio: visual ontology design canvas with entities, relationships and the entity editor panel" width="900">
+</p>
+
 **Generate** drives that AI design through a resumable, human-in-the-loop
 wizard — **Detect** candidate entities from metadata and your parsed document
 corpus, **Review** them (include/exclude, edit labels, add your own), then

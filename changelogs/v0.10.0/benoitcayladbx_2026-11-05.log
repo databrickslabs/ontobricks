@@ -432,3 +432,24 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9976 passed, 326 skipped, 8 deselected, 39 warnings in 51.09s
 
+================================================================================
+## Add Ontology Studio screenshot to README
+================================================================================
+
+Context: The README had no product screenshot. The Ontology Studio canvas
+image already shipped in the Help Center assets was not referenced from the
+README, so the project landing page showed no visual of the Studio.
+
+Changes:
+
+1. README.md
+   Insert a centred `docs/screenshots/Ontology-design.png` image (with alt
+   text) in the "Design ontologies visually or with AI" section, right after
+   the section intro paragraph.
+
+Modified files:
+- README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: not run (documentation-only change, no application code touched).
+
