@@ -399,7 +399,6 @@ Modified files:
 Tests: uv run --frozen pytest -q -m "not scenario" → 9932 passed, 326 skipped, 8 deselected, 39 warnings.
 
 ================================================================================
-<<<<<<< HEAD
 ## Add regression tests for paged Stage-3 completion
 ================================================================================
 
@@ -454,7 +453,6 @@ Modified files:
 
 Tests: not run (documentation-only change, no application code touched).
 
-=======
 ## Fix SWRL builtin atoms over datatype properties (inference, materialization, Lakebase)
 ================================================================================
 
@@ -511,4 +509,3 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9970 passed, 327 skipped, 8 deselected, 39 warnings (test_swrl_builtin_defects.py: 13 passed; architecture size budget green, baseline unchanged).
->>>>>>> 3a7c8484 (fix(swrl): apply builtin filters on inference and materialization)
