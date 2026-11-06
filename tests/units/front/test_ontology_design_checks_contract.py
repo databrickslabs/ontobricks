@@ -61,6 +61,31 @@ def test_module_fetches_endpoint():
     assert "window.DesignChecksModule" in src
 
 
+def test_attribute_findings_do_not_open_relationships():
+    # DatatypeProperties are attributes; Relationships only lists ObjectProperties.
+    src = _read(MODULE_JS)
+    assert "kind === 'attribute'" in src
+    assert "section: 'entities'" in src or "section=entities" in src
+    assert "data-dc-domain" in src
+
+
+def test_autofix_wiring_present():
+    src = _read(MODULE_JS)
+    assert "/ontology/design-checks/autofix/propose" in src
+    assert "/ontology/design-checks/autofix/apply" in src
+    assert "dcAutofixModal" in src
+    assert "_openAutofixModal" in src
+    assert "data-dc-fix-all" in src
+
+
+def test_orphan_modal_removed():
+    src = _read(MODULE_JS)
+    assert "_resolveOrphanAttribute" not in src
+    assert "_attachOrphanAttribute" not in src
+    assert "_removeOrphanAttribute" not in src
+    assert "dcOrphanAttrModal" not in src
+
+
 def test_review_consistency_links_to_section():
     src = _read(REVIEW_JS)
     assert "/ontology/?section=designchecks" in src

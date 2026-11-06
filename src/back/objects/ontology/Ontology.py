@@ -324,6 +324,14 @@ class Ontology:
         }
         ontology_config = Ontology.ensure_uris(ontology_config)
 
+        class_renames, property_renames = ClassModel.rewrite_renamed_uris(
+            old_classes,
+            ontology_config["classes"],
+            old_props,
+            ontology_config["properties"],
+        )
+        Editor(self._domain).remap_mapping_uris(class_renames, property_renames)
+
         if prune_orphan_mappings:
             new_class_uris = {
                 c.get("uri") for c in ontology_config["classes"] if c.get("uri")

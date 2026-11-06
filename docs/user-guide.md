@@ -158,9 +158,11 @@ Click **Business Views** in the sidebar to use the visual drag-and-drop interfac
 
 1. Click the **+ Add Entity** button in the toolbar
 2. A new entity box appears on the canvas
-3. **Edit the entity name** by clicking on it
+3. **Edit the entity ID** by clicking on it
 4. **Add attributes** using the + button on the entity
 5. **Move entities** by dragging them around the canvas
+
+An entity or relationship **ID** is also the local part of its URI. Renaming one updates its URI to the new ID and keeps its mappings attached; the URI is then used by the triples built afterwards, so run a build again after a rename. The freed ID can be reused without creating a duplicate URI.
 
 #### Customizing Entities
 
@@ -174,7 +176,7 @@ Each entity supports:
 
 1. Click and drag from one entity's connector (○) to another
 2. A relationship line is created between them
-3. **Edit the relationship name** by clicking on the label
+3. **Edit the relationship ID** by clicking on the label
 4. **Add relationship attributes** using the + button on the relationship
 
 #### Creating Inheritance Links
@@ -360,7 +362,9 @@ Click **Expr. & Axioms** in the sidebar to define OWL class expressions and axio
 
 #### Sanity Checks
 
-Open **Ontology → Sanity Checks** to lint the schema itself (not instance data). Checks are **advisory**: they never block save, mapping, Knowledge Graph build, or publish. Click **Refresh** after edits. Click a finding to jump to the entity, relationship, or group.
+Open **Ontology → Sanity Checks** to lint the schema itself (not instance data). Checks are **advisory**: they never block save, mapping, Knowledge Graph build, or publish. Click **Refresh** after edits. Click a finding to jump to the entity, relationship, or group. Attribute findings open the owning entity when they have a domain. Orphaned attributes (no domain) are not listed under Relationships.
+
+**Auto-fix.** Most findings show an **Auto-fix** button (and **Fix all** when a rule has two or more fixable findings). Clicking it opens a confirmation modal that explains the proposed change(s), offers ranked alternatives when a decision is needed (for orphan attributes: attach to an entity or remove), and applies only after you confirm. Mechanical rules (broken refs, naming) are fixed deterministically; judgement rules (descriptions, orphan ownership, near-duplicates) use the domain LLM when one is selected in **Domain → General → AI**. With **No LLM**, Auto-fix still works for mechanical rules, missing labels (humanised ID), and orphan attributes (entity picker + Remove). Duplicate URI (DC-E06) and deep hierarchy (DC-I05) have no Auto-fix — they need a manual decision.
 
 | ID | Severity | What it flags |
 |----|----------|----------------|

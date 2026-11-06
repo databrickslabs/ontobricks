@@ -46,8 +46,12 @@ class ToolContext:
     # Ontology assistant fields – mutable references to the live ontology lists
     ontology_classes: list = field(default_factory=list)
     ontology_properties: list = field(default_factory=list)
+    ontology_groups: list = field(default_factory=list)
     ontology_base_uri: str = ""
     ontology_dirty: bool = False
+
+    # Design fixer (Sanity Checks Auto-fix) – terminal submit_fix_plan output
+    submitted_fix_plan: Optional[dict] = None
 
     # Graph Chat agent fields (``agent_dtwin_chat``) – loopback REST caller
     dtwin_base_url: str = ""

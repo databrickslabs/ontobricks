@@ -20,7 +20,7 @@ from back.core.errors import (
 )
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
-from back.objects.ontology import DesignChecks, Ontology, Rules
+from back.objects.ontology import DesignAutofix, DesignChecks, Ontology, Rules
 from back.objects.ontology.generate import GenerateWorkflow
 from back.objects.session import get_domain
 from back.core.task_manager import get_task_manager
@@ -109,6 +109,71 @@ async def get_design_checks(
         domain.get_classes(), domain.get_properties(), domain.groups
     )
     return {"success": True, **report}
+
+
+@router.post("/design-checks/autofix/propose")
+async def propose_design_autofix(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Propose a typed Auto-fix plan for one rule's findings (confirm before apply)."""
+    from fastapi.responses import JSONResponse
+
+    from agents.agent_design_fixer import run_agent as run_design_fixer
+
+    with map_route_errors("Design Autofix propose failed", logger):
+        data = await request.json()
+        findings = data.get("findings") or []
+        domain = get_domain(session_mgr)
+        llm_endpoint = str((domain.info or {}).get("llm_endpoint") or "").strip()
+        llm_available = bool(llm_endpoint)
+
+        llm_runner = None
+        if llm_available:
+            host, token, endpoint, endpoint_kind = require_domain_llm(
+                domain, settings
+            )
+
+            def llm_runner(finding, classes, properties, groups):
+                return run_design_fixer(
+                    finding,
+                    classes,
+                    properties,
+                    groups,
+                    host=host,
+                    token=token,
+                    endpoint=endpoint,
+                    endpoint_kind=endpoint_kind,
+                )
+
+        result = DesignAutofix.propose(
+            findings,
+            domain.get_classes(),
+            domain.get_properties(),
+            domain.groups,
+            llm_available=llm_available,
+            llm_runner=llm_runner,
+        )
+        status = 200 if result.get("success") else 400
+        return JSONResponse(result, status_code=status)
+
+
+@router.post("/design-checks/autofix/apply")
+async def apply_design_autofix(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Apply confirmed Auto-fix operations to the session ontology."""
+    from fastapi.responses import JSONResponse
+
+    with map_route_errors("Design Autofix apply failed", logger):
+        data = await request.json()
+        operations = data.get("operations") or []
+        domain = get_domain(session_mgr)
+        result = DesignAutofix.apply(domain, operations)
+        status = 200 if result.get("success") else 400
+        return JSONResponse(result, status_code=status)
 
 
 @router.post("/save")

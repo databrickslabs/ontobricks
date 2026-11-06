@@ -66,3 +66,15 @@
     padding: 1.5rem 0.5rem;
     text-align: center;
 }
+
+.dc-autofix-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.dc-autofix-group {
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    padding: 0.75rem;
+    background: var(--db-surface-warm);
+}

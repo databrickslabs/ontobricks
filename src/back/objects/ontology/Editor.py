@@ -151,39 +151,18 @@ class Editor:
                 orphaned_props,
             )
 
+        class_renames, property_renames = self._rewrite_and_remap_uris(
+            old_classes, old_props, ontology_config
+        )
+
         existing_constraints = s.constraints
         existing_swrl_rules = s.swrl_rules
         existing_axioms = s.axioms
         existing_expressions = s.expressions
 
-        new_class_uris = {
-            c.get("uri") for c in ontology_config.get("classes", []) if c.get("uri")
-        }
-        new_property_uris = {
-            p.get("uri") for p in ontology_config.get("properties", []) if p.get("uri")
-        }
-
-        entity_before = s.get_entity_mappings()
-        removed_counts = self.prune_mappings_to_ontology_uris(
-            new_class_uris, new_property_uris
+        removed_entity, removed_rel = self._prune_mappings_for_config(
+            ontology_config
         )
-        removed_entity = removed_counts["entity_mappings_removed"]
-        removed_rel = removed_counts["relationship_mappings_removed"]
-
-        if removed_entity > 0 or removed_rel > 0:
-            orphaned_uris = [
-                m.get("ontology_class")
-                for m in entity_before
-                if m.get("ontology_class") not in new_class_uris
-            ]
-            logger.warning(
-                "Orphan cleanup: removing %d entity mappings (orphan URIs: %s) and %d rel mappings. "
-                "New class URIs: %s",
-                removed_entity,
-                orphaned_uris,
-                removed_rel,
-                list(new_class_uris)[:10],
-            )
 
         s.clear_generated_content()
         domain_name = (s.info.get("name") or "").strip()
@@ -242,7 +221,89 @@ class Editor:
                 "entity_mappings_removed": removed_entity,
                 "relationship_mappings_removed": removed_rel,
             },
+            "uri_renames": {"classes": class_renames, "properties": property_renames},
+            "attribute_uris": ClassModel.attribute_uris(ontology_config),
         }
+
+    def _rewrite_and_remap_uris(
+        self,
+        old_classes: List[Dict[str, Any]],
+        old_props: List[Dict[str, Any]],
+        ontology_config: Dict[str, Any],
+    ) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """Re-derive URIs after renames and point mappings at the new URIs."""
+        class_renames, property_renames = ClassModel.rewrite_renamed_uris(
+            old_classes,
+            ontology_config.get("classes", []),
+            old_props,
+            ontology_config.get("properties", []),
+        )
+        self.remap_mapping_uris(class_renames, property_renames)
+        return class_renames, property_renames
+
+    def _prune_mappings_for_config(
+        self, ontology_config: Dict[str, Any]
+    ) -> Tuple[int, int]:
+        """Drop mappings whose URIs left the ontology; log orphan cleanup."""
+        s = self._domain
+        new_class_uris = {
+            c.get("uri") for c in ontology_config.get("classes", []) if c.get("uri")
+        }
+        new_property_uris = {
+            p.get("uri") for p in ontology_config.get("properties", []) if p.get("uri")
+        }
+        entity_before = s.get_entity_mappings()
+        removed_counts = self.prune_mappings_to_ontology_uris(
+            new_class_uris, new_property_uris
+        )
+        removed_entity = removed_counts["entity_mappings_removed"]
+        removed_rel = removed_counts["relationship_mappings_removed"]
+        if removed_entity > 0 or removed_rel > 0:
+            orphaned_uris = [
+                m.get("ontology_class")
+                for m in entity_before
+                if m.get("ontology_class") not in new_class_uris
+            ]
+            logger.warning(
+                "Orphan cleanup: removing %d entity mappings (orphan URIs: %s) "
+                "and %d rel mappings. New class URIs: %s",
+                removed_entity,
+                orphaned_uris,
+                removed_rel,
+                list(new_class_uris)[:10],
+            )
+        return removed_entity, removed_rel
+
+    def remap_mapping_uris(
+        self,
+        class_renames: Dict[str, str],
+        property_renames: Dict[str, str],
+    ) -> None:
+        """Point entity and relationship mappings at the URIs of renamed items.
+
+        Mappings reference URIs (``ontology_class``, ``property``,
+        ``source_class``, ``target_class``); without this step, renaming an item
+        would make its mappings look orphaned and the prune would drop them.
+        Mutates the mapping rows in place; the caller saves the session.
+        """
+        if not class_renames and not property_renames:
+            return
+        s = self._domain
+        for mapping in s.get_entity_mappings():
+            for key in ("ontology_class", "class_uri"):
+                if mapping.get(key) in class_renames:
+                    mapping[key] = class_renames[mapping[key]]
+        for mapping in s.get_relationship_mappings():
+            if mapping.get("property") in property_renames:
+                mapping["property"] = property_renames[mapping["property"]]
+            for key in ("source_class", "target_class"):
+                if mapping.get(key) in class_renames:
+                    mapping[key] = class_renames[mapping[key]]
+        logger.info(
+            "Remapped mappings for renamed URIs: %d class(es), %d relationship(s)",
+            len(class_renames),
+            len(property_renames),
+        )
 
     def _sync_design_layout_with_ontology(self) -> None:
         """Reconcile design-layout views with the ontology (prune stale copies).

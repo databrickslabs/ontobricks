@@ -104,3 +104,13 @@ simulation_insights:
   latency_p95_seconds: 45.0
   cost_per_call_usd: 0.06
   aggregate: 0.82
+
+design_fixer:
+  schema_valid: 1.00
+  op_vocabulary: 1.00
+  rationale_present: 0.95
+  orphan_has_remove: 1.00
+  no_write_tools: 1.00
+  latency_p95_seconds: 30.0
+  cost_per_call_usd: 0.04
+  aggregate: 0.85

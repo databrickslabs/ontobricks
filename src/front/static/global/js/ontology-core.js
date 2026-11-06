@@ -129,12 +129,48 @@ async function saveConfigToSession(options = {}) {
             console.error('[AUTO-SAVE] Failed:', result.message);
         } else {
             console.log('[AUTO-SAVE] Config saved to session');
+            applyStoredUris(result);
         }
         return result.success;
     } catch (error) {
         console.error('[AUTO-SAVE] Error:', error);
         return false;
     }
+}
+
+/**
+ * Adopt the URIs the backend re-derived on rename.
+ *
+ * The backend gives a renamed class or relationship a URI built from its new
+ * name. The editor must hold that URI, otherwise the next save sends the old
+ * one and the backend no longer recognises the item.
+ *
+ * @param {Object} result Response of /ontology/save
+ */
+function applyStoredUris(result) {
+    const config = (typeof OntologyState !== 'undefined') ? OntologyState.config : null;
+    if (!config || !result) return;
+
+    const renames = result.uri_renames || {};
+    const classes = config.classes || [];
+    const properties = config.properties || [];
+
+    const remap = (items, map) => {
+        if (!map) return;
+        items.forEach(item => {
+            if (item.uri && map[item.uri]) item.uri = map[item.uri];
+        });
+    };
+    remap(classes, renames.classes);
+    remap(properties, renames.properties);
+
+    // Attributes are matched by position: several classes may own an attribute
+    // with the same name, so their URIs cannot be keyed by value.
+    (result.attribute_uris || []).forEach((uris, i) => {
+        const attrs = classes[i]?.dataProperties || [];
+        if (!Array.isArray(uris) || uris.length !== attrs.length) return;
+        attrs.forEach((attr, j) => { if (uris[j]) attr.uri = uris[j]; });
+    });
 }
 
 // Make it globally available

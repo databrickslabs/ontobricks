@@ -536,6 +536,7 @@ src/
 │   ├── agent_owl_generator/            # OWL ontology generation agent
 │   ├── agent_auto_assignment/          # Entity/relationship → SQL mapping agent
 │   ├── agent_auto_icon_assign/         # Emoji icon mapping agent
+│   ├── agent_design_fixer/             # Sanity Checks Auto-fix proposals (read-only)
 │   └── agent_ontology_assistant/       # Conversational assistant + ResponsesAgent wrapper
 │
 └── mcp-server/                         # MCP Server (separate Databricks App; under src/)
@@ -2398,7 +2399,7 @@ Entities represent ontology classes (`owl:Class`) and are displayed as interacti
 
 | Feature | Description |
 |---------|-------------|
-| **Name** | Editable entity name (click to edit) |
+| **ID** | Editable entity ID (click to edit) |
 | **Icon** | Customizable emoji icon for visual identification |
 | **Description** | Optional text description |
 | **Attributes** | Data properties with name and type |
@@ -2440,7 +2441,7 @@ Relationships represent object properties (`owl:ObjectProperty`) that connect en
 
 | Feature | Description |
 |---------|-------------|
-| **Name** | Editable relationship name (click on label) |
+| **ID** | Editable relationship ID (click on label) |
 | **Direction** | Forward (→), Reverse (←), or Bidirectional (↔) |
 | **Attributes** | Optional relationship properties |
 | **Visual** | Solid line with arrow indicating direction |
@@ -3182,6 +3183,7 @@ These agents do not query the triple store at runtime; they operate on the
 | `agent_owl_generator` | Build an OWL ontology from metadata + documents | `metadata.list_tables`, `metadata.preview_table`, `documents.read`, `ontology.write_owl` | REST + Spark SQL (samples) | `databricks-sql-connector` against UC tables, plus rdflib write |
 | `agent_auto_assignment` | Map ontology entities to Spark SQL queries | `tables.list`, `tables.sample`, `mapping.write` | REST + Spark SQL (samples) | Same as above; output stored as R2RML. Metric-view sources (`object_kind == "metric_view"`) drive metric-aware generation — measures are wrapped in `MEASURE()` and a `GROUP BY` over dimensions is emitted; a deterministic evaluator rejects `SELECT *`, unwrapped measures, or a missing `GROUP BY`. |
 | `agent_auto_icon_assign` | Pick emojis for entities | Inspects ontology + metadata | REST | None — generation only |
+| `agent_design_fixer` | Propose Sanity Checks Auto-fix plans | Read-only inspect tools + `submit_fix_plan` | REST | Python ontology object model (apply is separate, confirmed) |
 | `agent_ontology_assistant` | Conversational ontology editing | Dozens of tools mutating the in-session ontology | REST | Python ontology object model |
 | `agent_dtwin_chat` | Conversational graph querying | See §6 | REST + **GraphQL** + **SPARQL** | **Spark SQL** + **Cypher** (engine-side) |
 

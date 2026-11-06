@@ -474,7 +474,7 @@ function showOwlImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
+                                        <th>ID</th>
                                         <th>Label</th>
                                         <th>Parent</th>
                                         <th>Attributes</th>
@@ -492,7 +492,7 @@ function showOwlImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
+                                        <th>ID</th>
                                         <th>Domain (From)</th>
                                         <th>Range (To)</th>
                                     </tr>
@@ -853,7 +853,7 @@ function showRdfsImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
+                                        <th>ID</th>
                                         <th>Label</th>
                                         <th>Parent</th>
                                         <th>Attributes</th>
@@ -871,7 +871,7 @@ function showRdfsImportReport(filename, onto, details) {
                             <table class="table table-sm table-striped">
                                 <thead class="table-light sticky-top">
                                     <tr>
-                                        <th>Name</th>
+                                        <th>ID</th>
                                         <th>Domain (From)</th>
                                         <th>Range (To)</th>
                                     </tr>

@@ -146,6 +146,29 @@ class TestHygiene:
     def test_w03_missing_domain(self):
         report = DesignChecks.run(HEALTHY, [_prop(domain="")], [])
         assert "DC-W03" in _rules(report)
+        assert _by_rule(report, "DC-W03")[0]["kind"] == "property"
+
+    def test_w03_datatype_property_is_kind_attribute(self):
+        # Attributes must not be tagged as ``property``: the Sanity Checks UI
+        # would open Relationships, which only lists ObjectProperties.
+        report = DesignChecks.run(
+            HEALTHY,
+            [_prop(type="DatatypeProperty", domain="", range="xsd:string")],
+            [],
+        )
+        finding = _by_rule(report, "DC-W03")[0]
+        assert finding["kind"] == "attribute"
+        assert "Attribute" in finding["message"]
+
+    def test_w03_attribute_with_domain_exposes_owner(self):
+        report = DesignChecks.run(
+            HEALTHY,
+            [_prop(type="DatatypeProperty", domain="Person", range="")],
+            [],
+        )
+        finding = _by_rule(report, "DC-W04")[0]
+        assert finding["kind"] == "attribute"
+        assert finding["domain"] == "Person"
 
     def test_w03_negative(self):
         report = DesignChecks.run(HEALTHY, HEALTHY_PROPS, [])

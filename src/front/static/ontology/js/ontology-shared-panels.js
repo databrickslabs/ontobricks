@@ -797,7 +797,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
 
             <div class="form-tab-pane ${_eTab === 'details' ? 'active' : ''}" data-form-tab-content="details">
                 <div class="mb-3">
-                    <label for="sharedEntityName" class="form-label">Icon and name <span class="text-danger">*</span></label>
+                    <label for="sharedEntityName" class="form-label">Icon and ID <span class="text-danger">*</span></label>
                     <div class="panel-identity-row">
                         <div class="input-group input-group-sm panel-identity-icon">
                             <input type="text" class="form-control" id="sharedEntityIcon" value="${escapeHtml(emoji)}" ${disabled} maxlength="2" aria-label="Icon">
@@ -809,7 +809,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 </div>
                 <div class="mb-3">
                     <label for="sharedEntityLabel" class="form-label">Label</label>
-                    <input type="text" class="form-control form-control-sm" id="sharedEntityLabel" value="${escapeHtml(cls?.label || cls?.name || '')}" ${disabled} placeholder="Defaults to name if empty">
+                    <input type="text" class="form-control form-control-sm" id="sharedEntityLabel" value="${escapeHtml(cls?.label || cls?.name || '')}" ${disabled} placeholder="Defaults to ID if empty">
                 </div>
                 <div class="mb-3">
                     <label for="sharedEntityDescription" class="form-label">Description</label>
@@ -1011,7 +1011,7 @@ function renderSharedEntityAttributes(viewOnly = false) {
     const ownHtml = own.map((attr, idx) => `
         <div class="panel-attr-row">
             <i class="bi bi-tag panel-item-icon" aria-hidden="true"></i>
-            <input type="text" class="form-control form-control-sm panel-inline-field" value="${escapeHtml(attr.name || '')}" ${viewOnly ? 'disabled' : ''} placeholder="Attribute name" aria-label="Attribute name" onchange="updateSharedEntityAttribute(${idx}, this.value)">
+            <input type="text" class="form-control form-control-sm panel-inline-field" value="${escapeHtml(attr.name || '')}" ${viewOnly ? 'disabled' : ''} placeholder="Attribute ID" aria-label="Attribute ID" onchange="updateSharedEntityAttribute(${idx}, this.value)">
             ${!viewOnly ? `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSharedEntityAttribute(${idx})" title="Remove attribute" aria-label="Remove attribute"><i class="bi bi-x"></i></button>` : ''}
         </div>`).join('');
     container.innerHTML = `<div class="panel-list">${inheritedHtml}${ownHtml}</div>`;
@@ -3371,12 +3371,12 @@ async function saveSharedEntity(options = {}) {
     const disjointWith = disjointWithSelect ? Array.from(disjointWithSelect.selectedOptions).map(opt => opt.value) : [];
     const equivalentTo = equivalentToSelect ? Array.from(equivalentToSelect.selectedOptions).map(opt => opt.value) : [];
     
-    if (!name) { showNotification('Please enter an entity name', 'warning'); return; }
+    if (!name) { showNotification('Please enter an entity ID', 'warning'); return; }
 
     // Same stale-index guard as saveSharedRelationship: skip when only non-name fields changed.
     const duplicateEntity = (name !== sharedPanelOriginalName || sharedPanelEditIndex < 0)
         && (OntologyState.config.classes || []).some((c, i) => c.name === name && i !== sharedPanelEditIndex);
-    if (duplicateEntity) { showNotification(`An entity named "${name}" already exists`, 'warning'); return; }
+    if (duplicateEntity) { showNotification(`An entity with ID "${name}" already exists`, 'warning'); return; }
     
     const validAttributes = sharedPanelOwnAttributes.filter(a => a.name?.trim()).map(a => ({ name: a.name.trim(), localName: a.name.trim() }));
     
@@ -3411,7 +3411,7 @@ async function saveSharedEntity(options = {}) {
     const parentChanged = !isNew && (existingEntity?.parent || undefined) !== classData.parent;
     
     if (sharedPanelEditIndex >= 0) {
-        // Preserve server-assigned URI so the backend prune doesn't orphan mappings.
+        // Keep the current URI: the backend identifies the item by it and re-derives it from the new name on rename (see applyStoredUris).
         if (existingEntity.uri) classData.uri = existingEntity.uri;
         OntologyState.config.classes[sharedPanelEditIndex] = classData;
         if (oldName !== name) {
@@ -3724,12 +3724,12 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
 
             <div class="form-tab-pane ${_rTab === 'details' ? 'active' : ''}" data-form-tab-content="details">
                 <div class="mb-3">
-                    <label for="sharedRelName" class="form-label">Name <span class="text-danger">*</span></label>
+                    <label for="sharedRelName" class="form-label">ID <span class="text-danger">*</span></label>
                     <input type="text" class="form-control form-control-sm" id="sharedRelName" value="${escapeHtml(prop?.name || '')}" ${disabled} required>
                 </div>
                 <div class="mb-3">
                     <label for="sharedRelLabel" class="form-label">Label</label>
-                    <input type="text" class="form-control form-control-sm" id="sharedRelLabel" value="${escapeHtml(prop?.label || prop?.name || '')}" ${disabled} placeholder="Defaults to name if empty">
+                    <input type="text" class="form-control form-control-sm" id="sharedRelLabel" value="${escapeHtml(prop?.label || prop?.name || '')}" ${disabled} placeholder="Defaults to ID if empty">
                 </div>
                 <div class="mb-3">
                     <label for="sharedRelDomain" class="form-label">Source (Domain) <span class="text-danger">*</span></label>
@@ -3868,14 +3868,14 @@ async function saveSharedRelationship(options = {}) {
     const isSymmetric = panelGetById('sharedRelSymmetric')?.checked || false;
     const isTransitive = panelGetById('sharedRelTransitive')?.checked || false;
     
-    if (!name) { showNotification('Please enter a relationship name', 'warning'); return; }
+    if (!name) { showNotification('Please enter a relationship ID', 'warning'); return; }
 
     // When the name is unchanged (direction/domain/range edit) the entry cannot be a
     // duplicate of itself — skip the index-based check, which can be stale when
     // syncDesignToOntology has reordered the properties array since the panel opened.
     const duplicateRel = (name !== sharedPanelOriginalName || sharedPanelEditIndex < 0)
         && (OntologyState.config.properties || []).some((p, i) => p.name === name && i !== sharedPanelEditIndex);
-    if (duplicateRel) { showNotification(`A relationship named "${name}" already exists`, 'warning'); return; }
+    if (duplicateRel) { showNotification(`A relationship with ID "${name}" already exists`, 'warning'); return; }
 
     if (!domain) { showNotification('Please select a source entity', 'warning'); return; }
     if (!range) { showNotification('Please select a target entity', 'warning'); return; }
@@ -3912,7 +3912,7 @@ async function saveSharedRelationship(options = {}) {
         && (existingProperty.domain !== domain || existingProperty.range !== range);
     
     if (sharedPanelEditIndex >= 0) {
-        // Preserve server-assigned URI so the backend prune doesn't orphan mappings.
+        // Keep the current URI: the backend identifies the item by it and re-derives it from the new name on rename (see applyStoredUris).
         if (existingProperty.uri) propertyData.uri = existingProperty.uri;
         OntologyState.config.properties[sharedPanelEditIndex] = propertyData;
         showNotification('Relationship updated', 'success', 2000);

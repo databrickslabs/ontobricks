@@ -5,10 +5,91 @@ Fowler Extract Class. ``Ontology`` keeps one-line delegators.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 class ClassModel:
     """URI hygiene, class/property builders, completeness checks."""
+
+    @staticmethod
+    def _uri_namespace(uri: str) -> Optional[str]:
+        """Return *uri* up to and including its last ``#`` or ``/``."""
+        idx = max(uri.rfind("#"), uri.rfind("/"))
+        return uri[: idx + 1] if idx >= 0 else None
+
+    @staticmethod
+    def _rederive_renamed_uris(
+        old_items: List[Dict[str, Any]], new_items: List[Dict[str, Any]]
+    ) -> Dict[str, str]:
+        """Move the URI of renamed items to ``<namespace><new name>``.
+
+        An item is renamed when its URI was owned, in the previous state, by
+        items carrying a different name. The editor keeps the URI on rename so
+        the item stays identifiable; without this step the freed name could be
+        reused and produce two items with the same URI (DC-E06).
+
+        Mutates ``uri`` on *new_items* and returns ``{old_uri: new_uri}`` for
+        URIs owned by a single previous name. A URI shared by several previous
+        items (legacy duplicates) is ambiguous: the renamed item receives its
+        new URI while mappings stay on the original one.
+        """
+        old_names: Dict[str, Set[str]] = {}
+        for item in old_items:
+            uri, name = item.get("uri"), item.get("name")
+            if uri and name:
+                old_names.setdefault(uri, set()).add(name)
+
+        renames: Dict[str, str] = {}
+        for item in new_items:
+            uri, name = item.get("uri"), item.get("name")
+            if not uri or not name or uri not in old_names:
+                continue
+            if name in old_names[uri]:
+                continue
+            namespace = ClassModel._uri_namespace(uri)
+            if namespace is None:
+                continue
+            new_uri = namespace + name
+            item["uri"] = new_uri
+            if len(old_names[uri]) == 1:
+                renames[uri] = new_uri
+        return renames
+
+    @staticmethod
+    def rewrite_renamed_uris(
+        old_classes: List[Dict[str, Any]],
+        new_classes: List[Dict[str, Any]],
+        old_properties: List[Dict[str, Any]],
+        new_properties: List[Dict[str, Any]],
+    ) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """Re-derive URIs of renamed classes, relationships and attributes.
+
+        Mutates the *new* lists in place. Attributes (``dataProperties``) are
+        re-derived too, but their renames are not returned: no mapping
+        references attribute URIs.
+
+        Returns:
+            ``(class_renames, property_renames)`` as ``{old_uri: new_uri}``.
+        """
+        old_attrs = [a for c in old_classes for a in (c.get("dataProperties") or [])]
+        new_attrs = [a for c in new_classes for a in (c.get("dataProperties") or [])]
+        ClassModel._rederive_renamed_uris(old_attrs, new_attrs)
+        return (
+            ClassModel._rederive_renamed_uris(old_classes, new_classes),
+            ClassModel._rederive_renamed_uris(old_properties, new_properties),
+        )
+
+    @staticmethod
+    def attribute_uris(config: Dict[str, Any]) -> List[List[str]]:
+        """Attribute URIs per class, in class order.
+
+        Returned after a save so the editor can adopt the URIs re-derived on
+        rename. Positional on purpose: two classes may both own an attribute
+        named the same, so URIs cannot be keyed by value.
+        """
+        return [
+            [a.get("uri", "") for a in (c.get("dataProperties") or [])]
+            for c in config.get("classes") or []
+        ]
 
     @staticmethod
     def ensure_uris(config: Dict[str, Any]) -> Dict[str, Any]:

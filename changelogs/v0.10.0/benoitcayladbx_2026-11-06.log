@@ -281,3 +281,155 @@ Changes:
 
 Test results:
 - `uv run --frozen pytest -q tests/units/front`: 1736 passed.
+
+## Ontology editor: "Name" labels renamed to "ID"
+
+Context: entity and relationship identifiers are the local names used to build URIs (`base_uri + name`). The editor labelled them "Name", which hid that they drive the URI. Renamed the user-facing wording to "ID" in the ontology editor. Stored data keys (`name`, `uri`) are unchanged. URI rewrite on rename (DC-E06 duplicate URIs) is NOT part of this entry and is still pending.
+
+Changes:
+1. `src/front/static/ontology/js/ontology-shared-panels.js`: entity field label "Icon and name" → "Icon and ID"; entity and relationship label placeholders "Defaults to name if empty" → "Defaults to ID if empty"; attribute placeholder/aria-label "Attribute name" → "Attribute ID"; relationship field label "Name" → "ID"; validation and duplicate messages now say "ID" (e.g. "An entity with ID \"x\" already exists").
+2. `src/front/static/ontology/js/ontology-information.js`: four "Imported Entities/Relationships" table headers "Name" → "ID".
+3. `src/front/templates/partials/ontology/_ontology_import.html`: conflict table header "Name" → "ID".
+4. `docs/user-guide.md`: "Edit the entity/relationship name" → "ID".
+5. `docs/architecture.md`: entity and relationship table rows "Name" → "ID".
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/templates/partials/ontology/_ontology_import.html
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1612 passed, 124 failed. All failures are Node-based harnesses failing at process start (`dyld: Library not loaded: libsimdjson.29.dylib`, Homebrew Node 25.6.1 broken on this machine). Not caused by this change; to be re-run once Node is repaired.
+
+## Ontology: renaming an entity or relationship re-derives its URI (DC-E06)
+
+Context: Sanity Check DC-E06 ("URI ... is used by 2 propertys: assignedto2, assignedto"). The editor keeps the URI on rename so mappings stay identifiable, but the freed name was then reused by a new item whose URI (`base_uri + name`) collided with the renamed item's old URI. Decision (option A): a rename rewrites the URI from the new name and remaps the mappings that reference it.
+
+Changes:
+1. `src/back/objects/ontology/ClassModel.py`: new `_rederive_renamed_uris` and `rewrite_renamed_uris`. An item is renamed when its URI was owned in the previous state by a different name; its URI becomes `<namespace><new name>` (namespace kept, so imported entities keep their source namespace). Attributes are re-derived too. Legacy duplicate URIs are ambiguous: the renamed item gets its new URI and the mappings stay on the original one. New `attribute_uris` returns attribute URIs per class (positional).
+2. `src/back/objects/ontology/Editor.py`: `save_ontology_config_from_editor` re-derives renamed URIs before the orphan prune, then calls the new public `remap_mapping_uris` (entity `ontology_class`/`class_uri`; relationship `property`, `source_class`, `target_class`). The response now returns `uri_renames` (`classes`, `properties`) and `attribute_uris`.
+3. `src/back/objects/ontology/Ontology.py`: `apply_agent_ontology_changes` applies the same re-derivation and remap before its prune.
+4. `src/front/static/global/js/ontology-core.js`: `saveConfigToSession` calls the new `applyStoredUris(result)` after a successful save, so the editor holds the stored URIs (otherwise the next save would send the old URI). Classes and relationships are remapped by old URI, attributes by position.
+5. `src/front/static/ontology/js/ontology-shared-panels.js`: comments on the URI carry-over in `saveSharedEntity` and `saveSharedRelationship` updated (the URI is still sent so the backend can identify the item).
+6. `docs/user-guide.md`: note that renaming updates the URI and keeps mappings; a build must be re-run for the triples to use the new URI.
+
+Not changed: triples already materialised in the triple store keep the previous URI until the next build; saved artefacts that embed URIs (e.g. SWRL/cohort/simulation results) are not rewritten; relationship constraints/axioms stay name-based as before.
+
+Modified files:
+- src/back/objects/ontology/ClassModel.py
+- src/back/objects/ontology/Editor.py
+- src/back/objects/ontology/Ontology.py
+- src/front/static/global/js/ontology-core.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- docs/user-guide.md
+- tests/units/ontology/test_uri_rename.py (new)
+- tests/units/front/test_uri_rename_contract.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/ontology/test_uri_rename.py`: 9 passed.
+- `uv run --frozen pytest -q tests/units/front/test_uri_rename_contract.py`: 3 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 9956 passed, 125 failed, 326 skipped. All 125 failures are Node-based harnesses that abort at start (`dyld: Library not loaded: libsimdjson.29.dylib`, Homebrew Node 25.6.1 broken on this machine). Not caused by this change. Needs `brew reinstall node` (or simdjson) to re-run; the new `applyStoredUris` JS is not executed by the test suite yet.
+- Known pre-existing issue: collecting `tests/units/ontology/` alone raises a circular import (`OntologyGenerator`) on HEAD too; the full run is unaffected.
+
+## Fix Sanity Checks click for orphaned attributes (DC-W03)
+
+Context: Clicking a Sanity Checks warning such as ``paymentmethod`` / "Property has no domain" opened Ontology → Relationships, where the item does not exist. Root cause: the finding was a DatatypeProperty (attribute), tagged ``kind: property``. Relationships only lists ObjectProperties, so the link looked dead.
+
+Changes:
+1. `src/back/objects/ontology/DesignChecks.py`: DatatypeProperty findings are tagged ``kind: attribute``; domain is included when present; DC-W03/W04 messages say "Attribute" for datatype properties.
+2. `src/front/static/ontology/js/ontology-design-checks.js`: attribute findings with a domain open Entities on the owner; orphans stay on Sanity Checks with a warning toast (no Relationships redirect).
+3. `docs/user-guide.md`: document attribute click behaviour.
+4. `tests/units/ontology/test_design_checks.py`: cover attribute kind and domain payload.
+5. `tests/units/front/test_ontology_design_checks_contract.py`: contract that attributes do not open Relationships.
+
+Modified files:
+- src/back/objects/ontology/DesignChecks.py
+- src/front/static/ontology/js/ontology-design-checks.js
+- docs/user-guide.md
+- tests/units/ontology/test_design_checks.py
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/ontology/test_design_checks.py tests/units/front/test_ontology_design_checks_contract.py`: 45 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 9959 passed, 125 failed, 326 skipped. All 125 failures are Node harnesses aborting at start (`dyld: Library not loaded: libsimdjson.29.dylib`). Not caused by this change.
+
+## Let Sanity Checks attach or remove an orphan attribute
+
+Context: Clicking DC-W03 for an unattached DatatypeProperty (e.g. ``paymentmethod``) only showed a toast. The user still could not fix the orphan. Clicking now opens a dialog to attach the attribute to an entity or delete it.
+
+Changes:
+1. `src/front/static/ontology/js/ontology-design-checks.js`: orphan attribute click opens a modal (entity select + Attach / Remove). Attach sets ``domain`` and adds the attribute to the class ``dataProperties``; Remove deletes the property after confirm. Both persist via ``saveConfigToSession`` and refresh the report.
+2. `docs/user-guide.md`: orphan click now attaches or removes.
+3. `tests/units/front/test_ontology_design_checks_contract.py`: contract for attach/remove helpers.
+
+Modified files:
+- src/front/static/ontology/js/ontology-design-checks.js
+- docs/user-guide.md
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py tests/units/ontology/test_design_checks.py`: 45 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 9959 passed, 125 failed, 326 skipped. All 125 failures are Node harnesses aborting at start (`dyld: Library not loaded: libsimdjson.29.dylib`). Not caused by this change.
+
+## Add Sanity Checks Auto-fix (propose-then-apply)
+
+Context: Sanity Checks findings needed a guided repair path. Each fixable finding (and Fix all per rule) now opens a confirmation modal with an explained plan and ranked alternatives. Mechanical rules use deterministic fixers; judgement rules use ``agent_design_fixer``. Orphan attribute attach/remove is folded into this flow (the previous JS-only orphan modal is removed). Apply validates and mutates server-side, remapping URIs/mappings on rename.
+
+Changes:
+1. `src/back/objects/ontology/autofix_ops.py`: operation vocabulary, rule routing, naming helpers, FixPlan builders.
+2. `src/back/objects/ontology/autofix_rule_fixers.py`: mechanical plans for E01–E05, I02, I03.
+3. `src/back/objects/ontology/autofix_apply.py`: atomic apply + attach/remove/rename/merge handlers.
+4. `src/back/objects/ontology/DesignAutofix.py`: propose orchestration (rule / AI / No-LLM fallbacks for W02/W03).
+5. `src/back/objects/ontology/DesignChecks.py`: DC-E04 findings include ``member`` for Auto-fix.
+6. `src/back/objects/ontology/Editor.py`: extract URI rewrite/remap and mapping prune helpers (size budget).
+7. `src/agents/agent_design_fixer/`: read-only tools + engine + ``submit_fix_plan`` terminal tool.
+8. `src/agents/tools/context.py`: ``ontology_groups`` and ``submitted_fix_plan`` fields.
+9. `src/api/routers/internal/ontology.py`: ``POST .../autofix/propose`` and ``.../apply``.
+10. `src/front/static/ontology/js/ontology-design-checks.js`: Auto-fix / Fix all modal; remove orphan modal.
+11. `src/front/static/ontology/css/ontology-design-checks.css`: Auto-fix button/group styles.
+12. `tests/eval/datasets/agent_design_fixer/baseline.jsonl`: ≥20 eval rows.
+13. `tests/eval/judges/design_fixer.py` + `tests/eval/run_agent_design_fixer.py` + thresholds.
+14. `docs/user-guide.md` / `docs/architecture.md`: Auto-fix UX and agent entry.
+
+Modified files:
+- src/back/objects/ontology/autofix_ops.py
+- src/back/objects/ontology/autofix_rule_fixers.py
+- src/back/objects/ontology/autofix_apply.py
+- src/back/objects/ontology/DesignAutofix.py
+- src/back/objects/ontology/DesignChecks.py
+- src/back/objects/ontology/Editor.py
+- src/back/objects/ontology/__init__.py
+- src/agents/agent_design_fixer/__init__.py
+- src/agents/agent_design_fixer/AgentResult.py
+- src/agents/agent_design_fixer/engine.py
+- src/agents/agent_design_fixer/tools.py
+- src/agents/tools/context.py
+- src/api/routers/internal/ontology.py
+- src/front/static/ontology/js/ontology-design-checks.js
+- src/front/static/ontology/css/ontology-design-checks.css
+- tests/eval/datasets/agent_design_fixer/baseline.jsonl
+- tests/eval/judges/design_fixer.py
+- tests/eval/run_agent_design_fixer.py
+- tests/eval/thresholds.yaml
+- tests/units/ontology/test_design_autofix_ops.py
+- tests/units/ontology/test_design_autofix_rules.py
+- tests/units/ontology/test_design_autofix_apply.py
+- tests/units/ontology/test_design_autofix_propose.py
+- tests/units/agents/test_agent_design_fixer_tools.py
+- tests/units/agents/test_agent_design_fixer_engine.py
+- tests/units/api/test_design_autofix_endpoints.py
+- tests/units/front/test_ontology_design_checks_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests:
+- Autofix unit + contract suite: 50 passed.
+- `uv run --frozen python tests/eval/run_agent_design_fixer.py`: schema_valid=1.000 n=21.
+- `uv run --frozen pytest -q -m "not scenario"`: 10003 passed, 124 failed, 326 skipped. All failures are Node harnesses (`libsimdjson.29.dylib` missing) — environmental, not caused by this change. Architecture size/class-per-file gates pass after AgentResult extract and Editor helper extract.

@@ -19,6 +19,7 @@ SEVERITY_INFO = "info"
 
 KIND_CLASS = "class"
 KIND_PROPERTY = "property"
+KIND_ATTRIBUTE = "attribute"
 KIND_GROUP = "group"
 
 MAX_HIERARCHY_DEPTH = 5
@@ -127,7 +128,11 @@ class DesignChecks:
                         "DC-W03",
                         KIND_PROPERTY,
                         prop,
-                        "Property has no domain.",
+                        (
+                            "Attribute has no domain."
+                            if _is_datatype_property(prop)
+                            else "Property has no domain."
+                        ),
                     )
                 )
 
@@ -138,7 +143,11 @@ class DesignChecks:
                         "DC-W04",
                         KIND_PROPERTY,
                         prop,
-                        "Property has no range.",
+                        (
+                            "Attribute has no range."
+                            if _is_datatype_property(prop)
+                            else "Property has no range."
+                        ),
                     )
                 )
             elif _is_object_property(prop) and index.resolve(range_ref) is None:
@@ -163,14 +172,14 @@ class DesignChecks:
                 if not ref:
                     continue
                 if index.resolve(ref) is None:
-                    findings.append(
-                        _finding(
-                            "DC-E04",
-                            KIND_GROUP,
-                            group,
-                            f"Member '{ref}' is not a class in this ontology.",
-                        )
+                    finding = _finding(
+                        "DC-E04",
+                        KIND_GROUP,
+                        group,
+                        f"Member '{ref}' is not a class in this ontology.",
                     )
+                    finding["member"] = ref
+                    findings.append(finding)
 
     @staticmethod
     def _check_cycles(
@@ -506,7 +515,12 @@ def _finding(
     message: str,
 ) -> Dict[str, Any]:
     meta = RULE_META[rule]
-    return {
+    # DatatypeProperties live under Entities as attributes. Tagging them as
+    # ``property`` would send Sanity Checks clicks to Relationships, which
+    # only lists ObjectProperties — the finding would look like a dead link.
+    if kind == KIND_PROPERTY and _is_datatype_property(item):
+        kind = KIND_ATTRIBUTE
+    finding = {
         "rule": rule,
         "severity": meta["severity"],
         "kind": kind,
@@ -514,6 +528,10 @@ def _finding(
         "name": _display_name(item),
         "message": message,
     }
+    domain = _text(item.get("domain"))
+    if domain:
+        finding["domain"] = domain
+    return finding
 
 
 def _parent_ref(cls: Dict[str, Any]) -> str:
@@ -548,6 +566,10 @@ def _norm(value: str) -> str:
 
 def _is_object_property(prop: Dict[str, Any]) -> bool:
     return _text(prop.get("type")).replace("owl:", "") == "ObjectProperty"
+
+
+def _is_datatype_property(prop: Dict[str, Any]) -> bool:
+    return _text(prop.get("type")).replace("owl:", "") == "DatatypeProperty"
 
 
 def _levenshtein(left: str, right: str) -> int:
