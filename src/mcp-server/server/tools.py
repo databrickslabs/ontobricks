@@ -50,6 +50,27 @@ logger = logging.getLogger(__name__)
 SHACL_TOOL = "check_entity_shacl_facets"
 
 
+def _class_inventory_tags(cls: dict) -> list[str]:
+    """Build describe_ontology inventory tags for one class."""
+    tags: list[str] = []
+    n_datasets = len(
+        cls.get("datasets") or ([cls["dataset"]] if cls.get("dataset") else [])
+    )
+    if n_datasets == 1:
+        tags.append("dataset")
+    elif n_datasets > 1:
+        tags.append(f"{n_datasets} datasets")
+    if cls.get("bridges"):
+        tags.append(f"{len(cls['bridges'])} bridge(s)")
+    if cls.get("actions"):
+        tags.append(f"{len(cls['actions'])} action(s)")
+    if cls.get("business_rules"):
+        tags.append(f"{len(cls['business_rules'])} business rule(s)")
+    if cls.get("virtualAttributes"):
+        tags.append(f"{len(cls['virtualAttributes'])} virtual attr")
+    return tags
+
+
 def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
     """Register every OntoBricks MCP tool on *mcp*, bound to *session*."""
 
@@ -356,17 +377,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             lines.append("-" * 50)
             for cls in classes:
                 cls_name = cls.get("name") or _local_name(cls.get("uri", ""))
-                tags: list[str] = []
-                if cls.get("dataset"):
-                    tags.append("dataset")
-                if cls.get("bridges"):
-                    tags.append(f"{len(cls['bridges'])} bridge(s)")
-                if cls.get("actions"):
-                    tags.append(f"{len(cls['actions'])} action(s)")
-                if cls.get("business_rules"):
-                    tags.append(f"{len(cls['business_rules'])} business rule(s)")
-                if cls.get("virtualAttributes"):
-                    tags.append(f"{len(cls['virtualAttributes'])} virtual attr")
+                tags = _class_inventory_tags(cls)
                 suffix = f"  [{', '.join(tags)}]" if tags else ""
                 lines.append(f"  • {cls_name}{suffix}")
             lines.append("")
@@ -437,9 +448,15 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                 lines.append(f"  • {name}  ({count:,} instances)")
                 lines.append(f"    URI: {uri}")
                 actions = session.class_actions.get(uri) or {}
-                dataset = actions.get("dataset") or {}
-                if dataset.get("fullName"):
-                    lines.append(f"    Dataset: {dataset['fullName']}")
+                datasets = actions.get("datasets") or (
+                    [actions["dataset"]] if actions.get("dataset") else []
+                )
+                for dataset in datasets:
+                    if not dataset.get("fullName"):
+                        continue
+                    kind = (dataset.get("type") or "").strip()
+                    kind_suffix = f" [{kind}]" if kind else ""
+                    lines.append(f"    Dataset: {dataset['fullName']}{kind_suffix}")
                     desc = (dataset.get("description") or "").strip()
                     if desc:
                         lines.append(f"    Description: {desc}")

@@ -10,29 +10,32 @@ SIGMA_JS = REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
 DASHBOARD_JS = REPO_ROOT / "src/front/static/query/js/query-dashboard.js"
 
 
-def test_loaders_retain_class_dataset():
+def test_loaders_retain_class_datasets():
     js = LOADERS_JS.read_text(encoding="utf-8")
-    assert "dataset: cls.dataset || null" in js
-    assert "dataset: classInfo?.dataset || null" in js
+    assert "datasets:" in js
+    assert "cls.datasets" in js
+    assert "cls.dataset" in js
+    assert "classInfo?.datasets" in js or "classInfo.datasets" in js
 
 
-def test_entity_details_renders_dataset_section_with_preview():
+def test_entity_details_renders_datasets_section_with_preview():
     js = DETAILS_JS.read_text(encoding="utf-8")
-    assert "Dataset" in js
-    assert "entityMapping?.dataset || classInfo?.dataset" in js
+    assert "Datasets" in js
+    assert "entityMapping?.datasets" in js
     assert "dataset.key_column" in js
     assert "dataset.description" in js
     assert "Description" in js
     assert "Preview rows" in js
     assert "openDatasetPreviewModal" in js
+    assert "METRIC_VIEW" in js
 
 
-def test_sigmagraph_details_renders_dataset_section_with_preview():
+def test_sigmagraph_details_renders_datasets_section_with_preview():
     js = SIGMA_JS.read_text(encoding="utf-8")
     assert "bi bi-table" in js
     assert "Preview rows" in js
     assert "openDatasetPreviewModal" in js
-    assert "entityMapping.dataset" in js or "entityMapping && entityMapping.dataset" in js
+    assert "entityMapping.datasets" in js or "entityMapping && entityMapping.datasets" in js
 
 
 def test_sigmagraph_context_menu_has_dataset_preview():
@@ -50,7 +53,7 @@ def test_dataset_preview_modal_fetches_ten_rows():
     assert "dataset_row_limit" in js
     assert "'10'" in js or '"10"' in js
     assert "key_column_missing" in js
-    assert "Failed to load rows" in js
+    assert "data.datasets" in js
 
 
 def test_dataset_preview_modal_has_loading_empty_and_error_states():

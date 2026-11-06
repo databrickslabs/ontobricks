@@ -74,7 +74,10 @@ let sharedPanelElement = null;  // Reference to the current panel DOM element fo
 let sharedPanelDashboardUrl = null;  // Dashboard URL for the entity
 let sharedPanelDashboardParams = {};  // Dashboard parameter mappings { paramName: attributeName }
 let sharedPanelBridges = [];  // Cross-domain entity bridges
-let sharedPanelDataset = null;  // Linked Unity Catalog dataset { catalog, schema, asset, type, fullName, key_column, description }
+// Linked Unity Catalog datasets (tables, views, metric views). Each entry is
+// { catalog, schema, asset, type, fullName, key_column, description }.
+// ``type`` is TABLE | VIEW | METRIC_VIEW.
+let sharedPanelDatasets = [];
 // Linked Unity Catalog function actions. Each entry is
 // { catalog, schema, function, fullName, description, returns_table }.
 // The bound function must take exactly one parameter: the ID of the entity
@@ -517,7 +520,7 @@ function closeSharedPanel() {
     sharedPanelDashboardUrl = null;
     sharedPanelDashboardParams = {};
     sharedPanelBridges = [];
-    sharedPanelDataset = null;
+    sharedPanelDatasets = [];
     sharedPanelActions = [];
     sharedPanelJobs = [];
     sharedPanelBusinessRules = [];
@@ -576,7 +579,7 @@ async function openEntityPanel(options = {}) {
     sharedPanelDashboardUrl = null;  // Reset dashboard for new entity
     sharedPanelDashboardParams = {};  // Reset dashboard parameter mappings
     sharedPanelBridges = [];  // Reset bridges for new entity
-    sharedPanelDataset = null;  // Reset dataset for new entity
+    sharedPanelDatasets = [];  // Reset datasets for new entity
     sharedPanelActions = [];  // Reset UC function actions for new entity
     sharedPanelJobs = [];
     sharedPanelBusinessRules = [];  // Reset business rules for new entity
@@ -621,7 +624,7 @@ async function openEntityPanelForEdit(idx, options = {}) {
     sharedPanelDashboardUrl = cls.dashboard || null;  // Load existing dashboard URL
     sharedPanelDashboardParams = cls.dashboardParams || {};  // Load existing parameter mappings
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
-    sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
+    sharedPanelDatasets = _normalizeClassDatasets(cls);
     const splitActions = _splitClassActions(cls.actions);
     sharedPanelActions = splitActions.uc;
     sharedPanelJobs = splitActions.jobs;
@@ -665,7 +668,7 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelDashboardUrl = cls.dashboard || null;  // Load existing dashboard URL
     sharedPanelDashboardParams = cls.dashboardParams || {};  // Load existing parameter mappings
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
-    sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
+    sharedPanelDatasets = _normalizeClassDatasets(cls);
     const splitActions = _splitClassActions(cls.actions);
     sharedPanelActions = splitActions.uc;
     sharedPanelJobs = splitActions.jobs;
@@ -871,8 +874,8 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                     <div id="sharedEntityDashboard" class="panel-section-body"><div id="sharedEntityDashboardContent"></div></div>
                 </section>
                 <section class="panel-section">
-                    ${panelSectionHeader({ targetId: 'sharedEntityDataset', icon: 'bi-table', title: 'Dataset',
-                        subtitle: 'Unity Catalog table matched to the entity on a key column.', onAdd: 'openDatasetSelectorModal()', viewOnly })}
+                    ${panelSectionHeader({ targetId: 'sharedEntityDataset', icon: 'bi-table', title: 'Datasets',
+                        subtitle: 'Unity Catalog tables, views, or metric views matched to the entity on a key column.', onAdd: 'openDatasetSelectorModal()', viewOnly })}
                     <div id="sharedEntityDataset" class="panel-section-body"><div id="sharedEntityDatasetContent"></div></div>
                 </section>
             </div>
@@ -1196,66 +1199,99 @@ function removeSharedEntityDashboard() {
 // UNITY CATALOG DATASET
 // =====================================================
 
+function _normalizeClassDatasets(cls) {
+    if (!cls) return [];
+    if (Array.isArray(cls.datasets) && cls.datasets.length) {
+        return JSON.parse(JSON.stringify(cls.datasets));
+    }
+    if (cls.dataset) {
+        return [JSON.parse(JSON.stringify(cls.dataset))];
+    }
+    return [];
+}
+
+function _datasetAssetType(tableType) {
+    const t = String(tableType || '').toUpperCase().replace(/\s+/g, '_');
+    if (t === 'VIEW') return 'VIEW';
+    if (t === 'METRIC_VIEW') return 'METRIC_VIEW';
+    return 'TABLE';
+}
+
+function _datasetTypeMeta(type) {
+    const t = String(type || '').toUpperCase();
+    if (t === 'METRIC_VIEW') {
+        return { label: 'Metric View', icon: 'bi-graph-up-arrow', badgeClass: 'bg-info text-dark' };
+    }
+    if (t === 'VIEW') {
+        return { label: 'View', icon: 'bi-eye', badgeClass: 'bg-info text-dark' };
+    }
+    return { label: 'Table', icon: 'bi-table', badgeClass: 'bg-secondary' };
+}
+
 /**
- * Render the linked Unity Catalog dataset in the entity form
+ * Render linked Unity Catalog datasets in the entity form
  */
 function renderSharedEntityDataset(viewOnly = false) {
     const container = panelGetById('sharedEntityDatasetContent');
     if (!container) return;
 
-    const ds = sharedPanelDataset;
-    const hasDataset = Boolean(ds && ds.asset);
-    _updatePanelSection('sharedEntityDataset', { count: hasDataset ? 1 : 0, single: true });
-    if (hasDataset) {
-        const isView = (ds.type || '').toUpperCase() === 'VIEW';
-        const badge = `<span class="panel-kind-badge">${isView ? 'View' : 'Table'}</span>`;
+    _updatePanelSection('sharedEntityDataset', { count: sharedPanelDatasets.length });
+    if (!sharedPanelDatasets.length) {
+        container.innerHTML = panelEmptyState('No datasets linked yet.', 'Link a dataset', 'openDatasetSelectorModal()', viewOnly);
+        return;
+    }
+
+    container.innerHTML = sharedPanelDatasets.map((ds, idx) => {
+        const meta = _datasetTypeMeta(ds.type);
+        const badge = `<span class="panel-kind-badge">${meta.label}</span>`;
         const fullName = ds.fullName || `${ds.catalog}.${ds.schema}.${ds.asset}`;
         const keyColHtml = !viewOnly
             ? `<div class="panel-key-row">
-                 <label class="panel-item-sub-label mb-0" for="datasetKeyColumnSelect" title="Column matched against the entity ID">Key column</label>
+                 <label class="panel-item-sub-label mb-0" for="datasetKeyColumnSelect-${idx}" title="Column matched against the entity ID">Key column</label>
                  <select class="form-select form-select-sm"
-                         id="datasetKeyColumnSelect"
-                         onchange="onDatasetKeyColumnChange(this.value)"
+                         id="datasetKeyColumnSelect-${idx}"
+                         onchange="onDatasetKeyColumnChange(${idx}, this.value)"
                          disabled>
                    <option value="">Loading columns…</option>
                  </select>
                  <button type="button"
                          class="btn btn-sm btn-outline-secondary d-none"
-                         id="datasetKeyColumnRetry"
-                         onclick="retryDatasetKeyColumns()">Retry</button>
+                         id="datasetKeyColumnRetry-${idx}"
+                         onclick="retryDatasetKeyColumns(${idx})">Retry</button>
                </div>`
             : (ds.key_column
                 ? `<div class="panel-key-row"><span class="panel-item-sub-label">Key column</span><code>${escapeHtml(ds.key_column)}</code></div>`
                 : '');
         const descHtml = !viewOnly
             ? `<div class="panel-desc-row">
-                 ${panelInlineField({ value: ds.description || '', placeholder: 'Purpose of this dataset', oninput: 'onDatasetDescriptionChange(this.value)', id: 'datasetDescriptionInput' })}
+                 ${panelInlineField({ value: ds.description || '', placeholder: 'Purpose of this dataset', oninput: `onDatasetDescriptionChange(${idx}, this.value)`, id: `datasetDescriptionInput-${idx}` })}
                  <button type="button"
                          class="btn btn-sm btn-link p-0"
-                         id="datasetDescriptionFromUcBtn"
+                         id="datasetDescriptionFromUcBtn-${idx}"
                          title="Fill from the Data Assets table description"
                          aria-label="Fill from the Data Assets table description"
-                         onclick="loadDatasetDescriptionFromDataSource()">
+                         onclick="loadDatasetDescriptionFromDataSource(${idx})">
                    <i class="bi bi-database-down"></i>
                  </button>
                </div>`
             : panelInlineField({ value: ds.description || '', viewOnly: true });
-        container.innerHTML = panelItemRow({
-            icon: 'bi-table', title: ds.asset, badge, meta: fullName,
-            removeOnclick: 'removeSharedEntityDataset()', removeTitle: 'Remove dataset', viewOnly,
+        return panelItemRow({
+            icon: meta.icon, title: ds.asset, badge, meta: fullName,
+            removeOnclick: `removeSharedEntityDataset(${idx})`, removeTitle: 'Remove dataset', viewOnly,
             body: keyColHtml + descHtml,
         });
-        if (!viewOnly) {
-            void _loadDatasetKeyColumns(ds);
-        }
-    } else {
-        container.innerHTML = panelEmptyState('No dataset linked yet.', 'Link a dataset', 'openDatasetSelectorModal()', viewOnly);
+    }).join('');
+
+    if (!viewOnly) {
+        sharedPanelDatasets.forEach((ds, idx) => {
+            void _loadDatasetKeyColumns(idx, ds);
+        });
     }
 }
 
-function _setDatasetKeyColumnState(label, retry = false) {
-    const select = panelGetById('datasetKeyColumnSelect');
-    const retryButton = panelGetById('datasetKeyColumnRetry');
+function _setDatasetKeyColumnState(index, label, retry = false) {
+    const select = panelGetById(`datasetKeyColumnSelect-${index}`);
+    const retryButton = panelGetById(`datasetKeyColumnRetry-${index}`);
     if (select) {
         select.disabled = true;
         select.innerHTML = `<option value="">${escapeHtml(label)}</option>`;
@@ -1263,20 +1299,29 @@ function _setDatasetKeyColumnState(label, retry = false) {
     if (retryButton) retryButton.classList.toggle('d-none', !retry);
 }
 
-function _populateDatasetKeyColumnSelect(columns) {
-    const select = panelGetById('datasetKeyColumnSelect');
-    const retryButton = panelGetById('datasetKeyColumnRetry');
-    if (!select || !sharedPanelDataset) return;
+function _populateDatasetKeyColumnSelect(index, columns) {
+    const select = panelGetById(`datasetKeyColumnSelect-${index}`);
+    const retryButton = panelGetById(`datasetKeyColumnRetry-${index}`);
+    const ds = sharedPanelDatasets[index];
+    if (!select || !ds) return;
 
-    const names = columns
+    let usable = Array.isArray(columns) ? columns : [];
+    if (String(ds.type || '').toUpperCase() === 'METRIC_VIEW') {
+        const withRoles = usable.filter(c => c && c.role);
+        if (withRoles.length) {
+            usable = withRoles.filter(c => String(c.role).toLowerCase() !== 'measure');
+        }
+    }
+
+    const names = usable
         .map(column => String(column?.name || '').trim())
         .filter(Boolean);
     if (!names.length) {
-        _setDatasetKeyColumnState('No columns found', true);
+        _setDatasetKeyColumnState(index, 'No columns found', true);
         return;
     }
 
-    const current = sharedPanelDataset.key_column || '';
+    const current = ds.key_column || '';
     const options = [new Option('Select a key column…', '')];
     if (current && !names.includes(current)) {
         options.push(new Option(`${current} (missing)`, current, true, true));
@@ -1290,19 +1335,60 @@ function _populateDatasetKeyColumnSelect(columns) {
     if (retryButton) retryButton.classList.add('d-none');
 }
 
-async function _loadDatasetKeyColumns(dataset, force = false) {
+async function _enrichMetricViewColumns(dataset, columns) {
+    if (String(dataset?.type || '').toUpperCase() !== 'METRIC_VIEW') {
+        return columns;
+    }
+    if ((columns || []).some(c => c && c.role)) {
+        return columns;
+    }
+    try {
+        const resp = await fetch('/domain/metadata', { credentials: 'same-origin' });
+        if (!resp.ok) return columns;
+        const data = await resp.json();
+        const tables = data.metadata?.tables || [];
+        const target = (
+            dataset.fullName
+            || `${dataset.catalog}.${dataset.schema}.${dataset.asset}`
+        ).toLowerCase();
+        const match = tables.find(table =>
+            String(table.full_name || '').toLowerCase() === target
+            || String(table.name || '').toLowerCase() === String(dataset.asset || '').toLowerCase()
+        );
+        if (!match || !Array.isArray(match.columns) || !match.columns.length) {
+            return columns;
+        }
+        const byName = new Map(
+            (columns || []).map(c => [String(c.name || '').toLowerCase(), c])
+        );
+        return match.columns.map(col => {
+            const name = col.name || col.column_name || '';
+            const base = byName.get(String(name).toLowerCase()) || { name };
+            return {
+                ...base,
+                name,
+                role: col.role || (col.is_measure ? 'measure' : 'dimension'),
+            };
+        });
+    } catch (err) {
+        console.warn('[Dataset] Could not enrich metric-view column roles:', err);
+        return columns;
+    }
+}
+
+async function _loadDatasetKeyColumns(index, dataset, force = false) {
     const datasetKey = _datasetKey(dataset);
     if (!datasetKey || !dataset?.catalog || !dataset?.schema || !dataset?.asset) {
-        _setDatasetKeyColumnState('No columns found', true);
+        _setDatasetKeyColumnState(index, 'No columns found', true);
         return;
     }
 
     if (!force && _datasetColumnCache.has(datasetKey)) {
-        _populateDatasetKeyColumnSelect(_datasetColumnCache.get(datasetKey));
+        _populateDatasetKeyColumnSelect(index, _datasetColumnCache.get(datasetKey));
         return;
     }
 
-    _setDatasetKeyColumnState('Loading columns…');
+    _setDatasetKeyColumnState(index, 'Loading columns…');
     try {
         const response = await fetch('/mapping/table-columns', {
             method: 'POST',
@@ -1316,48 +1402,53 @@ async function _loadDatasetKeyColumns(dataset, force = false) {
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        const columns = Array.isArray(data.columns) ? data.columns : [];
+        let columns = Array.isArray(data.columns) ? data.columns : [];
+        columns = await _enrichMetricViewColumns(dataset, columns);
         if (columns.length) {
             _datasetColumnCache.set(datasetKey, columns);
         }
-        if (_isCurrentDataset(datasetKey)) {
-            _populateDatasetKeyColumnSelect(columns);
+        if (_datasetKey(sharedPanelDatasets[index]) === datasetKey) {
+            _populateDatasetKeyColumnSelect(index, columns);
         }
     } catch (error) {
         console.error('[Dataset] Error loading columns:', error);
-        if (_isCurrentDataset(datasetKey)) {
-            _setDatasetKeyColumnState('Failed to load columns', true);
+        if (_datasetKey(sharedPanelDatasets[index]) === datasetKey) {
+            _setDatasetKeyColumnState(index, 'Failed to load columns', true);
         }
     }
 }
 
-function retryDatasetKeyColumns() {
-    if (!sharedPanelDataset) return;
-    void _loadDatasetKeyColumns(sharedPanelDataset, true);
+function retryDatasetKeyColumns(index) {
+    const ds = sharedPanelDatasets[index];
+    if (!ds) return;
+    void _loadDatasetKeyColumns(index, ds, true);
 }
 
-function onDatasetKeyColumnChange(value) {
-    if (!sharedPanelDataset) return;
-    sharedPanelDataset.key_column = value || null;
+function onDatasetKeyColumnChange(index, value) {
+    const ds = sharedPanelDatasets[index];
+    if (!ds) return;
+    ds.key_column = value || null;
     markPanelDirty();
 }
 
-function onDatasetDescriptionChange(value) {
-    if (!sharedPanelDataset) return;
-    sharedPanelDataset.description = value.trim() || null;
+function onDatasetDescriptionChange(index, value) {
+    const ds = sharedPanelDatasets[index];
+    if (!ds) return;
+    ds.description = value.trim() || null;
     markPanelDirty();
 }
 
-async function loadDatasetDescriptionFromDataSource() {
-    if (!sharedPanelDataset?.catalog || !sharedPanelDataset?.schema || !sharedPanelDataset?.asset) {
+async function loadDatasetDescriptionFromDataSource(index) {
+    const ds = sharedPanelDatasets[index];
+    if (!ds?.catalog || !ds?.schema || !ds?.asset) {
         showNotification('No dataset selected', 'warning', 2500);
         return;
     }
-    const btn = panelGetById('datasetDescriptionFromUcBtn');
-    const datasetKey = _datasetKey(sharedPanelDataset);
+    const btn = panelGetById(`datasetDescriptionFromUcBtn-${index}`);
+    const datasetKey = _datasetKey(ds);
     const targetFullName = (
-        sharedPanelDataset.fullName
-        || `${sharedPanelDataset.catalog}.${sharedPanelDataset.schema}.${sharedPanelDataset.asset}`
+        ds.fullName
+        || `${ds.catalog}.${ds.schema}.${ds.asset}`
     ).toLowerCase();
     if (btn) {
         btn.disabled = true;
@@ -1367,7 +1458,7 @@ async function loadDatasetDescriptionFromDataSource() {
         const resp = await fetch('/domain/metadata', { credentials: 'same-origin' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        if (!_isCurrentDataset(datasetKey)) return;
+        if (_datasetKey(sharedPanelDatasets[index]) !== datasetKey) return;
         if (!data.success || !data.has_metadata || !data.metadata?.tables?.length) {
             showNotification('No Data Assets loaded for this domain', 'info', 3000);
             return;
@@ -1377,7 +1468,7 @@ async function loadDatasetDescriptionFromDataSource() {
             const shortName = String(table.name || '').toLowerCase();
             return fullName === targetFullName
                 || shortName === targetFullName
-                || shortName === String(sharedPanelDataset.asset || '').toLowerCase();
+                || shortName === String(ds.asset || '').toLowerCase();
         });
         if (!match) {
             showNotification('Dataset not found in Data Assets', 'info', 3000);
@@ -1388,17 +1479,17 @@ async function loadDatasetDescriptionFromDataSource() {
             showNotification('No table description in Data Assets for this dataset', 'info', 3000);
             return;
         }
-        onDatasetDescriptionChange(comment);
-        const input = panelGetById('datasetDescriptionInput');
+        onDatasetDescriptionChange(index, comment);
+        const input = panelGetById(`datasetDescriptionInput-${index}`);
         if (input) input.value = comment;
         showNotification('Description loaded from Data Assets', 'success', 2500);
     } catch (err) {
         console.error('[Dataset] Error loading Data Assets description:', err);
-        if (_isCurrentDataset(datasetKey)) {
+        if (_datasetKey(sharedPanelDatasets[index]) === datasetKey) {
             showNotification('Failed to load Data Assets description', 'danger', 3000);
         }
     } finally {
-        if (btn && _isCurrentDataset(datasetKey)) {
+        if (btn && _datasetKey(sharedPanelDatasets[index]) === datasetKey) {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-database-down"></i>';
         }
@@ -1406,10 +1497,10 @@ async function loadDatasetDescriptionFromDataSource() {
 }
 
 /**
- * Remove the assigned dataset
+ * Remove a linked dataset by index
  */
-function removeSharedEntityDataset() {
-    sharedPanelDataset = null;
+function removeSharedEntityDataset(index) {
+    sharedPanelDatasets.splice(index, 1);
     markPanelDirty();
     renderSharedEntityDataset(false);
 }
@@ -1425,12 +1516,8 @@ function _datasetKey(dataset) {
     return `${dataset.catalog || ''}.${dataset.schema || ''}.${dataset.asset || ''}`;
 }
 
-function _isCurrentDataset(datasetKey) {
-    return Boolean(sharedPanelDataset && _datasetKey(sharedPanelDataset) === datasetKey);
-}
-
 /**
- * Open the dataset selector modal (catalog -> schema -> table/view).
+ * Open the dataset selector modal (catalog -> schema -> table/view/metric view).
  */
 async function openDatasetSelectorModal() {
     const modalId = 'datasetSelectorModal';
@@ -1446,7 +1533,7 @@ async function openDatasetSelectorModal() {
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-table me-2"></i>Select a Unity Catalog Table or View</h5>
+                        <h5 class="modal-title"><i class="bi bi-table me-2"></i>Select a Unity Catalog table, view, or metric view</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
@@ -1464,9 +1551,9 @@ async function openDatasetSelectorModal() {
                                 </select>
                             </div>
                         </div>
-                        <input type="text" class="form-control form-control-sm mb-2" id="datasetAssetSearch" placeholder="Search tables and views..." oninput="_filterDatasetAssets()" disabled>
+                        <input type="text" class="form-control form-control-sm mb-2" id="datasetAssetSearch" placeholder="Search tables, views, and metric views..." oninput="_filterDatasetAssets()" disabled>
                         <div id="datasetAssetList" class="list-group" style="max-height: 320px; overflow-y: auto;">
-                            <div class="text-muted p-3 text-center">Select a catalog and schema to list tables and views</div>
+                            <div class="text-muted p-3 text-center">Select a catalog and schema to list assets</div>
                         </div>
                     </div>
                 </div>
@@ -1478,10 +1565,6 @@ async function openDatasetSelectorModal() {
     const modal = new bootstrap.Modal(document.getElementById(modalId));
     modal.show();
 
-    // Pre-select the current dataset's catalog/schema when editing
-    const preCatalog = sharedPanelDataset?.catalog || '';
-    const preSchema = sharedPanelDataset?.schema || '';
-
     try {
         const resp = await fetch('/settings/catalogs', { credentials: 'same-origin' });
         const data = await resp.json();
@@ -1489,11 +1572,7 @@ async function openDatasetSelectorModal() {
         if (!sel) return;
         const catalogs = data.catalogs || [];
         sel.innerHTML = '<option value="">Select a catalog...</option>' +
-            catalogs.map(c => `<option value="${escapeHtml(c)}"${c === preCatalog ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
-        if (preCatalog) {
-            _datasetSelCatalog = preCatalog;
-            await _datasetLoadSchemas(preCatalog, preSchema);
-        }
+            catalogs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
     } catch (err) {
         console.error('[Dataset] Error loading catalogs:', err);
         const sel = document.getElementById('datasetCatalogSelect');
@@ -1509,7 +1588,7 @@ async function _datasetOnCatalogChange() {
     const searchInput = document.getElementById('datasetAssetSearch');
     if (searchInput) searchInput.disabled = true;
     const list = document.getElementById('datasetAssetList');
-    if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list tables and views</div>';
+    if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list assets</div>';
     if (catalog) {
         await _datasetLoadSchemas(catalog);
     } else {
@@ -1550,13 +1629,13 @@ async function _datasetOnSchemaChange() {
         await _datasetLoadAssets(_datasetSelCatalog, schema);
     } else {
         const list = document.getElementById('datasetAssetList');
-        if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list tables and views</div>';
+        if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list assets</div>';
     }
 }
 
 async function _datasetLoadAssets(catalog, schema) {
     const list = document.getElementById('datasetAssetList');
-    if (list) list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading tables and views...</div>';
+    if (list) list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading assets...</div>';
     try {
         const resp = await fetch(`/settings/uc-assets?catalog=${encodeURIComponent(catalog)}&schema=${encodeURIComponent(schema)}`, { credentials: 'same-origin' });
         const data = await resp.json();
@@ -1564,32 +1643,37 @@ async function _datasetLoadAssets(catalog, schema) {
         const searchInput = document.getElementById('datasetAssetSearch');
         if (searchInput) searchInput.disabled = _datasetAllAssets.length === 0;
         if (!_datasetAllAssets.length) {
-            if (list) list.innerHTML = '<div class="text-muted p-3 text-center">No tables or views found in this schema</div>';
+            if (list) list.innerHTML = '<div class="text-muted p-3 text-center">No tables, views, or metric views found in this schema</div>';
             return;
         }
         _renderDatasetAssetList(_datasetAllAssets);
     } catch (err) {
         console.error('[Dataset] Error loading assets:', err);
-        if (list) list.innerHTML = '<div class="text-danger p-2"><i class="bi bi-exclamation-triangle"></i> Failed to load tables and views</div>';
+        if (list) list.innerHTML = '<div class="text-danger p-2"><i class="bi bi-exclamation-triangle"></i> Failed to load assets</div>';
     }
 }
 
 function _renderDatasetAssetList(assets) {
     const list = document.getElementById('datasetAssetList');
     if (!list) return;
+    const linked = new Set(sharedPanelDatasets.map(_datasetKey));
     list.innerHTML = assets.map(a => {
-        const isView = (a.table_type || '').toUpperCase() === 'VIEW';
-        const badge = isView
-            ? '<span class="badge bg-info text-dark">View</span>'
-            : '<span class="badge bg-secondary">Table</span>';
-        const icon = isView ? 'bi-eye' : 'bi-table';
+        const type = _datasetAssetType(a.table_type);
+        const meta = _datasetTypeMeta(type);
+        const already = linked.has(`${_datasetSelCatalog}.${_datasetSelSchema}.${a.name}`);
+        const badge = `<span class="badge ${meta.badgeClass}">${meta.label}</span>`;
+        const disabledAttr = already ? 'disabled' : '';
+        const note = already ? '<small class="text-muted">Already linked</small>' : (
+            a.comment ? `<small class="text-muted">${escapeHtml(String(a.comment).substring(0, 80))}</small>` : ''
+        );
         return `
             <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                    ${disabledAttr}
                     onclick='_datasetSelectAsset(${JSON.stringify(a).replace(/'/g, "&#39;")})'>
-                <i class="bi ${icon} text-primary"></i>
+                <i class="bi ${meta.icon} text-primary"></i>
                 <div class="flex-grow-1">
                     <div class="fw-semibold">${escapeHtml(a.name)} ${badge}</div>
-                    ${a.comment ? `<small class="text-muted">${escapeHtml(String(a.comment).substring(0, 80))}</small>` : ''}
+                    ${note}
                 </div>
                 <i class="bi bi-chevron-right text-muted"></i>
             </button>
@@ -1607,26 +1691,26 @@ function _filterDatasetAssets() {
 }
 
 function _datasetSelectAsset(asset) {
-    const previousDescription = Object.prototype.hasOwnProperty.call(
-        sharedPanelDataset || {},
-        'description'
-    )
-        ? (sharedPanelDataset.description || '')
-        : null;
+    const fullName = asset.full_name || `${_datasetSelCatalog}.${_datasetSelSchema}.${asset.name}`;
+    const key = `${_datasetSelCatalog}.${_datasetSelSchema}.${asset.name}`;
+    if (sharedPanelDatasets.some(ds => _datasetKey(ds) === key)) {
+        showNotification(`Dataset already linked: ${fullName}`, 'warning', 3000);
+        return;
+    }
     const defaultDescription = String(asset.comment || '').trim();
-    sharedPanelDataset = {
+    sharedPanelDatasets.push({
         catalog: _datasetSelCatalog,
         schema: _datasetSelSchema,
         asset: asset.name,
-        type: (asset.table_type || '').toUpperCase() === 'VIEW' ? 'VIEW' : 'TABLE',
-        fullName: asset.full_name || `${_datasetSelCatalog}.${_datasetSelSchema}.${asset.name}`,
+        type: _datasetAssetType(asset.table_type),
+        fullName,
         key_column: null,
-        description: previousDescription !== null ? previousDescription : (defaultDescription || null),
-    };
+        description: defaultDescription || null,
+    });
     markPanelDirty();
     renderSharedEntityDataset(false);
     closeDatasetSelectorModal();
-    showNotification(`Dataset linked: ${sharedPanelDataset.fullName}`, 'success', 3000);
+    showNotification(`Dataset linked: ${fullName}`, 'success', 3000);
 }
 
 function closeDatasetSelectorModal() {
@@ -3276,7 +3360,8 @@ async function saveSharedEntity(options = {}) {
         dashboard: sharedPanelDashboardUrl || undefined,
         dashboardParams: Object.keys(sharedPanelDashboardParams).length > 0 ? sharedPanelDashboardParams : undefined,
         bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined,
-        dataset: sharedPanelDataset || undefined,
+        datasets: sharedPanelDatasets.length > 0 ? sharedPanelDatasets : undefined,
+        dataset: sharedPanelDatasets.length > 0 ? sharedPanelDatasets[0] : undefined,
         actions: (sharedPanelActions.length + sharedPanelJobs.length) > 0
             ? sharedPanelActions.concat(sharedPanelJobs) : undefined,
         business_rules: sharedPanelBusinessRules.length > 0 ? sharedPanelBusinessRules : undefined,

@@ -1614,6 +1614,10 @@ async def dtwin_classes(
             {
                 "name": cls.get("name", ""),
                 "uri": cls.get("uri", ""),
+                "datasets": (
+                    cls.get("datasets")
+                    or ([cls["dataset"]] if cls.get("dataset") else [])
+                ),
                 "dataset": cls.get("dataset") or None,
                 "bridges": NodeContextService.enrich_bridge_targets(
                     NodeContextService.class_bridge_entries(cls),

@@ -25,6 +25,7 @@ from back.objects.digitaltwin.node.NodeBusinessRuleService import (
 )
 from back.objects.digitaltwin.node.NodeShaclService import NodeShaclService
 from back.objects.digitaltwin.node.VirtualAttributeService import VirtualAttributeService
+from back.objects.ontology.ClassModel import ClassModel
 from back.objects.registry import RegistryCfg, RegistryService
 from back.objects.session import SessionManager, get_domain, get_session_manager
 
@@ -145,6 +146,7 @@ class VersionsResponse(BaseModel):
 class ClassActionsItem(BaseModel):
     name: str
     uri: str
+    datasets: List[dict] = Field(default_factory=list)
     dataset: Optional[dict] = None
     bridges: List[dict] = Field(default_factory=list)
     actions: List[dict] = Field(default_factory=list)
@@ -527,7 +529,12 @@ async def get_domain_classes(
 
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
-        dataset = None if disabled(policy, "dataset") else cls.get("dataset") or None
+        datasets = (
+            []
+            if disabled(policy, "dataset")
+            else ClassModel.normalize_datasets(cls)
+        )
+        dataset = datasets[0] if datasets else None
         bridges = (
             []
             if disabled(policy, "bridges")
@@ -555,6 +562,7 @@ async def get_domain_classes(
             ClassActionsItem(
                 name=cls.get("name", ""),
                 uri=cls.get("uri", ""),
+                datasets=datasets,
                 dataset=dataset,
                 bridges=bridges,
                 actions=actions,

@@ -416,9 +416,9 @@ When viewing an entity in the Knowledge Graph visualization, the dashboard will 
 
 ### Class Actions (Unity Catalog functions)
 
-Beyond the linked dataset, an entity type can expose **actions** — Unity Catalog
-functions that operate on a single entity and can be run from the Graph Explorer
-or from an MCP client.
+Beyond linked datasets (tables, views, or metric views), an entity type can expose
+**actions** — Unity Catalog functions that operate on a single entity and can be
+run from the Graph Explorer or from an MCP client.
 
 1. Go to **Ontology** → **Entities** and select an entity type
 2. Open the **Behaviour** tab and find the **Functions** section
@@ -517,7 +517,7 @@ each section does:
 | **Attrs.** | Mapped attributes (data properties), then **Virtual attributes** (computed when viewed) |
 | **Model** | Inherits from, inherited relationships, equivalent to, disjoint with, bridges to other domains |
 | **Behaviour** | What the Knowledge Graph can run on one entity, each section tagged with its effect: **Functions** (return a result), **Jobs** (run in background), **Inference rules (SWRL)** (write to the graph) |
-| **Links** | Dashboard and dataset |
+| **Links** | Dashboard and datasets |
 
 Every section inside a tab has the same layout:
 
@@ -1368,7 +1368,7 @@ unrecoverable.
 
 | Attachment | What it covers |
 |------------|----------------|
-| **Datasets** | The Unity Catalog table or view linked to a class. |
+| **Datasets** | The Unity Catalog tables, views, or metric views linked to a class (one or more). |
 | **Bridges** | Cross-domain links declared between ontology classes. |
 | **Actions** | Unity Catalog functions declared on a class. |
 | **Virtual attributes** | Class attributes computed on demand by a Unity Catalog function instead of being mapped. |
@@ -1729,7 +1729,7 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 | `get_design_status` | Ontology / metadata / assignment readiness for a domain |
 | `list_entity_types` | Overview of entity types, counts, and predicates |
 | `describe_entity` | Full-text description of an entity with BFS traversal |
-| `get_entity_context` | Linked dataset rows, cross-domain bridges, and class actions for a node |
+| `get_entity_context` | Linked dataset rows (all linked UC tables/views/metric views), cross-domain bridges, and class actions for a node |
 | `invoke_entity_action` | Run a class action: UC function (entity ID as the single argument) or Databricks Job (`job:<id>`) |
 | `run_entity_business_rule` | Run a SWRL business rule attached to the entity's class and materialise the inferred triples (Builder role) |
 | `check_entity_shacl_facets` | Check one entity against the SHACL shapes of its class, its ancestors and the whole graph (pass / fail / not applicable / not evaluated / error, with the values found) |

@@ -324,9 +324,13 @@ class MCPServerSession:
             uri = cls.get("uri", "")
             if not uri:
                 continue
+            datasets = cls.get("datasets") or (
+                [cls["dataset"]] if cls.get("dataset") else []
+            )
             self.class_actions[uri] = {
                 "name": cls.get("name", ""),
-                "dataset": cls.get("dataset") or None,
+                "datasets": datasets,
+                "dataset": datasets[0] if datasets else None,
                 "bridges": cls.get("bridges") or [],
                 "actions": cls.get("actions") or [],
                 "business_rules": cls.get("business_rules") or [],

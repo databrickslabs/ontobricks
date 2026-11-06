@@ -1,0 +1,75 @@
+================================================================================
+## Allow multiple UC datasets (incl. metric views) per class
+================================================================================
+
+Context: Backport of issue #221 from 0.10.0 — Ontology Studio only allowed one
+linked dataset per class, and the picker excluded Unity Catalog metric views.
+Classes can now link several tables/views/metric views as equal peers; runtime
+context (MCP, Graph Explorer, Graph Chat) resolves all of them, with
+metric-aware SQL for metric views.
+
+Changes:
+
+1. src/back/objects/ontology/ClassModel.py
+   Add ``normalize_datasets`` / ``primary_dataset``; class field becomes
+   ``datasets`` list with legacy singular ``dataset`` back-compat.
+2. src/back/core/w3c/owl/OntologyParser.py / OntologyGenerator.py
+   Parse/emit ``ontobricks:dataset`` as a JSON array; normalize legacy object.
+3. src/back/objects/ontology/EntityImport.py
+   Treat ``datasets`` as a domain-bound field on import.
+4. src/back/core/databricks/uc/metric_sql.py
+   Add ``build_metric_view_entity_sql`` (WHERE key + MEASURE/GROUP BY + LIMIT).
+5. src/back/objects/digitaltwin/node/NodeDatasetService.py
+   New service resolving N datasets (table/view SELECT * or metric-view SQL).
+6. src/back/objects/digitaltwin/node/NodeContextService.py
+   Emit ``datasets`` plus singular ``dataset`` (first) for one-release back-compat.
+7. src/front/static/ontology/js/ontology-shared-panels.js
+   Multi-item Datasets Links panel; picker badges for TABLE/VIEW/METRIC_VIEW;
+   dimension-preferring key columns for metric views.
+8. src/front/static/query/js/query-*.js + ontology-map.js
+   Graph Explorer/Chat loaders, details, preview, and badges handle ``datasets[]``.
+9. src/api/routers/{digitaltwin,domains,internal/dtwin}.py
+   REST models/payloads expose ``datasets`` (keep singular ``dataset``).
+10. src/mcp-server/server/{formatting,session,tools}.py + agents formatting
+    MCP/Graph Chat inventory and context text list all linked datasets.
+11. docs/advanced_features.md, docs/user-guide.md
+    Document multi-dataset + metric-view linking.
+12. tests (units for ClassModel, OWL round-trip, metric SQL, front contracts, API)
+
+Modified files:
+- src/back/objects/ontology/ClassModel.py
+- src/back/objects/ontology/EntityImport.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/databricks/uc/metric_sql.py
+- src/back/objects/digitaltwin/node/NodeDatasetService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/digitaltwin/node/__init__.py
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/api/routers/digitaltwin.py
+- src/api/routers/domains.py
+- src/api/routers/internal/dtwin.py
+- src/mcp-server/server/formatting.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/tools.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/tools/graph_formatting.py
+- docs/advanced_features.md
+- docs/user-guide.md
+- tests/units/ontology/test_class_model_datasets.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/core/test_metric_sql.py
+- tests/units/front/test_ontology_dataset_key_dropdown.py
+- tests/units/front/test_ontology_dataset_description.py
+- tests/units/front/test_query_dataset_description.py
+- tests/units/front/test_entity_panel_sections.py
+- tests/units/front/test_ontology_map_external_badge.py
+- tests/units/api/test_node_context_endpoint.py
+- changelogs/v0.9.2/benoitcayladbx_2026-11-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9664 passed, 326 skipped, 8 deselected, 39 warnings in 55.28s

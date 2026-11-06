@@ -208,7 +208,7 @@ def test_equivalent_and_disjoint_are_chip_pickers_over_hidden_selects():
         ("renderSharedEntityBusinessRules", "No inference rules yet."),
         ("renderSharedEntityBridges", "No bridges to other domains yet."),
         ("renderSharedEntityDashboard", "No dashboard linked yet."),
-        ("renderSharedEntityDataset", "No dataset linked yet."),
+        ("renderSharedEntityDataset", "No datasets linked yet."),
     ],
 )
 def test_render_functions_use_the_empty_state_and_update_the_header(render, empty):
