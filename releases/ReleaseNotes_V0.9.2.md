@@ -2,9 +2,9 @@
 
 **Release window:** October – November 2026<br>
 **Type:** Patch release (v0.9.1 → v0.9.2)<br>
-**Test status:** `uv run --frozen pytest -q -m "not scenario"`: 9653 passed, 326 skipped, 8 deselected.
+**Test status:** `uv run --frozen pytest -q -m "not scenario"`: 9664 passed, 326 skipped, 8 deselected.
 
-This release is a patch on v0.9.1. It fixes MCP identity and domain resolution, SPARQL value filters, Apps deployment scopes, local setup on machines whose default `python3` is too old, and dependency security floors. No new user-facing feature.
+This release is a patch on v0.9.1. It fixes MCP identity and domain resolution, SPARQL value filters, Apps deployment scopes, local setup on machines whose default `python3` is too old, and dependency security floors. It also backports one feature from 0.10.0: several Unity Catalog datasets per ontology class, including metric views (issue #221).
 
 ---
 
@@ -15,6 +15,7 @@ This release is a patch on v0.9.1. It fixes MCP identity and domain resolution, 
 - **SPARQL value FILTERs are applied** — typed BGP filters such as `FILTER(STR(?v) = "…")` and `CONTAINS(LCASE(STR(?v)), …)` compile to SQL instead of producing `WHERE 1=1`. Unmapped filters now fail closed. ([#210](https://github.com/databrickslabs/ontobricks/issues/210))
 - **Databricks Apps deploy fixed** — `user_api_scopes` lists only `sql`; the identity scopes are platform defaults and are rejected when declared explicitly.
 - **Dependency security floors raised and lockfiles regenerated** — Authlib, dnspython, msgpack, nltk, pyasn1, graphql-core, joserfc, and others, with `uv.lock` and `src/mcp-server/uv.lock` regenerated.
+- **Several datasets per class, metric views included** — Ontology Studio lets a class link multiple Unity Catalog tables, views, or metric views instead of one. Graph Explorer, Graph Chat, and MCP surface all of them. ([#221](https://github.com/databrickslabs/ontobricks/issues/221))
 
 ---
 
@@ -36,6 +37,18 @@ Each MCP tool call can arrive in a new StreamableHTTP session, so `select_domain
 - Domain-scoped tools accept an optional `domain_name` argument.
 - Resolution order: `domain_name` argument, then `MCP_DEFAULT_DOMAIN`, then the only published MCP domain.
 - Factory instructions tell clients to pass `domain_name` when the session is not reused.
+
+---
+
+## Ontology Studio: several datasets per class
+
+Ontology Studio allowed only one linked dataset per class, and the picker excluded Unity Catalog metric views. A class can now link several datasets, with the same multi-item pattern as Actions and Bridges. ([#221](https://github.com/databrickslabs/ontobricks/issues/221))
+
+- **Links → Datasets** lists tables, views, and metric views. Metric views carry their own badge.
+- Each linked dataset keeps its own key column and description. For metric views, the key-column dropdown prefers dimensions, since measures are not valid keys.
+- The class field is now `datasets: []`. OWL still uses the `ontobricks:dataset` annotation, with a JSON array as the value. An ontology that stores a singular dataset object is normalized on load.
+- Graph Explorer, MCP, and Graph Chat treat all linked datasets as equal peers. Context payloads expose `datasets` and keep the singular `dataset` (the first entry) for one release.
+- Table and view previews stay `SELECT * … WHERE key = entity_id`. Metric views use metric-aware SQL (`MEASURE()`, `GROUP BY`, key filter), never a raw `SELECT *`.
 
 ---
 
@@ -98,7 +111,8 @@ Previously pinned packages that were never resolved into the lock (Pillow, filel
 
 - **`docs/deployment.md`**: acting headers vs Apps `x-forwarded-*` overwrite, identity scopes as platform defaults, Apple `python3` 3.9 accepted when `uv` is on `PATH`.
 - **`docs/architecture.md`**: acting-identity flow; typed BGP string `FILTER`s compile to SQL.
-- **`docs/user-guide.md`** and **`docs/mcp.md`**: AI Playground one-shot sessions, `domain_name`, `MCP_DEFAULT_DOMAIN`.
+- **`docs/user-guide.md`** and **`docs/mcp.md`**: AI Playground one-shot sessions, `domain_name`, `MCP_DEFAULT_DOMAIN`. The user guide also covers multi-dataset and metric-view linking.
+- **`docs/advanced_features.md`**: multi-dataset and metric-view linking per class.
 - **`docs/getting-started.md`**: `uv`-provisioned CPython and the setup order.
 - **`docs/development.md`**: current security floors and the MCP Python 3.11 floor.
 
@@ -110,4 +124,5 @@ Previously pinned packages that were never resolved into the lock (Pillow, filel
 - **MCP clients:** AI Playground and any client that does not reuse the MCP session must pass `domain_name` on domain-scoped tools, or set `MCP_DEFAULT_DOMAIN`.
 - **Redeploy:** `MCP_SP_CLIENT_ID` is injected by `scripts/deploy.sh`. Use the deploy script rather than a raw bundle deploy so the identity swap stays configured.
 - **Lockfiles:** the MCP server now requires Python ≥ 3.11, matching the app.
+- **Class datasets:** existing ontologies with a single dataset are normalized to `datasets[0]` on load, so no migration is needed. Integrations that read the singular `dataset` field keep working for this release; move them to `datasets`.
 - **Known open items:** oauthlib 4.0.0 and the nltk advisory above remain open.
