@@ -27,7 +27,6 @@ _BUILD_LAKEHOUSE = Path("src/front/templates/partials/dtwin/_query_databricks_bu
 _SYNC_JS = Path("src/front/static/query/js/query-sync.js")
 _ONTOLOGY_DESIGNER = Path("src/front/templates/partials/ontology/_ontology_map.html")
 _MAPPING_DESIGNER = Path("src/front/templates/partials/mapping/_mapping_design.html")
-_BUSINESS_VIEWS = Path("src/front/templates/partials/ontology/_ontology_design.html")
 _ONTOLOGY_ENTITIES = Path("src/front/templates/partials/ontology/_ontology_entities.html")
 
 
@@ -154,18 +153,23 @@ def test_ontology_and_mapping_designers_use_pencil_icon():
     )
 
 
-def test_business_views_uses_yelp_icon():
-    business_views = next(
+def test_studio_has_view_filter_dropdown():
+    studio = next(
         item
         for group in _menus()["ontology"]["groups"]
         for item in group["items"]
-        if item["id"] == "design"
+        if item["id"] == "map"
     )
-    assert business_views["label"] == "Business Views"
-    assert business_views["icon"] == "bi-yelp"
-    assert (
-        '<i class="bi bi-yelp me-2"></i>Visual Ontology Designer - Business Views'
-        in _BUSINESS_VIEWS.read_text(encoding="utf-8")
+    assert studio["label"] == "Studio"
+    assert studio["icon"] == "bi-pencil"
+    map_html = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
+    assert 'id="studioViewSelect"' in map_html
+    assert "Ontology Studio" in map_html
+    # Business Views is no longer a separate sidebar section.
+    assert not any(
+        item["id"] == "design"
+        for group in _menus()["ontology"]["groups"]
+        for item in group["items"]
     )
 
 

@@ -7,6 +7,31 @@
         <p class="text-muted mb-0 small">Interactive force-directed graph of your ontology</p>
     </div>
     <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-1" title="Filter the canvas by Business View">
+            <label for="studioViewSelect" class="small text-muted mb-0 me-1">View</label>
+            <select id="studioViewSelect" class="form-select form-select-sm studio-view-select" aria-label="Business view filter">
+                <option value="__all__" selected>All</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-secondary ontology-edit-btn" id="studioDeleteViewBtn"
+                    title="Delete the selected Business View" aria-label="Delete Business View" disabled>
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+        <div class="btn-group btn-group-sm ontology-edit-btn" title="Create or edit entity groups">
+            <button type="button" class="btn btn-outline-secondary dropdown-toggle" id="studioGroupsBtn"
+                    data-bs-toggle="dropdown" aria-expanded="false" aria-label="Manage groups">
+                <i class="bi bi-collection"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" id="studioGroupsMenu" aria-labelledby="studioGroupsBtn">
+                <li>
+                    <button type="button" class="dropdown-item" id="studioNewGroupBtn">
+                        <i class="bi bi-plus-lg me-1"></i>New group…
+                    </button>
+                </li>
+                <li><hr class="dropdown-divider" id="studioGroupsDivider"></li>
+                <li><span class="dropdown-item-text text-muted small" id="studioGroupsEmpty">No groups yet</span></li>
+            </ul>
+        </div>
         <div class="btn-group btn-group-sm" role="group" aria-label="Zoom and view">
             <button class="btn btn-outline-secondary" id="mapZoomIn" title="Zoom In" aria-label="Zoom in">
                 <i class="bi bi-zoom-in"></i>

@@ -5,8 +5,6 @@
 {% block extra_css %}
 <!-- Ontology page specific styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/ontology.css') }}?v={{ asset_version }}">
-<!-- OntoViz library styles for Design section -->
-<link rel="stylesheet" href="{{ url_for('static', filename='global/ontoviz/css/ontoviz.css') }}?v={{ asset_version }}">
 <!-- Ontology module styles (extracted from partials) -->
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-map.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-shared-panels.css') }}?v={{ asset_version }}">
@@ -50,12 +48,7 @@
                 {% include "partials/ontology/_ontology_import.html" %}
             </div>
             
-            <!-- Design Section (OntoViz Visual Editor) -->
-            <div id="design-section" class="sidebar-section">
-                {% include "partials/ontology/_ontology_design.html" %}
-            </div>
-            
-            <!-- Model Section (D3.js Force-Directed Graph) -->
+            <!-- Studio Section (D3.js Force-Directed Graph + Business View filter) -->
             <div id="map-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_map.html" %}
             </div>
@@ -68,11 +61,6 @@
             <!-- Relationships Section -->
             <div id="relationships-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_relationships.html" %}
-            </div>
-            
-            <!-- Groups Section (Entity Groups for expand/collapse in DT) -->
-            <div id="groups-section" class="sidebar-section">
-                {% include "partials/ontology/_ontology_groups.html" %}
             </div>
             
             <!-- Data Quality (SHACL) Section -->
@@ -107,12 +95,10 @@
 </div>
 
 {% include "partials/ontology/_ontology_entity_import_modal.html" %}
+{% include "partials/ontology/_ontology_groups.html" %}
 
-<!-- OntoViz library for Design section -->
-<script src="{{ url_for('static', filename='global/ontoviz/ontoviz.js') }}?v={{ asset_version }}"></script>
-
-<!-- Ontology Design module (extracted from _ontology_design.html partial) -->
-<script src="{{ url_for('static', filename='global/js/ontology-design.js') }}?v={{ asset_version }}"></script>
+<!-- Ontology session / registry persistence (unload beacons, dirty flag) -->
+<script src="{{ url_for('static', filename='global/js/ontology-persistence.js') }}?v={{ asset_version }}"></script>
 
 <!-- Ontology modules (extracted from partials) -->
 <script src="{{ url_for('static', filename='ontology/js/ontology-map.js') }}?v={{ asset_version }}"></script>

@@ -142,7 +142,11 @@ def test_multi_business_view_keeps_only_internal_links():
     assert "/domain/design-views/create" in helper
     assert "/domain/design-views/switch" in helper
     assert "/domain/design-views/save-current" in helper
-    assert "SidebarNav.switchTo('design')" in helper
+    # Stay on Studio and filter the canvas — no navigation to the removed design section.
+    assert "SidebarNav.switchTo('design')" not in helper
+    assert "loadOntologyIntoDesigner" not in helper
+    assert "applyStudioView(viewName)" in helper
+    assert "refreshStudioViewSelect()" in helper
 
 
 def test_single_entity_business_view_stays_one_hop():
@@ -277,9 +281,13 @@ def test_map_rebuild_does_not_close_the_panel():
 
 def test_business_view_builders_share_one_helper():
     js = MAP_JS.read_text(encoding="utf-8")
+    # create is unique to the shared helper; switch also lives in applyStudioView
+    # (Studio View dropdown), and save-current is reused when persisting layout /
+    # collapsed groups on an active Business View.
     assert js.count("/domain/design-views/create") == 1
-    assert js.count("/domain/design-views/switch") == 1
-    assert js.count("/domain/design-views/save-current") == 1
+    assert "async function applyStudioView(" in js
+    assert js.count("/domain/design-views/switch") == 2
+    assert "/domain/design-views/save-current" in js
     for signature in (
         "async function createBusinessViewFromEntity(",
         "async function createBusinessViewFromSelection(",

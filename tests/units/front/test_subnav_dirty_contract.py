@@ -8,7 +8,7 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
-ONTOLOGY_JS = REPO_ROOT / "src/front/static/global/js/ontology-design.js"
+ONTOLOGY_JS = REPO_ROOT / "src/front/static/global/js/ontology-persistence.js"
 MAPPING_JS = REPO_ROOT / "src/front/static/global/js/mapping-core.js"
 
 

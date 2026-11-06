@@ -16,7 +16,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PANELS_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"
 CORE_JS = REPO_ROOT / "src/front/static/global/js/ontology-core.js"
-DESIGN_JS = REPO_ROOT / "src/front/static/global/js/ontology-design.js"
+PERSISTENCE_JS = REPO_ROOT / "src/front/static/global/js/ontology-persistence.js"
 
 pytestmark = pytest.mark.unit
 
@@ -47,10 +47,8 @@ def test_session_save_survives_page_teardown():
 
 
 def test_flush_precedes_the_registry_save():
-    """The panel module loads after the design module, so its own unload
-    handler runs second; the registry would otherwise be written from a
-    session that never saw the pending edit."""
-    js = DESIGN_JS.read_text(encoding="utf-8")
+    """The persistence unload handler flushes the panel before save-to-uc."""
+    js = PERSISTENCE_JS.read_text(encoding="utf-8")
     start = js.index("function saveRegistryOnUnload()")
     body = js[start : js.index("window.addEventListener", start)]
     assert body.index("flushSharedPanelOnUnload") < body.index(

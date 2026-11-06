@@ -740,36 +740,12 @@ async function domainSave() {
         // First, save domain info from form if on the domain page
         await saveDomainInfoBeforeSave();
         
-        // Save the current design layout if on the design page
-        if (typeof ontologyDesigner !== 'undefined' && ontologyDesigner) {
+        // Persist Studio map positions before the registry save.
+        if (typeof flushStudioLayoutBeforeSave === 'function') {
             try {
-                const layoutData = ontologyDesigner.toJSON();
-                
-                // Strip icon and description from entities - they come from ontology
-                const cleanedLayout = {
-                    ...layoutData,
-                    entities: (layoutData.entities || []).map(entity => ({
-                        id: entity.id,
-                        name: entity.name,
-                        x: entity.x,
-                        y: entity.y,
-                        properties: entity.properties,
-                        color: entity.color
-                        // icon and description are intentionally NOT saved
-                    })),
-                    relationships: layoutData.relationships,
-                    inheritances: layoutData.inheritances,
-                    visibility: layoutData.visibility
-                };
-                
-                await fetch('/domain/design-views/save-current', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(cleanedLayout),
-                    credentials: 'same-origin'
-                });
+                await flushStudioLayoutBeforeSave();
             } catch (e) {
-                console.log('No design layout to save or not on design page');
+                console.log('No Studio layout to flush before save');
             }
         }
         

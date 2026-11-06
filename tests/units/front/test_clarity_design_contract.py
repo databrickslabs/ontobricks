@@ -64,7 +64,7 @@ MENU_CONFIG = REPO_ROOT / "src/front/config/menu_config.json"
 SIDEBAR_NAV_PARTIAL = (
     REPO_ROOT / "src/front/templates/partials/layout/_sidebar_nav.html"
 )
-ONTOVIZ_CSS = REPO_ROOT / "src/front/static/global/ontoviz/css/ontoviz.css"
+ONTOLOGY_MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
 
 
 def _read(path: Path) -> str:
@@ -834,17 +834,17 @@ def test_user_identity_lives_in_the_navbar_not_the_sidebar():
     assert "sidebar-user" not in _read(SIDEBAR_LAYOUT_CSS)
 
 
-def test_ontoviz_entity_headers_use_indigo_soft_not_red():
-    """Business Views entity cards were tinted light red, outside the palette."""
-    css = _read(ONTOVIZ_CSS)
-
+def test_studio_map_uses_design_tokens_not_hardcoded_red():
+    """Studio map chrome must stay on the Clarity token palette."""
+    css = _read(ONTOLOGY_MAP_CSS)
     assert "fdeaea" not in css.lower()
-    blocks = _rule_blocks_for_exact_class(css, ".ovz-entity-header")
-    assert _any_block_has_declaration(blocks, r"background", r"var\(--db-primary-light\)")
+    assert "var(--db-" in css
 
 
 def test_primary_consumers_use_runtime_tokens_outside_root_fallback():
-    css_files = [MAIN_CSS, COMPONENTS_CSS, SIDEBAR_LAYOUT_CSS, ONTOVIZ_CSS]
+    # Studio map CSS still uses a few interaction hex values (search popup,
+    # inheritance highlight); the shared chrome files must stay token-only.
+    css_files = [MAIN_CSS, COMPONENTS_CSS, SIDEBAR_LAYOUT_CSS]
     forbidden = [
         "#4f46e5",
         "rgba(79, 70, 229",

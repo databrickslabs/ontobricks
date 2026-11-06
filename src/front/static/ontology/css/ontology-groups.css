@@ -49,3 +49,28 @@
     max-height: 300px;
     overflow-y: auto;
 }
+
+/* Studio toolbar Groups dropdown — single line layout */
+#studioGroupsMenu {
+    min-width: 220px;
+    max-width: 320px;
+}
+
+.studio-group-menu-item {
+    white-space: nowrap !important;
+    overflow: hidden;
+}
+
+.studio-group-menu-item .group-color-dot {
+    margin-right: 8px;
+}
+
+.studio-group-menu-item .studio-group-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.studio-group-menu-item .studio-group-name {
+    min-width: 0;
+}
+

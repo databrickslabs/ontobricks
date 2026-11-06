@@ -66,6 +66,46 @@
     cursor: pointer;
 }
 
+/* Studio Business View dropdown */
+.studio-view-select {
+    width: auto;
+    min-width: 140px;
+    max-width: 220px;
+}
+
+/* Collapse/expand control on entity and group nodes */
+.studio-group-toggle {
+    pointer-events: all;
+}
+
+.studio-group-toggle-bg {
+    fill: #ffffff;
+    stroke: var(--db-border, #cbd5e1);
+    stroke-width: 1.25px;
+}
+
+.studio-group-toggle-icon {
+    font-size: 11px;
+    font-weight: 700;
+    fill: var(--db-text, #334155);
+    pointer-events: none;
+}
+
+.studio-group-toggle:hover .studio-group-toggle-bg {
+    fill: var(--db-surface-warm, #f8fafc);
+    stroke: var(--db-primary, #4F46E5);
+}
+
+.map-group-node .map-group-circle {
+    stroke: rgba(255, 255, 255, 0.85);
+    stroke-width: 2px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+}
+
+.map-group-node .map-node-icon {
+    font-size: 22px;
+}
+
 /* Entity nodes - icon only, no circles */
 .map-node {
     cursor: grab;

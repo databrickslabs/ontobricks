@@ -152,7 +152,7 @@ Product conventions (class `name` vs `rdfs:label`, instance `{Class}/{id}`,
 
 ### Option A: Studio (Recommended)
 
-Click **Business Views** in the sidebar to use the visual drag-and-drop interface.
+Open **Ontology → Studio** for the interactive ontology canvas. Use the toolbar **View** dropdown to show **All** entities or filter to a saved **Business View**. Create a Business View from a multi-selection (right-click → Create Business View); the dropdown switches to that view and filters the canvas. Manage entity groups from the Studio **Groups** toolbar button (create/edit/delete); assign an entity to a group in the right pane **General** tab. Collapsed groups use the **+** badge on a member node (group circle with **+** to expand).
 
 #### Creating Entities
 

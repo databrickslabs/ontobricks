@@ -208,20 +208,6 @@
                             "requires": null
                         },
                         {
-                            "id": "groups",
-                            "label": "Groups",
-                            "icon": "bi-collection",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
-                            "id": "design",
-                            "label": "Business Views",
-                            "icon": "bi-yelp",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
                             "id": "entities",
                             "label": "Entities",
                             "icon": "bi-list-nested",

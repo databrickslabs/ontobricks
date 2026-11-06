@@ -444,7 +444,6 @@ class TestOntologyPage:
             "import",
             "wizard",
             "map",
-            "design",
             "entities",
             "relationships",
             "dataquality",
@@ -466,7 +465,6 @@ class TestOntologyPage:
             "import-section",
             "wizard-section",
             "map-section",
-            "design-section",
             "entities-section",
             "relationships-section",
             "dataquality-section",
@@ -481,9 +479,15 @@ class TestOntologyPage:
             _find(_tags(html), id_=section_id) is not None
         ), f"Section div #{section_id} not found"
 
-    def test_ontoviz_script_loaded(self, client):
+    def test_ontology_map_script_loaded(self, client):
         html = _html(client, "/ontology")
-        assert any("ontoviz.js" in src for src in _script_srcs(html))
+        assert any("ontology-map.js" in src for src in _script_srcs(html))
+        assert not any("ontoviz.js" in src for src in _script_srcs(html))
+        assert any("ontology-persistence.js" in src for src in _script_srcs(html))
+
+    def test_studio_view_select_present(self, client):
+        html = _html(client, "/ontology")
+        assert _find(_tags(html), id_="studioViewSelect") is not None
 
     def test_ontology_core_script_loaded(self, client):
         html = _html(client, "/ontology")

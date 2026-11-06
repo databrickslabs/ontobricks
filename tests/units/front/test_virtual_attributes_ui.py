@@ -10,7 +10,6 @@ LOADERS_JS = REPO_ROOT / "src/front/static/query/js/query-loaders.js"
 DETAILS_JS = REPO_ROOT / "src/front/static/query/js/query-entity-details.js"
 SIGMA_JS = REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
 VA_JS = REPO_ROOT / "src/front/static/query/js/query-virtual-attributes.js"
-DESIGN_JS = REPO_ROOT / "src/front/static/global/js/ontology-design.js"
 INFO_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-information.js"
 DTWIN_HTML = REPO_ROOT / "src/front/templates/dtwin.html"
 
@@ -123,11 +122,10 @@ def test_loaders_retain_class_virtual_attributes():
     assert "virtualAttributes: cls.virtualAttributes || []" in js
 
 
-def test_designer_sync_preserves_virtual_attributes():
-    """Designer → ontology sync rebuilds each class from the canvas; anything
-    it forgets to carry over is silently lost on the next save."""
-    js = DESIGN_JS.read_text(encoding="utf-8")
-    assert "virtualAttributes: existing.virtualAttributes || []" in js
+def test_entity_panel_save_preserves_virtual_attributes():
+    """Entity panel save must carry virtual attributes into the class payload."""
+    js = PANELS_JS.read_text(encoding="utf-8")
+    assert "virtualAttributes: sharedPanelVirtualAttributes.length > 0" in js
 
 
 def test_owl_and_rdfs_import_preserve_virtual_attributes():

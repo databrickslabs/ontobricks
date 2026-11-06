@@ -11,7 +11,6 @@ SIGMA_JS = STATIC / "query/js/query-sigmagraph.js"
 DETAILS_JS = STATIC / "query/js/query-entity-details.js"
 BR_JS = STATIC / "query/js/query-business-rules.js"
 DTWIN_HTML = REPO_ROOT / "src/front/templates/dtwin.html"
-DESIGN_JS = STATIC / "global/js/ontology-design.js"
 INFO_JS = STATIC / "ontology/js/ontology-information.js"
 
 
@@ -36,7 +35,7 @@ def test_picker_lists_rules_for_class_and_parents_and_saves_refs():
 
 
 def test_class_mappers_keep_business_rules():
-    assert "business_rules: existing.business_rules || []" in DESIGN_JS.read_text(encoding="utf-8")
+    assert "business_rules: sharedPanelBusinessRules.length > 0" in PANELS_JS.read_text(encoding="utf-8")
     assert INFO_JS.read_text(encoding="utf-8").count("business_rules: cls.business_rules || []") == 2
 
 

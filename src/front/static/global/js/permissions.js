@@ -170,15 +170,13 @@
 
     /*
      * Selector matching every interactive design surface (mapping map,
-     * ontology map, Business Views OntoViz canvas, …) where right-
-     * click menus would trigger writes. We block ``contextmenu`` on
-     * descendants during the capture phase, which pre-empts the per-
-     * widget D3/Canvas handlers and swallows the browser's default
-     * menu — so we don't need to chase every individual handler.
+     * ontology Studio map, …) where right-click menus would trigger
+     * writes. We block ``contextmenu`` on descendants during the
+     * capture phase, which pre-empts the per-widget D3 handlers and
+     * swallows the browser's default menu.
      */
     const READ_ONLY_DESIGN_SURFACE_SELECTOR =
-        '#mapping-map-container, #ontology-map-container, '
-        + '.ovz-canvas, .ontoviz-container';
+        '#mapping-map-container, #ontology-map-container';
 
     function installReadOnlyContextMenuBlocker() {
         if (window._readOnlyContextMenuBlockerInstalled) return;

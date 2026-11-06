@@ -34,7 +34,7 @@ body.ontology-page {
    Self-contained sizing (no sidebar-content override needed).
    ========================================================================== */
 
-#design-section .section-header {
+#map-section .section-header {
     margin-bottom: 0.5rem;
 }
 
@@ -61,14 +61,6 @@ body.ontology-page {
 
 .view-selector .btn-group .btn:disabled {
     opacity: 0.5;
-}
-
-/* Designer canvas fills its wrapper */
-#ontology-designer-canvas {
-    width: 100%;
-    height: 100%;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
 }
 
 /* Designer Loading Overlay */
@@ -395,18 +387,7 @@ body.ontology-page {
 }
 
 /* ==========================================================================
-   Designer Canvas Wrapper
-   ========================================================================== */
-
-#ontology-designer-canvas-wrapper {
-    position: relative;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}
-
-/* ==========================================================================
-   Designer Empty State Overlay
+   Designer Empty State Overlay (shared by Studio loading empty states)
    ========================================================================== */
 
 .designer-empty-overlay {
@@ -524,13 +505,5 @@ body.ontology-page {
         overflow: visible;
     }
 
-    #design-section .content-section {
-        flex: none;
-    }
-
-    #ontology-designer-canvas-wrapper {
-        flex: none;
-        min-height: 400px;
-    }
 }
 

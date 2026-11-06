@@ -182,16 +182,11 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingIncludeExcl
        is unavailable rather than wondering where it went. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsDesignBtn,
-/* --- Ontology > Business Views: CRUD buttons (top toolbar) + the
-       empty-state "Create View" CTA shown when no view exists. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #createViewBtn,
-body:is(.read-only-version, .role-viewer, .read-only-locked) #renameViewBtn,
-body:is(.read-only-version, .role-viewer, .read-only-locked) #deleteViewBtn,
-body:is(.read-only-version, .role-viewer, .read-only-locked) #createGroupFromViewBtn,
+/* --- Ontology > Studio: Business View delete control. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) #studioDeleteViewBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #newAssistantBtn,
-body:is(.read-only-version, .role-viewer, .read-only-locked) #emptyStateCreateViewBtn,
-/* --- Ontology > Entity Groups: "New Group" CTA. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #newGroupBtn,
+/* --- Ontology > Studio: Groups toolbar dropdown. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) #studioGroupsBtn,
 /* --- Ontology > Data Quality: every per-rule action button. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) .dq-shape-card .btn-group button,
 /* --- Save Domain navbar item: still rendered, but neutralised. */

@@ -1146,12 +1146,48 @@ function onSharedEntityGroupChange(entityName, newGroup, previousGroup) {
             }
             const sel = panelGetById('sharedEntityGroup');
             if (sel) sel.dataset.prevGroup = newGroup;
+            if (typeof window.refreshStudioGroups === 'function') {
+                window.refreshStudioGroups();
+            }
         })
         .catch(err => {
             console.error('[SharedPanel] Group update failed:', err);
             showNotification('Could not update group membership', 'error');
         });
 }
+
+/**
+ * Rebuild the General-tab Group <select> after create/edit/delete from Studio.
+ * @param {Array<{name: string, label?: string, icon?: string}>} [groups]
+ */
+async function refreshSharedEntityGroupOptions(groups) {
+    const sel = panelGetById('sharedEntityGroup');
+    if (!sel) return;
+    let list = groups;
+    if (!list) {
+        try {
+            const gRes = await fetch('/ontology/groups/list', { credentials: 'same-origin' });
+            const gData = await gRes.json();
+            list = (gData.success && gData.groups) ? gData.groups : [];
+        } catch (e) {
+            console.warn('[SharedPanel] Could not refresh groups:', e);
+            return;
+        }
+    }
+    const current = sel.value || '';
+    let html = '<option value="">-- None --</option>';
+    list.forEach(g => {
+        const icon = g.icon || '📁';
+        const selAttr = g.name === current ? 'selected' : '';
+        html += `<option value="${escapeHtml(g.name)}" ${selAttr}>${escapeHtml(icon)} ${escapeHtml(g.label || g.name)}</option>`;
+    });
+    sel.innerHTML = html;
+    if (current && ![...sel.options].some(o => o.value === current)) {
+        sel.value = '';
+        sel.dataset.prevGroup = '';
+    }
+}
+window.refreshSharedEntityGroupOptions = refreshSharedEntityGroupOptions;
 
 // Emoji picker functions removed — now uses global EmojiPicker.create() (emoji-picker.js)
 

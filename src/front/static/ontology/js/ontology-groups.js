@@ -1,12 +1,15 @@
 /**
  * OntoBricks - ontology-groups.js
- * Entity group management for the Ontology page.
+ * Entity group create/edit modal + Studio toolbar menu.
+ * Per-entity membership is edited in the right pane General tab.
  */
 var OntologyGroups = (function () {
     var _editIndex = -1;
     var _cachedClasses = null;
+    var _cachedGroups = [];
     var _modalRelocated = false;
     var _picker = null;
+    var _toolbarWired = false;
 
     function _ensureModalAtBody() {
         if (_modalRelocated) return;
@@ -45,78 +48,110 @@ var OntologyGroups = (function () {
         return [];
     }
 
-    function _showLoading(show) {
-        var spinner = document.getElementById('groupsLoading');
-        var list = document.getElementById('groupsList');
-        if (spinner) spinner.style.display = show ? '' : 'none';
-        if (list) list.style.display = show ? 'none' : '';
-    }
-
-    function _load() {
-        _showLoading(true);
-        fetch('/ontology/groups/list')
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                _showLoading(false);
-                if (data.success) _render(data.groups || []);
-            })
-            .catch(function (err) {
-                _showLoading(false);
-                console.error('[Groups] load error:', err);
-            });
-    }
-
-    function _render(groups) {
-        var container = document.getElementById('groupsList');
-        var empty = document.getElementById('groupsEmptyState');
-        if (!container) return;
-
-        if (!groups || groups.length === 0) {
-            container.innerHTML = '';
-            if (empty) {
-                container.appendChild(empty);
-                empty.style.display = '';
-            }
-            return;
-        }
-        if (empty) empty.style.display = 'none';
-
-        var html = '';
-        groups.forEach(function (g, idx) {
-            var color = g.color || '#4A90D9';
-            var members = g.members || [];
-            var memberBadges = members.map(function (m) {
-                return '<span class="group-member-badge">' + _esc(m) + '</span>';
-            }).join('');
-            if (!memberBadges) memberBadges = '<span class="text-muted small">No members</span>';
-
-            html += '<div class="col-md-6 col-lg-4">' +
-                '<div class="card group-card h-100" style="--group-color:' + _esc(color) + '">' +
-                '<div class="card-body">' +
-                '<div class="d-flex justify-content-between align-items-start mb-2">' +
-                '<h6 class="mb-0">' +
-                '<span class="group-color-dot" style="background-color:' + _esc(color) + '"></span>' +
-                (g.icon ? _esc(g.icon) + ' ' : '') + _esc(g.label || g.name) +
-                '</h6>' +
-                '<div class="btn-group btn-group-sm">' +
-                '<button class="btn btn-outline-secondary btn-sm py-0" onclick="OntologyGroups.editGroup(' + idx + ')" title="Edit">' +
-                '<i class="bi bi-pencil"></i></button>' +
-                '<button class="btn btn-outline-danger btn-sm py-0" onclick="OntologyGroups.deleteGroup(' + idx + ')" title="Delete">' +
-                '<i class="bi bi-trash"></i></button>' +
-                '</div></div>' +
-                (g.description ? '<p class="text-muted small mb-2">' + _esc(g.description) + '</p>' : '') +
-                '<div class="small"><strong>' + members.length + '</strong> member' + (members.length !== 1 ? 's' : '') + '</div>' +
-                '<div class="mt-1">' + memberBadges + '</div>' +
-                '</div></div></div>';
-        });
-        container.innerHTML = html;
-    }
-
     function _esc(s) {
         if (!s) return '';
         var el = document.createElement('span');
         el.textContent = s;
         return el.innerHTML;
+    }
+
+    function _afterGroupsChanged(groups) {
+        _cachedGroups = groups || [];
+        _populateStudioMenu(_cachedGroups);
+        if (typeof window.refreshStudioGroups === 'function') {
+            window.refreshStudioGroups();
+        }
+        if (typeof window.refreshSharedEntityGroupOptions === 'function') {
+            window.refreshSharedEntityGroupOptions(_cachedGroups);
+        }
+    }
+
+    function _loadGroups() {
+        return fetch('/ontology/groups/list')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    _cachedGroups = data.groups || [];
+                    _populateStudioMenu(_cachedGroups);
+                }
+                return _cachedGroups;
+            })
+            .catch(function (err) {
+                console.error('[Groups] load error:', err);
+                return [];
+            });
+    }
+
+    function _populateStudioMenu(groups) {
+        var menu = document.getElementById('studioGroupsMenu');
+        if (!menu) return;
+        var newBtn = document.getElementById('studioNewGroupBtn');
+        var divider = document.getElementById('studioGroupsDivider');
+        menu.querySelectorAll('[data-group-idx]').forEach(function (el) {
+            el.closest('li')?.remove();
+        });
+        var empty = document.getElementById('studioGroupsEmpty');
+        if (empty) empty.closest('li')?.remove();
+
+        if (!groups || groups.length === 0) {
+            var emptyLi = document.createElement('li');
+            emptyLi.innerHTML = '<span class="dropdown-item-text text-muted small" id="studioGroupsEmpty">No groups yet</span>';
+            menu.appendChild(emptyLi);
+            if (divider) divider.classList.add('d-none');
+            return;
+        }
+        if (divider) divider.classList.remove('d-none');
+        groups.forEach(function (g, idx) {
+            var li = document.createElement('li');
+            var color = g.color || '#4A90D9';
+            var icon = g.icon || '📁';
+            var label = g.label || g.name;
+            li.innerHTML =
+                '<button type="button" class="dropdown-item studio-group-menu-item d-flex align-items-center flex-nowrap" data-group-idx="' + idx + '">' +
+                '<span class="group-color-dot flex-shrink-0" style="background-color:' + _esc(color) + '"></span>' +
+                '<span class="studio-group-icon flex-shrink-0 me-1">' + _esc(icon) + '</span>' +
+                '<span class="studio-group-name flex-grow-1 text-truncate me-2">' + _esc(label) + '</span>' +
+                '<i class="bi bi-pencil text-muted flex-shrink-0 ms-auto"></i>' +
+                '</button>';
+            li.querySelector('button').addEventListener('click', function (e) {
+                e.preventDefault();
+                OntologyGroups.editGroup(idx);
+            });
+            menu.appendChild(li);
+        });
+        if (newBtn && newBtn.parentElement !== menu.firstElementChild) {
+            // keep New group as first item — already in markup
+        }
+    }
+
+    function _wireStudioToolbar() {
+        if (_toolbarWired) return;
+        var newBtn = document.getElementById('studioNewGroupBtn');
+        if (!newBtn) return;
+        _toolbarWired = true;
+        newBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            OntologyGroups.showCreateModal();
+        });
+        var groupsBtn = document.getElementById('studioGroupsBtn');
+        if (groupsBtn) {
+            groupsBtn.addEventListener('show.bs.dropdown', function () {
+                _loadGroups();
+            });
+        }
+        var delBtn = document.getElementById('groupModalDeleteBtn');
+        if (delBtn) {
+            delBtn.addEventListener('click', function () {
+                if (_editIndex < 0) return;
+                OntologyGroups.deleteGroup(_editIndex);
+            });
+        }
+    }
+
+    function _setDeleteVisible(show) {
+        var btn = document.getElementById('groupModalDeleteBtn');
+        if (!btn) return;
+        btn.classList.toggle('d-none', !show);
     }
 
     function _renderCheckboxes(classes, selected, otherGroupMap) {
@@ -193,7 +228,7 @@ var OntologyGroups = (function () {
         var previewEl = document.getElementById('groupIconPreview');
         var inputEl   = document.getElementById('groupIcon');
         var mountEl   = document.getElementById('groupIconPickerMount');
-        if (!triggerEl) return;
+        if (!triggerEl || typeof EmojiPicker === 'undefined') return;
         _picker = EmojiPicker.create({
             triggerEl:   triggerEl,
             previewEl:   previewEl,
@@ -203,11 +238,15 @@ var OntologyGroups = (function () {
     }
 
     return {
-        init: function () { _load(); },
+        init: function () {
+            _wireStudioToolbar();
+            _loadGroups();
+        },
 
         showCreateModal: function () {
             _editIndex = -1;
             _ensureModalAtBody();
+            _wireStudioToolbar();
             var el = document.getElementById('groupModal');
             if (!el) { console.error('[Groups] groupModal element not found'); return; }
             document.getElementById('groupModalTitle').innerHTML = '<i class="bi bi-collection me-2"></i>New Group';
@@ -216,11 +255,11 @@ var OntologyGroups = (function () {
             document.getElementById('groupLabel').value = '';
             document.getElementById('groupDescription').value = '';
             document.getElementById('groupColor').value = '#4A90D9';
+            _setDeleteVisible(false);
             _ensureIconPicker();
             if (_picker) _picker.setEmoji('');
             _populateMembersCheckboxes([], '');
-            var modal = bootstrap.Modal.getOrCreateInstance(el);
-            modal.show();
+            bootstrap.Modal.getOrCreateInstance(el).show();
         },
 
         editGroup: function (idx) {
@@ -233,6 +272,7 @@ var OntologyGroups = (function () {
                     var g = groups[idx];
                     _editIndex = idx;
                     _ensureModalAtBody();
+                    _wireStudioToolbar();
                     var el = document.getElementById('groupModal');
                     if (!el) { console.error('[Groups] groupModal element not found'); return; }
                     document.getElementById('groupModalTitle').innerHTML = '<i class="bi bi-collection me-2"></i>Edit Group';
@@ -241,11 +281,11 @@ var OntologyGroups = (function () {
                     document.getElementById('groupLabel').value = g.label || '';
                     document.getElementById('groupDescription').value = g.description || '';
                     document.getElementById('groupColor').value = g.color || '#4A90D9';
+                    _setDeleteVisible(true);
                     _ensureIconPicker();
                     if (_picker) _picker.setEmoji(g.icon);
                     _populateMembersCheckboxes(g.members || [], g.name);
-                    var modal = bootstrap.Modal.getOrCreateInstance(el);
-                    modal.show();
+                    bootstrap.Modal.getOrCreateInstance(el).show();
                 });
         },
 
@@ -274,7 +314,7 @@ var OntologyGroups = (function () {
                 .then(function (data) {
                     if (data.success) {
                         bootstrap.Modal.getInstance(document.getElementById('groupModal'))?.hide();
-                        _render(data.groups || []);
+                        _afterGroupsChanged(data.groups || []);
                         showNotification('Group "' + name + '" saved successfully.', 'success', 3000);
                     } else {
                         showNotification(data.message || 'Save failed.', 'error');
@@ -302,7 +342,8 @@ var OntologyGroups = (function () {
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
                         if (data.success) {
-                            _render(data.groups || []);
+                            bootstrap.Modal.getInstance(document.getElementById('groupModal'))?.hide();
+                            _afterGroupsChanged(data.groups || []);
                             showNotification('Group deleted.', 'success', 3000);
                         }
                     })
@@ -313,6 +354,10 @@ var OntologyGroups = (function () {
             });
         },
 
-        refresh: function () { _load(); }
+        refresh: function () { return _loadGroups(); }
     };
 })();
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof OntologyGroups !== 'undefined') OntologyGroups.init();
+});

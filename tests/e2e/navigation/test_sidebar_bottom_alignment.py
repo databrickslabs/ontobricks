@@ -152,12 +152,7 @@ def test_desktop_page_title_box_aligns_with_sidebar_top(
 @pytest.mark.parametrize(
     "section,content_selector",
     [
-        pytest.param("map", "#map-section > .card", id="ontology-designer"),
-        pytest.param(
-            "design",
-            "#ontology-designer-canvas-wrapper",
-            id="ontology-business-views",
-        ),
+        pytest.param("map", "#map-section > .card", id="ontology-studio"),
     ],
 )
 def test_desktop_title_to_content_gap_matches_designer_reference(

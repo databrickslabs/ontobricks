@@ -1,38 +1,8 @@
 <!-- CSS: /static/ontology/css/ontology-groups.css -->
 <!-- JS: /static/ontology/js/ontology-groups.js -->
-<!-- Entity Groups Section -->
+<!-- Group create/edit modal (opened from Studio toolbar). Membership is set
+     per-entity in the right pane General tab. -->
 
-<div class="content-section">
-<div class="section-header d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h4 class="mb-1"><i class="bi bi-collection me-2"></i>Entity Groups</h4>
-        <p class="text-muted mb-0 small">
-            Group ontology entities for expand/collapse in the Graph Viewer.
-            Groups are modeled as OWL defined classes (<code>owl:equivalentClass</code> + <code>owl:unionOf</code>).
-        </p>
-    </div>
-    <button class="btn btn-sm btn-primary" id="newGroupBtn" onclick="OntologyGroups.showCreateModal()">
-        <i class="bi bi-plus-lg me-1"></i>New Group
-    </button>
-</div>
-
-<!-- Groups Loading Spinner -->
-<div id="groupsLoading" class="text-center text-muted py-5">
-    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-    <p class="mt-2 mb-0 small">Loading groups...</p>
-</div>
-
-<!-- Groups List -->
-<div id="groupsList" class="row g-3" style="display: none;">
-    <div class="col-12 text-center text-muted py-5" id="groupsEmptyState">
-        <i class="bi bi-collection fs-2"></i>
-        <p class="mt-2 mb-0">No groups defined yet.</p>
-        <p class="small">Create a group to organize related entities for visual clustering in the Knowledge Graph.</p>
-    </div>
-</div>
-</div>
-
-<!-- Create/Edit Group Modal -->
 <div class="modal fade" id="groupModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -43,29 +13,34 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Groups cluster entities on the Studio canvas (collapse/expand).
+                    Assign an entity to a group from its <strong>General</strong> tab,
+                    or pick members below when creating the group.
+                </p>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <label class="form-label" for="groupName">Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="groupName" placeholder="e.g. InfrastructureGroup">
                         <div class="form-text">URI-safe identifier (no spaces).</div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Label</label>
+                        <label class="form-label" for="groupLabel">Label</label>
                         <input type="text" class="form-control" id="groupLabel" placeholder="e.g. Infrastructure Group">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Description</label>
+                        <label class="form-label" for="groupDescription">Description</label>
                         <input type="text" class="form-control" id="groupDescription" placeholder="Optional description">
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Color</label>
+                        <label class="form-label" for="groupColor">Color</label>
                         <input type="color" class="form-control form-control-color" id="groupColor" value="#4A90D9">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Icon</label>
+                        <label class="form-label" for="groupIcon">Icon</label>
                         <div class="input-group">
                             <span class="input-group-text group-icon-preview-sized" id="groupIconPreview">📁</span>
-                            <input type="text" class="form-control" id="groupIcon" maxlength="2" placeholder="">
+                            <input type="text" class="form-control" id="groupIcon" maxlength="2" placeholder="" aria-label="Group icon">
                             <button type="button" class="btn btn-outline-secondary" id="groupIconPickerBtn" title="Pick icon">
                                 <i class="bi bi-emoji-smile"></i>
                             </button>
@@ -80,11 +55,17 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="OntologyGroups.saveGroup()">
-                    <i class="bi bi-check-lg me-1"></i>Save Group
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-danger d-none" id="groupModalDeleteBtn"
+                        title="Delete this group">
+                    <i class="bi bi-trash me-1"></i>Delete
                 </button>
+                <div class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="OntologyGroups.saveGroup()">
+                        <i class="bi bi-check-lg me-1"></i>Save Group
+                    </button>
+                </div>
             </div>
         </div>
     </div>

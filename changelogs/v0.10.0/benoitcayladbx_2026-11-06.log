@@ -702,3 +702,126 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_ontology_map_external_badge.py tests/units/front/test_ontology_map_multi_select.py` → 34 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 9992 passed, 143 failed, 326 skipped (pre-existing Node/libsimdjson + already-removed design-section contracts; ontology-map assertions updated and green).
+
+================================================================================
+## Remove OntoViz; Studio owns Business Views + group collapse
+================================================================================
+
+Context: Business Views lived in a separate sidebar section on a custom OntoViz
+canvas. Studio (D3) is now the only ontology canvas: OntoViz is removed, the
+Business Views menu entry is gone, and a Studio View dropdown (All + views)
+filters the graph. Ontology groups collapse/expand with a top-left + badge.
+
+Changes:
+
+1. Deleted `src/front/static/global/ontoviz/**`, `ontology-design.js`,
+   `_ontology_design.html`; removed menu `design` / Business Views entry and
+   `#design-section` from `ontology.html`.
+2. Added `ontology-persistence.js` for registry dirty / unload beacons formerly
+   in the design module; wired from `ontology.html` and navbar save flush via
+   `flushStudioLayoutBeforeSave`.
+3. Studio toolbar: `#studioViewSelect` (All + views) and delete control;
+   `ontology-map.js` filters nodes/links from design-view visibility; creating
+   a BV stays on Studio.
+4. Group collapse: synthetic `__group__*` nodes, `.studio-group-toggle`,
+   `refreshStudioGroups` after Groups CRUD.
+5. Tests/docs/help modal updated for the new IA; new
+   `test_studio_views_groups_contract.py`.
+
+Modified files:
+- src/front/static/global/ontoviz/** (deleted)
+- src/front/static/global/js/ontology-design.js (deleted)
+- src/front/templates/partials/ontology/_ontology_design.html (deleted)
+- src/front/static/global/js/ontology-persistence.js (new)
+- src/front/templates/ontology.html
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/permissions.js
+- src/front/static/global/css/main.css
+- src/front/static/global/css/ontology.css
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/front/test_studio_views_groups_contract.py (new)
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_*.py (OntoViz / design-section contracts)
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: targeted Studio/OntoViz contracts → 415 passed (1 deselected: Node
+simdjson SIGABRT on job-status helper). Full suite
+`uv run --frozen pytest -q -m "not scenario"` → 10013 passed, 125 failed,
+325 skipped — failures are pre-existing Node/`libsimdjson.29.dylib` dyld
+errors on JS helper tests, not Studio/OntoViz regressions.
+
+================================================================================
+## Remove Groups sidebar; manage groups from Studio + General tab
+================================================================================
+
+Context: Groups no longer need a dedicated sidebar section. Create/edit/delete
+moves to the Studio toolbar (reusing the group modal); membership stays on the
+entity General tab select.
+
+Changes:
+
+1. src/front/config/menu_config.json — remove Groups menu item.
+2. src/front/templates/ontology.html — drop `#groups-section`; include groups
+   modal at page level.
+3. src/front/templates/partials/ontology/_ontology_groups.html — modal only
+   (Delete button when editing).
+4. src/front/templates/partials/ontology/_ontology_map.html — Studio Groups
+   dropdown (`#studioGroupsBtn` / New group + edit list).
+5. src/front/static/ontology/js/ontology-groups.js — toolbar wiring, no list
+   page; refresh Studio + General-tab options after CRUD.
+6. src/front/static/ontology/js/ontology-shared-panels.js —
+   `refreshSharedEntityGroupOptions`; refresh Studio after membership change.
+7. Tests/docs/help updated.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/ontology.html
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/global/css/permissions.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/getting-started.md
+- tests/units/front/test_studio_views_groups_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_studio_views_groups_contract.py tests/units/front/test_sidebar_content_stretch_contract.py tests/units/front/test_help_center_menu_sync.py tests/units/api/test_ui_rendering.py` → 273 passed.
+
+
+================================================================================
+## Preserve exact entity layout across Studio group collapse/expand
+================================================================================
+
+Context: Collapsing or expanding a group rebuilt the D3 map and could reshuffle
+entity positions (async persist race + collapsed members absent from the live
+graph when saving).
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   In-memory `_studioEntityPositions` cache; snapshot before collapse/expand;
+   apply cache when rebuilding nodes; await persist + init; save collapsed
+   members' coords; sync group-drag onto the anchor member.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Assert snapshot helpers and awaited persist/rebuild.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_studio_views_groups_contract.py tests/units/front/test_ontology_map_multi_select.py tests/units/front/test_ontology_map_external_badge.py` → 42 passed.
+

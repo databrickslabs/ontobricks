@@ -247,10 +247,10 @@ read the same corpus; no `READ VOLUME` / `WRITE VOLUME` grant is required.
 
 ### 2. Design an Ontology (Studio)
 
-The fastest way to create an ontology is using the visual **Business Views** interface:
+The fastest way to create an ontology is using the visual **Studio** canvas:
 
 1. Go to the **Ontology** page (click on "Ontology" in the navbar)
-2. Click **Business Views** in the sidebar
+2. Click **Studio** in the sidebar
 
 #### Create Entities
 1. Click **+ Add Entity** button
@@ -427,9 +427,9 @@ other graph backends retain their native or iterative traversal.
 | **General** | Basic ontology settings (name, URI) |
 | **Import** | Import OWL, RDFS, FIBO, CDISC, IOF standards |
 | **Generate** | Three-stage wizard: detect entities from metadata and the Knowledge Store, review the catalog, then complete relations, attributes, and axioms (append-only merge) |
-| **Studio** | Interactive force-directed ontology graph (OntoViz canvas) |
+| **Studio** | Interactive force-directed ontology graph (View dropdown filters Business Views) |
 | **Groups** | Manage entity groupings |
-| **Business Views** | Visual drag-and-drop business view designer |
+| **Groups** | Created from the Studio toolbar; assigned per entity in the General tab |
 | **Entities** | Manage classes with form interface |
 | **Relationships** | Manage object properties |
 | **Data Quality** | SHACL shape-based data quality rules |

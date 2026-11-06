@@ -26,7 +26,8 @@ def test_node_data_computes_has_external_flag():
 
 def test_badge_rendered_only_for_matching_nodes():
     js = MAP_JS.read_text(encoding="utf-8")
-    assert "nodeElements.filter(d => d.hasExternal)" in js
+    # Entity nodes only (collapsed group super-nodes are filtered out).
+    assert "entityNodeElements.filter(d => d.hasExternal)" in js
     assert "map-node-external-badge-bg" in js
     assert "map-node-external-badge-icon" in js
 

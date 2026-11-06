@@ -10,9 +10,6 @@
 // Enable full-width layout for this page
 document.body.classList.add('full-width-layout');
 
-// OntoViz instance for the Design section
-let ontologyDesigner = null;
-
 var _MAP_RETRY_MAX = 20;
 var _MAP_RETRY_INTERVAL = 100;
 
@@ -26,16 +23,17 @@ function _tryInitMap(retries) {
     } else if (retries < _MAP_RETRY_MAX) {
         setTimeout(function () { _tryInitMap(retries + 1); }, _MAP_RETRY_INTERVAL);
     } else {
-        console.warn('Ontology Designer: Force initializing after timeout');
+        console.warn('Ontology Studio: Force initializing after timeout');
         if (typeof initOntologyMap === 'function') initOntologyMap();
     }
 }
 
 function _initSectionByName(section) {
+    // Legacy bookmarks used section=design for Business Views; Studio owns views now.
+    if (section === 'design') section = 'map';
+
     if (section === 'wizard' && typeof initOntologyWizard === 'function') {
         initOntologyWizard();
-    } else if (section === 'design' && typeof initOntologyDesigner === 'function') {
-        initOntologyDesigner();
     } else if (section === 'map') {
         if (typeof showOntologyMapLoading === 'function') {
             showOntologyMapLoading(true);
@@ -55,8 +53,6 @@ function _initSectionByName(section) {
         AxiomsModule.init();
     } else if (section === 'owl' && typeof autoGenerateOwl === 'function') {
         autoGenerateOwl();
-    } else if (section === 'groups' && typeof OntologyGroups !== 'undefined') {
-        OntologyGroups.init();
     }
 }
 
@@ -64,7 +60,8 @@ function _initSectionByName(section) {
 window.SIDEBAR_NAV_MANUAL_INIT = true;
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
-    const initialSection = urlParams.get('section');
+    let initialSection = urlParams.get('section');
+    if (initialSection === 'design') initialSection = 'map';
 
     SidebarNav.init({
         onBeforeSectionChange: async function(section) {
@@ -72,11 +69,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 await checkDirtyBeforeSwitch();
             }
             const currentSection = SidebarNav.getActiveSection();
-            if (currentSection === 'design' && typeof flushDesignLayout === 'function') {
-                await flushDesignLayout();
-                if (typeof autoSaveToRegistry === 'function') {
-                    await autoSaveToRegistry();
-                }
+            if (currentSection === 'map' && typeof autoSaveToRegistry === 'function') {
+                await autoSaveToRegistry();
             }
             return true;
         },
@@ -120,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /**
  * Add a "Discuss" button to every ontology section header (except Import)
- * so the ontology discussion can be opened from anywhere. The Model/Designer
+ * so the ontology discussion can be opened from anywhere. The Studio
  * section already carries its own toolbar button, so it is skipped.
  */
 function injectOntologyDiscussButtons() {
@@ -161,10 +155,9 @@ async function initializeDefaultSection() {
     
     const activeSection = SidebarNav.getActiveSection();
 
-    if (activeSection === 'wizard' || activeSection === 'design') {
+    if (activeSection === 'wizard') {
         setTimeout(function () { _initSectionByName(activeSection); }, 150);
     } else {
         _initSectionByName(activeSection);
     }
 }
-
