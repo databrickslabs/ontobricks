@@ -3035,6 +3035,7 @@ and the engine that ultimately runs (column **Engine**).
 | Generate (Wizard) | `ontology-wizard.js` | Domain LLM via `agent_owl_generator` | REST → LLM | Saved domain LLM: Databricks AI Gateway or Model Serving + tool-calling; selected ready documents come from the shared parsed corpus in the Lakebase Knowledge Store (`domain_documents`) |
 | AI Assistant | Studio floating chat, `agent_ontology_assistant` | `POST /ontology/assistant/chat`, `POST /ontology/assistant/invoke` | REST → LLM | Saved domain LLM (`llm_endpoint` + `llm_endpoint_kind`): AI Gateway chat completions or Model Serving invocations |
 | **Data Quality** rules editor | `ontology-dataquality.js` | `/ontology/dataquality/...` | REST | SHACL (`SHACLService`) on the in-memory ontology |
+| **Sanity Checks** | `ontology-design-checks.js` | `GET /ontology/design-checks` | REST | `DesignChecks` on the in-memory ontology (advisory) |
 | **Business Rules (SWRL)** editor | `ontology-business-rules.js` | `/ontology/swrl/...` | REST | `SWRLParser`, validated against ontology |
 | Expressions & Axioms | `ontology-axioms.js` | `/ontology/axioms/...` | REST | OWL axiom storage |
 

@@ -1,0 +1,68 @@
+/* Ontology Sanity Checks — Design tab of the Advanced sidebar. */
+
+#designchecks-section .dc-card-fill {
+    min-height: 0;
+}
+
+#designchecks-section .dc-card-fill > .card-body {
+    min-height: 0;
+    overflow: hidden;
+}
+
+#dcTabContent {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.dc-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    background: var(--db-surface-warm);
+}
+
+.dc-findings-list {
+    padding: 0.75rem 1rem 1rem;
+}
+
+.dc-finding {
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    padding: 0.625rem 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--db-surface-warm);
+    transition: border-color var(--db-transition-fast), box-shadow var(--db-transition-fast);
+}
+
+.dc-finding:hover {
+    border-color: var(--db-primary);
+    box-shadow: var(--db-shadow-sm);
+}
+
+.dc-finding-link {
+    display: block;
+    text-align: left;
+    width: 100%;
+    background: none;
+    border: 0;
+    padding: 0;
+    color: inherit;
+}
+
+.dc-finding-link:focus-visible {
+    outline: none;
+    box-shadow: var(--db-focus-ring);
+}
+
+.dc-finding-rule {
+    font-size: 0.75rem;
+    color: var(--db-text-muted);
+}
+
+.dc-empty {
+    color: var(--db-text-muted);
+    font-size: 0.875rem;
+    padding: 1.5rem 0.5rem;
+    text-align: center;
+}

@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-swrl.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-business-rules.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-dataquality.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-design-checks.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-wizard.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-groups.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-assistant.css') }}?v={{ asset_version }}">
@@ -78,6 +79,11 @@
             <div id="dataquality-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_dataquality.html" %}
             </div>
+
+            <!-- Sanity Checks (ontology design lint) -->
+            <div id="designchecks-section" class="sidebar-section">
+                {% include "partials/ontology/_ontology_design_checks.html" %}
+            </div>
             
             <!-- Business Rules Section (SWRL + Decision Tables + SPARQL + Aggregate + SHACL) -->
             <div id="swrl-section" class="sidebar-section">
@@ -116,6 +122,7 @@
 <script src="{{ url_for('static', filename='ontology/js/ontology-relationships.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-conditions.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-dataquality.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='ontology/js/ontology-design-checks.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-axioms.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-swrl.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='ontology/js/ontology-business-rules.js') }}?v={{ asset_version }}"></script>

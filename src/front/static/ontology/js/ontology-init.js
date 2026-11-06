@@ -49,6 +49,8 @@ function _initSectionByName(section) {
         BusinessRulesModule.init();
     } else if (section === 'dataquality' && typeof DataQualityModule !== 'undefined') {
         DataQualityModule.init();
+    } else if (section === 'designchecks' && typeof DesignChecksModule !== 'undefined') {
+        DesignChecksModule.init();
     } else if (section === 'axioms' && typeof AxiomsModule !== 'undefined') {
         AxiomsModule.init();
     } else if (section === 'owl' && typeof autoGenerateOwl === 'function') {

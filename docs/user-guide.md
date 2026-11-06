@@ -358,6 +358,31 @@ Click **Expr. & Axioms** in the sidebar to define OWL class expressions and axio
 | Inverse Of | isParentOf | hasParent |
 | Property Chain | hasGrandparent | hasParent, hasParent |
 
+#### Sanity Checks
+
+Open **Ontology → Sanity Checks** to lint the schema itself (not instance data). Checks are **advisory**: they never block save, mapping, Knowledge Graph build, or publish. Click **Refresh** after edits. Click a finding to jump to the entity, relationship, or group.
+
+| ID | Severity | What it flags |
+|----|----------|----------------|
+| DC-E01 | error | Parent class does not exist |
+| DC-E02 | error | Property domain does not exist |
+| DC-E03 | error | Object-property range does not exist |
+| DC-E04 | error | Group member does not exist |
+| DC-E05 | error | Subclass cycle |
+| DC-E06 | error | Duplicate URI (same kind) |
+| DC-W01 | warning | Orphan class (no parent, child, group, or property use) |
+| DC-W02 | warning | Missing label |
+| DC-W03 | warning | Property with no domain |
+| DC-W04 | warning | Property with no range |
+| DC-W05 | warning | Duplicate normalized name |
+| DC-I01 | info | Missing description |
+| DC-I02 | info | Class local name is not PascalCase |
+| DC-I03 | info | Property local name is not camelCase |
+| DC-I04 | info | Near-duplicate names (edit distance 1) |
+| DC-I05 | info | Hierarchy deeper than 5 |
+
+Domain → Validation shows the same error / warning / info counts under Consistency checks, with a link to this section.
+
 #### Data Quality (SHACL Shapes)
 
 Click **Data Quality** in the sidebar to define data quality rules using W3C SHACL (Shapes Constraint Language).

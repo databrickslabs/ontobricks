@@ -295,9 +295,19 @@
             })).json();
             const dtwin = d.dtwin || {};
             const warehouse = d.warehouse || {};
+            const dc = d.design_checks || {};
+            const dcParts = [
+                (dc.error || 0) + ' errors',
+                (dc.warning || 0) + ' warnings',
+                (dc.info || 0) + ' info',
+            ].join(' · ');
             el.innerHTML =
                 checkRow('Ontology valid', !!d.ontology_valid) +
                 checkRow('Mapping complete', !!d.mapping_valid) +
+                '<div class="review-check d-flex align-items-center gap-2 mb-1">' +
+                '<i class="bi bi-clipboard2-check text-muted"></i>' +
+                '<span class="small">Sanity Checks (advisory): ' + escapeHtml(dcParts) +
+                ' — <a href="/ontology/?section=designchecks">Open</a></span></div>' +
                 checkRow('SQL Warehouse configured', !!warehouse.warehouse_id) +
                 checkRow('Knowledge Graph built', dtwin.indicator === 'green',
                     dtwin.indicator === 'orange');

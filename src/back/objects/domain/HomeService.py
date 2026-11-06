@@ -353,8 +353,7 @@ class HomeService:
         dt_existence = dt_exist or {}
         ts_st = ts_status or {}
 
-        last_update = domain.last_update
-        last_build = domain.last_build
+        last_update, last_build = domain.last_update, domain.last_build
         needs_rebuild = bool(last_update and last_build and last_update > last_build)
 
         dtwin_detail = {
@@ -417,6 +416,7 @@ class HomeService:
             },
             "ontology_issues": ontology_errors,
             "ontology_warnings": ontology_warnings,
+            "design_checks": HomeService._design_check_summary(domain),
             "mapping_issues": mapping_issues,
             "mapping_warnings": mapping_warnings,
             "unmapped_entities": unmapped_entities,
@@ -460,6 +460,15 @@ class HomeService:
         from back.objects.digitaltwin import DigitalTwin
 
         return DigitalTwin.compute_dtwin_indicator(domain, ts_status, dt_exist)
+
+    @staticmethod
+    def _design_check_summary(domain) -> Dict[str, int]:
+        """Advisory design-check counts; never affects ontology_valid."""
+        from back.objects.ontology.DesignChecks import DesignChecks
+
+        return DesignChecks.run(
+            domain.get_classes(), domain.get_properties(), domain.groups
+        )["summary"]
 
     @staticmethod
     async def get_navbar_state(

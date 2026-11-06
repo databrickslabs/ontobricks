@@ -1,4 +1,65 @@
 ================================================================================
+## Add ontology Sanity Checks
+================================================================================
+
+Context: Ontology design had no schema-level lint. SHACL covers instance data
+quality, import conflict detection covers merge diffs, and `ontology_valid`
+only checks that entities have an identifier. Modelers needed advisory
+integrity, hygiene, naming, and hierarchy checks while editing.
+
+Changes:
+
+1. src/back/objects/ontology/DesignChecks.py
+   Stateless catalog DC-E01..DC-I05 returning findings plus severity counts.
+2. src/api/routers/internal/ontology.py
+   `GET /ontology/design-checks` runs the catalog on the session ontology.
+3. src/back/objects/domain/HomeService.py
+   Expose advisory `design_checks` summary counts from detailed validation.
+4. src/front/config/menu_config.json
+   Ontology Advanced menu item Sanity Checks (`designchecks`).
+5. src/front/templates/ontology.html
+   Wire the new sidebar section, CSS, and JS.
+6. src/front/templates/partials/ontology/_ontology_design_checks.html
+   Findings UI grouped by severity, Refresh action, ob-tabs.
+7. src/front/static/ontology/js/ontology-design-checks.js
+   Fetch checks and deep-link findings to Entities, Relationships, or Groups.
+8. src/front/static/ontology/css/ontology-design-checks.css
+   `--db-*` styling for the findings list.
+9. src/front/static/domain/js/domain-review.js
+   Advisory count line on Domain → Validation consistency checks.
+10. tests/units/ontology/test_design_checks.py
+    Positive and negative coverage per rule, plus a 1000-class smoke test.
+
+Modified files:
+- src/back/objects/ontology/DesignChecks.py
+- src/back/objects/ontology/__init__.py
+- src/api/routers/internal/ontology.py
+- src/back/objects/domain/HomeService.py
+- src/front/config/menu_config.json
+- src/front/templates/ontology.html
+- src/front/templates/partials/ontology/_ontology_design_checks.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/ontology/js/ontology-design-checks.js
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/css/ontology-design-checks.css
+- src/front/static/domain/js/domain-review.js
+- tests/units/ontology/test_design_checks.py
+- tests/units/front/test_ontology_design_checks_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/api/test_routes.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/domain/test_home_service.py
+- docs/user-guide.md
+- docs/api.md
+- docs/development.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-05-ontology-design-checks-design.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10037 passed, 326 skipped, 8 deselected, 39 warnings in 55.43s
+
+================================================================================
 ## Fix decision-table editor column removal
 ================================================================================
 

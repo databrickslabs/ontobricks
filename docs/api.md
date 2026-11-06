@@ -1579,6 +1579,32 @@ POST /ontology/save
 }
 ```
 
+#### Design checks (sanity)
+
+```http
+GET /ontology/design-checks
+```
+
+Runs the advisory ontology design catalog against the session ontology (classes, properties, groups). Does not persist anything and does not change `ontology_valid`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "findings": [
+    {
+      "rule": "DC-E01",
+      "severity": "error",
+      "kind": "class",
+      "uri": "http://example.org#Child",
+      "name": "Child",
+      "message": "Parent 'Missing' is not a class in this ontology."
+    }
+  ],
+  "summary": { "error": 1, "warning": 0, "info": 0 }
+}
+```
+
 #### Load Ontology from Session
 
 ```http

@@ -20,7 +20,7 @@ from back.core.errors import (
 )
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
-from back.objects.ontology import Ontology, Rules
+from back.objects.ontology import DesignChecks, Ontology, Rules
 from back.objects.ontology.generate import GenerateWorkflow
 from back.objects.session import get_domain
 from back.core.task_manager import get_task_manager
@@ -97,6 +97,18 @@ async def load_ontology(session_mgr: SessionManager = Depends(get_session_manage
             "properties": properties,
         },
     }
+
+
+@router.get("/design-checks")
+async def get_design_checks(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Run advisory ontology design checks on the session ontology."""
+    domain = get_domain(session_mgr)
+    report = DesignChecks.run(
+        domain.get_classes(), domain.get_properties(), domain.groups
+    )
+    return {"success": True, **report}
 
 
 @router.post("/save")

@@ -120,6 +120,14 @@ class TestOntologyRoutes:
         data = response.json()
         assert "success" in data
 
+    def test_design_checks(self, client):
+        response = client.get("/ontology/design-checks")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "findings" in data
+        assert set(data["summary"]) == {"error", "warning", "info"}
+
     def test_save_ontology(self, client):
         config = {
             "name": "TestOntology",

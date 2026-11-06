@@ -8,6 +8,7 @@ from back.objects.ontology.JsonViews import (
 )
 from back.objects.ontology.Ontology import IndustryKind, Ontology, QUALITY_CATEGORIES
 from back.objects.ontology.ClassModel import ClassModel
+from back.objects.ontology.DesignChecks import DesignChecks
 from back.objects.ontology.Editor import Editor
 from back.objects.ontology.Groups import Groups
 from back.objects.ontology.Import import Import
@@ -29,6 +30,7 @@ __all__ = [
     "IndustryKind",
     "Ontology",
     "ClassModel",
+    "DesignChecks",
     "Editor",
     "Groups",
     "Import",

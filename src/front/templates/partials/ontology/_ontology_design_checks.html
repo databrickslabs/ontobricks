@@ -1,0 +1,58 @@
+<!-- Sanity Checks (ontology design lint) -->
+<!-- JS: /static/ontology/js/ontology-design-checks.js -->
+<!-- CSS: /static/ontology/css/ontology-design-checks.css -->
+<div class="content-section">
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div class="me-auto">
+        <h4 class="mb-1"><i class="bi bi-clipboard2-check me-2"></i>Sanity Checks</h4>
+        <p class="text-muted mb-0 small">Advisory ontology design lint. Findings never block save, mapping, build, or publish.</p>
+    </div>
+    <div class="btn-group btn-group-sm ontology-edit-btn me-2">
+        <button type="button" class="btn btn-outline-primary" id="designChecksRefreshBtn"
+                onclick="DesignChecksModule.refresh()">
+            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<div class="card h-100 dc-card-fill">
+    <div class="card-body p-0 d-flex flex-column">
+        <div id="designChecksSummary" class="dc-summary px-3 py-2 border-bottom">
+            <span class="badge bg-danger" id="dcBadgeError">0 errors</span>
+            <span class="badge bg-warning text-dark" id="dcBadgeWarning">0 warnings</span>
+            <span class="badge bg-info" id="dcBadgeInfo">0 info</span>
+        </div>
+        <ul class="nav nav-tabs ob-tabs nav-fill" id="dcTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="dc-tab-error" data-bs-toggle="tab"
+                        data-bs-target="#dc-pane-error" type="button" role="tab" aria-controls="dc-pane-error">
+                    <i class="bi bi-x-circle me-1"></i>Errors
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="dc-tab-warning" data-bs-toggle="tab"
+                        data-bs-target="#dc-pane-warning" type="button" role="tab" aria-controls="dc-pane-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Warnings
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="dc-tab-info" data-bs-toggle="tab"
+                        data-bs-target="#dc-pane-info" type="button" role="tab" aria-controls="dc-pane-info">
+                    <i class="bi bi-info-circle me-1"></i>Info
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content flex-grow-1" id="dcTabContent">
+            <div class="tab-pane fade show active" id="dc-pane-error" role="tabpanel" aria-labelledby="dc-tab-error">
+                <div id="dcListError" class="dc-findings-list"></div>
+            </div>
+            <div class="tab-pane fade" id="dc-pane-warning" role="tabpanel" aria-labelledby="dc-tab-warning">
+                <div id="dcListWarning" class="dc-findings-list"></div>
+            </div>
+            <div class="tab-pane fade" id="dc-pane-info" role="tabpanel" aria-labelledby="dc-tab-info">
+                <div id="dcListInfo" class="dc-findings-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>

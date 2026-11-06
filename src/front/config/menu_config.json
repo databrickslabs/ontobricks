@@ -250,6 +250,13 @@
                             "requires": null
                         },
                         {
+                            "id": "designchecks",
+                            "label": "Sanity Checks",
+                            "icon": "bi-clipboard2-check",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
                             "id": "swrl",
                             "label": "Business Rules",
                             "icon": "bi-lightning",

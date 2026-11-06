@@ -53,6 +53,7 @@ def _make_domain(
     domain.assignment_changed = False
     domain._data = {"domain": {"metadata": {}}}
     domain.last_update = None
+    domain.groups = []
 
     from back.objects.session.DomainSession import DomainSession
 
@@ -176,3 +177,5 @@ class TestGetDetailedValidation:
         assert "ontology" in result
         assert "mapping" in result
         assert "design" in result
+        assert "design_checks" in result
+        assert set(result["design_checks"]) == {"error", "warning", "info"}
