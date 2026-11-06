@@ -27,11 +27,10 @@ def _mobile_block(css: str) -> str:
     return match.group(1)
 
 
-def test_mobile_subnav_hides_redundant_breadcrumb_and_spacer():
+def test_mobile_subnav_hides_flex_spacer():
     css = _mobile_block(_read(MAIN_CSS))
 
     assert re.search(
-        r"\.ob-subnav-breadcrumb-wrap\s*,\s*"
         r"\.ob-subnav-flex-spacer\s*\{[^}]*display:\s*none\s*!important",
         css,
         flags=re.DOTALL,
@@ -47,9 +46,10 @@ def test_mobile_subnav_keeps_controls_but_hides_their_visual_labels():
         css,
         flags=re.DOTALL,
     )
-    # Five workspace links plus Save, Versions and Close keep their accessible
-    # text in the DOM while CSS hides only the visual label on mobile.
-    assert html.count('class="ob-subnav-label"') == 8
+    # Five workspace links plus Save and Close keep their accessible text in
+    # the DOM while CSS hides only the visual label on mobile. Versions now
+    # lives in the vN crumb, which shows only the version number.
+    assert html.count('class="ob-subnav-label"') == 7
 
 
 def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():

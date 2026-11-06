@@ -318,6 +318,7 @@ function scheduleAutoSave() {
     layoutDirty = true;
     ontologyDirty = true;
     registryDirty = true;
+    if (typeof setDomainDirty === 'function') setDomainDirty('ontology', true);
     // A user edit on the canvas makes it the current source of truth (this only
     // runs for user-driven changes; loads are guarded by isLoadingData). Promote
     // it so the pending sync is allowed to persist, including on a fresh canvas.
@@ -477,6 +478,7 @@ async function autoSaveToRegistry() {
         const data = await response.json();
         if (data.success) {
             registryDirty = false;
+            if (typeof setDomainDirty === 'function') setDomainDirty('ontology', false);
             console.log('[AUTO-SAVE] Registry save successful');
             if (typeof showNotification === 'function') {
                 showNotification('Design auto-saved to registry', 'success', 2500);
@@ -494,6 +496,7 @@ async function autoSaveToRegistry() {
  */
 function clearRegistryDirty() {
     registryDirty = false;
+    if (typeof setDomainDirty === 'function') setDomainDirty('ontology', false);
 }
 
 /**

@@ -287,7 +287,7 @@ OntoBricks separates configuration into several layers:
 |------|---------|---------|
 | `src/shared/config/settings.py` | **Environment-specific settings** loaded from `.env` / env vars via Pydantic `BaseSettings` | Databricks host, token, session directory |
 | `src/shared/config/constants.py` | **Static constants and defaults** that rarely change and are shared across modules | App name/version, OWL namespaces, LLM defaults, wizard quick-templates |
-| `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Graph `bi-radar`) and match `breadcrumb.js` `_ROUTE_MAP` |
+| `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Graph `bi-radar`) |
 | `src/back/objects/session/GlobalConfigService.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in the registry (`global_config` JSONB, or `.global_config.json` on Volume-backed registries), shared across all user sessions | SQL Warehouse ID, default base URI, default class icon, UI branding (`ui_branding`) |
 | `src/back/objects/registry/PermissionService.py` | **`PermissionService`** — stores per-user permission levels in `.permissions.json` (app-wide) and per-domain overrides in `.domain_permissions.json` (per domain folder). Defines the role hierarchy: `admin > builder > editor > viewer > none`. | `CAN MANAGE` admin flag |
 
@@ -639,10 +639,11 @@ The UI uses a consistent **sidebar layout** across all main pages:
 
 - **L1 (global utilities):** icon-only Registry launcher plus warehouse status,
   task tracker, notification center, help, and user menu.
-- **L2 (domain context rail):** domain identity target
-  (`#domainContextTrigger`), the four-workspace segmented rail (Domain,
-  Ontology, Mapping, Knowledge Graph), inline breadcrumb, and
-  Versions -> Close -> Save actions.
+- **L2 (domain context rail):** domain crumb (`#domainContextTrigger`),
+  version crumb (`#menuSwitchDomain`, `vN ▾`, hosts Versions and New Version),
+  the five-workspace segmented track (Domain, Ontology, Mapping, Graph,
+  Simulation), and Close -> Save actions (Save shows a dirty
+  dot while registry writes are unsaved).
 - **Settings override in same L2 slot:** when `body[data-page="settings"]`
   and a domain is loaded, `#obSubnav` swaps to a single return control
   (`#settingsDomainReturnLink`) under `#settingsDomainReturnNav`; the regular

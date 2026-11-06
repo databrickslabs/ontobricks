@@ -15,7 +15,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
-BREADCRUMB_JS = REPO_ROOT / "src/front/static/global/js/breadcrumb.js"
 MAIN_CSS = REPO_ROOT / "src/front/static/global/css/main.css"
 BASE_HTML = REPO_ROOT / "src/front/templates/base.html"
 
@@ -80,17 +79,6 @@ def test_subnav_visibility_is_driven_by_the_four_state_combinations():
 def test_is_settings_page_flag_is_computed_once_at_function_top():
     body = _update_domain_menu_visibility_body()
     assert "const isSettingsPage = document.body.dataset.page === 'settings';" in body
-
-
-def test_breadcrumb_never_reveals_on_settings_pages():
-    js = _read(BREADCRUMB_JS)
-    init = re.search(r"init\(\) \{(.*?)\n    \},", js, re.DOTALL)
-    assert init is not None, "Breadcrumb.init not found"
-    body = init.group(1)
-
-    settings_guard = "if (document.body.dataset.page === 'settings') return;"
-    assert settings_guard in body
-    assert body.index(settings_guard) < body.index("wrap.classList.remove('d-none');")
 
 
 def test_settings_return_link_matches_sidebar_width_on_desktop():

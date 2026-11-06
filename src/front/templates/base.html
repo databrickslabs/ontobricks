@@ -258,24 +258,34 @@
         {% if m.id == 'simulation' %}{% set sim_m.v      = m %}{% endif %}
         {% if m.id == 'domain'     %}{% set domain_m.v   = m %}{% endif %}
     {% endfor %}
+    {# Version crumb (vN ▾) hosts the domainSwitch action from menu_config #}
+    {% set switch_action_ctx = namespace(v=none) %}
+    {% if domain_m.v %}{% for a in domain_m.v.navbar_actions %}{% if a.action == 'domainSwitch' %}{% set switch_action_ctx.v = a %}{% endif %}{% endfor %}{% endif %}
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
         <div class="container-fluid">
             <ul class="ob-subnav-nav">
                 {% if domain_m.v %}
                 <li class="ob-subnav-item ob-subnav-context" data-subnav-domain-chrome>
-                    <a class="ob-subnav-context-trigger"
+                    <a class="ob-subnav-crumb ob-subnav-context-trigger"
                        href="{{ domain_m.v.route }}"
                        id="domainContextTrigger"
                        title="Open workspace map"
                        aria-label="Open workspace map for Domain">
-                        <i class="bi {{ domain_m.v.icon }}"></i>
                         <span class="ob-subnav-context-copy">
-                            <span id="currentDomainName"
-                                  class="ob-subnav-context-name">{{ domain_m.v.label }}</span>
-                            <span id="domainContextVersion"
-                                  class="ob-subnav-context-version"></span>
+                            <span id="currentDomainName" class="ob-subnav-context-name">{{ domain_m.v.label }}</span>
                         </span>
+                        <i class="bi bi-chevron-down ob-subnav-caret" aria-hidden="true"></i>
                     </a>
+                    <span class="ob-subnav-crumb-sep" aria-hidden="true">/</span>
+                    {% if switch_action_ctx.v %}
+                    <a class="ob-subnav-crumb ob-subnav-version-crumb btn-requires-domain" href="#"
+                       data-navbar-action="{{ switch_action_ctx.v.action }}"
+                       {% if switch_action_ctx.v.element_id %}id="{{ switch_action_ctx.v.element_id }}"{% endif %}
+                       title="Switch version or create a new one">
+                        <span id="domainContextVersion" class="ob-subnav-context-version"></span>
+                        <i class="bi bi-chevron-down ob-subnav-caret" aria-hidden="true"></i>
+                    </a>
+                    {% endif %}
                 </li>
                 {% endif %}
                 <li class="ob-subnav-workspaces" id="domainWorkspaceSubnavNav" data-subnav-domain-chrome>
@@ -286,7 +296,6 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ domain_m.v.route }}"
                        title="Domain">
-                        <span class="ob-subnav-ordinal" aria-hidden="true">1</span>
                         <i class="bi {{ domain_m.v.icon }}"></i>
                         <span class="ob-subnav-label">Domain</span>
                     </a>
@@ -314,7 +323,6 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ ontology_m.v.route }}"
                        title="{{ ontology_m.v.label }}">
-                        <span class="ob-subnav-ordinal" aria-hidden="true">2</span>
                         <i class="bi {{ ontology_m.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ ontology_m.v.label }}</span>
                     </a>
@@ -341,7 +349,6 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ mapping_m.v.route }}"
                        title="{{ mapping_m.v.label }}">
-                        <span class="ob-subnav-ordinal" aria-hidden="true">3</span>
                         <i class="bi {{ mapping_m.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ mapping_m.v.label }}</span>
                     </a>
@@ -368,7 +375,6 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ kg_m.v.route }}"
                        title="{{ kg_m.v.label }}">
-                        <span class="ob-subnav-ordinal" aria-hidden="true">4</span>
                         <i class="bi {{ kg_m.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ kg_m.v.label }}</span>
                     </a>
@@ -395,7 +401,6 @@
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ sim_m.v.route }}"
                        title="{{ sim_m.v.label }}">
-                        <span class="ob-subnav-ordinal" aria-hidden="true">5</span>
                         <i class="bi {{ sim_m.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ sim_m.v.label }}</span>
                     </a>
@@ -419,27 +424,10 @@
                 <!-- Flex spacer — always pushes breadcrumb + Save button to the right -->
                 <li class="ob-subnav-flex-spacer" aria-hidden="true" data-subnav-domain-chrome></li>
 
-                <!-- Breadcrumb — inline between tabs and Save button -->
-                <li class="ob-subnav-item ob-subnav-breadcrumb-wrap d-none" id="obBreadcrumbWrap" data-subnav-domain-chrome>
-                    <nav id="obBreadcrumb" aria-label="breadcrumb">
-                        <ol class="breadcrumb mb-0" id="obBreadcrumbList"></ol>
-                    </nav>
-                </li>
-
                 <li class="ob-subnav-item" data-subnav-domain-chrome>
                     {% set save_action = namespace(v=none) %}
-                    {% set switch_action = namespace(v=none) %}
                     {% set close_action = namespace(v=none) %}
-                    {% if domain_m.v %}{% for a in domain_m.v.navbar_actions %}{% if a.action == 'domainSave' %}{% set save_action.v = a %}{% elif a.action == 'domainSwitch' %}{% set switch_action.v = a %}{% elif a.action == 'domainClose' %}{% set close_action.v = a %}{% endif %}{% endfor %}{% endif %}
-                    {% if switch_action.v %}
-                    <a class="ob-subnav-switch-btn btn-requires-domain" href="#"
-                       data-navbar-action="{{ switch_action.v.action }}"
-                       {% if switch_action.v.element_id %}id="{{ switch_action.v.element_id }}"{% endif %}
-                       title="Reload the current domain or switch to another version">
-                        <i class="bi {{ switch_action.v.icon }}"></i>
-                        <span class="ob-subnav-label">{{ switch_action.v.label }}</span>
-                    </a>
-                    {% endif %}
+                    {% if domain_m.v %}{% for a in domain_m.v.navbar_actions %}{% if a.action == 'domainSave' %}{% set save_action.v = a %}{% elif a.action == 'domainClose' %}{% set close_action.v = a %}{% endif %}{% endfor %}{% endif %}
                     {% if close_action.v %}
                     <a class="ob-subnav-close-btn btn-requires-domain" href="#"
                        data-navbar-action="{{ close_action.v.action }}"
@@ -454,8 +442,10 @@
                        data-navbar-action="{{ save_action.v.action }}"
                        {% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}
                        title="Save domain to Unity Catalog">
+                        <span class="ob-subnav-save-dirty" aria-hidden="true"></span>
                         <i class="bi {{ save_action.v.icon }}"></i>
                         <span class="ob-subnav-label">{{ save_action.v.label }}</span>
+                        <kbd class="ob-subnav-save-kbd" data-os-shortcut aria-hidden="true">Ctrl+S</kbd>
                     </a>
                     {% endif %}
                 </li>
@@ -501,11 +491,6 @@
             <span class="ob-spinner-label" id="domainLoadingLabel">Loading domain...</span>
         </div>
     </div>
-
-    <!-- Breadcrumb -->
-    <nav id="obBreadcrumb" class="ob-breadcrumb d-none" aria-label="breadcrumb">
-        <ol class="breadcrumb mb-0" id="obBreadcrumbList"></ol>
-    </nav>
 
     <!-- Main Content -->
     <div class="content-wrapper">

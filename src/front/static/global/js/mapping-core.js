@@ -90,6 +90,7 @@ async function autoSaveMappings() {
         if (result.success) {
             console.log('Mapping Core: Mappings auto-saved to session');
             mappingRegistryDirty = true;
+            if (typeof setDomainDirty === 'function') setDomainDirty('mapping', true);
             
             // Auto-validate after each change
             await autoValidateMappings();
@@ -356,6 +357,7 @@ async function autoSaveToRegistry() {
         const data = await resp.json();
         if (data.success) {
             mappingRegistryDirty = false;
+            if (typeof setDomainDirty === 'function') setDomainDirty('mapping', false);
             if (typeof showNotification === 'function') {
                 showNotification('Mapping auto-saved to registry', 'success', 2000);
             }
@@ -371,6 +373,7 @@ async function autoSaveToRegistry() {
  */
 function clearRegistryDirty() {
     mappingRegistryDirty = false;
+    if (typeof setDomainDirty === 'function') setDomainDirty('mapping', false);
 }
 
 /**

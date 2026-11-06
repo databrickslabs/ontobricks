@@ -137,7 +137,7 @@ surface: `#obSubnav` is transparent and its segmented workspace control uses
   undefined state.
 - `--db-gradient-primary` (`linear-gradient(120deg, var(--db-primary),
   var(--db-gradient-end))`) is the only gradient used on filled CTAs
-  (`.btn-primary`, `.ob-subnav-save-btn`) and the selected L2 workspace chip.
+  (`.btn-primary`, `.ob-subnav-save-btn`) and the current L2 workspace (colour only).
   `--db-gradient-end` is Primary mixed 45% toward Aurora, contrast-corrected
   server-side against `--db-on-primary` — never hardcode a second color on a
   button.
@@ -227,9 +227,8 @@ the entire app chrome — never duplicate or substitute any of it:
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
 | L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
-| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain identity launcher, segmented Domain / Ontology / Mapping / KG workspace control, breadcrumb, and Versions → Close → Save actions | a second nav element |
-| Breadcrumb | `#obBreadcrumb` inside `#obBreadcrumbWrap` (`<li>` in the L2 subnav row), populated by `breadcrumb.js` | a per-page breadcrumb |
-| Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav | a per-page save button |
+| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the domain crumb, version crumb (`vN ▾`), segmented Domain / Ontology / Mapping / Graph / Simulation workspace track, breadcrumb, and Close → Save actions | a second nav element |
+| Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav, with dirty dot and shortcut keycap | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
 | Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
 | Task Tracker dropdown | `#taskTrackerDropdown` (hourglass) | a per-page task panel |
@@ -534,29 +533,27 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   - **Settings + loaded domain:** show only the return link
     (`#settingsDomainReturnLink`) inside `#settingsDomainReturnNav`.
   - **Any page + no loaded domain:** hide all L2 chrome.
-- `breadcrumb.js` must never reveal `#obBreadcrumbWrap` on Settings pages.
-  The guard runs before removing `d-none`, preventing a transient breadcrumb
-  while asynchronous navbar state resolves.
 - Layout (left → right inside `.ob-subnav-nav`):
-  1. **Domain identity launcher** (`#domainContextTrigger`): current domain
-     status → name → version, opens `#workspaceMapModal`, and updates its
-     accessible label from `/navbar/state`.
-  2. **Workspace segmented control** (`.ob-subnav-workspaces` containing
-     `.ob-subnav-workspace-list`): Domain, divider, Ontology, Mapping, and
-     Graph. The current workspace is a static `aria-current="page"`
-     target; only the other workspace targets retain Bootstrap dropdowns.
-  3. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
-  4. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
-  5. **Versions button** (`.ob-subnav-switch-btn`, icon `bi-123`).
-  6. **Close Domain button** (`.ob-subnav-close-btn`).
-  7. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
+  1. **Domain crumb** (`#domainContextTrigger`, `.ob-subnav-crumb`): domain
+     name + caret; opens `#workspaceMapModal`.
+  2. **Version crumb** (`#menuSwitchDomain`, `.ob-subnav-version-crumb`):
+     `vN ▾`, rendered from the `domainSwitch` action in `menu_config.json`.
+     It opens the version switcher, which includes **New Version**.
+  3. **Workspace links** (`.ob-subnav-workspace-list`): Domain, Ontology,
+     Mapping, Graph, Simulation. No ordinal numbers. The current workspace is a
+     static `aria-current="page"` target; only the other workspace targets
+     retain Bootstrap dropdowns.
+  4. A `.ob-subnav-flex-spacer` (`flex: 1`) — pushes the right group to the edge.
+  6. **Close Domain button** (`.ob-subnav-close-btn`): ghost text action.
+  7. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`): see the
+     action-styles bullet below.
 - The three tab toggles (Ontology/Mapping/KG) do **not** carry
   `nav-requires-domain`. They are enabled whenever the subnav is
   visible. Specific dropdown items that truly need a UC-saved domain
   keep `dropdown-requires-domain`.
 - `--ob-chrome-height` = navbar height + subnav height (subnav already
-  contains the breadcrumb). Updated by `_updateChromeHeight()` in
-  `breadcrumb.js` and called from `updateDomainMenuVisibility`.
+  Updated by `_updateChromeHeight()` in `breadcrumb.js` and called from
+  `updateDomainMenuVisibility`.
 - Active-state behavior is owned by `initSubnavActiveState()` and
   `disableCurrentSubnavDropdown()` in `navbar.js`. The route-prefix match adds
   `.active`, removes Bootstrap dropdown wiring and the matching menu, sets
@@ -566,45 +563,22 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   `.dropdown-toggle`, `data-bs-toggle="dropdown"`, route and menu. A click opens
   the existing Bootstrap menu; selecting an item navigates to its existing
   route/section.
-- Visual contract: the L2 row is transparent with no full-width bottom
-  border. Domain / Ontology / Mapping / Graph sit in one compact
-  white segmented control (`--db-surface-warm`, one-pixel `--db-border`,
-  `--db-radius-control`). The selected workspace uses
-  `--db-primary-light` fill, `--db-primary-darker` text, and no dropdown;
-  non-selected workspaces retain their dropdowns. L1 and L2 dropdown items
-  use the same hover as the left sidebar (`--db-hover-indigo` well,
-  `9px` radius) — not a solid indigo invert, not a grey well. L1/L2
-  structure, order, and ownership are immutable.
-- Domain context geometry is fixed on desktop/tablet: `.ob-subnav-context-trigger`
-  stays exactly `200px` wide (matching expanded `.sidebar-nav` width), keeps
-  one-line ellipsis for long names, and shares the exact same fixed height as
-  `.ob-subnav-workspace-list` via one shared CSS source of truth. The shared
-  control height is `3rem`. Domain-name length must not change the row
-  height.
+- Visual contract: the L2 row is transparent with no bottom border. The five
+  workspaces are text links on the transparent row, styled like the Domain and
+  version crumbs (`--db-text`, weight 600; hover `--db-primary-darker` on
+  `--db-hover-indigo`). The current workspace is `--db-primary-darker`, weight 600,
+  with no fill or border. Dropdown menus keep the sidebar surface and hover
+  (`--db-hover-indigo`, `9px` radius). L1/L2 structure, order, and ownership are immutable.
+- Domain and version crumbs (`.ob-subnav-crumb`) are text on the transparent row,
+  with a `--db-hover-indigo` well on hover. The domain name is ellipsized
+  (`max-width: 10rem`); name length never changes the `3rem` rail height shared
+  with the workspace track.
 - Workspace target geometry: `.ob-subnav-workspace-list` keeps its `0.2rem`
   inset while direct `.ob-subnav-item` children and their `.ob-subnav-link`
   targets stretch with `height: 100%`. Hover and selected backgrounds therefore
   occupy the near-full inner rail height (approximately `40px` inside the
   `48px` / `3rem` outer rail) without touching the segmented-control border.
   The same stretch rule applies to all four workspace targets at every width.
-- The full `.ob-subnav-context-trigger` reads as a filled Domain badge:
-  `--db-primary-soft` background (darker than `--db-primary-light`) with
-  primary-darker text and **no** hard primary outline. Hover darkens the
-  wash (`--db-primary-soft-hover`); keyboard focus keeps `--db-focus-ring`.
-- Inside `.ob-subnav-context-copy`, status and labels are centered against the
-  full `200px` control. The leading `bi-box` icon may be absolutely positioned
-  at the left so copy remains visually centered. The copy is a two-row grid:
-  lifecycle status in row 1 of the main text area, domain name (ellipsized) in
-  row 2 of the main text area, and the raw numeric version in a right-side
-  column spanning both rows. The version cell is emphasized with a darker
-  themed fill (`--db-primary-darker`), contrast-safe text (`--db-on-primary`),
-  larger bold numerals, and shared control-radius tokens. Keep a small explicit
-  row gap between status and name in that scoped grid to improve legibility
-  without increasing the shared rail height. The scoped
-  `.ob-subnav-context-copy .domain-status-badge` removes Bootstrap's `ms-2`
-  offset only in this context, and `.ob-subnav-context-name` remains
-  constrained as a grid item (`min-width: 0` with bounded width) so long names
-  cannot blow out the 200px control or overlap the icon/version cells.
 - The segmented control's left edge aligns exactly with the framed sidebar
   panel's left edge. Both use the shell's `0.5rem` horizontal outer gutter:
   `.sidebar-layout { padding: 0.25rem 0.5rem 0.5rem; }` and
@@ -613,18 +587,14 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   full-width body rule zeroes nested `.container-fluid` padding with
   `!important`. Keep the L2 right padding independent at `1rem` (`0.5rem` on
   mobile).
-- The selected segment is rounded inside the outer control
-  (`calc(var(--db-radius-control) - 2px)`), not a square tab and not an
-  underlined tab. Keyboard focus uses `--db-focus-ring` plus a transparent
-  outline for forced-colour support.
-- Domain-action styles are fixed, and the rendered order is owned explicitly by
-  sequential Jinja blocks in `templates/base.html` (Versions → Close → Save).
-  `menu_config.json` supplies each action's metadata and IDs, but its
-  `navbar_actions` array order does not control render order. Save is the only
-  filled primary control (`--db-primary` / `--db-on-primary`); Versions
-  remains a neutral white outline with an indigo-soft hover; Close remains a
-  neutral white outline with danger text and a soft-danger hover. Preserve
-  existing IDs, permission classes, and handlers.
+- Workspace links use `calc(var(--db-radius-control) - 2px)` for their hover well.
+  Keyboard focus uses `--db-focus-ring` plus a transparent outline for forced-colour support.
+- Action styles: Save (`#menuSaveDomain`) is the only filled primary control
+  (`--db-primary` / `--db-on-primary`). It shows a `--db-status-warning` dirty dot
+  (`.ob-subnav-save-dirty`) while `setDomainDirty(source, dirty)` reports unsaved
+  registry writes, and a platform shortcut keycap (`.ob-subnav-save-kbd`, filled by
+  `navbar.js`). Close is a ghost text button with danger text. Rendered order:
+  version crumb → Close → Save. Preserve existing IDs, permission classes, and handlers.
 - Shared ownership: L2 markup stays in `templates/base.html`, styling stays in
   `static/global/css/main.css`, active behavior stays in
   `static/global/js/navbar.js`, and menu contents stay driven by
@@ -635,27 +605,20 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
   (`#settingsDomainReturnLink` / `.ob-settings-domain-return-link`) keeps
   exact `200px` width/min-width/max-width so it aligns with the expanded
   `200px` sidebar width and same shell left gutter.
-- Mobile contract (below `768px`): keep all four workspace targets plus
-  Save / Versions / Close, but show them as titled icons by hiding
-  only their `.ob-subnav-label`. Hide the redundant inline breadcrumb and
-  flex spacer, and compact horizontal padding. Reset
-  `.ob-subnav-context-trigger` and `#settingsDomainReturnLink`
-  width/min-width/max-width so desktop `200px` fixed widths do not force
-  overflow. Do not make the subnav horizontally scrollable: Bootstrap dropdowns
-  must remain able to escape the row without clipping. Mobile keeps the
-  selected-color domain trigger as an icon-only control and hides
-  status/name/version details
-  (`.ob-subnav-context-copy` stays hidden). The text stays in the DOM for
-  accessible names, and every workspace target carries a `title` tooltip.
+- Mobile contract (below `768px`): keep all four workspace targets plus Save and
+  Close as titled icons by hiding only their `.ob-subnav-label`. Hide the inline
+  flex spacer, `.ob-subnav-context-copy`, the save keycap, and the
+  crumb separator. The version crumb shows only `vN` and its caret. Do not make the
+  subnav horizontally scrollable: Bootstrap dropdowns must still escape the row.
 
 **Tokens**
 
 | Level | Token | Value |
 |-------|-------|-------|
 | L1 navbar background | `--db-navbar-bg` | `#FFFFFF` |
-| L2 workspace control | `--db-surface-warm` + `--db-border` | white segmented surface on the transparent row |
-| L2 Domain badge | `--db-primary-soft` / `--db-primary-soft-hover` | filled wash, no primary outline |
-| Breadcrumb strip | `.ob-subnav-breadcrumb-wrap` | muted text + one-pixel left separator |
+| L2 workspace links | `--db-text` / `--db-primary-darker` | transparent like the crumbs; hover `--db-hover-indigo`; current workspace in `--db-primary-darker` |
+| L2 crumbs | `--db-text` / `--db-hover-indigo` | quiet text crumbs on the transparent row |
+| L2 Save dirty dot | `--db-status-warning` | `.ob-subnav-save-dirty`, shown only when dirty |
 
 **New Domain flow**
 
@@ -691,54 +654,19 @@ asserts Domain ≠ Graph and menu ≡ breadcrumb for `/dtwin/`.
 - ❌ Moving the Save Domain button out of the L2 subnav.
 - ❌ Manually setting `--ob-chrome-height` from page code.
 
-### Breadcrumb Behaviour & Style
+### Breadcrumb (removed)
 
-The breadcrumb is owned by `global/js/breadcrumb.js`. It is **not**
-configured per page — it is fully derived from the URL and the
-currently-active sidebar section.
+The inline L2 breadcrumb was removed (Nov 2026). Do not reintroduce a
+breadcrumb trail in the L2 row or below the navbar; the active workspace is
+already shown by the workspace track, and the section by the sidebar.
 
-**Location**
-
-The breadcrumb now lives **inside the L2 subnav row** as
-`<li id="obBreadcrumbWrap" class="ob-subnav-item ob-subnav-breadcrumb-wrap d-none">`.
-It is not a standalone `<nav>` below the navbar. `breadcrumb.js`
-shows/hides `#obBreadcrumbWrap` (not `#obBreadcrumb`).
-
-**Behaviour**
-
-- `breadcrumb.js` auto-runs on `DOMContentLoaded`, builds the crumbs
-  and removes `d-none` from `#obBreadcrumbWrap` only when there is
-  more than one crumb to show.
-- The route hierarchy is fixed in `breadcrumb.js`:
-  Registry → Domain → Ontology → Mapping → Graph (plus
-  Settings as a flat entry). Adding a new top-level page means
-  extending `_ROUTE_MAP` and `_HIERARCHY` — not patching templates.
-- The "Domain" crumb label is read from `#currentDomainName` (set by
-  the navbar).
-- The last crumb is the active sidebar section, updated live on every
-  `sidebarSectionChanged` event.
-- `breadcrumb.js` exposes itself as `window.OBBreadcrumb` so
-  `navbar.js` can call `OBBreadcrumb._updateChromeHeight()` after the
-  subnav appears/disappears.
-- `--ob-chrome-height` = navbar height + subnav height (breadcrumb is
-  inside the subnav, so no separate measurement). **Don't set this
-  variable from anywhere else.**
-
-**Style**
-
-- Inline in the subnav row: `font-size: 0.65rem`, italic, no icons,
-  muted colour, left border separator.
-- Active crumb: `--db-text`, weight 500.
-- Links: `--db-text-muted`, no underline; underline on `:hover`.
+`global/js/breadcrumb.js` now only keeps `--ob-chrome-height` in sync and
+exposes `window.OBBreadcrumb._updateChromeHeight()` for `navbar.js`.
 
 **Don'ts**
 
-- ❌ Manually mutating `#obBreadcrumbList` from page JS. Use the
-  `_ROUTE_MAP` extension or rely on `sidebarSectionChanged`.
-- ❌ Adding a per-page breadcrumb — the global one is the only one allowed.
-- ❌ Toggling `#obBreadcrumb` or `#obBreadcrumbWrap` from page code.
-- ❌ Forcing the breadcrumb visible on a single-crumb page — use
-  `.page-header` instead.
+- ❌ Adding a breadcrumb trail to the L2 row or any page header.
+- ❌ Setting `--ob-chrome-height` from page code (see above).
 
 ### Section / Partial Conventions
 
@@ -1137,8 +1065,6 @@ These already exist; reuse before reinventing.
   *Loading Spinners* for the full contract.
 - **Page-level loading overlay** — `.domain-loading-overlay` already wired
   in `base.html` as `#domainLoadingOverlay`. Toggle via `.d-none`.
-- **Breadcrumb** — `#obBreadcrumbWrap` (`<li>` inside `#obSubnav`),
-  driven by `breadcrumb.js`; do not build a parallel breadcrumb.
 - **Save Domain button** — `#menuSaveDomain` (`.ob-subnav-save-btn`) in the
   L2 subnav. Enabled/disabled by `updateVersionStatus()` in
   `domain-actions.js`. Do not add a second Save button on a page.
@@ -1430,9 +1356,7 @@ src/front/static/
 - ❌ Pane-level `100vh` on sidebar pages, extra content `padding-bottom`
   that breaks menu/pane bottom alignment, or restoring
   `.sidebar-nav { margin: 0.5rem; height: calc(100% - 1rem); }`.
-- ❌ A custom per-page breadcrumb. Extend `_ROUTE_MAP` in
-  `breadcrumb.js` instead.
-- ❌ Toggling `#obSubnav` or `#obBreadcrumbWrap` from page code.
+- ❌ Toggling `#obSubnav` from page code.
 - ❌ Adding `nav-requires-domain` to L2 subnav tab toggles — use
   `dropdown-requires-domain` on individual items instead.
 - ❌ A Save Domain button anywhere outside `#obSubnav`.

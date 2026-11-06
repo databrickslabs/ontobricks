@@ -134,3 +134,150 @@ Test results:
   8 deselected, 0 failed.
 - `node --check` on simulation-evaluate.js: OK.
 
+================================================================================
+
+Context: The second banner (L2 domain subnav under the top navbar) was heavy:
+numbered 1-5 workspace "steps", a filled primary domain badge, a separate
+Versions button, and a Save button with no unsaved-state signal. Redesigned
+to the approved "C" direction (breadcrumb switcher + quiet segmented tabs).
+The L1 top navbar is unchanged. Specs: docs/superpowers/specs/2026-11-06-l2-subnav-modern-restyle-design.md
+and docs/superpowers/plans/2026-11-06-l2-subnav-modern-restyle.md (both local,
+gitignored).
+
+Changes:
+
+1. src/front/templates/base.html
+   Domain crumb (`#domainContextTrigger`, `.ob-subnav-crumb`) with caret; version
+   crumb (`.ob-subnav-version-crumb`, `#menuSwitchDomain` from menu_config) showing
+   `vN ▾`, so Versions is merged into the version crumb. Workspace ordinals 1-5
+   removed. Separate right-side Versions button removed. Close is a ghost action.
+   Save gets a dirty dot (`.ob-subnav-save-dirty`) and a shortcut keycap
+   (`.ob-subnav-save-kbd`).
+2. src/front/static/global/css/main.css
+   Removed the superseded L2 rules (domain badge, ordinals, gradient active tab,
+   outlined Versions/Close/Save). Added the crumb, grey workspace track, raised
+   active chip, Save dirty/keycap, and ghost Close rules. Mobile and constrained
+   media blocks updated to the new selectors.
+3. src/front/static/global/js/navbar.js
+   Dirty bus: `setDomainDirty(source, dirty)` and `clearAllDomainDirty()`
+   (exposed on window); `.is-dirty` toggled on Save; cleared after a successful
+   domain save. Platform-aware shortcut label (⌘S / Ctrl+S).
+4. src/front/static/global/js/ontology-design.js
+   Publishes ontology registry-dirty state to the bus (guarded calls).
+5. src/front/static/global/js/mapping-core.js
+   Publishes mapping registry-dirty state to the bus (guarded calls).
+6. tests/units/front/test_segmented_subnav_contract.py
+   Contract updated to the C direction (crumbs, track, Save dirty/keycap, no
+   ordinals).
+7. tests/units/front/test_mobile_subnav_contract.py
+   Visible-label count updated (Versions is now the vN crumb).
+8. tests/units/front/test_clarity_design_contract.py
+   Active workspace contract: surface chip instead of gradient.
+9. tests/units/front/test_subnav_dirty_contract.py (new)
+   Contract for the dirty bus, publishers, and shortcut label.
+10. .cursor/11-frontend-design.mdc
+    L2 contract rewritten (layout list, action styles, mobile, tokens).
+11. docs/user-guide.md, docs/architecture.md
+    Version switch, Save dirty dot, and L2 description updated.
+
+Decisions and deviations from the approved spec:
+- Keyboard shortcut: Ctrl/Cmd+S was already handled globally in
+  base-ui-handlers.js (including inside inputs). No second handler was added,
+  to avoid a double save. The on-button keycap label is the only new piece.
+- Version switcher: kept the existing "Switch Version" modal (it already has the
+  New Version action in its footer) instead of rebuilding it as an anchored
+  dropdown. Converting it to an anchored dropdown is a possible follow-up.
+
+Modified files:
+- src/front/templates/base.html
+- src/front/static/global/css/main.css
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/ontology-design.js
+- src/front/static/global/js/mapping-core.js
+- tests/units/front/test_segmented_subnav_contract.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_subnav_dirty_contract.py (new)
+- .cursor/11-frontend-design.mdc
+- docs/user-guide.md
+- docs/architecture.md
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1743 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 10076 passed, 326 skipped,
+  8 deselected, 0 failed.
+- `node --check` on navbar.js, ontology-design.js, mapping-core.js: OK.
+- Not yet verified in a browser (visual check at desktop and mobile widths
+  pending).
+
+
+Follow-up: L2 workspace track colour
+
+Context: the grey workspace track (--db-line-soft) did not match the rest of the
+UI after review.
+
+Changes:
+1. src/front/static/global/css/main.css
+   .ob-subnav-workspace-list back to the white --db-surface-warm surface with a
+   1px --db-border; active chip gets the same border.
+2. tests/units/front/test_segmented_subnav_contract.py
+   Track contract now asserts the white surface and border.
+3. .cursor/11-frontend-design.mdc
+   Track description and token table updated.
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1743 passed.
+
+
+Follow-up: remove the inline L2 breadcrumb
+
+Context: the breadcrumb trail on the right of the L2 row (for example
+"Simulation / Scenarios") was no longer wanted. The workspace track and the
+sidebar already show the current location.
+
+Changes:
+1. src/front/templates/base.html
+   Removed the `#obBreadcrumbWrap` <li> from the L2 row and the duplicate hidden
+   `#obBreadcrumb` nav (which also reused the `#obBreadcrumbList` id).
+2. src/front/static/global/css/main.css
+   Removed the `.ob-subnav-breadcrumb-wrap` rules and the `#obBreadcrumbWrap`
+   rules in the constrained and mobile media blocks. The flex spacer stays.
+3. src/front/static/global/js/breadcrumb.js
+   Stripped the crumb rendering, route map, and section updates. The file now
+   only keeps `--ob-chrome-height` in sync (`window.OBBreadcrumb._updateChromeHeight`),
+   which navbar.js depends on.
+4. tests/units/front/test_breadcrumb.py
+   Deleted: it only tested the removed crumb rendering.
+5. tests/units/front/test_settings_subnav_hidden.py
+   Removed the settings-page breadcrumb guard test.
+6. tests/units/front/test_knowledge_graph_icon.py
+   Removed the breadcrumb icon-match test (the menu-icon tests remain).
+7. tests/units/front/test_segmented_subnav_contract.py, test_mobile_subnav_contract.py
+   Assertions for the removed breadcrumb updated.
+8. .cursor/11-frontend-design.mdc, docs/architecture.md, docs/user-guide.md, docs/development.md
+   Breadcrumb documentation replaced with the removal note.
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1736 passed.
+- `uv run --frozen pytest -q -m "not scenario"`: 10069 passed, 326 skipped, 8 deselected, 0 failed.
+
+
+Follow-up: L2 workspace links styled like the crumbs
+
+Context: after the grey track and the white chip, the workspace menu still did
+not fit the page. Requested: no page-coloured background behind the workspace
+menu, and hover/colours consistent with the Domain and version crumbs.
+
+Changes:
+1. src/front/static/global/css/main.css
+   .ob-subnav-workspace-list: transparent track, no border. .ob-subnav-link:
+   600 weight, --db-text, hover --db-primary-darker on --db-hover-indigo.
+   .ob-subnav-link.active: --db-primary-darker, 600 weight, no fill, no shadow.
+2. tests/units/front/test_segmented_subnav_contract.py,
+   tests/units/front/test_clarity_design_contract.py
+   Contracts updated to the crumb-style links.
+3. .cursor/11-frontend-design.mdc
+   L2 visual contract and token table updated.
+
+Test results:
+- `uv run --frozen pytest -q tests/units/front`: 1736 passed.

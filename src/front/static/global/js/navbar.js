@@ -671,6 +671,53 @@ async function domainNew() {
  */
 let _domainSaving = false;
 
+// ── Save dirty indicator ──────────────────────────────────────
+// Modules report whether they hold registry writes that are not saved yet.
+// The Save button shows a dot while any source is dirty. Sources are tracked
+// separately so clearing one (e.g. ontology auto-save) does not hide another
+// (e.g. mapping).
+const _domainDirtySources = new Set();
+
+function _applySaveDirtyState() {
+    const dirty = _domainDirtySources.size > 0;
+    document.querySelectorAll('.ob-subnav-save-btn').forEach((btn) => {
+        btn.classList.toggle('is-dirty', dirty);
+    });
+}
+
+/** Mark a source (e.g. 'ontology', 'mapping') as having unsaved registry writes. */
+function setDomainDirty(source, dirty) {
+    if (dirty) {
+        _domainDirtySources.add(source);
+    } else {
+        _domainDirtySources.delete(source);
+    }
+    _applySaveDirtyState();
+}
+
+/** Clear every dirty source — called after a successful registry save. */
+function clearAllDomainDirty() {
+    _domainDirtySources.clear();
+    _applySaveDirtyState();
+}
+
+/** Show the platform-appropriate shortcut on the Save button. */
+function _labelSaveShortcut() {
+    const platform = (typeof navigator !== 'undefined' && navigator.platform) || '';
+    const mac = platform.indexOf('Mac') > -1;
+    document.querySelectorAll('[data-os-shortcut]').forEach((el) => {
+        el.textContent = mac ? '⌘S' : 'Ctrl+S';
+    });
+}
+
+window.setDomainDirty = setDomainDirty;
+window.clearAllDomainDirty = clearAllDomainDirty;
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _labelSaveShortcut);
+} else {
+    _labelSaveShortcut();
+}
+
 /** Swap the navbar Save icon for a spinner (and block re-clicks) while saving. */
 function setDomainSaveBusy(busy) {
     document.querySelectorAll('.ob-subnav-save-btn').forEach((btn) => {
@@ -929,6 +976,7 @@ async function doDomainSave(opts = {}) {
         const data = await response.json();
         if (data.success) {
             if (typeof clearRegistryDirty === 'function') clearRegistryDirty();
+            clearAllDomainDirty();
             showNotification(data.message || 'Domain saved successfully!', 'success');
             enableMenusAfterSave();
             await refreshNavbarIndicators();

@@ -500,10 +500,11 @@ def test_designer_canvas_selection_uses_clarity_indigo():
 
 def test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection():
     css = _read(MAIN_CSS)
+    # L2 "C" direction: active workspace is a raised surface chip, not a gradient.
     assert re.search(
         r"\.ob-subnav-link\.active\s*\{"
-        r"[^}]*background\s*:\s*var\(--db-gradient-primary\)\s*;"
-        r"[^}]*border-radius\s*:\s*calc\(var\(--db-radius-control\)\s*-\s*2px\)\s*;",
+        r"[^}]*color\s*:\s*var\(--db-primary-darker\)\s*;"
+        r"[^}]*background\s*:\s*transparent\s*;",
         css,
         flags=re.DOTALL,
     )

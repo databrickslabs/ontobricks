@@ -1732,14 +1732,16 @@ To keep two people from silently overwriting each other, a **DRAFT** version can
   Switching to another **version of the same domain** releases the old version's lock
   **after** the new version loads.
 
-**Closing a domain** — the top sub-navigation shows three buttons: **Versions** (switch or reload),
-**Close**, and **Save** (persist the domain to the registry). Clicking **Close** asks whether to *save
+**Closing a domain** — the top sub-navigation shows the domain name and its version (`vN ▾`), then
+**Close** and **Save** (persist the domain to the registry). The version crumb opens the version
+switcher (see below). Clicking **Close** asks whether to *save
 before closing* (**Save & Close** / **Close without saving** / **Cancel**), then releases the
 edit lock and returns you to the Home page. Once you close, the next person can open the
 domain in edit mode.
 
-**Switching version** — the **Versions** button (left of **Close** and **Save**, icon `bi-123`) opens a popup
-listing every version of the currently open domain, with the current one flagged. Pick the
+**Switching version** — click the version crumb (`vN ▾`, right after the domain name) to open a popup
+listing every version of the currently open domain, with the current one flagged. The popup also has
+**New Version** to create the next draft. Pick the
 current version to **reload** it from the Registry (discarding in-session edits) or another
 version to **switch** to it. On a **DRAFT** version, a *"Save my changes before switching"*
 box is ticked by default — leave it on to persist your work first, or untick it to discard
@@ -1869,7 +1871,7 @@ Four related ideas:
 
 ### Domain Save/Load
 
-Domains are saved as versioned documents in the Lakebase registry. Use the **Save** button (in the domain sub-navigation) and the **Load Domain** option in the top menu to persist and restore your work; after a generic load the app opens **Domain → General**. The **Versions** button reloads the current domain or loads another of its versions from the Registry (that also lands on General), and the **Close** button releases the edit lock and returns you to the Home page.
+Domains are saved as versioned documents in the Lakebase registry. Use the **Save** button (in the domain sub-navigation; a yellow dot means there are registry changes not yet saved, and **Ctrl+S** / **⌘S** saves) and the **Load Domain** option in the top menu to persist and restore your work; after a generic load the app opens **Domain → General**. The version crumb (`vN ▾`) reloads the current domain or loads another of its versions from the Registry (that also lands on General), and the **Close** button releases the edit lock and returns you to the Home page.
 
 ### Best Practices for Version Control
 
@@ -2418,7 +2420,6 @@ import. The repository must already be configured and claimed in Settings.
 - **Domain identity target**: The contextual identity launcher (`Domain` name + version badge) lives in the L2 rail. Clicking it opens the workspace map.
 - **Workspace map launcher**: `Open workspace map` opens a five-column menu directory for Domain, Ontology, Mapping, Graph, and Simulation actions. It launches sections/routes without forcing a jump to `/domain/`.
 - **Workspace active state**: The current workspace becomes a static highlighted segment (`aria-current="page"`); only inactive workspace targets keep dropdown menus.
-- **Inline breadcrumb**: The breadcrumb trail is rendered inside the L2 rail (between workspace targets and actions) and appears only when there is more than one crumb.
 - **Mobile icon state**: On narrow screens, workspace and action labels are visually hidden and controls remain as titled icons with keyboard focus support.
 
 ---
@@ -3214,7 +3215,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Registry modal from navbar**: Open **Registry → Browse** as a modal overlay from the top navbar without leaving the current domain; legacy `/registry/` URLs redirect into Home with the modal opened.
 - **Registry Browse for “Active” version**: Expand a domain in **Registry → Browse** to set which version is **Active** (API/MCP); the Domain app no longer exposes a per-version toggle on **Domain → Versions** (badge only).
 - **Versions popup New Version**: The navbar Versions popup can create the next DRAFT version of the open domain; Domain → Versions uses the same action. The loaded-domain badge stays visible across Settings navigation and transient navbar refresh failures.
-- **Breadcrumb Navigation**: Auto-generated breadcrumb bar below the navbar shows Registry > Domain > Ontology > Section context.
+- **Navigation context**: The L2 row shows the domain and version (`vN ▾`), the active workspace, and the Close / Save actions; the sidebar shows the active section.
 - **Keyboard Shortcuts**: `Cmd/Ctrl+S` to save domain, `Cmd/Ctrl+K` to focus sidebar search, `?` for a shortcut overlay.
 - **Toast Notifications**: All user feedback uses non-blocking toast notifications (no `alert()` dialogs).
 

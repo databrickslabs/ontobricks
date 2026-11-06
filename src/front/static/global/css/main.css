@@ -484,120 +484,16 @@ body {
     align-items: center;
 }
 
-.ob-subnav-context {
-    display: flex;
-    align-items: center;
-    margin-right: 0.5rem;
-}
 
-.ob-subnav-context-trigger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    width: 200px;
-    min-width: 200px;
-    max-width: 200px;
-    padding-top: 0.28rem;
-    padding-bottom: 0.28rem;
-    padding-left: 1.75rem;
-    padding-right: 0.55rem;
-    background: var(--db-primary-soft);
-    border: 0;
-    border-radius: var(--db-radius-control);
-    color: var(--db-primary-darker);
-    text-decoration: none;
-    transition: background-color 0.15s ease, color 0.15s ease;
-}
 
-.ob-subnav-context-trigger > .bi {
-    position: absolute;
-    left: 0.65rem;
-    top: 50%;
-    transform: translateY(-50%);
-}
 
-.ob-subnav-context-trigger:hover {
-    background: var(--db-primary-soft-hover);
-    color: var(--db-primary-darker);
-    text-decoration: none;
-}
 
-.ob-subnav-context-trigger:focus-visible {
-    outline: 2px solid transparent;
-    outline-offset: 2px;
-    box-shadow: var(--db-focus-ring);
-}
 
-.ob-subnav-context-copy {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    row-gap: 0.12rem;
-    column-gap: 0.4rem;
-    align-items: center;
-    justify-items: center;
-    width: 100%;
-    /* Required so the nested domain-name label can actually ellipsize. */
-    min-width: 0;
-    line-height: 1.15;
-}
 
-.ob-subnav-context-copy .domain-status-badge {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: center;
-    margin-left: 0 !important;
-}
 
-.ob-subnav-context-name {
-    grid-column: 1;
-    grid-row: 2;
-    min-width: 0;
-    width: 100%;
-    max-width: 100%;
-    text-align: center;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--db-text);
-}
 
-.ob-subnav-context-version {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: center;
-    justify-self: center;
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: var(--db-on-primary);
-    background: var(--db-primary-darker);
-    border-radius: var(--db-radius-control);
-    padding: 0.12rem 0.45rem;
-    white-space: nowrap;
-}
 
-.ob-subnav-workspace-list {
-    display: flex;
-    align-items: center;
-    list-style: none;
-    margin: 0;
-    padding: 0.2rem;
-    gap: 0.125rem;
-    background: var(--db-surface-warm);
-    border: 1px solid var(--db-border);
-    border-radius: var(--db-radius-control);
-}
 
-.ob-subnav-context-trigger,
-.ob-subnav-workspace-list {
-    min-height: var(--ob-subnav-rail-height);
-    height: var(--ob-subnav-rail-height);
-    box-sizing: border-box;
-    border-radius: var(--db-radius-control);
-}
 
 .ob-subnav-workspace-list > .ob-subnav-item,
 .ob-subnav-workspace-list > .ob-subnav-item > .ob-subnav-link {
@@ -615,7 +511,8 @@ body {
     gap: 0.35rem;
     padding: 0.3rem 0.7rem;
     font-size: 0.8125rem;
-    color: var(--db-text-secondary);
+    font-weight: 600;
+    color: var(--db-text);
     text-decoration: none;
     border: 0;
     border-radius: calc(var(--db-radius-control) - 2px);
@@ -627,23 +524,9 @@ body {
     font-size: 0.85rem;
 }
 
-.ob-subnav-ordinal {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.05rem;
-    height: 1.05rem;
-    padding: 0 0.25rem;
-    border: 1px solid var(--db-border);
-    border-radius: 999px;
-    color: var(--db-text-muted);
-    font-size: 0.62rem;
-    font-weight: 700;
-    line-height: 1;
-}
 
 .ob-subnav-link:hover {
-    color: var(--db-text);
+    color: var(--db-primary-darker);
     background: var(--db-hover-indigo);
     text-decoration: none;
 }
@@ -655,18 +538,7 @@ body {
     box-shadow: var(--db-focus-ring);
 }
 
-.ob-subnav-link.active {
-    color: var(--db-on-primary);
-    font-weight: 700;
-    background: var(--db-gradient-primary);
-    border-radius: calc(var(--db-radius-control) - 2px);
-}
 
-.ob-subnav-link.active .ob-subnav-ordinal {
-    border-color: var(--db-on-primary);
-    background: var(--db-on-primary);
-    color: var(--db-primary);
-}
 
 .ob-subnav-link.nav-disabled {
     opacity: 0.4;
@@ -819,18 +691,121 @@ body {
     border-color: #ffda6a;
 }
 
-/* Save Domain button — last action in the L2 order */
-.ob-subnav-save-btn {
+
+
+
+
+
+
+
+
+
+
+
+/* ---- Level-2 "C" direction: quiet crumbs, grey track, ghost Close, Save ---- */
+.ob-subnav-context {
+    display: flex;
+    align-items: center;
+    margin-right: 0.25rem;
+}
+
+/* Domain ▾ / vN ▾ crumbs — text on transparent, soft hover well */
+.ob-subnav-crumb {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.35rem;
+    height: var(--ob-subnav-rail-height);
+    padding: 0 0.55rem;
+    color: var(--db-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: var(--db-radius-control);
+    white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.ob-subnav-crumb:hover {
+    background: var(--db-hover-indigo);
+    color: var(--db-primary-darker);
+    text-decoration: none;
+}
+
+.ob-subnav-crumb:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
+}
+
+.ob-subnav-context-trigger {
+    min-width: 0;
+    max-width: 14rem;
+}
+
+.ob-subnav-context-copy {
+    display: inline-flex;
+    min-width: 0;
+}
+
+.ob-subnav-context-name {
+    min-width: 0;
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ob-subnav-context-version {
+    font-variant-numeric: tabular-nums;
+}
+
+.ob-subnav-crumb-sep {
+    color: var(--db-text-muted);
+    font-size: 0.875rem;
+    padding: 0 0.1rem;
+}
+
+.ob-subnav-caret {
+    font-size: 0.6rem;
+    color: var(--db-text-muted);
+}
+
+/* Quiet segmented track for the workspaces */
+.ob-subnav-workspace-list {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+    padding: 0.2rem;
+    gap: 0.125rem;
+    /* Transparent like the Domain / version crumbs: no page-coloured well. */
+    background: transparent;
+    border: 0;
+    border-radius: var(--db-radius-control);
+    min-height: var(--ob-subnav-rail-height);
+    height: var(--ob-subnav-rail-height);
+    box-sizing: border-box;
+}
+
+/* Active workspace: raised white chip, no gradient, no ordinal */
+.ob-subnav-link.active {
+    color: var(--db-primary-darker);
+    font-weight: 600;
+    background: transparent;
+}
+
+/* Save Domain — the only filled primary action in L2 */
+.ob-subnav-save-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: var(--db-on-primary);
-    background: var(--db-gradient-primary);
+    background: var(--db-primary);
     border: 1px solid var(--db-primary);
     border-radius: var(--db-radius-control);
-    box-shadow: var(--db-shadow-primary);
     text-decoration: none;
     white-space: nowrap;
     transition: background-color 0.15s ease, color 0.15s ease;
@@ -860,46 +835,44 @@ body {
     pointer-events: none;
 }
 
-/* Switch Version button — first in the L2 action cluster */
-.ob-subnav-switch-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    margin: 0;
-    padding: 0.25rem 0.7rem;
-    font-size: 0.8rem;
-    color: var(--db-text);
-    background-color: var(--db-surface-warm);
-    border: 1px solid var(--db-navbar-border);
-    border-radius: var(--db-radius-control);
-    text-decoration: none;
-    white-space: nowrap;
-    transition: background-color 0.15s ease, color 0.15s ease;
+/* Unsaved registry writes: warning dot before the label */
+.ob-subnav-save-dirty {
+    display: none;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: var(--db-status-warning);
 }
 
-.ob-subnav-switch-btn:hover {
-    background-color: var(--db-hover-indigo);
-    color: var(--db-text);
-    text-decoration: none;
+.ob-subnav-save-btn.is-dirty .ob-subnav-save-dirty {
+    display: inline-block;
 }
 
-.ob-subnav-switch-btn.disabled,
-.ob-subnav-switch-btn.btn-requires-domain.disabled {
-    opacity: 0.45;
-    pointer-events: none;
+/* Platform shortcut keycap on the Save button */
+.ob-subnav-save-kbd {
+    font-family: inherit;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--db-on-primary);
+    opacity: 0.75;
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 0 0.25rem;
 }
 
-/* Close Domain button — between Versions and Save */
+/* Close Domain — ghost text action */
 .ob-subnav-close-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
     margin: 0;
-    padding: 0.25rem 0.7rem;
+    padding: 0.25rem 0.6rem;
     font-size: 0.8rem;
     color: var(--db-status-danger);
-    background-color: var(--db-surface-warm);
-    border: 1px solid var(--db-navbar-border);
+    background: transparent;
+    border: 0;
     border-radius: var(--db-radius-control);
     text-decoration: none;
     white-space: nowrap;
@@ -908,7 +881,6 @@ body {
 
 .ob-subnav-close-btn:hover {
     background-color: var(--db-status-danger-soft-bg);
-    border-color: var(--db-status-danger);
     color: var(--db-status-danger);
     text-decoration: none;
 }
@@ -919,42 +891,11 @@ body {
     pointer-events: none;
 }
 
-/* Inline breadcrumb inside the subnav row */
+/* Spacer pushes Close / Save to the right edge of the L2 row */
 .ob-subnav-flex-spacer {
     flex: 1;
 }
 
-.ob-subnav-breadcrumb-wrap {
-    display: flex;
-    align-items: center;
-    padding: 0 0.75rem;
-    border-left: 1px solid var(--db-subnav-border);
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb {
-    font-size: 0.65rem;
-    font-style: italic;
-    white-space: nowrap;
-    flex-wrap: nowrap;
-    gap: 0;
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item,
-.ob-subnav-breadcrumb-wrap .breadcrumb-item a {
-    color: var(--db-text-muted, #6c757d);
-    text-decoration: none;
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item a:hover {
-    color: var(--db-primary, #1b3a6b);
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item.active {
-    color: var(--db-text, #1b3a6b);
-    font-weight: 500;
-}
-.ob-subnav-breadcrumb-wrap .breadcrumb-item + .breadcrumb-item::before {
-    font-size: 0.65rem;
-    color: var(--db-subnav-border);
-}
-
-/* Save/switch/close actions share one spacing wrapper for stable ordering. */
 .ob-subnav-nav .ob-subnav-item:has(.ob-subnav-save-btn) {
     display: flex;
     align-items: center;
@@ -963,12 +904,7 @@ body {
 }
 
 @media (max-width: 1199.98px) {
-    #obBreadcrumbWrap {
-        display: none !important;
-    }
-
     .ob-subnav-resume-btn .ob-subnav-label,
-    .ob-subnav-switch-btn .ob-subnav-label,
     .ob-subnav-close-btn .ob-subnav-label,
     .ob-subnav-save-btn .ob-subnav-label {
         position: absolute;
@@ -1181,12 +1117,10 @@ body {
 }
 
 @media (max-width: 767.98px) {
-    /* The desktop L2 row is intentionally one line, but its four workspace
-       links, breadcrumb and domain actions total about 883px. On a phone the
-       breadcrumb repeats the active L2 state, so remove it and its spacer;
-       keep every navigation/action target as a compact, titled icon. This
-       avoids horizontal scrolling, which would clip Bootstrap dropdowns. */
-    .ob-subnav-breadcrumb-wrap,
+    /* The desktop L2 row is intentionally one line, but its workspace links and
+       domain actions are wide. On a phone, drop the spacer and keep every
+       navigation/action target as a compact, titled icon. This avoids
+       horizontal scrolling, which would clip Bootstrap dropdowns. */
     .ob-subnav-flex-spacer {
         display: none !important;
     }
@@ -1225,14 +1159,15 @@ body {
         transform: none;
     }
 
-    .ob-subnav-ordinal {
+    .ob-subnav-save-kbd,
+    .ob-subnav-crumb-sep {
         display: none;
     }
 
     .ob-subnav-link,
     .ob-subnav-resume-btn,
     .ob-subnav-save-btn,
-    .ob-subnav-switch-btn,
+    .ob-subnav-version-crumb,
     .ob-subnav-close-btn {
         justify-content: center;
         padding-inline: 0.5rem;
