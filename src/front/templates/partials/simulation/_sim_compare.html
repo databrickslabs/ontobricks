@@ -244,6 +244,30 @@
                     </div>
                 </div>
             </div>
+            <div class="d-flex flex-column flex-shrink-0" id="simEvalInsights">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <div class="small fw-semibold text-truncate" id="simEvalInsightsTitle">
+                        <i class="bi bi-lightbulb me-1"></i>Business insights
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                            id="simEvalReportBtn" disabled>
+                        <i class="bi bi-arrows-fullscreen me-1"></i>Open report
+                    </button>
+                </div>
+                <div class="sim-eval-output" aria-labelledby="simEvalInsightsTitle">
+                    <div class="small text-muted d-none" id="simEvalInsightsStatus" role="status">
+                        <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span><span data-role="status-text">Analysing…</span>
+                    </div>
+                    <details class="sim-eval-steps d-none" id="simEvalInsightsSteps" open>
+                        <summary class="small text-muted">Thinking process <span data-role="count"></span></summary>
+                        <ol class="sim-eval-step-list small mb-0" data-role="list"></ol>
+                    </details>
+                    <div class="alert alert-danger small py-2 mb-0 d-none" id="simEvalInsightsError" role="alert"></div>
+                    <div class="oc-md sim-eval-answer" id="simEvalInsightsOutput" aria-live="polite">
+                        <p class="text-muted small mb-0">Business insights appear here once both answers are ready.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     </div>

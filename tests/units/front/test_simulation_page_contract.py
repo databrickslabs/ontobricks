@@ -467,9 +467,24 @@ def test_compare_evaluate_pane_has_prompt_and_two_side_by_side_outputs():
         assert f'id="{element}"' in partial, element
     assert partial.count('class="col-12 col-lg-6') == 2
     # Answers are rendered Markdown (shared .oc-md), not raw text areas.
-    assert partial.count('class="oc-md sim-eval-answer"') == 2
+    assert partial.count('class="oc-md sim-eval-answer"') == 3  # Live, Sandbox, Insights
     assert 'id="simEvalLiveOutput"' in partial and "<textarea" not in partial.split('id="simEvalHint"')[1]
-    assert partial.count("Thinking process") == 2
+    assert partial.count("Thinking process") == 3
+
+
+def test_compare_evaluate_has_business_insights_pane_below_both_answers():
+    partial = _read(FRONT / "templates/partials/simulation/_sim_compare.html")
+    for element in (
+        "simEvalInsightsOutput",
+        "simEvalInsightsError",
+        "simEvalInsightsSteps",
+        "simEvalInsightsStatus",
+    ):
+        assert f'id="{element}"' in partial, element
+    # Full-width block after the Live | Sandbox row, not inside it.
+    assert partial.index('id="simEvalSandboxOutput"') < partial.index('id="simEvalInsights"')
+    assert "bi-lightbulb" in partial
+    assert partial.count('class="col-12 col-lg-6') == 2
 
 
 def test_compare_graph_sources_sit_above_the_tabs():
@@ -511,6 +526,49 @@ def test_evaluate_asks_both_graphs_statelessly_via_graph_chat():
     # Enter submits the prompt; Shift+Enter keeps a newline.
     assert "e.key === 'Enter' && !e.shiftKey" in js
     assert "SimulationEvaluate.refresh()" in _read(FRONT / "static/simulation/js/simulation-compare.js")
+
+
+def test_evaluate_runs_insights_only_when_both_answers_succeed():
+    js = _read(FRONT / "static/simulation/js/simulation-evaluate.js")
+    assert "'/dtwin/assistant/insights/stream'" in js
+    assert "live.ok && sandbox.ok" in js
+    assert "Insights need both answers." in js
+    # Insights reuse the SSE client and the shared step/finish renderers.
+    assert "this._sse(" in js
+    assert "this._step('insights', event)" in js
+    assert "this._finish('insights'" in js
+    # Ask both stays busy until the insights run settles.
+    assert "if (seq === this._seq) this._setBusy(false);" in js
+    assert "innerHTML = text" not in js
+
+
+def test_evaluate_report_modal_is_included_on_the_simulation_page():
+    html = _read(PAGE)
+    modal = _read(FRONT / "templates/partials/simulation/_sim_insights_report_modal.html")
+    assert 'partials/simulation/_sim_insights_report_modal.html' in html
+    assert 'id="simEvalReportModal"' in modal
+    assert 'id="simEvalReportBody"' in modal
+    assert 'id="simEvalReportPrintBtn"' in modal
+    assert 'data-bs-dismiss="modal"' in modal
+    assert 'modal-xl' in modal
+    assert 'bi-file-earmark-pdf' in modal
+
+
+def test_evaluate_opens_a_printable_report_after_insights_succeed():
+    partial = _read(FRONT / "templates/partials/simulation/_sim_compare.html")
+    js = _read(FRONT / "static/simulation/js/simulation-evaluate.js")
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert 'id="simEvalReportBtn"' in partial
+    assert "disabled" in partial.split('id="simEvalReportBtn"', 1)[1][:80]
+    assert "bootstrap.Modal.getOrCreateInstance" in js
+    assert "window.print()" in js
+    assert "/simulation/${encodeURIComponent(" in js
+    assert "SimulationCompare.data" in js
+    assert "sim-eval-report-printing" in css
+    assert "@media print" in css
+    assert "Hypothetical facts" in js
+    assert "Graph comparison" in js
+    assert "Analysis" in js
 
 
 def test_evaluate_css_fills_the_tab_height():

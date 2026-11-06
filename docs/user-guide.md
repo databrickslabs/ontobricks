@@ -1270,6 +1270,13 @@ limited to about 400 entities and 1500 links, changes first. Unlike the
 Results tab (sandbox before vs after), Compare also shows what the live graph
 did since the run: re-run the scenario to refresh the sandbox.
 
+**Evaluate.** The **Evaluate** tab on the same page asks Graph Chat the same
+question against the live graph and the sandbox. When both answers succeed, a
+business-insights agent comments on the difference. **Open report** builds a
+printable summary: the scenario's hypothetical facts, the Compare metrics and
+graph (if you already ran Compare), both answers, and the analysis. **Export
+PDF** opens the browser print dialog — choose Save as PDF.
+
 **Isolation.** The sandbox store refuses to write to any table that is not a
 simulation sandbox, so a run cannot touch the built graph, its inferences or
 its caches. Re-running a scenario rebuilds its sandbox from the current live

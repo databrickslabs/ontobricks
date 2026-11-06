@@ -1,0 +1,136 @@
+================================================================================
+## Add Business insights agent to Simulation Compare → Evaluate
+================================================================================
+
+Context: The Evaluate tab showed the Live and Sandbox answers side by side, but
+left the reader to work out what the scenario changed. A dedicated agent now
+compares both answers against the scenario's fact changes and writes four
+short business-oriented sections into a third pane under the two answers. It
+runs only when both answers succeed. Its tools are read-only and each call
+names the graph it targets (live or sandbox).
+
+Changes:
+
+1. src/agents/agent_simulation_insights/engine.py
+   One-shot agent loop (`run_agent`, `@trace_agent`), system prompt with four
+   required headings, answer truncation (6000 chars), user-message assembly
+   from the prompt, both answers and the scenario facts.
+2. src/agents/agent_simulation_insights/tools.py
+   Four read-only Graph Chat wrappers (`list_entity_types`, `describe_entity`,
+   `query_graphql`, `get_entity_context`), each with a required `graph`
+   argument. `graph_view()` routes live (no scenario) and sandbox (scenario,
+   inferred). No mutation tool and no SPARQL.
+3. src/agents/agent_simulation_insights/AgentResult.py
+   Result dataclass (success, reply, steps, iterations, error, usage).
+4. src/agents/agent_simulation_insights/__init__.py
+   Package exports.
+5. src/api/routers/internal/dtwin.py
+   New `POST /dtwin/assistant/insights/stream` (SSE: step / done / error).
+   Validates the body, loads the scenario from the simulation registry
+   (`Simulation.get`, never the browser), and is stateless (no history read or
+   write). Helpers: `_insights_fields`, `_insights_scenario`,
+   `_insights_sse_response`.
+6. src/front/templates/partials/simulation/_sim_compare.html
+   Full-width "Business insights" pane under the Live | Sandbox row (status,
+   thinking steps, error, Markdown answer; ids `simEvalInsights*`).
+7. src/front/static/simulation/js/simulation-evaluate.js
+   Generic `_sse()` client shared by the chat and insights streams; `run()`
+   starts insights only when both Live and Sandbox succeed, otherwise shows
+   "Insights need both answers." Ask both stays busy until insights settle.
+   The pane-id map now includes `insights`.
+8. tests/eval/datasets/agent_simulation_insights/baseline.jsonl
+   20 baseline rows: 8 happy, 3 identical, 4 ambiguous, 3 adversarial,
+   2 synthetic.
+9. tests/eval/judges/simulation_insights.py
+   Dry-run dataset-contract judge (input well-formed, patches parse as `Patch`,
+   section headings and graph list valid).
+10. tests/eval/run_agent_simulation_insights.py
+    Eval runner (dry run; `--live` exits with an explicit "not wired" error).
+11. tests/eval/thresholds.yaml
+    `simulation_insights` threshold block.
+12. tests/units/agents/test_simulation_insights_tools.py
+    Read-only tool surface, required graph argument, routing, invalid graph.
+13. tests/units/agents/test_simulation_insights_engine.py
+    Truncation, user message, happy path, tool routing, tool feedback, final
+    iteration without tools, LLM / empty / iteration-cap errors, on_event.
+14. tests/units/api/test_dtwin_insights_stream.py
+    Input validation, draft and unknown scenarios, scenario read server-side
+    (body ignored), stateless history, happy and error SSE events.
+15. tests/units/front/test_simulation_page_contract.py
+    Insights pane markup and placement, auto-run gate, pane counts updated
+    from two to three.
+
+Notes:
+- Live scoring is not wired yet: the dry-run validates the dataset contract
+  only. The MLflow eval run and the live judge scores are still pending
+  (see .planning/simulation-insights/SPEC.md, gitignored).
+- The UI was not exercised in a browser; coverage is the contract tests plus a
+  JS syntax check.
+
+Modified files:
+- src/agents/agent_simulation_insights/__init__.py (new)
+- src/agents/agent_simulation_insights/AgentResult.py (new)
+- src/agents/agent_simulation_insights/engine.py (new)
+- src/agents/agent_simulation_insights/tools.py (new)
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/static/simulation/js/simulation-evaluate.js
+- tests/eval/datasets/agent_simulation_insights/baseline.jsonl (new)
+- tests/eval/judges/simulation_insights.py (new)
+- tests/eval/run_agent_simulation_insights.py (new)
+- tests/eval/thresholds.yaml
+- tests/units/agents/test_simulation_insights_tools.py (new)
+- tests/units/agents/test_simulation_insights_engine.py (new)
+- tests/units/api/test_dtwin_insights_stream.py (new)
+- tests/units/front/test_simulation_page_contract.py
+
+Test results:
+- `uv run --frozen pytest -q -m "not scenario"`: 10069 passed, 326 skipped,
+  8 deselected, 0 failed.
+- `uv run --frozen python tests/eval/run_agent_simulation_insights.py`:
+  schema_valid=1.000 n=20 threshold=1.000 (exit 0).
+- `node --check` on simulation-evaluate.js: OK.
+
+
+================================================================================
+## Add printable Evaluate business-insights report
+================================================================================
+
+Context: After Ask both, the insights pane was a short analysis only. Users
+needed a full summary they can open in a modal and export as PDF: hypothetical
+facts, Compare overlay, both answers, then the agent narrative.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_insights_report_modal.html
+   Bootstrap xl modal with Close and Export PDF (print).
+2. src/front/templates/partials/simulation/_sim_compare.html
+   Open report button next to the insights title (disabled until insights
+   succeed).
+3. src/front/templates/simulation.html
+   Include the report modal.
+4. src/front/static/simulation/js/simulation-evaluate.js
+   Compose the report from GET /simulation/{id}, SimulationCompare.data /
+   canvas snapshot, stored answers, and the agent Markdown. Export PDF calls
+   window.print() with a print class on html.
+5. src/front/static/simulation/css/simulation.css
+   Report layout and @media print rules that isolate the modal.
+6. tests/units/front/test_simulation_page_contract.py
+   Modal include, Open report, print, and composed sections.
+7. docs/user-guide.md
+   Evaluate tab and printable report.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_insights_report_modal.html
+- src/front/templates/partials/simulation/_sim_compare.html
+- src/front/templates/simulation.html
+- src/front/static/simulation/js/simulation-evaluate.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+
+Test results:
+- `uv run --frozen pytest -q -m "not scenario"`: 10071 passed, 326 skipped,
+  8 deselected, 0 failed.
+- `node --check` on simulation-evaluate.js: OK.
+

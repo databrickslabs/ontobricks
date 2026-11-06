@@ -446,6 +446,85 @@ a.sim-uri-link:focus-visible {
     overflow-wrap: anywhere;
 }
 
+.sim-eval-report h2 {
+    font-size: 1.05rem;
+    margin: 1.25rem 0 0.5rem;
+}
+
+.sim-eval-report h2:first-child {
+    margin-top: 0;
+}
+
+.sim-eval-report-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.sim-eval-report-kpis dt {
+    font-size: 0.75rem;
+    color: var(--db-text-muted);
+    margin: 0;
+}
+
+.sim-eval-report-kpis dd {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.sim-eval-report-graph {
+    width: 100%;
+    max-height: 360px;
+    object-fit: contain;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    background: var(--db-canvas-warm);
+}
+
+.sim-eval-report-answers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+@media (max-width: 767.98px) {
+    .sim-eval-report-answers,
+    .sim-eval-report-kpis {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media print {
+    html.sim-eval-report-printing body > *:not(.modal) {
+        display: none !important;
+    }
+    html.sim-eval-report-printing .modal {
+        position: static !important;
+        display: block !important;
+        opacity: 1 !important;
+        overflow: visible !important;
+    }
+    html.sim-eval-report-printing .modal-dialog {
+        max-width: 100% !important;
+        margin: 0 !important;
+        transform: none !important;
+    }
+    html.sim-eval-report-printing .modal-header,
+    html.sim-eval-report-printing .modal-footer,
+    html.sim-eval-report-printing .modal-backdrop {
+        display: none !important;
+    }
+    html.sim-eval-report-printing .modal-body {
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+    html.sim-eval-report-printing .sim-eval-report-graph {
+        max-height: none;
+        break-inside: avoid;
+    }
+}
+
 @media (max-width: 991.98px) {
     .sim-compare-layout {
         flex-direction: column;

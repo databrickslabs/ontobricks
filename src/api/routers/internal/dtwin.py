@@ -2421,6 +2421,176 @@ async def dtwin_assistant_chat_stream(
     )
 
 
+def _insights_fields(data: dict) -> dict:
+    """Validate and normalise the Evaluate business-insights request body."""
+    fields = {
+        "message": str(data.get("message") or "").strip(),
+        "live_answer": str(data.get("live_answer") or "").strip(),
+        "sandbox_answer": str(data.get("sandbox_answer") or "").strip(),
+        "simulation_id": str(data.get("simulation_id") or "").strip(),
+    }
+    if not fields["message"]:
+        raise ValidationError("No message provided")
+    if not fields["live_answer"] or not fields["sandbox_answer"]:
+        raise ValidationError("Insights need both the live and the sandbox answers")
+    if not fields["simulation_id"]:
+        raise ValidationError("Pick a ready scenario to compare")
+    fields["include_inferred"], _ = TwinGraphAccess.source_from_payload(data)
+    return fields
+
+
+def _insights_scenario(domain, settings, simulation_id: str) -> dict:
+    """Load the scenario facts from the registry; the browser never supplies them."""
+    from back.objects.simulation import Simulation
+
+    row = Simulation(domain, settings).get(simulation_id)
+    if row.get("status") != "ready":
+        raise ValidationError("Run the simulation before asking for insights")
+    spec = row.get("spec") or {}
+    return {
+        "label": row.get("label") or spec.get("label") or "",
+        "description": spec.get("description") or "",
+        "patches": spec.get("patches") or [],
+    }
+
+
+def _insights_sse_response(run_kwargs: dict):
+    """Run the insights agent in a worker thread and stream its events as SSE."""
+    import asyncio
+    import json as _json
+
+    from fastapi.responses import StreamingResponse
+    from agents.agent_simulation_insights import run_agent as run_insights_agent
+    from agents.agent_simulation_insights import AgentResult
+    from agents.engine_base import AgentStep
+
+    loop = asyncio.get_event_loop()
+    event_queue: asyncio.Queue = asyncio.Queue()
+
+    def _on_event(step: AgentStep) -> None:
+        """Forward an AgentStep from the sync thread to the async generator."""
+        asyncio.run_coroutine_threadsafe(event_queue.put(step), loop).result(timeout=10)
+
+    async def _run_agent_task() -> None:
+        try:
+            result = await asyncio.to_thread(
+                run_insights_agent, on_event=_on_event, **run_kwargs
+            )
+            await event_queue.put(("done", result))
+        except Exception as exc:
+            await event_queue.put(("error", str(exc)))
+
+    agent_task = asyncio.create_task(_run_agent_task())
+
+    def _sse(payload: dict) -> str:
+        return "data: " + _json.dumps(payload) + "\n\n"
+
+    def _final_event(kind: str, payload) -> str:
+        if kind == "done" and isinstance(payload, AgentResult) and payload.success:
+            return _sse({
+                "type": "done",
+                "reply": payload.reply,
+                "usage": payload.usage,
+                "iterations": payload.iterations,
+            })
+        if kind == "error":
+            error_text = payload
+        else:
+            error_text = payload.error or "Business insights failed"
+        return _sse({"type": "error", "message": error_text})
+
+    async def _generate():
+        try:
+            while True:
+                item = await event_queue.get()
+                if isinstance(item, tuple):
+                    yield _final_event(*item)
+                    break
+                if isinstance(item, AgentStep):
+                    yield _sse({
+                        "type": "step",
+                        "step_type": item.step_type,
+                        "tool_name": item.tool_name,
+                        "content": item.content,
+                        "duration_ms": item.duration_ms,
+                    })
+        finally:
+            if not agent_task.done():
+                agent_task.cancel()
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.post("/assistant/insights/stream")
+async def dtwin_assistant_insights_stream(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Stream the Compare → Evaluate business-insights agent using Server-Sent Events.
+
+    Called once both the Live and the Sandbox Graph Chat answers succeed. The
+    scenario (label, description, fact changes) is read from the simulation
+    registry, never from the request body. The turn is stateless: neither the
+    saved Graph Chat history nor the session cache is touched.
+
+    Event shapes::
+
+        data: {"type": "step",  "step_type": "tool_call",   "tool_name": "...", "content": "..."}
+        data: {"type": "step",  "step_type": "tool_result", "tool_name": "...", "duration_ms": 123}
+        data: {"type": "done",  "reply": "...", "usage": {...}, "iterations": N}
+        data: {"type": "error", "message": "..."}
+    """
+    import os
+
+    data = await request.json()
+    fields = _insights_fields(data)
+
+    domain = get_domain(session_mgr)
+    scenario = _insights_scenario(domain, settings, fields["simulation_id"])
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(domain, settings)
+    reg = DigitalTwin.resolve_registry(session_mgr, settings)
+    app_port = os.environ.get("DATABRICKS_APP_PORT") or os.environ.get("PORT") or "8000"
+    domain_name = _chat_resolve_domain_name(domain)
+
+    logger.info(
+        "Simulation insights/stream: simulation=%s, domain=%s, endpoint=%s",
+        fields["simulation_id"],
+        domain_name,
+        llm_endpoint,
+    )
+
+    return _insights_sse_response({
+        "host": host,
+        "token": token,
+        "endpoint_name": llm_endpoint,
+        "endpoint_kind": llm_endpoint_kind,
+        "base_url": f"http://localhost:{app_port}",
+        "domain_name": domain_name,
+        "registry_params": {
+            "registry_catalog": reg.get("catalog") or "",
+            "registry_schema": reg.get("schema") or "",
+            "registry_volume": reg.get("volume") or "",
+        },
+        "session_cookies": dict(request.cookies or {}),
+        "session_headers": _chat_forwarded_headers(request),
+        "message": fields["message"],
+        "live_answer": fields["live_answer"],
+        "sandbox_answer": fields["sandbox_answer"],
+        "include_inferred": fields["include_inferred"],
+        "simulation_id": fields["simulation_id"],
+        "scenario": scenario,
+    })
+
+
 @router.get("/assistant/history")
 async def dtwin_assistant_history_get(
     session_mgr: SessionManager = Depends(get_session_manager),

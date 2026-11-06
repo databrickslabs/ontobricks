@@ -94,3 +94,13 @@ mapping_pge:
   # run_agent_mapping_pge_metric.py against datasets/.../metric_view.jsonl.
   metric_view_sql_correctness: 0.95
   aggregate: 0.90
+
+simulation_insights:
+  schema_valid: 1.00
+  section_completeness: 1.00
+  cites_scenario_fact: 0.85
+  no_invented_diff: 0.90
+  tool_graph_valid: 1.00
+  latency_p95_seconds: 45.0
+  cost_per_call_usd: 0.06
+  aggregate: 0.82
