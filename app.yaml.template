@@ -115,6 +115,12 @@ env:
   # MLflow — ensure traces are persisted to the workspace tracking server.
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
+  # ── Graph Chat (Digital Twin assistant) ───────────────────────
+  # Output-token budget per LLM call, including the model's reasoning.
+  # Mirrors the default in src/shared/config/settings.py; raise it when
+  # answers come back as "I couldn't display that answer".
+  - name: ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS
+    value: "8192"
   # ── Knowledge-graph analytics ─────────────────────────────────
   # These mirror the defaults in src/shared/config/settings.py. They are
   # spelled out here so an admin can retune a deployed app without a code

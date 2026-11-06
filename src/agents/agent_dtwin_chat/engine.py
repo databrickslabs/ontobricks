@@ -33,6 +33,8 @@ logger = get_logger(__name__)
 
 MAX_ITERATIONS = 12
 LLM_TIMEOUT = 120
+# Matches ``Settings.dtwin_chat_max_tokens``; the routes pass the configured value.
+DEFAULT_MAX_TOKENS = 8192
 
 _TRACE_NAME = "dtwin_chat"
 _UNREADABLE_REPLY = "I couldn't display that answer. Please try again."
@@ -198,6 +200,7 @@ def run_agent(
     on_step: Optional[Callable[[str], None]] = None,
     on_event: Optional[Callable[["AgentStep"], None]] = None,
     describe_depth: int = 1,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> AgentResult:
     """Run one turn of the Graph Chat agent.
 
@@ -220,6 +223,8 @@ def run_agent(
         user_message: The user's new natural-language message.
         conversation_history: Prior ``{role, content}`` messages.
         on_step: Optional progress callback (unused but kept for parity).
+        max_tokens: Output-token budget per LLM call, including any
+            reasoning the model does before the answer.
     """
     logger.info(
         "===== DTWIN CHAT START ===== endpoint=%s, domain=%s, base_url=%s",
@@ -273,7 +278,7 @@ def run_agent(
                 endpoint_name,
                 messages,
                 tools=send_tools,
-                max_tokens=2048,
+                max_tokens=max_tokens,
                 temperature=0.1,
                 timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,
