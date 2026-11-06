@@ -47,6 +47,11 @@ def test_partial_has_required_ids():
         'class="nav nav-tabs ob-tabs nav-fill"',
     ):
         assert token in html, token
+    # Count badges live in the tab headers (same pattern as Data Quality).
+    assert 'id="designChecksSummary"' not in html
+    assert html.index('id="dc-tab-error"') < html.index('id="dcBadgeError"') < html.index('id="dc-pane-error"')
+    assert html.index('id="dc-tab-warning"') < html.index('id="dcBadgeWarning"') < html.index('id="dc-pane-warning"')
+    assert html.index('id="dc-tab-info"') < html.index('id="dcBadgeInfo"') < html.index('id="dc-pane-info"')
 
 
 def test_init_hook_calls_module():

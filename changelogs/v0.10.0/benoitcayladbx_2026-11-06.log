@@ -478,3 +478,82 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
 
 Tests: `uv run --frozen pytest -q tests/units/settings/test_github_settings.py tests/units/front/test_settings_github_loading.py` → 17 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no GitHub-settings regressions).
+
+================================================================================
+## Move Sanity Checks count badges into tab headers
+================================================================================
+
+Context: Ontology → Sanity Checks showed error/warning/info count badges in a
+separate summary strip above the tabs. The badges belong next to each severity
+label, matching the Data Quality tab-header count pattern.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design_checks.html
+   Remove the summary strip; place count badges inside Errors / Warnings / Info tab headers.
+2. src/front/static/ontology/js/ontology-design-checks.js
+   Update badge text to numeric counts only (labels live on the tabs).
+3. src/front/static/ontology/css/ontology-design-checks.css
+   Drop unused `.dc-summary` styles.
+4. tests/units/front/test_ontology_design_checks_contract.py
+   Assert badges sit inside their tab buttons and the summary strip is gone.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design_checks.html
+- src/front/static/ontology/js/ontology-design-checks.js
+- src/front/static/ontology/css/ontology-design-checks.css
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py` → 9 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no Sanity Checks regressions).
+
+================================================================================
+## Remove count text from Sanity Checks tab badges
+================================================================================
+
+Context: The severity badges in the Errors / Warnings / Info tab headers showed
+numeric counts. Per user request, the count text is removed and the badges are
+kept as empty colour pills. The JS that wrote the counts is removed so it does
+not repopulate them.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design_checks.html
+   Empty the three tab badges (no text), mark them aria-hidden, and make them round pills.
+2. src/front/static/ontology/js/ontology-design-checks.js
+   Remove the badge-count update from `_render` (and the now-unused `summary` read).
+3. tests/units/front/test_ontology_design_checks_contract.py
+   Assert the count ids are gone and the three empty pills sit inside their tab buttons.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design_checks.html
+- src/front/static/ontology/js/ontology-design-checks.js
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py` → 9 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no Sanity Checks regressions).
+
+================================================================================
+## Restore Sanity Checks count badges in tab headers
+================================================================================
+
+Context: The previous change emptied the Errors / Warnings / Info tab badges,
+which removed the counts the user wants visible. Restores the numeric counts
+in the tab badges, with the JS updating them on each refresh.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_design_checks.html
+   Restore the `dcBadgeError` / `dcBadgeWarning` / `dcBadgeInfo` count badges inside the tab headers.
+2. src/front/static/ontology/js/ontology-design-checks.js
+   Restore the `setBadge` count update in `_render`.
+3. tests/units/front/test_ontology_design_checks_contract.py
+   Assert the count ids are present and sit inside their tab buttons.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_design_checks.html
+- src/front/static/ontology/js/ontology-design-checks.js
+- tests/units/front/test_ontology_design_checks_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py` → 9 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no Sanity Checks regressions).

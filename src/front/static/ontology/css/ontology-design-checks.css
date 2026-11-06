@@ -14,14 +14,6 @@
     overflow-y: auto;
 }
 
-.dc-summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    background: var(--db-surface-warm);
-}
-
 .dc-findings-list {
     padding: 0.75rem 1rem 1rem;
 }

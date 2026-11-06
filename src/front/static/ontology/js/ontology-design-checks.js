@@ -72,13 +72,13 @@ window.DesignChecksModule = {
 
     _render: function (data) {
         const summary = data.summary || { error: 0, warning: 0, info: 0 };
-        const setBadge = function (id, count, label) {
+        const setBadge = function (id, count) {
             const el = document.getElementById(id);
-            if (el) el.textContent = count + ' ' + label;
+            if (el) el.textContent = String(count);
         };
-        setBadge('dcBadgeError', summary.error || 0, 'errors');
-        setBadge('dcBadgeWarning', summary.warning || 0, 'warnings');
-        setBadge('dcBadgeInfo', summary.info || 0, 'info');
+        setBadge('dcBadgeError', summary.error || 0);
+        setBadge('dcBadgeWarning', summary.warning || 0);
+        setBadge('dcBadgeInfo', summary.info || 0);
 
         const grouped = { error: [], warning: [], info: [] };
         (data.findings || []).forEach(function (finding) {
