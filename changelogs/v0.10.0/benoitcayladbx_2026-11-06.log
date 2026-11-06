@@ -433,3 +433,18 @@ Tests:
 - Autofix unit + contract suite: 50 passed.
 - `uv run --frozen python tests/eval/run_agent_design_fixer.py`: schema_valid=1.000 n=21.
 - `uv run --frozen pytest -q -m "not scenario"`: 10003 passed, 124 failed, 326 skipped. All failures are Node harnesses (`libsimdjson.29.dylib` missing) — environmental, not caused by this change. Architecture size/class-per-file gates pass after AgentResult extract and Editor helper extract.
+
+## Rewrite uv.lock package URLs onto the public CDN
+
+Context: Deploy pre-flight rejected the committed lock because it pinned every package to `pypi-proxy.dev.databricks.com` (3226 URLs). The Databricks Apps container installs from the lock verbatim and the proxy cold-caches wheels, which crashes the app ~45s after start. Public `pypi.org` is blocked on this machine via `/etc/hosts` (`127.0.0.1`), so a clean `UV_INDEX_URL=https://pypi.org/simple uv lock` was not possible. Per the chosen workaround, registry and package URLs were rewritten in place to `pypi.org/simple` and `files.pythonhosted.org` while keeping hashes and sizes unchanged.
+
+Changes:
+
+1. uv.lock
+   Replaced all `pypi-proxy.dev.databricks.com` registry/package URLs with `https://pypi.org/simple` and `https://files.pythonhosted.org/packages/...` (3226 refs → 0 remaining). Hashes and sizes untouched.
+
+Modified files:
+- uv.lock
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `UV_INDEX_URL=https://pypi.org/simple uv lock --check` → exit 0. Spot-check wheel download from files.pythonhosted.org → HTTP 200. `uv run --frozen pytest -q -m "not scenario"` → 10003 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before).
