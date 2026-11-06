@@ -580,6 +580,110 @@
     font-weight: 500;
 }
 
+/* ---------------------------------------------------
+   Thinking process (full, collapsible agent trace)
+--------------------------------------------------- */
+
+.graph-chat-thinking {
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px dashed #e2e8f0;
+    font-size: 0.76rem;
+    color: var(--db-text-secondary);
+}
+
+.graph-chat-thinking-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+.graph-chat-thinking-title::-webkit-details-marker { display: none; }
+.graph-chat-thinking-title:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+.graph-chat-thinking[open] > .graph-chat-thinking-title {
+    background: #EEF2FF;
+    color: #3730A3;
+}
+
+.graph-chat-thinking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.graph-chat-step {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+.graph-chat-step-title {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.55rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    background: #F8FAFC;
+}
+.graph-chat-step-title::-webkit-details-marker { display: none; }
+.graph-chat-step-title:hover { background: #e2e8f0; }
+
+.graph-chat-step-title code {
+    font-size: 0.72rem;
+    padding: 0;
+    background: transparent;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.graph-chat-step-meta {
+    margin-left: auto;
+    color: var(--db-text-secondary);
+    font-style: italic;
+    white-space: nowrap;
+}
+
+.graph-chat-step-section {
+    padding: 0.35rem 0.55rem 0.45rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.graph-chat-step-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--db-text-secondary);
+    margin-bottom: 0.2rem;
+}
+
+.graph-chat-step-pre {
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    max-height: 320px;
+    overflow: auto;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 4px;
+}
+
 
 /* ---------------------------------------------------
    Pending action card (Confirm / Cancel before invoking a UC Action)

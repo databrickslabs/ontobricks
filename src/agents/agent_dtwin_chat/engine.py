@@ -370,9 +370,11 @@ def run_agent(
                 )
                 tool_elapsed = int((time.time() - tool_t0) * 1000)
 
+                # Full result, not truncated: the Graph Chat UI shows the
+                # complete thinking trace (the LLM already gets the full payload).
                 result_step = AgentStep(
                     step_type="tool_result",
-                    content=tool_result[:500],
+                    content=tool_result,
                     tool_name=tool_name,
                     duration_ms=tool_elapsed,
                 )

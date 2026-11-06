@@ -615,3 +615,90 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
 
 Tests: `uv run --frozen pytest -q -p no:cacheprovider` on the design-checks, autofix propose, autofix endpoint and contract tests → 32 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10010 passed, 124 failed, 326 skipped (same Node/libsimdjson environmental failures; none in Sanity Checks or Auto-fix).
+
+================================================================================
+## Graph Chat: full, collapsible thinking process
+================================================================================
+
+Context: Graph Chat only showed the current tool name in a status line and a
+"Tools used" list, with tool results cut to 500 characters on the backend. The
+user wants the whole reasoning trace visible in the chat, with expand/collapse.
+The trace now shows every tool call (input arguments) and its full result, and
+stays on top of the final answer.
+
+Changes:
+
+1. src/agents/agent_dtwin_chat/engine.py
+   `tool_result` steps carry the full tool output instead of `[:500]`. The LLM
+   payload was already untruncated; only the observable step content changes.
+2. src/front/static/query/js/query-chat.js
+   Streaming bubble builds a collapsible "Thinking process (N tool calls)"
+   block, open by default. Each tool call is its own expandable block with
+   pretty-printed Input and Result sections and the duration. Blocks fill in
+   live as SSE events arrive. The block is kept on success and on error. All
+   tool output is rendered via `textContent` (no HTML injection).
+3. src/front/static/query/css/query-chat.css
+   Styles for `.graph-chat-thinking`, `.graph-chat-step*` (scrollable `pre`,
+   dark code panel).
+4. tests/units/agents/test_agent_dtwin_chat_engine.py
+   New test: a >500-char tool result is kept whole in the trace step.
+
+Limitation: the thinking trace is live-only. It is not persisted with the saved
+Graph Chat history, same as the existing "Tools used" list, so it is not shown
+again after a page reload.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 9993 passed, 142 failed,
+326 skipped, 8 deselected. The Graph Chat tests (`test_query_chat_*`,
+`test_dtwin_assistant_chat`, `test_dtwin_chat_persist_flag`, engine tests)
+pass. The failures are in ontology/DQ/wizard front-end contract tests and in
+Node-based tests. Node cannot load `libsimdjson.29.dylib` on this machine, and
+these areas have uncommitted work in the tree. The new engine test passes.
+`query-chat.js` parses (checked with esprima; `?.` unsupported by esprima, same
+as HEAD). Not verified in a live browser.
+
+================================================================================
+## Studio Business View filter and ontology group collapse
+================================================================================
+
+Context: After OntoViz / Business Views design section removal, Studio needs an
+in-canvas Business View dropdown to filter the map, plus ontology-group
+collapse/expand so large domains stay readable. Creating a Business View from
+selection must stay on Studio instead of navigating to the deleted design
+section.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Add Studio view state (`_studioActiveView`, `_studioViewLayout`),
+   `refreshStudioViewSelect` / `applyStudioView` / `wireStudioViewControls` /
+   `flushStudioLayoutBeforeSave`, Business View node/link filtering in
+   `initOntologyMap`, and ontology-group collapse with synthetic
+   `__group__*` nodes, toggles, and layout persistence (`collapsedGroups` in
+   map-layout / view visibility). `_createMapBusinessView` stays on Studio.
+2. src/front/static/ontology/css/ontology-map.css
+   Styles for `.studio-view-select`, `.studio-group-toggle`, and
+   `.map-group-node .map-group-circle`.
+3. src/front/static/ontology/js/ontology-groups.js
+   Call `window.refreshStudioGroups()` after successful save/delete.
+4. tests/units/front/test_ontology_map_external_badge.py
+   Expect badge filter on `entityNodeElements` (group nodes excluded).
+5. tests/units/front/test_ontology_map_multi_select.py
+   Assert Studio stay-on-canvas BV creation; update shared-helper endpoint
+   counts for `applyStudioView`.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-groups.js
+- tests/units/front/test_ontology_map_external_badge.py
+- tests/units/front/test_ontology_map_multi_select.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/front/test_ontology_map_external_badge.py tests/units/front/test_ontology_map_multi_select.py` → 34 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 9992 passed, 143 failed, 326 skipped (pre-existing Node/libsimdjson + already-removed design-section contracts; ontology-map assertions updated and green).

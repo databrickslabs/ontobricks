@@ -174,3 +174,63 @@ def test_normalize_reply_content_uses_non_technical_fallback(content):
     assert normalize_reply_content(content) == (
         "I couldn't display that answer. Please try again."
     )
+
+
+def test_run_agent_keeps_full_tool_result_in_trace_steps():
+    """The Graph Chat thinking trace must show the complete tool output."""
+    big_result = json.dumps({"rows": ["x" * 40] * 60})  # well over 500 chars
+    assert len(big_result) > 500
+
+    def llm_side_effect(*_args, **_kwargs):
+        if llm_side_effect.calls == 0:
+            llm_side_effect.calls += 1
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "tc1",
+                                    "function": {
+                                        "name": "list_entity_types",
+                                        "arguments": "{}",
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+        return {"choices": [{"message": {"content": "done"}}], "usage": {}}
+
+    llm_side_effect.calls = 0
+
+    def _dispatch(_handlers, _ctx, _tool_name, _arguments, *, trace_name=""):
+        return big_result
+
+    with (
+        patch(
+            "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+            side_effect=llm_side_effect,
+        ),
+        patch(
+            "agents.agent_dtwin_chat.engine.dispatch_tool",
+            side_effect=_dispatch,
+        ),
+    ):
+        result = run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="endpoint",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="list types",
+        )
+
+    result_steps = [s for s in result.steps if s.step_type == "tool_result"]
+    assert len(result_steps) == 1
+    assert result_steps[0].content == big_result
