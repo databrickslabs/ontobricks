@@ -87,3 +87,28 @@ def test_script_toggles_configuration_with_the_enable_switch(script):
         "$('githubDetails')?.classList.toggle('d-none', !$('githubEnabled').checked)"
         in script
     )
+
+
+def test_secret_dropdowns_reload_on_every_settings_load(script):
+    """Scope/key lists must refresh each visit — not only the first paint.
+
+    A one-shot ``loaded`` guard left the Token secret name stale after the
+    admin added a Databricks secret or revisited Settings → GitHub.
+    """
+    assert "if (!loaded)" not in script
+    assert "await loadScopes(g.token_secret_scope || '');" in script
+    assert "await loadKeys(g.token_secret_scope || '', g.token_secret_key || '');" in script
+
+
+def test_secret_name_has_refresh_control_like_neo4j(template, script):
+    """Token secret name gets its own refresh button; scope refresh cascades."""
+    assert 'id="btnRefreshGithubKeys"' in template
+    assert "btnRefreshGithubKeys" in script
+    assert "loadKeys($('githubSecretScope').value" in script
+    # Scope refresh must also refresh keys for the selected scope.
+    assert "btnRefreshGithubScopes" in script
+    refresh_scopes = script[
+        script.index("btnRefreshGithubScopes") : script.index("btnRefreshGithubKeys")
+    ]
+    assert "loadScopes" in refresh_scopes
+    assert "loadKeys" in refresh_scopes

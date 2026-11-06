@@ -82,9 +82,14 @@
         </div>
         <div class="col-md-6">
             <label for="githubSecretKey" class="form-label small fw-semibold mb-1">Token secret name</label>
-            <select class="form-select form-select-sm" id="githubSecretKey">
-                <option value="">— Select a key —</option>
-            </select>
+            <div class="input-group input-group-sm">
+                <select class="form-select form-select-sm" id="githubSecretKey">
+                    <option value="">— Select a key —</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary" id="btnRefreshGithubKeys" title="Refresh secret list">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
         </div>
         <div class="col-12">
             <div class="form-text small text-muted">

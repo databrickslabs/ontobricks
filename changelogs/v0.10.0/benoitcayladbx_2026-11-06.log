@@ -448,3 +448,33 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
 
 Tests: `UV_INDEX_URL=https://pypi.org/simple uv lock --check` → exit 0. Spot-check wheel download from files.pythonhosted.org → HTTP 200. `uv run --frozen pytest -q -m "not scenario"` → 10003 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before).
+
+================================================================================
+## Refresh GitHub token secret name dropdown on every load
+================================================================================
+
+Context: In Settings → GitHub, the Token secret name dropdown never picked up
+newly created Databricks secrets in the deployed app. A one-shot `loaded`
+guard skipped re-listing scopes/keys after the first visit, the scope refresh
+button did not cascade into keys, and there was no refresh control next to
+the secret name (unlike Neo4j settings).
+
+Changes:
+
+1. src/front/static/config/js/settings-github.js
+   Always re-list scopes and keys on each settings load; scope refresh now
+   also refreshes keys (preserving the current selection); wire a dedicated
+   secret-name refresh button.
+2. src/front/templates/partials/settings/_settings_github.html
+   Add a refresh button next to Token secret name, matching Neo4j.
+3. tests/units/front/test_settings_github_loading.py
+   Assert the one-shot guard is gone, the secret-name refresh control exists,
+   and scope refresh cascades into keys.
+
+Modified files:
+- src/front/static/config/js/settings-github.js
+- src/front/templates/partials/settings/_settings_github.html
+- tests/units/front/test_settings_github_loading.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q tests/units/settings/test_github_settings.py tests/units/front/test_settings_github_loading.py` → 17 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no GitHub-settings regressions).

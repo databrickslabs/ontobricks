@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!form) return; // panel not in the DOM (non-admin user)
 
     const $ = (id) => document.getElementById(id);
-    let loaded = false;
 
     document.addEventListener('sidebarSectionChanged', (e) => {
         if (e.detail && e.detail.section === 'github') load();
@@ -22,7 +21,17 @@ document.addEventListener('DOMContentLoaded', function () {
     $('btnSaveGithub')?.addEventListener('click', save);
     $('btnTestGithub')?.addEventListener('click', testConnection);
     $('btnSyncAllGithub')?.addEventListener('click', syncAll);
-    $('btnRefreshGithubScopes')?.addEventListener('click', () => loadScopes($('githubSecretScope').value));
+    $('btnRefreshGithubScopes')?.addEventListener('click', async () => {
+        const scope = $('githubSecretScope').value;
+        const key = $('githubSecretKey').value;
+        await loadScopes(scope);
+        await loadKeys($('githubSecretScope').value || scope, key);
+    });
+    $('btnRefreshGithubKeys')?.addEventListener('click', () => {
+        const scope = $('githubSecretScope').value;
+        if (!scope) return;
+        loadKeys(scope, $('githubSecretKey').value);
+    });
     $('githubSecretScope')?.addEventListener('change', () => loadKeys($('githubSecretScope').value, ''));
     $('githubEnabled')?.addEventListener('change', syncDetailsVisibility);
 
@@ -39,11 +48,10 @@ document.addEventListener('DOMContentLoaded', function () {
             $('githubAuthorName').value = g.author_name || '';
             $('githubAuthorEmail').value = g.author_email || '';
             renderStatus(data.status || {}, g);
-            if (!loaded) {
-                await loadScopes(g.token_secret_scope || '');
-                await loadKeys(g.token_secret_scope || '', g.token_secret_key || '');
-                loaded = true;
-            }
+            // Always re-list Databricks scopes/keys so newly created secrets
+            // appear after a revisit or save (mirrors Neo4j settings).
+            await loadScopes(g.token_secret_scope || '');
+            await loadKeys(g.token_secret_scope || '', g.token_secret_key || '');
             $('btnSaveGithub').disabled = false;
             syncDetailsVisibility();
         } catch (err) {
