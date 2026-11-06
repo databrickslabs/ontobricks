@@ -2141,6 +2141,7 @@ async def dtwin_assistant_chat(
             user_message=user_message,
             conversation_history=history,
             describe_depth=describe_depth,
+            max_tokens=settings.dtwin_chat_max_tokens,
         )
 
     if not agent_result.success:
@@ -2276,6 +2277,7 @@ async def dtwin_assistant_chat_stream(
                     user_message=user_message,
                     conversation_history=history,
                     describe_depth=describe_depth,
+                    max_tokens=settings.dtwin_chat_max_tokens,
                     on_event=_on_event,
                 )
             await event_queue.put(("done", result))
