@@ -105,6 +105,15 @@ def _target_name(op: Dict[str, Any]) -> str:
     return str((op.get("target") or {}).get("name") or "")
 
 
+def _prop_noun(op: Dict[str, Any]) -> str:
+    kind = (op.get("target") or {}).get("kind") or ""
+    if kind == "attribute":
+        return "Attribute"
+    if kind == "property":
+        return "Relationship"
+    return "Attribute or relationship"
+
+
 def _resolve_item(
     kind: str,
     name: str,
@@ -147,7 +156,7 @@ def _op_clear_parent(op, classes, properties, groups) -> None:
     name = _target_name(op)
     cls = _find_by_name(classes, name)
     if not cls:
-        raise _ApplyError(f"Class '{name}' not found.")
+        raise _ApplyError(f"Entity '{name}' not found.")
     cls["parent"] = ""
     cls.pop("parent_uri", None)
 
@@ -157,9 +166,9 @@ def _op_set_parent(op, classes, properties, groups) -> None:
     parent = str((op.get("params") or {}).get("parent") or "")
     cls = _find_by_name(classes, name)
     if not cls:
-        raise _ApplyError(f"Class '{name}' not found.")
+        raise _ApplyError(f"Entity '{name}' not found.")
     if parent and not _find_by_name(classes, parent):
-        raise _ApplyError(f"Parent class '{parent}' not found.")
+        raise _ApplyError(f"Parent entity '{parent}' not found.")
     cls["parent"] = parent
 
 
@@ -167,8 +176,39 @@ def _op_clear_domain(op, classes, properties, groups) -> None:
     name = _target_name(op)
     prop = _find_by_name(properties, name)
     if not prop:
-        raise _ApplyError(f"Property '{name}' not found.")
+        raise _ApplyError(f"{_prop_noun(op)} '{name}' not found.")
     prop["domain"] = ""
+
+
+def _is_attribute(prop: Dict[str, Any]) -> bool:
+    return str(prop.get("type") or "").replace("owl:", "") == "DatatypeProperty"
+
+
+def _sync_attribute_owner(
+    prop: Dict[str, Any], owner: str, classes: List[Dict[str, Any]]
+) -> None:
+    """Keep ``dataProperties`` in step with an attribute's owning entity.
+
+    Drops the attribute from every entity that lists it, then adds it to
+    ``owner`` when one is given. Idempotent, so re-applying is safe.
+    """
+    name = prop.get("name") or ""
+    for cls in classes:
+        attrs = cls.get("dataProperties") or []
+        cls["dataProperties"] = [a for a in attrs if a.get("name") != name]
+    if not owner:
+        return
+    cls = _find_by_name(classes, owner)
+    attrs = list(cls.get("dataProperties") or [])
+    attrs.append(
+        {
+            "name": name,
+            "localName": name,
+            "label": prop.get("label") or name,
+            "uri": prop.get("uri") or "",
+        }
+    )
+    cls["dataProperties"] = attrs
 
 
 def _op_set_domain(op, classes, properties, groups) -> None:
@@ -176,17 +216,19 @@ def _op_set_domain(op, classes, properties, groups) -> None:
     domain_name = str((op.get("params") or {}).get("domain") or "")
     prop = _find_by_name(properties, name)
     if not prop:
-        raise _ApplyError(f"Property '{name}' not found.")
+        raise _ApplyError(f"{_prop_noun(op)} '{name}' not found.")
     if domain_name and not _find_by_name(classes, domain_name):
-        raise _ApplyError(f"Domain class '{domain_name}' not found.")
+        raise _ApplyError(f"Entity '{domain_name}' not found.")
     prop["domain"] = domain_name
+    if _is_attribute(prop):
+        _sync_attribute_owner(prop, domain_name, classes)
 
 
 def _op_clear_range(op, classes, properties, groups) -> None:
     name = _target_name(op)
     prop = _find_by_name(properties, name)
     if not prop:
-        raise _ApplyError(f"Property '{name}' not found.")
+        raise _ApplyError(f"{_prop_noun(op)} '{name}' not found.")
     prop["range"] = ""
 
 
@@ -195,7 +237,7 @@ def _op_set_range(op, classes, properties, groups) -> None:
     range_name = str((op.get("params") or {}).get("range") or "")
     prop = _find_by_name(properties, name)
     if not prop:
-        raise _ApplyError(f"Property '{name}' not found.")
+        raise _ApplyError(f"{_prop_noun(op)} '{name}' not found.")
     prop["range"] = range_name
 
 
@@ -242,7 +284,7 @@ def _op_remove_property(op, classes, properties, groups) -> None:
     name = _target_name(op)
     idx = next((i for i, p in enumerate(properties) if p.get("name") == name), -1)
     if idx < 0:
-        raise _ApplyError(f"Property '{name}' not found.")
+        raise _ApplyError(f"{_prop_noun(op)} '{name}' not found.")
     properties.pop(idx)
     for cls in classes:
         attrs = cls.get("dataProperties") or []

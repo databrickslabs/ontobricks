@@ -6,21 +6,47 @@
 window.DesignChecksModule = {
     RULE_TITLES: {
         'DC-E01': 'Broken parent',
-        'DC-E02': 'Broken domain',
+        'DC-E02': 'Broken entity link',
         'DC-E03': 'Broken range',
         'DC-E04': 'Broken group member',
         'DC-E05': 'Hierarchy cycle',
         'DC-E06': 'Duplicate URI',
-        'DC-W01': 'Orphan class',
+        'DC-W01': 'Orphan entity',
         'DC-W02': 'Missing label',
-        'DC-W03': 'Missing domain',
+        'DC-W03': 'Missing entity',
         'DC-W04': 'Missing range',
         'DC-W05': 'Duplicate name',
         'DC-I01': 'Missing description',
-        'DC-I02': 'Class naming',
-        'DC-I03': 'Property naming',
+        'DC-I02': 'Entity naming',
+        'DC-I03': 'Attribute / relationship naming',
         'DC-I04': 'Near-duplicate name',
         'DC-I05': 'Deep hierarchy',
+    },
+
+    // Op ids keep their OWL names (domain = owning / source entity); the UI
+    // never shows them raw.
+    OP_LABELS: {
+        clear_parent: 'Clear parent entity',
+        set_parent: 'Set parent entity',
+        clear_domain: { attribute: 'Detach from entity', other: 'Clear source entity' },
+        set_domain: { attribute: 'Set owning entity', other: 'Set source entity' },
+        clear_range: 'Clear range',
+        set_range: 'Set range',
+        remove_group_member: 'Remove from group',
+        attach_attribute: 'Attach to entity',
+        remove_property: { attribute: 'Delete attribute', other: 'Delete relationship' },
+        set_label: 'Set label',
+        set_description: 'Set description',
+        rename: 'Rename',
+        merge_into: 'Merge into',
+    },
+
+    PARAM_LABELS: {
+        domain: 'entity',
+        parent: 'parent entity',
+        entity: 'entity',
+        new_name: 'new name',
+        survivor: 'keep',
     },
 
     // Mirror of backend RULE_PLANNER
@@ -364,7 +390,7 @@ window.DesignChecksModule = {
                     '<input class="form-check-input" type="radio" name="' + escapeHtml(g) +
                     '" id="' + id + '" data-op-id="' + escapeHtml(op.id || '') + '"' + checked + '>' +
                     '<label class="form-check-label" for="' + id + '">' +
-                    '<strong>' + escapeHtml(op.op) + '</strong> — ' +
+                    '<strong>' + escapeHtml(self._opLabel(op)) + '</strong> — ' +
                     escapeHtml(op.rationale || '') +
                     self._opParamsHtml(op, plan) +
                     '</label></div>';
@@ -379,7 +405,7 @@ window.DesignChecksModule = {
                 '<input class="form-check-input" type="checkbox" id="' + id +
                 '" data-op-id="' + escapeHtml(op.id || '') + '"' + checked + '>' +
                 '<label class="form-check-label" for="' + id + '">' +
-                '<strong>' + escapeHtml(op.op) + '</strong> — ' +
+                '<strong>' + escapeHtml(self._opLabel(op)) + '</strong> — ' +
                 escapeHtml(op.rationale || '') +
                 self._opParamsHtml(op, plan) +
                 '</label></div>';
@@ -390,6 +416,14 @@ window.DesignChecksModule = {
         confirmBtn.onclick = function () {
             self._confirmAutofix(plan);
         };
+    },
+
+    _opLabel: function (op) {
+        const entry = this.OP_LABELS[op.op];
+        if (!entry) return op.op;
+        if (typeof entry === 'string') return entry;
+        const kind = (op.target && op.target.kind) || '';
+        return kind === 'attribute' ? entry.attribute : entry.other;
     },
 
     _opParamsHtml: function (op, plan) {
@@ -403,8 +437,9 @@ window.DesignChecksModule = {
                 '</select></div>';
         }
         if (op.params && Object.keys(op.params).length) {
+            const labels = this.PARAM_LABELS;
             const bits = Object.keys(op.params).map(function (k) {
-                return k + '=' + String(op.params[k]);
+                return (labels[k] || k.replace(/_/g, ' ')) + ': ' + String(op.params[k]);
             }).join(', ');
             return '<div class="small text-muted">' + escapeHtml(bits) + '</div>';
         }

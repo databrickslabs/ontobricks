@@ -214,6 +214,77 @@ def test_attach_duplicate_rejected(domain_session):
     assert "already" in result["error"].lower()
 
 
+def _set_domain_op(prop_name: str, entity: str, kind: str = "attribute"):
+    return make_operation(
+        op="set_domain",
+        target={"kind": kind, "name": prop_name},
+        params={"domain": entity},
+        rationale="t",
+        source="ai",
+        finding_id=f"DC-W03:{kind}:{prop_name}",
+    )
+
+
+def _owned_attrs(domain_session, entity: str) -> list[str]:
+    cls = next(c for c in domain_session.get_classes() if c["name"] == entity)
+    return [a["name"] for a in cls.get("dataProperties", [])]
+
+
+def test_set_domain_on_attribute_lists_it_under_entity(domain_session):
+    _load_minimal(domain_session)
+    result = apply_operations(
+        domain_session, [_set_domain_op("paymentmethod", "Payment")]
+    )
+    assert result["success"]
+    prop = next(
+        p for p in domain_session.get_properties() if p["name"] == "paymentmethod"
+    )
+    assert prop["domain"] == "Payment"
+    assert _owned_attrs(domain_session, "Payment") == ["paymentmethod"]
+
+
+def test_set_domain_on_attribute_moves_it_from_previous_owner(domain_session):
+    _load_minimal(domain_session)
+    apply_operations(domain_session, [_set_domain_op("paymentmethod", "Payment")])
+    result = apply_operations(
+        domain_session, [_set_domain_op("paymentmethod", "Invoice")]
+    )
+    assert result["success"]
+    assert _owned_attrs(domain_session, "Payment") == []
+    assert _owned_attrs(domain_session, "Invoice") == ["paymentmethod"]
+
+
+def test_set_domain_on_attribute_is_idempotent(domain_session):
+    _load_minimal(domain_session)
+    op = _set_domain_op("paymentmethod", "Payment")
+    assert apply_operations(domain_session, [op])["success"]
+    assert apply_operations(domain_session, [op])["success"]
+    assert _owned_attrs(domain_session, "Payment") == ["paymentmethod"]
+
+
+def test_set_domain_on_relationship_leaves_dataproperties_alone(domain_session):
+    _load_minimal(domain_session)
+    result = apply_operations(
+        domain_session,
+        [_set_domain_op("hasOrder", "Invoice", kind="property")],
+    )
+    assert result["success"]
+    prop = next(p for p in domain_session.get_properties() if p["name"] == "hasOrder")
+    assert prop["domain"] == "Invoice"
+    assert _owned_attrs(domain_session, "Payment") == []
+    assert _owned_attrs(domain_session, "Invoice") == []
+
+
+def test_set_domain_unknown_entity_rejected(domain_session):
+    _load_minimal(domain_session)
+    result = apply_operations(
+        domain_session, [_set_domain_op("paymentmethod", "Ghost")]
+    )
+    assert result["success"] is False
+    assert "Ghost" in result["error"]
+    assert _owned_attrs(domain_session, "Payment") == []
+
+
 def test_remove_group_member(domain_session):
     _load_minimal(domain_session)
     result = apply_operations(

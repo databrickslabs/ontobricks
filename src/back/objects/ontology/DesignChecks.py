@@ -25,21 +25,31 @@ KIND_GROUP = "group"
 MAX_HIERARCHY_DEPTH = 5
 NEAR_DUP_MIN_LEN = 5
 
+# User-facing nouns: OntoBricks says "entity" (not class) and "domain" means
+# an OntoBricks domain, never the RDF rdfs:domain.
+_KIND_NOUNS = {
+    KIND_CLASS: "entity",
+    KIND_ATTRIBUTE: "attribute",
+    KIND_PROPERTY: "relationship",
+    KIND_GROUP: "group",
+}
+_NOUN_PLURALS = {"entity": "entities"}
+
 RULE_META: Dict[str, Dict[str, str]] = {
     "DC-E01": {"severity": SEVERITY_ERROR, "title": "Broken parent"},
-    "DC-E02": {"severity": SEVERITY_ERROR, "title": "Broken domain"},
+    "DC-E02": {"severity": SEVERITY_ERROR, "title": "Broken entity link"},
     "DC-E03": {"severity": SEVERITY_ERROR, "title": "Broken range"},
     "DC-E04": {"severity": SEVERITY_ERROR, "title": "Broken group member"},
     "DC-E05": {"severity": SEVERITY_ERROR, "title": "Hierarchy cycle"},
     "DC-E06": {"severity": SEVERITY_ERROR, "title": "Duplicate URI"},
-    "DC-W01": {"severity": SEVERITY_WARNING, "title": "Orphan class"},
+    "DC-W01": {"severity": SEVERITY_WARNING, "title": "Orphan entity"},
     "DC-W02": {"severity": SEVERITY_WARNING, "title": "Missing label"},
-    "DC-W03": {"severity": SEVERITY_WARNING, "title": "Missing domain"},
+    "DC-W03": {"severity": SEVERITY_WARNING, "title": "Missing entity"},
     "DC-W04": {"severity": SEVERITY_WARNING, "title": "Missing range"},
     "DC-W05": {"severity": SEVERITY_WARNING, "title": "Duplicate name"},
     "DC-I01": {"severity": SEVERITY_INFO, "title": "Missing description"},
-    "DC-I02": {"severity": SEVERITY_INFO, "title": "Class naming"},
-    "DC-I03": {"severity": SEVERITY_INFO, "title": "Property naming"},
+    "DC-I02": {"severity": SEVERITY_INFO, "title": "Entity naming"},
+    "DC-I03": {"severity": SEVERITY_INFO, "title": "Attribute / relationship naming"},
     "DC-I04": {"severity": SEVERITY_INFO, "title": "Near-duplicate name"},
     "DC-I05": {"severity": SEVERITY_INFO, "title": "Deep hierarchy"},
 }
@@ -101,7 +111,7 @@ class DesignChecks:
                         "DC-E01",
                         KIND_CLASS,
                         cls,
-                        f"Parent '{parent}' is not a class in this ontology.",
+                        f"Parent '{parent}' is not an entity in this ontology.",
                     )
                 )
 
@@ -112,26 +122,31 @@ class DesignChecks:
         findings: List[Dict[str, Any]],
     ) -> None:
         for prop in properties:
-            domain = _text(prop.get("domain"))
-            if domain and index.resolve(domain) is None:
+            is_attr = _is_datatype_property(prop)
+            owner = _text(prop.get("domain"))
+            if owner and index.resolve(owner) is None:
                 findings.append(
                     _finding(
                         "DC-E02",
                         KIND_PROPERTY,
                         prop,
-                        f"Domain '{domain}' is not a class in this ontology.",
+                        (
+                            f"Owning entity '{owner}' does not exist in this ontology."
+                            if is_attr
+                            else f"Source entity '{owner}' does not exist in this ontology."
+                        ),
                     )
                 )
-            elif not domain:
+            elif not owner:
                 findings.append(
                     _finding(
                         "DC-W03",
                         KIND_PROPERTY,
                         prop,
                         (
-                            "Attribute has no domain."
-                            if _is_datatype_property(prop)
-                            else "Property has no domain."
+                            "Attribute is not attached to any entity."
+                            if is_attr
+                            else "Relationship has no source entity."
                         ),
                     )
                 )
@@ -144,9 +159,9 @@ class DesignChecks:
                         KIND_PROPERTY,
                         prop,
                         (
-                            "Attribute has no range."
-                            if _is_datatype_property(prop)
-                            else "Property has no range."
+                            "Attribute has no range (datatype)."
+                            if is_attr
+                            else "Relationship has no range (target entity)."
                         ),
                     )
                 )
@@ -156,7 +171,7 @@ class DesignChecks:
                         "DC-E03",
                         KIND_PROPERTY,
                         prop,
-                        f"Range '{range_ref}' is not a class in this ontology.",
+                        f"Range '{range_ref}' is not an entity in this ontology.",
                     )
                 )
 
@@ -176,7 +191,7 @@ class DesignChecks:
                         "DC-E04",
                         KIND_GROUP,
                         group,
-                        f"Member '{ref}' is not a class in this ontology.",
+                        f"Member '{ref}' is not an entity in this ontology.",
                     )
                     finding["member"] = ref
                     findings.append(finding)
@@ -206,7 +221,7 @@ class DesignChecks:
                                 "DC-E05",
                                 KIND_CLASS,
                                 first,
-                                f"Subclass cycle: {names}.",
+                                f"Parent cycle: {names}.",
                             )
                         )
                     break
@@ -238,7 +253,7 @@ class DesignChecks:
                     "DC-E06",
                     kind,
                     group[0],
-                    f"URI '{uri}' is used by {len(group)} {kind}s: {names}.",
+                    f"URI '{uri}' is used by {len(group)} {_plural(kind, group)}: {names}.",
                 )
             )
 
@@ -283,7 +298,7 @@ class DesignChecks:
                         "DC-W01",
                         KIND_CLASS,
                         cls,
-                        "Class has no parent, children, group membership, or property use.",
+                        "Entity has no parent, children, group membership, attributes, or relationships.",
                     )
                 )
 
@@ -297,7 +312,9 @@ class DesignChecks:
             if _text(item.get("label")):
                 continue
             findings.append(
-                _finding("DC-W02", kind, item, f"{kind.capitalize()} has no label.")
+                _finding(
+                    "DC-W02", kind, item, f"{_noun(kind, item).capitalize()} has no label."
+                )
             )
 
     @staticmethod
@@ -314,7 +331,7 @@ class DesignChecks:
                     "DC-I01",
                     kind,
                     item,
-                    f"{kind.capitalize()} has no description.",
+                    f"{_noun(kind, item).capitalize()} has no description.",
                 )
             )
 
@@ -346,7 +363,7 @@ class DesignChecks:
                     "DC-W05",
                     kind,
                     group[0],
-                    f"Normalized name '{norm}' is shared by {kind}s: {names}.",
+                    f"Normalized name '{norm}' is shared by {_plural(kind, group)}: {names}.",
                 )
             )
 
@@ -365,7 +382,7 @@ class DesignChecks:
                         "DC-I02",
                         KIND_CLASS,
                         cls,
-                        f"Class local name '{local}' should be PascalCase.",
+                        f"Entity local name '{local}' should be PascalCase.",
                     )
                 )
 
@@ -384,7 +401,8 @@ class DesignChecks:
                         "DC-I03",
                         KIND_PROPERTY,
                         prop,
-                        f"Property local name '{local}' should be camelCase.",
+                        f"{_noun(KIND_PROPERTY, prop).capitalize()} local name "
+                        f"'{local}' should be camelCase.",
                     )
                 )
 
@@ -458,7 +476,7 @@ class DesignChecks:
                         "DC-I05",
                         KIND_CLASS,
                         cls,
-                        f"Class sits at depth {depth} (limit {MAX_HIERARCHY_DEPTH}).",
+                        f"Entity sits at depth {depth} (limit {MAX_HIERARCHY_DEPTH}).",
                     )
                 )
 
@@ -532,6 +550,17 @@ def _finding(
     if domain:
         finding["domain"] = domain
     return finding
+
+
+def _noun(kind: str, item: Optional[Dict[str, Any]] = None) -> str:
+    if kind == KIND_PROPERTY and item is not None and _is_datatype_property(item):
+        kind = KIND_ATTRIBUTE
+    return _KIND_NOUNS.get(kind, kind)
+
+
+def _plural(kind: str, items: List[Dict[str, Any]]) -> str:
+    nouns = sorted({_noun(kind, i) for i in items})
+    return "/".join(_NOUN_PLURALS.get(n, n + "s") for n in nouns)
 
 
 def _parent_ref(cls: Dict[str, Any]) -> str:

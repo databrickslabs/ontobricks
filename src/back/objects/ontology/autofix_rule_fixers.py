@@ -82,8 +82,8 @@ def _fix_clear_parent(
     return _single_op_plan(
         finding,
         op="clear_parent",
-        rationale=f"Clear the broken or cyclic parent on '{name}'.",
-        summary=f"Clear parent on '{name}'.",
+        rationale=f"Clear the broken or cyclic parent entity on '{name}'.",
+        summary=f"Clear parent entity on '{name}'.",
     )
 
 
@@ -94,11 +94,12 @@ def _fix_clear_domain(
     groups: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     name = finding.get("name") or ""
+    missing = finding.get("domain") or ""
     return _single_op_plan(
         finding,
         op="clear_domain",
-        rationale=f"Clear the broken domain reference on '{name}'.",
-        summary=f"Clear domain on '{name}'.",
+        rationale=f"Drop the link from '{name}' to the missing entity '{missing}'.",
+        summary=f"Unlink '{name}' from missing entity '{missing}'.",
     )
 
 
@@ -170,7 +171,7 @@ def _fix_class_naming(
         finding,
         op="rename",
         params={"new_name": new_name},
-        rationale=f"Rename class '{name}' to PascalCase '{new_name}'.",
+        rationale=f"Rename entity '{name}' to PascalCase '{new_name}'.",
         summary=f"Rename '{name}' → '{new_name}'.",
     )
 
@@ -197,6 +198,9 @@ def _fix_property_naming(
         finding,
         op="rename",
         params={"new_name": new_name},
-        rationale=f"Rename property '{name}' to camelCase '{new_name}'.",
+        rationale=(
+            f"Rename {'attribute' if finding.get('kind') == 'attribute' else 'relationship'} "
+            f"'{name}' to camelCase '{new_name}'."
+        ),
         summary=f"Rename '{name}' → '{new_name}'.",
     )

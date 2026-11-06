@@ -557,3 +557,61 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_design_checks_contract.py` → 9 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (same Node/simdjson environmental failures as before; no Sanity Checks regressions).
+
+================================================================================
+## Use entity / attribute wording in Sanity Checks and Auto-fix
+================================================================================
+
+Context: Sanity Checks titles, messages and the Auto-fix modal used OWL
+jargon ("class", "domain", raw op ids like `set_domain` and `domain=Order`).
+In OntoBricks the user-facing nouns are entity / attribute / relationship, and
+"domain" means an OntoBricks domain, so the rdfs:domain wording was confusing.
+Op ids and data fields are unchanged; only user-facing text is renamed.
+
+Changes:
+
+1. src/back/objects/ontology/DesignChecks.py
+   Rename titles (Broken entity link, Orphan entity, Missing entity, Entity naming, Attribute / relationship naming); reword every finding message to entity / attribute / relationship via new `_noun` / `_plural` helpers.
+2. src/back/objects/ontology/autofix_rule_fixers.py
+   Reword clear_parent / clear_domain / rename rationales and summaries (no "class" or "domain").
+3. src/back/objects/ontology/autofix_apply.py
+   Reword apply errors (Entity / Attribute / Relationship not found) via `_prop_noun`.
+4. src/front/static/ontology/js/ontology-design-checks.js
+   Mirror the new rule titles; add `OP_LABELS` / `PARAM_LABELS` + `_opLabel` so the modal shows "Set owning entity", "Detach from entity", "entity: Order" instead of raw op ids and `key=value` params.
+
+Modified files:
+- src/back/objects/ontology/DesignChecks.py
+- src/back/objects/ontology/autofix_rule_fixers.py
+- src/back/objects/ontology/autofix_apply.py
+- src/front/static/ontology/js/ontology-design-checks.js
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -k "design or autofix or sanity"` → 282 passed, 11 skipped. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10005 passed, 124 failed, 326 skipped (all failures are Node-subprocess tests crashing because local node cannot load libsimdjson.29.dylib; none touch Sanity Checks).
+
+================================================================================
+## Keep attribute-to-entity membership in sync on set_domain
+================================================================================
+
+Context: The Auto-fix operation `set_domain` on an attribute only updated the
+attribute's owning entity link, while `attach_attribute` also listed the
+attribute under that entity's attributes. Applying `set_domain` therefore left
+the attribute missing from its entity's attribute list. `set_domain` now
+behaves the same way as `attach_attribute` for attributes. Relationships are
+unchanged.
+
+Changes:
+
+1. src/back/objects/ontology/autofix_apply.py
+   Add `_is_attribute` and `_sync_attribute_owner`; `_op_set_domain` now moves
+   the attribute into the target entity's attribute list and removes it from
+   the previous entity. Idempotent.
+2. tests/units/ontology/test_design_autofix_apply.py
+   Add five tests: attach on attribute, move from previous entity, idempotent
+   re-apply, relationship left untouched, unknown entity rejected.
+
+Modified files:
+- src/back/objects/ontology/autofix_apply.py
+- tests/units/ontology/test_design_autofix_apply.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-06.log
+
+Tests: `uv run --frozen pytest -q -p no:cacheprovider` on the design-checks, autofix propose, autofix endpoint and contract tests → 32 passed. Full suite `uv run --frozen pytest -q -m "not scenario"` → 10010 passed, 124 failed, 326 skipped (same Node/libsimdjson environmental failures; none in Sanity Checks or Auto-fix).
