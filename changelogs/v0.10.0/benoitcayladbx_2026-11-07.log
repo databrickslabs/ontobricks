@@ -1,0 +1,25 @@
+## Style Studio group toggle badges with group color
+
+Context: The small top-left collapse/expand (+) badges on Studio entities and
+group super-nodes used a white circle with a dark plus. The plus also looked
+slightly off-center. Use each ontology group's color as the badge background
+and center the white + both horizontally and vertically.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Set studio-group-toggle circle fill to the member/group color; pin + text
+   at (0,0) with middle/central baselines.
+2. src/front/static/ontology/css/ontology-map.css
+   Drop white fill override; white + glyph; hover brightens stroke without
+   replacing the group color.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Assert group-color fill and centering attributes for the toggle badge.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10011 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted test_studio_views_groups_contract + test_clarity_design_contract → 54 passed
+

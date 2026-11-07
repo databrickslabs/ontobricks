@@ -1369,17 +1369,25 @@ async function initOntologyMap() {
         })
         .each(function (d) {
             const gName = _studioMemberToGroup[d.name];
+            const gDef = _studioGroupsDefs.find(g => g.name === gName);
+            const groupColor = (gDef && gDef.color) || '#4A90D9';
             const toggle = d3.select(this).append('g')
                 .attr('class', 'studio-group-toggle')
                 .attr('transform', 'translate(-22, -22)')
                 .style('cursor', 'pointer');
             toggle.append('circle')
                 .attr('r', 7)
-                .attr('class', 'studio-group-toggle-bg');
+                .attr('class', 'studio-group-toggle-bg')
+                .attr('fill', groupColor);
             toggle.append('text')
                 .attr('class', 'studio-group-toggle-icon')
+                .attr('x', 0)
+                .attr('y', 0)
+                .attr('dx', 0)
+                .attr('dy', 0)
                 .attr('text-anchor', 'middle')
                 .attr('dominant-baseline', 'central')
+                .attr('alignment-baseline', 'middle')
                 .text('+');
             toggle.on('click', function (event) {
                 event.preventDefault();
@@ -1390,17 +1398,24 @@ async function initOntologyMap() {
 
     // Expand toggle (+) on collapsed group super-nodes
     groupNodeElements.each(function (d) {
+        const groupColor = d.groupColor || '#4A90D9';
         const toggle = d3.select(this).append('g')
             .attr('class', 'studio-group-toggle')
             .attr('transform', 'translate(-22, -22)')
             .style('cursor', 'pointer');
         toggle.append('circle')
             .attr('r', 7)
-            .attr('class', 'studio-group-toggle-bg');
+            .attr('class', 'studio-group-toggle-bg')
+            .attr('fill', groupColor);
         toggle.append('text')
             .attr('class', 'studio-group-toggle-icon')
+            .attr('x', 0)
+            .attr('y', 0)
+            .attr('dx', 0)
+            .attr('dy', 0)
             .attr('text-anchor', 'middle')
             .attr('dominant-baseline', 'central')
+            .attr('alignment-baseline', 'middle')
             .text('+');
         toggle.on('click', function (event) {
             event.preventDefault();

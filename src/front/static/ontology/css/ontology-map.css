@@ -73,27 +73,31 @@
     max-width: 220px;
 }
 
-/* Collapse/expand control on entity and group nodes */
+/* Collapse/expand control on entity and group nodes.
+   Circle fill is set inline to the ontology group color. */
 .studio-group-toggle {
     pointer-events: all;
 }
 
 .studio-group-toggle-bg {
-    fill: #ffffff;
-    stroke: var(--db-border, #cbd5e1);
+    stroke: rgba(255, 255, 255, 0.9);
     stroke-width: 1.25px;
 }
 
 .studio-group-toggle-icon {
     font-size: 11px;
     font-weight: 700;
-    fill: var(--db-text, #334155);
+    fill: #ffffff;
     pointer-events: none;
+    text-anchor: middle;
+    dominant-baseline: central;
+    alignment-baseline: middle;
 }
 
 .studio-group-toggle:hover .studio-group-toggle-bg {
-    fill: var(--db-surface-warm, #f8fafc);
-    stroke: var(--db-primary, #4F46E5);
+    stroke: #ffffff;
+    stroke-width: 1.75px;
+    filter: brightness(1.08);
 }
 
 .map-group-node .map-group-circle {

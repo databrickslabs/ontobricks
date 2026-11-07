@@ -113,6 +113,12 @@ def test_group_toggle_css_exists():
     assert ".studio-group-toggle" in css
     assert ".map-group-circle" in css
     assert ".studio-view-select" in css
+    # + badge: white glyph centered on a group-colored circle (fill set in JS).
+    assert "dominant-baseline: central" in css
+    assert "text-anchor: middle" in css
+    js = _read(MAP_JS)
+    assert ".attr('fill', groupColor)" in js
+    assert "dominant-baseline', 'central'" in js
 
 
 def test_groups_crud_refreshes_studio():
