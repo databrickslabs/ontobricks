@@ -172,17 +172,41 @@ var OntologyGroups = (function () {
             var checked = selSet.has(name) ? 'checked' : '';
             var otherGroup = otherGroupMap && otherGroupMap[name];
             var badge = otherGroup
-                ? ' <span class="badge bg-warning text-dark ms-1" title="Currently in group ' + _esc(otherGroup) + '">' + _esc(otherGroup) + '</span>'
+                ? ' <span class="badge bg-warning text-dark ms-1" title="Currently in group ' + _esc(otherGroup) + ' — selecting moves it here">' + _esc(otherGroup) + '</span>'
                 : '';
             html += '<div class="form-check">' +
                 '<input class="form-check-input group-member-cb" type="checkbox" value="' +
-                _esc(name) + '" id="gm_' + _esc(name) + '" ' + checked + '>' +
+                _esc(name) + '" id="gm_' + _esc(name) + '" ' + checked +
+                (otherGroup ? ' data-other-group="' + _esc(otherGroup) + '"' : '') + '>' +
                 '<label class="form-check-label" for="gm_' + _esc(name) + '">' +
                 (emoji ? emoji + ' ' : '') + _esc(label) + ' <code class="small text-muted">' + _esc(name) + '</code>' +
                 badge +
                 '</label></div>';
         });
         container.innerHTML = html;
+        _wireExclusiveMemberChecks();
+    }
+
+    /**
+     * Confirm before claiming a member that already belongs to another group.
+     * Backend also enforces exclusive membership on save.
+     */
+    function _wireExclusiveMemberChecks() {
+        var cbs = document.querySelectorAll('.group-member-cb[data-other-group]');
+        cbs.forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                if (!cb.checked) return;
+                var other = cb.getAttribute('data-other-group') || '';
+                if (!other) return;
+                var entity = cb.value;
+                var msg = '"' + entity + '" is already in group "' + other +
+                    '". An entity can belong to only one group. Move it here?';
+                var proceed = window.confirm(msg);
+                if (!proceed) {
+                    cb.checked = false;
+                }
+            });
+        });
     }
 
     function _populateMembersCheckboxes(selected, editingGroupName) {

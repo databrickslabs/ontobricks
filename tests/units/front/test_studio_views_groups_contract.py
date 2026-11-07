@@ -12,6 +12,8 @@ MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
 MAP_HTML = REPO_ROOT / "src/front/templates/partials/ontology/_ontology_map.html"
 ONTOLOGY_HTML = REPO_ROOT / "src/front/templates/ontology.html"
 GROUPS_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-groups.js"
+GROUPS_HTML = REPO_ROOT / "src/front/templates/partials/ontology/_ontology_groups.html"
+PANELS_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"
 MENU = REPO_ROOT / "src/front/config/menu_config.json"
 PERSISTENCE_JS = REPO_ROOT / "src/front/static/global/js/ontology-persistence.js"
 
@@ -119,11 +121,34 @@ def test_group_toggle_css_exists():
     js = _read(MAP_JS)
     assert ".attr('fill', groupColor)" in js
     assert "dominant-baseline', 'central'" in js
+    # Member badge shows a minus (collapse); the group circle keeps the plus (expand).
+    assert "studio-group-toggle-collapse" in js
+    assert ".text('\\u2212')" in js
 
 
 def test_groups_crud_refreshes_studio():
     js = _read(GROUPS_JS)
     assert "refreshStudioGroups" in js
+
+
+def test_exclusive_group_membership_is_surfaced_in_ui():
+    """An entity can belong to only one group — modal, panel, and Studio menus say so."""
+    groups_js = _read(GROUPS_JS)
+    assert "_wireExclusiveMemberChecks" in groups_js
+    assert "data-other-group" in groups_js
+    assert "An entity can belong to only one group" in groups_js
+
+    panels = _read(PANELS_JS)
+    assert "sharedEntityGroupExclusiveHint" in panels
+    assert "An entity can belong to only one group." in panels
+
+    groups_html = _read(GROUPS_HTML)
+    assert "An entity can belong to only one group" in groups_html
+    assert "groupMembersExclusiveHint" in groups_html
+
+    css = _read(MAP_CSS)
+    assert ".map-context-submenu" in css
+    assert ".map-context-has-submenu" in css
 
 
 def test_persistence_module_marks_registry_dirty():

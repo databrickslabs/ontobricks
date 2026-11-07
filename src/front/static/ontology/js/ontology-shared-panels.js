@@ -823,6 +823,9 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         onchange="onSharedEntityGroupChange(this.dataset.entity, this.value, this.dataset.prevGroup)">
                         ${groupOptions}
                     </select>
+                    <div class="form-text" id="sharedEntityGroupExclusiveHint">
+                        An entity can belong to only one group.
+                    </div>
                 </div>
             </div>
 

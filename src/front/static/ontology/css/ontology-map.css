@@ -313,7 +313,7 @@
     border: 1px solid #e9ecef;
     min-width: 180px;
     z-index: 1000;
-    overflow: hidden;
+    overflow: visible;
     animation: mapContextFadeIn 0.15s ease;
 }
 
@@ -388,6 +388,95 @@
 
 .map-context-item.map-context-danger:hover {
     background: #fff5f5;
+}
+
+.map-context-has-submenu {
+    position: relative;
+}
+
+.map-context-chevron {
+    margin-left: auto;
+    font-size: 11px;
+    opacity: 0.65;
+}
+
+.map-context-submenu {
+    display: none;
+    position: absolute;
+    left: calc(100% - 4px);
+    top: -4px;
+    min-width: 200px;
+    max-width: 280px;
+    max-height: 280px;
+    overflow-y: auto;
+    background: #ffffff;
+    border: 1px solid var(--db-border, #e9ecef);
+    border-radius: 8px;
+    box-shadow: var(--db-shadow-md, 0 4px 20px rgba(0, 0, 0, 0.15));
+    z-index: 1001;
+    padding: 4px 0;
+}
+
+.map-context-submenu-left {
+    left: auto;
+    right: calc(100% - 4px);
+}
+
+.map-context-has-submenu:hover > .map-context-submenu,
+.map-context-has-submenu:focus-within > .map-context-submenu {
+    display: block;
+}
+
+.map-context-submenu-hint {
+    padding: 6px 14px 4px;
+    font-size: 11px;
+    color: var(--db-text-muted, #6F6B65);
+    white-space: nowrap;
+}
+
+.map-context-subitem {
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.map-context-subitem:hover {
+    background: #e8f4fd;
+    color: #1a73e8;
+}
+
+.map-context-subitem-disabled {
+    cursor: default;
+    color: var(--db-text-muted, #6F6B65);
+    font-style: italic;
+}
+
+.map-context-subitem-disabled:hover {
+    background: transparent;
+    color: var(--db-text-muted, #6F6B65);
+}
+
+.map-context-group-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.map-context-group-icon {
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.map-context-group-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ─── Neighborhood highlight (on node click) ─── */

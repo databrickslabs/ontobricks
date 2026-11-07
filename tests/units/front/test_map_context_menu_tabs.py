@@ -27,6 +27,17 @@ def test_entity_context_menu_has_five_tab_shortcuts():
         assert icon in js
 
 
+def test_entity_context_menu_can_assign_group_membership():
+    js = MAP_JS.read_text(encoding="utf-8")
+    assert "function _wireStudioGroupMembershipMenu(" in js
+    assert "function assignEntitiesToStudioGroup(" in js
+    assert "Add to group" in js
+    assert "One group per entity" in js
+    assert "/ontology/groups/members" in js
+    # Single + multi menus both wire the submenu.
+    assert js.count("_wireStudioGroupMembershipMenu(menu,") >= 2
+
+
 def test_entity_tab_shortcuts_call_edit_class_by_name_with_tab():
     js = MAP_JS.read_text(encoding="utf-8")
     assert "editClassByName(entityData.name, tab)" in js

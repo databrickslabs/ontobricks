@@ -1361,7 +1361,7 @@ async function initOntologyMap() {
         .attr('dy', 42)
         .text(d => d.label || d.name);
 
-    // Collapse toggle (+) for entities that belong to an expanded group
+    // Collapse toggle (−) for entities that belong to an expanded group
     entityNodeElements
         .filter(d => {
             const gName = _studioMemberToGroup[d.name];
@@ -1372,7 +1372,7 @@ async function initOntologyMap() {
             const gDef = _studioGroupsDefs.find(g => g.name === gName);
             const groupColor = (gDef && gDef.color) || '#4A90D9';
             const toggle = d3.select(this).append('g')
-                .attr('class', 'studio-group-toggle')
+                .attr('class', 'studio-group-toggle studio-group-toggle-collapse')
                 .attr('transform', 'translate(-22, -22)')
                 .style('cursor', 'pointer');
             toggle.append('circle')
@@ -1388,7 +1388,7 @@ async function initOntologyMap() {
                 .attr('text-anchor', 'middle')
                 .attr('dominant-baseline', 'central')
                 .attr('alignment-baseline', 'middle')
-                .text('+');
+                .text('\u2212');
             toggle.on('click', function (event) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -2371,6 +2371,205 @@ async function createBusinessViewFromSelection(names) {
 }
 
 
+/**
+ * Assign (or clear) ontology-group membership for one or more entities.
+ * Membership is exclusive: adding to a group removes the entity from any other.
+ * @param {string[]} entityNames
+ * @param {string} groupName  empty string → remove from current group(s)
+ */
+async function assignEntitiesToStudioGroup(entityNames, groupName) {
+    const names = (entityNames || []).filter(Boolean);
+    if (!names.length) return;
+
+    try {
+        let lastGroups = null;
+        if (groupName) {
+            const resp = await fetch('/ontology/groups/members', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ name: groupName, add: names }),
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                throw new Error(data.message || 'Failed to update group membership');
+            }
+            lastGroups = data.groups || null;
+            const label = (_studioGroupsDefs.find(g => g.name === groupName) || {}).label || groupName;
+            const msg = names.length === 1
+                ? `${names[0]} is now in group: ${label}`
+                : `${names.length} entities moved to group: ${label}`;
+            showNotification(msg, 'success');
+        } else {
+            const byGroup = {};
+            names.forEach(n => {
+                const g = _studioMemberToGroup[n];
+                if (!g) return;
+                if (!byGroup[g]) byGroup[g] = [];
+                byGroup[g].push(n);
+            });
+            const groupKeys = Object.keys(byGroup);
+            if (!groupKeys.length) {
+                showNotification('None of the selected entities belong to a group', 'info');
+                return;
+            }
+            for (const gName of groupKeys) {
+                const resp = await fetch('/ontology/groups/members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ name: gName, remove: byGroup[gName] }),
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to update group membership');
+                }
+                lastGroups = data.groups || lastGroups;
+            }
+            const msg = names.length === 1
+                ? `${names[0]} removed from its group`
+                : `${names.length} entities removed from their groups`;
+            showNotification(msg, 'success');
+        }
+
+        if (lastGroups) {
+            _studioGroupsDefs = lastGroups;
+            _studioMemberToGroup = {};
+            _studioGroupsDefs.forEach(g => {
+                (g.members || []).forEach(m => { _studioMemberToGroup[m] = g.name; });
+            });
+        }
+        if (typeof window.refreshStudioGroups === 'function') {
+            await window.refreshStudioGroups();
+        }
+        if (typeof window.refreshSharedEntityGroupOptions === 'function') {
+            window.refreshSharedEntityGroupOptions(lastGroups || undefined);
+        }
+    } catch (err) {
+        console.error('[Studio] Group membership update failed:', err);
+        showNotification(err.message || 'Could not update group membership', 'error');
+    }
+}
+
+/**
+ * Build the "Add to group" flyout (and optional Remove) inside a context menu.
+ * An entity can belong to only one group — picking another group moves it.
+ * @param {HTMLElement} menu
+ * @param {() => string[]} getNames  live selection resolver
+ */
+function _wireStudioGroupMembershipMenu(menu, getNames) {
+    const groups = _studioGroupsDefs || [];
+    const initialNames = (typeof getNames === 'function' ? getNames() : []) || [];
+    const anyInGroup = initialNames.some(n => !!_studioMemberToGroup[n]);
+    const singleCurrent = initialNames.length === 1 ? (_studioMemberToGroup[initialNames[0]] || '') : '';
+
+    let subItems = '';
+    if (!groups.length) {
+        subItems = `
+            <div class="map-context-subitem map-context-subitem-disabled">
+                <span>No groups yet</span>
+            </div>
+            <div class="map-context-subitem" data-action="create-group">
+                <i class="bi bi-plus-lg"></i>
+                <span>New group…</span>
+            </div>`;
+    } else {
+        const esc = (typeof escapeHtml === 'function')
+            ? escapeHtml
+            : (t) => String(t == null ? '' : t)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        subItems = groups.map(g => {
+            const rawColor = g.color || '#4A90D9';
+            const color = /^#[0-9A-Fa-f]{3,8}$/.test(rawColor) ? rawColor : '#4A90D9';
+            const icon = esc(g.icon || '📁');
+            const label = esc(g.label || g.name);
+            const name = esc(g.name);
+            const isCurrent = singleCurrent && g.name === singleCurrent;
+            return `
+                <div class="map-context-subitem" data-group-name="${name}">
+                    <span class="map-context-group-dot" style="background:${color}"></span>
+                    <span class="map-context-group-icon">${icon}</span>
+                    <span class="map-context-group-label">${label}</span>
+                    ${isCurrent ? '<i class="bi bi-check2 ms-auto"></i>' : ''}
+                </div>`;
+        }).join('');
+        if (anyInGroup) {
+            subItems += `
+                <div class="map-context-divider"></div>
+                <div class="map-context-subitem" data-group-name="">
+                    <i class="bi bi-x-circle"></i>
+                    <span>Remove from group</span>
+                </div>`;
+        }
+    }
+
+    const section = document.createElement('div');
+    section.innerHTML = `
+        <div class="map-context-item map-context-has-submenu" data-action="add-to-group">
+            <i class="bi bi-collection"></i>
+            <span>Add to group</span>
+            <i class="bi bi-chevron-right map-context-chevron"></i>
+            <div class="map-context-submenu">
+                <div class="map-context-submenu-hint">One group per entity</div>
+                ${subItems}
+            </div>
+        </div>
+    `;
+    const item = section.firstElementChild;
+    const insertBefore = menu.querySelector('[data-action="delete"]');
+    if (insertBefore) {
+        // Keep the existing divider that precedes Delete; only add one if missing.
+        const prev = insertBefore.previousElementSibling;
+        if (!prev || !prev.classList.contains('map-context-divider')) {
+            const divider = document.createElement('div');
+            divider.className = 'map-context-divider';
+            menu.insertBefore(divider, insertBefore);
+        }
+        menu.insertBefore(item, insertBefore);
+    } else {
+        menu.appendChild(item);
+    }
+
+    const host = menu.querySelector('[data-action="add-to-group"]');
+    const submenu = host && host.querySelector('.map-context-submenu');
+    if (host && submenu) {
+        const flipIfNeeded = () => {
+            submenu.classList.remove('map-context-submenu-left');
+            const rect = submenu.getBoundingClientRect();
+            if (rect.right > window.innerWidth - 8) {
+                submenu.classList.add('map-context-submenu-left');
+            }
+        };
+        host.addEventListener('mouseenter', flipIfNeeded);
+        host.addEventListener('focusin', flipIfNeeded);
+    }
+
+    menu.querySelectorAll('[data-group-name]').forEach(item => {
+        item.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideMapContextMenu();
+            const names = (typeof getNames === 'function' ? getNames() : []) || [];
+            if (!names.length) return;
+            const target = item.getAttribute('data-group-name') || '';
+            await assignEntitiesToStudioGroup(names, target);
+        });
+    });
+
+    const createBtn = menu.querySelector('[data-action="create-group"]');
+    if (createBtn) {
+        createBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideMapContextMenu();
+            if (window.OntologyGroups && typeof OntologyGroups.showCreateModal === 'function') {
+                OntologyGroups.showCreateModal();
+            }
+        });
+    }
+}
+
 function showMapMultiSelectContextMenu(event, names, container) {
     hideMapContextMenu();
 
@@ -2401,6 +2600,11 @@ function showMapMultiSelectContextMenu(event, names, container) {
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
     container.appendChild(menu);
+
+    _wireStudioGroupMembershipMenu(menu, () => {
+        const live = _liveMapSelectionNames();
+        return live.length >= 2 ? live : names.slice();
+    });
 
     const menuRect = menu.getBoundingClientRect();
     if (menuRect.right > containerRect.right) {
@@ -2498,6 +2702,8 @@ function showMapContextMenu(event, entityData, container) {
     menu.style.top = y + 'px';
     
     container.appendChild(menu);
+
+    _wireStudioGroupMembershipMenu(menu, () => [entityData.name]);
     
     // Adjust if menu goes off-screen
     const menuRect = menu.getBoundingClientRect();

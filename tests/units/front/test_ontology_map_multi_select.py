@@ -108,6 +108,7 @@ def test_multi_context_menu_limits_actions():
     assert "create-relationship" not in block
     assert "createBusinessViewFromSelection(live)" in block
     assert "deleteEntitiesFromMap(live)" in block
+    assert "_wireStudioGroupMembershipMenu(" in block
 
 
 def test_multi_delete_mutates_and_saves_once():

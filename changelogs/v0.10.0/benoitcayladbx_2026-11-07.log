@@ -23,3 +23,66 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m 'not scenario' → 10011 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted test_studio_views_groups_contract + test_clarity_design_contract → 54 passed
 
+
+## Add Studio context-menu group assignment (exclusive membership)
+
+Context: Users needed to assign selected Studio entities to an existing
+ontology group from the right-click menu (including multi-select), and to
+see clearly that an entity can belong to only one group across modal,
+General tab, and menus. Backend exclusive membership was already enforced.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Add assignEntitiesToStudioGroup + Add to group flyout on single and
+   multi-select context menus (with Remove from group when applicable).
+2. src/front/static/ontology/css/ontology-map.css
+   Context-menu submenu styles; overflow visible for flyouts.
+3. src/front/static/ontology/js/ontology-groups.js
+   Confirm when selecting a member already in another group.
+4. src/front/templates/partials/ontology/_ontology_groups.html
+   Exclusive-membership copy in the group modal.
+5. src/front/static/ontology/js/ontology-shared-panels.js
+   General-tab hint: one group per entity.
+6. docs/user-guide.md
+   Document right-click Add to group and exclusive membership.
+7. tests/units/front/test_map_context_menu_tabs.py
+   Contract for Add to group wiring.
+8. tests/units/front/test_ontology_map_multi_select.py
+   Multi-select menu wires group membership.
+9. tests/units/front/test_studio_views_groups_contract.py
+   Exclusive-membership UI surface contract.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/static/ontology/js/ontology-shared-panels.js
+- docs/user-guide.md
+- tests/units/front/test_map_context_menu_tabs.py
+- tests/units/front/test_ontology_map_multi_select.py
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10013 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted group/context-menu contracts → 64 passed
+
+## Show minus badge on members of expanded Studio groups
+
+Context: On the Studio canvas, entities of an expanded group carried a plus
+badge that collapses the group, which reads as the opposite action. Use a
+minus on each member badge while the group is displayed; the group circle
+keeps the plus to expand.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Member collapse badge glyph changed from + to a minus sign (U+2212) and
+   tagged with the studio-group-toggle-collapse class.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Assert the minus glyph and collapse class on member badges.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10013 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted studio/context-menu contracts → 45 passed
