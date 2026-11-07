@@ -36,12 +36,14 @@ let _studioMemberToGroup = {};  // entityName → groupName
 let _studioEntityPositions = new Map();
 
 /**
- * Rebuild #studioViewSelect from GET /domain/design-views.
+ * Rebuild the Studio View dropdown (#studioViewMenu) from GET /domain/design-views.
+ * Each view row has a pick item (switch view) and a pencil (rename).
  */
 async function refreshStudioViewSelect() {
-    const select = document.getElementById('studioViewSelect');
+    const menu = document.getElementById('studioViewMenu');
+    const nameEl = document.getElementById('studioViewName');
     const deleteBtn = document.getElementById('studioDeleteViewBtn');
-    if (!select) return;
+    if (!menu) return;
 
     let views = [];
     try {
@@ -54,24 +56,141 @@ async function refreshStudioViewSelect() {
         console.warn('[Studio] Could not load design views:', err);
     }
 
-    const current = _studioActiveView || '__all__';
-    select.innerHTML = '';
-    const allOpt = document.createElement('option');
-    allOpt.value = '__all__';
-    allOpt.textContent = 'All';
-    select.appendChild(allOpt);
+    const current = (_studioActiveView && views.includes(_studioActiveView))
+        ? _studioActiveView
+        : '__all__';
+
+    // Keep the "All" item; replace every view row and the empty/divider state.
+    menu.querySelectorAll('.studio-view-row').forEach(li => li.remove());
+    const allItem = menu.querySelector('[data-view="__all__"]');
+    if (allItem) allItem.classList.toggle('is-current', current === '__all__');
+
+    const divider = document.getElementById('studioViewDivider');
+    const empty = document.getElementById('studioViewEmpty');
+    if (divider) divider.hidden = views.length === 0;
+    if (empty) empty.classList.toggle('d-none', views.length > 0);
 
     views.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        select.appendChild(opt);
+        const li = document.createElement('li');
+        li.className = 'studio-view-row';
+
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'dropdown-item studio-view-row-pick flex-grow-1';
+        pick.dataset.view = name;
+        pick.classList.toggle('is-current', name === current);
+        const check = document.createElement('i');
+        check.className = 'bi bi-check2 studio-view-check me-1';
+        pick.appendChild(check);
+        pick.appendChild(document.createTextNode(name));
+
+        const rename = document.createElement('button');
+        rename.type = 'button';
+        rename.className = 'btn btn-link btn-sm text-muted studio-view-rename';
+        rename.dataset.view = name;
+        rename.title = 'Rename view';
+        rename.setAttribute('aria-label', `Rename Business View ${name}`);
+        rename.innerHTML = '<i class="bi bi-pencil"></i>';
+
+        li.appendChild(pick);
+        li.appendChild(rename);
+        menu.appendChild(li);
     });
 
-    select.value = views.includes(current) ? current : '__all__';
+    if (nameEl) nameEl.textContent = current === '__all__' ? 'All' : current;
     if (deleteBtn) {
-        deleteBtn.disabled = !(_studioActiveView && views.includes(_studioActiveView));
+        deleteBtn.disabled = current === '__all__';
     }
+}
+
+/**
+ * Rename a Business View via a small modal. Backend enforces uniqueness;
+ * the client checks first so the user gets an inline message.
+ * @param {string} oldName
+ */
+function renameStudioView(oldName) {
+    const modalId = 'studioRenameViewModal';
+    document.getElementById(modalId)?.remove();
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-dialog-centered">
+                <form class="modal-content" id="${modalId}Form" novalidate>
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Rename Business View</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label for="${modalId}Input" class="form-label">New name</label>
+                        <input type="text" class="form-control" id="${modalId}Input" maxlength="120" required>
+                        <div class="invalid-feedback" id="${modalId}Error"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="${modalId}Save">Rename</button>
+                    </div>
+                </form>
+            </div>
+        </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modalEl = document.getElementById(modalId);
+    const form = document.getElementById(`${modalId}Form`);
+    const input = document.getElementById(`${modalId}Input`);
+    const errEl = document.getElementById(`${modalId}Error`);
+    const saveBtn = document.getElementById(`${modalId}Save`);
+    input.value = oldName;
+
+    const showError = (msg) => {
+        input.classList.add('is-invalid');
+        errEl.textContent = msg;
+    };
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const newName = input.value.trim();
+        if (!newName) return showError('Enter a name.');
+        if (newName === oldName) { modal.hide(); return; }
+
+        const resp0 = await fetch('/domain/design-views', { credentials: 'same-origin' });
+        const existing = resp0.ok ? ((await resp0.json()).views || []) : [];
+        if (existing.includes(newName)) return showError(`"${newName}" already exists.`);
+
+        saveBtn.disabled = true;
+        try {
+            const resp = await fetch('/domain/design-views/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_name: oldName, new_name: newName }),
+                credentials: 'same-origin',
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.detail || `Rename failed (${resp.status})`);
+            }
+            if (_studioActiveView === oldName) _studioActiveView = newName;
+            modal.hide();
+            await refreshStudioViewSelect();
+            if (typeof showNotification === 'function') {
+                showNotification(`Business View renamed to "${newName}"`, 'success');
+            }
+        } catch (err) {
+            console.error('[Studio] rename view failed:', err);
+            showError(err.message || 'Rename failed.');
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        setTimeout(() => modalEl.remove(), 100);
+    }, { once: true });
+
+    const modal = showStackedModal(modalEl);
+    modalEl.addEventListener('shown.bs.modal', () => {
+        input.focus();
+        input.select();
+    }, { once: true });
 }
 
 /**
@@ -138,13 +257,27 @@ async function applyStudioView(viewNameOrAll) {
  */
 function wireStudioViewControls() {
     if (_studioViewWired) return;
-    const select = document.getElementById('studioViewSelect');
+    const menu = document.getElementById('studioViewMenu');
     const deleteBtn = document.getElementById('studioDeleteViewBtn');
-    if (!select) return;
+    if (!menu) return;
     _studioViewWired = true;
 
-    select.addEventListener('change', () => {
-        applyStudioView(select.value);
+    menu.addEventListener('click', (event) => {
+        const renameBtn = event.target.closest('.studio-view-rename');
+        if (renameBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const toggle = document.getElementById('studioViewBtn');
+            if (toggle && window.bootstrap?.Dropdown) {
+                bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+            }
+            renameStudioView(renameBtn.dataset.view || '');
+            return;
+        }
+        const item = event.target.closest('[data-view]');
+        if (item) {
+            applyStudioView(item.dataset.view);
+        }
     });
 
     if (deleteBtn) {
@@ -2452,7 +2585,8 @@ async function assignEntitiesToStudioGroup(entityNames, groupName) {
 }
 
 /**
- * Build the "Add to group" flyout (and optional Remove) inside a context menu.
+ * Build the "Add to group" flyout and a top-level "Remove from group" item
+ * (shown only when the selection already belongs to a group).
  * An entity can belong to only one group — picking another group moves it.
  * @param {HTMLElement} menu
  * @param {() => string[]} getNames  live selection resolver
@@ -2494,14 +2628,6 @@ function _wireStudioGroupMembershipMenu(menu, getNames) {
                     ${isCurrent ? '<i class="bi bi-check2 ms-auto"></i>' : ''}
                 </div>`;
         }).join('');
-        if (anyInGroup) {
-            subItems += `
-                <div class="map-context-divider"></div>
-                <div class="map-context-subitem" data-group-name="">
-                    <i class="bi bi-x-circle"></i>
-                    <span>Remove from group</span>
-                </div>`;
-        }
     }
 
     const section = document.createElement('div');
@@ -2515,8 +2641,13 @@ function _wireStudioGroupMembershipMenu(menu, getNames) {
                 ${subItems}
             </div>
         </div>
+        ${anyInGroup ? `
+        <div class="map-context-item" data-action="remove-from-group">
+            <i class="bi bi-x-circle"></i>
+            <span>Remove from group</span>
+        </div>` : ''}
     `;
-    const item = section.firstElementChild;
+    const nodes = Array.from(section.children);
     const insertBefore = menu.querySelector('[data-action="delete"]');
     if (insertBefore) {
         // Keep the existing divider that precedes Delete; only add one if missing.
@@ -2526,19 +2657,38 @@ function _wireStudioGroupMembershipMenu(menu, getNames) {
             divider.className = 'map-context-divider';
             menu.insertBefore(divider, insertBefore);
         }
-        menu.insertBefore(item, insertBefore);
+        nodes.forEach(node => menu.insertBefore(node, insertBefore));
     } else {
-        menu.appendChild(item);
+        nodes.forEach(node => menu.appendChild(node));
     }
 
     const host = menu.querySelector('[data-action="add-to-group"]');
     const submenu = host && host.querySelector('.map-context-submenu');
     if (host && submenu) {
+        /**
+         * Open the flyout on the side with room. The canvas
+         * (#ontology-map-container) clips overflow, and the right detail pane
+         * is a sibling — so window.innerWidth is the wrong bound.
+         */
         const flipIfNeeded = () => {
             submenu.classList.remove('map-context-submenu-left');
-            const rect = submenu.getBoundingClientRect();
-            if (rect.right > window.innerWidth - 8) {
+            const hostRect = host.getBoundingClientRect();
+            const clipEl = document.getElementById('ontology-map-container');
+            const clipRect = clipEl
+                ? clipEl.getBoundingClientRect()
+                : { left: 0, right: window.innerWidth };
+            // min-width of .map-context-submenu; prefer measured width once visible
+            const needed = Math.max(submenu.offsetWidth || 0, 200) + 8;
+            const spaceRight = clipRect.right - hostRect.right;
+            const spaceLeft = hostRect.left - clipRect.left;
+            if (spaceRight < needed && spaceLeft > spaceRight) {
                 submenu.classList.add('map-context-submenu-left');
+            }
+            const chevron = host.querySelector('.map-context-chevron');
+            if (chevron) {
+                const openLeft = submenu.classList.contains('map-context-submenu-left');
+                chevron.classList.toggle('bi-chevron-left', openLeft);
+                chevron.classList.toggle('bi-chevron-right', !openLeft);
             }
         };
         host.addEventListener('mouseenter', flipIfNeeded);
@@ -2556,6 +2706,18 @@ function _wireStudioGroupMembershipMenu(menu, getNames) {
             await assignEntitiesToStudioGroup(names, target);
         });
     });
+
+    const removeBtn = menu.querySelector('[data-action="remove-from-group"]');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            hideMapContextMenu();
+            const names = (typeof getNames === 'function' ? getNames() : []) || [];
+            if (!names.length) return;
+            await assignEntitiesToStudioGroup(names, '');
+        });
+    }
 
     const createBtn = menu.querySelector('[data-action="create-group"]');
     if (createBtn) {

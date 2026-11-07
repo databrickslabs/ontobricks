@@ -152,7 +152,7 @@ Product conventions (class `name` vs `rdfs:label`, instance `{Class}/{id}`,
 
 ### Option A: Studio (Recommended)
 
-Open **Ontology → Studio** for the interactive ontology canvas. Use the toolbar **View** dropdown to show **All** entities or filter to a saved **Business View**. Create a Business View from a multi-selection (right-click → Create Business View); the dropdown switches to that view and filters the canvas. Manage entity groups from the Studio **Groups** toolbar button (create/edit/delete). Assign an entity to a group from the right pane **General** tab or via right-click → **Add to group** (works with multi-select too). An entity can belong to only one group. Collapsed groups use the **+** badge on a member node (group circle with **+** to expand).
+Open **Ontology → Studio** for the interactive ontology canvas. Use the toolbar **View** dropdown to show **All** entities or filter to a saved **Business View**. To rename a Business View, open the dropdown and click the pencil next to it (not available to viewers). Create a Business View from a multi-selection (right-click → Create Business View); the dropdown switches to that view and filters the canvas. Manage entity groups from the Studio **Groups** toolbar button (create/edit/delete). Assign an entity to a group from the right pane **General** tab or via right-click → **Add to group** (works with multi-select too). When an entity already belongs to a group, right-click also offers **Remove from group**. An entity can belong to only one group. Collapsed groups use the **+** badge on a member node (group circle with **+** to expand).
 
 #### Creating Entities
 

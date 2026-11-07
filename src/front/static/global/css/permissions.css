@@ -184,6 +184,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsDesignBtn,
 /* --- Ontology > Studio: Business View delete control. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #studioDeleteViewBtn,
+body:is(.read-only-version, .role-viewer, .read-only-locked) .studio-view-rename,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #newAssistantBtn,
 /* --- Ontology > Studio: Groups toolbar dropdown. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #studioGroupsBtn,

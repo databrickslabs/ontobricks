@@ -8,10 +8,22 @@
     </div>
     <div class="d-flex align-items-center gap-2">
         <div class="d-flex align-items-center gap-1" title="Filter the canvas by Business View">
-            <label for="studioViewSelect" class="small text-muted mb-0 me-1">View</label>
-            <select id="studioViewSelect" class="form-select form-select-sm studio-view-select" aria-label="Business view filter">
-                <option value="__all__" selected>All</option>
-            </select>
+            <span class="small text-muted mb-0 me-1">View</span>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-secondary dropdown-toggle studio-view-toggle" id="studioViewBtn"
+                        data-bs-toggle="dropdown" aria-expanded="false" aria-label="Business view filter">
+                    <span class="studio-view-toggle-name text-truncate" id="studioViewName">All</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" id="studioViewMenu" aria-labelledby="studioViewBtn">
+                    <li>
+                        <button type="button" class="dropdown-item studio-view-item" data-view="__all__">
+                            <i class="bi bi-check2 studio-view-check me-1"></i>All
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider" id="studioViewDivider" hidden></li>
+                    <li><span class="dropdown-item-text text-muted small" id="studioViewEmpty">No Business Views yet</span></li>
+                </ul>
+            </div>
             <button type="button" class="btn btn-sm btn-outline-secondary ontology-edit-btn" id="studioDeleteViewBtn"
                     title="Delete the selected Business View" aria-label="Delete Business View" disabled>
                 <i class="bi bi-trash"></i>

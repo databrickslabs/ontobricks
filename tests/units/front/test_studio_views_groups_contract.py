@@ -58,8 +58,9 @@ def test_menu_has_no_business_views_or_groups_sidebar_entry():
 
 def test_studio_toolbar_has_view_dropdown_and_groups_menu():
     html = _read(MAP_HTML)
-    assert 'id="studioViewSelect"' in html
-    assert 'value="__all__"' in html
+    assert 'id="studioViewBtn"' in html
+    assert 'id="studioViewMenu"' in html
+    assert 'data-view="__all__"' in html
     assert 'id="studioDeleteViewBtn"' in html
     assert 'id="studioGroupsBtn"' in html
     assert 'id="studioNewGroupBtn"' in html
@@ -114,7 +115,8 @@ def test_group_toggle_css_exists():
     css = _read(MAP_CSS)
     assert ".studio-group-toggle" in css
     assert ".map-group-circle" in css
-    assert ".studio-view-select" in css
+    assert ".studio-view-toggle" in css
+    assert ".studio-view-rename" in css
     # + badge: white glyph centered on a group-colored circle (fill set in JS).
     assert "dominant-baseline: central" in css
     assert "text-anchor: middle" in css
@@ -124,6 +126,20 @@ def test_group_toggle_css_exists():
     # Member badge shows a minus (collapse); the group circle keeps the plus (expand).
     assert "studio-group-toggle-collapse" in js
     assert ".text('\\u2212')" in js
+
+
+def test_business_view_rename_is_wired_from_dropdown():
+    """Rename uses the rich View dropdown's pencil and the existing rename endpoint."""
+    js = _read(MAP_JS)
+    assert "function renameStudioView(" in js
+    assert "/domain/design-views/rename" in js
+    assert "studio-view-rename" in js
+    assert "studioViewMenu" in js
+    # Client-side duplicate check gives an inline message before the POST.
+    assert "already exists" in js
+
+    perms = _read(REPO_ROOT / "src/front/static/global/css/permissions.css")
+    assert ".studio-view-rename" in perms
 
 
 def test_groups_crud_refreshes_studio():
@@ -149,6 +165,10 @@ def test_exclusive_group_membership_is_surfaced_in_ui():
     css = _read(MAP_CSS)
     assert ".map-context-submenu" in css
     assert ".map-context-has-submenu" in css
+
+    map_js = _read(MAP_JS)
+    assert 'data-action="remove-from-group"' in map_js
+    assert "Remove from group" in map_js
 
 
 def test_persistence_module_marks_registry_dirty():

@@ -487,7 +487,7 @@ class TestOntologyPage:
 
     def test_studio_view_select_present(self, client):
         html = _html(client, "/ontology")
-        assert _find(_tags(html), id_="studioViewSelect") is not None
+        assert _find(_tags(html), id_="studioViewBtn") is not None
 
     def test_ontology_core_script_loaded(self, client):
         html = _html(client, "/ontology")

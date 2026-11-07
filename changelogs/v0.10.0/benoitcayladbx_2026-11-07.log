@@ -86,3 +86,94 @@ Modified files:
 - tests/units/front/test_studio_views_groups_contract.py
 
 Tests: uv run --frozen pytest -q -m 'not scenario' → 10013 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted studio/context-menu contracts → 45 passed
+
+
+## Add top-level Remove from group on Studio entity right-click
+
+Context: Remove from group lived only inside the Add to group flyout. Users
+expect a dedicated right-click action when the entity already belongs to a
+group (single or multi-select).
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Promote Remove from group to a top-level context-menu item gated on
+   anyInGroup; keep Add to group as the assign flyout only.
+2. docs/user-guide.md
+   Document right-click Remove from group.
+3. tests/units/front/test_map_context_menu_tabs.py
+   Contract for the top-level remove-from-group action.
+4. tests/units/front/test_studio_views_groups_contract.py
+   Assert remove-from-group is present in Studio menus.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- docs/user-guide.md
+- tests/units/front/test_map_context_menu_tabs.py
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10014 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted studio/context-menu contracts → 17 passed
+
+
+## Flip Add to group flyout inside the Studio canvas
+
+Context: Right-clicking near the right edge of the Studio canvas hid the
+Add to group submenu behind the detail pane. The flyout only flipped against
+window.innerWidth, but #ontology-map-container clips overflow and the right
+pane is a sibling of the canvas.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Flip the submenu left when spaceRight inside the map container is too
+   small; point the chevron the open direction.
+2. tests/units/front/test_map_context_menu_tabs.py
+   Contract that flip uses the map container clip box.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_map_context_menu_tabs.py
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10015 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted context-menu contracts → 18 passed
+
+
+## Rename Business Views from the Studio View dropdown
+
+Context: The Studio View filter was a plain select with no way to rename a
+Business View, although POST /domain/design-views/rename already existed and
+was tested. The dropdown now follows the Groups menu pattern: each view row has
+a pick item and a pencil that opens a rename modal.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   Replace the #studioViewSelect <select> with a btn-group dropdown
+   (#studioViewBtn, #studioViewMenu) keeping All, view rows, and the delete button.
+2. src/front/static/ontology/js/ontology-map.js
+   refreshStudioViewSelect rebuilds the rich menu; new renameStudioView modal
+   calls /domain/design-views/rename with a client-side duplicate check;
+   wireStudioViewControls handles pick and pencil clicks.
+3. src/front/static/ontology/css/ontology-map.css
+   Replace .studio-view-select with toggle, menu, check-mark and row styles.
+4. src/front/static/global/css/permissions.css
+   Hide .studio-view-rename for viewer and read-only roles.
+5. docs/user-guide.md
+   Document renaming a Business View from the View dropdown.
+6. tests/units/front/test_studio_views_groups_contract.py
+   Update ids to the new dropdown; add rename wiring contract.
+7. tests/units/api/test_ui_rendering.py
+   studioViewSelect rendering check now targets studioViewBtn.
+8. tests/units/front/test_help_center_menu_sync.py
+   Same id update.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/global/css/permissions.css
+- docs/user-guide.md
+- tests/units/front/test_studio_views_groups_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_help_center_menu_sync.py
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10016 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted studio/help/ui-rendering/design-views → 190 passed. Browser check of the rename modal pending. node --check could not run locally (libsimdjson missing for Homebrew node).

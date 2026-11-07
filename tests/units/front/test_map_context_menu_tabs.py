@@ -38,6 +38,25 @@ def test_entity_context_menu_can_assign_group_membership():
     assert js.count("_wireStudioGroupMembershipMenu(menu,") >= 2
 
 
+def test_entity_context_menu_has_top_level_remove_from_group():
+    """When an entity belongs to a group, right-click offers Remove from group."""
+    js = MAP_JS.read_text(encoding="utf-8")
+    assert 'data-action="remove-from-group"' in js
+    assert "Remove from group" in js
+    # Top-level item is gated on anyInGroup (entity already in a group).
+    assert "${anyInGroup ? `" in js
+    assert "assignEntitiesToStudioGroup(names, '')" in js
+
+
+def test_add_to_group_submenu_flips_inside_map_container():
+    """Flyout must flip left against the canvas clip box, not only the window."""
+    js = MAP_JS.read_text(encoding="utf-8")
+    assert "ontology-map-container" in js
+    assert "map-context-submenu-left" in js
+    assert "spaceRight" in js
+    assert "spaceLeft" in js
+
+
 def test_entity_tab_shortcuts_call_edit_class_by_name_with_tab():
     js = MAP_JS.read_text(encoding="utf-8")
     assert "editClassByName(entityData.name, tab)" in js

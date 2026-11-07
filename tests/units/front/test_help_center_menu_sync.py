@@ -163,7 +163,7 @@ def test_studio_has_view_filter_dropdown():
     assert studio["label"] == "Studio"
     assert studio["icon"] == "bi-pencil"
     map_html = _ONTOLOGY_DESIGNER.read_text(encoding="utf-8")
-    assert 'id="studioViewSelect"' in map_html
+    assert 'id="studioViewBtn"' in map_html
     assert "Ontology Studio" in map_html
     # Business Views is no longer a separate sidebar section.
     assert not any(
