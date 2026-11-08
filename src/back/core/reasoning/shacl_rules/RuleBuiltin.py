@@ -1,11 +1,11 @@
-"""Descriptor of one SWRL built-in predicate (arity, category, SQL/Cypher templates)."""
+"""Descriptor of one rule built-in predicate (arity, category, SQL/Cypher templates)."""
 
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class SWRLBuiltin:
-    """Descriptor for a single SWRL built-in predicate."""
+class RuleBuiltin:
+    """Descriptor for a single rule built-in predicate (SWRL-style syntax)."""
 
     name: str
     arity: int

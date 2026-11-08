@@ -1334,7 +1334,7 @@ All code follows a strict three-layer stack: **routes (HTTP)** → **domain clas
 
 #### 1.2 Naming conventions
 
-- Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `SWRLSQLTranslator.py`).
+- Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `ShaclFlatSqlBackend.py`).
 - Python files without a primary class: **lowercase with underscores** (e.g., `constants.py`, `models.py`).
 - CSS/JS assets: lowercase with dashes, organised by feature area under `front/static/`.
 

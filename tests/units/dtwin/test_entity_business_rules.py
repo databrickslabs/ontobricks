@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.errors import NotFoundError, ValidationError
-from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
 from back.core.w3c.owl.OntologyGenerator import OntologyGenerator
 from back.core.w3c.owl.OntologyParser import OntologyParser
 from back.objects.digitaltwin import NodeBusinessRuleService, NodeContextService
@@ -116,14 +116,14 @@ def _params(**extra):
 
 
 def test_inference_sql_unchanged_without_focus():
-    tr = SWRLSQLTranslator()
+    tr = ShaclFlatSqlBackend()
     assert tr.build_inference_sql("t", _params()) == tr.build_inference_sql(
         "t", _params(focus=None)
     )
 
 
 def test_inference_sql_adds_escaped_focus_predicate():
-    sql = SWRLSQLTranslator().build_inference_sql(
+    sql = ShaclFlatSqlBackend().build_inference_sql(
         "t", _params(focus={"vars": ["?c"], "uri": "https://x/C'1"})
     )
     assert "(a1.subject = 'https://x/C''1')" in sql
@@ -137,13 +137,13 @@ def test_inference_sql_ors_multiple_focus_vars():
         "base_uri": BASE,
         "focus": {"vars": ["?a", "?b"], "uri": "u"},
     }
-    sql = SWRLSQLTranslator().build_inference_sql("t", rule)
+    sql = ShaclFlatSqlBackend().build_inference_sql("t", rule)
     assert "(a1.subject = 'u' OR a3.subject = 'u')" in sql
 
 
 def test_inference_sql_none_when_focus_var_unbound():
     assert (
-        SWRLSQLTranslator().build_inference_sql(
+        ShaclFlatSqlBackend().build_inference_sql(
             "t", _params(focus={"vars": ["?zz"], "uri": "u"})
         )
         is None

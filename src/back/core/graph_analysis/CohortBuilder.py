@@ -209,7 +209,7 @@ class CohortBuilder:
         2. If the URI is unchanged (foreign namespace or already in data
            form), falls back to local-name matching against all predicates
            actually present in the loaded data — the same strategy
-           :class:`SWRLSQLTranslator` uses via
+           :class:`ShaclFlatSqlBackend` uses via
            ``_predicate_local_name_key``.
         """
         if not uri:

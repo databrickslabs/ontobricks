@@ -18,9 +18,11 @@ class ReasoningService:
     Phases (in order):
 
     - **T-Box** — OWL 2 RL closure via owlrl on the ontology graph.
-    - **SWRL** — Rule execution (violation and materialisation) on the
-      triple-store backend (SQL or Cypher).  Supports built-in predicates
-      (comparison, math, string, date) and negated atoms (closed-world).
+    - **SWRL** — IF/THEN rules authored in the UI, transpiled to canonical
+      SHACL-AF rules (``sh:TripleRule`` / ``sh:SPARQLRule``) and executed by
+      :class:`ShaclRuleEngine` on the triple-store backend (SQL or Cypher).
+      Supports built-in predicates (comparison, math, string, date) and
+      negated atoms (closed-world).  Provenance and stats are unchanged.
     - **Graph** — Structural reasoning (transitive closure, symmetric
       expansion, etc.).
     - **Decision Tables** — DMN-style tabular business rules.
@@ -258,10 +260,10 @@ class ReasoningService:
                 }
             )
 
-        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
+        from back.core.reasoning.shacl_rules.ShaclRuleEngine import ShaclRuleEngine
 
         ontology = self._get_ontology_dict()
-        engine = SWRLEngine(ontology=ontology)
+        engine = ShaclRuleEngine(ontology=ontology)
         table_name = self._get_graph_name()
         return engine.execute_rules(
             rules,
@@ -613,7 +615,7 @@ class ReasoningService:
     ) -> str:
         """Normalize a property URI to the data namespace used by R2RML.
 
-        Mirrors the logic in ``SWRLEngine._build_uri_map`` so that
+        Mirrors the logic in ``shacl_rules.rule_uri_map.build_uri_map`` so that
         predicate URIs match those stored in the triple store.
         """
         if not uri and name:

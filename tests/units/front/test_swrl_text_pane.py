@@ -1,4 +1,8 @@
-"""Source contracts for the Business Rules SWRL text modal."""
+"""Source contracts for the Business Rules SHACL-AF text modal.
+
+The modal is read-only (view / export of the generated SHACL-AF rules); SWRL
+text import was removed when the raw layer became read-only SHACL.
+"""
 
 from pathlib import Path
 
@@ -13,10 +17,11 @@ def test_swrl_button_and_modal_markup():
     assert "openSwrlModal" in HTML
     assert 'id="brSwrlModal"' in HTML
     assert 'id="brSwrlEditor"' in HTML
-    assert 'id="brSwrlImportModal"' in HTML
-    assert 'id="brSwrlImportFile"' in HTML
-    assert 'id="brSwrlImportText"' in HTML
     assert 'id="brSwrlPanel"' not in HTML
+    # SWRL text import was removed — the modal is read-only.
+    assert 'id="brSwrlImportModal"' not in HTML
+    assert 'id="brSwrlImportFile"' not in HTML
+    assert 'id="brSwrlImportText"' not in HTML
 
 
 def test_swrl_module_exposes_modal_helpers():
@@ -24,8 +29,12 @@ def test_swrl_module_exposes_modal_helpers():
         "openSwrlModal",
         "refreshSwrlText",
         "exportSwrl",
-        "showSwrlImportModal",
-        "doSwrlImport",
     ):
         assert f"{name}(" in JS, f"missing SwrlModule.{name}"
+    # Import helpers were removed with the read-only pivot.
+    assert "showSwrlImportModal" not in JS
+    assert "doSwrlImport" not in JS
     assert "toggleSwrlPanel" not in JS
+    # Rules text/export now target the SHACL-AF endpoints.
+    assert "/ontology/shacl-rules/text" in JS
+    assert "/ontology/shacl-rules/export" in JS

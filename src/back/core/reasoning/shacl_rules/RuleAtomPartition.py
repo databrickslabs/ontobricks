@@ -1,12 +1,12 @@
-"""Antecedent/consequent atom partition used by SWRL rule translation."""
+"""Antecedent/consequent atom partition used by SHACL-AF rule translation."""
 
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
 
 @dataclass
-class SWRLAtomPartition:
-    """Partitioned antecedent/consequent atoms for SWRL rule translation."""
+class RuleAtomPartition:
+    """Partitioned antecedent/consequent atoms for SHACL-AF rule translation."""
 
     class_atoms: List[Dict[str, Any]]
     prop_atoms: List[Dict[str, Any]]

@@ -1,8 +1,8 @@
-from back.core.reasoning.swrl.SWRLFlatCypherTranslator import SWRLFlatCypherTranslator
+from back.core.reasoning.shacl_rules.ShaclFlatCypherBackend import ShaclFlatCypherBackend
 
 
 def test_translates_customer_contract_meter_rule_to_read_only_cypher():
-    query = SWRLFlatCypherTranslator("sandbox").build_inference_sql(
+    query = ShaclFlatCypherBackend("sandbox").build_inference_sql(
         "sandbox",
         {
             "antecedent": (

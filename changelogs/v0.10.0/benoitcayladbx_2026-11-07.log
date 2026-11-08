@@ -177,3 +177,261 @@ Modified files:
 - tests/units/front/test_help_center_menu_sync.py
 
 Tests: uv run --frozen pytest -q -m 'not scenario' → 10016 passed, 125 failed (pre-existing Node/libsimdjson env), 325 skipped, 8 deselected; targeted studio/help/ui-rendering/design-views → 190 passed. Browser check of the rename modal pending. node --check could not run locally (libsimdjson missing for Homebrew node).
+
+================================================================================
+## Replace the SWRL execution engine with SHACL-AF rules (engine swap)
+================================================================================
+
+Context: SWRL inference was executed by the bespoke SWRL engine translating
+IF/THEN rules to SQL on the flat triple store. We swap the execution engine to
+canonical SHACL-AF rules (sh:TripleRule / sh:SPARQLRule) while keeping the
+authoring UI, the stored model, and every capability identical, and keeping
+SQL-at-scale execution on Delta/Lakebase. Rules authored in the UI are still
+SWRL; they are transpiled to SHACL-AF at execution time. Provenance
+(`swrl:<rule>`) and result stats (`phase = "swrl"`) are preserved so the UI,
+MCP, and Data-Quality pipeline see no change.
+
+Changes:
+
+1. src/back/core/reasoning/shacl_rules/ShaclRule.py
+   New canonical SHACL-AF rule model (rule_type, target_class_uri,
+   construct_sparql, canonical Turtle, preserved executable body).
+2. src/back/core/reasoning/shacl_rules/SwrlToShaclTranspiler.py
+   New transpiler SWRL dict -> ShaclRule. Simple assertions -> sh:TripleRule;
+   built-ins/negation/multi-hop -> sh:SPARQLRule with a CONSTRUCT body. Reuses
+   SWRLEngine._build_uri_map() for identical URI resolution; renders canonical
+   SHACL Turtle.
+3. src/back/core/reasoning/shacl_rules/ShaclRuleSqlTranslator.py
+   New SHACL-rule -> SQL path. Delegates to the flat-triple SQL backend
+   (SWRLSQLTranslator) to guarantee byte-for-byte parity for built-ins,
+   closed-world negation, multi-hop joins, focus, limit, and materialisation.
+4. src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py
+   New engine; drop-in replacement for SWRLEngine (same signature/result).
+   Emits InferredTriple provenance `swrl:<rule>` and stats `phase = "swrl"`
+   (plus `engine = "shacl-af"`).
+5. src/back/core/reasoning/shacl_rules/__init__.py
+   Package exports.
+6. src/back/core/reasoning/ReasoningService.py
+   run_swrl_rules() now uses ShaclRuleEngine (simulation inherits it). Phase
+   docstring updated.
+7. src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+   _eval_swrl_rule() + _swrl_antecedent_population_sql() routed through the
+   SHACL translator (ShaclRule + context) for SWRL violation detection.
+8. tests/units/reasoning/test_shacl_rule_engine.py
+   New golden parity suite: identical SQL vs SWRLEngine across unary/binary
+   atoms, comparison + string built-ins, negation, property chains,
+   materialisation, focus, inference_limit; provenance/stats contract;
+   transpiler rule-type + Turtle.
+9. tests/units/dtwin/test_v090_dq_sql_checks.py
+   Updated the two direct _swrl_antecedent_population_sql unit tests to the new
+   (table, rule, ctx) translator contract.
+10. docs/superpowers/specs/2026-11-07-swrl-to-shacl-rules-study.md
+    Design/feasibility study documenting the architecture, parity strategy,
+    preserved contract, capability map, and follow-ups.
+
+Modified files:
+- src/back/core/reasoning/shacl_rules/ShaclRule.py (new)
+- src/back/core/reasoning/shacl_rules/SwrlToShaclTranspiler.py (new)
+- src/back/core/reasoning/shacl_rules/ShaclRuleSqlTranslator.py (new)
+- src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py (new)
+- src/back/core/reasoning/shacl_rules/__init__.py (new)
+- src/back/core/reasoning/ReasoningService.py
+- src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+- tests/units/reasoning/test_shacl_rule_engine.py (new)
+- tests/units/dtwin/test_v090_dq_sql_checks.py
+- docs/superpowers/specs/2026-11-07-swrl-to-shacl-rules-study.md (new)
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → all backend suites pass
+(10026+ passed; 12 new SHACL parity/transpiler tests). Remaining failures are
+pre-existing and environmental: tests/units/front/* (local Node/libsimdjson
+dylib missing) and test_size_budget.py (agent_dtwin_chat/engine.py::run_agent,
+unrelated) — both already failing on 0.10.0 before this change.
+
+
+===============================================================================
+Title: Remove the SWRL engine lib — SHACL-AF fully takes over
+===============================================================================
+
+Context:
+Follow-up to the engine swap above. The SWRL IF/THEN layer had been rerouted to
+run through the new SHACL-AF engine, but the old `back/core/reasoning/swrl/`
+package still existed and was the real SQL/Cypher/parse/builtin implementation
+the SHACL layer delegated to. This change physically removes that package so
+SHACL-AF is unambiguously in charge: the proven implementation modules were
+MOVED (git mv, zero rewrite) into `shacl_rules/` and renamed to SHACL-named
+classes, the orchestrator `SWRLEngine` was deleted (its URI-map helper was
+extracted to a standalone function), and every importer, test, baseline, and
+doc was repointed. The authoring vocabulary is intentionally KEPT intact: the
+`swrl_rules` data model, the `/ontology/swrl/*` REST routes, the
+`ontology-business-rules.js` UI, OWL `swrl:` serialization, the `swrl:<rule>`
+provenance, and the `phase="swrl"` stats key are all unchanged, so the UI and
+capabilities remain identical.
+
+Changes:
+1. src/back/core/reasoning/swrl/  (DELETED)
+   Removed the entire package. SWRLEngine.py + __init__.py were deleted; the
+   other 7 modules were git-moved into shacl_rules/ (next item).
+2. src/back/core/reasoning/shacl_rules/  (absorbed modules, renamed classes)
+   - SWRLAtomPartition.py      → RuleAtomPartition.py      (RuleAtomPartition)
+   - SWRLBuiltin.py            → RuleBuiltin.py            (RuleBuiltin)
+   - SWRLBuiltinRegistry.py    → RuleBuiltinRegistry.py    (RuleBuiltinRegistry)
+   - SWRLParser.py             → RuleExpressionParser.py   (RuleExpressionParser)
+   - SWRLSQLTranslator.py      → ShaclFlatSqlBackend.py    (ShaclFlatSqlBackend)
+   - SWRLFlatCypherTranslator.py → ShaclFlatCypherBackend.py (ShaclFlatCypherBackend)
+   - SWRLTextCodec.py          → RuleTextCodec.py          (serialize/parse kept)
+   Method signatures and SQL output are byte-for-byte unchanged (pure rename).
+3. src/back/core/reasoning/shacl_rules/rule_uri_map.py  (new)
+   `build_uri_map(ontology)` — extracted verbatim from the deleted
+   `SWRLEngine._build_uri_map`, with the URI local-name helper inlined to avoid
+   importing `back.core.w3c` at module load (prevents a new circular import).
+4. src/back/core/reasoning/shacl_rules/{SwrlToShaclTranspiler,ShaclRuleEngine,
+   ShaclRuleSqlTranslator}.py
+   Repointed to the absorbed modules (RuleBuiltinRegistry, RuleExpressionParser,
+   build_uri_map, ShaclFlatSqlBackend); dropped all references to SWRLEngine.
+5. src/back/core/reasoning/__init__.py
+   Rewritten to export the SHACL rule layer (ShaclRuleEngine, ShaclRule,
+   ShaclRuleSqlTranslator, SwrlToShaclTranspiler, ShaclFlatSqlBackend,
+   RuleBuiltin, RuleBuiltinRegistry, RuleExpressionParser, RuleAtomPartition,
+   parse_swrl_text/serialize_swrl_text aliases, builtin-fn wrappers).
+6. External importers repointed to shacl_rules:
+   - src/back/objects/digitaltwin/quality/SqlQualityChecks.py (parser + backend)
+   - src/back/objects/digitaltwin/quality/QualitySqlBuilder.py (ShaclFlatSqlBackend)
+   - src/back/core/graphdb/interfaces/GraphBackend.py (ShaclFlatSqlBackend)
+   - src/back/core/graphdb/lakebase/Base.py (ShaclFlatSqlBackend, postgres)
+   - src/back/core/graphdb/neo4j/Store.py (ShaclFlatCypherBackend)
+   - src/api/routers/internal/ontology.py (RuleTextCodec serialize/parse)
+   - src/back/core/reasoning/rules/DecisionTableEngine.py (docstring)
+   - src/back/core/reasoning/ReasoningService.py (docstring)
+   - src/back/core/graph_analysis/CohortBuilder.py (comment)
+7. Tests repointed/renamed to the new classes:
+   test_swrl_engine.py, test_swrl_builtin_defects.py, test_swrl_text_codec.py,
+   test_business_rules.py, test_swrl_flat_cypher_translator.py,
+   test_v090_dq_sql_checks.py, test_entity_business_rules.py,
+   test_sql_literal_escaping.py, test_graphdb_factory.py, test_neo4j_store.py.
+   test_shacl_rule_engine.py: the cross-engine parity suite (vs deleted
+   SWRLEngine) was reworked into capability assertions on the SHACL engine's
+   emitted SQL (backend SQL paths stay covered by the flat-backend unit tests).
+   Added the `import back.objects` collection guard to the two reasoning test
+   modules (matches the pre-existing guard in test_swrl_builtin_defects.py).
+8. Baselines: tests/units/architecture/baseline.json (5 keys repointed to
+   shacl_rules/RuleBuiltinRegistry + ShaclFlatSqlBackend); mypy_baseline.txt
+   (stale SWRLFlatCypherTranslator path → ShaclFlatCypherBackend).
+9. Docs: docs/architecture.md (dir tree, Phase 2 section, impl tables,
+   backend-dispatch, patterns), docs/backend.md, docs/development.md,
+   docs/diagrams/class-hierarchy.mmd, tests/integration/neo4j_smoke_test.md,
+   .cursor/01 + .cursor/07 example references.
+
+Modified files:
+- src/back/core/reasoning/swrl/* (deleted: SWRLEngine.py, __init__.py)
+- src/back/core/reasoning/shacl_rules/RuleAtomPartition.py (moved+renamed)
+- src/back/core/reasoning/shacl_rules/RuleBuiltin.py (moved+renamed)
+- src/back/core/reasoning/shacl_rules/RuleBuiltinRegistry.py (moved+renamed)
+- src/back/core/reasoning/shacl_rules/RuleExpressionParser.py (moved+renamed)
+- src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py (moved+renamed)
+- src/back/core/reasoning/shacl_rules/ShaclFlatCypherBackend.py (moved+renamed)
+- src/back/core/reasoning/shacl_rules/RuleTextCodec.py (moved+renamed)
+- src/back/core/reasoning/shacl_rules/rule_uri_map.py (new)
+- src/back/core/reasoning/shacl_rules/{SwrlToShaclTranspiler,ShaclRuleEngine,ShaclRuleSqlTranslator}.py
+- src/back/core/reasoning/__init__.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/rules/DecisionTableEngine.py
+- src/back/objects/digitaltwin/quality/{SqlQualityChecks,QualitySqlBuilder}.py
+- src/back/core/graphdb/interfaces/GraphBackend.py
+- src/back/core/graphdb/lakebase/Base.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/api/routers/internal/ontology.py
+- tests/units/ontology/{test_swrl_engine,test_swrl_builtin_defects,test_swrl_text_codec,test_business_rules}.py
+- tests/units/reasoning/{test_shacl_rule_engine,test_swrl_flat_cypher_translator}.py
+- tests/units/dtwin/{test_v090_dq_sql_checks,test_entity_business_rules}.py
+- tests/units/core/{test_sql_literal_escaping,test_graphdb_factory}.py
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/architecture/baseline.json
+- mypy_baseline.txt
+- docs/{architecture,backend,development}.md
+- docs/diagrams/class-hierarchy.mmd
+- tests/integration/neo4j_smoke_test.md
+- .cursor/01-expertise-and-principles.mdc
+- .cursor/07-project-conventions.mdc
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10029 passed, 325 skipped.
+The only non-front failure is test_size_budget.py
+(agent_dtwin_chat/engine.py::run_agent 198→200), verified pre-existing via
+`git stash` on the branch base and unrelated to this change. The 125
+tests/units/front/* failures are the known local environmental issue (missing
+Node / libsimdjson.29.dylib). No `grep` hit for SWRLEngine/SWRLSQLTranslator/
+SWRLParser/SWRLBuiltin*/SWRLFlatCypherTranslator/SWRLTextCodec/SWRLAtomPartition
+or `reasoning.swrl` remains outside historical changelogs.
+
+================================================================================
+Business Rules UI — IF/THEN authoring with read-only generated SHACL-AF view
+================================================================================
+
+Context:
+Following the SWRL-lib removal (SHACL-AF is now the sole rule runtime), the
+Business Rules UI still exposed SWRL as the user-facing surface: a "Generated
+SWRL" preview, a raw SWRL text toggle with editable antecedent/consequent
+textareas, and an "Import SWRL" modal. Since transpilation is one-directional
+(no SHACL-AF -> rule parser exists), the raw/text surfaces were reworked to
+show the *generated SHACL-AF* read-only, and the SWRL-text import path was
+removed. The visual IF/THEN graph editor remains the authoring surface.
+
+Changes:
+1. src/back/core/reasoning/shacl_rules/rule_serializer.py (new) —
+   `serialize_rules_to_turtle(rules, ontology)` renders all rules as one
+   combined SHACL-AF Turtle document (single shared @prefix header + one
+   sh:NodeShape block per rule, `ex:` bound to the ontology base URI);
+   `preview_rule_shacl(name, antecedent, consequent, ontology)` transpiles a
+   single IF/THEN rule to its {turtle, construct_sparql, rule_type} views.
+   Both delegate to SwrlToShaclTranspiler (read-only, one-directional).
+2. src/api/routers/internal/ontology.py — replaced the SWRL text endpoints
+   `GET /swrl/text`, `GET /swrl/export`, `POST /swrl/import` with
+   `GET /shacl-rules/text` (combined Turtle), `GET /shacl-rules/export`
+   (.ttl download, media_type text/turtle, `<name>_shacl_rules.ttl`), and
+   `POST /shacl-rules/preview` (single-rule live SHACL for the editor). The
+   `/swrl/{list,save,delete,validate}` CRUD endpoints are unchanged.
+3. src/front/templates/partials/ontology/_ontology_business_rules.html —
+   toolbar button relabelled "SHACL" (view/export generated SHACL-AF); tab
+   and pane copy relabelled SWRL -> "If-Then"; the "Generated SWRL" preview
+   block became "Generated SHACL rule" (font-monospace) with a new
+   `swrlAdvancedNote` shown for non-representable rules; removed the raw-SWRL
+   toggle + antecedent/consequent textareas; the text modal is now read-only
+   "SHACL Rules" (Import button removed, textarea readonly) and the entire
+   Import SWRL modal was deleted.
+4. src/front/static/ontology/js/ontology-swrl.js — `_updateRulePane()` now
+   renders the live generated SHACL into the preview via a debounced
+   `POST /ontology/shacl-rules/preview`; `refreshSwrlText()`/`exportSwrl()`
+   repointed to `/ontology/shacl-rules/{text,export}`; removed
+   `showSwrlImportModal()`, `doSwrlImport()`, `toggleRawMode()`, `rawMode`,
+   the `swrlRawToggle` listener, and all raw-textarea reads/writes.
+   Non-representable rules (built-ins / negation / derived classes) now keep
+   their original antecedent/consequent verbatim in internal state
+   (`_nonRepresentable`, `_origAntecedent`, `_origConsequent`) so the
+   read-only SHACL view never drops them on save. Editor titles relabelled
+   "Add/Edit/View If-Then Rule".
+5. Tests:
+   - tests/units/reasoning/test_rule_serializer.py (new) — shared-header /
+     one-block-per-rule, empty + None safety, single-rule preview views.
+   - tests/units/api/test_routes.py — added coverage for the three new
+     `/shacl-rules/*` endpoints and asserted the legacy `/swrl/text` +
+     `/swrl/import` routes now 404.
+   - tests/units/front/test_swrl_text_pane.py — updated contract: read-only
+     modal, no import modal/helpers, text/export target `/shacl-rules/*`.
+6. Local environment repair: `brew reinstall node` relinked node against the
+   current simdjson soname (node wanted libsimdjson.29, installed provided
+   .36), unblocking the Node-runtime frontend tests.
+
+Modified files:
+- src/back/core/reasoning/shacl_rules/rule_serializer.py (new)
+- src/api/routers/internal/ontology.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-swrl.js
+- tests/units/reasoning/test_rule_serializer.py (new)
+- tests/units/api/test_routes.py
+- tests/units/front/test_swrl_text_pane.py
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 10162 passed, 325
+skipped. The only failure is test_size_budget.py
+(agent_dtwin_chat/engine.py::run_agent 198->200), verified pre-existing and
+unrelated to this change. Node-runtime frontend tests now pass after the
+node reinstall above.

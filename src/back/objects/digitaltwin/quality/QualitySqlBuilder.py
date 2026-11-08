@@ -200,9 +200,9 @@ class QualitySqlBuilder:
     @staticmethod
     def _get_swrl_translator():
         if QualitySqlBuilder._swrl_sql_translator is None:
-            from back.core.reasoning import SWRLSQLTranslator
+            from back.core.reasoning import ShaclFlatSqlBackend
 
-            QualitySqlBuilder._swrl_sql_translator = SWRLSQLTranslator()
+            QualitySqlBuilder._swrl_sql_translator = ShaclFlatSqlBackend()
         return QualitySqlBuilder._swrl_sql_translator
 
     @staticmethod

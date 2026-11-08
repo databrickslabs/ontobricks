@@ -1,9 +1,13 @@
-"""Tests for the SWRL SQL translator and SWRLEngine."""
+"""Tests for the flat-triple SQL backend, rule parser, and SHACL rule engine."""
 
+# Importing the package root first avoids a pre-existing circular import
+# between ``back.core.reasoning`` and ``back.core.w3c`` when this module is
+# collected on its own.
+import back.objects  # noqa: F401
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
-from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
-from back.core.reasoning.swrl.SWRLParser import SWRLParser
+from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
+from back.core.reasoning.shacl_rules.RuleExpressionParser import RuleExpressionParser
 
 
 # -- Atom parser tests ----------------------------------------------------
@@ -11,21 +15,21 @@ from back.core.reasoning.swrl.SWRLParser import SWRLParser
 
 class TestParseSwrlAtoms:
     def test_class_atom(self):
-        atoms = SWRLParser.parse_atoms("Customer(?x)")
+        atoms = RuleExpressionParser.parse_atoms("Customer(?x)")
         assert len(atoms) == 1
         assert atoms[0]["name"] == "Customer"
         assert atoms[0]["args"] == ["?x"]
         assert atoms[0]["arity"] == 1
 
     def test_property_atom(self):
-        atoms = SWRLParser.parse_atoms("hasClaim(?x, ?y)")
+        atoms = RuleExpressionParser.parse_atoms("hasClaim(?x, ?y)")
         assert len(atoms) == 1
         assert atoms[0]["name"] == "hasClaim"
         assert atoms[0]["args"] == ["?x", "?y"]
         assert atoms[0]["arity"] == 2
 
     def test_conjunction(self):
-        atoms = SWRLParser.parse_atoms(
+        atoms = RuleExpressionParser.parse_atoms(
             "Customer(?x) \u2227 hasClaim(?x, ?y) \u2227 Claim(?y)"
         )
         assert len(atoms) == 3
@@ -34,10 +38,10 @@ class TestParseSwrlAtoms:
         assert atoms[2]["name"] == "Claim"
 
     def test_empty(self):
-        assert SWRLParser.parse_atoms("") == []
+        assert RuleExpressionParser.parse_atoms("") == []
 
     def test_dotted_names(self):
-        atoms = SWRLParser.parse_atoms("ns.ClassName(?x)")
+        atoms = RuleExpressionParser.parse_atoms("ns.ClassName(?x)")
         assert atoms[0]["name"] == "ns.ClassName"
 
 
@@ -46,30 +50,30 @@ class TestParseSwrlAtoms:
 
 class TestResolveSwrlUri:
     def test_full_uri_passthrough(self):
-        assert SWRLParser.resolve_uri("http://ex.org/Foo", "") == "http://ex.org/Foo"
+        assert RuleExpressionParser.resolve_uri("http://ex.org/Foo", "") == "http://ex.org/Foo"
 
     def test_uri_map_lookup(self):
         uri_map = {"customer": "http://ex.org/Customer"}
         assert (
-            SWRLParser.resolve_uri("Customer", "", uri_map) == "http://ex.org/Customer"
+            RuleExpressionParser.resolve_uri("Customer", "", uri_map) == "http://ex.org/Customer"
         )
 
     def test_base_uri_fallback(self):
-        assert SWRLParser.resolve_uri("Foo", "http://ex.org") == "http://ex.org#Foo"
+        assert RuleExpressionParser.resolve_uri("Foo", "http://ex.org") == "http://ex.org#Foo"
 
     def test_base_uri_with_hash(self):
-        assert SWRLParser.resolve_uri("Foo", "http://ex.org#") == "http://ex.org#Foo"
+        assert RuleExpressionParser.resolve_uri("Foo", "http://ex.org#") == "http://ex.org#Foo"
 
     def test_base_uri_with_slash(self):
-        assert SWRLParser.resolve_uri("Foo", "http://ex.org/") == "http://ex.org/Foo"
+        assert RuleExpressionParser.resolve_uri("Foo", "http://ex.org/") == "http://ex.org/Foo"
 
 
 # -- SQL Translator tests -------------------------------------------------
 
 
-class TestSWRLSQLTranslator:
+class TestShaclFlatSqlBackend:
     def setup_method(self):
-        self.translator = SWRLSQLTranslator()
+        self.translator = ShaclFlatSqlBackend()
 
     def test_simple_rule_violation(self):
         params = {
@@ -147,7 +151,7 @@ class TestSWRLSQLTranslator:
             "base_uri": "http://ex.org",
             "uri_map": {},
         }
-        sql = SWRLSQLTranslator(dialect=SQL_DIALECT_POSTGRES).build_inference_sql(
+        sql = ShaclFlatSqlBackend(dialect=SQL_DIALECT_POSTGRES).build_inference_sql(
             "triples", params
         )
         assert sql is not None
@@ -167,19 +171,23 @@ class TestBuiltinNumericCasts:
     """
 
     def test_no_builtin_emits_a_bare_cast(self):
-        from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+        from back.core.reasoning.shacl_rules.RuleBuiltinRegistry import (
+            RuleBuiltinRegistry,
+        )
 
         offenders = [
             b.name
-            for b in SWRLBuiltinRegistry.all().values()
+            for b in RuleBuiltinRegistry.all().values()
             if "CAST(" in b.sql_template.replace("TRY_CAST(", "")
         ]
         assert offenders == []
 
     def test_greater_than_uses_try_cast(self):
-        from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+        from back.core.reasoning.shacl_rules.RuleBuiltinRegistry import (
+            RuleBuiltinRegistry,
+        )
 
-        builtin = SWRLBuiltinRegistry.get("greaterThan")
+        builtin = RuleBuiltinRegistry.get("greaterThan")
         assert (
             builtin.sql_template
             == "TRY_CAST({0} AS DOUBLE) > TRY_CAST({1} AS DOUBLE)"
@@ -187,22 +195,24 @@ class TestBuiltinNumericCasts:
 
     def test_postgres_templates_drop_spark_only_syntax(self):
         from back.core.helpers import SQL_DIALECT_POSTGRES
-        from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+        from back.core.reasoning.shacl_rules.RuleBuiltinRegistry import (
+            RuleBuiltinRegistry,
+        )
 
         offenders = []
-        for builtin in SWRLBuiltinRegistry.all().values():
-            sql = SWRLBuiltinRegistry.sql_template_for(builtin, SQL_DIALECT_POSTGRES)
+        for builtin in RuleBuiltinRegistry.all().values():
+            sql = RuleBuiltinRegistry.sql_template_for(builtin, SQL_DIALECT_POSTGRES)
             if "TRY_CAST" in sql or "RLIKE" in sql or "CURRENT_TIMESTAMP()" in sql:
                 offenders.append(builtin.name)
         assert offenders == []
 
 
-# -- SWRLEngine tests ------------------------------------------------------
+# -- ShaclRuleEngine tests -------------------------------------------------
 
 
-class TestSWRLEngine:
+class TestShaclRuleEngine:
     def test_execute_rules_with_mock_store(self):
-        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
+        from back.core.reasoning.shacl_rules.ShaclRuleEngine import ShaclRuleEngine
         from unittest.mock import MagicMock
 
         store = MagicMock()
@@ -214,7 +224,7 @@ class TestSWRLEngine:
             },
         ]
 
-        engine = SWRLEngine(
+        engine = ShaclRuleEngine(
             ontology={
                 "base_uri": "http://ex.org",
                 "classes": [{"name": "Customer"}],
@@ -236,11 +246,11 @@ class TestSWRLEngine:
         assert len(result.inferred_triples) >= 1
 
     def test_execute_empty_rules(self):
-        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
+        from back.core.reasoning.shacl_rules.ShaclRuleEngine import ShaclRuleEngine
         from unittest.mock import MagicMock
 
         store = MagicMock()
-        engine = SWRLEngine()
+        engine = ShaclRuleEngine()
         result = engine.execute_rules([], store, "triples")
         assert len(result.inferred_triples) == 0
         assert result.stats["rules_count"] == 0

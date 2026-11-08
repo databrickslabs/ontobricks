@@ -8,7 +8,7 @@ yet** — every method here returns ``None`` and logs a clear warning.
 
 Why this is scaffolded rather than fully implemented:
 
-- The SQL counterpart (:class:`SWRLSQLTranslator`) is ~730 lines of
+- The SQL counterpart (:class:`ShaclFlatSqlBackend`) is ~730 lines of
   careful logic for builtins, negation, variable bindings, arity-1 vs
   arity-2 atoms, IRI resolution, and antecedent-vs-consequent assembly.
   A faithful Cypher port is its own piece of work, deserving a dedicated
@@ -49,8 +49,8 @@ def reltype_from_predicate(predicate_uri: str) -> str:
     return _neo4j_builder().reltype_from_predicate(predicate_uri)
 
 
-class SWRLFlatCypherTranslator:
-    """Cypher counterpart of :class:`SWRLSQLTranslator` — scaffolded.
+class ShaclFlatCypherBackend:
+    """Cypher counterpart of :class:`ShaclFlatSqlBackend` — scaffolded.
 
     Parameters
     ----------
@@ -135,7 +135,7 @@ class SWRLFlatCypherTranslator:
         )
 
     # ------------------------------------------------------------------
-    #  Public interface — mirrors SWRLSQLTranslator.
+    #  Public interface — mirrors ShaclFlatSqlBackend.
     #  All methods return None for now (graceful no-op).
     # ------------------------------------------------------------------
 
@@ -149,7 +149,7 @@ class SWRLFlatCypherTranslator:
         zero violations until the dedicated translator PR lands.
         """
         logger.warning(
-            "SWRLFlatCypherTranslator.build_violation_cypher: "
+            "ShaclFlatCypherBackend.build_violation_cypher: "
             "SWRL→Cypher translation is not implemented yet. "
             "Returning None (rule produces no violations on Neo4j)."
         )
@@ -163,7 +163,7 @@ class SWRLFlatCypherTranslator:
         Returns ``None`` — see class docstring.
         """
         logger.warning(
-            "SWRLFlatCypherTranslator.build_antecedent_count_cypher: "
+            "ShaclFlatCypherBackend.build_antecedent_count_cypher: "
             "not implemented yet. Returning None."
         )
         return None
@@ -176,7 +176,7 @@ class SWRLFlatCypherTranslator:
         Returns ``None`` — see class docstring.
         """
         logger.warning(
-            "SWRLFlatCypherTranslator.build_materialization_cypher: "
+            "ShaclFlatCypherBackend.build_materialization_cypher: "
             "not implemented yet. Returning None (no inferences materialised)."
         )
         return None

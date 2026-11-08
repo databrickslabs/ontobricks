@@ -6,8 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
-from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 from back.objects.digitaltwin.quality.SqlQualityChecks import SqlQualityChecks
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 
@@ -346,23 +344,31 @@ def test_swrl_target_class_none_without_class_atoms():
 
 
 def test_swrl_antecedent_population_counts_rule_scope():
-    translator = SimpleNamespace(build_antecedent_count_sql=lambda t, p: f"SELECT COUNT(*) AS cnt FROM {t}")
+    translator = SimpleNamespace(
+        build_antecedent_count_sql=lambda t, r, c: f"SELECT COUNT(*) AS cnt FROM {t}"
+    )
     store = FakeStore(default=[{"cnt": "8"}])
-    assert SqlQualityChecks._swrl_antecedent_population_sql(translator, store, TABLE, {}) == 8
+    assert (
+        SqlQualityChecks._swrl_antecedent_population_sql(translator, store, TABLE, None, {})
+        == 8
+    )
     assert store.sql == [f"SELECT COUNT(*) AS cnt FROM {TABLE}"]
 
 
 @pytest.mark.parametrize(
     "build, store",
     [
-        (lambda t, p: None, FakeStore()),
-        (lambda t, p: "SELECT 1", FakeStore(default=[])),
-        (lambda t, p: "SELECT 1", FakeStore([(starts("SELECT"), RuntimeError("x"))])),
+        (lambda t, r, c: None, FakeStore()),
+        (lambda t, r, c: "SELECT 1", FakeStore(default=[])),
+        (lambda t, r, c: "SELECT 1", FakeStore([(starts("SELECT"), RuntimeError("x"))])),
     ],
 )
 def test_swrl_antecedent_population_returns_none_when_unavailable(build, store):
     translator = SimpleNamespace(build_antecedent_count_sql=build)
-    assert SqlQualityChecks._swrl_antecedent_population_sql(translator, store, TABLE, {}) is None
+    assert (
+        SqlQualityChecks._swrl_antecedent_population_sql(translator, store, TABLE, None, {})
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------

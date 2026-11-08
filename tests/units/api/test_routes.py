@@ -216,6 +216,32 @@ class TestOntologyRoutes:
         response = client.post("/ontology/swrl/save", json=data)
         assert response.status_code == 200
 
+    def test_shacl_rules_text(self, client):
+        response = client.get("/ontology/shacl-rules/text")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert "@prefix sh:" in body["text"]
+
+    def test_shacl_rules_export(self, client):
+        response = client.get("/ontology/shacl-rules/export")
+        assert response.status_code == 200
+        assert "text/turtle" in response.headers["content-type"]
+        assert "_shacl_rules.ttl" in response.headers["content-disposition"]
+
+    def test_shacl_rules_preview(self, client):
+        data = {"name": "r", "antecedent": "A(?x)", "consequent": "B(?x)"}
+        response = client.post("/ontology/shacl-rules/preview", json=data)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert body["turtle"].strip()
+        assert body["rule_type"] in ("sh:TripleRule", "sh:SPARQLRule")
+
+    def test_legacy_swrl_text_removed(self, client):
+        assert client.get("/ontology/swrl/text").status_code == 404
+        assert client.post("/ontology/swrl/import", json={"text": ""}).status_code == 404
+
     def test_axioms_list(self, client):
         response = client.get("/ontology/axioms/list")
         assert response.status_code == 200

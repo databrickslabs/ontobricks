@@ -467,11 +467,12 @@ src/
 │   │   │   ├── lakebase/               # FlatStore, Base, SyncedTableManager
 │   │   │   └── interfaces/             # backend contract (hats + capability ABCs)
 │   │   │
-│   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SWRL + SPARQL rules + Decision tables)
+│   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SHACL-AF rules + SPARQL rules + Decision tables)
 │   │   │   ├── ReasoningService.py     # Multi-phase orchestrator
 │   │   │   ├── OWLRLReasoner.py        # OWL 2 RL deductive closure via owlrl
-│   │   │   ├── swrl/                   # SWRLEngine, SWRLParser, SWRLSQLTranslator, SWRLFlatCypherTranslator,
-│   │   │   │                           # SWRLBuiltinRegistry, SWRLBuiltin, SWRLAtomPartition, SWRLTextCodec
+│   │   │   ├── shacl_rules/            # ShaclRuleEngine, SwrlToShaclTranspiler, ShaclRule, ShaclRuleSqlTranslator,
+│   │   │   │                           # ShaclFlatSqlBackend, ShaclFlatCypherBackend, RuleExpressionParser,
+│   │   │   │                           # RuleBuiltinRegistry, RuleBuiltin, RuleAtomPartition, RuleTextCodec, rule_uri_map
 │   │   │   ├── rules/                  # SPARQLRuleEngine, AggregateRuleEngine, DecisionTableEngine
 │   │   │   └── results/                # InferredTriple, RuleViolation, ReasoningResult
 │   │   │
@@ -1197,7 +1198,7 @@ OntoBricks includes a **multi-phase reasoning engine** (`src/back/core/reasoning
    │ (OWL 2 RL)│           │  Rules    │           │ Reasoning │
    └─────┬─────┘           └─────┬─────┘           └─────┬─────┘
          │                       │                       │
-   owlrl library           SWRLEngine              GraphBackend
+   owlrl library           ShaclRuleEngine         GraphBackend
    DeductiveClosure        └─ SQL translator       methods
    (OWLRL_Semantics)              │                ├─ transitive_closure
          │                        │                ├─ symmetric_expand
@@ -1242,30 +1243,33 @@ The `OWLRLReasoner` class uses the [`owlrl`](https://owl-rl.readthedocs.io/) Pyt
 - **T-Box only** (default): Closure over the ontology schema — fast, suitable for all dataset sizes
 - **T-Box + A-Box**: Closure over ontology + instance data — suitable for small datasets (< ~50,000 triples)
 
-### Phase 2: SWRL Rule Evaluation
+### Phase 2: Business Rule Evaluation (SHACL-AF)
 
-**SWRL** (Semantic Web Rule Language) extends OWL with Horn-clause rules. OntoBricks implements a custom SWRL engine that compiles rules into the query language of the active triple store backend.
+Business rules are **authored** in SWRL-style Horn-clause syntax in the UI, then **transpiled** to canonical [W3C SHACL Advanced Features](https://www.w3.org/TR/shacl-af/) rules (`sh:TripleRule` / `sh:SPARQLRule`) and executed against the active triple store backend via a flat-triple SQL/Cypher backend. The engine lives in `src/back/core/reasoning/shacl_rules/`.
 
-**Rule format:**
+**Rule format (authoring):**
 ```
 Antecedent → Consequent
 ```
 Where atoms are class assertions (`Person(?x)`) or property assertions (`worksIn(?x, ?y)`).
 
-**Implementation** (`src/back/core/reasoning/swrl/SWRLEngine.py`, `SWRLSQLTranslator.py`):
+**Implementation** (`src/back/core/reasoning/shacl_rules/`):
 
 | Component | File | Role |
 |-----------|------|------|
-| `SWRLEngine` | `SWRLEngine.py` | Orchestrator — executes rules, collects results |
-| `SWRLSQLTranslator` | `SWRLSQLTranslator.py` | Compiles SWRL atoms into SQL with multi-join + `NOT EXISTS` for violation detection |
+| `ShaclRuleEngine` | `ShaclRuleEngine.py` | Orchestrator — transpiles + executes rules, collects results |
+| `SwrlToShaclTranspiler` | `SwrlToShaclTranspiler.py` | Transpiles authored IF/THEN rules into canonical SHACL-AF rules (`ShaclRule`) |
+| `ShaclRuleSqlTranslator` | `ShaclRuleSqlTranslator.py` | Builds SQL for a `ShaclRule` by delegating to the flat-triple backend |
+| `ShaclFlatSqlBackend` | `ShaclFlatSqlBackend.py` | Compiles rule atoms into SQL with multi-join + `NOT EXISTS` for violation detection |
+| `ShaclFlatCypherBackend` | `ShaclFlatCypherBackend.py` | Cypher backend for Neo4j (scaffolded) |
 
 **Execution modes:**
 - **Violation detection**: Finds instances where the antecedent holds but the consequent does not (generates `NOT EXISTS` subqueries)
 - **Materialization**: Inserts inferred consequent triples into the store (generates `INSERT` statements)
 
-**Backend dispatch**: The two SQL backends — `MaterializedStore` (Spark SQL on the SQL Warehouse) and `FlatStore` (Postgres SQL) — use `SWRLSQLTranslator`. The `Store` engine reports `supports_cypher = True` and returns a `SWRLFlatCypherTranslator`, but that translator is currently scaffolded — full SWRL → Cypher reasoning lands in a follow-up; on Neo4j the SWRL materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct translator be selected per engine without touching `SWRLEngine`.
+**Backend dispatch**: The two SQL backends — `MaterializedStore` (Spark SQL on the SQL Warehouse) and `FlatStore` (Postgres SQL) — use `ShaclFlatSqlBackend`. The `Store` engine reports `supports_cypher = True` and returns a `ShaclFlatCypherBackend`, but that backend is currently scaffolded — full rule → Cypher reasoning lands in a follow-up; on Neo4j the materialization phase therefore short-circuits. The capability flags (`supports_cypher`, `query_dialect`) on `GraphBackend` let the correct backend be selected per engine without touching `ShaclRuleEngine`.
 
-**URI resolution**: The engine builds a lowercase-name → URI map from the ontology, normalizing property URIs to the data namespace used by R2RML so that SWRL atom names match the predicates stored in the triple store.
+**URI resolution**: `rule_uri_map.build_uri_map` builds a lowercase-name → URI map from the ontology, normalizing property URIs to the data namespace used by R2RML so that rule atom names match the predicates stored in the triple store.
 
 ### Phase 3: Graph Reasoning
 
@@ -1325,8 +1329,8 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 |------|---------|
 | `src/back/core/reasoning/ReasoningService.py` | `ReasoningService` — orchestrates all phases |
 | `src/back/core/reasoning/OWLRLReasoner.py` | `OWLRLReasoner` — OWL 2 RL deductive closure |
-| `src/back/core/reasoning/swrl/SWRLEngine.py` | `SWRLEngine` — SWRL rule orchestration |
-| `src/back/core/reasoning/swrl/SWRLSQLTranslator.py` | `SWRLSQLTranslator` — SWRL → Spark / Postgres SQL compilation |
+| `src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py` | `ShaclRuleEngine` — business-rule orchestration (SHACL-AF) |
+| `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py` | `ShaclFlatSqlBackend` — rule → Spark / Postgres SQL compilation |
 | `src/back/core/reasoning/models.py` | `InferredTriple`, `RuleViolation`, `ReasoningResult` dataclasses |
 | `src/back/core/graphdb/GraphBackend.py` | Graph DB primitives: `transitive_closure()`, `symmetric_expand()`, `shortest_path()` |
 
@@ -1945,7 +1949,7 @@ See [API Documentation](api.md) for complete endpoint reference.
 7. **OntoViz Extensions**: Add new entity/relationship types, custom rendering
 8. **Graph DB Engines**: Implement the `back.core.graphdb.interfaces` contracts in `src/back/core/graphdb/` (Lakebase Postgres, Unity Catalog Delta, and Neo4j ship today; the `interfaces/` package plus `GraphDBFactory` make it straightforward to add Memgraph, Gremlin, or other engines).
 9. **Theming**: Modify OntoViz CSS variables for custom themes
-10. **SWRL Built-ins**: Extend the SWRL engine (`src/back/core/reasoning/swrl/SWRLEngine.py`) with additional built-in atoms beyond class and property assertions (e.g., math, string, comparison built-ins)
+10. **Rule Built-ins**: Extend the business-rule engine (`src/back/core/reasoning/shacl_rules/RuleBuiltinRegistry.py`) with additional built-in atoms beyond class and property assertions (e.g., math, string, comparison built-ins)
 11. **Reasoning Profiles**: Add new reasoning profiles beyond OWL 2 RL (e.g., OWL 2 EL) by implementing alternative reasoner classes in `src/back/core/reasoning/`
 12. **Custom Constraint Types**: Add domain-specific constraint validators to the constraint checking phase in `ReasoningService`
 13. **New LLM Agents**: Add agents under `src/agents/` using the shared tool framework (see [Agentic Architecture](architecture.md#agentic-architecture))
@@ -2954,7 +2958,7 @@ constraints, and rule definitions:
 | **R2RML** | Maps relational tables → RDF; consumed by `SparqlTranslator` to lift SPARQL to Spark SQL | `back/core/w3c/r2rml/` |
 | **SHACL** | Constraint validation over RDF (data quality) | `back/core/w3c/shacl/SHACLService.py` |
 | **OWL / RDFS** | Schema definition + entailment (`OWLRLReasoner` materializes derived triples) | `back/core/w3c/owl/`, `back/core/reasoning/OWLRLReasoner.py` |
-| **SWRL** | Rule language; compiled to SQL via `SWRLSQLTranslator` (Spark SQL on Delta, Postgres SQL on Lakebase). The `query_dialect` flag on `GraphBackend` reserves a slot for a future Cypher translator. | `back/core/reasoning/SWRL*.py` |
+| **SWRL** | Authoring syntax for business rules; transpiled to SHACL-AF and compiled to SQL via `ShaclFlatSqlBackend` (Spark SQL on Delta, Postgres SQL on Lakebase). The `query_dialect` flag on `GraphBackend` reserves a slot for a future Cypher backend. | `back/core/reasoning/shacl_rules/` |
 
 ---
 
@@ -3038,7 +3042,7 @@ and the engine that ultimately runs (column **Engine**).
 | AI Assistant | Studio floating chat, `agent_ontology_assistant` | `POST /ontology/assistant/chat`, `POST /ontology/assistant/invoke` | REST → LLM | Saved domain LLM (`llm_endpoint` + `llm_endpoint_kind`): AI Gateway chat completions or Model Serving invocations |
 | **Data Quality** rules editor | `ontology-dataquality.js` | `/ontology/dataquality/...` | REST | SHACL (`SHACLService`) on the in-memory ontology |
 | **Sanity Checks** | `ontology-design-checks.js` | `GET /ontology/design-checks` | REST | `DesignChecks` on the in-memory ontology (advisory) |
-| **Business Rules (SWRL)** editor | `ontology-business-rules.js` | `/ontology/swrl/...` | REST | `SWRLParser`, validated against ontology |
+| **Business Rules (SWRL)** editor | `ontology-business-rules.js` | `/ontology/swrl/...` | REST | `RuleExpressionParser`, validated against ontology |
 | Expressions & Axioms | `ontology-axioms.js` | `/ontology/axioms/...` | REST | OWL axiom storage |
 
 #### 4.3 Mapping (R2RML)
@@ -3229,7 +3233,7 @@ based on the active triple-store backend's `query_dialect`.
 | Component | Input | Compiled to | Engine |
 |---|---|---|---|
 | `OWLRLReasoner` | OWL 2 RL fragment + facts | RDF graph operations (rdflib) | Python in-memory; results materialized to triple store via Spark SQL or GraphDB bulk insert |
-| `SWRLEngine` + `SWRLSQLTranslator` | SWRL rules | **SQL** | Databricks SQL Warehouse on the Delta view, and the Lakebase Postgres Graph DB engine. Future Cypher / Gremlin engines can plug in their own `SWRL*Translator`. |
+| `ShaclRuleEngine` + `ShaclFlatSqlBackend` | Business rules (SHACL-AF) | **SQL** | Databricks SQL Warehouse on the Delta view, and the Lakebase Postgres Graph DB engine. Future Cypher / Gremlin engines can plug in their own flat-triple backend. |
 | `SPARQLRuleEngine` | SPARQL `CONSTRUCT` rules | **SPARQL** → Spark SQL | Same as SPARQL execution path |
 | `DecisionTableEngine` | Decision tables | **Spark SQL** | Databricks SQL Warehouse |
 | `AggregateRuleEngine` | Aggregate rules | **Spark SQL** | Databricks SQL Warehouse |
@@ -3338,6 +3342,6 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 - GraphDB backend — `src/back/core/graphdb/GraphBackend.py`
 - Delta engine — `src/back/core/graphdb/delta/MaterializedStore.py`
 - GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{Base,FlatStore,SyncedTableManager}.py`
-- Reasoning — `src/back/core/reasoning/{OWLRLReasoner,SWRLSQLTranslator,SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
+- Reasoning — `src/back/core/reasoning/OWLRLReasoner.py`, `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py`, `src/back/core/reasoning/rules/{SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`
 - Graph Chat — `src/agents/agent_dtwin_chat/{engine,tools}.py`

@@ -1,0 +1,49 @@
+================================================================================
+SWRL -> SHACL regression test coverage
+================================================================================
+
+Context:
+Following the removal of the legacy SWRL engine (SHACL-AF now executes the
+IF/THEN business-rules UI), we hardened the test suite with a dedicated
+regression suite that pins the SWRL -> SHACL-AF behavioural contract so any
+future drift away from the legacy semantics is caught. The suite complements
+test_shacl_rule_engine.py (which asserts *that* SQL is emitted) by nailing
+down *what* that SQL means and *what* the engine returns, across the full
+capability battery (unary/binary atoms, property chains, comparison + string
+built-ins, closed-world negation).
+
+Changes:
+1. tests/units/reasoning/test_swrl_to_shacl_regression.py (new, 22 tests) —
+   - TestEngineContractParity: end-to-end via a canned triple store —
+     `stats["phase"] == "swrl"` / `engine == "shacl-af"`, `swrl:<rule>`
+     provenance, enabled-only rules_count vs rules_total, disabled rules emit
+     no SQL, whole-battery error-free run, materialisation INSERT +
+     `swrl:materialized` marker, focus restricts to the entity URI, and
+     inference_limit is applied.
+   - TestInferenceSqlSemantics: the SQL each capability compiles to —
+     property-chain derives the relationship head with closed-world NOT EXISTS
+     de-dup; comparison built-in classifies via rdf:type HighValue with an
+     ANSI-safe TRY_CAST filter; string built-in translates `contains` to
+     LIKE CONCAT without leaking the built-in predicate; class-only rule is a
+     classification no-op (no inference SELECT); negation has no positive
+     inference SELECT and renders its closed-world body as nested NOT EXISTS
+     in the violation query.
+   - TestDialectParity: across the whole battery, Postgres SQL leaks no
+     Spark-only syntax (TRY_CAST / RLIKE / CURRENT_TIMESTAMP()) and Spark SQL
+     leaks no Postgres-only syntax (::float8 / ::double precision).
+   - TestTranspilerClassificationParity: stable sh:TripleRule vs sh:SPARQLRule
+     mapping per capability, antecedent-class targeting, CONSTRUCT bodies on
+     SPARQL rules, and FILTER NOT EXISTS for negation.
+   - TestShaclViewParity: the new read-only SHACL view (serialize) and the
+     editor preview render every capability (one sh:NodeShape per rule under a
+     single shared header; preview returns well-formed turtle + rule_type).
+
+Modified files:
+- tests/units/reasoning/test_swrl_to_shacl_regression.py (new)
+
+Tests: uv run --frozen pytest -q -m 'not scenario' -> 10184 passed, 325
+skipped (the new suite adds 22). Focused business-rules run
+(tests/units/reasoning + tests/units/ontology + test_routes.py +
+test_swrl_text_pane.py) -> 1248 passed. The only full-suite failure is
+test_size_budget.py (agent_dtwin_chat/engine.py::run_agent 198->200),
+verified pre-existing and unrelated to this change.

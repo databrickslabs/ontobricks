@@ -1,4 +1,8 @@
-"""SWRL built-in registry — maps built-in names to SQL / Cypher expressions.
+"""Rule built-in registry — maps built-in names to SQL / Cypher expressions.
+
+Built-ins use SWRL-style authoring syntax (``swrlb:greaterThan`` ...), which is
+the vocabulary surfaced in the UI; execution lives entirely in this SHACL rule
+layer.
 
 Each built-in has a ``name``, ``arity``, ``category``, and templates for
 both SQL and Cypher translation.  Templates use positional placeholders
@@ -10,7 +14,7 @@ import re
 from typing import Dict, Optional
 
 from back.core.helpers import SQL_DIALECT_POSTGRES
-from back.core.reasoning.swrl.SWRLBuiltin import SWRLBuiltin
+from back.core.reasoning.shacl_rules.RuleBuiltin import RuleBuiltin
 
 # POSIX character class so the pattern is safe inside a Postgres string
 # literal (no backslash escapes). Accepts the same shapes as Spark DOUBLE.
@@ -22,21 +26,21 @@ _TRY_CAST_RE = re.compile(
 )
 
 
-class SWRLBuiltinRegistry:
-    """Class-based registry for SWRL built-in predicates.
+class RuleBuiltinRegistry:
+    """Class-based registry for rule built-in predicates (SWRL-style syntax).
 
     All methods are class-level or static; no instance is needed.
     The registry is populated once at class-definition time.
     """
 
-    _BUILTINS: Dict[str, SWRLBuiltin] = {}
+    _BUILTINS: Dict[str, RuleBuiltin] = {}
 
     # ------------------------------------------------------------------
     # Registry population
     # ------------------------------------------------------------------
 
     @classmethod
-    def _register(cls, b: SWRLBuiltin) -> None:
+    def _register(cls, b: RuleBuiltin) -> None:
         cls._BUILTINS[b.name.lower()] = b
 
     @classmethod
@@ -46,7 +50,7 @@ class SWRLBuiltinRegistry:
 
         # -- Comparison ------------------------------------------------
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "greaterThan",
                 2,
                 "comparison",
@@ -56,7 +60,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "lessThan",
                 2,
                 "comparison",
@@ -66,7 +70,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "greaterThanOrEqual",
                 2,
                 "comparison",
@@ -76,7 +80,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "lessThanOrEqual",
                 2,
                 "comparison",
@@ -85,12 +89,12 @@ class SWRLBuiltinRegistry:
                 cast_numeric=True,
             )
         )
-        r(SWRLBuiltin("equal", 2, "comparison", "{0} = {1}", "{0} = {1}"))
-        r(SWRLBuiltin("notEqual", 2, "comparison", "{0} <> {1}", "{0} <> {1}"))
+        r(RuleBuiltin("equal", 2, "comparison", "{0} = {1}", "{0} = {1}"))
+        r(RuleBuiltin("notEqual", 2, "comparison", "{0} <> {1}", "{0} <> {1}"))
 
         # -- Math ------------------------------------------------------
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "add",
                 3,
                 "math",
@@ -100,7 +104,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "subtract",
                 3,
                 "math",
@@ -110,7 +114,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "multiply",
                 3,
                 "math",
@@ -120,7 +124,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "divide",
                 3,
                 "math",
@@ -130,7 +134,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "mod",
                 3,
                 "math",
@@ -140,7 +144,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "abs",
                 2,
                 "math",
@@ -150,7 +154,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "round",
                 2,
                 "math",
@@ -160,7 +164,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "ceiling",
                 2,
                 "math",
@@ -170,7 +174,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "floor",
                 2,
                 "math",
@@ -182,7 +186,7 @@ class SWRLBuiltinRegistry:
 
         # -- String ----------------------------------------------------
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "startsWith",
                 2,
                 "string",
@@ -191,7 +195,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "endsWith",
                 2,
                 "string",
@@ -200,7 +204,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "contains",
                 2,
                 "string",
@@ -208,14 +212,14 @@ class SWRLBuiltinRegistry:
                 "contains({0}, {1})",
             )
         )
-        r(SWRLBuiltin("stringLength", 2, "string", "LENGTH({0})", "size({0})"))
-        r(SWRLBuiltin("upperCase", 2, "string", "UPPER({0})", "toUpper({0})"))
-        r(SWRLBuiltin("lowerCase", 2, "string", "LOWER({0})", "toLower({0})"))
-        r(SWRLBuiltin("matches", 2, "string", "{0} RLIKE {1}", "{0} =~ {1}"))
+        r(RuleBuiltin("stringLength", 2, "string", "LENGTH({0})", "size({0})"))
+        r(RuleBuiltin("upperCase", 2, "string", "UPPER({0})", "toUpper({0})"))
+        r(RuleBuiltin("lowerCase", 2, "string", "LOWER({0})", "toLower({0})"))
+        r(RuleBuiltin("matches", 2, "string", "{0} RLIKE {1}", "{0} =~ {1}"))
 
         # -- Date/Time -------------------------------------------------
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "before",
                 2,
                 "date",
@@ -224,7 +228,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "after",
                 2,
                 "date",
@@ -233,7 +237,7 @@ class SWRLBuiltinRegistry:
             )
         )
         r(
-            SWRLBuiltin(
+            RuleBuiltin(
                 "dateDiff",
                 3,
                 "date",
@@ -241,14 +245,14 @@ class SWRLBuiltinRegistry:
                 "duration.between(datetime({1}), datetime({0})).days",
             )
         )
-        r(SWRLBuiltin("now", 1, "date", "CURRENT_TIMESTAMP()", "datetime()"))
+        r(RuleBuiltin("now", 1, "date", "CURRENT_TIMESTAMP()", "datetime()"))
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     @classmethod
-    def sql_template_for(cls, builtin: SWRLBuiltin, dialect: Optional[str] = None) -> str:
+    def sql_template_for(cls, builtin: RuleBuiltin, dialect: Optional[str] = None) -> str:
         """Return the SQL template for *dialect* (Spark by default).
 
         Lakebase is Postgres: Spark ``TRY_CAST`` / ``RLIKE`` / ``CURRENT_TIMESTAMP()``
@@ -305,7 +309,7 @@ class SWRLBuiltinRegistry:
         return local
 
     @classmethod
-    def get(cls, name: str) -> Optional[SWRLBuiltin]:
+    def get(cls, name: str) -> Optional[RuleBuiltin]:
         """Look up a built-in by name (case-insensitive, prefix-tolerant)."""
         return cls._BUILTINS.get(cls._normalize(name))
 
@@ -315,7 +319,7 @@ class SWRLBuiltinRegistry:
         return cls._normalize(name) in cls._BUILTINS
 
     @classmethod
-    def all(cls) -> Dict[str, SWRLBuiltin]:
+    def all(cls) -> Dict[str, RuleBuiltin]:
         """Return a copy of the full registry."""
         return dict(cls._BUILTINS)
 
@@ -373,4 +377,4 @@ class SWRLBuiltinRegistry:
 
 
 # Populate the registry once at import time
-SWRLBuiltinRegistry._init_builtins()
+RuleBuiltinRegistry._init_builtins()

@@ -16,10 +16,10 @@ from unittest.mock import MagicMock, patch
 from back.core.reasoning.results.InferredTriple import InferredTriple
 from back.core.reasoning.results.ReasoningResult import ReasoningResult
 from back.core.reasoning.results.RuleViolation import RuleViolation
-from back.core.reasoning.swrl.SWRLParser import SWRLParser
-from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
-from back.core.reasoning.swrl.SWRLBuiltin import SWRLBuiltin
-from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+from back.core.reasoning.shacl_rules.RuleExpressionParser import RuleExpressionParser
+from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
+from back.core.reasoning.shacl_rules.RuleBuiltin import RuleBuiltin
+from back.core.reasoning.shacl_rules.RuleBuiltinRegistry import RuleBuiltinRegistry
 from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
 from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
 from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
@@ -31,31 +31,31 @@ from back.core.reasoning.ReasoningService import ReasoningService
 # ===========================================================================
 
 
-class TestSWRLBuiltinRegistry:
+class TestRuleBuiltinRegistry:
     def test_get_builtin_comparison(self):
-        bi = SWRLBuiltinRegistry.get("greaterThan")
+        bi = RuleBuiltinRegistry.get("greaterThan")
         assert bi is not None
         assert bi.arity == 2
         assert bi.category == "comparison"
 
     def test_get_builtin_case_insensitive(self):
-        assert SWRLBuiltinRegistry.get("GREATERTHAN") is not None
-        assert SWRLBuiltinRegistry.get("GreaterThan") is not None
+        assert RuleBuiltinRegistry.get("GREATERTHAN") is not None
+        assert RuleBuiltinRegistry.get("GreaterThan") is not None
 
     def test_is_builtin(self):
-        assert SWRLBuiltinRegistry.is_builtin("greaterThan")
-        assert SWRLBuiltinRegistry.is_builtin("add")
-        assert SWRLBuiltinRegistry.is_builtin("startsWith")
-        assert SWRLBuiltinRegistry.is_builtin("before")
-        assert not SWRLBuiltinRegistry.is_builtin("Customer")
-        assert not SWRLBuiltinRegistry.is_builtin("hasAge")
+        assert RuleBuiltinRegistry.is_builtin("greaterThan")
+        assert RuleBuiltinRegistry.is_builtin("add")
+        assert RuleBuiltinRegistry.is_builtin("startsWith")
+        assert RuleBuiltinRegistry.is_builtin("before")
+        assert not RuleBuiltinRegistry.is_builtin("Customer")
+        assert not RuleBuiltinRegistry.is_builtin("hasAge")
 
     def test_all_builtins_non_empty(self):
-        builtins = SWRLBuiltinRegistry.all()
+        builtins = RuleBuiltinRegistry.all()
         assert len(builtins) > 20
 
     def test_builtins_by_category(self):
-        cats = SWRLBuiltinRegistry.by_category()
+        cats = RuleBuiltinRegistry.by_category()
         assert "comparison" in cats
         assert "math" in cats
         assert "string" in cats
@@ -63,31 +63,31 @@ class TestSWRLBuiltinRegistry:
         assert len(cats["comparison"]) >= 6
 
     def test_literal_detection(self):
-        assert SWRLBuiltinRegistry.is_literal("18")
-        assert SWRLBuiltinRegistry.is_literal('"hello"')
-        assert SWRLBuiltinRegistry.is_literal("'world'")
-        assert not SWRLBuiltinRegistry.is_literal("?x")
-        assert not SWRLBuiltinRegistry.is_literal("?age")
+        assert RuleBuiltinRegistry.is_literal("18")
+        assert RuleBuiltinRegistry.is_literal('"hello"')
+        assert RuleBuiltinRegistry.is_literal("'world'")
+        assert not RuleBuiltinRegistry.is_literal("?x")
+        assert not RuleBuiltinRegistry.is_literal("?age")
 
     def test_literal_sql(self):
-        assert SWRLBuiltinRegistry.literal_sql("18") == "18"
-        assert SWRLBuiltinRegistry.literal_sql('"hello"') == "'hello'"
-        assert SWRLBuiltinRegistry.literal_sql("Gold") == "'Gold'"
+        assert RuleBuiltinRegistry.literal_sql("18") == "18"
+        assert RuleBuiltinRegistry.literal_sql('"hello"') == "'hello'"
+        assert RuleBuiltinRegistry.literal_sql("Gold") == "'Gold'"
 
     def test_literal_cypher(self):
-        assert SWRLBuiltinRegistry.literal_cypher("18") == "18"
-        assert SWRLBuiltinRegistry.literal_cypher('"hello"') == '"hello"'
-        assert SWRLBuiltinRegistry.literal_cypher("Gold") == '"Gold"'
+        assert RuleBuiltinRegistry.literal_cypher("18") == "18"
+        assert RuleBuiltinRegistry.literal_cypher('"hello"') == '"hello"'
+        assert RuleBuiltinRegistry.literal_cypher("Gold") == '"Gold"'
 
     def test_builtin_sql_templates(self):
-        bi = SWRLBuiltinRegistry.get("greaterThan")
+        bi = RuleBuiltinRegistry.get("greaterThan")
         result = bi.sql_template.format("col1", "42")
         assert "col1" in result
         assert "42" in result
         assert ">" in result
 
     def test_builtin_cypher_templates(self):
-        bi = SWRLBuiltinRegistry.get("contains")
+        bi = RuleBuiltinRegistry.get("contains")
         result = bi.cypher_template.format("x.name", '"VIP"')
         assert "contains" in result
 
@@ -95,7 +95,7 @@ class TestSWRLBuiltinRegistry:
 class TestParseSwrlAtomsWithBuiltins:
     def test_builtin_atoms_detected(self):
         expr = "Customer(?x), hasAge(?x, ?age), greaterThan(?age, 65)"
-        atoms = SWRLParser.parse_atoms(expr)
+        atoms = RuleExpressionParser.parse_atoms(expr)
         assert len(atoms) == 3
         builtin_atoms = [a for a in atoms if a.get("builtin")]
         assert len(builtin_atoms) == 1
@@ -104,7 +104,7 @@ class TestParseSwrlAtomsWithBuiltins:
 
     def test_negated_atoms_detected(self):
         expr = "Customer(?x), not(hasPayment(?x, ?y))"
-        atoms = SWRLParser.parse_atoms(expr)
+        atoms = RuleExpressionParser.parse_atoms(expr)
         assert len(atoms) == 2
         negated = [a for a in atoms if a.get("negated")]
         assert len(negated) == 1
@@ -115,7 +115,7 @@ class TestParseSwrlAtomsWithBuiltins:
         expr = (
             "Person(?x), hasAge(?x, ?a), greaterThan(?a, 18), not(hasLicense(?x, ?l))"
         )
-        atoms = SWRLParser.parse_atoms(expr)
+        atoms = RuleExpressionParser.parse_atoms(expr)
         regular = [a for a in atoms if not a.get("builtin") and not a.get("negated")]
         builtins = [a for a in atoms if a.get("builtin")]
         negated = [a for a in atoms if a.get("negated")]
@@ -125,7 +125,7 @@ class TestParseSwrlAtomsWithBuiltins:
 
     def test_no_builtins_backward_compatible(self):
         expr = "Customer(?x), hasOrder(?x, ?o), Order(?o)"
-        atoms = SWRLParser.parse_atoms(expr)
+        atoms = RuleExpressionParser.parse_atoms(expr)
         assert all(not a.get("builtin") for a in atoms)
         assert all(not a.get("negated") for a in atoms)
         assert len(atoms) == 3
@@ -133,7 +133,7 @@ class TestParseSwrlAtomsWithBuiltins:
 
 class TestSWRLSQLBuiltinTranslation:
     def test_violation_sql_with_builtin(self):
-        translator = SWRLSQLTranslator()
+        translator = ShaclFlatSqlBackend()
         params = {
             "antecedent": "Customer(?x), hasAge(?x, ?age), greaterThan(?age, 65)",
             "consequent": "SeniorCustomer(?x)",
@@ -158,7 +158,7 @@ class TestSWRLSQLBuiltinTranslation:
 
 class TestNegationSQL:
     def test_negated_antecedent_sql(self):
-        translator = SWRLSQLTranslator()
+        translator = ShaclFlatSqlBackend()
         params = {
             "antecedent": "Customer(?x), not(hasPayment(?x, ?y))",
             "consequent": "UnpaidCustomer(?x)",

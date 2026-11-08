@@ -15,7 +15,7 @@ from back.core.helpers import SQLHelpers
 from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
 from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
 from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
-from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
 from back.core.w3c.shacl.SHACLService import SHACLService
 from back.core.w3c.sparql.SparqlValueFilterSql import SparqlValueFilterSql
 
@@ -254,6 +254,6 @@ class TestGraphBackendEscape:
         assert store._sql_escape(PAYLOAD) == SQLHelpers.sql_escape(PAYLOAD, "postgres")
 
 
-class TestSWRLSQLTranslatorEscape:
+class TestShaclFlatSqlBackendEscape:
     def test_escape_uses_canonical_helper(self):
-        assert SWRLSQLTranslator._escape(PAYLOAD) == SQLHelpers.sql_escape(PAYLOAD)
+        assert ShaclFlatSqlBackend._escape(PAYLOAD) == SQLHelpers.sql_escape(PAYLOAD)

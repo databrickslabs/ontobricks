@@ -243,11 +243,13 @@ class SqlQualityChecks:
 
     @staticmethod
     def _swrl_target_class_uri(rule, base_uri, uri_map):
-        """Return the class URI of the SWRL violation subject."""
-        from back.core.reasoning.swrl.SWRLParser import SWRLParser
+        """Return the class URI of the rule's violation subject."""
+        from back.core.reasoning.shacl_rules.RuleExpressionParser import (
+            RuleExpressionParser,
+        )
 
-        ante_atoms = SWRLParser.parse_atoms(rule.get("antecedent", ""))
-        cons_atoms = SWRLParser.parse_atoms(rule.get("consequent", ""))
+        ante_atoms = RuleExpressionParser.parse_atoms(rule.get("antecedent", ""))
+        cons_atoms = RuleExpressionParser.parse_atoms(rule.get("consequent", ""))
         class_atoms = [
             a
             for a in ante_atoms
@@ -256,17 +258,21 @@ class SqlQualityChecks:
         if not class_atoms:
             return None
 
-        viol_var = SWRLParser.determine_violation_subject(cons_atoms, class_atoms)
+        viol_var = RuleExpressionParser.determine_violation_subject(
+            cons_atoms, class_atoms
+        )
         for ca in class_atoms:
             if ca["args"][0] == viol_var:
-                return SWRLParser.resolve_uri(ca["name"], base_uri, uri_map)
-        return SWRLParser.resolve_uri(class_atoms[0]["name"], base_uri, uri_map)
+                return RuleExpressionParser.resolve_uri(ca["name"], base_uri, uri_map)
+        return RuleExpressionParser.resolve_uri(
+            class_atoms[0]["name"], base_uri, uri_map
+        )
 
     @staticmethod
-    def _swrl_antecedent_population_sql(translator, store, table, params):
+    def _swrl_antecedent_population_sql(translator, store, table, rule, ctx):
         """Count entities matching the SWRL antecedent (the rule's scope)."""
         try:
-            count_sql = translator.build_antecedent_count_sql(table, params)
+            count_sql = translator.build_antecedent_count_sql(table, rule, ctx)
             if not count_sql:
                 return None
             rows = store.execute_query(count_sql) or []
@@ -555,20 +561,25 @@ class SqlQualityChecks:
             )
 
     def _eval_swrl_rule(rule, idx, table, store, ontology, violation_limit):
-        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
-        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+        from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import (
+            ShaclFlatSqlBackend,
+        )
+        from back.core.reasoning.shacl_rules.ShaclRuleEngine import ShaclRuleEngine
+        from back.core.reasoning.shacl_rules.ShaclRuleSqlTranslator import (
+            ShaclRuleSqlTranslator,
+        )
 
         label = rule.get("name", f"SWRL Rule {idx + 1}")
         check_id = SqlQualityChecks._rule_check_id(SWRL_ID_PREFIX, rule, idx)
         ontology = ontology or {}
-        translator = SWRLSQLTranslator()
-        params = {
-            "antecedent": rule.get("antecedent", ""),
-            "consequent": rule.get("consequent", ""),
+        engine = ShaclRuleEngine(ontology=ontology)
+        translator = ShaclRuleSqlTranslator(ShaclFlatSqlBackend())
+        shacl_rule = engine._transpiler.transpile(rule)
+        ctx = {
             "base_uri": ontology.get("base_uri", ""),
-            "uri_map": SWRLEngine(ontology=ontology)._build_uri_map(),
+            "uri_map": engine._build_uri_map(),
         }
-        sql = translator.build_violation_sql(table, params)
+        sql = translator.build_violation_sql(table, shacl_rule, ctx)
         if not sql:
             return {
                 "name": label,
@@ -603,7 +614,7 @@ class SqlQualityChecks:
             pop = None
             if violations:
                 pop = SqlQualityChecks._swrl_antecedent_population_sql(
-                    translator, store, table, params
+                    translator, store, table, shacl_rule, ctx
                 )
             SqlQualityChecks._enrich_with_population(result, pop)
             logger.info(

@@ -84,7 +84,7 @@ src/back/core/industry/cdisc/CdiscImportService.py:374: error: Argument 1 has in
 src/back/core/industry/cdisc/CdiscImportService.py:430: error: Argument 1 has incompatible type "Node"; expected "str"  [arg-type]
 src/back/core/industry/cdisc/CdiscImportService.py:450: error: Argument 1 has incompatible type "Node"; expected "str"  [arg-type]
 src/back/core/reasoning/DecisionTableEngine.py:252: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
-src/back/core/reasoning/SWRLFlatCypherTranslator.py:159: error: Incompatible types in assignment (expression has type "str", variable has type "dict[str, Any]")  [assignment]
+src/back/core/reasoning/shacl_rules/ShaclFlatCypherBackend.py:159: error: Incompatible types in assignment (expression has type "str", variable has type "dict[str, Any]")  [assignment]
 src/back/core/sqlwizard/SQLWizardService.py:44: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
 src/back/core/sqlwizard/SQLWizardService.py:658: error: Need type annotation for "seen" (hint: "seen: dict[<type>, <type>] = ...")  [var-annotated]
 src/back/core/sqlwizard/SQLWizardService.py:786: error: Incompatible types in assignment (expression has type "int", target has type "Sequence[str]")  [assignment]

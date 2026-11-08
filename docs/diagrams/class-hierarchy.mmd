@@ -202,13 +202,13 @@ classDiagram
         +run_decision_tables()
     }
     class SPARQLRuleEngine { +execute_rules() }
-    class SWRLEngine       { +execute_rules() }
+    class ShaclRuleEngine  { +execute_rules() }
     class AggregateRuleEngine { +execute_rules() }
     class DecisionTableEngine { +execute_tables() }
     class OWLRLReasoner    { +compute_closure() }
 
     ReasoningService --> SPARQLRuleEngine    : uses
-    ReasoningService --> SWRLEngine          : uses
+    ReasoningService --> ShaclRuleEngine     : uses
     ReasoningService --> AggregateRuleEngine : uses
     ReasoningService --> DecisionTableEngine : uses
     ReasoningService --> OWLRLReasoner       : uses

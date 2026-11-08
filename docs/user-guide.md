@@ -302,9 +302,12 @@ If `Employé` inherits from `Personne` and `Personne` has `habiteÀ → Ville`, 
 
 OntoBricks provides advanced ontology features under the **Advanced** section in the sidebar.
 
-#### SWRL Rules (Graphical Editor)
+#### If-Then Rules (Graphical Editor)
 
-Click **Business Rules** in the sidebar to define inference rules using SWRL (Semantic Web Rule Language). OntoBricks provides a **graphical D3-based editor** for building rules visually.
+Click **Business Rules** in the sidebar to define IF–THEN inference rules.
+OntoBricks provides a **graphical D3-based editor** for building rules visually.
+Rules are executed as **SHACL-AF** (SHACL Advanced Features); the editor shows
+the generated SHACL-AF live as you build a rule.
 
 1. Click **Add Rule** to open the fullscreen rule editor
 2. The editor has two panes:
@@ -314,16 +317,17 @@ Click **Business Rules** in the sidebar to define inference rules using SWRL (Se
    - Right-click a class or relationship on the graph to open the context menu
    - Choose **Add to IF** or **Add to THEN** to add atoms
    - Variable names (e.g., `?x`, `?y`) are assigned automatically
-   - The SWRL preview updates live as you add atoms
-4. **Advanced mode**: Toggle the Advanced section to edit raw antecedent/consequent text directly
+   - The **Generated SHACL rule** preview updates live as you add atoms
+4. **Advanced rules**: rules using built-ins, negation, or derived classes that
+   the visual graph cannot fully represent are shown read-only (their generated
+   SHACL-AF is displayed and preserved on save).
 5. Enter a **Rule Name** and optional **Description**
 6. Click **Save Rule**
 
-**Import/Export**: Click the header **SWRL** button to open a modal
-(same pattern as Data Quality → SHACL). Refresh shows the current rules as
-OntoBricks SWRL text (`# Rule:` / optional `# Description:` /
-`antecedent -> consequent`). Export downloads a `.swrl` file; Import appends
-parsed rules to the existing list (duplicate names are allowed).
+**View/Export**: Click the header **SHACL** button to open a modal
+(same pattern as Data Quality → SHACL). It shows all rules as their generated
+**SHACL-AF** Turtle (read-only, since transpilation is one-directional) and
+Export downloads a `.ttl` file.
 
 **Example SWRL Rules:**
 
@@ -3103,7 +3107,7 @@ After import you can:
 - **Ontology Studio (menu)**: Primary visual ontology workspace under **Ontology → Studio** — OntoViz canvas, toolbar, and floating AI Assistant (the sidebar label is *Studio*, not “Model”). The assistant uses the LLM saved in **Domain → General → AI** (Unity AI Gateway or Model Serving); it is unavailable when **No LLM** is selected.
 - **Visual Ontology Editor (OntoViz)**: Drag-and-drop canvas to create entities, relationships, and inheritance hierarchies with icons and attributes.
 - **Class Hierarchies**: Define rdfs:subClassOf relationships with automatic property inheritance from parent to child entities.
-- **SWRL Rules**: Create inference rules using a **graphical D3-based editor** — fullscreen modal with IF/THEN atom builders, ontology-aware context menu, live SWRL preview, and raw-edit mode for advanced users. A header **SWRL** button opens a modal (mirroring Data Quality’s SHACL) to view, export, and append-import OntoBricks SWRL text.
+- **If-Then Rules**: Create inference rules using a **graphical D3-based editor** — fullscreen modal with IF/THEN atom builders, ontology-aware context menu, and a live **Generated SHACL rule** preview. Rules run as SHACL-AF. A header **SHACL** button opens a modal (mirroring Data Quality’s SHACL) to view and export the generated SHACL-AF rules (read-only, one-directional).
 - **OWL Constraints**: Define cardinality, value restrictions, and property characteristics (functional, transitive, symmetric).
 - **SHACL Data Quality Shapes**: Define data quality rules using W3C SHACL — six categories (completeness, cardinality, uniqueness, consistency, conformance, structural), Turtle round-trip (generate/import), and SQL compilation for triple store execution.
 - **Decision Tables & Aggregate Rules**: Both editors explain each field and show a live plain-English preview of what the rule does, with warnings for combinations the engine cannot apply. In a decision table, each column reads one attribute and each row is an AND of conditions. A cell only requires its attribute when it holds a condition, so instances missing that attribute still match *any* or empty cells. The output either **sets a value** (`riskTier = high`) or **assigns an entity** (types the instance, e.g. `HighRiskCustomer`). The hit policy decides what happens when several OR rows match the same instance: *First* keeps the first row, *All* fires every row, and *Unique* reports a conflict and applies no output.

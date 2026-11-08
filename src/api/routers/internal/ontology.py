@@ -1031,77 +1031,64 @@ async def validate_swrl_rule(request: Request):
     return {"success": True, "valid": True, "message": "Rule syntax is valid"}
 
 
-@router.get("/swrl/text")
-async def get_swrl_text(session_mgr: SessionManager = Depends(get_session_manager)):
-    """Serialize all SWRL rules as OntoBricks SWRL text."""
-    from back.core.reasoning.swrl.SWRLTextCodec import serialize_rules
+@router.get("/shacl-rules/text")
+async def get_shacl_rules_text(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Serialize all IF/THEN rules as a combined SHACL-AF Turtle document."""
+    from back.core.reasoning.shacl_rules.rule_serializer import (
+        serialize_rules_to_turtle,
+    )
 
     domain = get_domain(session_mgr)
-    return {"success": True, "text": serialize_rules(domain.swrl_rules)}
+    text = serialize_rules_to_turtle(domain.swrl_rules, domain.ontology)
+    return {"success": True, "text": text}
 
 
-@router.get("/swrl/export")
-async def export_swrl(session_mgr: SessionManager = Depends(get_session_manager)):
-    """Download SWRL rules as an OntoBricks SWRL text file."""
+@router.get("/shacl-rules/export")
+async def export_shacl_rules(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Download the generated SHACL-AF rules as a Turtle (.ttl) file."""
     from fastapi.responses import Response
-    from back.core.reasoning.swrl.SWRLTextCodec import serialize_rules
+    from back.core.reasoning.shacl_rules.rule_serializer import (
+        serialize_rules_to_turtle,
+    )
 
     domain = get_domain(session_mgr)
-    text = serialize_rules(domain.swrl_rules)
+    text = serialize_rules_to_turtle(domain.swrl_rules, domain.ontology)
     export_name = (
         domain._data["domain"].get("info", {}).get("name", DEFAULT_GRAPH_NAME)
     )
-    filename = f"{export_name}_swrl_rules.swrl"
+    filename = f"{export_name}_shacl_rules.ttl"
     return Response(
         content=text,
-        media_type="text/plain",
+        media_type="text/turtle",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
-@router.post("/swrl/import")
-async def import_swrl(
+@router.post("/shacl-rules/preview")
+async def preview_shacl_rule(
     request: Request, session_mgr: SessionManager = Depends(get_session_manager)
 ):
-    """Import SWRL rules from OntoBricks SWRL text (always append)."""
-    from back.core.reasoning.swrl.SWRLTextCodec import parse_rules
+    """Transpile a single IF/THEN rule to its generated SHACL-AF form.
 
-    with map_route_errors("SWRL import failed", logger):
+    Read-only: used by the visual editor to show the SHACL a rule compiles to
+    as it is built. Transpilation is one-directional (no SHACL→rule parser).
+    """
+    from back.core.reasoning.shacl_rules.rule_serializer import preview_rule_shacl
+
+    with map_route_errors("SHACL rule preview failed", logger):
         data = await request.json()
-        text = data.get("text", "")
-        if not text or not str(text).strip():
-            raise ValidationError("No SWRL text provided")
-        try:
-            imported = parse_rules(text)
-        except ValueError as e:
-            raise ValidationError(str(e)) from e
-        if not imported:
-            raise ValidationError("No valid SWRL rules found in the provided text")
-        for rule in imported:
-            errors = Ontology.validate_swrl_rule(rule)
-            if errors:
-                raise ValidationError(
-                    f"Invalid rule '{rule.get('name', '')}': {'; '.join(errors)}"
-                )
         domain = get_domain(session_mgr)
-        rules = list(domain.swrl_rules)
-        rules.extend(imported)
-        domain.swrl_rules = rules
-        names = [r.get("name", "") for r in imported if isinstance(r, dict)]
-        domain.record_change(
-            "swrl_added",
-            entity_type="swrl",
-            entity_ref=f"{len(imported)} imported",
-            summary=f"Imported {len(imported)} SWRL rule(s)",
-            meta=domain.diff_meta({}, {"name": ", ".join(n for n in names if n)}),
+        result = preview_rule_shacl(
+            data.get("name", ""),
+            data.get("antecedent", ""),
+            data.get("consequent", ""),
+            domain.ontology,
         )
-        domain.save()
-        return {
-            "success": True,
-            "message": f"Imported {len(imported)} rules",
-            "rules": rules,
-            "imported_count": len(imported),
-        }
+        return {"success": True, **result}
 
 
 # ===========================================

@@ -3,7 +3,7 @@
 All currently supported triple stores (Delta views, Lakebase Postgres) are
 SQL-based, so the engine emits a SELECT against the flat triple table.  A
 future Cypher / Gremlin backend would extend this engine via a translator
-seam similar to :class:`back.core.reasoning.swrl.SWRLEngine`.
+seam similar to :class:`back.core.reasoning.shacl_rules.ShaclRuleEngine`.
 """
 
 import time

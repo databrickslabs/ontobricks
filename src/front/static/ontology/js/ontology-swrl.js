@@ -56,7 +56,10 @@ window.SwrlModule = {
         { op: 'startsWith', label: 'starts with' },
         { op: 'endsWith', label: 'ends with' },
     ],
-    rawMode: false,
+    // Advanced (non-representable) rule state — preserved verbatim for save.
+    _nonRepresentable: false,
+    _origAntecedent: '',
+    _origConsequent: '',
 
     // ── Initialisation ───────────────────────────────────
 
@@ -210,7 +213,11 @@ window.SwrlModule = {
         this.conditions = [];
         const condWrap = document.getElementById('swrlConditions');
         if (condWrap) condWrap.innerHTML = '';
-        this.rawMode = false;
+        // Non-representable rules (built-ins / negation) keep their original
+        // body here so a read-only SHACL view never drops it on save.
+        this._nonRepresentable = false;
+        this._origAntecedent = '';
+        this._origConsequent = '';
         this._ctxTarget = null;
         this._ctxType = null;
         this._readOnly = false;
@@ -219,14 +226,8 @@ window.SwrlModule = {
         const desc = document.getElementById('swrlRuleDescription');
         if (name) name.value = '';
         if (desc) desc.value = '';
-        const rawToggle = document.getElementById('swrlRawToggle');
-        if (rawToggle) rawToggle.checked = false;
-        const rawEditor = document.getElementById('swrlRawEditor');
-        if (rawEditor) rawEditor.classList.add('d-none');
-        const rawAnt = document.getElementById('swrlRawAntecedent');
-        if (rawAnt) rawAnt.value = '';
-        const rawCons = document.getElementById('swrlRawConsequent');
-        if (rawCons) rawCons.value = '';
+        const note = document.getElementById('swrlAdvancedNote');
+        if (note) note.classList.add('d-none');
 
         this._hideContextMenu();
     },
@@ -295,7 +296,7 @@ window.SwrlModule = {
 
     addRule() {
         this._resetEditor();
-        this._openEditor('Add SWRL Rule');
+        this._openEditor('Add If-Then Rule');
     },
 
     editRule(index) {
@@ -304,7 +305,7 @@ window.SwrlModule = {
         const rule = this.rules[index];
         document.getElementById('swrlRuleName').value = rule.name || '';
         document.getElementById('swrlRuleDescription').value = rule.description || '';
-        this._openEditor('Edit SWRL Rule').then(() => {
+        this._openEditor('Edit If-Then Rule').then(() => {
             this._prefillFromRule(rule);
         });
     },
@@ -316,7 +317,7 @@ window.SwrlModule = {
         const rule = this.rules[index];
         document.getElementById('swrlRuleName').value = rule.name || '';
         document.getElementById('swrlRuleDescription').value = rule.description || '';
-        this._openEditor('View SWRL Rule').then(() => {
+        this._openEditor('View If-Then Rule').then(() => {
             this._prefillFromRule(rule);
             document.querySelectorAll('#swrlRulePane input, #swrlRulePane textarea').forEach(el => { el.disabled = true; });
             document.getElementById('swrlSaveBtn').classList.add('d-none');
@@ -904,23 +905,53 @@ window.SwrlModule = {
             if (thenCount) thenCount.textContent = thenAtoms.length;
         }
 
-        // SWRL preview
-        const antStr = this._buildSwrlString(ifAtoms);
-        const conStr = this._buildSwrlString(thenAtoms);
-        const preview = document.getElementById('swrlPreview');
-        if (preview) {
-            if (!antStr && !conStr) {
-                preview.innerHTML = '<span class="text-muted fst-italic">Select elements to build the rule</span>';
-            } else {
-                preview.innerHTML = `${this._esc(antStr)} <span class="swrl-arrow">&rarr;</span> ${this._esc(conStr)}`;
-            }
-        }
+        // Generated SHACL preview — built from the visual selection, or from
+        // the preserved original body for advanced (non-representable) rules.
+        const antStr = this._nonRepresentable
+            ? this._origAntecedent
+            : this._buildSwrlString(ifAtoms);
+        const conStr = this._nonRepresentable
+            ? this._origConsequent
+            : this._buildSwrlString(thenAtoms);
+        this._currentAntecedent = antStr;
+        this._currentConsequent = conStr;
+        this._refreshShaclPreview(antStr, conStr);
+    },
 
-        // Raw editor sync
-        const rawAnt = document.getElementById('swrlRawAntecedent');
-        const rawCon = document.getElementById('swrlRawConsequent');
-        if (rawAnt) rawAnt.value = antStr;
-        if (rawCon) rawCon.value = conStr;
+    // Fetch and render the generated SHACL-AF for the rule being built.
+    // Read-only: transpilation is one-directional (no SHACL->rule parser).
+    _refreshShaclPreview(antecedent, consequent) {
+        const preview = document.getElementById('swrlPreview');
+        if (!preview) return;
+        if (!antecedent && !consequent) {
+            preview.innerHTML = '<span class="text-muted fst-italic">Select elements to build the rule</span>';
+            return;
+        }
+        const token = (this._previewToken = (this._previewToken || 0) + 1);
+        clearTimeout(this._previewTimer);
+        this._previewTimer = setTimeout(async () => {
+            try {
+                const resp = await fetch('/ontology/shacl-rules/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        name: document.getElementById('swrlRuleName')?.value || 'rule',
+                        antecedent, consequent,
+                    }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (token !== this._previewToken) return;  // superseded
+                if (data && data.success && data.turtle) {
+                    preview.innerHTML = `<pre class="mb-0 swrl-shacl-preview">${this._esc(data.turtle)}</pre>`;
+                } else {
+                    preview.innerHTML = `${this._esc(antecedent)} <span class="swrl-arrow">&rarr;</span> ${this._esc(consequent)}`;
+                }
+            } catch (e) {
+                if (token !== this._previewToken) return;
+                preview.innerHTML = `${this._esc(antecedent)} <span class="swrl-arrow">&rarr;</span> ${this._esc(consequent)}`;
+            }
+        }, 250);
     },
 
     _buildAtomsFromSelection() {
@@ -1190,12 +1221,10 @@ window.SwrlModule = {
         const antD = this._parseAtomsDetailed(rule.antecedent || '');
         const conD = this._parseAtomsDetailed(rule.consequent || '');
 
-        // Always seed the raw editor so it stays accurate if the user toggles
-        // it — and so the fallback below can rely on it.
-        const rawAnt = document.getElementById('swrlRawAntecedent');
-        const rawCons = document.getElementById('swrlRawConsequent');
-        if (rawAnt) rawAnt.value = rule.antecedent || '';
-        if (rawCons) rawCons.value = rule.consequent || '';
+        // Preserve the original body so an advanced (non-representable) rule is
+        // never dropped on save — the SHACL view is read-only.
+        this._origAntecedent = rule.antecedent || '';
+        this._origConsequent = rule.consequent || '';
 
         const varToNodeId = new Map();
         // Atoms the graph cannot represent (data-property atoms, SWRL builtins
@@ -1280,28 +1309,16 @@ window.SwrlModule = {
             if (link) processPropertyAtom(a, 'then'); else unmapped++;
         });
 
-        // If the visual graph cannot fully represent the rule, switch to raw
-        // mode so nothing (notably the THEN clause) is silently dropped.
-        if (unmapped > 0) {
-            const toggle = document.getElementById('swrlRawToggle');
-            if (toggle) toggle.checked = true;
-            this.toggleRawMode();
-        }
+        // If the visual graph cannot fully represent the rule (built-ins,
+        // negation, derived classes), mark it non-representable: its original
+        // body is kept verbatim and shown as read-only SHACL, so nothing
+        // (notably the THEN clause) is silently dropped on save.
+        this._nonRepresentable = unmapped > 0;
+        const note = document.getElementById('swrlAdvancedNote');
+        if (note) note.classList.toggle('d-none', !this._nonRepresentable);
 
         this._applyVisualSelection();
         this._updateRulePane();
-    },
-
-    // ── Raw mode toggle ──────────────────────────────────
-
-    toggleRawMode() {
-        const checked = document.getElementById('swrlRawToggle')?.checked;
-        this.rawMode = !!checked;
-        const editor = document.getElementById('swrlRawEditor');
-        if (editor) {
-            if (this.rawMode) editor.classList.remove('d-none');
-            else editor.classList.add('d-none');
-        }
     },
 
     // ── Save & Delete ────────────────────────────────────
@@ -1309,9 +1326,10 @@ window.SwrlModule = {
     async saveRule() {
         let antecedent, consequent;
 
-        if (this.rawMode) {
-            antecedent = (document.getElementById('swrlRawAntecedent')?.value || '').trim();
-            consequent = (document.getElementById('swrlRawConsequent')?.value || '').trim();
+        if (this._nonRepresentable) {
+            // Advanced rule shown read-only: persist its original body verbatim.
+            antecedent = (this._origAntecedent || '').trim();
+            consequent = (this._origConsequent || '').trim();
         } else {
             const atoms = this._buildAtomsFromSelection();
             antecedent = this._buildSwrlString(atoms.ifAtoms.concat(this._conditionAtoms()));
@@ -1416,7 +1434,7 @@ window.SwrlModule = {
         }
     },
 
-    // ── SWRL text modal (view / export / import) ──────────
+    // ── SHACL rules text modal (view / export, read-only) ─
 
     openSwrlModal() {
         bootstrap.Modal.getOrCreateInstance(document.getElementById('brSwrlModal')).show();
@@ -1425,72 +1443,19 @@ window.SwrlModule = {
 
     async refreshSwrlText() {
         try {
-            const resp = await fetch('/ontology/swrl/text', { credentials: 'same-origin' });
+            const resp = await fetch('/ontology/shacl-rules/text', { credentials: 'same-origin' });
             const data = await resp.json();
             if (data.success) {
                 const el = document.getElementById('brSwrlEditor');
                 if (el) el.value = data.text || '';
             }
         } catch (e) {
-            console.error('[SWRL] Text refresh error:', e);
+            console.error('[SHACL] Rules text refresh error:', e);
         }
     },
 
     exportSwrl() {
-        window.location.href = '/ontology/swrl/export';
-    },
-
-    showSwrlImportModal() {
-        const file = document.getElementById('brSwrlImportFile');
-        const text = document.getElementById('brSwrlImportText');
-        if (file) file.value = '';
-        if (text) text.value = '';
-        new bootstrap.Modal(document.getElementById('brSwrlImportModal')).show();
-    },
-
-    async doSwrlImport() {
-        let text = (document.getElementById('brSwrlImportText')?.value || '').trim();
-        const fileInput = document.getElementById('brSwrlImportFile');
-        if (fileInput?.files?.length > 0 && !text) {
-            text = await fileInput.files[0].text();
-        }
-        if (!text) {
-            if (typeof showNotification === 'function')
-                showNotification('Please provide SWRL text', 'warning');
-            return;
-        }
-        try {
-            const resp = await fetch('/ontology/swrl/import', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ text }),
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok || !data.success) {
-                const msg = data.detail || data.message || 'Import failed';
-                if (typeof showNotification === 'function')
-                    showNotification(msg, 'error');
-                return;
-            }
-            this.rules = data.rules || [];
-            this.renderRulesList();
-            if (typeof OntologyState !== 'undefined' && OntologyState.config) {
-                OntologyState.config.swrl_rules = this.rules;
-            }
-            if (typeof BusinessRulesModule !== 'undefined') {
-                BusinessRulesModule._refreshAllBadges();
-            }
-            if (typeof autoGenerateOwl === 'function') autoGenerateOwl();
-            bootstrap.Modal.getInstance(document.getElementById('brSwrlImportModal'))?.hide();
-            if (typeof showNotification === 'function')
-                showNotification('Imported ' + (data.imported_count || 0) + ' rules', 'success');
-            this.refreshSwrlText();
-        } catch (e) {
-            console.error('[SWRL] Import error:', e);
-            if (typeof showNotification === 'function')
-                showNotification('Error importing SWRL: ' + (e.message || e), 'error');
-        }
+        window.location.href = '/ontology/shacl-rules/export';
     },
 
     _esc(s) { return typeof escapeHtml === 'function' ? escapeHtml(s || '') : (s || ''); }
@@ -1543,8 +1508,4 @@ document.addEventListener('DOMContentLoaded', function () {
             else if (k === 'remove') SwrlModule.ctxRemove();
         });
     }
-
-    document.getElementById('swrlRawToggle')?.addEventListener('change', function () {
-        SwrlModule.toggleRawMode();
-    });
 });

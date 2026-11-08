@@ -1,27 +1,27 @@
-"""SWRL expression parser — shared parsing utilities for SWRL translators.
+"""Rule expression parser — shared parsing utilities for the SHACL rule layer.
 
-Extracts atoms from SWRL rule strings and provides URI resolution,
-violation-subject detection, and variable connectivity analysis used
-by both the SQL and Cypher translation paths.
+Parses IF/THEN rule expressions (SWRL-style authoring syntax) into atoms and
+provides URI resolution, violation-subject detection, and variable
+connectivity analysis used by both the SQL and Cypher translation backends.
 """
 
 from typing import Dict, List, Optional
 
 from back.core.logging import get_logger
 from back.core.reasoning.constants import SWRL_ATOM_RE, NEGATED_ATOM_RE
-from back.core.reasoning.swrl.SWRLAtomPartition import SWRLAtomPartition
+from back.core.reasoning.shacl_rules.RuleAtomPartition import RuleAtomPartition
 
 logger = get_logger(__name__)
 
 
-class SWRLParser:
-    """Parse and analyse SWRL rule expressions.
+class RuleExpressionParser:
+    """Parse and analyse IF/THEN rule expressions (SWRL-style syntax).
 
     All methods are static — no instance state is needed.
     """
 
     @staticmethod
-    def partition_rule_atoms(rule: Dict) -> Optional[SWRLAtomPartition]:
+    def partition_rule_atoms(rule: Dict) -> Optional[RuleAtomPartition]:
         """Parse and partition a SWRL rule's atoms for translation.
 
         Returns ``None`` if the antecedent or consequent is empty, or if
@@ -29,8 +29,8 @@ class SWRLParser:
         """
         antecedent = rule.get("antecedent", "")
         consequent = rule.get("consequent", "")
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
+        ante_atoms = RuleExpressionParser.parse_atoms(antecedent)
+        cons_atoms = RuleExpressionParser.parse_atoms(consequent)
         if not ante_atoms or not cons_atoms:
             return None
 
@@ -51,7 +51,7 @@ class SWRLParser:
         if not class_atoms:
             return None
 
-        return SWRLAtomPartition(
+        return RuleAtomPartition(
             class_atoms=class_atoms,
             prop_atoms=prop_atoms,
             builtin_atoms=builtin_atoms,
@@ -73,7 +73,9 @@ class SWRLParser:
         Each returned dict has ``name``, ``args``, ``arity``, ``negated``
         (bool), and ``builtin`` (bool).
         """
-        from back.core.reasoning.swrl.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+        from back.core.reasoning.shacl_rules.RuleBuiltinRegistry import (
+            RuleBuiltinRegistry,
+        )
 
         atoms: List[Dict] = []
         remaining = expression
@@ -87,7 +89,7 @@ class SWRLParser:
                     "args": raw_args,
                     "arity": len(raw_args),
                     "negated": True,
-                    "builtin": SWRLBuiltinRegistry.is_builtin(name),
+                    "builtin": RuleBuiltinRegistry.is_builtin(name),
                 }
             )
 
@@ -104,7 +106,7 @@ class SWRLParser:
                     "args": raw_args,
                     "arity": len(raw_args),
                     "negated": False,
-                    "builtin": SWRLBuiltinRegistry.is_builtin(name),
+                    "builtin": RuleBuiltinRegistry.is_builtin(name),
                 }
             )
         return atoms
