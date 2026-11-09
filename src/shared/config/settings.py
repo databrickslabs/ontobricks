@@ -94,6 +94,17 @@ class Settings(BaseSettings):
     session_dir: str = _get_default_session_dir()
     session_max_age: int = 86400  # 24 hours
 
+    # Output-token budget per LLM call of the Graph Chat agent (Digital Twin
+    # assistant). Reasoning models spend part of it before writing the answer;
+    # when it runs out first, the user gets the "couldn't display" fallback.
+    dtwin_chat_max_tokens: int = Field(
+        default=8192,
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS",
+            "dtwin_chat_max_tokens",
+        ),
+    )
+
     # Knowledge-graph analytics: the maximum number of triples the cluster
     # detection endpoint will load into memory. Raise with care: the full
     # triple set is held in memory during community detection.

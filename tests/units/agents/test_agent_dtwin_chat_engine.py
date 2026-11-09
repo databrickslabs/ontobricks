@@ -73,6 +73,36 @@ def _run_with_scripted_llm(llm_side_effect):
         )
 
 
+def _final_answer_response():
+    return {
+        "choices": [{"message": {"content": "Answer", "tool_calls": None}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+
+
+@pytest.mark.parametrize("configured, expected", [(None, 8192), (16000, 16000)])
+def test_run_agent_sends_the_configured_max_tokens(configured, expected):
+    extra = {} if configured is None else {"max_tokens": configured}
+    with patch(
+        "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+        return_value=_final_answer_response(),
+    ) as llm:
+        result = run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="endpoint",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="hello",
+            **extra,
+        )
+
+    assert result.reply == "Answer"
+    assert llm.call_args.kwargs["max_tokens"] == expected
+
+
 def test_run_agent_preserves_pending_action_on_llm_error():
     def llm_side_effect(*_args, **_kwargs):
         if llm_side_effect.calls == 0:

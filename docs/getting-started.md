@@ -569,6 +569,7 @@ the workspace token (locally) or the SP token (in Apps).
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for community detection (`POST /clusters/detect`). Not used by graph analytics, which always runs on the Lakeflow job. | `500000` |
+| `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` | Output-token budget per LLM call of the Graph Chat (Digital Twin assistant), including the model's reasoning. When it runs out before any answer text, the chat shows "I couldn't display that answer". | `8192` |
 | `ONTOBRICKS_ANALYTICS_TOP_N` | How many top-ranked nodes per metric the job returns per output table. Keeps the persisted payload bounded on very large graphs; must stay above the Analytics page "Top N" selector maximum (50). | `100` |
 | `ONTOBRICKS_ANALYTICS_JOB_ENABLED` | **Initial value only** — admins override this in Settings → Global (*Compute large-graph metrics on Databricks*), and their choice wins, including an explicit "off". Enables the serverless Lakeflow job that computes all graph KPIs. Requires the bundle to be deployed and the domain to have been built (which materialises the `…_data` Delta snapshot the job reads). | `false` |
 | `ONTOBRICKS_ANALYTICS_JOB_NAME` | Deployed name of that job. Empty derives `<app name>-graph-analytics`, matching the bundle. A bundle deployed in development mode prefixes the name with `[dev <user>] `, which is matched automatically. | *(derived)* |
@@ -610,6 +611,7 @@ ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # Community detection in-memory triple 
 ONTOBRICKS_ANALYTICS_TOP_N=100           # Top nodes per metric returned by the Lakeflow job
 ONTOBRICKS_ANALYTICS_JOB_ENABLED=false   # Initial value; admins override it in Settings → Global
 # ONTOBRICKS_GITHUB_TOKEN=ghp_...          # Local GitHub mirror only; prefer a Databricks secret in Apps
+ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS=8192    # Graph Chat output tokens per LLM call (incl. reasoning)
 ```
 
 #### Shell Export
