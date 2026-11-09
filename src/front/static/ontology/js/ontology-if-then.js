@@ -121,72 +121,34 @@ window.IfThenModule = {
         const noMsg = document.getElementById('noIfThenRulesMessage');
         if (!container) return;
 
-        // Always clear previously rendered cards first so deletions (incl. the
-        // last rule) reflect immediately. The empty-state message is a
-        // permanent child of the container and is only toggled.
-        container.querySelectorAll('.if-then-rule-card').forEach(c => c.remove());
+        // Same card renderer as Complex (BusinessRulesModule._renderRuleCard).
+        // Cards are permanent siblings of the empty-state message; only the
+        // cards are cleared, the empty message is toggled.
+        container.querySelectorAll('.br-rule-card').forEach(c => c.remove());
 
         if (this.rules.length === 0) {
             if (noMsg) noMsg.classList.remove('d-none');
             return;
         }
         if (noMsg) noMsg.classList.add('d-none');
-        const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
-            ? window.OB.canEditOntology()
-            : window.isActiveVersion !== false;
+        if (!window.BusinessRulesModule || !BusinessRulesModule._renderRuleCard) return;
 
-        let html = '';
+        const badge =
+            `<span class="badge bg-primary bg-opacity-75 small">` +
+            `<i class="bi bi-code-square me-1"></i>Simple</span>`;
         this.rules.forEach((rule, i) => {
-            const enabled = rule.enabled !== false;
-            const opacity = enabled ? '' : 'opacity-50';
-            const toggleIcon = enabled ? 'bi-toggle-on text-success' : 'bi-toggle-off text-danger';
-            const toggleTitle = enabled ? 'Disable' : 'Enable';
-            const description = rule.description
-                ? `<div class="text-muted small mt-1">${this._esc(rule.description)}</div>`
-                : '';
-
-            const actions = canEdit ? `
-                <div class="btn-group btn-group-sm ms-2 flex-shrink-0 ontology-edit-btn">
-                    <button class="btn btn-outline-secondary btn-sm" onclick="IfThenModule.toggleEnabled(${i})" title="${toggleTitle}">
-                        <i class="bi ${toggleIcon}"></i>
-                    </button>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="IfThenModule.editRule(${i})" title="Edit">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-outline-danger btn-sm" onclick="IfThenModule.deleteRule(${i})" title="Delete">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>` : `
-                <div class="btn-group btn-group-sm ms-2 flex-shrink-0">
-                    <button class="btn btn-outline-secondary btn-sm" onclick="IfThenModule.viewRule(${i})" title="View">
-                        <i class="bi bi-eye"></i>
-                    </button>
-                </div>`;
-
-            html += `
-                <div class="ob-rule-card if-then-rule-card ${opacity} mb-2" data-rule-index="${i}">
-                    <div class="d-flex align-items-start justify-content-between">
-                        <div class="flex-grow-1">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="badge bg-primary bg-opacity-75 small">
-                                    <i class="bi bi-code-square me-1"></i>Simple
-                                </span>
-                            </div>
-                            <div class="small fw-medium">${this._esc(rule.name)}</div>
-                            ${description}
-                            <div class="text-muted small mt-1">
-                                <code>${this._esc(rule.antecedent)}</code>
-                                <span class="mx-1">&rarr;</span>
-                                <code>${this._esc(rule.consequent)}</code>
-                            </div>
-                        </div>
-                        ${actions}
-                    </div>
-                </div>`;
+            const ante = this._esc(rule.antecedent || '');
+            const cons = this._esc(rule.consequent || '');
+            BusinessRulesModule._renderRuleCard(container, {
+                name: rule.name || `Simple Rule ${i + 1}`,
+                meta: `${ante} → ${cons}`,
+                enabled: rule.enabled,
+                badge,
+                onEdit: () => this.editRule(i),
+                onDelete: () => this.deleteRule(i),
+                onToggle: () => this.toggleEnabled(i),
+            });
         });
-        // Insert cards before the (hidden) empty-state message, keeping it in
-        // the DOM for the next empty render.
-        container.insertAdjacentHTML('afterbegin', html);
     },
 
     async toggleEnabled(index) {

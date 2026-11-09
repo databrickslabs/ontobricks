@@ -1,4 +1,4 @@
-"""Business Rules list UI: Simple-tab toolbar + Data Quality card style."""
+"""Business Rules list UI: Simple-tab toolbar + shared Complex card style."""
 
 from pathlib import Path
 
@@ -15,8 +15,14 @@ BR_JS = (
 MAIN_CSS = (
     ROOT / "src/front/static/global/css/main.css"
 ).read_text(encoding="utf-8")
+ONTOLOGY_CSS = (
+    ROOT / "src/front/static/global/css/ontology.css"
+).read_text(encoding="utf-8")
 DQ_JS = (
     ROOT / "src/front/static/ontology/js/ontology-dataquality.js"
+).read_text(encoding="utf-8")
+ONTOLOGY_HTML = (
+    ROOT / "src/front/templates/ontology.html"
 ).read_text(encoding="utf-8")
 
 
@@ -50,15 +56,25 @@ def test_section_header_keeps_add_rule():
     assert 'data-br-action="add-rule"' in header
 
 
-def test_simple_and_complex_rows_use_shared_ob_rule_card():
-    assert "ob-rule-card" in IF_THEN_JS
-    assert "if-then-rule-card" in IF_THEN_JS
-    assert "ob-rule-card" in BR_JS
-    assert "br-rule-card" in BR_JS
+def test_simple_reuses_complex_rule_card_renderer():
+    """Simple rows go through BusinessRulesModule._renderRuleCard (Complex)."""
+    assert "BusinessRulesModule._renderRuleCard" in IF_THEN_JS
+    assert "br-rule-card" in IF_THEN_JS
+    assert "if-then-rule-card" not in IF_THEN_JS
+    assert "_renderRuleCard(container, { name, meta, enabled, badge, onEdit, onDelete, onToggle })" in BR_JS
+    assert "ob-rule-card br-rule-card" in BR_JS
     assert ".ob-rule-card" in MAIN_CSS
     assert "ob-rule-card dq-shape-card" in DQ_JS
-    # Match Data Quality: badge + fw-medium title, not Bootstrap .card wrappers.
-    assert "badge bg-primary bg-opacity-75" in IF_THEN_JS
-    assert "small fw-medium" in IF_THEN_JS
-    assert 'class="card mb-2 if-then-rule-card"' not in IF_THEN_JS
-    assert "small fw-medium" in BR_JS
+
+
+def test_simple_no_longer_has_purple_card_overrides():
+    assert ".if-then-rule-card" not in ONTOLOGY_CSS
+    assert ".if-then-rule-code" not in ONTOLOGY_CSS
+    assert "#6f42c1" not in ONTOLOGY_CSS
+
+
+def test_business_rules_module_loads_after_if_then():
+    """renderRulesList needs BusinessRulesModule._renderRuleCard at runtime."""
+    assert ONTOLOGY_HTML.index("ontology/js/ontology-if-then.js") < ONTOLOGY_HTML.index(
+        "ontology/js/ontology-business-rules.js"
+    )

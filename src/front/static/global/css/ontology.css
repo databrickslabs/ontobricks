@@ -119,29 +119,6 @@ body.ontology-page {
     font-size: 3rem;
 }
 
-/* IF-THEN Rules */
-.if-then-rule-card {
-    border-left: 3px solid #6f42c1;
-    transition: box-shadow 0.2s ease;
-}
-
-.if-then-rule-card:hover {
-    box-shadow: 0 2px 8px rgba(111, 66, 193, 0.15);
-}
-
-.if-then-rule-code {
-    font-family: 'Fira Code', 'Monaco', monospace;
-    font-size: 0.85rem;
-    background: #ffffff;
-    padding: 4px 8px;
-    border-radius: 4px;
-    display: inline-block;
-}
-
-.if-then-rule-code code {
-    color: #6f42c1;
-}
-
 /* Constraints */
 .constraint-card {
     border-left: 3px solid #0d6efd;
@@ -150,16 +127,6 @@ body.ontology-page {
 
 .constraint-card:hover {
     box-shadow: 0 2px 8px rgba(13, 110, 253, 0.15);
-}
-
-/* Axioms */
-.axiom-card {
-    border-left: 3px solid #198754;
-    transition: box-shadow 0.2s ease;
-}
-
-.axiom-card:hover {
-    box-shadow: 0 2px 8px rgba(25, 135, 84, 0.15);
 }
 
 /* Clickable chips for IF-THEN predicates */

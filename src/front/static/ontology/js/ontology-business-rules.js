@@ -291,26 +291,33 @@ window.BusinessRulesModule = {
             `<span class="badge bg-warning text-dark bg-opacity-75 small">` +
             `<i class="bi bi-braces me-1"></i>Complex</span>`
         );
+        const metaHtml = meta
+            ? `<div class="text-muted small mt-1"><code>${meta}</code></div>`
+            : '';
+        const toggleHtml = onToggle
+            ? `<button class="btn btn-outline-secondary btn-sm" title="${isEnabled ? 'Disable' : 'Enable'}">` +
+              `<i class="bi ${isEnabled ? 'bi-toggle-on text-success' : 'bi-toggle-off text-danger'}"></i>` +
+              `</button>`
+            : '';
 
         card.innerHTML =
             `<div class="d-flex align-items-start justify-content-between">` +
             `  <div class="flex-grow-1">` +
             `    <div class="d-flex align-items-center gap-2 mb-1">${badgeHtml}</div>` +
             `    <div class="small fw-medium">${this._esc(name)}</div>` +
-            `    <div class="text-muted small mt-1"><code>${meta}</code></div>` +
+            `    ${metaHtml}` +
             `  </div>` +
             `  <div class="btn-group btn-group-sm ms-2 flex-shrink-0">` +
-            `    <button class="btn btn-outline-secondary btn-sm" title="${isEnabled ? 'Disable' : 'Enable'}">` +
-            `      <i class="bi ${isEnabled ? 'bi-toggle-on text-success' : 'bi-toggle-off text-danger'}"></i>` +
-            `    </button>` +
+            `    ${toggleHtml}` +
             `    <button class="btn btn-outline-secondary btn-sm" title="Edit"><i class="bi bi-pencil"></i></button>` +
             `    <button class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>` +
             `  </div>` +
             `</div>`;
-        const btns = card.querySelectorAll('button');
-        btns[0].addEventListener('click', onToggle);
-        btns[1].addEventListener('click', onEdit);
-        btns[2].addEventListener('click', onDelete);
+        const btns = [...card.querySelectorAll('button')];
+        let i = 0;
+        if (onToggle) btns[i++].addEventListener('click', onToggle);
+        if (onEdit) btns[i++].addEventListener('click', onEdit);
+        if (onDelete) btns[i].addEventListener('click', onDelete);
         container.appendChild(card);
     },
 

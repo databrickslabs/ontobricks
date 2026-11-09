@@ -1059,3 +1059,76 @@ Test result:
   carries the 5 on-dimensions and the 3 ticked shape ids only. Inference tree:
   rule mapping, partial state, applied selection and phase-off behaviour verified.
 
+
+Business Rules Simple list uses the same card as Complex
+
+Context: Simple and Complex already shared the `.ob-rule-card` class name, but
+Simple still carried a purple left border / purple hover from the old
+`.if-then-rule-card` styles, an extra description line, its own markup and a
+read-only eye button. Complex is the reference: badge, name, one `<code>` meta
+line, toggle / edit / delete. Simple now goes through the same renderer.
+
+Changes:
+1. src/front/static/ontology/js/ontology-if-then.js
+   `renderRulesList` delegates to `BusinessRulesModule._renderRuleCard` with a
+   Simple badge and `antecedent → consequent` as the meta line. Cards use
+   `.br-rule-card` like Complex. The purple-only markup, description line and
+   canEdit / eye-button branch are gone; read-only still comes from
+   permissions.css on `.ob-rule-card .btn-group button`.
+2. src/front/static/global/css/ontology.css
+   Removed the leftover `.if-then-rule-card` / `.if-then-rule-code` purple
+   overrides. Both lists now rely on the shared `.ob-rule-card` styles.
+3. tests/units/front/test_business_rules_list_ui.py
+   Asserts Simple reuses `_renderRuleCard`, no purple CSS, and that
+   business-rules.js loads after if-then.js.
+
+Modified files:
+- src/front/static/ontology/js/ontology-if-then.js
+- src/front/static/global/css/ontology.css
+- tests/units/front/test_business_rules_list_ui.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-09.log
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/test_business_rules_list_ui.py -> 5 passed.
+- uv run --frozen pytest -q -m "not scenario" -> 10164 passed, 325 skipped,
+  1 failed. The failure is the existing test_no_function_grows_beyond_budget
+  (agents/agent_dtwin_chat/engine.py::run_agent 198→200), a file this change
+  does not touch.
+
+
+Expressions & Axioms lists use the same card as Business Rules Complex
+
+Context: both Expressions and Axioms still rendered Bootstrap `.card` rows with
+a green left border (`.axiom-card`). Business Rules Complex is the reference:
+`.ob-rule-card`, badge, title, optional `<code>` meta, edit / delete. Both
+lists now go through the same renderer; the enable toggle stays optional so
+axioms do not get one.
+
+Changes:
+1. src/front/static/ontology/js/ontology-business-rules.js
+   `_renderRuleCard` skips the toggle button when `onToggle` is omitted, and
+   skips the meta line when `meta` is empty. Simple / Complex still pass both.
+2. src/front/static/ontology/js/ontology-axioms.js
+   `_renderList` delegates to `BusinessRulesModule._renderRuleCard` for
+   Expressions and Axioms. Name is the subject; meta is symbol + objects /
+   individuals / chain via `_itemMeta`. Edit / delete only (no eye-button
+   branch); read-only still comes from permissions.css.
+3. src/front/static/global/css/ontology.css
+   Removed the leftover `.axiom-card` green border / hover overrides.
+4. tests/units/front/test_axioms_list_ui.py (new)
+   Contract: shared renderer, no `.axiom-card`, optional toggle, script order.
+
+Modified files:
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/js/ontology-axioms.js
+- src/front/static/global/css/ontology.css
+- tests/units/front/test_axioms_list_ui.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-09.log
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/test_axioms_list_ui.py
+  tests/units/front/test_business_rules_list_ui.py -> 9 passed.
+- uv run --frozen pytest -q -m "not scenario" -> 10168 passed, 325 skipped,
+  1 failed. The failure is the existing test_no_function_grows_beyond_budget
+  (agents/agent_dtwin_chat/engine.py::run_agent 198→200), a file this change
+  does not touch.
