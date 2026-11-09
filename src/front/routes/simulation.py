@@ -41,6 +41,9 @@ async def simulation_page(
         "backend_type": DigitalTwin(domain_session).effective_backend_label(),
         "owlrl_available": DigitalTwin.is_owlrl_available(),
         "if_then_rules_count": len(ont.get("if_then_rules", [])),
+        "object_properties_count": sum(
+            1 for p in ont.get("properties", []) if p.get("type") == "ObjectProperty"
+        ),
         "sparql_rules_count": len(ont.get("sparql_rules", [])),
         "cohort_rules_count": len(ont.get("cohort_rules", [])),
         "default_hops": Simulation.DEFAULT_HOPS,

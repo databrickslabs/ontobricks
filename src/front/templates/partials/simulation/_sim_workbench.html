@@ -194,72 +194,13 @@
 
                 <div class="tab-pane fade" id="simWb-pane-reasoning" role="tabpanel"
                      aria-labelledby="simWb-tab-reasoning">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <p class="text-muted small mb-0">Same phases as Graph → Inference. Expand a tile to pick individual rules.</p>
-                        <div class="d-flex gap-2 small">
-                            <button type="button" class="btn btn-link btn-sm py-0" id="simWbRulesAll">Select all</button>
-                            <button type="button" class="btn btn-link btn-sm py-0" id="simWbRulesNone">Unselect all</button>
-                        </div>
-                    </div>
-                    <div id="simWbPhases">
-                        <div class="row g-2">
-                            <div class="col-6 col-md-4">
-                                <label class="reasoning-tile active w-100" for="simPhaseIfThen" id="simTileIfThen">
-                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseIfThen" data-phase="if_then" checked>
-                                    <i class="bi bi-code-square rt-icon text-primary"></i>
-                                    <span class="rt-title">Simple rules</span>
-                                    {% if simulation_ctx.if_then_rules_count > 0 %}
-                                    <span class="badge bg-primary bg-opacity-75 rt-badge">{{ simulation_ctx.if_then_rules_count }}</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary rt-badge">no rules</span>
-                                    {% endif %}
-                                    <button type="button" class="dq-rules-toggle d-none" data-sim-expand="if_then" title="Show individual rules">
-                                        <i class="bi bi-chevron-down dq-expand-chevron"></i>
-                                        <span class="dq-rules-count"></span>
-                                    </button>
-                                </label>
-                                <div class="dq-rule-list d-none" data-sim-rulelist="if_then"></div>
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <label class="reasoning-tile active w-100" for="simPhaseGraph">
-                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseGraph" data-phase="graph" checked>
-                                    <i class="bi bi-share rt-icon text-info"></i>
-                                    <span class="rt-title">Graph reasoning</span>
-                                    <span class="rt-desc">Transitive / symmetric closure</span>
-                                </label>
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <label class="reasoning-tile w-100" for="simPhaseSparql">
-                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseSparql" data-phase="sparql_rules">
-                                    <i class="bi bi-braces rt-icon text-danger"></i>
-                                    <span class="rt-title">Complex rules</span>
-                                    {% if simulation_ctx.sparql_rules_count > 0 %}
-                                    <span class="badge bg-primary bg-opacity-75 rt-badge">{{ simulation_ctx.sparql_rules_count }}</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary rt-badge">no rules</span>
-                                    {% endif %}
-                                    <button type="button" class="dq-rules-toggle d-none" data-sim-expand="sparql_rules" title="Show individual rules">
-                                        <i class="bi bi-chevron-down dq-expand-chevron"></i>
-                                        <span class="dq-rules-count"></span>
-                                    </button>
-                                </label>
-                                <div class="dq-rule-list d-none" data-sim-rulelist="sparql_rules"></div>
-                            </div>
-                            <div class="col-6 col-md-4">
-                                <label class="reasoning-tile w-100" for="simPhaseTbox">
-                                    <input class="form-check-input rt-check" type="checkbox" id="simPhaseTbox" data-phase="tbox"
-                                           {% if not simulation_ctx.owlrl_available %}disabled{% endif %}>
-                                    <i class="bi bi-diagram-3 rt-icon text-primary"></i>
-                                    <span class="rt-title">T-Box (OWL 2 RL)</span>
-                                    {% if simulation_ctx.owlrl_available %}
-                                    <span class="badge bg-success bg-opacity-75 rt-badge">owlrl ready</span>
-                                    {% else %}
-                                    <span class="badge bg-warning text-dark rt-badge">owlrl missing</span>
-                                    {% endif %}
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+                    <p class="text-muted small mb-2">Same phases as Graph → Inference, run top to bottom over the sandbox. Expand a rule phase to pick individual rules.</p>
+                    {% with tree_id="simWbPhases", tree_ctx=simulation_ctx,
+                            tree_ids={"tbox": "simPhaseTbox", "if_then": "simPhaseIfThen",
+                                      "graph": "simPhaseGraph", "sparql_rules": "simPhaseSparql"},
+                            tree_checked=["if_then", "graph"], tree_lock_tbox=true %}
+                    {% include "partials/layout/_phase_tree.html" %}
+                    {% endwith %}
                 </div>
 
                 <div class="tab-pane fade" id="simWb-pane-results" role="tabpanel"

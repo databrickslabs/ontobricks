@@ -1463,11 +1463,13 @@ rules, or results, shows the brand spinner over that pane.
    existing relationship and proposes a reviewed **Remove** card with the
    exact subject, predicate, and claim URI. Contract termination does not
    implicitly remove claims.
-3. **Reasoning** — the same phase tiles as Graph → Inference.
-   Simple rules and graph reasoning are on by default; Complex rules and
-   OWL 2 RL are optional. Expand a Simple / Complex tile to tick individual
-   rules; the scenario stores that selection and only those rules run in the
-   sandbox.
+3. **Reasoning** — the same phase tree as Graph → Inference. Phases are
+   listed in execution order: T-Box (OWL 2 RL), Simple rules, Graph
+   reasoning, then Complex rules. Simple rules and graph reasoning are on by
+   default; Complex rules and OWL 2 RL are optional. Expand Simple or Complex
+   rules to tick individual rules. A phase with only some rules ticked shows
+   a partial checkbox and an `n/total` badge. The scenario stores that
+   selection and only those rules run in the sandbox.
 4. **Results** — KPIs (entities in scope, triples before / after, new
    inferences, removed triples, affected entities) and two paged,
    searchable tables for this scenario's last run: **Added** — each row

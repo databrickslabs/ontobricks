@@ -9,28 +9,21 @@ const ReasoningModule = {
     PAGE_SIZE: 15,
     _inferredData: [],
     _inferredPage: 0,
-    _rulesCache: {},
     _rulesLoaded: false,
-
-    // rule type → { tileCheckboxId, listAttr }
-    _RULE_TILE_MAP: {
-        if_then:             { checkboxId: 'reasoningIfThen',           listAttr: 'if_then' },
-        sparql_rules:     { checkboxId: 'reasoningSparqlRules',    listAttr: 'sparql_rules' },
-    },
+    _tree: null,
 
     async init() {
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
             new bootstrap.Tooltip(el, { html: true });
         });
+        const root = document.getElementById('reasoningPhaseTree');
+        if (root && window.PhaseTree) this._tree = new PhaseTree(root);
         this.checkAndResumeTask();
         this._loadRules();
     },
 
-    // ── Per-rule loading ─────────────────────────────────────────
-
     async _loadRules() {
-        if (this._rulesLoaded) return;
-        this._rulesLoaded = true;
+        if (this._rulesLoaded || !this._tree) return;
         try {
             const [ifThenResp, sparqlResp] = await Promise.all([
                 fetch('/ontology/if-then/list', { credentials: 'same-origin' }),
@@ -39,133 +32,11 @@ const ReasoningModule = {
             const [ifThenData, sparqlData] = await Promise.all([
                 ifThenResp.json(), sparqlResp.json(),
             ]);
-            this._rulesCache = {
-                if_then:            ifThenData.rules || [],
-                sparql_rules:    sparqlData.rules || [],
-            };
-            this._renderRuleCheckboxes();
+            this._tree.renderRules('if_then', ifThenData.rules || []);
+            this._tree.renderRules('sparql_rules', sparqlData.rules || []);
+            this._rulesLoaded = true;
         } catch (e) {
             console.error('[Reasoning] Failed to load rules:', e);
-        }
-    },
-
-    _renderRuleCheckboxes() {
-        for (const [type, cfg] of Object.entries(this._RULE_TILE_MAP)) {
-            const rules = this._rulesCache[type] || [];
-            const container = document.querySelector(`[data-r-rulelist="${cfg.listAttr}"]`);
-            const toggleBtn = document.querySelector(`[data-r-expand="${cfg.listAttr}"]`);
-            if (!container || !rules.length) continue;
-
-            if (toggleBtn) {
-                const countSpan = toggleBtn.querySelector('.dq-rules-count');
-                if (countSpan) countSpan.textContent = `${rules.length} rule${rules.length !== 1 ? 's' : ''}`;
-                toggleBtn.classList.remove('d-none');
-            }
-
-            container.innerHTML = rules.map((r, i) => `
-                <div class="dq-rule-item">
-                    <input type="checkbox" class="form-check-input r-rule-cb"
-                           id="rRule_${type}_${i}"
-                           data-r-rule-name="${this._escAttr(r.name || '')}"
-                           data-r-rule-type="${type}"
-                           checked>
-                    <label class="form-check-label small" for="rRule_${type}_${i}"
-                           title="${this._escAttr(r.name || '')}">
-                        ${this._esc(r.name || `Rule ${i + 1}`)}
-                    </label>
-                </div>
-            `).join('');
-
-            container.querySelectorAll('.r-rule-cb').forEach(cb => {
-                cb.addEventListener('change', () => this._onRuleCheckChange(type));
-            });
-        }
-    },
-
-    _toggleRuleList(type) {
-        const cfg = this._RULE_TILE_MAP[type];
-        if (!cfg) return;
-        const container = document.querySelector(`[data-r-rulelist="${cfg.listAttr}"]`);
-        const btn = document.querySelector(`[data-r-expand="${cfg.listAttr}"]`);
-        if (!container) return;
-        const isHidden = container.classList.contains('d-none');
-        container.classList.toggle('d-none', !isHidden);
-        if (btn) {
-            const icon = btn.querySelector('.dq-expand-chevron');
-            if (icon) icon.classList.toggle('dq-chevron-open', isHidden);
-        }
-    },
-
-    _onRuleCheckChange(type) {
-        const cfg = this._RULE_TILE_MAP[type];
-        if (!cfg) return;
-        const tileCb = document.getElementById(cfg.checkboxId);
-        const container = document.querySelector(`[data-r-rulelist="${cfg.listAttr}"]`);
-        if (!tileCb || !container) return;
-        const ruleCbs = [...container.querySelectorAll('.r-rule-cb')];
-        if (!ruleCbs.length) return;
-        const checkedCount = ruleCbs.filter(cb => cb.checked).length;
-        if (checkedCount === ruleCbs.length) {
-            tileCb.checked = true;
-            tileCb.indeterminate = false;
-        } else if (checkedCount === 0) {
-            tileCb.checked = false;
-            tileCb.indeterminate = false;
-        } else {
-            tileCb.checked = false;
-            tileCb.indeterminate = true;
-        }
-        const tile = tileCb.closest('.reasoning-tile');
-        if (tile) tile.classList.toggle('active', tileCb.checked || tileCb.indeterminate);
-    },
-
-    _getSelectedRuleNames(type) {
-        const cfg = this._RULE_TILE_MAP[type];
-        if (!cfg) return [];
-        const names = [];
-        document.querySelectorAll(`.r-rule-cb[data-r-rule-type="${type}"]:checked`).forEach(cb => {
-            if (cb.dataset.rRuleName) names.push(cb.dataset.rRuleName);
-        });
-        return names;
-    },
-
-    _escAttr(s) {
-        return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    },
-
-    toggleAllOptions(checked) {
-        const ids = [
-            'reasoningTbox', 'reasoningIfThen', 'reasoningGraph',
-            'reasoningSparqlRules',
-        ];
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.checked = checked;
-                el.indeterminate = false;
-                this._syncTile(el);
-            }
-        });
-    },
-
-    _syncTile(checkbox) {
-        const tile = checkbox.closest('.reasoning-tile');
-        if (tile) tile.classList.toggle('active', checkbox.checked);
-        checkbox.indeterminate = false;
-        // Cascade to child rule checkboxes for enumerable tiles
-        const typeMap = {
-            reasoningIfThen:           'if_then',
-            reasoningSparqlRules:    'sparql_rules',
-        };
-        const type = typeMap[checkbox.id];
-        if (!type) return;
-        const cfg = this._RULE_TILE_MAP[type];
-        if (!cfg) return;
-        const container = document.querySelector(`[data-r-rulelist="${cfg.listAttr}"]`);
-        if (container) {
-            container.querySelectorAll('.r-rule-cb').forEach(cb => {
-                cb.checked = checkbox.checked;
-            });
         }
     },
 
@@ -177,9 +48,6 @@ const ReasoningModule = {
 
     setRunning(running) {
         const btn = document.getElementById('runReasoningBtn');
-        const checkboxes = document.querySelectorAll(
-            '#reasoningTbox, #reasoningIfThen, #reasoningGraph, #reasoningSparqlRules'
-        );
         if (running) {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Running inference…';
@@ -187,28 +55,12 @@ const ReasoningModule = {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-play-fill me-1"></i> Run';
         }
-        checkboxes.forEach(el => {
-            el.disabled = running;
-            const item = el.closest('.list-group-item');
-            if (item) {
-                item.classList.toggle('disabled', running);
-                item.style.opacity = running ? '0.6' : '';
-            }
-        });
-        document.querySelectorAll('.r-rule-cb').forEach(el => { el.disabled = running; });
-        document.querySelectorAll('[data-r-expand]').forEach(el => { el.disabled = running; });
+        if (this._tree) this._tree.setBusy(running);
     },
 
     async runReasoning() {
-        const tboxEl   = document.getElementById('reasoningTbox');
-        const ifThenEl   = document.getElementById('reasoningIfThen');
-        const graphEl  = document.getElementById('reasoningGraph');
-        const sparqlEl = document.getElementById('reasoningSparqlRules');
-
-        const tbox           = tboxEl?.checked || false;
-        const if_then           = ifThenEl?.checked || ifThenEl?.indeterminate || false;
-        const graph          = graphEl?.checked || false;
-        const sparql_rules   = sparqlEl?.checked || sparqlEl?.indeterminate || false;
+        const phases = this._tree ? this._tree.phases() : {};
+        const { tbox = false, if_then = false, graph = false, sparql_rules = false } = phases;
 
         if (!tbox && !if_then && !graph && !sparql_rules) {
             if (typeof showNotification === 'function')
@@ -217,13 +69,10 @@ const ReasoningModule = {
         }
 
         const payload = { tbox, if_then, graph, sparql_rules };
-
-        // Attach per-rule name filters for enumerable phases (only when rules are loaded)
         if (this._rulesLoaded) {
-            const ifThenNames = this._getSelectedRuleNames('if_then');
-            const sparqlNames = this._getSelectedRuleNames('sparql_rules');
-            if (ifThenNames.length)   payload.if_then_rule_names        = ifThenNames;
-            if (sparqlNames.length) payload.sparql_rule_names      = sparqlNames;
+            const names = this._tree.ruleNames(phases);
+            if (names.if_then) payload.if_then_rule_names = names.if_then;
+            if (names.sparql_rules) payload.sparql_rule_names = names.sparql_rules;
         }
 
         this.setRunning(true);

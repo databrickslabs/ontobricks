@@ -889,3 +889,84 @@ Modified files:
 Test result:
 - Targeted: uv run --frozen pytest -q tests/units/front/test_simulation_page_contract.py
   tests/units/front/test_business_rules_list_ui.py -> 38 passed.
+
+
+Inference phase picker redesigned as an icon tree (Graph → Inference, Simulation → Reasoning)
+
+Context: the two screens drew the same choice (which inference phases and which
+rules run) with two different tile grids. The order was different (Graph: T-Box
+first, Simulation: T-Box last), the labels and descriptions were different, and
+the select-all controls were different (inline-onclick links vs btn-links). The
+per-rule lists dropped under the tile in a 3+1 grid, and the JavaScript that
+handles tri-state selection was written twice. Both screens now render one shared
+tree. Each phase is a node with a checkbox, an icon, a description and a badge.
+Simple and Complex rules expand into child rule nodes. Phases are listed in
+execution order (T-Box → Simple → Graph → Complex).
+
+Changes:
+1. src/front/templates/partials/layout/_phase_tree.html (new)
+   Shared Jinja partial for the phase tree. It takes tree_id, tree_ctx (counts
+   and owlrl), tree_ids (phase key → checkbox id), tree_checked and
+   tree_lock_tbox. It includes a toolbar (select all, unselect all, expand all,
+   collapse all). No inline handlers.
+2. src/front/static/global/js/phase-tree.js (new)
+   `PhaseTree` class. It renders the rule nodes, handles tri-state phase
+   checkboxes and cascading to child rules, expand/collapse, the n/total badges
+   and a busy state. It exposes `phases()`, `ruleNames()` and `applyRules()`.
+   Disabled rules get an "off" badge.
+3. src/front/templates/partials/dtwin/_query_reasoning.html
+   The Options pane now includes the tree; the old tiles and inline
+   onclick/onchange handlers are removed. The checkbox ids are unchanged
+   (reasoningTbox, reasoningIfThen, reasoningGraph, reasoningSparqlRules).
+4. src/front/static/query/js/query-reasoning.js
+   Selection, rule rendering and the running state go through PhaseTree. Removed
+   `_RULE_TILE_MAP`, `_renderRuleCheckboxes`, `_toggleRuleList`,
+   `_onRuleCheckChange`, `_getSelectedRuleNames`, `toggleAllOptions`,
+   `_syncTile` and `_escAttr`. The payload (`if_then_rule_names` /
+   `sparql_rule_names`) is unchanged.
+5. src/front/templates/partials/simulation/_sim_workbench.html
+   The Reasoning pane now includes the same tree. The ids are unchanged
+   (simWbPhases, simPhase*), and so are the defaults (Simple + Graph on; T-Box
+   locked without owlrl).
+6. src/front/static/simulation/js/simulation-rules.js
+   Now a thin wrapper around PhaseTree that keeps bind/load/apply/
+   collectPhases/collectRuleNames for the workbench.
+7. src/front/routes/simulation.py
+   simulation_ctx gains `object_properties_count`, so the Graph reasoning node
+   shows the same badge on both screens.
+8. src/front/templates/dtwin.html, src/front/templates/simulation.html
+   Load global/js/phase-tree.js before the page module.
+9. src/front/static/query/css/query-reasoning.css
+   Added the `.ob-phase-tree` / `.ob-tree-*` styles (--db-* tokens with
+   Bootstrap fallbacks; descriptions hidden on small screens). The tile styles
+   are kept for Data Quality.
+10. docs/user-guide.md
+    The Simulation Reasoning step now describes the tree.
+11. tests/units/front/test_phase_tree_ui.py (new), tests/units/front/test_simulation_page_contract.py
+    Contract tests: execution order, icons, no inline handlers, badges,
+    T-Box lock, script load order, ReasoningModule delegation and the
+    PhaseTree API. The simulation rule-picker assertions were moved to the tree.
+
+Modified files:
+- src/front/templates/partials/layout/_phase_tree.html (new)
+- src/front/static/global/js/phase-tree.js (new)
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/static/query/js/query-reasoning.js
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/routes/simulation.py
+- src/front/templates/dtwin.html
+- src/front/templates/simulation.html
+- src/front/static/query/css/query-reasoning.css
+- docs/user-guide.md
+- tests/units/front/test_phase_tree_ui.py (new)
+- tests/units/front/test_simulation_page_contract.py
+
+Test result:
+- uv run --frozen pytest -q tests/units/front -> 1748 passed.
+- uv run --frozen pytest -q -m "not scenario" -> 10156 passed, 325 skipped,
+  1 failed. The failure was already there before this change:
+  test_no_function_grows_beyond_budget (agents/agent_dtwin_chat/engine.py::run_agent
+  198→200), a file this change does not touch.
+- Headless Chrome render of the partial with PhaseTree: tri-state and rule-name
+  collection verified.
