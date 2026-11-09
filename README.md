@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.9.1</h1>
+<h1 align="center">OntoBricks 0.9.2</h1>
 
 <p align="center">
   <strong>Turn your Databricks tables into a living knowledge graph — in four clicks.</strong>
@@ -26,6 +26,16 @@
 </p>
 
 ---
+
+### What's new in 0.9.2
+
+- **Several datasets per class**: Ontology Studio links multiple Unity Catalog tables, views, or **metric views** to one class. Graph Explorer, Graph Chat, and MCP surface all of them.
+- **MCP identity and domain resolution**: graph tools run as the end user again, and domain-scoped tools work without a sticky session (`domain_name`).
+- **SPARQL value filters**: typed `FILTER(STR(?v) = …)` and `CONTAINS(…)` compile to SQL instead of returning unfiltered results.
+- **Apps deploy and local setup fixes**: identity scopes are no longer declared, and `./scripts/start.sh` works when the default `python3` is 3.9.
+- **Dependency security floors** raised (Authlib, dnspython, msgpack, nltk, pyasn1, graphql-core, joserfc); the MCP server now requires Python ≥ 3.11.
+
+Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.2.md).
 
 ### What's new in 0.9.1
 

@@ -30,10 +30,15 @@ Python package deployed separately from the main OntoBricks web application.
 
 ## Workflow
 
-The MCP server follows a **two-step workflow**:
+The MCP server follows a **two-step workflow** on a **persistent MCP session**:
 
 1. **Choose a domain** — call `list_domains` to see available graph viewers with descriptions, then `select_domain` to activate one. Only domains with the **API / MCP** flag enabled in OntoBricks are listed.
 2. **Query the graph viewer** — use `list_entity_types`, `describe_entity`, or `get_status` on the selected domain.
+
+Clients that open a **new Streamable HTTP session per tool call** (Databricks
+AI Playground) cannot reuse `select_domain`. Pass optional `domain_name` on
+every domain-scoped tool, or set `MCP_DEFAULT_DOMAIN`, or publish a single
+MCP domain (the server then uses that one).
 
 **Which version?** For each domain folder, the registry stores exactly one **Active** (MCP/API-enabled) version at a time. Operators set that version in the main OntoBricks app under **Registry → Browse** (expand the domain, then **Set as Active** on a row). **Domain → Versions** shows the outcome as a read-only badge but does not change it.
 
@@ -43,9 +48,11 @@ After selecting a domain, the LLM can also leverage GraphQL for structured data 
 1. Call `get_graphql_schema` to discover the typed schema (types, fields, relationships).
 2. Call `query_graphql` with a GraphQL query to retrieve data with nested traversal, specific field selection, and filtering.
 
-The LLM is instructed (via the MCP `instructions` field) to always select a
-domain before querying entities. If the user's question clearly refers to a
-topic covered by one of the listed domains, the LLM selects it automatically.
+The LLM is instructed (via the MCP `instructions` field) to resolve a domain
+before querying entities — `select_domain` on a sticky session, or
+`domain_name` on each call when the session is not reused. If the user's
+question clearly refers to a topic covered by one of the listed domains, the
+LLM picks it automatically.
 
 ---
 
@@ -60,7 +67,7 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 | `describe_ontology` | Returns the selected domain's ontology **structure** — a class inventory (with dataset/bridge/action/virtual-attribute tags) plus the raw OWL/Turtle that carries the full attribute and relationship (domain/range) detail. Reads the ontology schema only, so it works without a built graph and is the sole domain tool an ontology-only domain exposes |
 | `list_entity_types` | Returns a human-readable overview of the selected domain's graph viewer: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
 | `describe_entity` | Searches for an entity by name/type and returns a **full-text description** — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal) |
-| `get_entity_context` | Returns a node's external context: linked Unity Catalog dataset (optionally with rows), cross-domain bridges, the Unity Catalog function **actions** configured on its class, and its **virtual attributes** (declared always; values via `compute_virtual_attributes` or the inline `compute_virtual_attributes=True` flag) |
+| `get_entity_context` | Returns a node's external context: linked Unity Catalog datasets (all linked tables, views, or metric views, optionally with preview rows), cross-domain bridges, the Unity Catalog function **actions** configured on its class, and its **virtual attributes** (declared always; values via `compute_virtual_attributes` or the inline `compute_virtual_attributes=True` flag) |
 | `compute_virtual_attributes` | Runs the Unity Catalog functions that compute an entity's **virtual attributes** and returns their live values. Call this when the user asks about a virtual attribute — those values are not stored in the graph. Only functions declared on the entity's class can be invoked |
 | `invoke_entity_action` | Runs a class action: a Unity Catalog function (one argument: the entity ID) or a Databricks Job (`job:<job_id>`, must declare `entity_id`). Jobs start asynchronously and are tracked in Background Tasks. Only actions declared on the entity's ontology class can be invoked |
 | `run_entity_business_rule` | Runs one of the SWRL **business rules** attached to the entity's class, scoped to that entity, and materialises the inferred triples into the graph (no confirmation step). Requires the Builder role on the domain; only rules declared on the class can be run. On Neo4j-backed domains it currently infers nothing |
@@ -202,7 +209,8 @@ Found 1 matching entity (33 triples across 3 entities, depth=2)
     • label: Service_Activation via in_person
 
   [Context — class: Customer]
-  Dataset: main.crm.customers  (key: customer_id = 'CUST00094')
+  Datasets:
+    • [TABLE] main.crm.customers  (key: customer_id = 'CUST00094')
     → call get_entity_context(fetch_dataset_rows=True) to retrieve rows
   Bridges:
     → finance / Contract  "Owns contracts"
@@ -416,6 +424,11 @@ comes back in domain B.
 > The in-process session store retains at most 512 recently used sessions; an
 > evicted client must call `select_domain` again. This state is process-local,
 > so a future multi-worker deployment will require a shared session store.
+>
+> **Clients without a persistent session** (Databricks Playground opens a new
+> transport per tool call) never see a previous `select_domain`. Those clients
+> must pass `domain_name` on each domain-scoped tool, set `MCP_DEFAULT_DOMAIN`
+> on the MCP app, or publish exactly one MCP-visible domain.
 
 Clients that ignore the notification (or replay a cached list) can still emit
 a call for a hidden tool. Every domain-scoped tool therefore re-checks the
@@ -516,6 +529,7 @@ Authentication between the two apps uses Databricks OAuth (service principal).
 | `REGISTRY_CATALOG` | Yes (deployed) | — | Unity Catalog catalog containing the domain registry |
 | `REGISTRY_SCHEMA` | Yes (deployed) | — | Schema within the catalog |
 | `REGISTRY_VOLUME` | No | `OntoBricksRegistry` | Volume name for domain registry storage |
+| `MCP_DEFAULT_DOMAIN` | No | — | Domain used when the call omits `domain_name` and this MCP session has not called `select_domain`. For Playground and other one-shot sessions. |
 
 The registry variables are passed as query parameters to every
 `/api/v1/digitaltwin/*` call, letting the MCP server operate without a
@@ -569,11 +583,16 @@ at the end of this guide.
 
 ### Using in Playground
 
+Playground opens a **new MCP session for every tool call**, so `select_domain`
+does not stick. Pass `domain_name` on graph tools, set `MCP_DEFAULT_DOMAIN` on
+the MCP app, or publish a single MCP domain.
+
 1. Go to your Databricks workspace
 2. Navigate to **Playground**
 3. **mcp-ontobricks** appears in the MCP Servers list (apps starting with `mcp-` are shown automatically)
 4. Select it — you now have access to `list_entity_types`, `describe_entity`, and `get_status`
 5. Ask questions like *"What entity types are in the graph viewer?"* or *"Tell me about Jacob Martinez"*
+6. If several domains are published and `MCP_DEFAULT_DOMAIN` is unset, name the domain in the prompt so the model passes `domain_name` on each call.
 
 ---
 
@@ -731,7 +750,11 @@ Round 2: select_domain →  "Domain selected. 984 000 triples."
 These rounds add ~1.5 s and ~1 200 tokens to every question even when the target
 domain is known at client start-up.
 
-**Fix.** Call `select_domain` once before the first question. Tell the system prompt
+This only works when the client **reuses** the MCP session. Databricks
+Playground does not; use `domain_name` on each tool or `MCP_DEFAULT_DOMAIN`
+instead.
+
+**Fix.** Call `select_domain` once before the first question (sticky session). Tell the system prompt
 to skip the warm-up.
 
 ```python

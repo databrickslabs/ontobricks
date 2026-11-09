@@ -17,7 +17,7 @@ from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
 from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
 from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 from back.core.w3c.shacl.SHACLService import SHACLService
-from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
+from back.core.w3c.sparql.SparqlValueFilterSql import SparqlValueFilterSql
 
 pytestmark = pytest.mark.unit
 
@@ -228,7 +228,7 @@ class TestSHACLService:
 class TestSparqlTranslatorValueFilters:
     @staticmethod
     def _where(value, dialect="spark"):
-        return SparqlTranslator._sql_conditions_for_value_filters(
+        return SparqlValueFilterSql.conditions_for(
             {PROP: "tier"},
             [{"predicate_uri": PROP, "operator": "equals", "value": value}],
             "",

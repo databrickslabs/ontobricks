@@ -167,7 +167,35 @@ class TestClassGeneration:
 
         parser = OntologyParser(owl_content=owl)
         parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["datasets"] == [dataset]
         assert parsed["Customer"]["dataset"] == dataset
+
+    def test_class_with_multiple_datasets_roundtrip(self):
+        datasets = [
+            {
+                "catalog": "main",
+                "schema": "sales",
+                "asset": "orders",
+                "type": "TABLE",
+                "fullName": "main.sales.orders",
+                "key_column": "customer_id",
+            },
+            {
+                "catalog": "main",
+                "schema": "metrics",
+                "asset": "customer_kpis",
+                "type": "METRIC_VIEW",
+                "fullName": "main.metrics.customer_kpis",
+                "key_column": "customer_id",
+            },
+        ]
+        classes = [{"name": "Customer", "label": "Customer", "datasets": datasets}]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["datasets"] == datasets
+        assert parsed["Customer"]["dataset"] == datasets[0]
 
     def test_alternate_labels_export_import_roundtrip(self):
         """Synonyms (``alternate_labels``) are first-class ontology data
@@ -201,6 +229,7 @@ class TestClassGeneration:
         owl = gen.generate()
         parser = OntologyParser(owl_content=owl)
         parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["datasets"] == []
         assert parsed["Customer"]["dataset"] is None
 
     def test_class_with_actions_roundtrip(self):

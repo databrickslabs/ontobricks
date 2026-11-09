@@ -425,24 +425,31 @@ async function showEntityDetails(entity) {
         `;
     }
 
-    // Linked external dataset (Dashboard-style box + preview)
-    const dataset = entityMapping?.dataset || classInfo?.dataset || null;
-    if (dataset && (dataset.fullName || dataset.asset)) {
-        const fullName = dataset.fullName
-            || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
-        const hasKey = Boolean(dataset.key_column);
-        const previewDisabled = hasKey ? '' : 'disabled';
-        const previewTitle = hasKey
-            ? 'Preview up to 10 matching rows'
+    // Linked external datasets (Dashboard-style box + preview)
+    const datasets = entityMapping?.datasets
+        || classInfo?.datasets
+        || ((entityMapping?.dataset || classInfo?.dataset)
+            ? [entityMapping?.dataset || classInfo?.dataset]
+            : []);
+    const linkedDatasets = (datasets || []).filter(ds => ds && (ds.fullName || ds.asset));
+    if (linkedDatasets.length) {
+        const anyKey = linkedDatasets.some(ds => ds.key_column);
+        const previewDisabled = anyKey ? '' : 'disabled';
+        const previewTitle = anyKey
+            ? 'Preview up to 10 matching rows per dataset'
             : 'Key column is not configured — preview unavailable';
-        const previewOnClick = hasKey
+        const previewOnClick = anyKey
             ? `openDatasetPreviewModal('${escapeHtml(entity.id)}', '${escapeHtml(ontologyTypeName)}', '${escapeHtml(actualIdValue || '')}')`
             : '';
-        html += `
-            <div class="entity-detail-section">
-                <h6><i class="bi bi-table"></i> Dataset</h6>
+        const rowsHtml = linkedDatasets.map(dataset => {
+            const fullName = dataset.fullName
+                || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
+            const kind = (dataset.type || '').toUpperCase();
+            const kindLabel = kind === 'METRIC_VIEW' ? 'Metric View'
+                : (kind === 'VIEW' ? 'View' : 'Table');
+            return `
                 <div class="entity-detail-item">
-                    <span class="detail-key">Table</span>
+                    <span class="detail-key">${escapeHtml(kindLabel)}</span>
                     <span class="detail-value"><code>${escapeHtml(fullName)}</code></span>
                 </div>
                 ${dataset.key_column ? `
@@ -454,7 +461,12 @@ async function showEntityDetails(entity) {
                 <div class="entity-detail-item">
                     <span class="detail-key">Description</span>
                     <span class="detail-value">${escapeHtml(dataset.description)}</span>
-                </div>` : ''}
+                </div>` : ''}`;
+        }).join('');
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-table"></i> Datasets</h6>
+                ${rowsHtml}
                 <div class="entity-detail-item">
                     <button type="button" onclick="${previewOnClick}"
                             class="btn btn-sm btn-outline-info w-100" ${previewDisabled}

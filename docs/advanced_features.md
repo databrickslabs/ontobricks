@@ -155,7 +155,7 @@ Databricks/product layer.
 | `ontobricks:direction` | object property | `forward` / `reverse` / bidirectional (UI + graph, not OWL) |
 | `ontobricks:dashboard` | class | Databricks dashboard URL |
 | `ontobricks:dashboardParams` | class | JSON: map dashboard filters → `__ID__` or an attribute |
-| `ontobricks:dataset` | class | JSON: linked Unity Catalog table/view |
+| `ontobricks:dataset` | class | JSON array of linked Unity Catalog tables/views/metric views (legacy singular object still accepted on read) |
 | `ontobricks:actions` | class | JSON: UC functions, **exactly one arg = entity local ID** |
 | `ontobricks:virtualAttributes` | class | JSON: computed attrs via UC functions (same 1-arg ID contract); **not** emitted as `owl:DatatypeProperty` |
 | `ontobricks:bridges` | class | JSON: cross-project bridges |

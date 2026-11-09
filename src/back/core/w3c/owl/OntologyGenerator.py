@@ -10,6 +10,7 @@ from typing import List, Dict
 from back.core.logging import get_logger
 from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
 from back.core.w3c.owl.iri import serialize_turtle
+from back.objects.ontology.ClassModel import ClassModel
 from shared.config.constants import ONTOBRICKS_NS
 
 logger = get_logger(__name__)
@@ -622,11 +623,11 @@ class OntologyGenerator:
                 (class_uri, ONTOBRICKS_NS.bridges, Literal(json.dumps(bridges)))
             )
 
-        # Add linked Unity Catalog dataset (table/view) as JSON string
-        dataset = cls.get("dataset")
-        if dataset:
+        # Linked Unity Catalog datasets (tables/views/metric views) as JSON array
+        datasets = ClassModel.normalize_datasets(cls)
+        if datasets:
             self.graph.add(
-                (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(dataset)))
+                (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(datasets)))
             )
 
         # Add linked Unity Catalog function actions as JSON string

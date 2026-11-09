@@ -221,6 +221,7 @@ class FindResponse(BaseModel):
 
 class NodeContextDataset(BaseModel):
     fullName: str
+    type: Optional[str] = None
     key_column: Optional[str] = None
     key_column_missing: Optional[bool] = None
     description: Optional[str] = None
@@ -290,6 +291,7 @@ class NodeContextResponse(BaseModel):
     entity_uri: str = ""
     entity_local_id: str = ""
     class_name: Optional[str] = None
+    datasets: Optional[List[NodeContextDataset]] = None
     dataset: Optional[NodeContextDataset] = None
     bridges: Optional[List[NodeContextBridge]] = None
     actions: Optional[List[NodeContextAction]] = None

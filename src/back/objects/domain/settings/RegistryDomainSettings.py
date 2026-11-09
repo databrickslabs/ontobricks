@@ -287,7 +287,10 @@ class RegistryDomainSettings:
             )
             domain = _ss.get_domain(_ss.SessionManager(request))
             host, token = get_databricks_host_and_token(domain, settings)
-            user_token = request.headers.get("x-forwarded-access-token", "")
+            user_token = (
+                getattr(request.state, "user_token", "")
+                or request.headers.get("x-forwarded-access-token", "")
+            )
             registry_cfg = _ss.RegistryCfg.from_domain(domain, settings).as_dict()
             return _ss.permission_service.get_domain_role(
                 email,

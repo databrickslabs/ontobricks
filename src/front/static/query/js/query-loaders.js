@@ -93,7 +93,12 @@ async function loadOntologyClasses() {
                     dashboard: cls.dashboard || null,
                     dashboardParams: cls.dashboardParams || {},
                     bridges: cls.bridges || [],
-                    dataset: cls.dataset || null,
+                    datasets: Array.isArray(cls.datasets) && cls.datasets.length
+                        ? cls.datasets
+                        : (cls.dataset ? [cls.dataset] : []),
+                    dataset: (Array.isArray(cls.datasets) && cls.datasets[0])
+                        || cls.dataset
+                        || null,
                     actions: cls.actions || [],
                     businessRules: (cls.business_rules || [])
                         .filter(ref => ref && ref.name && (!hasSwrl
@@ -181,6 +186,7 @@ async function loadEntityMappings() {
                     dashboard: classInfo?.dashboard || null,
                     dashboardParams: classInfo?.dashboardParams || {},
                     bridges: classInfo?.bridges || [],
+                    datasets: classInfo?.datasets || (classInfo?.dataset ? [classInfo.dataset] : []),
                     dataset: classInfo?.dataset || null,
                     actions: classInfo?.actions || [],
                     emoji: classInfo?.emoji || '📦',

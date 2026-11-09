@@ -158,24 +158,36 @@ def format_class_context_block(
     action_invoke_hint: str = DEFAULT_ACTION_INVOKE_HINT,
 ) -> str:
     """Append a [Context] block for a node's class Actions metadata."""
-    dataset = cls_actions.get("dataset")
+    datasets = cls_actions.get("datasets") or (
+        [cls_actions["dataset"]] if cls_actions.get("dataset") else []
+    )
     bridges = cls_actions.get("bridges") or []
     actions = cls_actions.get("actions") or []
-    if not dataset and not bridges and not actions:
+    if not datasets and not bridges and not actions:
         return ""
 
     lines: list[str] = []
     lines.append(f"  [Context — class: {cls_actions.get('name', '')}]")
 
-    if dataset and dataset.get("fullName"):
+    for dataset in datasets:
+        if not dataset.get("fullName"):
+            continue
+        kind = (dataset.get("type") or "").strip()
+        kind_suffix = f" [{kind}]" if kind else ""
         key_col = dataset.get("key_column")
         if key_col:
-            lines.append(f"  Dataset: {dataset['fullName']}  (key: {key_col} = '{local_id}')")
+            lines.append(
+                f"  Dataset: {dataset['fullName']}{kind_suffix}  "
+                f"(key: {key_col} = '{local_id}')"
+            )
             lines.append(
                 "    → call get_entity_context(fetch_dataset_rows=True) to retrieve rows"
             )
         else:
-            lines.append(f"  Dataset: {dataset['fullName']}  (key_column not configured)")
+            lines.append(
+                f"  Dataset: {dataset['fullName']}{kind_suffix}  "
+                "(key_column not configured)"
+            )
         purpose = (dataset.get("description") or "").strip()
         if purpose:
             lines.append(f"  Description: {purpose}")
@@ -219,9 +231,13 @@ def format_node_context_response(
         "",
     ]
 
-    dataset = data.get("dataset")
-    if dataset:
-        lines.append(f"Dataset: {dataset.get('fullName', '')}")
+    datasets = data.get("datasets") or (
+        [data["dataset"]] if data.get("dataset") else []
+    )
+    for dataset in datasets:
+        kind = (dataset.get("type") or "").strip()
+        kind_suffix = f" [{kind}]" if kind else ""
+        lines.append(f"Dataset: {dataset.get('fullName', '')}{kind_suffix}")
         key_col = dataset.get("key_column")
         if key_col:
             lines.append(f"  Key: {key_col} = '{local_id}'")

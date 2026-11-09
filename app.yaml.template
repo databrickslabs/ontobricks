@@ -80,6 +80,12 @@ env:
   # graph permission grants resolve the right service principal (#137).
   - name: MCP_APP_NAME
     value: "${MCP_APP_NAME}"
+  # MCP app SP client id. PermissionMiddleware trusts acting-identity
+  # headers only when the Apps proxy identity matches this value (#208).
+  # Empty on first-ever deploy (app does not exist yet); the next deploy
+  # fills it from ``databricks apps get``.
+  - name: MCP_SP_CLIENT_ID  # optional
+    value: "${MCP_SP_CLIENT_ID}"
   # ── Lakebase (optional) ───────────────────────────────────────
   # When the bundle is deployed to a *-lakebase target the DAB binds
   # a `database` resource to this app. Databricks Apps then
@@ -168,16 +174,16 @@ env:
 # User authorization scopes — declares which Databricks APIs the app is
 # allowed to access on behalf of the logged-in user via the
 # x-forwarded-access-token header injected by the Apps platform.
-# The app uses the user token exclusively for permission checks
-# (SCIM user-group lookup + App ACL read) — all data queries go through
-# the app's service principal (M2M OAuth). These two scopes are the
-# minimum required; they are also the platform defaults when no scopes
-# are declared, but explicit declaration is required for Public Preview.
+# The identity scopes (iam.current-user:read, iam.access-control:read) used
+# for permission checks (SCIM user-group lookup + App ACL read) are platform
+# defaults and MUST NOT be declared explicitly — the Apps API now rejects
+# them as invalid. Only the additional `sql` scope (admin group checks /
+# MCP OBO, #208) is declared; all data queries still go through the app's
+# service principal (M2M OAuth).
 authorization:
   user:
     scopes:
-      - iam.current-user:read
-      - iam.access-control:read
+      - sql
 
 # Resources that this app uses.
 # Configure these resources in the Databricks Apps UI after deployment.

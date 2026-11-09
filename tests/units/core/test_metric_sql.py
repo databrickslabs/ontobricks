@@ -1,6 +1,9 @@
 """Tests for the metric-aware base-SQL builder."""
 
-from back.core.databricks.uc.metric_sql import build_metric_view_base_sql
+from back.core.databricks.uc.metric_sql import (
+    build_metric_view_base_sql,
+    build_metric_view_entity_sql,
+)
 
 _ENTRY = {
     "full_name": "cat.sales.region_metrics",
@@ -44,3 +47,27 @@ def test_columns_missing_role_default_dimension():
     sql = build_metric_view_base_sql(entry)
     assert "MEASURE(" not in sql
     assert "`a`" in sql and "`b`" in sql
+
+
+def test_entity_sql_filters_key_and_limits():
+    sql = build_metric_view_entity_sql(
+        _ENTRY,
+        key_column="region",
+        key_value="EU-1",
+        limit=10,
+    )
+    assert "WHERE `region` = 'EU-1'" in sql
+    assert "MEASURE(`revenue`) AS `revenue`" in sql
+    assert "GROUP BY" in sql
+    assert "LIMIT 10" in sql
+    assert "SELECT *" not in sql
+
+
+def test_entity_sql_escapes_quotes_in_key_value():
+    sql = build_metric_view_entity_sql(
+        _ENTRY,
+        key_column="region",
+        key_value="O'Brien",
+        limit=1,
+    )
+    assert "WHERE `region` = 'O''Brien'" in sql

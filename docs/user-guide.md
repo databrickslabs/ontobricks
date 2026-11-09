@@ -393,6 +393,21 @@ with no conditions applies to every instance, exactly as before.
 
 **Validation**: Shapes are executed in the Knowledge Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on Lakebase, Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.
 
+### Linked Datasets (Unity Catalog tables, views, and metric views)
+
+An entity type can link **one or more Unity Catalog datasets** (tables, views,
+or metric views) to provide underlying row context in the Knowledge Graph,
+MCP tools, and Graph Chat.
+
+1. Go to **Ontology** → **Entities** and select an entity type
+2. Open the **Links** tab and find the **Datasets** section
+3. Click **+ Add** to open the dataset picker:
+   - Select a catalog, schema, and table, view, or **metric view** (badged with `METRIC VIEW`)
+   - Select the **Key column** that matches the entity's identifier (for metric views, dimension columns are preferred)
+   - Add an optional description explaining what this dataset contributes
+4. Click **Apply** to link the dataset; repeat to link additional datasets for the same class
+5. In Graph Explorer, selecting an entity node surfaces all linked datasets as equal peers, with metric-aware aggregation queries automatically used for metric views
+
 ### Dashboard Mapping
 
 You can assign Databricks dashboards to entity types for embedded visualization in the Knowledge Graph:
@@ -416,9 +431,9 @@ When viewing an entity in the Knowledge Graph visualization, the dashboard will 
 
 ### Class Actions (Unity Catalog functions)
 
-Beyond the linked dataset, an entity type can expose **actions** — Unity Catalog
-functions that operate on a single entity and can be run from the Graph Explorer
-or from an MCP client.
+Beyond linked datasets (tables, views, or metric views), an entity type can expose
+**actions** — Unity Catalog functions that operate on a single entity and can be
+run from the Graph Explorer or from an MCP client.
 
 1. Go to **Ontology** → **Entities** and select an entity type
 2. Open the **Behaviour** tab and find the **Functions** section
@@ -517,19 +532,19 @@ each section does:
 | **Attrs.** | Mapped attributes (data properties), then **Virtual attributes** (computed when viewed) |
 | **Model** | Inherits from, inherited relationships, equivalent to, disjoint with, bridges to other domains |
 | **Behaviour** | What the Knowledge Graph can run on one entity, each section tagged with its effect: **Functions** (return a result), **Jobs** (run in background), **Inference rules (SWRL)** (write to the graph) |
-| **Links** | Dashboard and dataset |
+| **Links** | Dashboard and datasets |
 
 Every section inside a tab has the same layout:
 
 - a header with the section icon and title, a count of its items, an effect
   chip where relevant, and a **+ Add** button on the right (a small menu on
   **Mapped attributes**: *From data assets* or *Manually*; **Change** on
-  Dashboard and Dataset once one is linked);
+  Dashboard once linked; **+ Add** on Datasets to link multiple assets);
 - a one-line explanation, with the longer help behind the ⓘ button;
 - one row per item (icon, name, kind, full name, remove button), or a dashed
   empty state with a direct "Add …" link.
 
-Descriptions on functions, jobs, virtual attributes and the dataset are always
+Descriptions on functions, jobs, virtual attributes and datasets are always
 editable in place: the field shows its border only when hovered or focused.
 **Equivalent to** and **Disjoint with** show the chosen entities as chips;
 pick another entity from **+ Add entity…** and click a chip's × to remove it.
@@ -1368,7 +1383,7 @@ unrecoverable.
 
 | Attachment | What it covers |
 |------------|----------------|
-| **Datasets** | The Unity Catalog table or view linked to a class. |
+| **Datasets** | The Unity Catalog tables, views, or metric views linked to a class (one or more). |
 | **Bridges** | Cross-domain links declared between ontology classes. |
 | **Actions** | Unity Catalog functions declared on a class. |
 | **Virtual attributes** | Class attributes computed on demand by a Unity Catalog function instead of being mapped. |
@@ -1729,7 +1744,7 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 | `get_design_status` | Ontology / metadata / assignment readiness for a domain |
 | `list_entity_types` | Overview of entity types, counts, and predicates |
 | `describe_entity` | Full-text description of an entity with BFS traversal |
-| `get_entity_context` | Linked dataset rows, cross-domain bridges, and class actions for a node |
+| `get_entity_context` | Linked dataset rows (all linked UC tables/views/metric views), cross-domain bridges, and class actions for a node |
 | `invoke_entity_action` | Run a class action: UC function (entity ID as the single argument) or Databricks Job (`job:<id>`) |
 | `run_entity_business_rule` | Run a SWRL business rule attached to the entity's class and materialise the inferred triples (Builder role) |
 | `check_entity_shacl_facets` | Check one entity against the SHACL shapes of its class, its ancestors and the whole graph (pass / fail / not applicable / not evaluated / error, with the values found) |
@@ -1742,6 +1757,10 @@ so they are always available. The other seven are **domain-scoped** and each
 domain chooses which of them to publish, from its [MCP tab](#mcp-tab).
 
 ### Using in Databricks Playground
+
+Playground opens a new MCP session per tool call, so `select_domain` does not
+stick. Pass `domain_name` on graph tools, set `MCP_DEFAULT_DOMAIN` on the MCP
+app, or publish a single MCP domain. See [docs/mcp.md](mcp.md).
 
 1. Deploy the MCP server as `mcp-ontobricks` (see [Deployment Guide](deployment.md))
 2. In your Databricks workspace, navigate to **Playground**
@@ -2916,7 +2935,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Entity Discovery**: `list_entity_types` and `describe_entity` provide human-readable text descriptions with BFS traversal. `describe_entity` accepts optional `cache` (true = require companions, false = live SPO).
 - **GraphQL via MCP**: `get_graphql_schema` and `query_graphql` tools let LLM agents introspect and query the typed GraphQL API.
 - **Per-Domain MCP Policy**: Each domain picks, in **Domain → General → MCP**, which of the eight domain-scoped tools it publishes and how its ontology attachments (Datasets, Bridges, Actions, Virtual attributes) are surfaced — **Preferred** (the hint becomes a directive instruction), **Normal**, or **Disabled** (withheld from every MCP *and* external REST response). The four registry-level tools stay always-on, since they run before a domain is resolved. An unconfigured domain behaves exactly as before.
-- **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. Note that the *selected domain* itself remains process-global in the MCP proxy (a pre-existing limitation), so the policy is reliable for one concurrent client per process.
+- **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. The selected domain is isolated per MCP session id; clients that do not reuse a session (Playground) must pass `domain_name` or set `MCP_DEFAULT_DOMAIN`.
 - **Databricks Playground**: Deployed as `mcp-ontobricks`, auto-discoverable by LLM agents in the Databricks Playground.
 - **Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client.
 
@@ -2939,7 +2958,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **CSRF Protection**: Double-submit cookie pattern for all state-changing requests; `X-CSRF-Token` header auto-attached by the frontend fetch wrapper.
 - **Secure Cookies**: Session cookies use `secure=True` and `samesite=lax` in Databricks Apps deployments (HTTPS-only).
 - **On-Behalf-Of (OBO) Unity Catalog access**: In Databricks Apps, every non-build UC data read runs as the **signed-in user**, not the app service principal — SPARQL/GraphQL Delta reads, Graph Explorer, mapping preview & UC browse, Class Actions (`EXECUTE`), and virtual-attribute compute all use the caller's forwarded token (`x-forwarded-access-token`). UC governance is therefore enforced per user. The path is **fail-closed**: a UC read with no forwarded user token is denied rather than silently run as the SP. Build (view/triplestore materialisation) stays on the control-plane service principal. Local dev is unaffected (OBO is a no-op outside App mode).
-- **Per-domain graph gating (Lakebase / Neo4j)**: Reads against backends that carry no UC identity (Lakebase Postgres, Neo4j) require **Team membership** on the loaded domain — at least the **Viewer** role — enforced by `assert_domain_graph_read` on every graph read endpoint; App admins bypass. The MCP server forwards the end-user identity so the same OBO + Team rules apply to MCP-driven reads.
+- **Per-domain graph gating (Lakebase / Neo4j)**: Reads against backends that carry no UC identity (Lakebase Postgres, Neo4j) require **Team membership** on the loaded domain — at least the **Viewer** role — enforced by `assert_domain_graph_read` on every graph read endpoint; App admins bypass. The MCP server forwards the end-user identity on acting headers (not `x-forwarded-*`, which the UI Apps proxy overwrites from the MCP service principal) so the same OBO + Team rules apply to MCP-driven reads.
 
 ### Observability
 - **Structured JSON Logging**: Set `LOG_FORMAT=json` for machine-readable log lines with `ts`, `level`, `logger`, `module`, `func`, `line`, `msg` fields.

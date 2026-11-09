@@ -82,6 +82,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    # MCP companion app service-principal client id. PermissionMiddleware
+    # trusts X-OntoBricks-Acting-* headers only when the Apps proxy identity
+    # matches this value (issue #208). Empty → no swap (fail-closed).
+    mcp_sp_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("MCP_SP_CLIENT_ID", "mcp_sp_client_id"),
+    )
+
     # Session settings - use /tmp in Databricks Apps
     session_dir: str = _get_default_session_dir()
     session_max_age: int = 86400  # 24 hours

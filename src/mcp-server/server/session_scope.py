@@ -85,12 +85,18 @@ class SessionScopeMiddleware(Middleware):
             from server import http_client as _http
             from fastmcp.server.dependencies import get_http_headers
 
-            headers = get_http_headers()
+            try:
+                headers = get_http_headers(include_all=True)
+            except TypeError:
+                headers = get_http_headers()
         except Exception:  # pragma: no cover - defensive; no HTTP request in scope
             return
+        # Inbound Apps headers are the end user. Outbound uses acting
+        # headers because the UI proxy overwrites x-forwarded-* (#208).
+        lowered = {str(k).lower(): v for k, v in (headers or {}).items()}
         _http.set_forwarded_identity(
-            email=headers.get("x-forwarded-email", ""),
-            user_token=headers.get("x-forwarded-access-token", ""),
+            email=lowered.get("x-forwarded-email", "") or "",
+            user_token=lowered.get("x-forwarded-access-token", "") or "",
         )
 
     @staticmethod

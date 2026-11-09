@@ -11,6 +11,20 @@ Center and the Sphinx site include the same files, grouped the same way.
 **New here?** [Get Started](getting-started.md) → [Examples](examples.md) →
 [User Guide](user-guide.md).
 
+## What's new in 0.9.2
+
+Patch on 0.9.1. Full details:
+[Release notes V0.9.2](../releases/ReleaseNotes_V0.9.2.md).
+
+| Feature | Where it is documented |
+|---------|------------------------|
+| Several datasets per class, metric views included | [User Guide](user-guide.md#ontology-studio-map-full-graph), [Advanced features](advanced_features.md#ontology-specifics), [MCP](mcp.md#available-tools) |
+| MCP end-user identity forward (`X-OntoBricks-Acting-*`) | [Architecture](architecture.md#agents--mcp-server), [Deployment](deployment.md#e-permission-layers) |
+| MCP stateless domain resolution (`domain_name`) | [User Guide](user-guide.md#available-mcp-tools), [MCP](mcp.md#available-tools) |
+| SPARQL typed value `FILTER` compilation to SQL | [Architecture](architecture.md#query-engines) |
+| Apps deployment user API scopes reduced to `[sql]` | [Deployment](deployment.md#appyaml-configuration--full-reference) |
+| Local setup interpreter fallback on macOS (Python 3.9) | [Deployment](deployment.md#prerequisites) |
+
 ## What's new in 0.9.1
 
 Patch on 0.9.0. Full details:
