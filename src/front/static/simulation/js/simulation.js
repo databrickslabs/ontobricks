@@ -184,10 +184,16 @@ const SimulationPage = {
             + `${this.esc(label)}</td></tr>`;
     },
 
+    _loadingBlock(label) {
+        return '<div class="text-center text-muted py-4">'
+            + '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>'
+            + `${this.esc(label)}</div>`;
+    },
+
     async loadScenarios() {
         const body = document.getElementById('simScenariosBody');
         const refresh = document.getElementById('simRefreshBtn');
-        if (body) body.innerHTML = this._loadingRow(8, 'Loading scenarios…');
+        if (body) body.innerHTML = this._loadingBlock('Loading scenarios…');
         if (refresh) refresh.disabled = true;
         try {
             const data = await this.api('/simulation/list');
@@ -196,7 +202,7 @@ const SimulationPage = {
         } catch (err) {
             this.scenarios = [];
             if (body) {
-                body.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">${this.esc(err.message)}</td></tr>`;
+                body.innerHTML = `<div class="text-center text-muted py-4">${this.esc(err.message)}</div>`;
             }
         } finally {
             if (refresh) refresh.disabled = false;
@@ -208,33 +214,73 @@ const SimulationPage = {
         const body = document.getElementById('simScenariosBody');
         if (!body) return;
         if (!this.scenarios.length) {
-            body.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">'
+            body.innerHTML = '<div class="text-center text-muted py-4">'
                 + '<i class="bi bi-sliders2-vertical d-block fs-3 mb-2"></i>'
                 + 'No scenarios yet — create one, or use <em>Simulate from here</em> on an entity in Graph.'
-                + '</td></tr>';
+                + '</div>';
             return;
         }
-        body.innerHTML = this.scenarios.map((s) => {
-            const spec = s.spec || {};
-            const sum = s.diff_summary || {};
-            const ready = s.status === 'ready';
-            const running = s.status === 'running';
-            return `<tr>
-                <td><a href="/simulation/?section=scenarios&simulation=${this.esc(s.id)}" data-action="open" data-id="${this.esc(s.id)}" class="fw-semibold">${this.esc(s.label || s.id)}</a></td>
-                <td class="small">${this.scopeLabel(spec.scope)}</td>
-                <td class="text-end">${(spec.patches || []).length}</td>
-                <td>${this.statusBadge(s.status)}</td>
-                <td class="text-end text-success">${ready ? '+' + (sum.added_count || 0) : '–'}</td>
-                <td class="text-end text-danger">${ready ? '−' + (sum.removed_count || 0) : '–'}</td>
-                <td class="small text-muted">${this.fmtDate(s.last_run_at)}</td>
-                <td class="text-end text-nowrap">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-action="results" data-id="${this.esc(s.id)}" title="Results" ${ready ? '' : 'disabled'}><i class="bi bi-clipboard-data"></i></button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-action="run" data-id="${this.esc(s.id)}" title="Run" ${running ? 'disabled' : ''}><i class="bi bi-play-fill"></i></button>
-                    <button type="button" class="btn btn-sm btn-outline-warning" data-action="purge" data-id="${this.esc(s.id)}" title="Purge sandbox" ${running || s.status === 'draft' ? 'disabled' : ''}><i class="bi bi-eraser"></i></button>
-                    <button type="button" class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${this.esc(s.id)}" title="Delete" ${running ? 'disabled' : ''}><i class="bi bi-trash"></i></button>
-                </td>
-            </tr>`;
-        }).join('');
+        body.innerHTML = this.scenarios.map((s) => this._renderScenarioCard(s)).join('');
+    },
+
+    _renderScenarioCard(s) {
+        const spec = s.spec || {};
+        const sum = s.diff_summary || {};
+        const ready = s.status === 'ready';
+        const running = s.status === 'running';
+        const id = this.esc(s.id);
+        const patchCount = (spec.patches || []).length;
+        const diffLine = ready
+            ? `<span class="text-success">+${sum.added_count || 0}</span>`
+                + ` <span class="text-danger">−${sum.removed_count || 0}</span>`
+            : '–';
+        return `
+        <div class="ob-rule-card sim-scenario-card mb-2" data-scenario-id="${id}">
+            <div class="d-flex align-items-start justify-content-between">
+                <div class="flex-grow-1 min-w-0">
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        ${this.statusBadge(s.status)}
+                        <span class="text-muted small">${this.scopeLabel(spec.scope)}</span>
+                    </div>
+                    <div class="small fw-medium">
+                        <a href="/simulation/?section=scenarios&simulation=${id}"
+                           data-action="open" data-id="${id}" class="text-decoration-none text-body">
+                            ${this.esc(s.label || s.id)}
+                        </a>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        ${patchCount} patch${patchCount === 1 ? '' : 'es'}
+                        <span class="mx-1">·</span>
+                        ${diffLine}
+                        <span class="mx-1">·</span>
+                        Last run ${this.fmtDate(s.last_run_at)}
+                    </div>
+                </div>
+                <div class="btn-group btn-group-sm ms-2 flex-shrink-0">
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-action="open" data-id="${id}" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-action="results" data-id="${id}" title="Results" ${ready ? '' : 'disabled'}>
+                        <i class="bi bi-clipboard-data"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            data-action="run" data-id="${id}" title="Run" ${running ? 'disabled' : ''}>
+                        <i class="bi bi-play-fill"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm"
+                            data-action="purge" data-id="${id}" title="Purge sandbox"
+                            ${running || s.status === 'draft' ? 'disabled' : ''}>
+                        <i class="bi bi-eraser"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm"
+                            data-action="delete" data-id="${id}" title="Delete" ${running ? 'disabled' : ''}>
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>`;
     },
 
     openScenario(id, { tab } = {}) {

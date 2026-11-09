@@ -822,3 +822,70 @@ Test result:
   325 skipped, 8 deselected, 1 failed (pre-existing
   test_no_function_grows_beyond_budget on agents/agent_dtwin_chat/engine.py::run_agent;
   file not modified by this change).
+
+================================================================================
+Scenario list uses Data Quality card style
+================================================================================
+
+Context:
+The Simulation Scenarios list was a dense HTML table. Ontology Data Quality
+(and Business Rules) already use the shared `.ob-rule-card` list style; the
+Scenario items should match that look.
+
+Changes:
+1. src/front/static/global/css/main.css
+   Moved shared `.ob-rule-card` styles here so Simulation (and Ontology) both
+   load them from the app shell CSS.
+2. src/front/static/global/css/ontology.css
+   Removed the Ontology-only copy of `.ob-rule-card`.
+3. src/front/templates/partials/simulation/_sim_scenarios.html
+   Replaced the scenarios table with a card list container
+   (`#simScenariosBody.sim-scenarios-list`).
+4. src/front/static/simulation/js/simulation.js
+   `renderScenarios` / `_renderScenarioCard` emit `.ob-rule-card` items
+   (status badge, scope, title, patch/diff/last-run meta, action btn-group);
+   loading/empty/error states are block markup via `_loadingBlock`.
+5. tests/units/front/test_simulation_page_contract.py
+   Contracts for the card list (no table, shared class, `_renderScenarioCard`).
+6. tests/units/front/test_business_rules_list_ui.py
+   Point the shared-class assertion at `main.css`.
+
+Modified files:
+- src/front/static/global/css/main.css
+- src/front/static/global/css/ontology.css
+- src/front/templates/partials/simulation/_sim_scenarios.html
+- src/front/static/simulation/js/simulation.js
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- Targeted: uv run --frozen pytest -q tests/units/front/test_simulation_page_contract.py
+  tests/units/front/test_business_rules_list_ui.py -> 37 passed.
+- Full suite: uv run --frozen pytest -q -m "not scenario" -> 10149 passed,
+  325 skipped, 8 deselected, 1 failed (pre-existing
+  test_no_function_grows_beyond_budget on agents/agent_dtwin_chat/engine.py::run_agent;
+  file not modified by this change).
+
+================================================================================
+Scenario card: pencil Edit action
+================================================================================
+
+Context:
+Scenario cards opened the editor only through the title link. Added an
+explicit Edit control with a pencil icon, consistent with the Data Quality and
+Business Rules row actions.
+
+Changes:
+1. src/front/static/simulation/js/simulation.js
+   `_renderScenarioCard` adds a first action button (`data-action="open"`,
+   `title="Edit"`, `bi-pencil`) to the scenario action group.
+2. tests/units/front/test_simulation_page_contract.py
+   `test_scenario_card_edit_action_uses_pencil_icon`.
+
+Modified files:
+- src/front/static/simulation/js/simulation.js
+- tests/units/front/test_simulation_page_contract.py
+
+Test result:
+- Targeted: uv run --frozen pytest -q tests/units/front/test_simulation_page_contract.py
+  tests/units/front/test_business_rules_list_ui.py -> 38 passed.

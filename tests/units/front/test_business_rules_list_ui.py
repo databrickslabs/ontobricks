@@ -12,8 +12,8 @@ IF_THEN_JS = (
 BR_JS = (
     ROOT / "src/front/static/ontology/js/ontology-business-rules.js"
 ).read_text(encoding="utf-8")
-ONTOLOGY_CSS = (
-    ROOT / "src/front/static/global/css/ontology.css"
+MAIN_CSS = (
+    ROOT / "src/front/static/global/css/main.css"
 ).read_text(encoding="utf-8")
 DQ_JS = (
     ROOT / "src/front/static/ontology/js/ontology-dataquality.js"
@@ -55,7 +55,7 @@ def test_simple_and_complex_rows_use_shared_ob_rule_card():
     assert "if-then-rule-card" in IF_THEN_JS
     assert "ob-rule-card" in BR_JS
     assert "br-rule-card" in BR_JS
-    assert ".ob-rule-card" in ONTOLOGY_CSS
+    assert ".ob-rule-card" in MAIN_CSS
     assert "ob-rule-card dq-shape-card" in DQ_JS
     # Match Data Quality: badge + fw-medium title, not Bootstrap .card wrappers.
     assert "badge bg-primary bg-opacity-75" in IF_THEN_JS

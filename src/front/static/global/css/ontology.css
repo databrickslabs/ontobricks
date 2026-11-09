@@ -507,16 +507,4 @@ body.ontology-page {
 
 }
 
-/* Shared rule/shape list cards (Data Quality, Business Rules Simple/Complex). */
-.ob-rule-card {
-    border: 1px solid var(--db-border, var(--bs-border-color));
-    border-radius: var(--db-radius-control, 0.375rem);
-    padding: 0.625rem 0.75rem;
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.ob-rule-card:hover {
-    border-color: var(--db-primary, var(--bs-primary));
-    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
-}
 

@@ -246,8 +246,32 @@ def test_scenarios_list_shows_spinner_while_loading():
     js = _read(FRONT / "static/simulation/js/simulation.js")
     assert "spinner-border spinner-border-sm" in html
     assert "Loading scenarios" in html
-    assert "_loadingRow" in js
+    assert "_loadingBlock" in js
     assert "Loading scenarios…" in js
+
+
+def test_scenarios_list_uses_data_quality_card_style():
+    html = _read(FRONT / "templates/partials/simulation/_sim_scenarios.html")
+    js = _read(FRONT / "static/simulation/js/simulation.js")
+    css = _read(FRONT / "static/global/css/main.css")
+    assert 'id="simScenariosBody"' in html
+    assert 'id="simScenariosTable"' not in html
+    assert "sim-scenarios-list" in html
+    assert "_renderScenarioCard" in js
+    assert "ob-rule-card" in js
+    assert "sim-scenario-card" in js
+    assert "small fw-medium" in js
+    assert ".ob-rule-card" in css
+    assert "<table" not in html
+    assert "<tr>" not in js.split("renderScenarios()", 1)[1].split("openScenario(", 1)[0]
+
+
+def test_scenario_card_edit_action_uses_pencil_icon():
+    js = _read(FRONT / "static/simulation/js/simulation.js")
+    card = js.split("_renderScenarioCard(s) {", 1)[1].split("openScenario(", 1)[0]
+    edit = card.split('data-action="open"', 1)[1].split("</button>", 1)[0]
+    assert 'title="Edit"' in edit
+    assert "bi-pencil" in edit
 
 
 def test_workbench_picks_individual_inference_rules():
