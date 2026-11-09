@@ -970,3 +970,92 @@ Test result:
   198→200), a file this change does not touch.
 - Headless Chrome render of the partial with PhaseTree: tri-state and rule-name
   collection verified.
+
+
+Graph → Data quality uses the same icon tree as Graph → Inference
+
+Context: Data quality still drew its six dimensions as the old tile grid, with
+inline onclick handlers, its own rule-list markup and its own tri-state code.
+After the inference picker moved to the shared tree, the two screens looked
+different. The shared PhaseTree is now generic: it takes rule items instead of
+hardcoding the inference rule types. Data quality reuses it, one node per
+dimension, with its SHACL shapes and Simple rules as child rows.
+
+Changes:
+1. src/front/static/global/js/phase-tree.js
+   Rule items are `{value, label, title?, badge?}`. `renderRules(key, items)`
+   replaces the per-type list code. Expandable nodes are discovered from the
+   DOM (`expandableKeys()`) instead of a fixed RULE_TYPES list. New helpers:
+   `PhaseTree.fromNamedRules()` (inference records), `selectedRules()` (was
+   `ruleNames()`), `checkedValues()` (every ticked rule value). Rule checkboxes
+   carry `data-rule-value` (was `data-rule-name`).
+2. src/front/templates/partials/layout/_phase_tree.html
+   Generic renderer. It takes `tree_id`, `tree_caption` and `tree_nodes`, with
+   the toolbar caption configurable. Badges are omitted when empty, except on
+   expandable nodes, which keep the count badge that `sync()` fills in.
+3. src/front/templates/partials/layout/_inference_phase_tree.html (new)
+   Builds the four inference phases from `tree_ctx` and includes the generic
+   partial. Graph → Inference and Simulation → Reasoning both include it, so
+   their phases, counts and T-Box lock stay identical.
+4. src/front/templates/partials/dtwin/_query_dataquality.html
+   The six dimension tiles and the Select all / Unselect all links are replaced
+   by the shared tree (`dqPhaseTree`, ids `dqDim*` kept). Inline handlers and
+   the `data-dimension` / `dq-rule-list` markup are removed.
+5. src/front/static/query/js/query-dataquality.js
+   `_ensureTree()` creates the tree. `_renderShapeCheckboxes` hands each
+   dimension's shapes and Simple rules to `renderRules`. Dimension and rule
+   selection for the run now come from the tree (`phases()` and
+   `checkedValues()`), and busy state from `setBusy()`. Removed
+   `_toggleRuleList`, `_onRuleCheckChange`, `_syncTile`, `toggleAllDimensions`
+   and the `toggle-all-dims` action. The run payload is unchanged.
+6. src/front/static/query/js/query-reasoning.js, src/front/static/simulation/js/simulation-rules.js
+   Use `fromNamedRules`, `expandableKeys`, `selectedRules` and `applyRules`.
+7. src/front/static/query/css/query-reasoning.css
+   Removed the tile (`.reasoning-tile`, `.rt-*`) and rule-list
+   (`.dq-rules-toggle`, `.dq-rule-list`, `.dq-rule-item`, `.dq-expand-chevron`)
+   styles, which nothing uses now. `.dq-col-msg` stays for Data Quality results.
+   Empty tree badges are hidden with `:empty`.
+8. src/front/templates/partials/dtwin/_query_reasoning.html, src/front/templates/partials/simulation/_sim_workbench.html
+   Include `_inference_phase_tree.html`. Ids and behaviour are unchanged.
+9. src/front/templates/dtwin.html
+   `phase-tree.js` now loads before `query-dataquality.js`, which uses it at init.
+10. tests/units/front/test_phase_tree_ui.py
+    Rewritten for the generic partial, the inference wrapper and the Data
+    quality wiring.
+11. tests/units/front/test_dq_run_payload.py
+    Run-request tests now stub the tree's selection API. The payload contract
+    is unchanged.
+12. tests/units/front/test_dq_rule_checkboxes.py
+    Rule-row tests now check the items handed to the tree (value, label, the
+    Simple family badge), not the old DOM markup.
+13. tests/units/front/test_simulation_page_contract.py
+    Points at `_inference_phase_tree.html`.
+
+Modified files:
+- src/front/static/global/js/phase-tree.js
+- src/front/templates/partials/layout/_phase_tree.html
+- src/front/templates/partials/layout/_inference_phase_tree.html (new)
+- src/front/templates/partials/dtwin/_query_dataquality.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-dataquality.js
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/static/query/css/query-reasoning.css
+- tests/units/front/test_phase_tree_ui.py
+- tests/units/front/test_dq_run_payload.py
+- tests/units/front/test_dq_rule_checkboxes.py
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-09.log
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/test_dq_run_payload.py tests/units/front/test_dq_rule_checkboxes.py tests/units/front/test_phase_tree_ui.py tests/units/front/test_simulation_page_contract.py -> 62 passed.
+- uv run --frozen pytest -q -m "not scenario" -> 10162 passed, 325 skipped, 1 failed.
+  The failure is the existing test_no_function_grows_beyond_budget
+  (agents/agent_dtwin_chat/engine.py::run_agent 198→200), a file this change does not touch.
+- Headless Chrome, real partial and modules, fetch mocked: untick a rule ->
+  dimension partly ticked; untick a dimension -> its rules off; the run request
+  carries the 5 on-dimensions and the 3 ticked shape ids only. Inference tree:
+  rule mapping, partial state, applied selection and phase-off behaviour verified.
+

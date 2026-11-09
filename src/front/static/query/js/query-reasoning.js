@@ -32,8 +32,8 @@ const ReasoningModule = {
             const [ifThenData, sparqlData] = await Promise.all([
                 ifThenResp.json(), sparqlResp.json(),
             ]);
-            this._tree.renderRules('if_then', ifThenData.rules || []);
-            this._tree.renderRules('sparql_rules', sparqlData.rules || []);
+            this._tree.renderRules('if_then', PhaseTree.fromNamedRules(ifThenData.rules));
+            this._tree.renderRules('sparql_rules', PhaseTree.fromNamedRules(sparqlData.rules));
             this._rulesLoaded = true;
         } catch (e) {
             console.error('[Reasoning] Failed to load rules:', e);
@@ -70,7 +70,7 @@ const ReasoningModule = {
 
         const payload = { tbox, if_then, graph, sparql_rules };
         if (this._rulesLoaded) {
-            const names = this._tree.ruleNames(phases);
+            const names = this._tree.selectedRules(phases);
             if (names.if_then) payload.if_then_rule_names = names.if_then;
             if (names.sparql_rules) payload.sparql_rule_names = names.sparql_rules;
         }

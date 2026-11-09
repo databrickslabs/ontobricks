@@ -1,50 +1,74 @@
 /**
- * Tri-state tree for inference phases and their rules
- * (markup: templates/partials/layout/_phase_tree.html).
+ * Tri-state tree used by Graph → Inference, Simulation → Reasoning and
+ * Graph → Data quality (markup: templates/partials/layout/_phase_tree.html).
  *
- * Phase checkboxes carry `data-phase`; rule checkboxes carry
- * `data-tree-rule="<phase>"` + `data-rule-name`. A phase is "on" when it is
- * checked or indeterminate.
+ * A node checkbox carries `data-phase="<key>"`. A node that expands carries a
+ * child list `data-tree-children="<key>"`, and its rule checkboxes carry
+ * `data-tree-rule="<key>"` + `data-rule-value="<value>"`. A node is "on" when
+ * it is checked or indeterminate.
  */
 class PhaseTree {
-    static RULE_TYPES = ['if_then', 'sparql_rules'];
-
     constructor(root) {
         this.root = root;
         this.root.addEventListener('change', (e) => this._onChange(e.target));
         this.root.addEventListener('click', (e) => this._onClick(e));
     }
 
-    renderRules(type, rules) {
-        const list = this.root.querySelector(`[data-tree-children="${type}"]`);
-        const twisty = this.root.querySelector(`[data-tree-toggle="${type}"]`);
+    /**
+     * Rule items for a child list. Each item is
+     * `{value, label, title?, badge?: {text, cls?, title?}}`; every field is
+     * escaped here, so callers pass plain strings.
+     */
+    renderRules(key, items) {
+        const list = this._children(key);
         if (!list) return;
         const leafIcon = list.dataset.leafIcon || 'bi-dot';
-        const phaseOn = this._isOn(type);
-        list.innerHTML = (rules || []).map((rule, i) => {
-            const name = rule.name || `Rule ${i + 1}`;
-            const id = `${this.root.id}_${type}_${i}`;
-            const off = rule.enabled === false
-                ? '<span class="badge text-bg-light border ob-tree-badge">off</span>' : '';
+        const phaseOn = this._isOn(key);
+        const esc = PhaseTree.esc;
+        list.innerHTML = (items || []).map((item, i) => {
+            const id = `${this.root.id}_${key}_${i}`;
+            const badge = item.badge
+                ? `<span class="badge ob-tree-badge ${esc(item.badge.cls || 'text-bg-light border')}"`
+                    + ` title="${esc(item.badge.title || '')}">${esc(item.badge.text)}</span>`
+                : '';
             return `<li class="ob-tree-node" role="treeitem">
                 <div class="ob-tree-row">
-                    <input type="checkbox" class="form-check-input" id="${PhaseTree.esc(id)}"
-                           data-tree-rule="${PhaseTree.esc(type)}" data-rule-name="${PhaseTree.esc(name)}"
+                    <input type="checkbox" class="form-check-input" id="${esc(id)}"
+                           data-tree-rule="${esc(key)}" data-rule-value="${esc(item.value)}"
                            ${phaseOn ? 'checked' : ''}>
-                    <label class="ob-tree-label" for="${PhaseTree.esc(id)}"
-                           title="${PhaseTree.esc(rule.description || name)}">
-                        <i class="bi ${leafIcon} ob-tree-icon"></i>
-                        <span class="ob-tree-title">${PhaseTree.esc(name)}</span>
+                    <label class="ob-tree-label" for="${esc(id)}" title="${esc(item.title || item.label)}">
+                        <i class="bi ${esc(leafIcon)} ob-tree-icon"></i>
+                        <span class="ob-tree-title">${esc(item.label)}</span>
                     </label>
-                    ${off}
+                    ${badge}
                 </div>
             </li>`;
         }).join('');
+        const twisty = this.root.querySelector(`[data-tree-toggle="${key}"]`);
         if (twisty) twisty.disabled = !list.children.length;
         this.sync();
     }
 
-    /** `{phase: bool}` for every phase in the tree. */
+    /** Rule items from `{name, description, enabled}` records (IF-THEN, SPARQL). */
+    static fromNamedRules(rules) {
+        return (rules || []).map((r, i) => {
+            const name = r.name || `Rule ${i + 1}`;
+            return {
+                value: r.name || '',
+                label: name,
+                title: r.description || name,
+                badge: r.enabled === false ? { text: 'off' } : null,
+            };
+        });
+    }
+
+    /** Keys of the nodes that have a rule list. */
+    expandableKeys() {
+        return [...this.root.querySelectorAll('[data-tree-children]')]
+            .map((el) => el.dataset.treeChildren);
+    }
+
+    /** `{key: bool}` for every node. */
     phases() {
         const out = {};
         this._phaseInputs().forEach((cb) => {
@@ -53,29 +77,35 @@ class PhaseTree {
         return out;
     }
 
-    /** `{phase: [rule names]}` for enabled phases with at least one rule ticked. */
-    ruleNames(phases = this.phases()) {
+    /** `{key: [values]}` for on nodes with at least one rule ticked. */
+    selectedRules(phases = this.phases()) {
         const out = {};
-        PhaseTree.RULE_TYPES.forEach((type) => {
-            if (!phases[type]) return;
-            const names = this._rules(type).filter((cb) => cb.checked)
-                .map((cb) => cb.dataset.ruleName).filter(Boolean);
-            if (names.length) out[type] = names;
+        this.expandableKeys().forEach((key) => {
+            if (!phases[key]) return;
+            const values = this._checkedValues(key);
+            if (values.length) out[key] = values;
         });
         return out;
     }
 
-    /** Tick rules from a saved selection; an empty selection means every rule. */
-    applyRules(ruleNames) {
-        PhaseTree.RULE_TYPES.forEach((type) => {
-            const selected = ruleNames && ruleNames[type];
-            const phaseOn = this._isOn(type);
-            this._rules(type).forEach((cb) => {
+    /** Every ticked rule value, whatever its node is doing. */
+    checkedValues() {
+        return [...this.root.querySelectorAll('[data-tree-rule]:checked')]
+            .map((cb) => cb.dataset.ruleValue)
+            .filter(Boolean);
+    }
+
+    /** Tick rules from a saved `{key: [values]}`; an empty selection means every rule. */
+    applyRules(selection) {
+        this.expandableKeys().forEach((key) => {
+            const picked = selection && selection[key];
+            const phaseOn = this._isOn(key);
+            this._rules(key).forEach((cb) => {
                 if (!phaseOn) cb.checked = false;
-                else if (!selected || !selected.length) cb.checked = true;
-                else cb.checked = selected.includes(cb.dataset.ruleName);
+                else if (!picked || !picked.length) cb.checked = true;
+                else cb.checked = picked.includes(cb.dataset.ruleValue);
             });
-            this._syncPhase(type);
+            this._syncPhase(key);
         });
         this.sync();
     }
@@ -90,9 +120,9 @@ class PhaseTree {
         this.sync();
     }
 
-    expand(type, open) {
-        const node = this.root.querySelector(`[data-tree-node="${type}"]`);
-        const list = this.root.querySelector(`[data-tree-children="${type}"]`);
+    expand(key, open) {
+        const node = this.root.querySelector(`[data-tree-node="${key}"]`);
+        const list = this._children(key);
         if (!node || !list || !list.children.length) return;
         const show = open === undefined ? list.hidden : open;
         list.hidden = !show;
@@ -104,7 +134,7 @@ class PhaseTree {
         this.root.querySelectorAll('input, button').forEach((el) => {
             if (el.hasAttribute('data-tree-locked')) return;
             if (el.matches('[data-tree-toggle]')) {
-                const list = this.root.querySelector(`[data-tree-children="${el.dataset.treeToggle}"]`);
+                const list = this._children(el.dataset.treeToggle);
                 el.disabled = busy || !(list && list.children.length);
                 return;
             }
@@ -112,14 +142,14 @@ class PhaseTree {
         });
     }
 
-    /** Repaint "on" accents and the selected/total badges. */
+    /** Repaint the "on" accent and the `n/total rules` badges. */
     sync() {
         this._phaseInputs().forEach((cb) => {
-            const type = cb.dataset.phase;
+            const key = cb.dataset.phase;
             const node = cb.closest('[data-tree-node]');
             if (node) node.classList.toggle('is-on', !!(cb.checked || cb.indeterminate));
-            const badge = this.root.querySelector(`[data-tree-count="${type}"]`);
-            const rules = this._rules(type);
+            const badge = this.root.querySelector(`[data-tree-count="${key}"]`);
+            const rules = this._rules(key);
             if (badge && rules.length) {
                 const n = rules.filter((r) => r.checked).length;
                 badge.textContent = `${n}/${rules.length} rule${rules.length !== 1 ? 's' : ''}`;
@@ -151,38 +181,47 @@ class PhaseTree {
         if (kind === 'all' || kind === 'none') {
             this.setAll(kind === 'all');
         } else {
-            PhaseTree.RULE_TYPES.forEach((type) => this.expand(type, kind === 'expand'));
+            this.expandableKeys().forEach((key) => this.expand(key, kind === 'expand'));
         }
     }
 
-    _cascade(type, checked) {
-        this._rules(type).forEach((cb) => { cb.checked = checked; });
+    _cascade(key, checked) {
+        this._rules(key).forEach((cb) => { cb.checked = checked; });
     }
 
-    _syncPhase(type) {
-        const phase = this._phaseInput(type);
-        const rules = this._rules(type);
+    _syncPhase(key) {
+        const phase = this._phaseInput(key);
+        const rules = this._rules(key);
         if (!phase || !rules.length || phase.disabled) return;
         const n = rules.filter((cb) => cb.checked).length;
         phase.checked = n === rules.length;
         phase.indeterminate = n > 0 && n < rules.length;
     }
 
-    _isOn(type) {
-        const cb = this._phaseInput(type);
+    _checkedValues(key) {
+        return this._rules(key).filter((cb) => cb.checked)
+            .map((cb) => cb.dataset.ruleValue).filter(Boolean);
+    }
+
+    _isOn(key) {
+        const cb = this._phaseInput(key);
         return !!(cb && (cb.checked || cb.indeterminate));
     }
 
-    _phaseInput(type) {
-        return this.root.querySelector(`[data-phase="${type}"]`);
+    _children(key) {
+        return this.root.querySelector(`[data-tree-children="${key}"]`);
+    }
+
+    _phaseInput(key) {
+        return this.root.querySelector(`[data-phase="${key}"]`);
     }
 
     _phaseInputs() {
         return [...this.root.querySelectorAll('[data-phase]')];
     }
 
-    _rules(type) {
-        return [...this.root.querySelectorAll(`[data-tree-rule="${type}"]`)];
+    _rules(key) {
+        return [...this.root.querySelectorAll(`[data-tree-rule="${key}"]`)];
     }
 
     static esc(value) {

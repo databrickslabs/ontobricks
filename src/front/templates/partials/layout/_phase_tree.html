@@ -1,43 +1,20 @@
 {#
-  Inference phase picker shared by Graph → Inference and Simulation → Reasoning.
-  Driven by PhaseTree (global/js/phase-tree.js); rule nodes are rendered client-side.
+  Generic icon tree: Graph → Inference, Simulation → Reasoning, Graph → Data quality.
+  Behaviour lives in PhaseTree (global/js/phase-tree.js); rule rows are rendered client-side.
 
   Context (pass with {% with %}):
     tree_id       id of the root element
-    tree_ctx      dict with owlrl_available, if_then_rules_count,
-                  object_properties_count, sparql_rules_count
-    tree_ids      phase key → checkbox id
-    tree_checked  phase keys checked on first paint
-    tree_lock_tbox  disable T-Box when owlrl is missing
+    tree_caption  toolbar caption
+    tree_nodes    list of node dicts:
+                    key, title, desc, icon, tone, input_id,
+                    checked (bool), locked (bool), expandable (bool),
+                    leaf_icon (rule icon, expandable only),
+                    badge (text, optional), badge_cls (optional)
 #}
-{% set _n_if = tree_ctx.if_then_rules_count or 0 %}
-{% set _n_sp = tree_ctx.sparql_rules_count or 0 %}
-{% set _n_op = tree_ctx.object_properties_count or 0 %}
-{% set tree_phases = [
-    {"key": "tbox", "icon": "bi-diagram-3", "tone": "text-primary",
-     "title": "T-Box (OWL 2 RL)", "desc": "Deductive closure over the ontology axioms",
-     "badge": "owlrl ready" if tree_ctx.owlrl_available else "owlrl missing",
-     "badge_cls": "text-bg-success" if tree_ctx.owlrl_available else "text-bg-warning",
-     "locked": tree_lock_tbox and not tree_ctx.owlrl_available},
-    {"key": "if_then", "icon": "bi-code-square", "tone": "text-indigo", "leaf_icon": "bi-signpost-split",
-     "title": "Simple rules", "desc": "IF-THEN business rules",
-     "badge": (_n_if ~ " rule" ~ ("s" if _n_if != 1 else "")) if _n_if else "no rules",
-     "badge_cls": "text-bg-primary" if _n_if else "text-bg-secondary",
-     "expandable": true},
-    {"key": "graph", "icon": "bi-share", "tone": "text-info",
-     "title": "Graph reasoning", "desc": "Transitive / symmetric / inverse closure",
-     "badge": _n_op ~ " object prop" ~ ("s" if _n_op != 1 else ""),
-     "badge_cls": "text-bg-info"},
-    {"key": "sparql_rules", "icon": "bi-braces", "tone": "text-danger", "leaf_icon": "bi-file-earmark-code",
-     "title": "Complex rules", "desc": "SPARQL CONSTRUCT queries",
-     "badge": (_n_sp ~ " rule" ~ ("s" if _n_sp != 1 else "")) if _n_sp else "no rules",
-     "badge_cls": "text-bg-primary" if _n_sp else "text-bg-secondary",
-     "expandable": true},
-] %}
 <div class="ob-phase-tree" id="{{ tree_id }}">
     <div class="ob-phase-tree-toolbar">
-        <span class="ob-phase-tree-caption"><i class="bi bi-diagram-2 me-1"></i>Inference phases</span>
-        <div class="btn-group btn-group-sm" role="group" aria-label="Phase selection">
+        <span class="ob-phase-tree-caption"><i class="bi bi-diagram-2 me-1"></i>{{ tree_caption }}</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="{{ tree_caption }} actions">
             <button type="button" class="btn btn-outline-secondary" data-tree-action="all" title="Select all">
                 <i class="bi bi-check2-all"></i>
             </button>
@@ -52,28 +29,30 @@
             </button>
         </div>
     </div>
-    <ul class="ob-tree" role="tree" aria-label="Inference phases">
-        {% for p in tree_phases %}
-        {% set _on = p.key in tree_checked and not p.locked %}
+    <ul class="ob-tree" role="tree" aria-label="{{ tree_caption }}">
+        {% for p in tree_nodes %}
+        {% set _on = p.checked and not p.locked %}
         <li class="ob-tree-node{% if _on %} is-on{% endif %}" role="treeitem" data-tree-node="{{ p.key }}"
             {% if p.expandable %}aria-expanded="false"{% endif %}>
             <div class="ob-tree-row">
                 {% if p.expandable %}
                 <button type="button" class="ob-tree-twisty" data-tree-toggle="{{ p.key }}"
-                        aria-label="Show {{ p.title|lower }}" disabled>
+                        aria-label="Show {{ p.title|lower }} rules" disabled>
                     <i class="bi bi-chevron-right"></i>
                 </button>
                 {% else %}
                 <span class="ob-tree-twisty" aria-hidden="true"></span>
                 {% endif %}
-                <input class="form-check-input" type="checkbox" id="{{ tree_ids[p.key] }}" data-phase="{{ p.key }}"
+                <input class="form-check-input" type="checkbox" id="{{ p.input_id }}" data-phase="{{ p.key }}"
                        {% if _on %}checked{% endif %}{% if p.locked %} disabled data-tree-locked{% endif %}>
-                <label class="ob-tree-label" for="{{ tree_ids[p.key] }}">
+                <label class="ob-tree-label" for="{{ p.input_id }}">
                     <i class="bi {{ p.icon }} ob-tree-icon {{ p.tone }}"></i>
                     <span class="ob-tree-title">{{ p.title }}</span>
                     <span class="ob-tree-desc">{{ p.desc }}</span>
                 </label>
-                <span class="badge {{ p.badge_cls }} ob-tree-badge"{% if p.expandable %} data-tree-count="{{ p.key }}"{% endif %}>{{ p.badge }}</span>
+                {% if p.badge or p.expandable %}
+                <span class="badge {{ p.badge_cls or 'text-bg-secondary' }} ob-tree-badge"{% if p.expandable %} data-tree-count="{{ p.key }}"{% endif %}>{{ p.badge or '' }}</span>
+                {% endif %}
             </div>
             {% if p.expandable %}
             <ul class="ob-tree-children" role="group" data-tree-children="{{ p.key }}"

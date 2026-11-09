@@ -8,6 +8,7 @@ window.DQExecModule = {
     _templateUiBound: false,
     _shapesCache: null,
     _shapesLoaded: false,
+    _tree: null,
 
     CATEGORIES: [
         'completeness', 'cardinality', 'uniqueness',
@@ -17,7 +18,13 @@ window.DQExecModule = {
     init() {
         this._updateTripleStoreLabel();
         this._bindTemplateUiOnce();
+        this._ensureTree();
         this._loadShapes();
+    },
+
+    _ensureTree() {
+        const root = document.getElementById('dqPhaseTree');
+        if (!this._tree && root && window.PhaseTree) this._tree = new PhaseTree(root);
     },
 
     _bindTemplateUiOnce() {
@@ -44,19 +51,10 @@ window.DQExecModule = {
                 this.runAllChecks();
                 return;
             }
-            if (act === 'toggle-all-dims') {
-                e.preventDefault();
-                this.toggleAllDimensions(t.getAttribute('data-dq-checked') === '1');
-                return;
-            }
             if (act === 'hide-query-viewer') {
                 e.preventDefault();
                 this.hideQueryViewer();
             }
-        });
-
-        root.querySelectorAll('input[data-dimension]').forEach((cb) => {
-            cb.addEventListener('change', () => this._syncTile(cb));
         });
     },
 
@@ -80,38 +78,18 @@ window.DQExecModule = {
     },
 
     _renderShapeCheckboxes() {
+        if (!this._tree) return;
         const shapes = this._shapesCache || [];
         this.CATEGORIES.forEach(cat => {
-            const container = document.querySelector(`[data-dq-rulelist="${cat}"]`);
-            const toggleBtn = document.querySelector(`[data-dq-expand="${cat}"]`);
-            if (!container) return;
-            const catShapes = shapes.filter(s => s.category === cat && s.enabled !== false);
-            if (!catShapes.length) return;
-
-            if (toggleBtn) {
-                const countSpan = toggleBtn.querySelector('.dq-rules-count');
-                if (countSpan) countSpan.textContent = `${catShapes.length} rule${catShapes.length !== 1 ? 's' : ''}`;
-                toggleBtn.classList.remove('d-none');
-            }
-
-            container.innerHTML = catShapes.map((s, i) => `
-                <div class="dq-rule-item">
-                    <input type="checkbox" class="form-check-input dq-rule-cb"
-                           id="dqRule_${cat}_${i}"
-                           data-dq-rule-id="${this._escAttr(s.id)}"
-                           data-dq-rule-dim="${cat}"
-                           checked>
-                    <label class="form-check-label small" for="dqRule_${cat}_${i}"
-                           title="${this._escAttr(s.id)}">
-                        ${this._escHtml(s.label || s.id)}
-                    </label>
-                    ${this._familyBadge(s.family)}
-                </div>
-            `).join('');
-
-            container.querySelectorAll('.dq-rule-cb').forEach(cb => {
-                cb.addEventListener('change', () => this._onRuleCheckChange(cat));
-            });
+            const items = shapes
+                .filter(s => s.category === cat && s.enabled !== false)
+                .map(s => ({
+                    value: s.id,
+                    label: s.label || s.id,
+                    title: s.id,
+                    badge: this._familyBadge(s.family),
+                }));
+            this._tree.renderRules(cat, items);
         });
     },
 
@@ -123,87 +101,21 @@ window.DQExecModule = {
 
     _familyBadge(family) {
         const meta = this.RULE_FAMILIES[family];
-        if (!meta) return '';
-        return `<span class="badge bg-secondary bg-opacity-25 text-body-secondary fw-normal dq-rule-family"
-                      title="${this._escAttr(meta.title)}">${this._escHtml(meta.label)}</span>`;
-    },
-
-    _toggleRuleList(dim) {
-        const container = document.querySelector(`[data-dq-rulelist="${dim}"]`);
-        const btn = document.querySelector(`[data-dq-expand="${dim}"]`);
-        if (!container) return;
-        const isHidden = container.classList.contains('d-none');
-        container.classList.toggle('d-none', !isHidden);
-        if (btn) {
-            const icon = btn.querySelector('.dq-expand-chevron');
-            if (icon) icon.classList.toggle('dq-chevron-open', isHidden);
-        }
-    },
-
-    _onRuleCheckChange(dim) {
-        const dimCb = document.querySelector(`input[data-dimension="${dim}"]`);
-        const container = document.querySelector(`[data-dq-rulelist="${dim}"]`);
-        if (!dimCb || !container) return;
-        const ruleCbs = [...container.querySelectorAll('.dq-rule-cb')];
-        if (!ruleCbs.length) return;
-        const checkedCount = ruleCbs.filter(cb => cb.checked).length;
-        if (checkedCount === ruleCbs.length) {
-            dimCb.checked = true;
-            dimCb.indeterminate = false;
-        } else if (checkedCount === 0) {
-            dimCb.checked = false;
-            dimCb.indeterminate = false;
-        } else {
-            dimCb.checked = false;
-            dimCb.indeterminate = true;
-        }
-        const tile = dimCb.closest('.reasoning-tile');
-        if (tile) tile.classList.toggle('active', dimCb.checked || dimCb.indeterminate);
-    },
-
-    _syncTile(checkbox) {
-        const tile = checkbox.closest('.reasoning-tile');
-        if (tile) tile.classList.toggle('active', checkbox.checked);
-        const dim = checkbox.dataset.dimension;
-        if (!dim) return;
-        checkbox.indeterminate = false;
-        const container = document.querySelector(`[data-dq-rulelist="${dim}"]`);
-        if (container) {
-            container.querySelectorAll('.dq-rule-cb').forEach(cb => {
-                cb.checked = checkbox.checked;
-            });
-        }
-    },
-
-    toggleAllDimensions(checked) {
-        document.querySelectorAll('#dqDimCompleteness, #dqDimCardinality, #dqDimUniqueness, #dqDimConsistency, #dqDimConformance, #dqDimStructural')
-            .forEach(el => {
-                el.checked = checked;
-                el.indeterminate = false;
-                this._syncTile(el);
-            });
+        if (!meta) return null;
+        return { text: meta.label, cls: 'text-bg-secondary bg-opacity-25 text-body-secondary fw-normal', title: meta.title };
     },
 
     _getSelectedDimensions() {
-        const dims = [];
-        document.querySelectorAll('[data-dimension]').forEach(el => {
-            if (el.checked || el.indeterminate) dims.push(el.dataset.dimension);
-        });
-        return dims;
+        const phases = this._tree ? this._tree.phases() : {};
+        return Object.keys(phases).filter(key => phases[key]);
     },
 
     _getSelectedShapeIds() {
-        const ids = [];
-        document.querySelectorAll('.dq-rule-cb:checked').forEach(cb => {
-            if (cb.dataset.dqRuleId) ids.push(cb.dataset.dqRuleId);
-        });
-        return ids;
+        return this._tree ? this._tree.checkedValues() : [];
     },
 
     _setDimensionsDisabled(disabled) {
-        document.querySelectorAll('[data-dimension]').forEach(el => { el.disabled = disabled; });
-        document.querySelectorAll('.dq-rule-cb').forEach(el => { el.disabled = disabled; });
-        document.querySelectorAll('.dq-rules-toggle').forEach(el => { el.disabled = disabled; });
+        if (this._tree) this._tree.setBusy(disabled);
     },
 
     _updateTripleStoreLabel() {

@@ -280,7 +280,7 @@ def test_workbench_picks_individual_inference_rules():
     js = _read(FRONT / "static/simulation/js/simulation-rules.js")
     wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
     assert 'tree_id="simWbPhases"' in html
-    assert "partials/layout/_phase_tree.html" in html
+    assert "partials/layout/_inference_phase_tree.html" in html
     assert "query-reasoning.css" in page
     assert page.index("global/js/phase-tree.js") < page.index("simulation/js/simulation-rules.js")
     assert "new PhaseTree(" in js

@@ -27,11 +27,13 @@ const SimulationRules = {
                 SimulationPage.api('/ontology/if-then/list'),
                 SimulationPage.api('/ontology/rules/sparql_rules/list'),
             ]);
-            rules = { if_then: ifThen.rules || [], sparql_rules: sparql.rules || [] };
+            rules = { if_then: ifThen.rules, sparql_rules: sparql.rules };
         } catch (err) {
             console.error('[Simulation] Could not load reasoning rules:', err);
         } finally {
-            PhaseTree.RULE_TYPES.forEach((type) => this._tree.renderRules(type, rules[type]));
+            this._tree.expandableKeys().forEach((type) => {
+                this._tree.renderRules(type, PhaseTree.fromNamedRules(rules[type]));
+            });
             this._loaded = true;
             this.apply(this._pending);
             if (window.SimulationWorkbench) SimulationWorkbench.setTabBusy('reasoning', false);
@@ -50,7 +52,7 @@ const SimulationRules = {
     },
 
     collectRuleNames(phases) {
-        return this._tree ? this._tree.ruleNames(phases) : {};
+        return this._tree ? this._tree.selectedRules(phases) : {};
     },
 };
 
