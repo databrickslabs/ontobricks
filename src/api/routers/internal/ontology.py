@@ -2474,6 +2474,91 @@ async def ontology_assistant_chat(
 
 
 # ===========================================
+# Complex Rule Builder — conversational SPARQL assistant
+# ===========================================
+
+
+@router.post("/business-rules/complex-assistant/chat")
+async def complex_rule_assistant_chat(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Process a single turn of the Complex (SPARQL CONSTRUCT) rule builder.
+
+    Expects a JSON body::
+
+        {
+            "message": "Flag high-balance customers as VIP",
+            "history": [{"role": "user"|"assistant", "content": "..."}, ...],
+            "current_draft": {"name": "...", "description": "...", "query": "..."}
+        }
+
+    and responds with::
+
+        {
+            "success": true,
+            "reply": "...markdown...",
+            "draft": {"name", "description", "query"} | null,
+            "ready": true|false,
+            "usage": {...}
+        }
+    """
+    from agents.agent_complex_rule_builder import run_agent as run_rule_builder
+
+    data = await request.json()
+    user_message = (data.get("message") or "").strip()
+    history = data.get("history") or []
+    current_draft = data.get("current_draft") or None
+
+    if not user_message:
+        raise ValidationError("No message provided")
+
+    domain = get_domain(session_mgr)
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(domain, settings)
+
+    classes = list(domain.get_classes())
+    properties = list(domain.get_properties())
+    base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
+
+    logger.info(
+        "ComplexRuleBuilder: user_message=%s, classes=%d, properties=%d",
+        user_message[:80],
+        len(classes),
+        len(properties),
+    )
+
+    with map_route_errors("Complex rule builder request failed", logger):
+        agent_result = await asyncio.to_thread(
+            run_rule_builder,
+            host=host,
+            token=token,
+            endpoint_name=llm_endpoint,
+            endpoint_kind=llm_endpoint_kind,
+            classes=classes,
+            properties=properties,
+            base_uri=base_uri,
+            user_message=user_message,
+            current_draft=current_draft,
+            conversation_history=history,
+        )
+
+    if not agent_result.success:
+        raise InfrastructureError(
+            "Complex rule builder failed",
+            detail=agent_result.error or None,
+        )
+
+    return {
+        "success": True,
+        "reply": agent_result.reply,
+        "draft": agent_result.draft,
+        "ready": agent_result.ready,
+        "usage": agent_result.usage,
+    }
+
+
+# ===========================================
 # Ontology Assistant — ResponsesAgent API
 # ===========================================
 

@@ -1132,3 +1132,246 @@ Test result:
   1 failed. The failure is the existing test_no_function_grows_beyond_budget
   (agents/agent_dtwin_chat/engine.py::run_agent 198→200), a file this change
   does not touch.
+
+
+================================================================================
+Complex rule builder: conversational SPARQL assistant (new agent)
+================================================================================
+
+Context:
+The "Edit Complex Rule" window was a bare form (Name / Description / raw
+CONSTRUCT textarea), so authoring a Complex (SPARQL CONSTRUCT) rule required
+knowing both SPARQL and the exact ontology names. It is reshaped into a
+two-column window: a conversational, ontology-grounded assistant (new LLM
+agent) on the left that drives a live-updating CONSTRUCT draft on the right.
+The user can still hand-edit the code and Validate/Save as before. Design doc:
+docs/superpowers/specs/2026-11-09-complex-rule-builder-agent-design.md.
+
+Changes:
+1. New agent agent_complex_rule_builder (follows the in-process
+   agent_ontology_assistant pattern — ontology passed into run_agent, no
+   loopback):
+   - src/agents/agent_complex_rule_builder/tools.py — read tools
+     get_ontology_overview / describe_class (over ctx.ontology_classes /
+     ontology_properties) and the write tool update_draft(name, description,
+     query, ready) that stashes the draft on the context.
+   - src/agents/agent_complex_rule_builder/engine.py — @trace_agent run_agent
+     turn loop over engine_base helpers; AgentResult gains draft / ready; the
+     draft is surfaced only when it changed this turn. System prompt: ground
+     names via tools, one question at a time, update_draft on material change,
+     ready only when complete.
+   - src/agents/agent_complex_rule_builder/__init__.py — re-exports run_agent.
+2. Shared context:
+   - src/agents/tools/context.py — added rule_draft / rule_draft_ready fields.
+3. Route:
+   - src/api/routers/internal/ontology.py — POST
+     /ontology/business-rules/complex-assistant/chat: resolves domain + LLM,
+     runs the agent via asyncio.to_thread, returns {reply, draft, ready,
+     usage}. Empty message -> ValidationError; agent failure ->
+     InfrastructureError.
+4. Frontend (no inline JS/CSS):
+   - src/front/templates/partials/ontology/_ontology_business_rules.html —
+     #sparqlEditorModal reshaped to modal-xl two columns: left assistant
+     (craChatLog / craChatInput / cra-send / craThinking), right the existing
+     Name / Description / CONSTRUCT (ids preserved) + Validate / Save.
+   - src/front/static/ontology/js/ontology-business-rules.js — sparqlOpenEditor
+     boots the assistant (_craKickoff); new craSend / _craTurn /
+     _craApplyResponse / _craAppendBubble / _craSetThinking; Enter-to-send;
+     current_draft sent each turn; replies rendered via renderMarkdown; Save
+     pulses when ready.
+   - src/front/static/ontology/css/ontology-business-rules.css — two-column
+     layout, chat bubbles and cra-save-ready styles using --bs-* tokens.
+
+Tests:
+5. tests/units/agents/test_agent_complex_rule_builder.py — engine turn loop
+   (update_draft -> draft surfaced, question-only -> no draft, unchanged draft
+   not resurfaced, LLM failure) + the three tools.
+6. tests/units/api/test_complex_rule_assistant_chat.py — reply/draft/ready
+   passthrough, empty-message rejection, failure -> InfrastructureError.
+7. tests/units/front/test_business_rules_list_ui.py — two-column modal contract
+   + JS wiring.
+
+Deferred (follow-up debt, user decision): the CNS §3.5 eval artifacts
+(SPEC.md + baseline dataset + eval harness) for agent_complex_rule_builder,
+tracked alongside the outstanding agent_business_rules_generator eval delta.
+
+Modified files:
+- src/agents/agent_complex_rule_builder/__init__.py (new)
+- src/agents/agent_complex_rule_builder/engine.py (new)
+- src/agents/agent_complex_rule_builder/tools.py (new)
+- src/agents/tools/context.py
+- src/api/routers/internal/ontology.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/agents/test_agent_complex_rule_builder.py (new)
+- tests/units/api/test_complex_rule_assistant_chat.py (new)
+- tests/units/front/test_business_rules_list_ui.py
+- tests/units/architecture/baseline.json (grandfathered the new agent's
+  engine.py filename + run_agent loop, consistent with the sibling agents)
+
+Test result:
+- node --check on the edited JS: OK.
+- uv run --frozen pytest -q -m "not scenario" — 10181 passed, 325 skipped,
+  1 failed. The sole failure is the pre-existing
+  test_no_function_grows_beyond_budget (agent_dtwin_chat/engine.py::run_agent
+  198 -> 200), a file this change does not touch.
+
+
+================================================================================
+Complex rule assistant: adopt the Graph chat look & feel
+================================================================================
+
+Context:
+Follow-up to the two-column Complex rule builder: the chat column now reuses
+the exact same visual language as the Knowledge Graph → Graph chat instead of
+a bespoke bubble style, so the two assistants feel like one product.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_business_rules.html — the
+   assistant column now uses the shared .assistant-messages list and
+   .assistant-input-area / .assistant-input-wrapper markup (round send button,
+   Enter/Shift+Enter hint), matching query-chat.js.
+2. src/front/static/ontology/js/ontology-business-rules.js — _craAppendBubble
+   builds the same .assistant-msg / user-msg / bot-msg structure with an avatar
+   (person icon for the user, the OntoBricks mark SVG for the bot) and an
+   .assistant-msg-body rendered via renderMarkdown; errors use the bot
+   error-msg style; _craSetThinking appends/removes the shared
+   .assistant-thinking dots indicator (as the Graph chat does).
+3. src/front/static/ontology/css/ontology-business-rules.css — dropped the
+   bespoke .cra-bubble styles; kept only the modal-column framing (.cra-chat-log
+   top+sides border, .cra-input-area sides+bottom border, .cra-code,
+   .cra-save-ready). The .assistant-* family is already loaded on the ontology
+   page via ontology-assistant.css.
+4. tests/units/front/test_business_rules_list_ui.py — asserts the chat column
+   reuses the .assistant-* family and the JS renders the shared bubble/thinking
+   markup.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- node --check on the edited JS: OK.
+- uv run --frozen pytest -q tests/units/front/test_business_rules_list_ui.py —
+  8 passed. Full suite unchanged (only the pre-existing size-budget failure).
+
+
+================================================================================
+Complex rule assistant: full Graph-chat parity (wrappers + send button)
+================================================================================
+
+Context:
+The first restyle only reused the plain .assistant-* popup classes, so the
+Complex assistant still differed from the Graph chat (flat bubbles, a bespoke
+full-width send button, and the input bar nearly touching the modal bottom).
+This switches the chat column to the real Graph-chat look & feel defined in
+query-chat.css (.graph-chat-container / -messages / -input-area), giving
+gradient bubbles and the exact circular gradient send button.
+
+Changes:
+1. src/front/templates/ontology.html — load query-chat.css on the ontology
+   page (self-contained, .graph-chat-* scoped) so the modal can reuse it.
+2. src/front/templates/partials/ontology/_ontology_business_rules.html — the
+   assistant column is now wrapped in .graph-chat-container with
+   .graph-chat-messages + .graph-chat-input-area; the send button matches the
+   Graph chat (class="btn", <i class="bi bi-send-fill">).
+3. src/front/static/query/css/query-chat.css — generalised the send-button
+   selectors (#chatSendBtn) to also match #craSendBtn so the circular gradient
+   button, hover, active and disabled states are shared (DRY, additive).
+4. src/front/static/ontology/css/ontology-business-rules.css — dropped the
+   bespoke .cra-chat-log / .cra-input-area framing and the full-width button
+   overrides (now owned by .graph-chat-*); the chat column gets a bounded
+   30rem height so the inner container scrolls and no longer crowds the modal
+   bottom. Kept .cra-layout / .cra-col-chat / .cra-code / .cra-save-ready.
+
+Modified files:
+- src/front/templates/ontology.html
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/query/css/query-chat.css
+- src/front/static/ontology/css/ontology-business-rules.css
+
+Test result:
+- node --check on the JS: OK (unchanged).
+- uv run --frozen pytest -q tests/units/front/test_business_rules_list_ui.py —
+  8 passed. Full suite unchanged (only the pre-existing size-budget failure).
+
+
+================================================================================
+Complex rule assistant: see the edited draft + fullscreen window
+================================================================================
+
+Context:
+Two fixes on the Complex rule assistant. (1) When editing an existing rule the
+agent replied "I don't have the CONSTRUCT query, please paste it" even though
+the query was in the code pane — the current_draft was stored on the tool
+context but never shown to the model. (2) The editor is enlarged to the same
+fullscreen window style as the Simple rule graph editor.
+
+Changes:
+1. src/agents/agent_complex_rule_builder/engine.py — new _build_system_prompt()
+   inlines the current draft (name / description / CONSTRUCT query) into the
+   system prompt whenever a draft is present. Rebuilt every turn, so the agent
+   always sees the latest query and any hand-edits, and no longer asks the user
+   to paste it. Extracted into a helper to keep run_agent within its size
+   budget.
+2. src/front/templates/partials/ontology/_ontology_business_rules.html —
+   #sparqlEditorModal switched from modal-xl to modal-fullscreen with a compact
+   py-2 header/footer and a flex two-pane body (chat left, code right),
+   mirroring the Simple rule editor (#ifThenGraphEditorModal). The query
+   textarea now grows to fill the pane.
+3. src/front/static/ontology/css/ontology-business-rules.css — replaced the
+   fixed-height column rules with a fullscreen flex two-pane layout
+   (.cra-body / .cra-layout / .cra-col-chat / .cra-col-code / .cra-code-scroll
+   / .cra-code-field), a pane divider, and a <lg stacking media query.
+
+Tests:
+4. tests/units/agents/test_agent_complex_rule_builder.py — asserts the existing
+   draft (the CONSTRUCT query) is injected into the system prompt.
+5. tests/units/front/test_business_rules_list_ui.py — the Complex editor is now
+   asserted to be modal-fullscreen.
+
+Modified files:
+- src/agents/agent_complex_rule_builder/engine.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- node --check on the JS: OK.
+- uv run --frozen pytest -q -m "not scenario" — 10183 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+================================================================================
+Complex rule assistant: prompt to review Name/Description at the end
+================================================================================
+
+Context:
+When the rule is ready the assistant should invite the user to review and
+rename the rule Name and Description before saving, instead of only nudging
+Validate/Save.
+
+Changes:
+1. src/agents/agent_complex_rule_builder/engine.py — SYSTEM_PROMPT step 4 now
+   tells the agent to propose a Name + Description with ready=true and, as its
+   final message, always ask the user to review / rename them before Validate
+   and Save.
+2. tests/units/agents/test_agent_complex_rule_builder.py — asserts the prompt
+   asks to review the Name/Description at the end.
+
+Note: this is a prompt change under CNS §3.5 — it adds to the deferred eval
+debt already tracked for agent_complex_rule_builder.
+
+Modified files:
+- src/agents/agent_complex_rule_builder/engine.py
+- tests/units/agents/test_agent_complex_rule_builder.py
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10184 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).

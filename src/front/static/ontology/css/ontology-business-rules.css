@@ -57,3 +57,76 @@
     resize: vertical;
     min-height: 22rem;
 }
+
+/* Complex rule assistant — fullscreen two-pane editor (same window style as
+   the Simple rule graph editor). The chat pane reuses the Graph-chat look &
+   feel (.graph-chat-* classes in query-chat.css). */
+.cra-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.cra-layout {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+}
+
+.cra-col-chat,
+.cra-col-code {
+    flex: 1 1 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+}
+
+.cra-col-chat {
+    border-right: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+/* The chat container fills its pane and scrolls internally. */
+.cra-col-chat .graph-chat-container {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Right pane scrolls; the query field grows to fill the available height. */
+.cra-code-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.cra-code-field {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.cra-code {
+    flex: 1 1 auto;
+    min-height: 16rem;
+    resize: none;
+}
+
+/* Stack the two panes on narrow viewports. */
+@media (max-width: 991.98px) {
+    .cra-layout {
+        flex-direction: column;
+    }
+    .cra-col-chat {
+        border-right: none;
+        border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+        min-height: 20rem;
+    }
+}
+
+/* Save button pulses when the assistant marks the draft ready. */
+.cra-save-ready {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-success-rgb, 25, 135, 84), 0.5);
+}

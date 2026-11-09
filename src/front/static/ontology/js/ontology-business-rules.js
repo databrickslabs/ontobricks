@@ -53,7 +53,19 @@ window.BusinessRulesModule = {
             else if (act === 'suggest-accept') this.acceptSuggestions();
             else if (act === 'sparql-validate') this.sparqlValidate();
             else if (act === 'sparql-save') this.sparqlSave();
+            else if (act === 'cra-send') this.craSend();
         });
+
+        // Enter-to-send in the assistant input (Shift+Enter = newline).
+        const craInput = document.getElementById('craChatInput');
+        if (craInput) {
+            craInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.craSend();
+                }
+            });
+        }
     },
 
     // ── Ontology items (classes / properties for dropdowns) ──
@@ -357,6 +369,156 @@ window.BusinessRulesModule = {
         const svm = document.getElementById('sparqlValidationMsg');
         if (svm) svm.classList.add('d-none');
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
+        this._craKickoff(isNew);
+    },
+
+    // ── Complex rule assistant (conversational SPARQL builder) ──
+
+    _craHistory: [],
+    _craBusy: false,
+
+    _craCollectDraft() {
+        return {
+            name: (document.getElementById('sparqlName').value || '').trim(),
+            description: (document.getElementById('sparqlDescription').value || '').trim(),
+            query: document.getElementById('sparqlQuery').value || '',
+        };
+    },
+
+    _craKickoff(isNew) {
+        this._craHistory = [];
+        const log = document.getElementById('craChatLog');
+        if (log) log.innerHTML = '';
+        const input = document.getElementById('craChatInput');
+        if (input) input.value = '';
+        const kickoff = isNew
+            ? "Hi! I'll help you build a SPARQL CONSTRUCT rule. In one sentence, what should this rule infer?"
+            : "Let's refine this existing Complex rule. Summarise what the current query does and ask me what I'd like to change.";
+        this._craTurn(kickoff, { silentUser: true });
+    },
+
+    craSend() {
+        const input = document.getElementById('craChatInput');
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        this._craTurn(text, { silentUser: false });
+    },
+
+    async _craTurn(message, { silentUser }) {
+        if (this._craBusy) return;
+        this._craBusy = true;
+        if (!silentUser) this._craAppendBubble('user', message);
+        this._craSetThinking(true);
+        try {
+            const resp = await fetch('/ontology/business-rules/complex-assistant/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    message,
+                    history: this._craHistory,
+                    current_draft: this._craCollectDraft(),
+                }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                this._craAppendBubble('assistant', data.message || data.detail || 'The assistant is unavailable right now.', true);
+                return;
+            }
+            this._craHistory.push({ role: 'user', content: message });
+            this._craHistory.push({ role: 'assistant', content: data.reply || '' });
+            this._craApplyResponse(data);
+        } catch (e) {
+            console.error('[BusinessRules] complex assistant error:', e);
+            this._craAppendBubble('assistant', 'Error contacting the assistant: ' + (e.message || e), true);
+        } finally {
+            this._craSetThinking(false);
+            this._craBusy = false;
+        }
+    },
+
+    _craApplyResponse(data) {
+        if (data.reply) this._craAppendBubble('assistant', data.reply);
+        if (data.draft) {
+            if (typeof data.draft.name === 'string' && data.draft.name) {
+                document.getElementById('sparqlName').value = data.draft.name;
+            }
+            if (typeof data.draft.description === 'string') {
+                document.getElementById('sparqlDescription').value = data.draft.description;
+            }
+            if (typeof data.draft.query === 'string') {
+                document.getElementById('sparqlQuery').value = data.draft.query;
+            }
+        }
+        const saveBtn = document.getElementById('sparqlSaveBtn');
+        if (saveBtn) saveBtn.classList.toggle('cra-save-ready', !!data.ready);
+    },
+
+    // OntoBricks mark — same avatar glyph the Graph chat uses for bot bubbles.
+    _OB_ICON_SVG:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" width="16" height="16">' +
+        '<g stroke="#fff" stroke-width="1.5"><line x1="16" y1="5" x2="24" y2="9"/>' +
+        '<line x1="24" y1="9" x2="26" y2="16"/><line x1="26" y1="16" x2="24" y2="23"/>' +
+        '<line x1="24" y1="23" x2="16" y2="27"/><line x1="16" y1="27" x2="8" y2="23"/>' +
+        '<line x1="8" y1="23" x2="6" y2="16"/><line x1="6" y1="16" x2="8" y2="9"/>' +
+        '<line x1="8" y1="9" x2="16" y2="5"/></g>' +
+        '<circle cx="16" cy="5" r="2.5" fill="#FF3621"/><circle cx="24" cy="9" r="2.5" fill="#6366F1"/>' +
+        '<circle cx="26" cy="16" r="2.5" fill="#4ECDC4"/><circle cx="24" cy="23" r="2.5" fill="#F59E0B"/>' +
+        '<circle cx="16" cy="27" r="2.5" fill="#FF3621"/><circle cx="8" cy="23" r="2.5" fill="#6366F1"/>' +
+        '<circle cx="6" cy="16" r="2.5" fill="#4ECDC4"/><circle cx="8" cy="9" r="2.5" fill="#F59E0B"/>' +
+        '<g transform="translate(16,16)"><path d="M0-5 L4-2.5 L0 0 L-4-2.5Z" fill="#FF3621"/>' +
+        '<path d="M0-2 L4 .5 L0 3 L-4 .5Z" fill="#FF3621" opacity=".85"/>' +
+        '<path d="M0 1 L4 3.5 L0 6 L-4 3.5Z" fill="#FF3621" opacity=".7"/></g></svg>',
+
+    _craAppendBubble(role, text, isError) {
+        const log = document.getElementById('craChatLog');
+        if (!log) return;
+        const isUser = role === 'user';
+        const div = document.createElement('div');
+        div.className = `assistant-msg ${isUser ? 'user-msg' : 'bot-msg'}${isError ? ' error-msg' : ''}`;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'assistant-msg-avatar';
+        if (isError) {
+            avatar.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>';
+            avatar.style.background = 'var(--bs-danger, #dc3545)';
+        } else {
+            avatar.innerHTML = isUser ? '<i class="bi bi-person-fill"></i>' : this._OB_ICON_SVG;
+        }
+
+        const body = document.createElement('div');
+        body.className = 'assistant-msg-body';
+        if (!isUser && typeof renderMarkdown === 'function') {
+            body.innerHTML = renderMarkdown(text || '');
+        } else {
+            body.textContent = text || '';
+        }
+
+        div.appendChild(avatar);
+        div.appendChild(body);
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+    },
+
+    _craSetThinking(on) {
+        const log = document.getElementById('craChatLog');
+        const existing = document.getElementById('craThinking');
+        if (!on) {
+            if (existing) existing.remove();
+        } else if (log && !existing) {
+            const div = document.createElement('div');
+            div.className = 'assistant-thinking';
+            div.id = 'craThinking';
+            div.innerHTML =
+                '<div class="assistant-thinking-dots"><span></span><span></span><span></span></div>' +
+                '<span>Thinking&hellip;</span>';
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+        }
+        const btn = document.getElementById('craSendBtn');
+        if (btn) btn.disabled = on;
     },
 
     async sparqlValidate() {

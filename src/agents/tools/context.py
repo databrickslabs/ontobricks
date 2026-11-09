@@ -50,6 +50,11 @@ class ToolContext:
     ontology_base_uri: str = ""
     ontology_dirty: bool = False
 
+    # Complex rule builder fields (``agent_complex_rule_builder``) – the live
+    # CONSTRUCT draft written through ``update_draft`` and surfaced to the UI.
+    rule_draft: Optional[dict] = None  # {name, description, query}
+    rule_draft_ready: bool = False
+
     # Design fixer (Sanity Checks Auto-fix) – terminal submit_fix_plan output
     submitted_fix_plan: Optional[dict] = None
 

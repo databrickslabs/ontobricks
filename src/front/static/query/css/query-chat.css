@@ -370,8 +370,11 @@
     border: none !important;
 }
 
-/* Send button: circular gradient, vertically centered */
-.graph-chat-input-area #chatSendBtn {
+/* Send button: circular gradient, vertically centered.
+   #craSendBtn is the Complex rule assistant's button (ontology page), which
+   reuses this exact styling. */
+.graph-chat-input-area #chatSendBtn,
+.graph-chat-input-area #craSendBtn {
     width: 38px;
     height: 38px;
     min-width: 38px;
@@ -389,15 +392,18 @@
     font-size: 0.95rem;
     align-self: center;
 }
-.graph-chat-input-area #chatSendBtn:hover:not(:disabled) {
+.graph-chat-input-area #chatSendBtn:hover:not(:disabled),
+.graph-chat-input-area #craSendBtn:hover:not(:disabled) {
     transform: translateY(-1px) scale(1.04);
     box-shadow: 0 6px 16px rgba(var(--db-primary-rgb), 0.40);
     color: #fff;
 }
-.graph-chat-input-area #chatSendBtn:active:not(:disabled) {
+.graph-chat-input-area #chatSendBtn:active:not(:disabled),
+.graph-chat-input-area #craSendBtn:active:not(:disabled) {
     transform: scale(0.96);
 }
-.graph-chat-input-area #chatSendBtn:disabled {
+.graph-chat-input-area #chatSendBtn:disabled,
+.graph-chat-input-area #craSendBtn:disabled {
     background: #cbd5e1;
     box-shadow: none;
     opacity: 0.85;

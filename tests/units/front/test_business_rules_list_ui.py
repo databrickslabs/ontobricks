@@ -78,3 +78,43 @@ def test_business_rules_module_loads_after_if_then():
     assert ONTOLOGY_HTML.index("ontology/js/ontology-if-then.js") < ONTOLOGY_HTML.index(
         "ontology/js/ontology-business-rules.js"
     )
+
+
+def _complex_modal() -> str:
+    start = HTML.index('id="sparqlEditorModal"')
+    return HTML[start:start + 5200]
+
+
+def test_complex_editor_is_two_column_assistant_modal():
+    """The Complex editor is a fullscreen two-pane (chat + code) window,
+    matching the Simple rule editor's window style."""
+    modal = _complex_modal()
+    assert "modal-fullscreen" in modal
+    # Left column — assistant chat
+    assert 'id="craChatLog"' in modal
+    assert 'id="craChatInput"' in modal
+    assert 'data-br-action="cra-send"' in modal
+    # Right column — code fields kept by id so Validate/Save still work
+    assert 'id="sparqlName"' in modal
+    assert 'id="sparqlQuery"' in modal
+    assert 'data-br-action="sparql-validate"' in modal
+    assert 'data-br-action="sparql-save"' in modal
+
+
+def test_business_rules_js_wires_complex_assistant():
+    assert "cra-send" in BR_JS
+    assert "craSend" in BR_JS
+    assert "/ontology/business-rules/complex-assistant/chat" in BR_JS
+    # The editor boots the assistant when opened.
+    assert "_craKickoff" in BR_JS
+
+
+def test_complex_assistant_reuses_graph_chat_styling():
+    """Chat column shares the .assistant-* family with the Graph chat."""
+    modal = _complex_modal()
+    assert "assistant-messages" in modal
+    assert "assistant-input-wrapper" in modal
+    # JS renders the same bubble / thinking markup as query-chat.js.
+    assert "assistant-msg" in BR_JS
+    assert "assistant-msg-avatar" in BR_JS
+    assert "assistant-thinking-dots" in BR_JS
