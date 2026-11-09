@@ -123,8 +123,8 @@ env:
     value: "${APP_MLFLOW_TRACKING_URI}"
   # ── Graph Chat (Digital Twin assistant) ───────────────────────
   # Output-token budget per LLM call, including the model's reasoning.
-  # Mirrors the default in src/shared/config/settings.py; raise it when
-  # answers come back as "I couldn't display that answer".
+  # Mirrors the default in src/shared/config/settings.py, which is also the
+  # maximum (Foundation Model output ceiling); lower it to cut latency.
   - name: ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS
     value: "8192"
   # ── Knowledge-graph analytics ─────────────────────────────────

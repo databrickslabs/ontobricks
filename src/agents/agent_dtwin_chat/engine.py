@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 from back.core.logging import get_logger
+from shared.config.constants import DTWIN_CHAT_MAX_TOKENS
 from agents.agent_dtwin_chat.tools import TOOL_DEFINITIONS, TOOL_HANDLERS
 from agents.tools.context import ToolContext
 from agents.engine_base import (
@@ -33,8 +34,7 @@ logger = get_logger(__name__)
 
 MAX_ITERATIONS = 12
 LLM_TIMEOUT = 120
-# Matches ``Settings.dtwin_chat_max_tokens``; the routes pass the configured value.
-DEFAULT_MAX_TOKENS = 8192
+DEFAULT_MAX_TOKENS = DTWIN_CHAT_MAX_TOKENS
 
 _TRACE_NAME = "dtwin_chat"
 _UNREADABLE_REPLY = "I couldn't display that answer. Please try again."

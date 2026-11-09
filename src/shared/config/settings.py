@@ -8,6 +8,8 @@ from pydantic import AliasChoices, ConfigDict, Field
 from functools import lru_cache
 import os
 
+from shared.config.constants import DTWIN_CHAT_MAX_TOKENS
+
 
 def _get_default_session_dir() -> str:
     """Get the default session directory based on environment."""
@@ -98,7 +100,9 @@ class Settings(BaseSettings):
     # assistant). Reasoning models spend part of it before writing the answer;
     # when it runs out first, the user gets the "couldn't display" fallback.
     dtwin_chat_max_tokens: int = Field(
-        default=8192,
+        default=DTWIN_CHAT_MAX_TOKENS,
+        ge=1,
+        le=DTWIN_CHAT_MAX_TOKENS,
         validation_alias=AliasChoices(
             "ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS",
             "dtwin_chat_max_tokens",
