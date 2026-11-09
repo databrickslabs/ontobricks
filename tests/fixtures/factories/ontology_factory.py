@@ -52,7 +52,7 @@ class OntologyFactory:
             "classes": classes,
             "properties": properties,
             "constraints": self._constraints(class_names) if self.with_constraints else [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "axioms": [],
             "expressions": [],
         }

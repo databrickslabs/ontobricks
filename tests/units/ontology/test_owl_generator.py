@@ -11,7 +11,7 @@ def _make_generator(
     classes=None,
     properties=None,
     constraints=None,
-    swrl_rules=None,
+    if_then_rules=None,
     axioms=None,
     expressions=None,
 ):
@@ -21,7 +21,7 @@ def _make_generator(
         classes=classes or [],
         properties=properties or [],
         constraints=constraints,
-        swrl_rules=swrl_rules,
+        if_then_rules=if_then_rules,
         axioms=axioms,
         expressions=expressions,
     )
@@ -563,8 +563,8 @@ class TestConstraintGeneration:
         assert any(client_uri in list(graph.items(items)) for items in union_lists)
 
 
-class TestSwrlGeneration:
-    def test_swrl_rule(self):
+class TestIfThenGeneration:
+    def test_if_then_rule(self):
         rules = [
             {
                 "name": "CheckAge",
@@ -573,10 +573,10 @@ class TestSwrlGeneration:
                 "consequent": "Valid(?c)",
             }
         ]
-        gen = _make_generator(swrl_rules=rules)
+        gen = _make_generator(if_then_rules=rules)
         owl = gen.generate()
         assert "CheckAge" in owl
-        assert "SWRLRule" in owl
+        assert "IfThenRule" in owl
 
 
 class TestAxiomGeneration:
@@ -772,7 +772,7 @@ class TestRoundtrip:
         functional = [c for c in parsed_constraints if c["type"] == "functional"]
         assert len(functional) >= 1
 
-    def test_roundtrip_swrl(self):
+    def test_roundtrip_if_then(self):
         rules = [
             {
                 "name": "TestRule",
@@ -781,11 +781,11 @@ class TestRoundtrip:
                 "consequent": "B(?x)",
             }
         ]
-        gen = _make_generator(swrl_rules=rules)
+        gen = _make_generator(if_then_rules=rules)
         owl = gen.generate()
 
         parser = OntologyParser(owl)
-        parsed_rules = parser.get_swrl_rules()
+        parsed_rules = parser.get_if_then_rules()
         assert len(parsed_rules) == 1
         assert parsed_rules[0]["name"] == "TestRule"
 

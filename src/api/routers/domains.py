@@ -525,7 +525,7 @@ async def get_domain_classes(
     # attachment is never handed to an MCP client.
     policy = NodeContextService.resolve_context_policy(domain)
     disabled = NodeContextService.context_feature_disabled
-    swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
+    if_then_rules = NodeBusinessRuleService.domain_if_then_rules(domain)
 
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
@@ -551,7 +551,7 @@ async def get_domain_classes(
         business_rules = (
             []
             if disabled(policy, BUSINESS_RULES_FEATURE)
-            else NodeBusinessRuleService.class_entries(cls, swrl_rules)
+            else NodeBusinessRuleService.class_entries(cls, if_then_rules)
         )
         virtual_attributes = (
             []
@@ -638,7 +638,7 @@ async def get_domain_ontology(
             owl_content = Ontology.generate_owl(
                 domain.ontology,
                 domain.constraints,
-                domain.swrl_rules,
+                domain.if_then_rules,
                 domain.axioms,
                 domain.expressions,
                 domain.groups,

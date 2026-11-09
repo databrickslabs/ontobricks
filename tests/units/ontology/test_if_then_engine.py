@@ -13,7 +13,7 @@ from back.core.reasoning.shacl_rules.RuleExpressionParser import RuleExpressionP
 # -- Atom parser tests ----------------------------------------------------
 
 
-class TestParseSwrlAtoms:
+class TestParseIfThenAtoms:
     def test_class_atom(self):
         atoms = RuleExpressionParser.parse_atoms("Customer(?x)")
         assert len(atoms) == 1
@@ -48,7 +48,7 @@ class TestParseSwrlAtoms:
 # -- URI resolution tests -------------------------------------------------
 
 
-class TestResolveSwrlUri:
+class TestResolveIfThenUri:
     def test_full_uri_passthrough(self):
         assert RuleExpressionParser.resolve_uri("http://ex.org/Foo", "") == "http://ex.org/Foo"
 
@@ -125,7 +125,7 @@ class TestShaclFlatSqlBackend:
             "antecedent": (
                 'Customer(?x) \u2227 Contract(?z) \u2227 Meter(?w) '
                 '\u2227 hasContract(?x, ?z) \u2227 hasMeter(?z, ?w) '
-                '\u2227 status(?z, ?status) \u2227 swrlb:contains(?status, "active")'
+                '\u2227 status(?z, ?status) \u2227 builtin:contains(?status, "active")'
             ),
             "consequent": "owns(?x, ?w)",
             "base_uri": "http://ex.org",
@@ -145,7 +145,7 @@ class TestShaclFlatSqlBackend:
         params = {
             "antecedent": (
                 "Customer(?x) \u2227 hasScore(?x, ?s) "
-                "\u2227 swrlb:greaterThan(?s, 500)"
+                "\u2227 builtin:greaterThan(?s, 500)"
             ),
             "consequent": "HighValue(?x)",
             "base_uri": "http://ex.org",
@@ -241,7 +241,7 @@ class TestShaclRuleEngine:
         ]
 
         result = engine.execute_rules(rules, store, "triples")
-        assert result.stats["phase"] == "swrl"
+        assert result.stats["phase"] == "if_then"
         assert result.stats["rules_count"] == 1
         assert len(result.inferred_triples) >= 1
 
@@ -264,7 +264,7 @@ class TestReasoningResultDeduplication:
         result = ReasoningResult(
             inferred_triples=[
                 InferredTriple("s1", "p1", "o1", "tbox"),
-                InferredTriple("s1", "p1", "o1", "swrl:Rule1"),
+                InferredTriple("s1", "p1", "o1", "if_then:Rule1"),
                 InferredTriple("s1", "p1", "o1", "graph:transitive"),
                 InferredTriple("s2", "p2", "o2", "tbox"),
             ]
@@ -279,7 +279,7 @@ class TestReasoningResultDeduplication:
         result = ReasoningResult(
             inferred_triples=[
                 InferredTriple("s1", "p1", "o1", "tbox"),
-                InferredTriple("s2", "p2", "o2", "swrl:R1"),
+                InferredTriple("s2", "p2", "o2", "if_then:R1"),
             ]
         )
         removed = result.deduplicate()
@@ -299,8 +299,8 @@ class TestReasoningResultDeduplication:
         )
         r2 = ReasoningResult(
             inferred_triples=[
-                InferredTriple("s1", "p1", "o1", "swrl:R1"),
-                InferredTriple("s3", "p3", "o3", "swrl:R1"),
+                InferredTriple("s1", "p1", "o1", "if_then:R1"),
+                InferredTriple("s3", "p3", "o3", "if_then:R1"),
             ]
         )
         r1.merge(r2)

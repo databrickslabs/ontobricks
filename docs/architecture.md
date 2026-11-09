@@ -52,7 +52,7 @@ Under the hood, SPARQL translates ontology mappings into Spark SQL — users nev
 | **MCP Server** | Separate Databricks App (`mcp-ontobricks`) exposing knowledge-graph tools to LLM clients (Cursor, Claude Desktop, Playground) |
 | **FastAPI Application** | Routes → Domain Objects → Core layered architecture with GlobalConfigService, PermissionService, and BuildScheduler |
 | **LLM Agents** | MLflow-traced agentic loops for ontology generation, auto-mapping, icon mapping, and conversational assistance |
-| **Reasoning Engine** | OWL 2 RL deductive closure, SWRL rules (compiled to SQL), graph reasoning, and constraint validation |
+| **Reasoning Engine** | OWL 2 RL deductive closure, IF-THEN rules (compiled to SQL), graph reasoning, and constraint validation |
 | **Triple Store Backends** | Delta-backed view in Unity Catalog plus a per-domain pluggable Graph DB engine (Lakebase Postgres, Unity Catalog Delta, or Neo4j) via the `GraphDBFactory` pattern, with BFS, shortest path, and transitive closure built in |
 | **Databricks Platform** | Unity Catalog (metadata & governance), SQL Warehouse (query execution), UC Volumes (shared storage) |
 | **GitHub mirror** *(optional)* | One repository per instance; coalesced commits of registry JSON plus generated OWL/R2RML Turtle. Lakebase stays the source of truth. |
@@ -72,7 +72,7 @@ The stack shows how each layer builds upon the previous:
 | **Query** | SPARQL | Semantic query language (used internally for SQL generation) |
 | **Validation** | SHACL | Shapes Constraint Language for data quality validation |
 | **Mapping** | R2RML | Maps tables to RDF triples |
-| **Rules** | SWRL | Horn-clause rules for inference and violation detection |
+| **Rules** | IF-THEN | Horn-clause rules for inference and violation detection |
 | **Ontology** | OWL/RDFS | Defines classes and properties |
 | **Data** | RDF | Triple data model (S, P, O) |
 | **Storage** | SQL | Delta view (Spark SQL) + Lakebase Postgres flat triple table |
@@ -467,13 +467,13 @@ src/
 │   │   │   ├── lakebase/               # FlatStore, Base, SyncedTableManager
 │   │   │   └── interfaces/             # backend contract (hats + capability ABCs)
 │   │   │
-│   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SHACL-AF rules + SPARQL rules + Decision tables)
+│   │   ├── reasoning/                  # Reasoning engine (OWL 2 RL + SHACL-AF rules + SPARQL rules)
 │   │   │   ├── ReasoningService.py     # Multi-phase orchestrator
 │   │   │   ├── OWLRLReasoner.py        # OWL 2 RL deductive closure via owlrl
-│   │   │   ├── shacl_rules/            # ShaclRuleEngine, SwrlToShaclTranspiler, ShaclRule, ShaclRuleSqlTranslator,
+│   │   │   ├── shacl_rules/            # ShaclRuleEngine, IfThenToShaclTranspiler, ShaclRule, ShaclRuleSqlTranslator,
 │   │   │   │                           # ShaclFlatSqlBackend, ShaclFlatCypherBackend, RuleExpressionParser,
 │   │   │   │                           # RuleBuiltinRegistry, RuleBuiltin, RuleAtomPartition, RuleTextCodec, rule_uri_map
-│   │   │   ├── rules/                  # SPARQLRuleEngine, AggregateRuleEngine, DecisionTableEngine
+│   │   │   ├── rules/                  # SPARQLRuleEngine + SparqlConstructCompiler (Complex rules)
 │   │   │   └── results/                # InferredTriple, RuleViolation, ReasoningResult
 │   │   │
 │   │   ├── industry/                   # Industry-standard ontology importers
@@ -806,7 +806,7 @@ The session middleware maintains state using a **unified domain session** patter
     "current_version": "1.0",
     "ontology": { 
         "name", "base_uri", "classes", "properties",
-        "constraints", "swrl_rules", "axioms" 
+        "constraints", "if_then_rules", "axioms" 
     },
     "assignment": { 
         "entities", "relationships", 
@@ -886,7 +886,7 @@ relational tables:
 | `graph_analytics` | Cache of the LAST knowledge-graph metrics result (centrality/structure) keyed by `(domain_id, version)`; one row, replaced on every successful async recompute (UPSERT). Backs the KG Analytics page and the Domain Validation cockpit |
 | `graph_analytics_runs` | Append-only history of every analytics run launched (success or failure) keyed by `(domain_id, version)`; lightweight per-run metadata (node/edge counts, components, avg degree, density, duration, scope, status). Capped per tuple. Backs the KG Analytics "History" tab |
 | `domain_review_events` | Append-only review/validation audit log (submit / sign-off / publish / reopen / comment) keyed by `(domain_id, version)` |
-| `domain_change_events` | Append-only ontology/mapping change audit ("who changed what, and when") keyed by `(domain_id, version)`. Fine-grained edits (class/property/mapping add/update/remove, SHACL/SWRL/groups/axioms/expressions/business rules, imports, resets) are buffered in the working session as they happen and flushed here in one batch on save-to-registry; `source` tags human vs AI-assistant edits; `occurred_at` is the real edit time, `created_at` the flush time |
+| `domain_change_events` | Append-only ontology/mapping change audit ("who changed what, and when") keyed by `(domain_id, version)`. Fine-grained edits (class/property/mapping add/update/remove, SHACL/IF-THEN/groups/axioms/expressions/business rules, imports, resets) are buffered in the working session as they happen and flushed here in one batch on save-to-registry; `source` tags human vs AI-assistant edits; `occurred_at` is the real edit time, `created_at` the flush time |
 | `domain_comments` | Domain-wide threaded discussion keyed by `(domain_id, version)`; `parent_id` links replies, `resolved` closes a thread |
 | `domain_tasks` | Personalised work items assigned to a teammate (usually born from a comment); `status` walks `open → in_progress → done` (or `cancelled`), surfaced in the assignee's "My Tasks" worklist |
 
@@ -1194,7 +1194,7 @@ OntoBricks includes a **multi-phase reasoning engine** (`src/back/core/reasoning
          ▼                        ▼                        ▼
    ┌───────────┐           ┌───────────┐           ┌───────────┐
    │  Phase 1  │           │  Phase 2  │           │  Phase 3  │
-   │  T-Box    │           │   SWRL    │           │   Graph   │
+   │  T-Box    │           │   IF-THEN    │           │   Graph   │
    │ (OWL 2 RL)│           │  Rules    │           │ Reasoning │
    └─────┬─────┘           └─────┬─────┘           └─────┬─────┘
          │                       │                       │
@@ -1245,7 +1245,7 @@ The `OWLRLReasoner` class uses the [`owlrl`](https://owl-rl.readthedocs.io/) Pyt
 
 ### Phase 2: Business Rule Evaluation (SHACL-AF)
 
-Business rules are **authored** in SWRL-style Horn-clause syntax in the UI, then **transpiled** to canonical [W3C SHACL Advanced Features](https://www.w3.org/TR/shacl-af/) rules (`sh:TripleRule` / `sh:SPARQLRule`) and executed against the active triple store backend via a flat-triple SQL/Cypher backend. The engine lives in `src/back/core/reasoning/shacl_rules/`.
+Business rules are **authored** in IF-THEN-style Horn-clause syntax in the UI, then **transpiled** to canonical [W3C SHACL Advanced Features](https://www.w3.org/TR/shacl-af/) rules (`sh:TripleRule` / `sh:SPARQLRule`) and executed against the active triple store backend via a flat-triple SQL/Cypher backend. The engine lives in `src/back/core/reasoning/shacl_rules/`.
 
 **Rule format (authoring):**
 ```
@@ -1258,7 +1258,7 @@ Where atoms are class assertions (`Person(?x)`) or property assertions (`worksIn
 | Component | File | Role |
 |-----------|------|------|
 | `ShaclRuleEngine` | `ShaclRuleEngine.py` | Orchestrator — transpiles + executes rules, collects results |
-| `SwrlToShaclTranspiler` | `SwrlToShaclTranspiler.py` | Transpiles authored IF/THEN rules into canonical SHACL-AF rules (`ShaclRule`) |
+| `IfThenToShaclTranspiler` | `IfThenToShaclTranspiler.py` | Transpiles authored IF/THEN rules into canonical SHACL-AF rules (`ShaclRule`) |
 | `ShaclRuleSqlTranslator` | `ShaclRuleSqlTranslator.py` | Builds SQL for a `ShaclRule` by delegating to the flat-triple backend |
 | `ShaclFlatSqlBackend` | `ShaclFlatSqlBackend.py` | Compiles rule atoms into SQL with multi-join + `NOT EXISTS` for violation detection |
 | `ShaclFlatCypherBackend` | `ShaclFlatCypherBackend.py` | Cypher backend for Neo4j (scaffolded) |
@@ -1313,7 +1313,7 @@ All reasoning phases produce standardized output via three dataclasses (`src/bac
 
 | Model | Purpose |
 |-------|---------|
-| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"swrl:RuleName"`, `"graph:transitive"`) |
+| `InferredTriple` | A new triple with `subject`, `predicate`, `object`, `provenance` (e.g., `"owlrl"`, `"if_then:RuleName"`, `"graph:transitive"`) |
 | `RuleViolation` | A constraint failure with `rule_name`, `subject`, `message`, `check_type` |
 | `ReasoningResult` | Aggregated output: `inferred_triples[]`, `violations[]`, `stats{}` — mergeable across phases |
 
@@ -1357,9 +1357,9 @@ domains redirect to Domain, other backends show a disabled page.
 3. **Patch** applies the hypothetical facts in order: `add`, `remove`, or `set`
    (delete every `(s, p, *)` then assert the new value).
 4. **Reason** with `Reasoning`, a `ReasoningService` subclass
-   whose `_get_graph_name()` returns the sandbox table, so every phase (SWRL,
-   graph, decision tables, SPARQL, aggregate, optional T-Box) reads the
-   sandbox. Inferred triples are materialised into the sandbox only.
+   whose `_get_graph_name()` returns the sandbox table, so every phase (IF-THEN,
+   graph, SPARQL, optional T-Box) reads the sandbox. Inferred triples are
+   materialised into the sandbox only.
 5. **Diff** (`Diff`) compares the seeded slice (S0) with the final
    sandbox (S2): added triples are tagged `patch` or `inferred` (with rule
    provenance), removed triples come from patches. Exact counts plus the first
@@ -1570,7 +1570,7 @@ Shapes are organized into six data quality categories:
 | OWL | 2 | Ontology language |
 | R2RML | W3C Rec | Mapping language |
 | SPARQL | 1.1 | Query language |
-| SWRL | W3C Sub | Rule language |
+| IF-THEN | W3C Sub | Rule language |
 | SHACL | W3C Rec | Data quality validation |
 | Turtle | 1.1 | RDF serialization |
 
@@ -1966,7 +1966,7 @@ See [API Documentation](api.md) for complete endpoint reference.
 - **RDF 1.1 Primer**: https://www.w3.org/TR/rdf11-primer/
 - **OWL 2 Web Ontology Language**: https://www.w3.org/TR/owl2-overview/
 - **OWL 2 Profiles (RL, EL, QL)**: https://www.w3.org/TR/owl2-profiles/
-- **SWRL**: https://www.w3.org/submissions/SWRL/
+- **IF-THEN**: https://www.w3.org/submissions/IF-THEN/
 - **SHACL**: https://www.w3.org/TR/shacl/
 - **R2RML: RDB to RDF Mapping Language**: https://www.w3.org/TR/r2rml/
 - **SPARQL 1.1 Query Language**: https://www.w3.org/TR/sparql11-query/
@@ -2958,7 +2958,7 @@ constraints, and rule definitions:
 | **R2RML** | Maps relational tables → RDF; consumed by `SparqlTranslator` to lift SPARQL to Spark SQL | `back/core/w3c/r2rml/` |
 | **SHACL** | Constraint validation over RDF (data quality) | `back/core/w3c/shacl/SHACLService.py` |
 | **OWL / RDFS** | Schema definition + entailment (`OWLRLReasoner` materializes derived triples) | `back/core/w3c/owl/`, `back/core/reasoning/OWLRLReasoner.py` |
-| **SWRL** | Authoring syntax for business rules; transpiled to SHACL-AF and compiled to SQL via `ShaclFlatSqlBackend` (Spark SQL on Delta, Postgres SQL on Lakebase). The `query_dialect` flag on `GraphBackend` reserves a slot for a future Cypher backend. | `back/core/reasoning/shacl_rules/` |
+| **IF-THEN** | Authoring syntax for business rules; transpiled to SHACL-AF and compiled to SQL via `ShaclFlatSqlBackend` (Spark SQL on Delta, Postgres SQL on Lakebase). The `query_dialect` flag on `GraphBackend` reserves a slot for a future Cypher backend. | `back/core/reasoning/shacl_rules/` |
 
 ---
 
@@ -3002,7 +3002,7 @@ swapped.
         │                                  │            │                │
        REST                              SPARQL      GraphQL          Cypher
    (/api/v1/* or /dtwin/*)            (free-form    (typed,       (graph traversal,
-                                       triples,     nested,        SWRL rules)
+                                       triples,     nested,        IF-THEN rules)
                                        aggregates,  schema-driven)       │
                                        analytics)                        │
                                                                   Internal only
@@ -3042,7 +3042,7 @@ and the engine that ultimately runs (column **Engine**).
 | AI Assistant | Studio floating chat, `agent_ontology_assistant` | `POST /ontology/assistant/chat`, `POST /ontology/assistant/invoke` | REST → LLM | Saved domain LLM (`llm_endpoint` + `llm_endpoint_kind`): AI Gateway chat completions or Model Serving invocations |
 | **Data Quality** rules editor | `ontology-dataquality.js` | `/ontology/dataquality/...` | REST | SHACL (`SHACLService`) on the in-memory ontology |
 | **Sanity Checks** | `ontology-design-checks.js` | `GET /ontology/design-checks` | REST | `DesignChecks` on the in-memory ontology (advisory) |
-| **Business Rules (SWRL)** editor | `ontology-business-rules.js` | `/ontology/swrl/...` | REST | `RuleExpressionParser`, validated against ontology |
+| **Business Rules (IF-THEN)** editor | `ontology-business-rules.js` | `/ontology/if-then/...` | REST | `RuleExpressionParser`, validated against ontology |
 | Expressions & Axioms | `ontology-axioms.js` | `/ontology/axioms/...` | REST | OWL axiom storage |
 
 #### 4.3 Mapping (R2RML)
@@ -3072,7 +3072,7 @@ storage.
 | **Graph Chat** | `query-chat.js`, agent `agent_dtwin_chat` | `POST /dtwin/assistant/chat`, `GET/DELETE /dtwin/assistant/history` | REST → LLM tool-calling | LLM calls REST + GraphQL + SPARQL tools (see §6) |
 | **Build** (materialize triple store) | `query-sync.js` | `POST /dtwin/sync/start`, `POST /dtwin/sync/load` | REST | `_BuildPipeline` runs the R2RML SQL on the Warehouse (Delta `CREATE OR REPLACE VIEW`) and streams the rows into the active Graph DB engine via `bulk_insert_iter` (`COPY FROM STDIN` on Lakebase) |
 | **Data Quality** (SHACL execution) | `query-dataquality.js` | `POST /dtwin/dataquality/start`, `POST /dtwin/dataquality/execute` | REST | `SHACLService` translates shapes to **SQL** SELECTs that find violations |
-| **Inference (Reasoning)** | `query-reasoning.js`, `query-purge-inferences.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET/DELETE /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** SWRL rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine`; GET counts the generated companion shared by reasoning and cohorts, while DELETE truncates only that companion. On Databricks Apps, companion DDL/DML (CREATE, INSERT, TRUNCATE, OPTIMIZE, graph-index rebuild) uses INLINE Statement Execution — the same path as graph reads — because Apps cannot open a Thrift SQL session. |
+| **Inference (Reasoning)** | `query-reasoning.js`, `query-purge-inferences.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET/DELETE /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** IF-THEN rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine`; GET counts the generated companion shared by reasoning and cohorts, while DELETE truncates only that companion. On Databricks Apps, companion DDL/DML (CREATE, INSERT, TRUNCATE, OPTIMIZE, graph-index rebuild) uses INLINE Statement Execution — the same path as graph reads — because Apps cannot open a Thrift SQL session. |
 | **Cockpit → Knowledge Graph** | `domain-validation.js` | `GET /validate/detailed`, `GET /dtwin/reasoning/inferred` | REST | Displays mapped graph health plus the live combined materialized reasoning-and-cohort count; unsupported source-indistinguishable backends return the count as unavailable |
 
 `GET /dtwin/reasoning/inferred` is a lightweight status call: it returns
@@ -3118,7 +3118,7 @@ traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 | `get_entity_context` | `GET /api/v1/digitaltwin/nodes/context` | REST | Class resolution + optional **Spark SQL** dataset read and bridge traversal |
 | `compute_virtual_attributes` | `GET /api/v1/digitaltwin/nodes/virtual-attributes` | REST | **Unity Catalog function** call for declared virtual attributes |
 | `invoke_entity_action` | `POST /api/v1/digitaltwin/nodes/action` | REST | **Unity Catalog function** via SQL warehouse, or Databricks Job `run_now` (`job:<id>`) tracked in TaskManager |
-| `run_entity_business_rule` | `POST /api/v1/digitaltwin/nodes/business-rule` | REST | SWRL rule → entity-scoped **Spark SQL** inference + insert into the graph (Builder role required) |
+| `run_entity_business_rule` | `POST /api/v1/digitaltwin/nodes/business-rule` | REST | IF-THEN rule → entity-scoped **Spark SQL** inference + insert into the graph (Builder role required) |
 | `check_entity_shacl_facets` | `GET /api/v1/digitaltwin/nodes/shacl` | REST | Applicable SHACL shapes (class + ancestors + global) → one entity-scoped `UNION ALL` **Spark SQL** batch, per-shape fallback on error. Explorer UI uses `POST /dtwin/nodes/shacl/start` + task poll for a live activity log |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
 | `get_graphql_schema` | `GET /graphql/{domain}/schema` | **GraphQL** | `GraphQLSchemaBuilder` (no DB hit; SDL only) |
@@ -3234,9 +3234,7 @@ based on the active triple-store backend's `query_dialect`.
 |---|---|---|---|
 | `OWLRLReasoner` | OWL 2 RL fragment + facts | RDF graph operations (rdflib) | Python in-memory; results materialized to triple store via Spark SQL or GraphDB bulk insert |
 | `ShaclRuleEngine` + `ShaclFlatSqlBackend` | Business rules (SHACL-AF) | **SQL** | Databricks SQL Warehouse on the Delta view, and the Lakebase Postgres Graph DB engine. Future Cypher / Gremlin engines can plug in their own flat-triple backend. |
-| `SPARQLRuleEngine` | SPARQL `CONSTRUCT` rules | **SPARQL** → Spark SQL | Same as SPARQL execution path |
-| `DecisionTableEngine` | Decision tables | **Spark SQL** | Databricks SQL Warehouse |
-| `AggregateRuleEngine` | Aggregate rules | **Spark SQL** | Databricks SQL Warehouse |
+| `SPARQLRuleEngine` + `SparqlConstructCompiler` | Complex (SPARQL `CONSTRUCT`) rules | **SQL** on the flat triple table (rdflib algebra → Spark / Postgres SQL; fail-closed subset, already-known triples skipped) | Same engines as `ShaclRuleEngine`; a query outside the subset is refused on save and reported as a phase error at run time |
 
 ---
 
@@ -3342,6 +3340,6 @@ Wrappers in play: REST → (SPARQL → **Spark SQL** on Delta) and **Postgres SQ
 - GraphDB backend — `src/back/core/graphdb/GraphBackend.py`
 - Delta engine — `src/back/core/graphdb/delta/MaterializedStore.py`
 - GraphDB engine (Lakebase Postgres) — `src/back/core/graphdb/lakebase/{Base,FlatStore,SyncedTableManager}.py`
-- Reasoning — `src/back/core/reasoning/OWLRLReasoner.py`, `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py`, `src/back/core/reasoning/rules/{SPARQLRuleEngine,DecisionTableEngine,AggregateRuleEngine}.py`
+- Reasoning — `src/back/core/reasoning/OWLRLReasoner.py`, `src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py`, `src/back/core/reasoning/rules/SPARQLRuleEngine.py`
 - MCP server — `src/mcp-server/server/app.py`, `src/mcp-server/mcp_server.py`
 - Graph Chat — `src/agents/agent_dtwin_chat/{engine,tools}.py`

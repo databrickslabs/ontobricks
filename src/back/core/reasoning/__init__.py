@@ -1,7 +1,7 @@
 """Reasoning engine — OWL 2 RL inference, SHACL-AF rule execution, graph
-reasoning, decision tables, SPARQL CONSTRUCT rules, and aggregate rules.
+reasoning, and SPARQL CONSTRUCT rules.
 
-IF/THEN business rules authored in the UI (SWRL-style syntax) are transpiled
+IF/THEN business rules authored in the UI (IF-THEN-style syntax) are transpiled
 to canonical SHACL-AF rules and executed by :mod:`back.core.reasoning.shacl_rules`.
 """
 
@@ -14,7 +14,7 @@ from back.core.reasoning.results.RuleViolation import RuleViolation  # noqa: F40
 from back.core.reasoning.ReasoningService import ReasoningService  # noqa: F401
 from back.core.reasoning.OWLRLReasoner import OWLRLReasoner  # noqa: F401
 
-# ── SHACL-AF rule layer (absorbed former SWRL lib) ──────────────────────
+# ── SHACL-AF rule layer (absorbed former IF-THEN lib) ──────────────────────
 from back.core.reasoning.shacl_rules.RuleAtomPartition import (  # noqa: F401
     RuleAtomPartition,
 )
@@ -33,18 +33,16 @@ from back.core.reasoning.shacl_rules.ShaclRuleEngine import ShaclRuleEngine  # n
 from back.core.reasoning.shacl_rules.ShaclRuleSqlTranslator import (  # noqa: F401
     ShaclRuleSqlTranslator,
 )
-from back.core.reasoning.shacl_rules.SwrlToShaclTranspiler import (  # noqa: F401
-    SwrlToShaclTranspiler,
+from back.core.reasoning.shacl_rules.IfThenToShaclTranspiler import (  # noqa: F401
+    IfThenToShaclTranspiler,
 )
 from back.core.reasoning.shacl_rules.RuleTextCodec import (  # noqa: F401
-    parse_rules as parse_swrl_text,
-    serialize_rules as serialize_swrl_text,
+    parse_rules as parse_if_then_text,
+    serialize_rules as serialize_if_then_text,
 )
 
 # ── Other rule engines ──────────────────────────────────────────────────
-from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine  # noqa: F401
 from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine  # noqa: F401
-from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine  # noqa: F401
 
 # ── Convenience wrappers for the function-based builtin API ─────────────
 get_builtin = RuleBuiltinRegistry.get
@@ -53,8 +51,6 @@ all_builtins = RuleBuiltinRegistry.all
 builtins_by_category = RuleBuiltinRegistry.by_category
 
 __all__ = [
-    "AggregateRuleEngine",
-    "DecisionTableEngine",
     "InferredTriple",
     "OWLRLReasoner",
     "ReasoningResult",
@@ -69,11 +65,11 @@ __all__ = [
     "ShaclRule",
     "ShaclRuleEngine",
     "ShaclRuleSqlTranslator",
-    "SwrlToShaclTranspiler",
+    "IfThenToShaclTranspiler",
     "all_builtins",
     "builtins_by_category",
     "get_builtin",
     "is_builtin",
-    "parse_swrl_text",
-    "serialize_swrl_text",
+    "parse_if_then_text",
+    "serialize_if_then_text",
 ]

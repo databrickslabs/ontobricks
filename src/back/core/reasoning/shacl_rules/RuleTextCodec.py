@@ -1,4 +1,4 @@
-"""Serialize / parse OntoBricks SWRL text (IF → THEN blocks).
+"""Serialize / parse OntoBricks IF-THEN text (IF → THEN blocks).
 
 Format (blank-line separated)::
 
@@ -18,7 +18,7 @@ _ARROW_RE = re.compile(r"\s*->\s*")
 
 
 def serialize_rules(rules: List[Dict[str, Any]]) -> str:
-    """Render SWRL rule dicts as OntoBricks SWRL text."""
+    """Render IF-THEN rule dicts as OntoBricks IF-THEN text."""
     blocks: List[str] = []
     for rule in rules or []:
         name = (rule.get("name") or "").strip()
@@ -36,7 +36,7 @@ def serialize_rules(rules: List[Dict[str, Any]]) -> str:
 
 
 def parse_rules(text: str) -> List[Dict[str, Any]]:
-    """Parse OntoBricks SWRL text into rule dicts.
+    """Parse OntoBricks IF-THEN text into rule dicts.
 
     Raises:
         ValueError: if any non-empty block is malformed (fail closed).

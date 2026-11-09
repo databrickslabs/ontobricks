@@ -1,11 +1,9 @@
 """A data quality run only covers the dimensions the user selected.
 
-SHACL shapes have a checkbox each, but SWRL rules, decision tables and
-aggregate rules do not: they are reported under a fixed dimension
-(``structural`` for SWRL, ``conformance`` for the two business-rule families).
-The run used to take all three in full whatever was selected, so ticking
-Conformance alone still executed every SWRL rule and listed the results under
-Structural.
+SHACL shapes have a checkbox each, but IF-THEN (Simple) rules do not: they are
+reported under a fixed dimension (``structural``). The run used to take them
+in full whatever was selected, so ticking Conformance alone still executed
+every IF-THEN rule and listed the results under Structural.
 """
 
 from __future__ import annotations
@@ -30,21 +28,15 @@ class _Request:
 
 
 class _Domain:
-    """A domain carrying one shape per dimension plus every rule family."""
+    """A domain carrying one shape per dimension plus the IF-THEN rule family."""
 
     def __init__(self):
         self.shacl_shapes = [
             {"id": f"shape_{cat}", "category": cat, "enabled": True}
             for cat in ("conformance", "structural", "completeness")
         ]
-        self.swrl_rules = [{"name": "swrl_1"}, {"name": "swrl_2"}]
-        self.ontology = {
-            "decision_tables": [
-                {"name": "dt_1", "enabled": True},
-                {"name": "dt_2", "enabled": True},
-            ],
-            "aggregate_rules": [{"name": "agg_1", "enabled": True}],
-        }
+        self.if_then_rules = [{"name": "if_then_1"}, {"name": "if_then_2"}]
+        self.ontology = {}
 
 
 class _Task:
@@ -99,28 +91,18 @@ def run(monkeypatch):
 
 
 class TestDimensionSelection:
-    async def test_conformance_only_leaves_out_the_swrl_rules(self, run):
-        """The reported bug: SWRL results are filed under Structural."""
+    async def test_conformance_only_leaves_out_the_if_then_rules(self, run):
+        """The reported bug: IF-THEN results are filed under Structural."""
         selected = await run(dimensions=["conformance"])
-        assert selected["swrl_rules"] == []
+        assert selected["if_then_rules"] == []
 
-    async def test_conformance_only_keeps_the_business_rules(self, run):
-        """Decision tables and aggregate rules report as conformance."""
-        selected = await run(dimensions=["conformance"])
-        assert len(selected["decision_tables"]) == 2
-        assert len(selected["aggregate_rules"]) == 1
-
-    async def test_structural_only_keeps_the_swrl_rules(self, run):
+    async def test_structural_only_keeps_the_if_then_rules(self, run):
         selected = await run(dimensions=["structural"])
-        assert len(selected["swrl_rules"]) == 2
-        assert selected["decision_tables"] == []
-        assert selected["aggregate_rules"] == []
+        assert len(selected["if_then_rules"]) == 2
 
     async def test_a_dimension_owning_no_rule_family_runs_shapes_only(self, run):
         selected = await run(dimensions=["completeness"])
-        assert selected["swrl_rules"] == []
-        assert selected["decision_tables"] == []
-        assert selected["aggregate_rules"] == []
+        assert selected["if_then_rules"] == []
         assert [s["id"] for s in selected["shapes"]] == ["shape_completeness"]
 
     async def test_shapes_follow_the_selected_dimensions(self, run):
@@ -130,18 +112,17 @@ class TestDimensionSelection:
     async def test_no_selection_runs_everything(self, run):
         """An API client that names no dimension gets the whole suite."""
         selected = await run()
-        assert len(selected["swrl_rules"]) == 2
-        assert len(selected["decision_tables"]) == 2
+        assert len(selected["if_then_rules"]) == 2
         assert len(selected["shapes"]) == 3
 
 
 class TestRuleSelection:
     """Picking individual rules runs those rules and nothing else.
 
-    SWRL rules, decision tables and aggregate rules are addressed by the same
-    check id the run reports them under, so a selection covers them as it
-    covers shapes. Before that they had no id to be picked by and rode on the
-    dimension, so choosing a couple of rules still ran every one of them.
+    IF-THEN rules are addressed by the same check id the run reports them under,
+    so a selection covers them as it covers shapes. Before that they had no id
+    to be picked by and rode on the dimension, so choosing a couple of rules
+    still ran every one of them.
     """
 
     async def test_naming_a_shape_leaves_the_other_families_out(self, run):
@@ -149,36 +130,33 @@ class TestRuleSelection:
             shape_ids=["shape_conformance"], dimensions=["conformance"]
         )
         assert [s["id"] for s in selected["shapes"]] == ["shape_conformance"]
-        assert selected["swrl_rules"] == []
-        assert selected["decision_tables"] == []
-        assert selected["aggregate_rules"] == []
+        assert selected["if_then_rules"] == []
 
     async def test_a_ticked_dimension_no_longer_drags_its_rules_in(self, run):
-        """The reported bug: Structural stayed ticked, so every SWRL rule ran."""
+        """The reported bug: Structural stayed ticked, so every IF-THEN rule ran."""
         selected = await run(
             shape_ids=["shape_conformance"], dimensions=["conformance", "structural"]
         )
-        assert selected["swrl_rules"] == []
+        assert selected["if_then_rules"] == []
 
-    async def test_a_swrl_rule_can_be_picked_on_its_own(self, run):
-        selected = await run(shape_ids=["swrl:swrl_2"], dimensions=["structural"])
-        assert [r["name"] for r in selected["swrl_rules"]] == ["swrl_2"]
+    async def test_a_if_then_rule_can_be_picked_on_its_own(self, run):
+        selected = await run(shape_ids=["if_then:if_then_2"], dimensions=["structural"])
+        assert [r["name"] for r in selected["if_then_rules"]] == ["if_then_2"]
         assert selected["shapes"] == []
 
     async def test_unpicking_one_rule_of_a_family_keeps_the_others(self, run):
-        selected = await run(shape_ids=["dt:dt_1", "agg:agg_1"])
-        assert [d["name"] for d in selected["decision_tables"]] == ["dt_1"]
-        assert [a["name"] for a in selected["aggregate_rules"]] == ["agg_1"]
+        selected = await run(shape_ids=["if_then:if_then_2"])
+        assert [r["name"] for r in selected["if_then_rules"]] == ["if_then_2"]
 
     async def test_the_picked_id_travels_with_the_rule(self, run):
         """Filtering renumbers the family, so the id cannot be re-derived."""
-        selected = await run(shape_ids=["swrl:swrl_2"])
-        assert selected["swrl_rules"][0]["check_id"] == "swrl:swrl_2"
+        selected = await run(shape_ids=["if_then:if_then_2"])
+        assert selected["if_then_rules"][0]["check_id"] == "if_then:if_then_2"
 
     async def test_a_dimension_may_run_with_no_shape_of_its_own(self, run):
-        """Structural can hold SWRL rules and no shape at all."""
+        """Structural can hold IF-THEN rules and no shape at all."""
         selected = await run(dimensions=["structural"], shape_ids=[])
-        assert len(selected["swrl_rules"]) == 2
+        assert len(selected["if_then_rules"]) == 2
 
 
 class TestEmptySelection:

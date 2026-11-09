@@ -2,12 +2,12 @@
 
 The execution engine behind the IF/THEN business-rules UI.  Rules are
 transpiled to canonical
-SHACL-AF rules (:class:`SwrlToShaclTranspiler`) and executed at scale against
+SHACL-AF rules (:class:`IfThenToShaclTranspiler`) and executed at scale against
 the triple-store backend via :class:`ShaclRuleSqlTranslator` (SQL on the flat
 ``(subject, predicate, object)`` table — Delta views / Lakebase Postgres).
 
-The emitted :class:`InferredTriple` provenance (``swrl:<rule>``) and the result
-``stats`` keys (``phase = "swrl"``, ``rules_count`` ...) are intentionally
+The emitted :class:`InferredTriple` provenance (``if_then:<rule>``) and the result
+``stats`` keys (``phase = "if_then"``, ``rules_count`` ...) are intentionally
 identical to the legacy engine so the UI, MCP tools, and Data-Quality pipeline
 observe no change.
 """
@@ -23,17 +23,17 @@ from back.core.reasoning.shacl_rules.ShaclRule import ShaclRule
 from back.core.reasoning.shacl_rules.ShaclRuleSqlTranslator import (
     ShaclRuleSqlTranslator,
 )
-from back.core.reasoning.shacl_rules.SwrlToShaclTranspiler import SwrlToShaclTranspiler
+from back.core.reasoning.shacl_rules.IfThenToShaclTranspiler import IfThenToShaclTranspiler
 
 logger = get_logger(__name__)
 
 
 class ShaclRuleEngine:
-    """Execute SHACL-AF rules (transpiled from SWRL) against a triple store."""
+    """Execute SHACL-AF rules (transpiled from IF-THEN) against a triple store."""
 
     def __init__(self, ontology: Optional[Dict[str, Any]] = None) -> None:
         self._ontology = ontology or {}
-        self._transpiler = SwrlToShaclTranspiler(ontology=self._ontology)
+        self._transpiler = IfThenToShaclTranspiler(ontology=self._ontology)
 
     def _build_uri_map(self) -> Dict[str, str]:
         """Canonical class/property URI map (reused by the DQ pipeline)."""
@@ -51,7 +51,7 @@ class ShaclRuleEngine:
     ) -> ReasoningResult:
         """Run all rules and collect inferred triples.
 
-        Same arguments and result shape as the former SWRL engine, so callers
+        Same arguments and result shape as the former IF-THEN engine, so callers
         and the result contract (provenance / stats) are unchanged.
         """
         t0 = time.time()
@@ -99,7 +99,7 @@ class ShaclRuleEngine:
 
         duration = time.time() - t0
         result.stats = {
-            "phase": "swrl",
+            "phase": "if_then",
             "engine": "shacl-af",
             "rules_count": total,
             "rules_total": len(rules),
@@ -151,7 +151,7 @@ class ShaclRuleEngine:
                     subject=row.get("subject", ""),
                     predicate=row.get("predicate", ""),
                     object=row.get("object", ""),
-                    provenance=f"swrl:{rule.name}",
+                    provenance=f"if_then:{rule.name}",
                     rule_name=rule.name,
                 )
             )
@@ -187,9 +187,9 @@ class ShaclRuleEngine:
                 result.inferred_triples.append(
                     InferredTriple(
                         subject="(batch)",
-                        predicate="swrl:materialized",
+                        predicate="if_then:materialized",
                         object=rule.name,
-                        provenance=f"swrl:{rule.name}",
+                        provenance=f"if_then:{rule.name}",
                         rule_name=rule.name,
                     )
                 )

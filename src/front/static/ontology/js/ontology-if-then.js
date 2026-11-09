@@ -1,13 +1,13 @@
 /**
- * OntoBricks — ontology-swrl.js
- * SWRL Visual Graph Editor + rules list
+ * OntoBricks — ontology-if-then.js
+ * IF-THEN Visual Graph Editor + rules list
  *
  * Replaces the 4-step wizard with a fullscreen D3 ontology graph
  * where the user clicks entities/relationships and assigns them
  * to IF (blue) or THEN (red) via a contextual menu.
  */
 
-window.SwrlModule = {
+window.IfThenModule = {
 
     // ── Persistent state ─────────────────────────────────
     rules: [],
@@ -33,10 +33,14 @@ window.SwrlModule = {
     thenLinks: new Set(),
     nodeVars: new Map(),
 
-    // Attribute conditions (data-property + SWRL builtin), e.g.
-    // loyaltyPoints(?c, ?lp) ^ swrlb:greaterThanOrEqual(?lp, 1000).
+    // Attribute conditions (data-property + IF-THEN builtin), e.g.
+    // loyaltyPoints(?c, ?lp) ^ builtin:greaterThanOrEqual(?lp, 1000).
     // Each entry: { subjectNodeId, property, op, value }.
     conditions: [],
+
+    // THEN set-attribute actions (data-property literal assignment), e.g.
+    // priority(?c, "high").  Each entry: { subjectNodeId, property, value }.
+    assignments: [],
 
     // Context menu state
     _ctxTarget: null,
@@ -44,8 +48,8 @@ window.SwrlModule = {
 
     ATOM_RE: /([A-Za-z_][\w.]*)\(([^)]+)\)/g,
     VAR_NAMES: ['?x', '?y', '?z', '?w', '?v1', '?v2', '?v3', '?v4', '?v5'],
-    // SWRL builtin comparison/string operators offered for attribute conditions.
-    SWRL_BUILTINS: [
+    // IF-THEN builtin comparison/string operators offered for attribute conditions.
+    IF_THEN_BUILTINS: [
         { op: 'greaterThan', label: '>' },
         { op: 'greaterThanOrEqual', label: '\u2265' },
         { op: 'lessThan', label: '<' },
@@ -69,19 +73,19 @@ window.SwrlModule = {
     },
 
     async loadRules() {
-        const spinner = document.getElementById('swrlRulesSpinner');
-        const list = document.getElementById('swrlRulesList');
+        const spinner = document.getElementById('ifThenRulesSpinner');
+        const list = document.getElementById('ifThenRulesList');
         if (spinner) spinner.classList.remove('d-none');
         if (list) list.classList.add('d-none');
         try {
-            const r = await fetch('/ontology/swrl/list');
+            const r = await fetch('/ontology/if-then/list');
             const d = await r.json();
             if (d.success) {
                 this.rules = d.rules || [];
                 this.renderRulesList();
             }
         } catch (e) {
-            console.error('Error loading SWRL rules:', e);
+            console.error('Error loading IF-THEN rules:', e);
         } finally {
             if (spinner) spinner.classList.add('d-none');
             if (list) list.classList.remove('d-none');
@@ -113,14 +117,14 @@ window.SwrlModule = {
     // ── Rules list ───────────────────────────────────────
 
     renderRulesList() {
-        const container = document.getElementById('swrlRulesList');
-        const noMsg = document.getElementById('noSwrlRulesMessage');
+        const container = document.getElementById('ifThenRulesList');
+        const noMsg = document.getElementById('noIfThenRulesMessage');
         if (!container) return;
 
         // Always clear previously rendered cards first so deletions (incl. the
         // last rule) reflect immediately. The empty-state message is a
         // permanent child of the container and is only toggled.
-        container.querySelectorAll('.swrl-rule-card').forEach(c => c.remove());
+        container.querySelectorAll('.if-then-rule-card').forEach(c => c.remove());
 
         if (this.rules.length === 0) {
             if (noMsg) noMsg.classList.remove('d-none');
@@ -134,42 +138,49 @@ window.SwrlModule = {
         let html = '';
         this.rules.forEach((rule, i) => {
             const enabled = rule.enabled !== false;
-            const disabledBadge = enabled ? '' : '<span class="badge bg-secondary me-1" style="font-size:.6rem">disabled</span>';
+            const opacity = enabled ? '' : 'opacity-50';
             const toggleIcon = enabled ? 'bi-toggle-on text-success' : 'bi-toggle-off text-danger';
             const toggleTitle = enabled ? 'Disable' : 'Enable';
-            const cardOpacity = enabled ? '' : ' style="opacity:0.55"';
+            const description = rule.description
+                ? `<div class="text-muted small mt-1">${this._esc(rule.description)}</div>`
+                : '';
 
             const actions = canEdit ? `
-                <div class="btn-group btn-group-sm ontology-edit-btn">
-                    <button class="btn btn-outline-secondary" onclick="SwrlModule.toggleEnabled(${i})" title="${toggleTitle}">
+                <div class="btn-group btn-group-sm ms-2 flex-shrink-0 ontology-edit-btn">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="IfThenModule.toggleEnabled(${i})" title="${toggleTitle}">
                         <i class="bi ${toggleIcon}"></i>
                     </button>
-                    <button class="btn btn-outline-secondary" onclick="SwrlModule.editRule(${i})" title="Edit">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="IfThenModule.editRule(${i})" title="Edit">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <button class="btn btn-outline-danger" onclick="SwrlModule.deleteRule(${i})" title="Delete">
+                    <button class="btn btn-outline-danger btn-sm" onclick="IfThenModule.deleteRule(${i})" title="Delete">
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>` : `
-                <button class="btn btn-sm btn-outline-secondary" onclick="SwrlModule.viewRule(${i})" title="View">
-                    <i class="bi bi-eye"></i> View
-                </button>`;
+                <div class="btn-group btn-group-sm ms-2 flex-shrink-0">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="IfThenModule.viewRule(${i})" title="View">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>`;
 
             html += `
-                <div class="card mb-2 swrl-rule-card"${cardOpacity}>
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <strong>${disabledBadge}${this._esc(rule.name)}</strong>
-                                ${rule.description ? `<small class="text-muted d-block">${this._esc(rule.description)}</small>` : ''}
-                                <div class="mt-1">
-                                    <code class="small">${this._esc(rule.antecedent)}</code>
-                                    <span class="mx-2">&rarr;</span>
-                                    <code class="small">${this._esc(rule.consequent)}</code>
-                                </div>
+                <div class="ob-rule-card if-then-rule-card ${opacity} mb-2" data-rule-index="${i}">
+                    <div class="d-flex align-items-start justify-content-between">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-primary bg-opacity-75 small">
+                                    <i class="bi bi-code-square me-1"></i>Simple
+                                </span>
                             </div>
-                            ${actions}
+                            <div class="small fw-medium">${this._esc(rule.name)}</div>
+                            ${description}
+                            <div class="text-muted small mt-1">
+                                <code>${this._esc(rule.antecedent)}</code>
+                                <span class="mx-1">&rarr;</span>
+                                <code>${this._esc(rule.consequent)}</code>
+                            </div>
                         </div>
+                        ${actions}
                     </div>
                 </div>`;
         });
@@ -182,7 +193,7 @@ window.SwrlModule = {
         if (!this.rules[index]) return;
         const rule = { ...this.rules[index], enabled: !this.rules[index].enabled };
         try {
-            const r = await fetch('/ontology/swrl/save', {
+            const r = await fetch('/ontology/if-then/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rule, index })
@@ -192,12 +203,12 @@ window.SwrlModule = {
                 this.rules = d.rules || [];
                 this.renderRulesList();
                 if (typeof OntologyState !== 'undefined' && OntologyState.config) {
-                    OntologyState.config.swrl_rules = this.rules;
+                    OntologyState.config.if_then_rules = this.rules;
                 }
                 if (typeof BusinessRulesModule !== 'undefined') BusinessRulesModule._refreshAllBadges();
             }
         } catch (e) {
-            console.error('Error toggling SWRL rule:', e);
+            console.error('Error toggling IF-THEN rule:', e);
         }
     },
 
@@ -211,8 +222,11 @@ window.SwrlModule = {
         this.thenLinks = new Set();
         this.nodeVars = new Map();
         this.conditions = [];
-        const condWrap = document.getElementById('swrlConditions');
+        const condWrap = document.getElementById('ifThenConditions');
         if (condWrap) condWrap.innerHTML = '';
+        this.assignments = [];
+        const assignWrap = document.getElementById('ifThenAssignments');
+        if (assignWrap) assignWrap.innerHTML = '';
         // Non-representable rules (built-ins / negation) keep their original
         // body here so a read-only SHACL view never drops it on save.
         this._nonRepresentable = false;
@@ -222,27 +236,35 @@ window.SwrlModule = {
         this._ctxType = null;
         this._readOnly = false;
 
-        const name = document.getElementById('swrlRuleName');
-        const desc = document.getElementById('swrlRuleDescription');
+        const name = document.getElementById('ifThenRuleName');
+        const desc = document.getElementById('ifThenRuleDescription');
         if (name) name.value = '';
         if (desc) desc.value = '';
-        const note = document.getElementById('swrlAdvancedNote');
+        const note = document.getElementById('ifThenAdvancedNote');
         if (note) note.classList.add('d-none');
+        // Collapse the generated-SHACL code pane back to its default.
+        const previewWrap = document.getElementById('ifThenPreviewWrap');
+        if (previewWrap) previewWrap.classList.add('d-none');
+        const toggle = document.getElementById('ifThenToggleShacl');
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.innerHTML = '<i class="bi bi-code-slash me-1"></i>Show SHACL code';
+        }
 
         this._hideContextMenu();
     },
 
     async _openEditor(title) {
         this._hideContextMenu();
-        const modalEl = document.getElementById('swrlGraphEditorModal');
-        document.getElementById('swrlEditorTitle').innerHTML = `<i class="bi bi-lightning me-2"></i>${this._esc(title)}`;
+        const modalEl = document.getElementById('ifThenGraphEditorModal');
+        document.getElementById('ifThenEditorTitle').innerHTML = `<i class="bi bi-lightning me-2"></i>${this._esc(title)}`;
         this._modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         this._modal.show();
 
-        const container = document.getElementById('swrlGraphContainer');
-        container.querySelectorAll('svg, .swrl-legend').forEach(el => el.remove());
+        const container = document.getElementById('ifThenGraphContainer');
+        container.querySelectorAll('svg, .if-then-legend').forEach(el => el.remove());
         container.insertAdjacentHTML('afterbegin',
-            '<div class="d-flex justify-content-center align-items-center h-100 swrl-graph-loading">' +
+            '<div class="d-flex justify-content-center align-items-center h-100 if-then-graph-loading">' +
             '<div class="text-center text-muted"><div class="spinner-border spinner-border-sm text-primary mb-3"></div>' +
             '<div>Loading ontology graph...</div></div></div>');
 
@@ -259,7 +281,7 @@ window.SwrlModule = {
                 this._rawProperties = config.properties || [];
             }
 
-            container.querySelector('.swrl-graph-loading')?.remove();
+            container.querySelector('.if-then-graph-loading')?.remove();
 
             if (!config || !config.classes || config.classes.length === 0) {
                 container.insertAdjacentHTML('afterbegin',
@@ -283,8 +305,8 @@ window.SwrlModule = {
                 setTimeout(() => this.fitToView(), 2000);
             }
         } catch (err) {
-            console.error('[SwrlModule] Graph error:', err);
-            container.querySelector('.swrl-graph-loading')?.remove();
+            console.error('[IfThenModule] Graph error:', err);
+            container.querySelector('.if-then-graph-loading')?.remove();
             container.insertAdjacentHTML('afterbegin',
                 `<div class="d-flex justify-content-center align-items-center h-100">` +
                 `<div class="text-center text-danger"><i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i>` +
@@ -296,16 +318,16 @@ window.SwrlModule = {
 
     addRule() {
         this._resetEditor();
-        this._openEditor('Add If-Then Rule');
+        this._openEditor('Add Simple Rule');
     },
 
     editRule(index) {
         this._resetEditor();
         this.editingIndex = index;
         const rule = this.rules[index];
-        document.getElementById('swrlRuleName').value = rule.name || '';
-        document.getElementById('swrlRuleDescription').value = rule.description || '';
-        this._openEditor('Edit If-Then Rule').then(() => {
+        document.getElementById('ifThenRuleName').value = rule.name || '';
+        document.getElementById('ifThenRuleDescription').value = rule.description || '';
+        this._openEditor('Edit Simple Rule').then(() => {
             this._prefillFromRule(rule);
         });
     },
@@ -315,12 +337,12 @@ window.SwrlModule = {
         this._readOnly = true;
         this.editingIndex = index;
         const rule = this.rules[index];
-        document.getElementById('swrlRuleName').value = rule.name || '';
-        document.getElementById('swrlRuleDescription').value = rule.description || '';
-        this._openEditor('View If-Then Rule').then(() => {
+        document.getElementById('ifThenRuleName').value = rule.name || '';
+        document.getElementById('ifThenRuleDescription').value = rule.description || '';
+        this._openEditor('View Simple Rule').then(() => {
             this._prefillFromRule(rule);
-            document.querySelectorAll('#swrlRulePane input, #swrlRulePane textarea').forEach(el => { el.disabled = true; });
-            document.getElementById('swrlSaveBtn').classList.add('d-none');
+            document.querySelectorAll('#ifThenRulePane input, #ifThenRulePane textarea').forEach(el => { el.disabled = true; });
+            document.getElementById('ifThenSaveBtn').classList.add('d-none');
         });
     },
 
@@ -482,15 +504,15 @@ window.SwrlModule = {
         const g = this._svg.append('g');
         const defs = this._svg.append('defs');
 
-        defs.append('marker').attr('id', 'swrl-arrow').attr('viewBox', '0 -5 10 10')
+        defs.append('marker').attr('id', 'if-then-arrow').attr('viewBox', '0 -5 10 10')
             .attr('refX', 28).attr('refY', 0).attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
             .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#6c757d');
 
-        defs.append('marker').attr('id', 'swrl-arrow-self').attr('viewBox', '0 -5 10 10')
+        defs.append('marker').attr('id', 'if-then-arrow-self').attr('viewBox', '0 -5 10 10')
             .attr('refX', 10).attr('refY', 0).attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
             .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#495057');
 
-        defs.append('marker').attr('id', 'swrl-arrow-inh').attr('viewBox', '0 -5 10 10')
+        defs.append('marker').attr('id', 'if-then-arrow-inh').attr('viewBox', '0 -5 10 10')
             .attr('refX', 28).attr('refY', 0).attr('markerWidth', 8).attr('markerHeight', 8).attr('orient', 'auto')
             .append('path').attr('d', 'M0,-5L10,0L0,5Z').attr('fill', 'white').attr('stroke', '#adb5bd').attr('stroke-width', 1);
 
@@ -508,16 +530,16 @@ window.SwrlModule = {
         this._simulation = simulation;
 
         // Relationship paths
-        const relLinks = g.append('g').attr('class', 'swrl-rel-links').selectAll('path')
+        const relLinks = g.append('g').attr('class', 'if-then-rel-links').selectAll('path')
             .data(regularLinks.filter(l => l.type === 'relationship'))
             .enter().append('path').attr('class', 'map-link')
             .attr('data-link-id', d => d.linkId)
-            .style('marker-end', 'url(#swrl-arrow)');
+            .style('marker-end', 'url(#if-then-arrow)');
 
         // Relationship hitareas (invisible wider targets)
-        const relHitareas = g.append('g').attr('class', 'swrl-rel-hitareas').selectAll('path')
+        const relHitareas = g.append('g').attr('class', 'if-then-rel-hitareas').selectAll('path')
             .data(regularLinks.filter(l => l.type === 'relationship'))
-            .enter().append('path').attr('class', 'swrl-link-hitarea')
+            .enter().append('path').attr('class', 'if-then-link-hitarea')
             .attr('data-link-id', d => d.linkId)
             .on('click', (event, d) => { event.stopPropagation(); this._onLinkClick(event, d); });
 
@@ -525,26 +547,26 @@ window.SwrlModule = {
         const inhLinks = g.append('g').selectAll('path')
             .data(regularLinks.filter(l => l.type === 'inheritance'))
             .enter().append('path').attr('class', 'map-link inheritance')
-            .style('marker-end', 'url(#swrl-arrow-inh)');
+            .style('marker-end', 'url(#if-then-arrow-inh)');
 
         // Self-loop paths
         const selfLoops = g.append('g').selectAll('path')
             .data(selfLoopLinks).enter().append('path')
             .attr('class', d => d.type === 'relationship' ? 'map-link self-loop' : 'map-link self-loop inheritance')
             .attr('data-link-id', d => d.linkId)
-            .style('marker-end', d => d.type === 'relationship' ? 'url(#swrl-arrow-self)' : 'url(#swrl-arrow-inh)');
+            .style('marker-end', d => d.type === 'relationship' ? 'url(#if-then-arrow-self)' : 'url(#if-then-arrow-inh)');
 
         // Self-loop hitareas
         const selfHitareas = g.append('g').selectAll('path')
             .data(selfLoopLinks.filter(l => l.type === 'relationship'))
-            .enter().append('path').attr('class', 'swrl-link-hitarea')
+            .enter().append('path').attr('class', 'if-then-link-hitarea')
             .attr('data-link-id', d => d.linkId)
             .on('click', (event, d) => { event.stopPropagation(); this._onLinkClick(event, d); });
 
         // Link labels
         const linkLabels = g.append('g').selectAll('text')
             .data(links.filter(l => l.type === 'relationship'))
-            .enter().append('text').attr('class', 'swrl-link-label').text(d => d.name);
+            .enter().append('text').attr('class', 'if-then-link-label').text(d => d.name);
 
         // Nodes
         const nodeEls = g.append('g').selectAll('g').data(nodes).enter().append('g')
@@ -555,7 +577,7 @@ window.SwrlModule = {
         nodeEls.append('circle').attr('class', 'map-node-hitarea').attr('r', 25);
         nodeEls.append('text').attr('class', 'map-node-icon').text(d => d.icon);
         nodeEls.append('text').attr('class', 'map-node-label').attr('dy', 35).text(d => d.label);
-        nodeEls.append('text').attr('class', 'swrl-var-label').attr('dy', -30).text('');
+        nodeEls.append('text').attr('class', 'if-then-var-label').attr('dy', -30).text('');
         nodeEls.append('title').text(d => d.id);
 
         // Tick handler
@@ -612,12 +634,12 @@ window.SwrlModule = {
 
         // Legend
         const legend = document.createElement('div');
-        legend.className = 'swrl-legend';
+        legend.className = 'if-then-legend';
         legend.innerHTML =
-            '<div class="swrl-legend-item"><div class="swrl-legend-swatch" style="background:#6c757d"></div><span>Relationship</span></div>' +
-            '<div class="swrl-legend-item"><div class="swrl-legend-swatch" style="background:#adb5bd;border:1px dashed #adb5bd"></div><span>Inheritance</span></div>' +
-            '<div class="swrl-legend-item"><div class="swrl-legend-swatch" style="background:#0d6efd"></div><span>IF (condition)</span></div>' +
-            '<div class="swrl-legend-item"><div class="swrl-legend-swatch" style="background:#dc3545"></div><span>THEN (conclusion)</span></div>';
+            '<div class="if-then-legend-item"><div class="if-then-legend-swatch" style="background:#6c757d"></div><span>Relationship</span></div>' +
+            '<div class="if-then-legend-item"><div class="if-then-legend-swatch" style="background:#adb5bd;border:1px dashed #adb5bd"></div><span>Inheritance</span></div>' +
+            '<div class="if-then-legend-item"><div class="if-then-legend-swatch" style="background:#0d6efd"></div><span>IF (condition)</span></div>' +
+            '<div class="if-then-legend-item"><div class="if-then-legend-swatch" style="background:#dc3545"></div><span>THEN (conclusion)</span></div>';
         container.appendChild(legend);
     },
 
@@ -628,7 +650,7 @@ window.SwrlModule = {
         const g = this._svg.select('g');
         const bounds = g.node().getBBox();
         if (bounds.width === 0 || bounds.height === 0) return;
-        const container = document.getElementById('swrlGraphContainer');
+        const container = document.getElementById('ifThenGraphContainer');
         const w = container.clientWidth, h = container.clientHeight;
         const padding = 60;
         const scale = Math.min((w - padding * 2) / bounds.width, (h - padding * 2) / bounds.height, 2);
@@ -664,13 +686,13 @@ window.SwrlModule = {
     // ── Context menu ─────────────────────────────────────
 
     _showContextMenu(event, elementId) {
-        const menu = document.getElementById('swrlContextMenu');
+        const menu = document.getElementById('ifThenContextMenu');
         const isSelected = this.ifNodes.has(elementId) || this.thenNodes.has(elementId) ||
                           this.ifLinks.has(elementId) || this.thenLinks.has(elementId);
 
-        const ifItem = menu.querySelector('.swrl-ctx-if');
-        const thenItem = menu.querySelector('.swrl-ctx-then');
-        const removeItem = menu.querySelector('.swrl-ctx-remove');
+        const ifItem = menu.querySelector('.if-then-ctx-if');
+        const thenItem = menu.querySelector('.if-then-ctx-then');
+        const removeItem = menu.querySelector('.if-then-ctx-remove');
         if (ifItem) ifItem.classList.toggle('d-none', isSelected);
         if (thenItem) thenItem.classList.toggle('d-none', isSelected);
         if (removeItem) removeItem.classList.toggle('d-none', !isSelected);
@@ -685,7 +707,7 @@ window.SwrlModule = {
     },
 
     _hideContextMenu() {
-        const menu = document.getElementById('swrlContextMenu');
+        const menu = document.getElementById('ifThenContextMenu');
         if (menu) menu.classList.add('d-none');
     },
 
@@ -823,20 +845,20 @@ window.SwrlModule = {
 
         this._svg.selectAll('.map-node').each(function(d) {
             const el = d3.select(this);
-            el.classed('swrl-node-if', SwrlModule.ifNodes.has(d.id));
-            el.classed('swrl-node-then', SwrlModule.thenNodes.has(d.id));
+            el.classed('if-then-node-if', IfThenModule.ifNodes.has(d.id));
+            el.classed('if-then-node-then', IfThenModule.thenNodes.has(d.id));
 
-            const varLabel = el.select('.swrl-var-label');
-            const v = SwrlModule.nodeVars.get(d.id);
+            const varLabel = el.select('.if-then-var-label');
+            const v = IfThenModule.nodeVars.get(d.id);
             varLabel.text(v || '');
         });
 
         this._svg.selectAll('[data-link-id]').each(function(d) {
             if (!d || !d.linkId) return;
             const el = d3.select(this);
-            if (el.classed('swrl-link-hitarea')) return;
-            el.classed('swrl-link-if', SwrlModule.ifLinks.has(d.linkId));
-            el.classed('swrl-link-then', SwrlModule.thenLinks.has(d.linkId));
+            if (el.classed('if-then-link-hitarea')) return;
+            el.classed('if-then-link-if', IfThenModule.ifLinks.has(d.linkId));
+            el.classed('if-then-link-then', IfThenModule.thenLinks.has(d.linkId));
         });
     },
 
@@ -849,16 +871,18 @@ window.SwrlModule = {
         const ifAtoms = atoms.ifAtoms.concat(condAtoms);
         const thenAtoms = atoms.thenAtoms;
 
-        // Render the editable condition rows (separate from the auto-derived
-        // class/relationship badges).
+        // Render the editable condition / set-attribute rows (separate from the
+        // auto-derived class/relationship badges).
         this._renderConditions();
+        this._renderAssignments();
+        const assignAtoms = this._assignmentAtoms();
 
         // IF section — badges show class/relationship atoms only; attribute
         // conditions are listed in their own editable rows below.
         const ifBadgeAtoms = atoms.ifAtoms;
-        const ifContainer = document.getElementById('swrlIfAtoms');
-        const ifEmpty = document.getElementById('swrlIfEmpty');
-        const ifCount = document.getElementById('swrlIfCount');
+        const ifContainer = document.getElementById('ifThenIfAtoms');
+        const ifEmpty = document.getElementById('ifThenIfEmpty');
+        const ifCount = document.getElementById('ifThenIfCount');
         if (ifContainer) {
             if (ifBadgeAtoms.length === 0) {
                 ifContainer.innerHTML = '';
@@ -869,10 +893,10 @@ window.SwrlModule = {
                     const display = a.kind === 'class'
                         ? `${this._esc(a.name)}(${this._esc(a.args[0])})`
                         : `${this._esc(a.name)}(${this._esc(a.args[0])}, ${this._esc(a.args[1])})`;
-                    html += `<div class="swrl-atom-badge if-atom">` +
-                        `<span class="swrl-atom-type">${a.kind === 'class' ? 'CLS' : 'REL'}</span>` +
+                    html += `<div class="if-then-atom-badge if-atom">` +
+                        `<span class="if-then-atom-type">${a.kind === 'class' ? 'CLS' : 'REL'}</span>` +
                         `<span>${display}</span>` +
-                        (this._readOnly ? '' : `<span class="swrl-atom-remove" onclick="SwrlModule._removeAtomByIndex('if',${i})" title="Remove"><i class="bi bi-x-lg"></i></span>`) +
+                        (this._readOnly ? '' : `<span class="if-then-atom-remove" onclick="IfThenModule._removeAtomByIndex('if',${i})" title="Remove"><i class="bi bi-x-lg"></i></span>`) +
                         `</div>`;
                 });
                 ifContainer.innerHTML = html;
@@ -881,9 +905,9 @@ window.SwrlModule = {
         }
 
         // THEN section
-        const thenContainer = document.getElementById('swrlThenAtoms');
-        const thenEmpty = document.getElementById('swrlThenEmpty');
-        const thenCount = document.getElementById('swrlThenCount');
+        const thenContainer = document.getElementById('ifThenThenAtoms');
+        const thenEmpty = document.getElementById('ifThenThenEmpty');
+        const thenCount = document.getElementById('ifThenThenCount');
         if (thenContainer) {
             if (thenAtoms.length === 0) {
                 thenContainer.innerHTML = '';
@@ -894,34 +918,54 @@ window.SwrlModule = {
                     const display = a.kind === 'class'
                         ? `${this._esc(a.name)}(${this._esc(a.args[0])})`
                         : `${this._esc(a.name)}(${this._esc(a.args[0])}, ${this._esc(a.args[1])})`;
-                    html += `<div class="swrl-atom-badge then-atom">` +
-                        `<span class="swrl-atom-type">${a.kind === 'class' ? 'CLS' : 'REL'}</span>` +
+                    html += `<div class="if-then-atom-badge then-atom">` +
+                        `<span class="if-then-atom-type">${a.kind === 'class' ? 'CLS' : 'REL'}</span>` +
                         `<span>${display}</span>` +
-                        (this._readOnly ? '' : `<span class="swrl-atom-remove" onclick="SwrlModule._removeAtomByIndex('then',${i})" title="Remove"><i class="bi bi-x-lg"></i></span>`) +
+                        (this._readOnly ? '' : `<span class="if-then-atom-remove" onclick="IfThenModule._removeAtomByIndex('then',${i})" title="Remove"><i class="bi bi-x-lg"></i></span>`) +
                         `</div>`;
                 });
                 thenContainer.innerHTML = html;
             }
-            if (thenCount) thenCount.textContent = thenAtoms.length;
+            if (thenCount) thenCount.textContent = thenAtoms.length + assignAtoms.length;
         }
 
         // Generated SHACL preview — built from the visual selection, or from
         // the preserved original body for advanced (non-representable) rules.
         const antStr = this._nonRepresentable
             ? this._origAntecedent
-            : this._buildSwrlString(ifAtoms);
+            : this._buildIfThenString(ifAtoms);
         const conStr = this._nonRepresentable
             ? this._origConsequent
-            : this._buildSwrlString(thenAtoms);
+            : this._buildIfThenString(thenAtoms.concat(assignAtoms));
         this._currentAntecedent = antStr;
         this._currentConsequent = conStr;
         this._refreshShaclPreview(antStr, conStr);
     },
 
+    // Toggle the (collapsed-by-default) generated-SHACL code pane. Fetching is
+    // skipped while hidden, so opening it triggers a fresh render.
+    toggleShaclPreview() {
+        const wrap = document.getElementById('ifThenPreviewWrap');
+        const btn = document.getElementById('ifThenToggleShacl');
+        if (!wrap) return;
+        const show = wrap.classList.contains('d-none');
+        wrap.classList.toggle('d-none', !show);
+        if (btn) {
+            btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+            btn.innerHTML = show
+                ? '<i class="bi bi-code-slash me-1"></i>Hide SHACL code'
+                : '<i class="bi bi-code-slash me-1"></i>Show SHACL code';
+        }
+        if (show) this._refreshShaclPreview(this._currentAntecedent, this._currentConsequent);
+    },
+
     // Fetch and render the generated SHACL-AF for the rule being built.
     // Read-only: transpilation is one-directional (no SHACL->rule parser).
+    // No-ops while the code pane is collapsed (avoids needless fetches).
     _refreshShaclPreview(antecedent, consequent) {
-        const preview = document.getElementById('swrlPreview');
+        const wrap = document.getElementById('ifThenPreviewWrap');
+        if (wrap && wrap.classList.contains('d-none')) return;
+        const preview = document.getElementById('ifThenPreview');
         if (!preview) return;
         if (!antecedent && !consequent) {
             preview.innerHTML = '<span class="text-muted fst-italic">Select elements to build the rule</span>';
@@ -936,20 +980,20 @@ window.SwrlModule = {
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify({
-                        name: document.getElementById('swrlRuleName')?.value || 'rule',
+                        name: document.getElementById('ifThenRuleName')?.value || 'rule',
                         antecedent, consequent,
                     }),
                 });
                 const data = await resp.json().catch(() => ({}));
                 if (token !== this._previewToken) return;  // superseded
                 if (data && data.success && data.turtle) {
-                    preview.innerHTML = `<pre class="mb-0 swrl-shacl-preview">${this._esc(data.turtle)}</pre>`;
+                    preview.innerHTML = `<pre class="mb-0 if-then-shacl-preview">${this._esc(data.turtle)}</pre>`;
                 } else {
-                    preview.innerHTML = `${this._esc(antecedent)} <span class="swrl-arrow">&rarr;</span> ${this._esc(consequent)}`;
+                    preview.innerHTML = `${this._esc(antecedent)} <span class="if-then-arrow">&rarr;</span> ${this._esc(consequent)}`;
                 }
             } catch (e) {
                 if (token !== this._previewToken) return;
-                preview.innerHTML = `${this._esc(antecedent)} <span class="swrl-arrow">&rarr;</span> ${this._esc(consequent)}`;
+                preview.innerHTML = `${this._esc(antecedent)} <span class="if-then-arrow">&rarr;</span> ${this._esc(consequent)}`;
             }
         }, 250);
     },
@@ -1095,7 +1139,7 @@ window.SwrlModule = {
             while (used.has(v)) { v = base + k; k++; }
             used.add(v);
             atoms.push({ kind: 'data', name: c.property, args: [subjVar, v] });
-            atoms.push({ kind: 'builtin', name: 'swrlb:' + c.op, args: [v, this._formatLiteral(c.value)] });
+            atoms.push({ kind: 'builtin', name: 'builtin:' + c.op, args: [v, this._formatLiteral(c.value)] });
         });
         return atoms;
     },
@@ -1127,7 +1171,7 @@ window.SwrlModule = {
     },
 
     _renderConditions() {
-        const wrap = document.getElementById('swrlConditions');
+        const wrap = document.getElementById('ifThenConditions');
         if (!wrap) return;
         const ro = this._readOnly;
         // Every IF entity is a legal condition subject, so the dropdown mirrors
@@ -1159,7 +1203,7 @@ window.SwrlModule = {
                 props.map(p => `<option value="${this._esc(p)}"${p === c.property ? ' selected' : ''}>${this._esc(p)}</option>`)
             ).join('');
 
-            const builtins = this.SWRL_BUILTINS.slice();
+            const builtins = this.IF_THEN_BUILTINS.slice();
             if (c.op && !builtins.some(b => b.op === c.op)) builtins.unshift({ op: c.op, label: c.op });
             const opOpts = builtins.map(b =>
                 `<option value="${this._esc(b.op)}"${b.op === c.op ? ' selected' : ''}>${this._esc(b.label)}</option>`
@@ -1167,24 +1211,106 @@ window.SwrlModule = {
 
             const dis = ro ? ' disabled' : '';
             html +=
-                `<div class="swrl-condition-row d-flex align-items-center gap-1 mb-1">` +
-                `<select class="form-select form-select-sm"${dis} onchange="SwrlModule._onConditionChange(${i},'subject',this.value)">${entOpts}</select>` +
-                `<select class="form-select form-select-sm"${dis} onchange="SwrlModule._onConditionChange(${i},'property',this.value)">${propOpts}</select>` +
-                `<select class="form-select form-select-sm" style="max-width:5.5rem"${dis} onchange="SwrlModule._onConditionChange(${i},'op',this.value)">${opOpts}</select>` +
-                `<input type="text" class="form-control form-control-sm" style="max-width:6rem" placeholder="value" value="${this._esc(c.value)}"${dis} onchange="SwrlModule._onConditionChange(${i},'value',this.value)">` +
-                (ro ? '' : `<button type="button" class="btn btn-sm btn-link text-danger p-0 px-1" onclick="SwrlModule._removeCondition(${i})" title="Remove"><i class="bi bi-x-lg"></i></button>`) +
+                `<div class="if-then-condition-row d-flex align-items-center gap-1 mb-1">` +
+                `<select class="form-select form-select-sm"${dis} onchange="IfThenModule._onConditionChange(${i},'subject',this.value)">${entOpts}</select>` +
+                `<select class="form-select form-select-sm"${dis} onchange="IfThenModule._onConditionChange(${i},'property',this.value)">${propOpts}</select>` +
+                `<select class="form-select form-select-sm" style="max-width:5.5rem"${dis} onchange="IfThenModule._onConditionChange(${i},'op',this.value)">${opOpts}</select>` +
+                `<input type="text" class="form-control form-control-sm" style="max-width:6rem" placeholder="value" value="${this._esc(c.value)}"${dis} onchange="IfThenModule._onConditionChange(${i},'value',this.value)">` +
+                (ro ? '' : `<button type="button" class="btn btn-sm btn-link text-danger p-0 px-1" onclick="IfThenModule._removeCondition(${i})" title="Remove"><i class="bi bi-x-lg"></i></button>`) +
                 `</div>`;
         });
         wrap.innerHTML = html;
     },
 
-    // ── SWRL string utilities ────────────────────────────
+    // ── THEN set-attribute actions ───────────────────────
 
-    _buildSwrlString(atoms) {
+    // Build the data-property assignment atoms, e.g. priority(?c, "high").
+    // Subject must be an IF entity so it is bound in the generated SQL.
+    _assignmentAtoms() {
+        const atoms = [];
+        (this.assignments || []).forEach(a => {
+            const subjVar = this.nodeVars.get(a.subjectNodeId);
+            if (!subjVar || !this.ifNodes.has(a.subjectNodeId)) return;
+            if (!a.property || a.value === '' || a.value == null) return;
+            atoms.push({ kind: 'data', name: a.property, args: [subjVar, this._formatLiteral(a.value)] });
+        });
+        return atoms;
+    },
+
+    addAssignmentRow() {
+        if (this._readOnly) return;
+        // Subject must be bound by the antecedent, so it is an IF entity.
+        const ifIds = [...this.ifNodes];
+        const subject = ifIds.find(id => this._dataPropsForClass(id).length) || ifIds[0] || '';
+        this.assignments.push({ subjectNodeId: subject, property: '', value: '' });
+        this._updateRulePane();
+    },
+
+    _removeAssignment(index) {
+        if (index < 0 || index >= this.assignments.length) return;
+        this.assignments.splice(index, 1);
+        this._updateRulePane();
+    },
+
+    _onAssignmentChange(index, field, value) {
+        const a = this.assignments[index];
+        if (!a) return;
+        if (field === 'subject') { a.subjectNodeId = value; a.property = ''; }
+        else if (field === 'property') a.property = value;
+        else if (field === 'value') a.value = value;
+        this._updateRulePane();
+    },
+
+    _renderAssignments() {
+        const wrap = document.getElementById('ifThenAssignments');
+        if (!wrap) return;
+        const ro = this._readOnly;
+        const entIds = [...this.ifNodes];
+
+        if (!this.assignments.length) {
+            wrap.innerHTML = entIds.length
+                ? '<div class="text-muted small fst-italic">No attribute actions</div>'
+                : '<div class="text-muted small fst-italic">Select an IF entity to set attributes</div>';
+            return;
+        }
+
+        let html = '';
+        this.assignments.forEach((a, i) => {
+            const entOpts = ['<option value="">entity\u2026</option>'].concat(
+                entIds.map(id => {
+                    const v = this.nodeVars.get(id) || '';
+                    const sel = id === a.subjectNodeId ? ' selected' : '';
+                    return `<option value="${this._esc(id)}"${sel}>${this._esc(id)} (${this._esc(v)})</option>`;
+                })
+            ).join('');
+
+            const props = this._dataPropsForClass(a.subjectNodeId);
+            if (a.property && !props.includes(a.property)) props.unshift(a.property);
+            const propPlaceholder = (a.subjectNodeId && !props.length) ? 'no attribute' : 'attribute\u2026';
+            const propOpts = [`<option value="">${propPlaceholder}</option>`].concat(
+                props.map(p => `<option value="${this._esc(p)}"${p === a.property ? ' selected' : ''}>${this._esc(p)}</option>`)
+            ).join('');
+
+            const dis = ro ? ' disabled' : '';
+            html +=
+                `<div class="if-then-condition-row d-flex align-items-center gap-1 mb-1">` +
+                `<select class="form-select form-select-sm"${dis} onchange="IfThenModule._onAssignmentChange(${i},'subject',this.value)">${entOpts}</select>` +
+                `<select class="form-select form-select-sm"${dis} onchange="IfThenModule._onAssignmentChange(${i},'property',this.value)">${propOpts}</select>` +
+                `<span class="small text-muted px-1">=</span>` +
+                `<input type="text" class="form-control form-control-sm" style="max-width:6rem" placeholder="value" value="${this._esc(a.value)}"${dis} onchange="IfThenModule._onAssignmentChange(${i},'value',this.value)">` +
+                (ro ? '' : `<button type="button" class="btn btn-sm btn-link text-danger p-0 px-1" onclick="IfThenModule._removeAssignment(${i})" title="Remove"><i class="bi bi-x-lg"></i></button>`) +
+                `</div>`;
+        });
+        wrap.innerHTML = html;
+    },
+
+    // ── IF-THEN string utilities ────────────────────────────
+
+    _buildIfThenString(atoms) {
         return atoms.map(a => `${a.name}(${a.args.join(', ')})`).join(' \u2227 ');
     },
 
-    _parseSwrlString(str) {
+    _parseIfThenString(str) {
         if (!str) return [];
         const atoms = [];
         const re = new RegExp(this.ATOM_RE.source, 'g');
@@ -1197,8 +1323,8 @@ window.SwrlModule = {
         return atoms;
     },
 
-    // Like _parseSwrlString but keeps the namespace prefix so SWRL builtins
-    // (swrlb:greaterThanOrEqual …) can be told apart from ontology atoms.
+    // Like _parseIfThenString but keeps the namespace prefix so IF-THEN builtins
+    // (builtin:greaterThanOrEqual …) can be told apart from ontology atoms.
     _parseAtomsDetailed(str) {
         const out = [];
         if (!str) return out;
@@ -1227,8 +1353,8 @@ window.SwrlModule = {
         this._origConsequent = rule.consequent || '';
 
         const varToNodeId = new Map();
-        // Atoms the graph cannot represent (data-property atoms, SWRL builtins
-        // like swrlb:*, or derived classes not present in the ontology) are
+        // Atoms the graph cannot represent (data-property atoms, IF-THEN builtins
+        // like builtin:*, or derived classes not present in the ontology) are
         // counted here; if any exist the rule is not faithfully editable in
         // the visual graph, so we fall back to raw mode (keeps the full
         // IF/THEN — including derived consequents — visible and editable).
@@ -1281,7 +1407,7 @@ window.SwrlModule = {
             else dataAtomByObjVar.set(a.args[1], { subjVar: a.args[0], property: a.name });
         });
 
-        // 3) Builtins (swrlb:*) pair with a data atom to form a condition.
+        // 3) Builtins (builtin:*) pair with a data atom to form a condition.
         const consumed = new Set();
         antD.filter(a => a.prefix).forEach(b => {
             if (b.args.length < 2) { unmapped++; return; }
@@ -1306,7 +1432,20 @@ window.SwrlModule = {
             if (a.prefix) { unmapped++; return; }
             if (a.args.length <= 1) { processClassAtom(a, 'then'); return; }
             const link = this._graphLinks.find(l => l.name === a.name && l.type === 'relationship');
-            if (link) processPropertyAtom(a, 'then'); else unmapped++;
+            if (link) { processPropertyAtom(a, 'then'); return; }
+            // Set-attribute action: property(?subj, "literal"). The object is a
+            // literal (not a ?-variable) and the property is not a relationship.
+            const objTok = a.args[1] || '';
+            const subjId = varToNodeId.get(a.args[0]);
+            if (objTok && !objTok.startsWith('?') && subjId) {
+                this.assignments.push({
+                    subjectNodeId: subjId,
+                    property: a.name,
+                    value: this._parseLiteral(objTok),
+                });
+                return;
+            }
+            unmapped++;
         });
 
         // If the visual graph cannot fully represent the rule (built-ins,
@@ -1314,7 +1453,7 @@ window.SwrlModule = {
         // body is kept verbatim and shown as read-only SHACL, so nothing
         // (notably the THEN clause) is silently dropped on save.
         this._nonRepresentable = unmapped > 0;
-        const note = document.getElementById('swrlAdvancedNote');
+        const note = document.getElementById('ifThenAdvancedNote');
         if (note) note.classList.toggle('d-none', !this._nonRepresentable);
 
         this._applyVisualSelection();
@@ -1332,13 +1471,13 @@ window.SwrlModule = {
             consequent = (this._origConsequent || '').trim();
         } else {
             const atoms = this._buildAtomsFromSelection();
-            antecedent = this._buildSwrlString(atoms.ifAtoms.concat(this._conditionAtoms()));
-            consequent = this._buildSwrlString(atoms.thenAtoms);
+            antecedent = this._buildIfThenString(atoms.ifAtoms.concat(this._conditionAtoms()));
+            consequent = this._buildIfThenString(atoms.thenAtoms.concat(this._assignmentAtoms()));
         }
 
         const rule = {
-            name: document.getElementById('swrlRuleName').value.trim(),
-            description: document.getElementById('swrlRuleDescription').value.trim(),
+            name: document.getElementById('ifThenRuleName').value.trim(),
+            description: document.getElementById('ifThenRuleDescription').value.trim(),
             antecedent,
             consequent,
             enabled: true
@@ -1355,7 +1494,7 @@ window.SwrlModule = {
 
         const previousName = this.editingIndex >= 0 ? (this.rules[this.editingIndex] || {}).name : null;
         try {
-            const r = await fetch('/ontology/swrl/save', {
+            const r = await fetch('/ontology/if-then/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ rule, index: this.editingIndex })
@@ -1363,12 +1502,12 @@ window.SwrlModule = {
             const d = await r.json();
 
             if (d.success) {
-                bootstrap.Modal.getInstance(document.getElementById('swrlGraphEditorModal'))?.hide();
+                bootstrap.Modal.getInstance(document.getElementById('ifThenGraphEditorModal'))?.hide();
                 if (previousName && previousName !== rule.name) this._renameBusinessRuleRefs(previousName, rule.name);
                 this.rules = d.rules || [];
                 this.renderRulesList();
                 if (typeof OntologyState !== 'undefined' && OntologyState.config) {
-                    OntologyState.config.swrl_rules = this.rules;
+                    OntologyState.config.if_then_rules = this.rules;
                 }
                 if (typeof autoGenerateOwl === 'function') autoGenerateOwl();
                 if (typeof BusinessRulesModule !== 'undefined') BusinessRulesModule._refreshAllBadges();
@@ -1398,8 +1537,8 @@ window.SwrlModule = {
 
     async deleteRule(index) {
         const confirmed = await showConfirmDialog({
-            title: 'Delete SWRL Rule',
-            message: 'Are you sure you want to delete this SWRL rule?',
+            title: 'Delete IF-THEN Rule',
+            message: 'Are you sure you want to delete this IF-THEN rule?',
             confirmText: 'Delete',
             confirmClass: 'btn-danger',
             icon: 'trash'
@@ -1408,7 +1547,7 @@ window.SwrlModule = {
 
         const removedName = (this.rules[index] || {}).name;
         try {
-            const r = await fetch('/ontology/swrl/delete', {
+            const r = await fetch('/ontology/if-then/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ index })
@@ -1420,7 +1559,7 @@ window.SwrlModule = {
                 if (removedName && !this.rules.some(x => x.name === removedName)) this._dropBusinessRuleRefs(removedName);
                 this.renderRulesList();
                 if (typeof OntologyState !== 'undefined' && OntologyState.config) {
-                    OntologyState.config.swrl_rules = this.rules;
+                    OntologyState.config.if_then_rules = this.rules;
                 }
                 if (typeof autoGenerateOwl === 'function') autoGenerateOwl();
                 if (typeof BusinessRulesModule !== 'undefined') BusinessRulesModule._refreshAllBadges();
@@ -1436,17 +1575,17 @@ window.SwrlModule = {
 
     // ── SHACL rules text modal (view / export, read-only) ─
 
-    openSwrlModal() {
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('brSwrlModal')).show();
-        this.refreshSwrlText();
+    openIfThenModal() {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('brIfThenModal')).show();
+        this.refreshIfThenText();
     },
 
-    async refreshSwrlText() {
+    async refreshIfThenText() {
         try {
             const resp = await fetch('/ontology/shacl-rules/text', { credentials: 'same-origin' });
             const data = await resp.json();
             if (data.success) {
-                const el = document.getElementById('brSwrlEditor');
+                const el = document.getElementById('brIfThenEditor');
                 if (el) el.value = data.text || '';
             }
         } catch (e) {
@@ -1454,7 +1593,7 @@ window.SwrlModule = {
         }
     },
 
-    exportSwrl() {
+    exportIfThen() {
         window.location.href = '/ontology/shacl-rules/export';
     },
 
@@ -1464,48 +1603,48 @@ window.SwrlModule = {
 // ── Bootstrap wiring ─────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', function () {
-    if (document.getElementById('swrl-section')?.classList.contains('active')) {
-        SwrlModule.init();
+    if (document.getElementById('if-then-section')?.classList.contains('active')) {
+        IfThenModule.init();
     }
 
-    const modal = document.getElementById('swrlGraphEditorModal');
+    const modal = document.getElementById('ifThenGraphEditorModal');
     if (modal) {
         modal.addEventListener('hidden.bs.modal', function () {
             modal.querySelectorAll('input, textarea').forEach(el => { el.disabled = false; });
-            document.getElementById('swrlSaveBtn').classList.remove('d-none');
-            SwrlModule._resetEditor();
-            if (SwrlModule._simulation) { SwrlModule._simulation.stop(); SwrlModule._simulation = null; }
-            SwrlModule._svg = null;
-            SwrlModule._zoom = null;
+            document.getElementById('ifThenSaveBtn').classList.remove('d-none');
+            IfThenModule._resetEditor();
+            if (IfThenModule._simulation) { IfThenModule._simulation.stop(); IfThenModule._simulation = null; }
+            IfThenModule._svg = null;
+            IfThenModule._zoom = null;
         });
     }
 
     document.addEventListener('click', function (e) {
-        const menu = document.getElementById('swrlContextMenu');
+        const menu = document.getElementById('ifThenContextMenu');
         if (menu && !menu.classList.contains('d-none') && !menu.contains(e.target)) {
-            SwrlModule._hideContextMenu();
+            IfThenModule._hideContextMenu();
         }
     });
 
-    const swrlSec = document.getElementById('swrl-section');
-    if (swrlSec) {
-        swrlSec.addEventListener('click', function (e) {
-            const b = e.target.closest('[data-swrl-action]');
-            if (!b || !swrlSec.contains(b)) return;
-            const act = b.getAttribute('data-swrl-action');
-            if (act && typeof SwrlModule[act] === 'function') SwrlModule[act]();
+    const ifThenSec = document.getElementById('if-then-section');
+    if (ifThenSec) {
+        ifThenSec.addEventListener('click', function (e) {
+            const b = e.target.closest('[data-if-then-action]');
+            if (!b || !ifThenSec.contains(b)) return;
+            const act = b.getAttribute('data-if-then-action');
+            if (act && typeof IfThenModule[act] === 'function') IfThenModule[act]();
         });
     }
 
-    const swrlCtx = document.getElementById('swrlContextMenu');
-    if (swrlCtx) {
-        swrlCtx.addEventListener('click', function (e) {
-            const item = e.target.closest('[data-swrl-ctx]');
-            if (!item || !swrlCtx.contains(item)) return;
-            const k = item.getAttribute('data-swrl-ctx');
-            if (k === 'if') SwrlModule.ctxAddToIf();
-            else if (k === 'then') SwrlModule.ctxAddToThen();
-            else if (k === 'remove') SwrlModule.ctxRemove();
+    const ifThenCtx = document.getElementById('ifThenContextMenu');
+    if (ifThenCtx) {
+        ifThenCtx.addEventListener('click', function (e) {
+            const item = e.target.closest('[data-if-then-ctx]');
+            if (!item || !ifThenCtx.contains(item)) return;
+            const k = item.getAttribute('data-if-then-ctx');
+            if (k === 'if') IfThenModule.ctxAddToIf();
+            else if (k === 'then') IfThenModule.ctxAddToThen();
+            else if (k === 'remove') IfThenModule.ctxRemove();
         });
     }
 });

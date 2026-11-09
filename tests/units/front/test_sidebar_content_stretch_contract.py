@@ -47,7 +47,7 @@ SECTION_INVENTORY = {
         "relationships",
         "dataquality",
         "designchecks",
-        "swrl",
+        "if-then",
         "axioms",
         "owl",
     },
@@ -308,7 +308,7 @@ def test_primary_partial_uses_root_content_section(relative_path):
         for tag, classes in roots[1:]
         if tag != "script"
         and "modal" not in classes
-        and "swrl-context-menu" not in classes
+        and "if-then-context-menu" not in classes
     ]
     assert not unexpected_siblings, (
         f"{relative_path} leaves primary content outside the stretch root: "
@@ -599,7 +599,7 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
             BUSINESS_RULES_CSS,
             (
                 (
-                    "#swrl-section .card-body",
+                    "#if-then-section .card-body",
                     {
                         "display": "flex",
                         "flex-direction": "column",
@@ -616,7 +616,7 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
                     {"max-height": "none", "overflow-y": "visible"},
                 ),
                 (
-                    "#swrlRulesList",
+                    "#ifThenRulesList",
                     {"max-height": "none", "overflow-y": "visible"},
                 ),
             ),

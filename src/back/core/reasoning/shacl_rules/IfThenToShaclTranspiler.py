@@ -1,6 +1,6 @@
-"""Transpile SWRL IF/THEN rules into canonical SHACL-AF rules.
+"""Transpile IF-THEN rules into canonical SHACL-AF rules.
 
-The UI still authors rules as SWRL (``antecedent`` / ``consequent``); this
+The UI still authors rules as IF-THEN (``antecedent`` / ``consequent``); this
 transpiler converts each rule into a :class:`ShaclRule` whose canonical form
 is SHACL-AF (``sh:TripleRule`` / ``sh:SPARQLRule``).  Classification:
 
@@ -9,7 +9,7 @@ is SHACL-AF (``sh:TripleRule`` / ``sh:SPARQLRule``).  Classification:
 - anything else (built-ins, negation, multi-hop) -> ``sh:SPARQLRule`` carrying
   a ``CONSTRUCT { ... } WHERE { ... }`` body.
 
-The SWRL body is preserved on the :class:`ShaclRule` so the flat triple-store
+The IF-THEN body is preserved on the :class:`ShaclRule` so the flat triple-store
 SQL backend can generate byte-for-byte the same inference SQL as before.
 """
 
@@ -30,7 +30,7 @@ from back.core.reasoning.shacl_rules.ShaclRule import (
 
 logger = get_logger(__name__)
 
-#: SWRL comparison built-ins that map cleanly to a SPARQL FILTER operator.
+#: IF-THEN comparison built-ins that map cleanly to a SPARQL FILTER operator.
 _COMPARISON_OPS = {
     "greaterthan": ">",
     "lessthan": "<",
@@ -41,8 +41,8 @@ _COMPARISON_OPS = {
 }
 
 
-class SwrlToShaclTranspiler:
-    """Convert SWRL rule dicts into :class:`ShaclRule` instances."""
+class IfThenToShaclTranspiler:
+    """Convert IF-THEN rule dicts into :class:`ShaclRule` instances."""
 
     def __init__(self, ontology: Optional[Dict] = None) -> None:
         self._ontology = ontology or {}
@@ -56,13 +56,13 @@ class SwrlToShaclTranspiler:
     def transpile_many(self, rules: List[Dict]) -> List[ShaclRule]:
         return [self.transpile(r) for r in rules]
 
-    def transpile(self, swrl_rule: Dict) -> ShaclRule:
-        """Transpile one SWRL rule dict into a :class:`ShaclRule`."""
-        name = swrl_rule.get("name", "unnamed")
-        antecedent = swrl_rule.get("antecedent", "")
-        consequent = swrl_rule.get("consequent", "")
+    def transpile(self, if_then_rule: Dict) -> ShaclRule:
+        """Transpile one IF-THEN rule dict into a :class:`ShaclRule`."""
+        name = if_then_rule.get("name", "unnamed")
+        antecedent = if_then_rule.get("antecedent", "")
+        consequent = if_then_rule.get("consequent", "")
 
-        part = RuleExpressionParser.partition_rule_atoms(swrl_rule)
+        part = RuleExpressionParser.partition_rule_atoms(if_then_rule)
         rule_type = self._classify(part)
         target_uri = self._target_class_uri(part)
         construct = self._build_construct(antecedent, consequent)
@@ -79,8 +79,8 @@ class SwrlToShaclTranspiler:
             consequent=consequent,
             construct_sparql=construct,
             turtle=turtle,
-            enabled=swrl_rule.get("enabled", True),
-            description=swrl_rule.get("description", ""),
+            enabled=if_then_rule.get("enabled", True),
+            description=if_then_rule.get("description", ""),
         )
 
     # -- Classification ---------------------------------------------------
@@ -153,14 +153,14 @@ class SwrlToShaclTranspiler:
         args = atom.get("args", [])
         if op and len(args) >= 2:
             return (
-                f"FILTER ({SwrlToShaclTranspiler._term(args[0])} {op} "
-                f"{SwrlToShaclTranspiler._term(args[1])})"
+                f"FILTER ({IfThenToShaclTranspiler._term(args[0])} {op} "
+                f"{IfThenToShaclTranspiler._term(args[1])})"
             )
         return f"# builtin {atom.get('name', '')}({', '.join(args)})"
 
     @staticmethod
     def _term(token: str) -> str:
-        """Render a SWRL argument as a SPARQL term (variable or literal)."""
+        """Render an IF-THEN argument as a SPARQL term (variable or literal)."""
         if not token:
             return '""'
         if token.startswith("?"):
@@ -208,11 +208,20 @@ class SwrlToShaclTranspiler:
                 lines.append(f"        sh:object <{self._uri(atom.get('name', ''))}> ;")
                 lines.append("    ] .")
             else:
+                args = atom.get("args", [])
+                obj_arg = args[1] if len(args) >= 2 else ""
+                # A set-attribute consequent (e.g. priority(?x, "high")) carries
+                # a literal object; a relationship consequent points back to the
+                # focus node (sh:this).
+                if obj_arg and not obj_arg.startswith("?"):
+                    obj_line = f"        sh:object {self._term(obj_arg)} ;"
+                else:
+                    obj_line = "        sh:object sh:this ;"
                 lines.append("    sh:rule [")
                 lines.append("        a sh:TripleRule ;")
                 lines.append("        sh:subject sh:this ;")
                 lines.append(f"        sh:predicate <{self._uri(atom.get('name', ''))}> ;")
-                lines.append("        sh:object sh:this ;")
+                lines.append(obj_line)
                 lines.append("    ] .")
         else:
             lines.append("    sh:rule [")

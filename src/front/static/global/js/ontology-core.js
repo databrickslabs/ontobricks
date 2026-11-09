@@ -112,7 +112,7 @@ async function saveConfigToSession(options = {}) {
         // Strip sub-collections managed by their own dedicated endpoints
         // so we don't overwrite them with stale frontend state.
         var payload = Object.assign({}, OntologyState.config);
-        delete payload.swrl_rules;
+        delete payload.if_then_rules;
         delete payload.constraints;
         delete payload.axioms;
         delete payload.expressions;

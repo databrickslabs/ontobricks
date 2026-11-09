@@ -1,9 +1,9 @@
-"""Regression tests for the SWRL builtin defects behind issue #171.
+"""Regression tests for the IF-THEN builtin defects behind issue #171.
 
-The rule editor emits ``swrlb:``-prefixed builtins over datatype
+The rule editor emits ``builtin:``-prefixed builtins over datatype
 properties. Four defects made every such rule silently infer zero triples:
 
-1. The registry did not recognise the ``swrlb:`` prefix.
+1. The registry did not recognise the ``builtin:`` prefix.
 2. ``build_uri_map`` skipped class ``dataProperties``.
 3. Materialization (and negated atoms in inference) mishandled builtin and
    negated atoms, so builtins were joined as phantom predicates.
@@ -49,7 +49,7 @@ def _params():
     return {
         "antecedent": (
             "Sailing(?x) ∧ nights(?x, ?nights) "
-            "∧ swrlb:greaterThanOrEqual(?nights, 10)"
+            "∧ builtin:greaterThanOrEqual(?nights, 10)"
         ),
         "consequent": "LongSailing(?x)",
         "base_uri": BASE,
@@ -59,8 +59,8 @@ def _params():
 
 class TestDefect1BuiltinPrefix:
     def test_editor_prefixed_name_is_recognised(self):
-        assert RuleBuiltinRegistry.is_builtin("swrlb:greaterThanOrEqual")
-        assert RuleBuiltinRegistry.get("swrlb:greaterThanOrEqual") is not None
+        assert RuleBuiltinRegistry.is_builtin("builtin:greaterThanOrEqual")
+        assert RuleBuiltinRegistry.get("builtin:greaterThanOrEqual") is not None
 
     def test_bare_and_cased_names_still_work(self):
         assert RuleBuiltinRegistry.is_builtin("greaterThanOrEqual")
@@ -72,7 +72,7 @@ class TestDefect1BuiltinPrefix:
         assert RuleBuiltinRegistry.get(iri).name == "greaterThanOrEqual"
 
     def test_non_builtin_stays_false(self):
-        assert not RuleBuiltinRegistry.is_builtin("swrlb:notARealBuiltin")
+        assert not RuleBuiltinRegistry.is_builtin("builtin:notARealBuiltin")
         assert not RuleBuiltinRegistry.is_builtin("operatedBy")
         assert not RuleBuiltinRegistry.is_builtin(DATA + "operatedBy")
 
@@ -85,7 +85,7 @@ class TestDefect2UriMapDataProperties:
         assert uri_map["nights"] == DATA + "nights"
 
     def test_object_property_wins_same_name_clash(self):
-        # Same precedence as AggregateRuleEngine._build_uri_map.
+        # Object properties win over data properties on a same-name clash.
         onto = {
             "base_uri": BASE,
             "classes": [

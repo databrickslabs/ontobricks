@@ -60,18 +60,18 @@ async function loadOntologyClasses() {
         if (typeof ontologyProperties !== 'undefined') ontologyProperties = {};
         
         if (data && data.success && data.config) {
-            // Business rules: keep references to existing, enabled SWRL rules.
-            const swrlByName = {};
-            let hasSwrl = false;
+            // Business rules: keep references to existing, enabled IF-THEN rules.
+            const ifThenByName = {};
+            let hasIfThen = false;
             try {
-                const swrlResp = await fetch('/ontology/swrl/list');
-                const swrlData = await swrlResp.json();
-                if (swrlData && Array.isArray(swrlData.rules)) {
-                    hasSwrl = true;
-                    swrlData.rules.forEach(r => { if (r && r.name) swrlByName[r.name] = r; });
+                const ifThenResp = await fetch('/ontology/if-then/list');
+                const ifThenData = await ifThenResp.json();
+                if (ifThenData && Array.isArray(ifThenData.rules)) {
+                    hasIfThen = true;
+                    ifThenData.rules.forEach(r => { if (r && r.name) ifThenByName[r.name] = r; });
                 }
             } catch (e) {
-                console.log('No SWRL rules loaded:', e.message);
+                console.log('No IF-THEN rules loaded:', e.message);
             }
             // SHACL shapes: only their count per class is needed up front, to
             // gate the "Check SHACL facets" menu item without a round-trip.
@@ -101,9 +101,9 @@ async function loadOntologyClasses() {
                         || null,
                     actions: cls.actions || [],
                     businessRules: (cls.business_rules || [])
-                        .filter(ref => ref && ref.name && (!hasSwrl
-                            || (swrlByName[ref.name] && swrlByName[ref.name].enabled !== false)))
-                        .map(ref => ({ name: ref.name, description: (swrlByName[ref.name] || {}).description || '' })),
+                        .filter(ref => ref && ref.name && (!hasIfThen
+                            || (ifThenByName[ref.name] && ifThenByName[ref.name].enabled !== false)))
+                        .map(ref => ({ name: ref.name, description: (ifThenByName[ref.name] || {}).description || '' })),
                     virtualAttributes: cls.virtualAttributes || [],
                     shaclShapeCount: (typeof shaclShapeCountFor === 'function')
                         ? shaclShapeCountFor(cls.name, allClasses, shaclShapes) : 0,

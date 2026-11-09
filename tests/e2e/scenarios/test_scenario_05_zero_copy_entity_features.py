@@ -1,6 +1,6 @@
 """
 E2E (LIVE) — ``test_scenario_5``: Lakehouse zero-copy backend, virtual
-attributes and entity actions (SWRL business rule + Unity Catalog function).
+attributes and entity actions (IF-THEN business rule + Unity Catalog function).
 
 One connected journey against a running app and a real SQL warehouse:
 
@@ -13,11 +13,11 @@ One connected journey against a running app and a real SQL warehouse:
        watch the ``…_data`` triple count grow with no rebuild
     4. declare, on the ``Customer`` class, a **virtual attribute** group (a
        ``RETURNS TABLE`` UC function), a **UC function action** (scalar) and a
-       **SWRL business rule**; check the node context exposes all three
+       **IF-THEN business rule**; check the node context exposes all three
     5. **compute the virtual attributes** of an entity
     6. **invoke the UC function action** through the request → confirm flow,
        and check the one-time token cannot be replayed
-    7. **trigger the SWRL business rule** on one entity (request → confirm):
+    7. **trigger the IF-THEN business rule** on one entity (request → confirm):
        it infers for a customer that placed an order, and nothing for one that
        did not (the rule is scoped to the focus entity)
 
@@ -291,7 +291,7 @@ class TestScenario5ZeroCopyEntityFeatures:
                 {
                     "name": _DOMAIN_NAME,
                     "description": "Live scenario: Lakehouse zero-copy, virtual "
-                    "attributes, SWRL + UC function actions",
+                    "attributes, IF-THEN + UC function actions",
                     "base_uri": _BASE_URI,
                 },
             )
@@ -410,11 +410,11 @@ class TestScenario5ZeroCopyEntityFeatures:
         assert by_name[_FN_PROFILE].get("returns_table") is True, by_name[_FN_PROFILE]
         _step("both scratch functions listed with exactly one parameter (picker-eligible)")
 
-        # ── 7. Declare the SWRL rule, then bind everything to Customer ──────
-        _step(f"adding SWRL rule {_RULE_NAME}: Customer(?c) ^ places(?c, ?o) -> ActiveCustomer(?c)")
+        # ── 7. Declare the IF-THEN rule, then bind everything to Customer ──────
+        _step(f"adding IF-THEN rule {_RULE_NAME}: Customer(?c) ^ places(?c, ?o) -> ActiveCustomer(?c)")
         ok(
             post(
-                "/ontology/swrl/save",
+                "/ontology/if-then/save",
                 {
                     "rule": {
                         "name": _RULE_NAME,
@@ -509,7 +509,7 @@ class TestScenario5ZeroCopyEntityFeatures:
         )
         _step("replaying the consumed token is refused (one-time confirmation)")
 
-        # ── 10. Trigger the SWRL business rule on one entity ────────────────
+        # ── 10. Trigger the IF-THEN business rule on one entity ────────────────
         def run_rule(entity_uri: str) -> dict:
             pending_rule = ok(
                 post("/dtwin/nodes/business-rule/request", {"entity_uri": entity_uri, "rule": _RULE_NAME})

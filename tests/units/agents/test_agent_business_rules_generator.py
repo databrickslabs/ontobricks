@@ -8,7 +8,8 @@ through:
    -> tool_call: get_ontology_design     (LLM iter 1)
    -> final text message: JSON rule lists (LLM iter 2)
 
-The result we assert on is the four rule lists on :class:`AgentResult`.
+The result we assert on is the two rule lists (Simple/IF-THEN and Complex/SPARQL)
+on :class:`AgentResult`.
 """
 
 from __future__ import annotations
@@ -46,37 +47,14 @@ _RULES_OUTPUT = {
         {
             "name": "AdultCustomer",
             "description": "18+ are adults",
-            "antecedent": "Customer(?c) ^ age(?c, ?a) ^ swrlb:greaterThanOrEqual(?a, 18)",
+            "antecedent": "Customer(?c) ^ age(?c, ?a) ^ builtin:greaterThanOrEqual(?a, 18)",
             "consequent": "Adult(?c)",
-        }
-    ],
-    "decision_tables": [
-        {
-            "name": "RiskTier",
-            "target_class": "Customer",
-            "hit_policy": "first",
-            "row_logic": "and",
-            "input_columns": [{"property": "balance", "label": "Balance"}],
-            "output_column": {"property": "riskTier", "action": "set", "value": ""},
-            "rows": [{"conditions": [{"op": "gt", "value": "100000"}], "action_value": "high"}],
         }
     ],
     "sparql_rules": [
         {
             "name": "FlagBigOrder",
             "query": "CONSTRUCT { ?o a :LargeOrder } WHERE { ?o a :Order . ?o :total ?t . FILTER(?t > 10000) }",
-        }
-    ],
-    "aggregate_rules": [
-        {
-            "name": "FrequentBuyer",
-            "target_class": "Customer",
-            "group_by_property": "placesOrder",
-            "aggregate_property": "",
-            "aggregate_function": "count",
-            "operator": "gte",
-            "threshold": "10",
-            "result_class": "FrequentBuyer",
         }
     ],
 }
@@ -119,7 +97,7 @@ def _run(responses):
 
 
 class TestRunAgent:
-    def test_full_round_trip_returns_four_rule_lists(self):
+    def test_full_round_trip_returns_two_rule_lists(self):
         responses = [
             _tool_call_response("get_ontology_design"),
             _text_response(json.dumps(_RULES_OUTPUT)),
@@ -128,14 +106,12 @@ class TestRunAgent:
 
         assert result.success is True
         assert result.iterations == 2
-        assert len(result.swrl_rules) == 1
-        assert len(result.decision_tables) == 1
+        assert len(result.if_then_rules) == 1
         assert len(result.sparql_rules) == 1
-        assert len(result.aggregate_rules) == 1
-        assert result.total_rules() == 4
+        assert result.total_rules() == 2
         # enabled is defaulted to True on every rule.
-        assert all(r["enabled"] is True for r in result.swrl_rules)
-        assert result.swrl_rules[0]["name"] == "AdultCustomer"
+        assert all(r["enabled"] is True for r in result.if_then_rules)
+        assert result.if_then_rules[0]["name"] == "AdultCustomer"
         # usage summed across iterations.
         assert result.usage["prompt_tokens"] == 300
 
@@ -143,13 +119,13 @@ class TestRunAgent:
         fenced = "```json\n" + json.dumps(_RULES_OUTPUT) + "\n```"
         result = _run([_text_response(fenced)])
         assert result.success is True
-        assert result.total_rules() == 4
+        assert result.total_rules() == 2
 
     def test_json_embedded_in_prose_is_extracted(self):
         prose = "Here are the rules:\n" + json.dumps(_RULES_OUTPUT) + "\nDone."
         result = _run([_text_response(prose)])
         assert result.success is True
-        assert result.total_rules() == 4
+        assert result.total_rules() == 2
 
     def test_invalid_json_triggers_retry_then_succeeds(self):
         responses = [
@@ -158,7 +134,7 @@ class TestRunAgent:
         ]
         result = _run(responses)
         assert result.success is True
-        assert result.total_rules() == 4
+        assert result.total_rules() == 2
 
     def test_persistently_invalid_json_fails(self):
         responses = [_text_response("nope") for _ in range(5)]
@@ -166,7 +142,7 @@ class TestRunAgent:
         assert result.success is False
         assert "JSON" in result.error
 
-    def test_swrl_referencing_unknown_entities_is_dropped(self):
+    def test_if_then_referencing_unknown_entities_is_dropped(self):
         bad = {
             "swrl_rules": [
                 {
@@ -184,10 +160,10 @@ class TestRunAgent:
         result = _run([_text_response(json.dumps(bad))])
         assert result.success is True
         # Only the rule that references existing ontology terms survives.
-        names = [r["name"] for r in result.swrl_rules]
+        names = [r["name"] for r in result.if_then_rules]
         assert names == ["GoodLoyal"]
 
-    def test_tautological_swrl_rule_is_dropped(self):
+    def test_tautological_if_then_rule_is_dropped(self):
         out = {
             "swrl_rules": [
                 {
@@ -199,23 +175,21 @@ class TestRunAgent:
                 },
                 {
                     "name": "AdultCustomer",
-                    "antecedent": "Customer(?c) ^ age(?c, ?a) ^ swrlb:greaterThanOrEqual(?a, 18)",
+                    "antecedent": "Customer(?c) ^ age(?c, ?a) ^ builtin:greaterThanOrEqual(?a, 18)",
                     "consequent": "Adult(?c)",
                 },
             ]
         }
         result = _run([_text_response(json.dumps(out))])
         assert result.success is True
-        names = [r["name"] for r in result.swrl_rules]
+        names = [r["name"] for r in result.if_then_rules]
         assert names == ["AdultCustomer"]
 
     def test_missing_keys_yield_empty_lists(self):
         result = _run([_text_response(json.dumps({"swrl_rules": _RULES_OUTPUT["swrl_rules"]}))])
         assert result.success is True
-        assert len(result.swrl_rules) == 1
-        assert result.decision_tables == []
+        assert len(result.if_then_rules) == 1
         assert result.sparql_rules == []
-        assert result.aggregate_rules == []
 
     def test_llm_failure_is_reported(self):
         with patch.object(

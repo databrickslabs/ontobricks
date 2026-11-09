@@ -82,7 +82,7 @@ class OntologyConflictDetector:
             ``domain.ontology`` dict (session state).
         incoming:
             Dict with keys ``classes``, ``properties``, ``constraints``,
-            ``swrl_rules``, ``axioms``, ``expressions``, ``groups`` — the
+            ``if_then_rules``, ``axioms``, ``expressions``, ``groups`` — the
             structured output from the OWL/RDFS parser.
         """
         report = ConflictReport()
@@ -109,9 +109,9 @@ class OntologyConflictDetector:
             report=report,
         )
         self._analyze_named_list(
-            entity_type="swrl_rule",
-            existing_list=existing.get("swrl_rules") or [],
-            incoming_list=incoming.get("swrl_rules") or [],
+            entity_type="if_then_rule",
+            existing_list=existing.get("if_then_rules") or [],
+            incoming_list=incoming.get("if_then_rules") or [],
             equality_fn=_generic_equal,
             report=report,
         )
@@ -221,7 +221,7 @@ class OntologyConflictDetector:
         equality_fn,
         report: ConflictReport,
     ) -> None:
-        """Classify items identified only by name (constraints, SWRL rules, groups)."""
+        """Classify items identified only by name (constraints, IF-THEN rules, groups)."""
         existing_by_name: Dict[str, Dict] = {
             _name_key(e): e for e in existing_list if _name_key(e)
         }

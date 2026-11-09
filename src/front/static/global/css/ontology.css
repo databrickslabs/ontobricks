@@ -111,7 +111,7 @@ body.ontology-page {
 }
 
 /* ==========================================================================
-   Advanced Sections (SWRL, Constraints, Axioms)
+   Advanced Sections (IF-THEN, Constraints, Axioms)
    ========================================================================== */
 
 /* Placeholder icons */
@@ -119,17 +119,17 @@ body.ontology-page {
     font-size: 3rem;
 }
 
-/* SWRL Rules */
-.swrl-rule-card {
+/* IF-THEN Rules */
+.if-then-rule-card {
     border-left: 3px solid #6f42c1;
     transition: box-shadow 0.2s ease;
 }
 
-.swrl-rule-card:hover {
+.if-then-rule-card:hover {
     box-shadow: 0 2px 8px rgba(111, 66, 193, 0.15);
 }
 
-.swrl-rule-code {
+.if-then-rule-code {
     font-family: 'Fira Code', 'Monaco', monospace;
     font-size: 0.85rem;
     background: #ffffff;
@@ -138,7 +138,7 @@ body.ontology-page {
     display: inline-block;
 }
 
-.swrl-rule-code code {
+.if-then-rule-code code {
     color: #6f42c1;
 }
 
@@ -162,7 +162,7 @@ body.ontology-page {
     box-shadow: 0 2px 8px rgba(25, 135, 84, 0.15);
 }
 
-/* Clickable chips for SWRL predicates */
+/* Clickable chips for IF-THEN predicates */
 .clickable-chip {
     cursor: pointer;
     transition: transform 0.1s ease, opacity 0.1s ease;
@@ -505,5 +505,18 @@ body.ontology-page {
         overflow: visible;
     }
 
+}
+
+/* Shared rule/shape list cards (Data Quality, Business Rules Simple/Complex). */
+.ob-rule-card {
+    border: 1px solid var(--db-border, var(--bs-border-color));
+    border-radius: var(--db-radius-control, 0.375rem);
+    padding: 0.625rem 0.75rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ob-rule-card:hover {
+    border-color: var(--db-primary, var(--bs-primary));
+    box-shadow: 0 0 0 0.15rem rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), 0.1);
 }
 

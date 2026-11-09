@@ -351,7 +351,7 @@ Then map those tables on the **Mapping** page:
    - Use the **Search** tab to narrow down by entity type, field, or depth
    - View all mapped attributes, values, and relationships
 4. Run **Data Quality** checks from the **Data Quality** sidebar section — validates cardinality, datatypes, patterns, and custom SPARQL rules against the triple store. In **Explorer**, right-click a node for **Data Quality Checks** on that entity.
-5. Run inference from the **Inference** sidebar section — executes OWL 2 RL inference and SWRL business rules to discover inferred triples. Explorer can also run a class **Inference rule** or a bound **Job** on one entity.
+5. Run inference from the **Inference** sidebar section — executes OWL 2 RL inference and IF-THEN business rules to discover inferred triples. Explorer can also run a class **Inference rule** or a bound **Job** on one entity.
 6. Open **Query → GraphQL** for the typed schema, or **Query → SPARQL** for read-only SELECT queries (generated SQL stays below the editor).
 
 ## Common Commands
@@ -433,7 +433,7 @@ other graph backends retain their native or iterative traversal.
 | **Entities** | Manage classes with form interface |
 | **Relationships** | Manage object properties |
 | **Data Quality** | SHACL shape-based data quality rules |
-| **Business Rules** | Define SWRL inference rules (graphical D3 editor) |
+| **Business Rules** | Define IF-THEN inference rules (graphical D3 editor) |
 | **Expr. & Axioms** | OWL class expressions and axioms |
 
 > **Tip**: The **Generate** wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in `src/shared/config/constants.py` and can be customised or extended.
@@ -493,7 +493,7 @@ scripts/setup.sh
 - Check [Deployment](deployment.md) for Databricks Apps deployment
 - Explore the [MCP Server](mcp.md) for Databricks Playground integration
 - Review [Data Quality](user-guide.md#data-quality-shacl-shapes) for SHACL shape validation
-- Explore [Reasoning](user-guide.md#step-7b-run-reasoning-optional) for OWL 2 RL and SWRL inference
+- Explore [Reasoning](user-guide.md#step-7b-run-reasoning-optional) for OWL 2 RL and IF-THEN inference
 - See the [External API](api.md) for REST and GraphQL programmatic access
 
 ---

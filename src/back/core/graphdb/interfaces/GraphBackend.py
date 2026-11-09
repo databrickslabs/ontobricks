@@ -147,7 +147,7 @@ class GraphBackend(
         return table_name
 
     def sql_table_reference(self, graph_name: str) -> str:
-        """Stable identifier for translators (SWRL, SPARQL, aggregate/DT SQL)."""
+        """Stable identifier for translators (IF-THEN, SPARQL, aggregate/DT SQL)."""
         return self._sql_relation(graph_name)
 
     def sql_flavor(self) -> Optional[Literal["spark", "postgres"]]:

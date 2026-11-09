@@ -41,7 +41,7 @@ ex:hasName a owl:DatatypeProperty ;
 
 
 def _roundtrip() -> Graph:
-    info, classes, properties, constraints, swrl, axioms, expressions, groups = (
+    info, classes, properties, constraints, if_then, axioms, expressions, groups = (
         Owl.parse_owl(ISSUE_194_TTL, extract_advanced=True)
     )
     turtle = Owl.generate_owl(
@@ -54,7 +54,7 @@ def _roundtrip() -> Graph:
             "rdf_extras": info.get("rdf_extras") or {},
         },
         constraints=constraints,
-        swrl_rules=swrl,
+        if_then_rules=if_then,
         axioms=axioms,
         expressions=expressions,
         groups=groups,

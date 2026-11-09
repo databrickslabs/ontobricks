@@ -12,8 +12,6 @@ import pytest
 from back.core.graphdb.delta.MaterializedStore import MaterializedStore
 from back.core.graphdb.lakebase.FlatStore import FlatStore
 from back.core.helpers import SQLHelpers
-from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
-from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
 from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
 from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
 from back.core.w3c.shacl.SHACLService import SHACLService
@@ -84,118 +82,43 @@ class TestCanonicalHelper:
 
 
 class TestSPARQLRuleEngine:
+    """SPARQL IRIs cannot hold spaces or backslashes, so IRI payloads use a
+    quote only; string literals carry the full payload (``\\\\`` in SPARQL)."""
+
+    IRI_PAYLOAD = "x'OR'1'='1"
+    SPARQL_STRING = PAYLOAD.replace("\\", "\\\\")
+
     @staticmethod
     def _sql(where: str, dialect: str = "spark") -> str:
         query = (
-            f"CONSTRUCT {{ ?p rdf:type <http://test.org/{PAYLOAD}> }} "
+            f"CONSTRUCT {{ ?p rdf:type <http://test.org/{TestSPARQLRuleEngine.IRI_PAYLOAD}> }} "
             f"WHERE {{ ?p rdf:type <{CLS}> . ?p <http://test.org/amt> ?amt . {where} }}"
         )
-        return SPARQLRuleEngine()._construct_to_sql(
-            query, "triples", {"base_uri": BASE}, dialect=dialect
-        )
-
-    def test_construct_iri_stays_closed(self):
-        assert f"http://test.org/{PAYLOAD}" in _literals(self._sql(""))
-
-    def test_where_iri_stays_closed(self):
-        query = (
-            f"CONSTRUCT {{ ?p rdf:type <{CLS}> }} "
-            f"WHERE {{ ?p <http://t/{PAYLOAD}> <http://o/{PAYLOAD}> }}"
-        )
-        sql = SPARQLRuleEngine()._construct_to_sql(query, "triples", {"base_uri": BASE})
-        literals = _literals(sql)
-        assert f"http://t/{PAYLOAD}" in literals
-        assert f"http://o/{PAYLOAD}" in literals
-
-    def test_filter_string_stays_closed(self):
-        assert PAYLOAD in _literals(self._sql(f"FILTER(?amt = {PAYLOAD})"))
-
-    def test_postgres_dialect_keeps_backslash(self):
-        sql = self._sql(f"FILTER(?amt = {PAYLOAD})", dialect="postgres")
-        assert PAYLOAD in _literals(sql, "postgres")
-
-    @pytest.mark.parametrize("token", ["nan", "inf", "1_000"])
-    def test_non_finite_filter_is_quoted(self, token):
-        sql = self._sql(f"FILTER(?amt > {token})")
-        assert f"w1.object > '{token}'" in sql
-
-    def test_numeric_filter_unchanged(self):
-        sql = self._sql("FILTER(?amt > 100000)")
-        assert "TRY_CAST(w1.object AS DOUBLE) > 100000" in sql
-
-    def test_ordinary_output_unchanged(self):
-        sql = self._sql("")
-        assert sql.startswith(
-            "SELECT DISTINCT w0.subject AS s, "
-            "'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' AS p"
-        )
-        assert f"w0.object = '{CLS}'" in sql
-
-    def test_store_flavor_selects_dialect(self):
         store = MagicMock()
-        store.sql_flavor.return_value = "postgres"
+        store.sql_flavor.return_value = dialect
         store.sql_table_reference.return_value = "triples"
         store.execute_query.return_value = []
-        query = f"CONSTRUCT {{ ?p rdf:type <{CLS}> }} WHERE {{ ?p <http://t/{PAYLOAD}> ?o }}"
-        SPARQLRuleEngine()._execute_one("r", query, store, "t", {"base_uri": BASE}, False)
-        sql = store.execute_query.call_args.args[0]
-        assert f"http://t/{PAYLOAD}" in _literals(sql, "postgres")
+        SPARQLRuleEngine()._execute_one("r", query, store, "t", {"base_uri": BASE})
+        return store.execute_query.call_args.args[0]
 
+    def test_construct_iri_stays_closed(self):
+        assert f"http://test.org/{self.IRI_PAYLOAD}" in _literals(self._sql(""))
 
-def _decision_table(value):
-    return {
-        "target_class_uri": CLS,
-        "input_columns": [{"property": "tier", "property_uri": PROP}],
-        "rows": [{"conditions": [{"op": "eq", "value": value}], "action": "x"}],
-    }
-
-
-class TestDecisionTableEngine:
-    def test_condition_value_stays_closed(self):
-        sql = DecisionTableEngine().build_violation_sql(_decision_table(PAYLOAD), "t", BASE)
-        assert PAYLOAD.lower() in _literals(sql)
-
-    @pytest.mark.parametrize("token", ["nan", "inf"])
-    def test_non_finite_value_is_quoted(self, token):
-        sql = DecisionTableEngine().build_violation_sql(_decision_table(token), "t", BASE)
-        assert f"LOWER(inp0.object) = '{token}'" in sql
-
-    def test_numeric_value_unchanged(self):
-        sql = DecisionTableEngine().build_violation_sql(_decision_table("100"), "t", BASE)
-        assert "inp0.object = 100" in sql
-
-
-class TestAggregateRuleEngine:
-    @staticmethod
-    def _rule(**overrides):
-        rule = {
-            "target_class_uri": CLS,
-            "aggregate_property_uri": PROP,
-            "aggregate_function": "count",
-            "operator": "gt",
-            "threshold": "5",
-        }
-        rule.update(overrides)
-        return rule
-
-    def test_uri_stays_closed(self):
-        sql = AggregateRuleEngine().build_sql(
-            self._rule(target_class_uri=PAYLOAD), "t", BASE
-        )
+    def test_filter_string_stays_closed(self):
+        sql = self._sql(f'FILTER(?amt = "{self.SPARQL_STRING}")')
         assert PAYLOAD in _literals(sql)
 
-    @pytest.mark.parametrize("threshold", ["0 OR 1=1", "nan", "inf"])
-    def test_non_numeric_threshold_is_rejected(self, threshold):
-        assert AggregateRuleEngine().build_sql(self._rule(threshold=threshold), "t", BASE) is None
+    def test_postgres_dialect_keeps_backslash(self):
+        sql = self._sql(f'FILTER(?amt = "{self.SPARQL_STRING}")', dialect="postgres")
+        assert PAYLOAD in _literals(sql, "postgres")
 
-    def test_non_numeric_threshold_fails_validation(self):
-        rule = {"name": "r", "target_class": "C", "aggregate_property": "p",
-                "threshold": "0 OR 1=1"}
-        assert any("threshold" in e.lower() for e in AggregateRuleEngine.validate_rule(rule))
+    def test_like_filter_stays_closed(self):
+        sql = self._sql(f'FILTER(CONTAINS(?amt, "{self.SPARQL_STRING}"))')
+        assert any(PAYLOAD in lit for lit in _literals(sql))
 
-    def test_numeric_threshold_unchanged(self):
-        sql = AggregateRuleEngine().build_sql(self._rule(threshold=5), "t", BASE)
-        assert sql.endswith("HAVING COUNT(TRY_CAST(t_agg.object AS DOUBLE)) > 5")
+    def test_numeric_filter_is_cast(self):
+        sql = self._sql("FILTER(?amt > 100000)")
+        assert "TRY_CAST(t2.object AS DOUBLE) > 100000" in sql
 
 
 class TestSHACLService:

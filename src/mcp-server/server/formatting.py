@@ -351,8 +351,8 @@ def _format_node_context_response(
 def _node_business_rule_lines(
     business_rules: list, context_policy: Optional[dict]
 ) -> list[str]:
-    """Render a node's SWRL business rules and point at their execution."""
-    lines = ["Business rules (SWRL):"]
+    """Render a node's IF-THEN business rules and point at their execution."""
+    lines = ["Business rules (IF-THEN):"]
     for br in business_rules:
         lines.append(f"  → {br.get('name', '')}")
         desc = (br.get("description") or "").strip()

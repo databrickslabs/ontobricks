@@ -100,7 +100,7 @@ class TestCacheRefreshConfig:
 class TestReasoningConfig:
     def _cfg(self, **over):
         base = {
-            "phases": {"swrl": True},
+            "phases": {"if_then": True},
             "materialize_graph": True,
             "materialize_delta": False,
             "materialize_table": "",
@@ -112,19 +112,17 @@ class TestReasoningConfig:
         out = get_task_type("reasoning").normalize_config(self._cfg())
         assert set(out["phases"]) == {
             "tbox",
-            "swrl",
+            "if_then",
             "graph",
-            "decision_tables",
             "sparql_rules",
-            "aggregate_rules",
         }
-        assert out["phases"]["swrl"] is True
-        assert out["phases"]["decision_tables"] is False
+        assert out["phases"]["if_then"] is True
+        assert out["phases"]["sparql_rules"] is False
 
     def test_no_phase_enabled_is_rejected(self):
         with pytest.raises(ValidationError) as exc:
             get_task_type("reasoning").normalize_config(
-                self._cfg(phases={name: False for name in ("tbox", "swrl", "graph")})
+                self._cfg(phases={name: False for name in ("tbox", "if_then", "graph")})
             )
         assert "phase" in str(exc.value)
 
@@ -211,7 +209,7 @@ class TestReasoningExecutor:
         ctx = _ctx(
             task_type="reasoning",
             config={
-                "phases": {"tbox": True, "swrl": True},
+                "phases": {"tbox": True, "if_then": True},
                 "materialize_graph": True,
                 "materialize_delta": True,
                 "materialize_table": "cat.sch.inferred",
@@ -233,7 +231,7 @@ class TestReasoningExecutor:
 
         ctx = _ctx(
             task_type="reasoning",
-            config={"phases": {"swrl": True}, "materialize_graph": False},
+            config={"phases": {"if_then": True}, "materialize_graph": False},
         )
         with patch.object(DigitalTwin, "run_inference_task") as run_inference:
             with pytest.raises(ValidationError):

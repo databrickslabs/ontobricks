@@ -7,7 +7,7 @@ prove:
    (unary/binary atoms, comparison/string built-ins, negation, multi-hop,
    materialisation, entity focus), the engine issues the expected SQL to the
    store via the flat-triple SQL backend.
-2. **Contract** — provenance (``swrl:<rule>``) and ``stats`` keys match the
+2. **Contract** — provenance (``if_then:<rule>``) and ``stats`` keys match the
    established contract, so the UI / MCP / DQ consumers observe no difference.
 3. **Transpiler** — IF/THEN rules map to the expected SHACL-AF rule type and
    produce well-formed canonical Turtle.
@@ -22,7 +22,7 @@ import back.objects  # noqa: F401
 from back.core.reasoning.shacl_rules import (
     ShaclRuleEngine,
     SPARQL_RULE,
-    SwrlToShaclTranspiler,
+    IfThenToShaclTranspiler,
     TRIPLE_RULE,
 )
 
@@ -44,7 +44,7 @@ ONTOLOGY = {
     ],
 }
 
-# A battery exercising every SWRL capability path.
+# A battery exercising every IF-THEN capability path.
 RULE_BATTERY = [
     {
         "name": "simple_class",
@@ -58,14 +58,14 @@ RULE_BATTERY = [
     },
     {
         "name": "comparison_builtin",
-        "antecedent": "Customer(?x) \u2227 hasScore(?x, ?s) \u2227 swrlb:greaterThan(?s, 500)",
+        "antecedent": "Customer(?x) \u2227 hasScore(?x, ?s) \u2227 builtin:greaterThan(?s, 500)",
         "consequent": "HighValue(?x)",
     },
     {
         "name": "string_builtin",
         "antecedent": (
             'Customer(?x) \u2227 Contract(?z) \u2227 hasContract(?x, ?z) '
-            '\u2227 status(?z, ?st) \u2227 swrlb:contains(?st, "active")'
+            '\u2227 status(?z, ?st) \u2227 builtin:contains(?st, "active")'
         ),
         "consequent": "HighValue(?x)",
     },
@@ -158,11 +158,11 @@ class TestContract:
         result = ShaclRuleEngine(ontology=ONTOLOGY).execute_rules(
             [RULE_BATTERY[1]], store, "triples"
         )
-        assert result.stats["phase"] == "swrl"
+        assert result.stats["phase"] == "if_then"
         assert result.stats["rules_count"] == 1
         assert len(result.inferred_triples) >= 1
         assert all(
-            t.provenance.startswith("swrl:") for t in result.inferred_triples
+            t.provenance.startswith("if_then:") for t in result.inferred_triples
         )
 
     def test_empty_rules(self):
@@ -183,7 +183,7 @@ class TestContract:
 
 class TestTranspiler:
     def setup_method(self):
-        self.t = SwrlToShaclTranspiler(ontology=ONTOLOGY)
+        self.t = IfThenToShaclTranspiler(ontology=ONTOLOGY)
 
     def test_simple_assertion_is_triple_rule(self):
         rule = self.t.transpile(RULE_BATTERY[0])

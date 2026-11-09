@@ -1,5 +1,6 @@
 /**
- * Inference Module — OWL 2 RL, SWRL, and graph reasoning UI
+ * Inference Module — OWL 2 RL, Simple (IF-THEN) / Complex (SPARQL) rules,
+ * and graph reasoning UI.
  */
 const ReasoningModule = {
     currentTaskId: null,
@@ -13,10 +14,8 @@ const ReasoningModule = {
 
     // rule type → { tileCheckboxId, listAttr }
     _RULE_TILE_MAP: {
-        swrl:             { checkboxId: 'reasoningSwrl',           listAttr: 'swrl' },
-        decision_tables:  { checkboxId: 'reasoningDecisionTables', listAttr: 'decision_tables' },
+        if_then:             { checkboxId: 'reasoningIfThen',           listAttr: 'if_then' },
         sparql_rules:     { checkboxId: 'reasoningSparqlRules',    listAttr: 'sparql_rules' },
-        aggregate_rules:  { checkboxId: 'reasoningAggregateRules', listAttr: 'aggregate_rules' },
     },
 
     async init() {
@@ -33,20 +32,16 @@ const ReasoningModule = {
         if (this._rulesLoaded) return;
         this._rulesLoaded = true;
         try {
-            const [swrlResp, dtResp, sparqlResp, aggResp] = await Promise.all([
-                fetch('/ontology/swrl/list', { credentials: 'same-origin' }),
-                fetch('/ontology/rules/decision_tables/list', { credentials: 'same-origin' }),
+            const [ifThenResp, sparqlResp] = await Promise.all([
+                fetch('/ontology/if-then/list', { credentials: 'same-origin' }),
                 fetch('/ontology/rules/sparql_rules/list', { credentials: 'same-origin' }),
-                fetch('/ontology/rules/aggregate_rules/list', { credentials: 'same-origin' }),
             ]);
-            const [swrlData, dtData, sparqlData, aggData] = await Promise.all([
-                swrlResp.json(), dtResp.json(), sparqlResp.json(), aggResp.json(),
+            const [ifThenData, sparqlData] = await Promise.all([
+                ifThenResp.json(), sparqlResp.json(),
             ]);
             this._rulesCache = {
-                swrl:            swrlData.rules || [],
-                decision_tables: dtData.rules || [],
+                if_then:            ifThenData.rules || [],
                 sparql_rules:    sparqlData.rules || [],
-                aggregate_rules: aggData.rules || [],
             };
             this._renderRuleCheckboxes();
         } catch (e) {
@@ -140,9 +135,8 @@ const ReasoningModule = {
 
     toggleAllOptions(checked) {
         const ids = [
-            'reasoningTbox', 'reasoningSwrl', 'reasoningGraph',
-            'reasoningDecisionTables', 'reasoningSparqlRules',
-            'reasoningAggregateRules',
+            'reasoningTbox', 'reasoningIfThen', 'reasoningGraph',
+            'reasoningSparqlRules',
         ];
         ids.forEach(id => {
             const el = document.getElementById(id);
@@ -160,10 +154,8 @@ const ReasoningModule = {
         checkbox.indeterminate = false;
         // Cascade to child rule checkboxes for enumerable tiles
         const typeMap = {
-            reasoningSwrl:           'swrl',
-            reasoningDecisionTables: 'decision_tables',
+            reasoningIfThen:           'if_then',
             reasoningSparqlRules:    'sparql_rules',
-            reasoningAggregateRules: 'aggregate_rules',
         };
         const type = typeMap[checkbox.id];
         if (!type) return;
@@ -186,8 +178,7 @@ const ReasoningModule = {
     setRunning(running) {
         const btn = document.getElementById('runReasoningBtn');
         const checkboxes = document.querySelectorAll(
-            '#reasoningTbox, #reasoningSwrl, #reasoningGraph, ' +
-            '#reasoningDecisionTables, #reasoningSparqlRules, #reasoningAggregateRules'
+            '#reasoningTbox, #reasoningIfThen, #reasoningGraph, #reasoningSparqlRules'
         );
         if (running) {
             btn.disabled = true;
@@ -210,37 +201,29 @@ const ReasoningModule = {
 
     async runReasoning() {
         const tboxEl   = document.getElementById('reasoningTbox');
-        const swrlEl   = document.getElementById('reasoningSwrl');
+        const ifThenEl   = document.getElementById('reasoningIfThen');
         const graphEl  = document.getElementById('reasoningGraph');
-        const dtEl     = document.getElementById('reasoningDecisionTables');
         const sparqlEl = document.getElementById('reasoningSparqlRules');
-        const aggEl    = document.getElementById('reasoningAggregateRules');
 
         const tbox           = tboxEl?.checked || false;
-        const swrl           = swrlEl?.checked || swrlEl?.indeterminate || false;
+        const if_then           = ifThenEl?.checked || ifThenEl?.indeterminate || false;
         const graph          = graphEl?.checked || false;
-        const decision_tables = dtEl?.checked || dtEl?.indeterminate || false;
         const sparql_rules   = sparqlEl?.checked || sparqlEl?.indeterminate || false;
-        const aggregate_rules = aggEl?.checked || aggEl?.indeterminate || false;
 
-        if (!tbox && !swrl && !graph && !decision_tables && !sparql_rules && !aggregate_rules) {
+        if (!tbox && !if_then && !graph && !sparql_rules) {
             if (typeof showNotification === 'function')
                 showNotification('Select at least one inference phase.', 'warning');
             return;
         }
 
-        const payload = { tbox, swrl, graph, decision_tables, sparql_rules, aggregate_rules };
+        const payload = { tbox, if_then, graph, sparql_rules };
 
         // Attach per-rule name filters for enumerable phases (only when rules are loaded)
         if (this._rulesLoaded) {
-            const swrlNames = this._getSelectedRuleNames('swrl');
-            const dtNames   = this._getSelectedRuleNames('decision_tables');
+            const ifThenNames = this._getSelectedRuleNames('if_then');
             const sparqlNames = this._getSelectedRuleNames('sparql_rules');
-            const aggNames  = this._getSelectedRuleNames('aggregate_rules');
-            if (swrlNames.length)   payload.swrl_rule_names        = swrlNames;
-            if (dtNames.length)     payload.decision_table_names   = dtNames;
+            if (ifThenNames.length)   payload.if_then_rule_names        = ifThenNames;
             if (sparqlNames.length) payload.sparql_rule_names      = sparqlNames;
-            if (aggNames.length)    payload.aggregate_rule_names   = aggNames;
         }
 
         this.setRunning(true);
@@ -469,11 +452,9 @@ const ReasoningModule = {
     _renderExecutionReport(stats, result) {
         const phases = [
             { key: 'tbox',            label: 'T-Box (OWL 2 RL)',      icon: 'bi-diagram-3' },
-            { key: 'swrl',            label: 'SWRL Inference',          icon: 'bi-code-square' },
+            { key: 'if_then',            label: 'Simple Rules',          icon: 'bi-code-square' },
             { key: 'graph',           label: 'Graph Inference',         icon: 'bi-share' },
-            { key: 'decision_tables', label: 'Decision Tables',        icon: 'bi-table' },
-            { key: 'sparql_rules',    label: 'SPARQL CONSTRUCT Rules', icon: 'bi-braces' },
-            { key: 'aggregate_rules', label: 'Aggregate Rules',        icon: 'bi-calculator' },
+            { key: 'sparql_rules',    label: 'Complex Rules',         icon: 'bi-braces' },
         ];
 
         const tbody = document.getElementById('reasoningReportBody');

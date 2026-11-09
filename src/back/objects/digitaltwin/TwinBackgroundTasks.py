@@ -185,15 +185,13 @@ class TwinBackgroundTasks:
         triplestore_table: str,
         total: int,
         *,
-        swrl_rules=None,
+        if_then_rules=None,
         ontology_dict=None,
-        decision_tables=None,
-        aggregate_rules=None,
         violation_limit=None,
         failure_message: str = "Data quality checks failed",
         use_exception_message_on_failure: bool = False,
     ) -> None:
-        """Run SHACL / SWRL / DT / aggregate checks inside a worker thread.
+        """Run SHACL / IF-THEN checks inside a worker thread.
 
         Every check is compiled to SQL and executed against the triple-store
         VIEW on the SQL warehouse, or against a run-scoped snapshot of it.
@@ -233,10 +231,8 @@ class TwinBackgroundTasks:
                     store,
                     t0,
                     total,
-                    swrl_rules=swrl_rules,
+                    if_then_rules=if_then_rules,
                     ontology=ontology_dict,
-                    decision_tables=decision_tables,
-                    aggregate_rules=aggregate_rules,
                     violation_limit=violation_limit,
                     parallel=snap.parallel,
                 )
@@ -477,27 +473,24 @@ class TwinBackgroundTasks:
             tm.update_progress(task_id, 30, "Running inference phases")
 
             logger.info(
-                "%s task %s: running phases (tbox=%s, swrl=%s, graph=%s, "
-                "constraints=%s, decision_tables=%s, sparql_rules=%s, "
-                "aggregate_rules=%s)",
+                "%s task %s: running phases (tbox=%s, if_then=%s, graph=%s, "
+                "constraints=%s, sparql_rules=%s)",
                 label,
                 task_id,
                 options.get("tbox"),
-                options.get("swrl"),
+                options.get("if_then"),
                 options.get("graph"),
                 options.get("constraints"),
-                options.get("decision_tables"),
                 options.get("sparql_rules"),
-                options.get("aggregate_rules"),
             )
 
-            def _swrl_progress(idx: int, total: int, rule_name: str) -> None:
+            def _if_then_progress(idx: int, total: int, rule_name: str) -> None:
                 pct = 30 + int((idx / max(total, 1)) * 50)
                 tm.update_progress(
-                    task_id, pct, f"SWRL {idx + 1}/{total}: {rule_name}"
+                    task_id, pct, f"IF-THEN {idx + 1}/{total}: {rule_name}"
                 )
 
-            result = svc.run_full_reasoning(options, progress_callback=_swrl_progress)
+            result = svc.run_full_reasoning(options, progress_callback=_if_then_progress)
             logger.info(
                 "%s task %s: phases done — %d inferred, %d violations",
                 label,

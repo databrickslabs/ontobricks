@@ -6,12 +6,11 @@ The conditions only narrow the focus nodes the constraint applies to — the
 constraint itself is untouched, which is why every translator here produces a
 **subject filter** rather than a new kind of check.
 
-A single condition is ``{property, property_uri, op, value}``.  Unlike a
-decision-table cell it carries its own property, so rows are independent and
-there is no rectangular invariant to maintain.
+A single condition is ``{property, property_uri, op, value}``; each row
+carries its own property, so rows are independent.
 
-Operators are the decision-table vocabulary (``DT_OP_SQL``) plus ``exists`` /
-``notExists`` for relationships, so the two rule builders stay in sync.
+Operators are the ``DT_OP_SQL`` vocabulary plus ``exists`` / ``notExists``
+for relationships.
 """
 
 from typing import Callable, Dict, List, Optional, Sequence, Set
@@ -31,8 +30,8 @@ CONDITION_CATEGORIES = ("conformance", "consistency")
 #: Relationship operators — they ignore ``value``.
 EXISTENCE_OPS = frozenset({"exists", "notExists"})
 
-#: Every operator a condition may use (``any`` is a decision-table wildcard
-#: with no meaning for a guard, so it is excluded).
+#: Every operator a condition may use (``any`` is a wildcard with no meaning
+#: for a guard, so it is excluded).
 CONDITION_OPS = frozenset(set(DT_OP_SQL) - {"any"} | EXISTENCE_OPS)
 
 CONDITION_LOGICS = ("and", "or")

@@ -1,4 +1,4 @@
-"""OntoBricks SWRL text serialize / parse round-trips and fail-closed import."""
+"""OntoBricks IF-THEN text serialize / parse round-trips and fail-closed import."""
 
 import pytest
 

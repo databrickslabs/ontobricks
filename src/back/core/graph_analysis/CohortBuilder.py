@@ -98,7 +98,7 @@ class CohortBuilder:
     # Codebase convention: the ontology stores property URIs with the
     # base_uri's separator (typically ``…#name``), but data triples are
     # loaded with the *data namespace* — ``base_uri.rstrip("#") + "/"`` —
-    # so live predicates look like ``…/name``. SPARQL, SWRL, SHACL and
+    # so live predicates look like ``…/name``. SPARQL, IF-THEN, SHACL and
     # Aggregate engines all rewrite property URIs through this
     # translation before querying triples (see
     # :meth:`SPARQLRuleEngine._build_uri_map`); the cohort engine has to

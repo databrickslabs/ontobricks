@@ -68,7 +68,7 @@ TURTLE_WITH_CONSTRAINTS = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
 ] .
 """
 
-TURTLE_WITH_SWRL = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+TURTLE_WITH_IF_THEN = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix : <http://test.org/ontology#> .
@@ -77,7 +77,7 @@ TURTLE_WITH_SWRL = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
 <http://test.org/ontology> a owl:Ontology .
 :Customer a owl:Class .
 
-:_swrlRule_CheckAge a ontobricks:SWRLRule ;
+:_ifThenRule_CheckAge a ontobricks:IfThenRule ;
     rdfs:label "CheckAge" ;
     rdfs:comment "Age must be positive" ;
     ontobricks:antecedent "Customer(?c) ^ age(?c, ?a) ^ lessThan(?a, 0)" ;
@@ -363,10 +363,10 @@ class TestGetConstraints:
         assert min_card[0]["cardinalityValue"] == 1
 
 
-class TestGetSwrlRules:
-    def test_extract_swrl_rule(self):
-        parser = OntologyParser(TURTLE_WITH_SWRL)
-        rules = parser.get_swrl_rules()
+class TestGetIfThenRules:
+    def test_extract_if_then_rule(self):
+        parser = OntologyParser(TURTLE_WITH_IF_THEN)
+        rules = parser.get_if_then_rules()
         assert len(rules) == 1
         assert rules[0]["name"] == "CheckAge"
         assert "age" in rules[0]["antecedent"]

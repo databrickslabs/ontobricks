@@ -396,7 +396,7 @@ class NodeContextService:
             []
             if disabled(context_policy, BUSINESS_RULES_FEATURE)
             else NodeBusinessRuleService.class_entries(
-                matched_cls, NodeBusinessRuleService.domain_swrl_rules(domain)
+                matched_cls, NodeBusinessRuleService.domain_if_then_rules(domain)
             )
         )
 
@@ -624,7 +624,7 @@ class NodeContextService:
             (
                 e
                 for e in NodeBusinessRuleService.class_entries(
-                    matched_cls, NodeBusinessRuleService.domain_swrl_rules(domain)
+                    matched_cls, NodeBusinessRuleService.domain_if_then_rules(domain)
                 )
                 if e["name"] == requested
             ),
@@ -647,7 +647,7 @@ class NodeContextService:
         context_policy: Optional[Dict[str, str]] = None,
         simulation_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Trigger a class-declared SWRL business rule on *entity_uri*.
+        """Trigger a class-declared IF-THEN business rule on *entity_uri*.
 
         A domain that disabled the ``business_rules`` context element refuses
         every execution, independently of whether the

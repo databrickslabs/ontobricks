@@ -1,6 +1,6 @@
-"""Regression suite: SWRL -> SHACL-AF behavioural parity.
+"""Regression suite: IF-THEN -> SHACL-AF behavioural parity.
 
-The legacy SWRL engine was removed and SHACL-AF now executes the IF/THEN
+The legacy IF-THEN engine was removed and SHACL-AF now executes the IF/THEN
 business-rules UI.  The transition must be *behaviour preserving*: the same
 rule bodies must yield the same inferred triples, the same provenance /
 ``stats`` contract that the UI, MCP tools, and Data-Quality pipeline depend
@@ -8,7 +8,7 @@ on, and the same cross-dialect (Spark / Postgres) SQL guarantees.
 
 These tests pin that contract across a capability battery (unary/binary
 atoms, property chains, comparison + string built-ins, closed-world
-negation) so any drift away from the legacy SWRL semantics is caught.  They
+negation) so any drift away from the legacy IF-THEN semantics is caught.  They
 complement :mod:`test_shacl_rule_engine` (which asserts *that* SQL is emitted)
 by nailing down *what* that SQL means and *what* the engine returns.
 """
@@ -25,7 +25,7 @@ from back.core.helpers import SQL_DIALECT_POSTGRES
 from back.core.reasoning.shacl_rules import (
     ShaclRuleEngine,
     SPARQL_RULE,
-    SwrlToShaclTranspiler,
+    IfThenToShaclTranspiler,
     TRIPLE_RULE,
 )
 from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
@@ -50,10 +50,11 @@ ONTOLOGY = {
         {"name": "hasScore"},
         {"name": "status"},
         {"name": "owns"},
+        {"name": "priority"},
     ],
 }
 
-# The capability battery — identical rule bodies the legacy SWRL engine ran.
+# The capability battery — identical rule bodies the legacy IF-THEN engine ran.
 SIMPLE_CLASS = {
     "name": "simple_class",
     "antecedent": "Customer(?x)",
@@ -66,14 +67,14 @@ PROPERTY_CHAIN = {
 }
 COMPARISON_BUILTIN = {
     "name": "comparison_builtin",
-    "antecedent": "Customer(?x) \u2227 hasScore(?x, ?s) \u2227 swrlb:greaterThan(?s, 500)",
+    "antecedent": "Customer(?x) \u2227 hasScore(?x, ?s) \u2227 builtin:greaterThan(?s, 500)",
     "consequent": "HighValue(?x)",
 }
 STRING_BUILTIN = {
     "name": "string_builtin",
     "antecedent": (
         'Customer(?x) \u2227 Contract(?z) \u2227 hasContract(?x, ?z) '
-        '\u2227 status(?z, ?st) \u2227 swrlb:contains(?st, "active")'
+        '\u2227 status(?z, ?st) \u2227 builtin:contains(?st, "active")'
     ),
     "consequent": "HighValue(?x)",
 }
@@ -82,12 +83,18 @@ NEGATION = {
     "antecedent": "Customer(?x) \u2227 not(hasContract(?x, ?z))",
     "consequent": "HighValue(?x)",
 }
+SET_ATTRIBUTE = {
+    "name": "set_attribute",
+    "antecedent": "Customer(?x)",
+    "consequent": 'priority(?x, "high")',
+}
 BATTERY = [
     SIMPLE_CLASS,
     PROPERTY_CHAIN,
     COMPARISON_BUILTIN,
     STRING_BUILTIN,
     NEGATION,
+    SET_ATTRIBUTE,
 ]
 
 
@@ -132,19 +139,19 @@ def _run(rules, **kw) -> Any:
 
 
 class TestEngineContractParity:
-    """The result contract legacy SWRL consumers (UI / MCP / DQ) rely on."""
+    """The result contract legacy IF-THEN consumers (UI / MCP / DQ) rely on."""
 
-    def test_phase_label_stays_swrl(self):
-        # DQ / MCP branch on stats["phase"] == "swrl"; the SHACL engine keeps it.
+    def test_phase_label_stays_if_then(self):
+        # DQ / MCP branch on stats["phase"] == "if_then"; the SHACL engine keeps it.
         result, _ = _run([PROPERTY_CHAIN])
-        assert result.stats["phase"] == "swrl"
+        assert result.stats["phase"] == "if_then"
         assert result.stats["engine"] == "shacl-af"
 
-    def test_inferred_triples_carry_swrl_provenance(self):
+    def test_inferred_triples_carry_if_then_provenance(self):
         result, _ = _run([PROPERTY_CHAIN])
         assert result.inferred_triples
         for triple in result.inferred_triples:
-            assert triple.provenance == "swrl:property_chain"
+            assert triple.provenance == "if_then:property_chain"
             assert triple.rule_name == "property_chain"
 
     def test_rules_count_reflects_enabled_only(self):
@@ -168,7 +175,7 @@ class TestEngineContractParity:
         result, store = _run([PROPERTY_CHAIN], materialize=True)
         assert any(q.strip().upper().startswith("INSERT") for q in store.queries)
         assert any(
-            t.predicate == "swrl:materialized" for t in result.inferred_triples
+            t.predicate == "if_then:materialized" for t in result.inferred_triples
         )
 
     def test_focus_restricts_inference_to_entity(self):
@@ -187,7 +194,7 @@ class TestEngineContractParity:
 
 
 class TestInferenceSqlSemantics:
-    """Pin the SQL each capability compiles to, matching legacy SWRL output."""
+    """Pin the SQL each capability compiles to, matching legacy IF-THEN output."""
 
     def setup_method(self):
         self.b = ShaclFlatSqlBackend()
@@ -237,7 +244,7 @@ class TestInferenceSqlSemantics:
         assert "LIKE CONCAT(" in sql
         assert "'active'" in sql
         # The built-in predicate itself must not leak as a triple pattern.
-        assert "contains" not in sql.replace("swrlb", "")
+        assert "contains" not in sql.replace("builtin:", "")
 
     def test_simple_class_inference_is_a_classification_noop(self):
         # Legacy + SHACL: a pure class->class assertion emits no inference
@@ -311,7 +318,7 @@ class TestTranspilerClassificationParity:
     """Each capability must keep its SHACL-AF rule type across refactors."""
 
     def setup_method(self):
-        self.t = SwrlToShaclTranspiler(ontology=ONTOLOGY)
+        self.t = IfThenToShaclTranspiler(ontology=ONTOLOGY)
 
     def test_rule_type_mapping_is_stable(self):
         expected = {
@@ -320,6 +327,7 @@ class TestTranspilerClassificationParity:
             "comparison_builtin": SPARQL_RULE,
             "string_builtin": SPARQL_RULE,
             "negation": SPARQL_RULE,
+            "set_attribute": TRIPLE_RULE,
         }
         for rule in BATTERY:
             shacl = self.t.transpile(rule)
@@ -359,3 +367,86 @@ class TestShaclViewParity:
             )
             assert out["turtle"].strip()
             assert out["rule_type"] in (TRIPLE_RULE, SPARQL_RULE)
+
+
+# -- Set-attribute (data-property) consequents ----------------------------
+
+
+class TestSetAttribute:
+    """THEN can set a data property to a literal with replace semantics."""
+
+    def setup_method(self):
+        self.b = ShaclFlatSqlBackend()
+
+    def _params(self, rule):
+        return {
+            "antecedent": rule["antecedent"],
+            "consequent": rule["consequent"],
+            "base_uri": "http://ex.org",
+            "uri_map": {},
+        }
+
+    def test_inference_emits_literal_object_with_exact_dedup(self):
+        sql = self.b.build_inference_sql("triples", self._params(SET_ATTRIBUTE))
+        assert sql is not None
+        # Literal object in the derived head (not the '' relationship fallback).
+        assert "'http://ex.org#priority' AS predicate, 'high' AS object" in sql
+        # Exact (s, p, o) de-dup: fires on a changed value, no-ops when identical.
+        assert "AND a2.object = 'high'" in sql
+
+    def test_numeric_literal_is_unquoted(self):
+        rule = {
+            "name": "set_score",
+            "antecedent": "Customer(?x)",
+            "consequent": "hasScore(?x, 42)",
+        }
+        sql = self.b.build_inference_sql("triples", self._params(rule))
+        assert "'http://ex.org#hasScore' AS predicate, 42 AS object" in sql
+
+    def test_materialisation_is_delete_then_insert(self):
+        sql = self.b.build_materialization_sql("triples", self._params(SET_ATTRIBUTE))
+        assert sql is not None
+        stmts = [s.strip() for s in sql.split(";\n")]
+        assert len(stmts) == 2
+        assert stmts[0].startswith("DELETE FROM triples")
+        assert "WHERE predicate = 'http://ex.org#priority'" in stmts[0]
+        assert "subject IN (" in stmts[0]
+        assert stmts[1].startswith("INSERT INTO triples")
+        assert "'http://ex.org#priority', 'high'" in stmts[1]
+        # Replace => the INSERT does not guard on NOT EXISTS (DELETE cleared it).
+        assert "NOT EXISTS" not in stmts[1]
+
+    def test_conditional_set_attribute_keeps_the_guard(self):
+        rule = {
+            "name": "set_priority_high",
+            "antecedent": (
+                "Customer(?x) \u2227 hasScore(?x, ?s) "
+                "\u2227 builtin:greaterThan(?s, 500)"
+            ),
+            "consequent": 'priority(?x, "high")',
+        }
+        sql = self.b.build_inference_sql("triples", self._params(rule))
+        assert sql is not None
+        assert "'high' AS object" in sql
+        assert "TRY_CAST(a2.object AS DOUBLE) > TRY_CAST(500 AS DOUBLE)" in sql
+
+    def test_relationship_consequent_is_unchanged(self):
+        # Regression guard: a dangling relationship object still falls back to
+        # the empty-object form, never a literal.
+        sql = self.b.build_inference_sql("triples", self._params(PROPERTY_CHAIN))
+        assert "'http://ex.org#hasContract' AS predicate, '' AS object" in sql
+
+    def test_transpiler_triple_rule_with_literal_object(self):
+        shacl = IfThenToShaclTranspiler(ontology=ONTOLOGY).transpile(SET_ATTRIBUTE)
+        assert shacl.rule_type == TRIPLE_RULE
+        # Literal object in the Turtle, not a self-relationship (sh:this).
+        assert 'sh:object "high" ;' in shacl.turtle
+        assert "sh:object sh:this" not in shacl.turtle
+        # CONSTRUCT head carries the literal too.
+        assert '"high"' in shacl.construct_sparql
+
+    def test_end_to_end_inference_provenance(self):
+        result, store = _run([SET_ATTRIBUTE])
+        assert result.inferred_triples
+        assert all(t.provenance == "if_then:set_attribute" for t in result.inferred_triples)
+        assert any("priority" in q for q in store.queries)

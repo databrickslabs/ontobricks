@@ -360,7 +360,7 @@ CREATE TABLE IF NOT EXISTS domain_change_events (
     source          text NOT NULL DEFAULT 'user'
                     CHECK (source IN ('user', 'agent')),
     action          text NOT NULL,             -- e.g. class_added, mapping_entity_updated
-    entity_type     text NOT NULL DEFAULT '',  -- class | property | shacl | swrl | ...
+    entity_type     text NOT NULL DEFAULT '',  -- class | property | shacl | if_then | ...
     entity_ref      text NOT NULL DEFAULT '',  -- uri or name of the affected entity
     summary         text NOT NULL DEFAULT '',
     meta            jsonb NOT NULL DEFAULT '{}'::jsonb,

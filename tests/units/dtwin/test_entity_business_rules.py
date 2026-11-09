@@ -1,4 +1,4 @@
-"""Entity business rules: SWRL rules referenced from a class and triggered on one entity."""
+"""Entity business rules: IF-THEN rules referenced from a class and triggered on one entity."""
 
 import sys
 from types import SimpleNamespace
@@ -26,7 +26,7 @@ VIP_RULE = {
 }
 ORDER_RULE = {
     "name": "FlagOrder",
-    "antecedent": "Order(?o) ^ amount(?o, ?a) ^ swrlb:greaterThan(?a, 100)",
+    "antecedent": "Order(?o) ^ amount(?o, ?a) ^ builtin:greaterThan(?a, 100)",
     "consequent": "BigOrder(?o)",
 }
 PERSON_RULE = {
@@ -51,9 +51,9 @@ CLASSES = [
 # Rule <-> class matching
 
 
-def test_swrl_rule_classes_lists_unary_unprefixed_atoms():
-    assert Rules.swrl_rule_classes(VIP_RULE) == {"customer", "order", "vip"}
-    assert Rules.swrl_rule_classes(ORDER_RULE) == {"order", "bigorder"}
+def test_if_then_rule_classes_lists_unary_unprefixed_atoms():
+    assert Rules.if_then_rule_classes(VIP_RULE) == {"customer", "order", "vip"}
+    assert Rules.if_then_rule_classes(ORDER_RULE) == {"order", "bigorder"}
 
 
 def test_rules_for_class_includes_ancestor_rules():
@@ -68,9 +68,9 @@ def test_rules_for_class_matches_consequent_only_class():
 
 
 def test_focus_variables_follow_lineage():
-    assert Rules.swrl_focus_variables(VIP_RULE, ["Customer", "Person"]) == ["?c"]
-    assert Rules.swrl_focus_variables(PERSON_RULE, ["Customer", "Person"]) == ["?p"]
-    assert Rules.swrl_focus_variables(ORDER_RULE, ["Customer"]) == []
+    assert Rules.if_then_focus_variables(VIP_RULE, ["Customer", "Person"]) == ["?c"]
+    assert Rules.if_then_focus_variables(PERSON_RULE, ["Customer", "Person"]) == ["?p"]
+    assert Rules.if_then_focus_variables(ORDER_RULE, ["Customer"]) == []
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ def _domain(rules=None):
         domain_folder="c360",
         current_version="1",
         ontology={"base_uri": BASE, "classes": CLASSES},
-        swrl_rules=rules if rules is not None else [VIP_RULE, PERSON_RULE],
+        if_then_rules=rules if rules is not None else [VIP_RULE, PERSON_RULE],
         get_classes=lambda: CLASSES,
     )
 
@@ -292,7 +292,7 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             self.store = sandbox_store
             self.table = "g__sim_sim1"
 
-        def seed_focus_for_swrl(self, uri, hops=2):
+        def seed_focus_for_if_then(self, uri, hops=2):
             seeded.append((uri, hops))
 
         def ensure_explorer_views(self, live_union):
@@ -312,7 +312,7 @@ async def test_run_business_rule_on_simulation_uses_sandbox(monkeypatch):
             assert table == "g__sim_sim1"
             self._store = store
 
-        def run_swrl_rules(self, rule_names=None, focus=None):
+        def run_if_then_rules(self, rule_names=None, focus=None):
             assert focus["uri"] == ENTITY
             return SimpleNamespace(
                 inferred_triples=[

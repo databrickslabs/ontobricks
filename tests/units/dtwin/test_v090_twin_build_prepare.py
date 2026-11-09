@@ -212,7 +212,7 @@ _GOOD = {
     "subject": "http://ex.org/s1",
     "predicate": "http://ex.org/p",
     "object": "http://ex.org/o1",
-    "provenance": "swrl:rule1",
+    "provenance": "if_then:rule1",
 }
 _LITERAL = {"subject": "http://ex.org/s2", "predicate": "http://ex.org/p", "object": "42"}
 
@@ -283,7 +283,7 @@ class TestInferredMaterialize:
         assert cls.call_args.args[1] is store
         rr = svc.materialize_inferred.call_args.args[0]
         assert [(t.subject, t.predicate, t.object, t.provenance) for t in rr.inferred_triples] == [
-            ("http://ex.org/s1", "http://ex.org/p", "http://ex.org/o1", "swrl:rule1")
+            ("http://ex.org/s1", "http://ex.org/p", "http://ex.org/o1", "if_then:rule1")
         ]
 
     def test_graph_write_opens_the_store_on_the_build_warehouse(self):

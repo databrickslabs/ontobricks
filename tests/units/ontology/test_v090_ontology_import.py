@@ -189,7 +189,7 @@ class TestIngestOwlOutcomes:
         assert info["label"] == "Sales Ontology"
         assert info["namespace"] == EX
         assert info["uri"] == "http://example.org/onto"
-        assert payload["stats"]["swrl_rules"] == 0
+        assert payload["stats"]["if_then_rules"] == 0
 
     def test_load_file_outcome_returns_session_ontology(self, session):
         payload = Import(session).ingest_owl(OWL_TTL, outcome="load_file")
@@ -479,7 +479,7 @@ def _industry_result(info):
         "classes": [{"name": "Thing", "uri": "http://x#Thing"}],
         "properties": [],
         "constraints": [],
-        "swrl_rules": [],
+        "if_then_rules": [],
         "axioms": [],
         "expressions": [],
         "message": "ok",

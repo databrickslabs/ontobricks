@@ -1,9 +1,9 @@
 /**
  * Per-rule picker for the simulation workbench — same lists as
- * Knowledge Graph → Inference (SWRL, decision tables, SPARQL, aggregates).
+ * Knowledge Graph → Inference (Simple / IF-THEN and Complex / SPARQL rules).
  */
 const SimulationRules = {
-    TYPES: ['swrl', 'decision_tables', 'sparql_rules', 'aggregate_rules'],
+    TYPES: ['if_then', 'sparql_rules'],
     _cache: {},
     _loaded: false,
     _pending: null,
@@ -43,21 +43,17 @@ const SimulationRules = {
         }
         if (window.SimulationWorkbench) SimulationWorkbench.setTabBusy('reasoning', true);
         try {
-            const [swrl, tables, sparql, aggregate] = await Promise.all([
-                SimulationPage.api('/ontology/swrl/list'),
-                SimulationPage.api('/ontology/rules/decision_tables/list'),
+            const [if_then, sparql] = await Promise.all([
+                SimulationPage.api('/ontology/if-then/list'),
                 SimulationPage.api('/ontology/rules/sparql_rules/list'),
-                SimulationPage.api('/ontology/rules/aggregate_rules/list'),
             ]);
             this._cache = {
-                swrl: swrl.rules || [],
-                decision_tables: tables.rules || [],
+                if_then: if_then.rules || [],
                 sparql_rules: sparql.rules || [],
-                aggregate_rules: aggregate.rules || [],
             };
         } catch (err) {
             console.error('[Simulation] Could not load reasoning rules:', err);
-            this._cache = { swrl: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] };
+            this._cache = { if_then: [], sparql_rules: [] };
         } finally {
             this._loaded = true;
             this._render();

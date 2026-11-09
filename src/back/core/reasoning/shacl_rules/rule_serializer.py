@@ -2,7 +2,7 @@
 
 The UI authors rules as IF/THEN (``antecedent`` / ``consequent``); these
 helpers transpile them to canonical SHACL-AF via
-:class:`~back.core.reasoning.shacl_rules.SwrlToShaclTranspiler.SwrlToShaclTranspiler`
+:class:`~back.core.reasoning.shacl_rules.IfThenToShaclTranspiler.IfThenToShaclTranspiler`
 and render them for display / export. Transpilation is one-directional, so the
 output is read-only — there is no SHACL-AF → rule parser.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from back.core.reasoning.shacl_rules.SwrlToShaclTranspiler import SwrlToShaclTranspiler
+from back.core.reasoning.shacl_rules.IfThenToShaclTranspiler import IfThenToShaclTranspiler
 
 #: The shared prefix header for a combined SHACL-AF document.
 _PREFIX_HEADER = (
@@ -42,7 +42,7 @@ def serialize_rules_to_turtle(
     block per rule. The ``ex:`` prefix is bound to the ontology base URI.
     """
     rules = rules or []
-    transpiler = SwrlToShaclTranspiler(ontology or {})
+    transpiler = IfThenToShaclTranspiler(ontology or {})
     base_uri = (ontology or {}).get("base_uri", "") or "http://example.org/ontology#"
 
     header = _PREFIX_HEADER + f"@prefix ex: <{base_uri}> .\n"
@@ -60,7 +60,7 @@ def preview_rule_shacl(
     ontology: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Transpile a single IF/THEN rule and return its SHACL-AF views."""
-    transpiler = SwrlToShaclTranspiler(ontology or {})
+    transpiler = IfThenToShaclTranspiler(ontology or {})
     rule = transpiler.transpile(
         {
             "name": name or "rule",

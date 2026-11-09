@@ -278,22 +278,22 @@ def test_no_orphans_ignores_type_and_label_triples():
 
 
 # ---------------------------------------------------------------------------
-# SWRL
+# IF-THEN
 
 
 @pytest.fixture
-def reset_swrl_translator(monkeypatch):
-    monkeypatch.setattr(QualitySqlBuilder, "_swrl_sql_translator", None)
+def reset_if_then_translator(monkeypatch):
+    monkeypatch.setattr(QualitySqlBuilder, "_if_then_sql_translator", None)
 
 
-def test_swrl_translator_is_created_once_and_cached(reset_swrl_translator):
-    first = QualitySqlBuilder._get_swrl_translator()
-    assert QualitySqlBuilder._get_swrl_translator() is first
+def test_if_then_translator_is_created_once_and_cached(reset_if_then_translator):
+    first = QualitySqlBuilder._get_if_then_translator()
+    assert QualitySqlBuilder._get_if_then_translator() is first
 
 
-def test_swrl_check_delegates_to_translator(reset_swrl_translator):
+def test_if_then_check_delegates_to_translator(reset_if_then_translator):
     sql = build(
-        "swrl",
+        "if_then",
         {
             "antecedent": "Customer(?c) ^ hasOrder(?c, ?o)",
             "consequent": "VIP(?c)",
@@ -306,5 +306,5 @@ def test_swrl_check_delegates_to_translator(reset_swrl_translator):
     assert "NOT EXISTS" in sql and "https://ex.com/onto#VIP" in sql
 
 
-def test_swrl_check_without_atoms_is_skipped(reset_swrl_translator):
-    assert build("swrl", {"antecedent": "", "consequent": ""}) is None
+def test_if_then_check_without_atoms_is_skipped(reset_if_then_translator):
+    assert build("if_then", {"antecedent": "", "consequent": ""}) is None

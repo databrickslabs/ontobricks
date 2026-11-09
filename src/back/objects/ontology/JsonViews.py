@@ -20,7 +20,7 @@ class JsonViews:
             "classes": ontology.get("classes", []),
             "properties": ontology.get("properties", []),
             "constraints": sl["constraints"],
-            "swrl_rules": sl["swrl_rules"],
+            "if_then_rules": sl["if_then_rules"],
             "statistics": {
                 "class_count": len(ontology.get("classes", [])),
                 "property_count": len(ontology.get("properties", [])),

@@ -1,23 +1,16 @@
 /**
  * OntoBricks — ontology-business-rules.js
- * Tabbed Business Rules manager: coordinates SWRL (delegated), Decision Tables,
- * SPARQL CONSTRUCT, and Aggregate Rules.
+ * Tabbed Business Rules manager: coordinates Simple (IF/THEN, delegated to
+ * IfThenModule) and Complex (SPARQL CONSTRUCT) rules.
  */
 window.BusinessRulesModule = {
     _initialized: false,
     _brStaticUiBound: false,
-    _dtEditorDelegBound: false,
     _ontologyClasses: [],
     _ontologyProperties: [],
 
     // Rule data per tab
-    dtRules: [],
     sparqlRules: [],
-    aggRules: [],
-
-    // Decision-table editor transient state
-    _dtColumns: [],
-    _dtRows: [],
 
     // ── Initialization ───────────────────────────────────────
 
@@ -29,18 +22,15 @@ window.BusinessRulesModule = {
         this._initialized = true;
 
         this._bindBrStaticUiOnce();
-        this._ensureDtEditorDelegation();
 
         await this._loadOntologyItems();
 
         const loaders = [
-            this._loadRules('decision_tables'),
             this._loadRules('sparql_rules'),
-            this._loadRules('aggregate_rules'),
         ];
-        if (typeof SwrlModule !== 'undefined') {
-            SwrlModule.loadOntologyItems();
-            loaders.push(SwrlModule.loadRules());
+        if (typeof IfThenModule !== 'undefined') {
+            IfThenModule.loadOntologyItems();
+            loaders.push(IfThenModule.loadRules());
         }
         await Promise.all(loaders);
         this._refreshAllBadges();
@@ -48,7 +38,7 @@ window.BusinessRulesModule = {
 
     _bindBrStaticUiOnce() {
         if (this._brStaticUiBound) return;
-        const root = document.getElementById('swrl-section');
+        const root = document.getElementById('if-then-section');
         if (!root) return;
         this._brStaticUiBound = true;
 
@@ -61,77 +51,8 @@ window.BusinessRulesModule = {
             else if (act === 'suggest-select-all') this.selectAllSuggestions(true);
             else if (act === 'suggest-select-none') this.selectAllSuggestions(false);
             else if (act === 'suggest-accept') this.acceptSuggestions();
-            else if (act === 'dt-add-column') this.dtAddColumn();
-            else if (act === 'dt-add-row') this.dtAddRow();
-            else if (act === 'dt-save') this.dtSave();
             else if (act === 'sparql-validate') this.sparqlValidate();
             else if (act === 'sparql-save') this.sparqlSave();
-            else if (act === 'agg-save') this.aggSave();
-        });
-
-        root.addEventListener('change', (e) => {
-            const el = e.target;
-            if (!root.contains(el)) return;
-            if (el.id === 'dtTargetClass') this._dtTargetClassChanged();
-            else if (el.id === 'dtOutputAction') this._dtSyncOutputValue();
-            else if (el.id === 'aggTargetClass') this._aggTargetClassChanged();
-            else if (el.name === 'dtRowLogic') this._dtRowLogicChanged();
-            if (el.closest('#aggEditorModal')) this._aggRenderPreview();
-            else if (el.closest('#dtEditorModal')) this._dtRenderPreview();
-        });
-
-        root.addEventListener('input', (e) => {
-            const el = e.target;
-            if (el.id === 'aggThreshold') this._aggRenderPreview();
-            else if (el.closest('#dtEditorModal')) this._dtRenderPreview();
-        });
-    },
-
-    _ensureDtEditorDelegation() {
-        if (this._dtEditorDelegBound) return;
-        const modal = document.getElementById('dtEditorModal');
-        if (!modal) return;
-        this._dtEditorDelegBound = true;
-
-        modal.addEventListener('change', (e) => {
-            const t = e.target;
-            if (!modal.contains(t)) return;
-            if (t.matches && t.matches('select[data-dt-hdr-col]')) {
-                this._dtColChanged(parseInt(t.getAttribute('data-dt-hdr-col'), 10), t.value);
-                return;
-            }
-            if (t.matches && t.matches('select.dt-op-select')) {
-                const ri = parseInt(t.getAttribute('data-dt-r'), 10);
-                const ci = parseInt(t.getAttribute('data-dt-c'), 10);
-                this._dtCellChanged(ri, ci, 'op', t.value);
-                return;
-            }
-            if (t.matches && t.matches('input[data-dt-cell-val]')) {
-                const ri = parseInt(t.getAttribute('data-dt-r'), 10);
-                const ci = parseInt(t.getAttribute('data-dt-c'), 10);
-                this._dtCellChanged(ri, ci, 'value', t.value);
-            }
-        });
-
-        modal.addEventListener('input', (e) => {
-            const t = e.target;
-            if (t.matches && t.matches('input[data-dt-cell-val]')) {
-                const ri = parseInt(t.getAttribute('data-dt-r'), 10);
-                const ci = parseInt(t.getAttribute('data-dt-c'), 10);
-                this._dtCellChanged(ri, ci, 'value', t.value);
-            }
-        });
-
-        modal.addEventListener('click', (e) => {
-            const rmCol = e.target.closest('[data-dt-remove-col]');
-            if (rmCol && modal.contains(rmCol)) {
-                this._dtRemoveColumn(parseInt(rmCol.getAttribute('data-dt-remove-col'), 10));
-                return;
-            }
-            const rm = e.target.closest('[data-dt-remove-row]');
-            if (rm && modal.contains(rm)) {
-                this._dtRemoveRow(parseInt(rm.getAttribute('data-dt-remove-row'), 10));
-            }
         });
     },
 
@@ -258,9 +179,7 @@ window.BusinessRulesModule = {
             const data = await resp.json();
             if (!data.success) return;
             switch (ruleType) {
-                case 'decision_tables': this.dtRules = data.rules || []; this._renderDtList(); break;
                 case 'sparql_rules': this.sparqlRules = data.rules || []; this._renderSparqlList(); break;
-                case 'aggregate_rules': this.aggRules = data.rules || []; this._renderAggList(); break;
             }
         } catch (e) {
             console.error(`BusinessRulesModule: failed to load ${ruleType}`, e);
@@ -318,9 +237,7 @@ window.BusinessRulesModule = {
     async _toggleEnabled(ruleType, index) {
         let rules;
         switch (ruleType) {
-            case 'decision_tables': rules = this.dtRules; break;
             case 'sparql_rules': rules = this.sparqlRules; break;
-            case 'aggregate_rules': rules = this.aggRules; break;
         }
         if (!rules || !rules[index]) return;
         const rule = { ...rules[index], enabled: !rules[index].enabled };
@@ -331,31 +248,25 @@ window.BusinessRulesModule = {
 
     _activeTab() {
         const active = document.querySelector('#brTabs .nav-link.active');
-        if (!active) return 'swrl';
+        if (!active) return 'if_then';
         const target = active.getAttribute('data-bs-target') || '';
-        if (target.includes('dt')) return 'dt';
         if (target.includes('sparql')) return 'sparql';
-        if (target.includes('agg')) return 'agg';
-        return 'swrl';
+        return 'if_then';
     },
 
     addRuleForActiveTab() {
         switch (this._activeTab()) {
-            case 'swrl': if (typeof SwrlModule !== 'undefined') SwrlModule.addRule(); break;
-            case 'dt': this.dtOpenEditor(-1); break;
+            case 'if_then': if (typeof IfThenModule !== 'undefined') IfThenModule.addRule(); break;
             case 'sparql': this.sparqlOpenEditor(-1); break;
-            case 'agg': this.aggOpenEditor(-1); break;
         }
     },
 
     // ── Badge updates ───────────────────────────────────────
 
     _refreshAllBadges() {
-        const swrlCount = (typeof SwrlModule !== 'undefined' && SwrlModule.rules) ? SwrlModule.rules.length : 0;
-        this._setBadge('brBadgeSwrl', swrlCount);
-        this._setBadge('brBadgeDt', this.dtRules.length);
+        const ifThenCount = (typeof IfThenModule !== 'undefined' && IfThenModule.rules) ? IfThenModule.rules.length : 0;
+        this._setBadge('brBadgeIfThen', ifThenCount);
         this._setBadge('brBadgeSparql', this.sparqlRules.length);
-        this._setBadge('brBadgeAgg', this.aggRules.length);
     },
 
     _setBadge(id, count) {
@@ -372,26 +283,29 @@ window.BusinessRulesModule = {
         return d.innerHTML;
     },
 
-    _renderRuleCard(container, { name, meta, enabled, onEdit, onDelete, onToggle }) {
+    _renderRuleCard(container, { name, meta, enabled, badge, onEdit, onDelete, onToggle }) {
         const card = document.createElement('div');
-        card.className = 'br-rule-card d-flex align-items-center gap-2';
-        if (enabled === false) card.style.opacity = '0.55';
-
-        const enabledBadge = enabled === false
-            ? '<span class="badge bg-secondary me-1 br-disabled-badge">disabled</span>'
-            : '';
+        const isEnabled = enabled !== false;
+        card.className = `ob-rule-card br-rule-card mb-2${isEnabled ? '' : ' opacity-50'}`;
+        const badgeHtml = badge || (
+            `<span class="badge bg-warning text-dark bg-opacity-75 small">` +
+            `<i class="bi bi-braces me-1"></i>Complex</span>`
+        );
 
         card.innerHTML =
-            `<div class="flex-grow-1">` +
-            `  <div class="br-rule-name">${enabledBadge}${this._esc(name)}</div>` +
-            `  <div class="br-rule-meta">${meta}</div>` +
-            `</div>` +
-            `<div class="btn-group btn-group-sm br-rule-actions">` +
-            `  <button class="btn btn-outline-secondary" title="${enabled !== false ? 'Disable' : 'Enable'}">` +
-            `    <i class="bi ${enabled !== false ? 'bi-toggle-on text-success' : 'bi-toggle-off text-danger'}"></i>` +
-            `  </button>` +
-            `  <button class="btn btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></button>` +
-            `  <button class="btn btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>` +
+            `<div class="d-flex align-items-start justify-content-between">` +
+            `  <div class="flex-grow-1">` +
+            `    <div class="d-flex align-items-center gap-2 mb-1">${badgeHtml}</div>` +
+            `    <div class="small fw-medium">${this._esc(name)}</div>` +
+            `    <div class="text-muted small mt-1"><code>${meta}</code></div>` +
+            `  </div>` +
+            `  <div class="btn-group btn-group-sm ms-2 flex-shrink-0">` +
+            `    <button class="btn btn-outline-secondary btn-sm" title="${isEnabled ? 'Disable' : 'Enable'}">` +
+            `      <i class="bi ${isEnabled ? 'bi-toggle-on text-success' : 'bi-toggle-off text-danger'}"></i>` +
+            `    </button>` +
+            `    <button class="btn btn-outline-secondary btn-sm" title="Edit"><i class="bi bi-pencil"></i></button>` +
+            `    <button class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>` +
+            `  </div>` +
             `</div>`;
         const btns = card.querySelectorAll('button');
         btns[0].addEventListener('click', onToggle);
@@ -401,295 +315,7 @@ window.BusinessRulesModule = {
     },
 
     // ═══════════════════════════════════════════════════════════
-    // DECISION TABLES
-    // ═══════════════════════════════════════════════════════════
-
-    _renderDtList() {
-        const container = document.getElementById('dtList');
-        const empty = document.getElementById('dtEmpty');
-        if (!container) return;
-        container.querySelectorAll('.br-rule-card').forEach(c => c.remove());
-        if (this.dtRules.length === 0) { if (empty) empty.classList.remove('d-none'); return; }
-        if (empty) empty.classList.add('d-none');
-
-        this.dtRules.forEach((dt, i) => {
-            this._renderRuleCard(container, {
-                name: dt.name || `Table ${i + 1}`,
-                meta: `${this._esc(dt.target_class || '?')} · ${(dt.input_columns || []).length} col · ${(dt.rows || []).length} rows (${(dt.row_logic || 'or').toUpperCase()}) · ${dt.hit_policy || 'first'}`,
-                enabled: dt.enabled,
-                onEdit: () => this.dtOpenEditor(i),
-                onDelete: () => this._deleteRule('decision_tables', i),
-                onToggle: () => this._toggleEnabled('decision_tables', i),
-            });
-        });
-    },
-
-    dtOpenEditor(index) {
-        const isNew = index < 0;
-        const dt = isNew ? {} : { ...this.dtRules[index] };
-        document.getElementById('dtEditIndex').value = index;
-        document.getElementById('dtName').value = dt.name || '';
-        document.getElementById('dtHitPolicy').value = dt.hit_policy || 'first';
-        document.getElementById('dtEditorTitle').innerHTML = `<i class="bi bi-table me-2"></i>${isNew ? 'Add' : 'Edit'} Decision Table`;
-
-        const logic = dt.row_logic || 'or';
-        document.getElementById(logic === 'and' ? 'dtRowLogicAnd' : 'dtRowLogicOr').checked = true;
-        this._dtUpdateLogicHint();
-
-        this._populateClassSelect('dtTargetClass', dt.target_class || '');
-        const targetCls = dt.target_class || '';
-        const out = dt.output_column || {};
-        const assign = out.action === 'assign_class';
-        this._populatePropertySelect('dtOutputProperty', assign ? '' : (out.property || ''), targetCls);
-        this._populateClassSelect('dtOutputClass', assign ? (out.value || '') : '');
-        document.getElementById('dtOutputAction').value = assign ? 'assign_class' : 'set_value';
-        document.getElementById('dtOutputValue').value = assign ? '' : (out.value || '');
-        this._dtSyncOutputValue();
-
-        this._dtColumns = (dt.input_columns || []).map(c => ({ ...c }));
-        this._dtRows = (dt.rows || []).map(r => ({ conditions: [...(r.conditions || [])], action_value: r.action_value || '' }));
-        if (this._dtColumns.length === 0) {
-            this._dtColumns.push({ property: '', label: '' });
-            this._dtRows.push({ conditions: [{ op: 'eq', value: '' }], action_value: '' });
-        }
-        this._dtRenderGrid();
-        new bootstrap.Modal(document.getElementById('dtEditorModal')).show();
-    },
-
-    _dtGetRowLogic() {
-        return document.getElementById('dtRowLogicAnd')?.checked ? 'and' : 'or';
-    },
-
-    _dtRowLogicChanged() {
-        this._dtUpdateLogicHint();
-        this._dtRenderGrid();
-    },
-
-    _dtUpdateLogicHint() {
-        const hint = document.getElementById('dtRowLogicHint');
-        if (!hint) return;
-        const isAnd = this._dtGetRowLogic() === 'and';
-        hint.innerHTML = isAnd
-            ? 'An instance matches only if it satisfies <strong>every</strong> row'
-            : 'An instance matches if it satisfies <strong>at least one</strong> row';
-    },
-
-    _dtRenderGrid() {
-        const thead = document.getElementById('dtGridHead');
-        const tbody = document.getElementById('dtGridBody');
-        if (!thead || !tbody) return;
-
-        const targetCls = (document.getElementById('dtTargetClass') || {}).value || '';
-        const filteredProps = this._getPropertiesForClass(targetCls);
-
-        let hdr = '<tr><th class="text-center small text-muted dt-grid-num-col">#</th>';
-        this._dtColumns.forEach((col, ci) => {
-            hdr += `<th class="dt-col-header">` +
-                `<div class="d-flex align-items-center gap-1">` +
-                `<select class="form-select form-select-sm" data-dt-hdr-col="${ci}">` +
-                `<option value="">Property…</option>`;
-            for (const p of filteredProps) {
-                const pName = p.name || p.label || '';
-                hdr += `<option value="${this._esc(pName)}" ${pName === col.property ? 'selected' : ''}>${this._esc(pName)}</option>`;
-            }
-            hdr += `</select>`;
-            if (this._dtColumns.length > 1) {
-                hdr += `<i class="bi bi-x-circle dt-remove-btn" data-dt-remove-col="${ci}" title="Remove column" role="button" tabindex="0"></i>`;
-            }
-            hdr += `</div></th>`;
-        });
-        hdr += '<th class="dt-grid-action-col"></th></tr>';
-        thead.innerHTML = hdr;
-
-        const colCount = this._dtColumns.length + 2;
-        const logic = this._dtGetRowLogic();
-        const logicLabel = logic.toUpperCase();
-        const logicClass = logic === 'and' ? 'bg-success' : 'bg-primary';
-
-        tbody.innerHTML = '';
-        this._dtRows.forEach((row, ri) => {
-            if (ri > 0) {
-                tbody.innerHTML +=
-                    `<tr class="dt-logic-row"><td colspan="${colCount}" class="text-center py-0 dt-logic-row-cell">` +
-                    `<span class="badge ${logicClass} bg-opacity-75 dt-logic-badge">${logicLabel}</span>` +
-                    `</td></tr>`;
-            }
-            let tr = `<tr><td class="text-center small text-muted">${ri + 1}</td>`;
-            this._dtColumns.forEach((_, ci) => {
-                const cond = (row.conditions || [])[ci] || { op: 'eq', value: '' };
-                tr += `<td>` +
-                    `<div class="d-flex gap-1">` +
-                    `<select class="form-select form-select-sm dt-op-select" data-dt-r="${ri}" data-dt-c="${ci}">` +
-                    this._dtOpOptions(cond.op) +
-                    `</select>` +
-                    `<input type="text" class="form-control form-control-sm dt-val-input" value="${this._esc(cond.value)}" data-dt-cell-val data-dt-r="${ri}" data-dt-c="${ci}">` +
-                    `</div></td>`;
-            });
-            tr += `<td class="text-center"><i class="bi bi-x-circle dt-remove-btn" data-dt-remove-row="${ri}" title="Remove row" role="button" tabindex="0"></i></td>`;
-            tr += '</tr>';
-            tbody.innerHTML += tr;
-        });
-        this._dtRenderPreview();
-    },
-
-    _dtOpOptions(selected) {
-        const ops = [
-            ['eq', '='], ['neq', '≠'], ['gt', '>'], ['gte', '≥'],
-            ['lt', '<'], ['lte', '≤'], ['startsWith', 'starts'], ['endsWith', 'ends'],
-            ['contains', 'contains'], ['any', 'any'],
-        ];
-        return ops.map(([v, l]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${l}</option>`).join('');
-    },
-
-    _dtTargetClassChanged() {
-        const cls = (document.getElementById('dtTargetClass') || {}).value || '';
-        this._populatePropertySelect('dtOutputProperty', '', cls);
-        this._dtColumns.forEach(c => { c.property = ''; });
-        this._dtRenderGrid();
-    },
-
-    _dtColChanged(ci, val) { this._dtColumns[ci].property = val; },
-    _dtCellChanged(ri, ci, field, val) {
-        if (!this._dtRows[ri].conditions[ci]) this._dtRows[ri].conditions[ci] = { op: 'eq', value: '' };
-        this._dtRows[ri].conditions[ci][field] = val;
-    },
-
-    _dtSyncOutputValue() {
-        const assign = document.getElementById('dtOutputAction')?.value === 'assign_class';
-        document.getElementById('dtOutputPropertyGroup')?.classList.toggle('d-none', assign);
-        document.getElementById('dtOutputValueGroup')?.classList.toggle('d-none', assign);
-        document.getElementById('dtOutputClassGroup')?.classList.toggle('d-none', !assign);
-    },
-
-    dtAddColumn() {
-        this._dtColumns.push({ property: '', label: '' });
-        this._dtRows.forEach(r => r.conditions.push({ op: 'eq', value: '' }));
-        this._dtRenderGrid();
-    },
-    dtAddRow() {
-        this._dtRows.push({ conditions: this._dtColumns.map(() => ({ op: 'eq', value: '' })), action_value: '' });
-        this._dtRenderGrid();
-    },
-    _dtRemoveColumn(ci) {
-        if (this._dtColumns.length <= 1) return;
-        this._dtColumns.splice(ci, 1);
-        this._dtRows.forEach(r => r.conditions.splice(ci, 1));
-        this._dtRenderGrid();
-    },
-    _dtRemoveRow(ri) {
-        if (this._dtRows.length <= 1) return;
-        this._dtRows.splice(ri, 1);
-        this._dtRenderGrid();
-    },
-
-    _dtFormRule() {
-        const assign = document.getElementById('dtOutputAction').value === 'assign_class';
-        return {
-            name: document.getElementById('dtName').value.trim(),
-            target_class: document.getElementById('dtTargetClass').value,
-            hit_policy: document.getElementById('dtHitPolicy').value,
-            row_logic: this._dtGetRowLogic(),
-            input_columns: this._dtColumns.map(c => ({ property: c.property, label: c.label || c.property })),
-            output_column: assign
-                ? { property: '', action: 'assign_class', value: document.getElementById('dtOutputClass').value }
-                : {
-                    property: document.getElementById('dtOutputProperty').value,
-                    action: 'set_value',
-                    value: (document.getElementById('dtOutputValue')?.value || '').trim(),
-                },
-            rows: this._dtRows,
-        };
-    },
-
-    /** Plain-English reading of a decision table, mirroring DecisionTableEngine (SQL + hit policy). */
-    dtDescribeTable(dt) {
-        const target = dt.target_class || '';
-        if (!target) return { text: 'Pick a target entity to see what this table does.', warnings: [] };
-
-        const opWords = {
-            eq: '=', neq: '≠', gt: '>', gte: '≥', lt: '<', lte: '≤',
-            startsWith: 'starts with', endsWith: 'ends with', contains: 'contains',
-        };
-        const isNum = (v) => v !== '' && !isNaN(Number(v));
-        const cols = (dt.input_columns || []).map(c => c.property || '');
-        const warnings = [];
-        cols.forEach((p, i) => {
-            if (!p) warnings.push(`Column ${i + 1} has no attribute selected: pick one or remove the column.`);
-        });
-
-        const rowTexts = (dt.rows || []).map(row => (row.conditions || [])
-            .map((c, j) => {
-                const v = String((c && c.value) ?? '').trim();
-                if (!c || c.op === 'any' || !v || !cols[j] || !opWords[c.op]) return '';
-                return `${cols[j]} ${opWords[c.op]} ${isNum(v) ? v : `"${v}"`}`;
-            })
-            .filter(Boolean))
-            .filter(parts => parts.length)
-            .map(parts => `(${parts.join(' AND ')})`);
-
-        if (!rowTexts.length) {
-            warnings.push('Every cell is empty or "any": the table matches nothing.');
-            return { text: `For each ${target}: no condition set yet.`, warnings };
-        }
-
-        const logic = dt.row_logic === 'and' ? 'AND' : 'OR';
-        let text = `For each ${target}: it matches when ${rowTexts.join(` ${logic} `)}.`;
-
-        const out = dt.output_column || {};
-        const assign = out.action === 'assign_class';
-        const prop = assign ? '' : (out.property || '');
-        const value = out.value || '';
-        const rowValues = (dt.rows || []).some(r => r.action_value);
-        let effect = '';
-        if (assign && (value || rowValues)) {
-            effect = value ? `typed as ${value}` : "typed as the matching row's entity";
-        } else if (prop && (value || rowValues)) {
-            effect = value ? `get ${prop} = "${value}"` : `get ${prop} from the matching row's value`;
-        }
-
-        if (effect) {
-            text += ` Matching instances are reported and, when reasoning materializes inferences, ${effect}.`;
-            if (logic === 'OR' && rowTexts.length > 1) {
-                text += {
-                    first: ' When several rows match the same instance, only the first matching row counts.',
-                    all: ' When several rows match the same instance, every matching row fires.',
-                    unique: ' An instance matching several rows is reported as a conflict and gets no output.',
-                }[dt.hit_policy || 'first'] || '';
-            }
-        } else {
-            text += ' Matching instances are reported as matches (Data Quality and Reasoning).';
-            if (assign) warnings.push('Pick the entity to assign, otherwise matches are only reported.');
-            else if (value && !prop) warnings.push('Pick an output property, otherwise the value is not written.');
-            else if (prop && !value) warnings.push(`Set a value to write on ${prop}.`);
-        }
-        return { text, warnings };
-    },
-
-    _dtRenderPreview() {
-        const textEl = document.getElementById('dtPreviewText');
-        const warnEl = document.getElementById('dtPreviewWarning');
-        if (!textEl || !warnEl) return;
-        const { text, warnings } = this.dtDescribeTable(this._dtFormRule());
-        textEl.textContent = text;
-        warnEl.replaceChildren(...warnings.map(w => {
-            const li = document.createElement('li');
-            li.textContent = w;
-            return li;
-        }));
-        warnEl.classList.toggle('d-none', !warnings.length);
-    },
-
-    async dtSave() {
-        const index = parseInt(document.getElementById('dtEditIndex').value, 10);
-        const rule = { ...this._dtFormRule(), enabled: true };
-        if (index >= 0 && this.dtRules[index]) rule.enabled = this.dtRules[index].enabled;
-
-        const result = await this._saveRule('decision_tables', rule, index);
-        if (result && result.success) bootstrap.Modal.getInstance(document.getElementById('dtEditorModal'))?.hide();
-    },
-
-    // ═══════════════════════════════════════════════════════════
-    // SPARQL CONSTRUCT RULES
+    // SPARQL CONSTRUCT RULES  (UI label: "Complex")
     // ═══════════════════════════════════════════════════════════
 
     _renderSparqlList() {
@@ -703,7 +329,7 @@ window.BusinessRulesModule = {
         this.sparqlRules.forEach((r, i) => {
             const querySnip = (r.query || '').substring(0, 80).replace(/\n/g, ' ');
             this._renderRuleCard(container, {
-                name: r.name || `SPARQL Rule ${i + 1}`,
+                name: r.name || `Complex Rule ${i + 1}`,
                 meta: this._esc(querySnip) + (r.query && r.query.length > 80 ? '…' : ''),
                 enabled: r.enabled,
                 onEdit: () => this.sparqlOpenEditor(i),
@@ -720,7 +346,7 @@ window.BusinessRulesModule = {
         document.getElementById('sparqlName').value = r.name || '';
         document.getElementById('sparqlDescription').value = r.description || '';
         document.getElementById('sparqlQuery').value = r.query || '';
-        document.getElementById('sparqlEditorTitle').innerHTML = `<i class="bi bi-braces me-2"></i>${isNew ? 'Add' : 'Edit'} SPARQL Rule`;
+        document.getElementById('sparqlEditorTitle').innerHTML = `<i class="bi bi-braces me-2"></i>${isNew ? 'Add' : 'Edit'} Complex Rule`;
         const svm = document.getElementById('sparqlValidationMsg');
         if (svm) svm.classList.add('d-none');
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
@@ -740,10 +366,10 @@ window.BusinessRulesModule = {
             msgEl.classList.remove('d-none');
             if (data.valid) {
                 msgEl.className = 'alert alert-success small py-2';
-                msgEl.textContent = 'Query syntax is valid.';
+                msgEl.textContent = 'Query is valid and compiles to SQL.';
             } else {
                 msgEl.className = 'alert alert-danger small py-2';
-                msgEl.textContent = (data.errors || []).join('; ') || 'Validation failed';
+                msgEl.textContent = data.message || 'Validation failed';
             }
         } catch (e) {
             msgEl.classList.remove('d-none');
@@ -767,146 +393,15 @@ window.BusinessRulesModule = {
     },
 
     // ═══════════════════════════════════════════════════════════
-    // AGGREGATE RULES
-    // ═══════════════════════════════════════════════════════════
-
-    _renderAggList() {
-        const container = document.getElementById('aggList');
-        const empty = document.getElementById('aggEmpty');
-        if (!container) return;
-        container.querySelectorAll('.br-rule-card').forEach(c => c.remove());
-        if (this.aggRules.length === 0) { if (empty) empty.classList.remove('d-none'); return; }
-        if (empty) empty.classList.add('d-none');
-
-        const opLabels = { lt: '<', gt: '>', eq: '=', lte: '≤', gte: '≥', neq: '≠' };
-        this.aggRules.forEach((r, i) => {
-            const func = (r.aggregate_function || 'count').toUpperCase();
-            const op = opLabels[r.operator] || r.operator || '?';
-            this._renderRuleCard(container, {
-                name: r.name || `Aggregate Rule ${i + 1}`,
-                meta: `${this._esc(r.target_class || '?')} · ${func}(${this._esc(r.aggregate_property || r.group_by_property || '*')}) ${op} ${r.threshold ?? '?'}`,
-                enabled: r.enabled,
-                onEdit: () => this.aggOpenEditor(i),
-                onDelete: () => this._deleteRule('aggregate_rules', i),
-                onToggle: () => this._toggleEnabled('aggregate_rules', i),
-            });
-        });
-    },
-
-    aggOpenEditor(index) {
-        const isNew = index < 0;
-        const r = isNew ? {} : { ...this.aggRules[index] };
-        document.getElementById('aggEditIndex').value = index;
-        document.getElementById('aggName').value = r.name || '';
-        document.getElementById('aggFunction').value = r.aggregate_function || 'count';
-        document.getElementById('aggOperator').value = r.operator || 'gt';
-        document.getElementById('aggThreshold').value = r.threshold ?? '';
-        document.getElementById('aggEditorTitle').innerHTML = `<i class="bi bi-calculator me-2"></i>${isNew ? 'Add' : 'Edit'} Aggregate Rule`;
-
-        const targetCls = r.target_class || '';
-        this._populateClassSelect('aggTargetClass', targetCls);
-        this._populateClassSelect('aggResultClass', r.result_class || '');
-        this._populatePropertySelect('aggGroupBy', r.group_by_property || '', targetCls);
-        this._populatePropertySelect('aggAggProp', r.aggregate_property || '', targetCls);
-        this._aggRenderPreview();
-        new bootstrap.Modal(document.getElementById('aggEditorModal')).show();
-    },
-
-    _aggTargetClassChanged() {
-        const cls = (document.getElementById('aggTargetClass') || {}).value || '';
-        this._populatePropertySelect('aggGroupBy', '', cls);
-        this._populatePropertySelect('aggAggProp', '', cls);
-    },
-
-    _aggFormRule() {
-        const val = (id) => document.getElementById(id).value;
-        return {
-            name: val('aggName').trim(),
-            target_class: val('aggTargetClass'),
-            group_by_property: val('aggGroupBy'),
-            aggregate_property: val('aggAggProp'),
-            aggregate_function: val('aggFunction'),
-            operator: val('aggOperator'),
-            threshold: parseFloat(val('aggThreshold')) || 0,
-            result_class: val('aggResultClass') || '',
-        };
-    },
-
-    /** Plain-English reading of an aggregate rule, mirroring AggregateRuleEngine.build_sql's four shapes. */
-    aggDescribeRule(rule) {
-        const target = rule.target_class || '';
-        if (!target) return { text: 'Pick a target entity to see what this rule checks.', warning: '' };
-
-        const opWords = {
-            gt: 'greater than', gte: 'greater than or equal to', eq: 'equal to',
-            lt: 'less than', lte: 'less than or equal to', neq: 'different from',
-        };
-        const func = (rule.aggregate_function || 'count').toLowerCase();
-        const FUNC = func.toUpperCase();
-        const cond = `${opWords[rule.operator || 'gt'] || rule.operator} ${rule.threshold ?? 0}`;
-        const group = rule.group_by_property || '';
-        const agg = rule.aggregate_property || '';
-        const result = rule.result_class || '';
-        let text;
-        let warning = '';
-
-        if (group && agg) {
-            const what = func === 'count' ? `count their "${agg}" values` : `take the ${FUNC} of their "${agg}" values`;
-            text = `For each ${target}, follow "${group}" to the linked entities, ${what}, and flag the ${target} when the result is ${cond}.`;
-        } else if (agg) {
-            const what = func === 'count' ? `count its own "${agg}" values` : `take the ${FUNC} of its own "${agg}" values`;
-            text = `For each ${target}, ${what} and flag it when the result is ${cond}.`;
-        } else if (group) {
-            text = func === 'count'
-                ? `For each ${target}, count its "${group}" links and flag it when the count is ${cond}.`
-                : `For each ${target}, take the ${FUNC} of its "${group}" values (read as numbers) and flag it when the result is ${cond}.`;
-        } else {
-            text = `Count all ${target} instances and report one finding for the entity as a whole when the total is ${cond}.`;
-            if (func !== 'count') {
-                warning = 'Only COUNT works without a Group-by or Aggregate property: pick one, or switch the function to COUNT.';
-            } else if (result) {
-                warning = 'Result entity does not apply without a Group-by or Aggregate property: there are no individual instances to classify.';
-            }
-            return { text, warning };
-        }
-
-        text += result
-            ? ` Flagged instances are reported as violations and, when reasoning materializes inferences, typed as ${result}.`
-            : ' Flagged instances are reported as violations (Data Quality and Reasoning).';
-        return { text, warning };
-    },
-
-    _aggRenderPreview() {
-        const textEl = document.getElementById('aggPreviewText');
-        const warnEl = document.getElementById('aggPreviewWarning');
-        if (!textEl || !warnEl) return;
-        const { text, warning } = this.aggDescribeRule(this._aggFormRule());
-        textEl.textContent = text;
-        warnEl.textContent = warning;
-        warnEl.classList.toggle('d-none', !warning);
-    },
-
-    async aggSave() {
-        const index = parseInt(document.getElementById('aggEditIndex').value, 10);
-        const rule = { ...this._aggFormRule(), enabled: true };
-        if (index >= 0 && this.aggRules[index]) rule.enabled = this.aggRules[index].enabled;
-
-        const result = await this._saveRule('aggregate_rules', rule, index);
-        if (result && result.success) bootstrap.Modal.getInstance(document.getElementById('aggEditorModal'))?.hide();
-    },
-
-    // ═══════════════════════════════════════════════════════════
     // AUTO-GENERATE (agent) — suggest + review + accept
     // ═══════════════════════════════════════════════════════════
 
-    _suggestions: { swrl_rules: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] },
+    _suggestions: { if_then_rules: [], sparql_rules: [] },
     _genTaskActive: false,
 
     SUGGEST_SECTIONS: [
-        { key: 'swrl_rules', label: 'SWRL', icon: 'bi-code-square', badge: 'bg-primary' },
-        { key: 'decision_tables', label: 'Decision Tables', icon: 'bi-table', badge: 'bg-success' },
-        { key: 'sparql_rules', label: 'SPARQL', icon: 'bi-braces', badge: 'bg-warning text-dark' },
-        { key: 'aggregate_rules', label: 'Aggregate', icon: 'bi-calculator', badge: 'bg-danger' },
+        { key: 'if_then_rules', label: 'Simple', icon: 'bi-code-square', badge: 'bg-primary' },
+        { key: 'sparql_rules', label: 'Complex', icon: 'bi-braces', badge: 'bg-warning text-dark' },
     ],
 
     async autoGenerate() {
@@ -926,7 +421,7 @@ window.BusinessRulesModule = {
         if (acceptBtn) acceptBtn.classList.add('d-none');
         if (progressEl) progressEl.textContent = 'Generating business rules…';
 
-        this._suggestions = { swrl_rules: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] };
+        this._suggestions = { if_then_rules: [], sparql_rules: [] };
         new bootstrap.Modal(document.getElementById('brSuggestModal')).show();
 
         this._genTaskActive = true;
@@ -945,10 +440,8 @@ window.BusinessRulesModule = {
             const result = await this._pollGenTask(data.task_id, progressEl);
             if (result === null) return;
             this._suggestions = {
-                swrl_rules: result.swrl_rules || [],
-                decision_tables: result.decision_tables || [],
+                if_then_rules: result.if_then_rules || [],
                 sparql_rules: result.sparql_rules || [],
-                aggregate_rules: result.aggregate_rules || [],
             };
             this._renderSuggestions();
         } catch (e) {
@@ -992,17 +485,11 @@ window.BusinessRulesModule = {
 
     _suggestMeta(key, rule) {
         switch (key) {
-            case 'swrl_rules':
+            case 'if_then_rules':
                 return `${this._esc(rule.antecedent || '')} → ${this._esc(rule.consequent || '')}`;
-            case 'decision_tables':
-                return `${this._esc(rule.target_class || '?')} · ${(rule.input_columns || []).length} col · ${(rule.rows || []).length} rows`;
             case 'sparql_rules': {
                 const snip = (rule.query || '').substring(0, 90).replace(/\n/g, ' ');
                 return this._esc(snip) + ((rule.query || '').length > 90 ? '…' : '');
-            }
-            case 'aggregate_rules': {
-                const func = (rule.aggregate_function || 'count').toUpperCase();
-                return `${this._esc(rule.target_class || '?')} · ${func}(${this._esc(rule.aggregate_property || rule.group_by_property || '*')}) ${this._esc(rule.operator || '')} ${rule.threshold ?? '?'}`;
             }
             default:
                 return '';
@@ -1054,7 +541,7 @@ window.BusinessRulesModule = {
     },
 
     async acceptSuggestions() {
-        const payload = { swrl_rules: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] };
+        const payload = { if_then_rules: [], sparql_rules: [] };
         let selectedCount = 0;
         document.querySelectorAll('#brSuggestItems [data-br-sug-idx]').forEach(el => {
             if (!el.checked) return;
@@ -1081,12 +568,8 @@ window.BusinessRulesModule = {
                 if (typeof showNotification === 'function') showNotification(data.message || 'Accept failed', 'error');
                 return;
             }
-            await Promise.all([
-                this._loadRules('decision_tables'),
-                this._loadRules('sparql_rules'),
-                this._loadRules('aggregate_rules'),
-            ]);
-            if (typeof SwrlModule !== 'undefined') await SwrlModule.loadRules();
+            await this._loadRules('sparql_rules');
+            if (typeof IfThenModule !== 'undefined') await IfThenModule.loadRules();
             this._refreshAllBadges();
             bootstrap.Modal.getInstance(document.getElementById('brSuggestModal'))?.hide();
 

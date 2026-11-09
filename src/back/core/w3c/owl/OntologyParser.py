@@ -14,6 +14,15 @@ from shared.config.constants import DEFAULT_BASE_URI, ONTOBRICKS_NS
 logger = get_logger(__name__)
 
 
+def _if_then_rule_nodes(graph: Graph) -> Dict[Any, None]:
+    """Subjects typed as IF-THEN rules, in document order.
+
+    OWL files exported before the rename type their rules as ``SWRLRule``.
+    """
+    rule_classes = (ONTOBRICKS_NS.IfThenRule, ONTOBRICKS_NS["SWRLRule"])
+    return dict.fromkeys(s for c in rule_classes for s in graph.subjects(RDF.type, c))
+
+
 class OntologyParser:
     """Parse OWL ontologies to extract classes and properties."""
 
@@ -300,7 +309,7 @@ class OntologyParser:
                     pass
                 break
 
-            # Get referenced SWRL business rules from OntoBricks property
+            # Get referenced IF-THEN business rules from OntoBricks property
             business_rules = []
             for br in self.graph.objects(cls, ONTOBRICKS_NS.businessRules):
                 try:
@@ -832,16 +841,15 @@ class OntologyParser:
 
         return constraints
 
-    def get_swrl_rules(self) -> List[Dict]:
-        """Extract SWRL rules from the ontology.
+    def get_if_then_rules(self) -> List[Dict]:
+        """Extract IF-THEN rules from the ontology.
 
         Returns:
             List of rule dicts with 'name', 'description', 'antecedent', 'consequent'
         """
         rules = []
 
-        # Extract OntoBricks SWRL rules
-        for rule_res in self.graph.subjects(RDF.type, ONTOBRICKS_NS.SWRLRule):
+        for rule_res in _if_then_rule_nodes(self.graph):
             rule = {}
 
             for label in self.graph.objects(rule_res, RDFS.label):

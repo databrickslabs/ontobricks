@@ -69,9 +69,9 @@ window.DQExecModule = {
             const resp = await fetch('/ontology/dataquality/list', { credentials: 'same-origin' });
             const data = await resp.json();
             if (!data.success) return;
-            // SWRL rules, decision tables and aggregate rules run alongside the
-            // shapes, so they get a checkbox of their own or picking a few
-            // rules would still run every one of them.
+            // Simple (IF-THEN) rules run alongside the shapes, so they get a
+            // checkbox of their own or picking a few rules would still run
+            // every one of them.
             this._shapesCache = [...(data.shapes || []), ...(data.rules || [])];
             this._renderShapeCheckboxes();
         } catch (e) {
@@ -118,9 +118,7 @@ window.DQExecModule = {
     // A dimension mixes SHACL shapes with rules authored elsewhere, so the
     // ones that are not shapes say where they come from.
     RULE_FAMILIES: {
-        swrl: { label: 'SWRL', title: 'SWRL rule, defined in Ontology → Rules' },
-        dt: { label: 'Decision table', title: 'Decision table, defined in Business Rules' },
-        agg: { label: 'Aggregate', title: 'Aggregate rule, defined in Business Rules' },
+        if_then: { label: 'Simple', title: 'Simple (IF/THEN) rule, defined in Ontology → Rules' },
     },
 
     _familyBadge(family) {
@@ -233,9 +231,8 @@ window.DQExecModule = {
         const shapeIds = this._getSelectedShapeIds();
         const dimensions = this._getSelectedDimensions();
 
-        // A dimension with no shape of its own may still carry SWRL rules,
-        // decision tables or aggregate rules, so either selection can stand
-        // alone.
+        // A dimension with no shape of its own may still carry IF-THEN rules,
+        // so either selection can stand alone.
         if (!shapeIds.length && !dimensions.length) {
             showNotification('Select at least one rule or dimension to run.', 'warning');
             return;

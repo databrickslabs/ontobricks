@@ -1,9 +1,9 @@
 """The run request always names the selected dimensions.
 
-SWRL rules, decision tables and aggregate rules have no checkbox: the backend
+IF-THEN rules, decision tables and aggregate rules have no checkbox: the backend
 includes them based on the dimensions. Sending only ``shape_ids`` — which is
 what happened as soon as a domain had any shape — left the backend with no
-selection to apply, so every SWRL rule ran under Structural even when only
+selection to apply, so every IF-THEN rule ran under Structural even when only
 Conformance was ticked.
 
 ``runAllChecks`` is executed under node against a stubbed DOM and fetch.
@@ -111,7 +111,7 @@ class TestPayload:
         assert outcome["sent"]["body"]["dimensions"] == ["conformance"]
 
     def test_a_dimension_with_no_shape_can_run_alone(self):
-        """Structural may hold only SWRL rules, which have no checkbox."""
+        """Structural may hold only IF-THEN rules, which have no checkbox."""
         outcome = _run_checks(
             dimensions=[["structural", True]], rules=[], shapes=[{"id": "s1"}]
         )
@@ -125,14 +125,14 @@ class TestPayload:
 
 
 class TestRuleFamilySelection:
-    """A picked SWRL rule reaches the request the way a picked shape does."""
+    """A picked IF-THEN rule reaches the request the way a picked shape does."""
 
     def test_a_family_rule_id_travels_as_a_shape_id(self):
         outcome = _run_checks(
             dimensions=[["structural", True]],
-            rules=[["swrl:no_orphans", True], ["swrl:unique_ids", False]],
+            rules=[["if_then:no_orphans", True], ["if_then:unique_ids", False]],
         )
-        assert outcome["sent"]["body"]["shape_ids"] == ["swrl:no_orphans"]
+        assert outcome["sent"]["body"]["shape_ids"] == ["if_then:no_orphans"]
 
 
 class TestExecutionTarget:

@@ -1,9 +1,9 @@
 """Every rule a run executes is offered for selection, under its check id.
 
-SWRL rules, decision tables and aggregate rules are not SHACL shapes, so they
-have no shape id. A run addresses them by a synthetic one. The list endpoint,
-the run selection and the reported result each derive that id, and if any of
-them derives it differently the rule silently cannot be picked.
+IF-THEN (Simple) rules are not SHACL shapes, so they have no shape id. A run
+addresses them by a synthetic one. The list endpoint, the run selection and
+the reported result each derive that id, and if any of them derives it
+differently the rule silently cannot be picked.
 """
 
 from __future__ import annotations
@@ -18,11 +18,8 @@ pytestmark = pytest.mark.unit
 
 class _Domain:
     shacl_shapes = [{"id": "shape_1", "category": "conformance", "enabled": True}]
-    swrl_rules = [{"name": "no_orphans"}, {"name": "disabled_one", "enabled": False}]
-    ontology = {
-        "decision_tables": [{"name": "pricing", "enabled": True}],
-        "aggregate_rules": [{"name": "totals", "enabled": True}],
-    }
+    if_then_rules = [{"name": "no_orphans"}, {"name": "disabled_one", "enabled": False}]
+    ontology: dict = {}
 
     def deduplicate_shacl_shapes(self):
         return None
@@ -44,9 +41,7 @@ class TestRuleFamilies:
     async def test_the_families_are_offered_alongside_the_shapes(self, listed):
         response = await listed()
         assert [r["id"] for r in response["rules"]] == [
-            "swrl:no_orphans",
-            "dt:pricing",
-            "agg:totals",
+            "if_then:no_orphans",
         ]
 
     async def test_the_shapes_stay_free_of_them(self, listed):
@@ -61,30 +56,28 @@ class TestRuleFamilies:
     async def test_each_rule_carries_the_dimension_it_reports_under(self, listed):
         response = await listed()
         by_id = {r["id"]: r["category"] for r in response["rules"]}
-        assert by_id["swrl:no_orphans"] == "structural"
-        assert by_id["dt:pricing"] == "conformance"
-        assert by_id["agg:totals"] == "conformance"
+        assert by_id["if_then:no_orphans"] == "structural"
 
     async def test_a_category_filter_narrows_both_lists(self, listed):
         response = await listed(category="structural")
-        assert [r["id"] for r in response["rules"]] == ["swrl:no_orphans"]
+        assert [r["id"] for r in response["rules"]] == ["if_then:no_orphans"]
         assert response["shapes"] == []
 
     async def test_a_rule_with_no_name_still_gets_an_id(self, listed):
-        assert rule_check_id("swrl", {}, 3) == "swrl:3"
+        assert rule_check_id("if_then", {}, 3) == "if_then:3"
 
 
 class TestIdAgreement:
     """The runner must report the id the rule was picked by."""
 
     def test_the_runner_prefers_the_id_the_selector_stamped(self):
-        rule = {"name": "second", "check_id": "swrl:second"}
-        assert DigitalTwin._rule_check_id("swrl", rule, 0) == "swrl:second"
+        rule = {"name": "second", "check_id": "if_then:second"}
+        assert DigitalTwin._rule_check_id("if_then", rule, 0) == "if_then:second"
 
     def test_an_unstamped_rule_falls_back_to_the_shared_derivation(self):
         rule = {"name": "second"}
-        assert DigitalTwin._rule_check_id("swrl", rule, 0) == rule_check_id(
-            "swrl", rule, 0
+        assert DigitalTwin._rule_check_id("if_then", rule, 0) == rule_check_id(
+            "if_then", rule, 0
         )
 
 

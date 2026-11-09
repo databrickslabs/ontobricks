@@ -12,7 +12,7 @@ class Reasoning(ReasoningService):
 
     All phases resolve their table through :meth:`_get_graph_name`, so
     overriding it (together with a sandbox-pinned store) is enough to make
-    T-Box / SWRL / graph / decision-table / SPARQL / aggregate phases read
+    T-Box / IF-THEN / graph / SPARQL phases read
     and materialise inside the sandbox only.
     """
 

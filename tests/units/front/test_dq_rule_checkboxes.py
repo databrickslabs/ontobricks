@@ -1,7 +1,7 @@
 """The run page offers a checkbox for every rule a run executes.
 
-The list endpoint returns SHACL shapes under ``shapes`` and the other rule
-families under ``rules``. The page has to render both or a SWRL rule has no
+The list endpoint returns SHACL shapes under ``shapes`` and the Simple (IF-THEN)
+rules under ``rules``. The page has to render both or a Simple rule has no
 checkbox, and picking a few rules still runs every one of them.
 
 ``_loadShapes`` is executed under node against a stubbed DOM and fetch.
@@ -90,29 +90,19 @@ RESPONSE = {
     "shapes": [{"id": "shape_1", "label": "Email present", "category": "completeness"}],
     "rules": [
         {
-            "id": "swrl:no_orphans",
+            "id": "if_then:no_orphans",
             "label": "No orphans",
             "category": "structural",
-            "family": "swrl",
-        },
-        {
-            "id": "dt:pricing",
-            "label": "Pricing table",
-            "category": "conformance",
-            "family": "dt",
+            "family": "if_then",
         },
     ],
 }
 
 
 class TestRuleCheckboxes:
-    def test_a_swrl_rule_gets_a_checkbox(self):
+    def test_a_if_then_rule_gets_a_checkbox(self):
         outcome = _load(RESPONSE)
-        assert 'data-dq-rule-id="swrl:no_orphans"' in outcome["rendered"]["structural"]
-
-    def test_a_decision_table_gets_a_checkbox(self):
-        outcome = _load(RESPONSE)
-        assert 'data-dq-rule-id="dt:pricing"' in outcome["rendered"]["conformance"]
+        assert 'data-dq-rule-id="if_then:no_orphans"' in outcome["rendered"]["structural"]
 
     def test_the_rule_is_listed_under_the_dimension_it_reports_in(self):
         outcome = _load(RESPONSE)
@@ -123,11 +113,10 @@ class TestRuleCheckboxes:
         assert 'data-dq-rule-id="shape_1"' in outcome["rendered"]["completeness"]
 
     def test_a_rule_says_which_family_it_comes_from(self):
-        """A dimension counts shapes and business rules together, so the ones
+        """A dimension counts shapes and Simple rules together, so the ones
         that are not shapes have to say where they were authored."""
         outcome = _load(RESPONSE)
-        assert "Decision table" in outcome["rendered"]["conformance"]
-        assert "SWRL" in outcome["rendered"]["structural"]
+        assert "Simple" in outcome["rendered"]["structural"]
 
     def test_a_shape_carries_no_family_badge(self):
         outcome = _load(RESPONSE)

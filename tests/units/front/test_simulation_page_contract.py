@@ -255,11 +255,11 @@ def test_workbench_picks_individual_inference_rules():
     page = _read(PAGE)
     js = _read(FRONT / "static/simulation/js/simulation-rules.js")
     wb = _read(FRONT / "static/simulation/js/simulation-workbench.js")
-    assert 'data-sim-rulelist="swrl"' in html
-    assert 'data-sim-expand="swrl"' in html
+    assert 'data-sim-rulelist="if_then"' in html
+    assert 'data-sim-expand="if_then"' in html
     assert "query-reasoning.css" in page
     assert "simulation/js/simulation-rules.js" in page
-    assert "/ontology/swrl/list" in js
+    assert "/ontology/if-then/list" in js
     assert "rule_names" in wb
     assert "collectRuleNames" in js
     assert "onclick=" not in html

@@ -260,7 +260,7 @@ class NodeContextAction(BaseModel):
 
 
 class NodeContextBusinessRule(BaseModel):
-    """A SWRL rule declared on the node's ontology class, runnable on the node."""
+    """A IF-THEN rule declared on the node's ontology class, runnable on the node."""
 
     name: str
     description: Optional[str] = None
@@ -338,7 +338,7 @@ class NodeActionResponse(BaseModel):
 
 class NodeBusinessRuleRequest(BaseModel):
     entity_uri: str = Field(..., description="Instance URI of the node to apply the rule to")
-    rule: str = Field(..., description="Name of a SWRL business rule declared on the class")
+    rule: str = Field(..., description="Name of an IF-THEN business rule declared on the class")
     domain_name: Optional[str] = Field(None, description="Domain name in the registry")
     domain_version: Optional[str] = Field(None, description="Domain version to load")
     registry_catalog: Optional[str] = None
@@ -389,17 +389,11 @@ class DataQualityStartedResponse(BaseModel):
 
 class InferenceRequest(BaseModel):
     tbox: bool = Field(True, description="Run T-Box (OWL 2 RL) inference")
-    swrl: bool = Field(True, description="Run SWRL rule execution")
+    if_then: bool = Field(True, description="Run IF-THEN rule execution")
     graph: bool = Field(True, description="Run graph-structural reasoning")
     constraints: bool = Field(True, description="Run constraint checks")
-    decision_tables: bool = Field(
-        False, description="Run DMN-style decision table rules"
-    )
     sparql_rules: bool = Field(
         False, description="Run SPARQL CONSTRUCT inference rules"
-    )
-    aggregate_rules: bool = Field(
-        False, description="Run aggregate (GROUP BY/HAVING) rules"
     )
     append_graph: bool = Field(
         False,
@@ -1120,17 +1114,17 @@ async def dt_dataquality_start(
         shapes = [s for s in shapes if s.get("category") == body.category]
     shapes = [s for s in shapes if s.get("enabled", True)]
 
-    swrl_rules = domain.swrl_rules or []
+    if_then_rules = domain.if_then_rules or []
     ontology_dict = getattr(domain, "ontology", None)
     if not isinstance(ontology_dict, dict):
         ontology_dict = (
             domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
         )
 
-    if not shapes and not swrl_rules:
+    if not shapes and not if_then_rules:
         return DataQualityStartedResponse(
             success=False,
-            message="No enabled shapes or SWRL rules to check"
+            message="No enabled shapes or IF-THEN rules to check"
             + (f" (category={body.category})" if body.category else ""),
         )
 
@@ -1140,7 +1134,7 @@ async def dt_dataquality_start(
             "The triple-store VIEW is not available. Build the Knowledge Graph first."
         )
 
-    total = len(shapes) + len(swrl_rules)
+    total = len(shapes) + len(if_then_rules)
     domain_snap = DigitalTwin.make_snapshot(domain)
 
     tm = get_task_manager()
@@ -1159,7 +1153,7 @@ async def dt_dataquality_start(
             shapes,
             triplestore_table,
             total,
-            swrl_rules=swrl_rules,
+            if_then_rules=if_then_rules,
             ontology_dict=ontology_dict,
             use_exception_message_on_failure=True,
         )
@@ -1199,9 +1193,9 @@ async def dt_dataquality_progress(task_id: str):
     "/inference/start",
     response_model=InferenceStartedResponse,
     summary="Run inference",
-    description="Start OWL 2 RL inference, SWRL rule execution, graph reasoning, "
-    "constraint checking, SHACL inference rules, decision tables, "
-    "SPARQL CONSTRUCT rules, and aggregate rules as an asynchronous task. "
+    description="Start OWL 2 RL inference, Simple (IF/THEN, SHACL-AF) rules, "
+    "graph reasoning, constraint checking, and Complex (SPARQL CONSTRUCT) "
+    "rules as an asynchronous task. "
     "Each phase can be toggled on or off. Optionally append inferred "
     "triples to the knowledge graph via ``append_graph``. "
     "Returns a task_id to poll.",
@@ -1247,12 +1241,10 @@ async def dt_inference_start(
 
     options = {
         "tbox": body.tbox,
-        "swrl": body.swrl,
+        "if_then": body.if_then,
         "graph": body.graph,
         "constraints": body.constraints,
-        "decision_tables": body.decision_tables,
         "sparql_rules": body.sparql_rules,
-        "aggregate_rules": body.aggregate_rules,
         "append_graph": body.append_graph,
         "materialize": body.materialize,
         "materialize_table": (body.materialize_table or "").strip(),
@@ -1277,7 +1269,7 @@ async def dt_inference_start(
 
     threading.Thread(target=_run, daemon=True).start()
 
-    enabled = [k for k in ("tbox", "swrl", "graph", "constraints") if options.get(k)]
+    enabled = [k for k in ("tbox", "if_then", "graph", "constraints") if options.get(k)]
     return InferenceStartedResponse(
         success=True,
         task_id=task.id,
@@ -1905,8 +1897,8 @@ async def dt_nodes_action(
     "/nodes/business-rule",
     response_model=NodeBusinessRuleResponse,
     response_model_exclude_none=True,
-    summary="Trigger a SWRL business rule on a node",
-    description="Run one of the SWRL business rules declared on the node's "
+    summary="Trigger an IF-THEN business rule on a node",
+    description="Run one of the IF-THEN business rules declared on the node's "
     "ontology class, restricted to that node, and write the inferred triples "
     "to the graph. Requires the Builder role on the domain. Only rules "
     "declared on the resolved class may be triggered.",

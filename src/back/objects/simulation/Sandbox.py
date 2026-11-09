@@ -196,13 +196,13 @@ class _LakebaseSandbox(_CompanionMixin):
 
         Patch objects (e.g. extra contracts on a customer) are often outside
         the original scope slice. Without their outgoing triples — and the
-        meter subjects those triples point at — SWRL cannot chain
+        meter subjects those triples point at — IF-THEN cannot chain
         ``hasContract`` to ``hasMeter``.
 
         *inbound* follows live reverse edges (who already points at this
         contract). Leave it off for hypothesis objects: those contracts
         still belong to other customers in the live graph, and pulling
-        their claims into the sandbox makes SWRL fire on the wrong people.
+        their claims into the sandbox makes IF-THEN fire on the wrong people.
         """
         unique = list(dict.fromkeys(u for u in uris if u))
         if not unique:
@@ -337,10 +337,10 @@ class _LakebaseSandbox(_CompanionMixin):
                 out.setdefault(obj, None)
         return list(out)
 
-    def seed_focus_for_swrl(self, entity_uri: str, hops: int = 2) -> int:
+    def seed_focus_for_if_then(self, entity_uri: str, hops: int = 2) -> int:
         """Copy the entity neighbourhood plus objects already linked in the sandbox.
 
-        Explorer SWRL runs against the sandbox table, not the union view.
+        Explorer IF-THEN runs against the sandbox table, not the union view.
         Extra contracts added by a patch are already in the sandbox as
         objects of the focus entity; their live meters still need copying.
         """
@@ -500,7 +500,7 @@ class _StoreSandbox(_CompanionMixin):
         more = [uri for uri in dict.fromkeys(extra) if uri]
         return self.seed(more) if more else 0
 
-    def seed_focus_for_swrl(self, entity_uri: str, hops: int = 2) -> int:
+    def seed_focus_for_if_then(self, entity_uri: str, hops: int = 2) -> int:
         return self.seed_neighbourhood([entity_uri], hops=hops)
 
     def uri_objects_of(self, subject: str) -> List[str]:

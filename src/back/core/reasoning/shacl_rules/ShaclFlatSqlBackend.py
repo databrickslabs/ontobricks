@@ -1,6 +1,6 @@
 """Flat-triple SQL backend for the SHACL rule layer.
 
-Translates IF/THEN rules (SWRL-style syntax) into SQL on the flat
+Translates IF/THEN rules (IF-THEN-style syntax) into SQL on the flat
 ``(subject, predicate, object)`` table for inference, materialisation, and
 violation detection. This is the shared SQL backend behind SHACL-AF rules
 (``ShaclRuleSqlTranslator`` delegates here); it carries the full built-in,
@@ -19,6 +19,164 @@ from back.core.reasoning.shacl_rules.RuleExpressionParser import RuleExpressionP
 logger = get_logger(__name__)
 
 
+def _literal_object_sql(token: str) -> Optional[str]:
+    """SQL literal for a consequent object that is a literal constant.
+
+    A set-attribute consequent (e.g. ``priority(?x, "high")``) carries a
+    literal in the object position.  Returns the SQL literal, or ``None`` when
+    *token* is a variable (``?z``) — i.e. an unbound relationship object — so
+    the caller keeps its ``''`` fallback.
+    """
+    if token and not token.startswith("?"):
+        return RuleBuiltinRegistry.literal_sql(token)
+    return None
+
+
+def _has_literal_assignment(cons_atoms: List[Dict]) -> bool:
+    """True if any consequent atom sets a data property to a literal.
+
+    Such a set-attribute can be realised from the class anchor alone, so a
+    rule carrying one is valid even with no property atoms in the antecedent.
+    """
+    return any(
+        a.get("arity") == 2 and _literal_object_sql(a["args"][1]) is not None
+        for a in cons_atoms
+    )
+
+
+def _consequent_inference_selects(
+    escape, table, cons_atoms, var_bindings, from_part, join_parts,
+    where_parts, ref, next_alias, base_uri, uri_map,
+) -> List[str]:
+    """Render each consequent atom as an inference ``SELECT`` (UNION ALL'd).
+
+    Handles class assertions (``rdf:type``), relationships (bound or dangling
+    object), and set-attribute literals.  De-dup is exact (s, p, o) for valued
+    objects so a set-attribute fires on a changed value and no-ops otherwise.
+    """
+    joins = "\n".join(join_parts)
+    where = " AND ".join(where_parts)
+    selects: List[str] = []
+    for atom in cons_atoms:
+        c_uri = escape(RuleExpressionParser.resolve_uri(atom["name"], base_uri, uri_map))
+        c_alias = next_alias()
+        if atom["arity"] == 1:
+            var = atom["args"][0]
+            if var not in var_bindings:
+                continue
+            not_exists = (
+                f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
+                f"WHERE {c_alias}.predicate = '{RDF_TYPE}' "
+                f"AND {c_alias}.object = '{c_uri}' "
+                f"AND {c_alias}.subject = {ref(var)})"
+            )
+            selects.append(
+                f"SELECT DISTINCT {ref(var)} AS subject, "
+                f"'{RDF_TYPE}' AS predicate, '{c_uri}' AS object\n"
+                f"FROM {from_part}\n{joins}\n"
+                f"WHERE {where}\n  AND {not_exists}"
+            )
+        elif atom["arity"] == 2:
+            var_s, var_o = atom["args"][0], atom["args"][1]
+            if var_s not in var_bindings:
+                continue
+            literal_obj = _literal_object_sql(var_o)
+            if var_o in var_bindings:
+                obj_expr = ref(var_o)
+            elif literal_obj is not None:
+                obj_expr = literal_obj
+            else:
+                obj_expr = "''"
+            not_exists = (
+                f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
+                f"WHERE {c_alias}.predicate = '{c_uri}' "
+                f"AND {c_alias}.subject = {ref(var_s)}"
+            )
+            if var_o in var_bindings or literal_obj is not None:
+                not_exists += f" AND {c_alias}.object = {obj_expr}"
+            not_exists += ")"
+            selects.append(
+                f"SELECT DISTINCT {ref(var_s)} AS subject, "
+                f"'{c_uri}' AS predicate, {obj_expr} AS object\n"
+                f"FROM {from_part}\n{joins}\n"
+                f"WHERE {where}\n  AND {not_exists}"
+            )
+    return selects
+
+
+def _consequent_materialize_stmts(
+    escape, table, cons_atoms, var_bindings, from_part, join_parts,
+    where_parts, ref, next_alias, base_uri, uri_map,
+) -> List[str]:
+    """Render each consequent atom as materialisation statement(s).
+
+    Class / relationship atoms become a guarded ``INSERT``.  A set-attribute
+    literal becomes ``DELETE`` (existing value for the subject + predicate)
+    followed by ``INSERT`` — the replace semantics that make it a true update.
+    """
+    joins = "\n".join(join_parts)
+    where = " AND ".join(where_parts)
+    stmts: List[str] = []
+    for atom in cons_atoms:
+        c_uri = escape(RuleExpressionParser.resolve_uri(atom["name"], base_uri, uri_map))
+        c_alias = next_alias()
+        if atom["arity"] == 1:
+            var = atom["args"][0]
+            if var not in var_bindings:
+                continue
+            not_exists = (
+                f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
+                f"WHERE {c_alias}.predicate = '{RDF_TYPE}' "
+                f"AND {c_alias}.object = '{c_uri}' "
+                f"AND {c_alias}.subject = {ref(var)})"
+            )
+            stmts.append(
+                f"INSERT INTO {table} (subject, predicate, object)\n"
+                f"SELECT DISTINCT {ref(var)}, '{RDF_TYPE}', '{c_uri}'\n"
+                f"FROM {from_part}\n{joins}\n"
+                f"WHERE {where}\n  AND {not_exists}"
+            )
+        elif atom["arity"] == 2:
+            var_s, var_o = atom["args"][0], atom["args"][1]
+            if var_s not in var_bindings:
+                continue
+            literal_obj = _literal_object_sql(var_o)
+            if literal_obj is not None and var_o not in var_bindings:
+                subject_select = (
+                    f"SELECT DISTINCT {ref(var_s)}\n"
+                    f"FROM {from_part}\n{joins}\n"
+                    f"WHERE {where}"
+                )
+                stmts.append(
+                    f"DELETE FROM {table}\n"
+                    f"WHERE predicate = '{c_uri}'\n"
+                    f"  AND subject IN (\n{subject_select}\n  )"
+                )
+                stmts.append(
+                    f"INSERT INTO {table} (subject, predicate, object)\n"
+                    f"SELECT DISTINCT {ref(var_s)}, '{c_uri}', {literal_obj}\n"
+                    f"FROM {from_part}\n{joins}\n"
+                    f"WHERE {where}"
+                )
+                continue
+            not_exists = (
+                f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
+                f"WHERE {c_alias}.predicate = '{c_uri}' "
+                f"AND {c_alias}.subject = {ref(var_s)}"
+            )
+            if var_o in var_bindings:
+                not_exists += f" AND {c_alias}.object = {ref(var_o)}"
+            not_exists += ")"
+            obj_expr = ref(var_o) if var_o in var_bindings else "''"
+            stmts.append(
+                f"INSERT INTO {table} (subject, predicate, object)\n"
+                f"SELECT DISTINCT {ref(var_s)}, '{c_uri}', {obj_expr}\n"
+                f"FROM {from_part}\n{joins}\n"
+                f"WHERE {where}\n  AND {not_exists}"
+            )
+    return stmts
+
+
 class ShaclFlatSqlBackend:
     """Build SQL from IF/THEN rules for the flat triple-store table."""
 
@@ -29,7 +187,7 @@ class ShaclFlatSqlBackend:
 
     @staticmethod
     def _resolve_arg(token: str, var_bindings: Dict[str, tuple]) -> str:
-        """Resolve a SWRL argument to a SQL expression.
+        """Resolve an IF-THEN argument to a SQL expression.
 
         Variables (``?x``) are resolved via *var_bindings*.  Literals are
         converted to SQL literal syntax.
@@ -172,7 +330,7 @@ class ShaclFlatSqlBackend:
         return parts
 
     def build_violation_sql(self, table: str, params: Dict) -> Optional[str]:
-        """Build SQL that finds subjects violating a SWRL rule.
+        """Build SQL that finds subjects violating an IF-THEN rule.
 
         The violation subject is determined from the consequent (first
         property-atom subject, or first class-atom variable).  When
@@ -378,7 +536,7 @@ class ShaclFlatSqlBackend:
         Returns a query with a single ``cnt`` column — the number of
         distinct subjects that satisfy the antecedent conditions
         (ignoring the consequent).  This is the denominator for
-        computing the pass rate of a SWRL rule used as a DQ indicator.
+        computing the pass rate of an IF-THEN rule used as a DQ indicator.
         """
         antecedent = params.get("antecedent", "")
         consequent = params.get("consequent", "")
@@ -529,7 +687,9 @@ class ShaclFlatSqlBackend:
 
         primary_var = class_atoms[0]["args"][0]
         primary_props = [p for p in prop_atoms if p["args"][0] == primary_var]
-        if not primary_props:
+        # A set-attribute consequent (literal object) materialises from the
+        # class anchor alone; a class consequent without props stays a no-op.
+        if not primary_props and not _has_literal_assignment(cons_atoms):
             return None
 
         alias_counter = 0
@@ -579,50 +739,10 @@ class ShaclFlatSqlBackend:
 
         where_parts.extend(self._rule_filters(part, table, var_bindings, base_uri, uri_map, _next))
 
-        stmts: List[str] = []
-        for atom in cons_atoms:
-            c_uri = self._escape(
-                RuleExpressionParser.resolve_uri(atom["name"], base_uri, uri_map),
-            )
-            c_alias = _next()
-            if atom["arity"] == 1:
-                var = atom["args"][0]
-                if var not in var_bindings:
-                    continue
-                not_exists = (
-                    f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
-                    f"WHERE {c_alias}.predicate = '{RDF_TYPE}' "
-                    f"AND {c_alias}.object = '{c_uri}' "
-                    f"AND {c_alias}.subject = {_ref(var)})"
-                )
-                stmts.append(
-                    f"INSERT INTO {table} (subject, predicate, object)\n"
-                    f"SELECT DISTINCT {_ref(var)}, '{RDF_TYPE}', '{c_uri}'\n"
-                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
-                    f"WHERE {' AND '.join(where_parts)}\n"
-                    f"  AND {not_exists}"
-                )
-            elif atom["arity"] == 2:
-                var_s, var_o = atom["args"][0], atom["args"][1]
-                if var_s not in var_bindings:
-                    continue
-                not_exists = (
-                    f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
-                    f"WHERE {c_alias}.predicate = '{c_uri}' "
-                    f"AND {c_alias}.subject = {_ref(var_s)}"
-                )
-                if var_o in var_bindings:
-                    not_exists += f" AND {c_alias}.object = {_ref(var_o)}"
-                not_exists += ")"
-                obj_expr = _ref(var_o) if var_o in var_bindings else "''"
-                stmts.append(
-                    f"INSERT INTO {table} (subject, predicate, object)\n"
-                    f"SELECT DISTINCT {_ref(var_s)}, '{c_uri}', {obj_expr}\n"
-                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
-                    f"WHERE {' AND '.join(where_parts)}\n"
-                    f"  AND {not_exists}"
-                )
-
+        stmts = _consequent_materialize_stmts(
+            self._escape, table, cons_atoms, var_bindings, from_part,
+            join_parts, where_parts, _ref, _next, base_uri, uri_map,
+        )
         return ";\n".join(stmts) if stmts else None
 
     def build_inference_sql(self, table: str, params: Dict) -> Optional[str]:
@@ -661,7 +781,10 @@ class ShaclFlatSqlBackend:
             primary_var,
             [p for p in prop_atoms if p["args"][0] in connected and p["args"][1] in connected],
         )
-        if not connected_props:
+        # A set-attribute consequent (literal object) can be realised from the
+        # class anchor alone, so it is valid even with no property atoms.  A
+        # class consequent without property atoms stays a classification no-op.
+        if not connected_props and not _has_literal_assignment(cons_atoms):
             return None
 
         alias_counter = 0
@@ -730,50 +853,10 @@ class ShaclFlatSqlBackend:
         if focus_filter:
             where_parts.append(focus_filter)
 
-        selects: List[str] = []
-        for atom in cons_atoms:
-            c_uri = self._escape(
-                RuleExpressionParser.resolve_uri(atom["name"], base_uri, uri_map),
-            )
-            c_alias = _next()
-            if atom["arity"] == 1:
-                var = atom["args"][0]
-                if var not in var_bindings:
-                    continue
-                not_exists = (
-                    f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
-                    f"WHERE {c_alias}.predicate = '{RDF_TYPE}' "
-                    f"AND {c_alias}.object = '{c_uri}' "
-                    f"AND {c_alias}.subject = {_ref(var)})"
-                )
-                selects.append(
-                    f"SELECT DISTINCT {_ref(var)} AS subject, "
-                    f"'{RDF_TYPE}' AS predicate, '{c_uri}' AS object\n"
-                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
-                    f"WHERE {' AND '.join(where_parts)}\n"
-                    f"  AND {not_exists}"
-                )
-            elif atom["arity"] == 2:
-                var_s, var_o = atom["args"][0], atom["args"][1]
-                if var_s not in var_bindings:
-                    continue
-                not_exists = (
-                    f"NOT EXISTS (SELECT 1 FROM {table} {c_alias} "
-                    f"WHERE {c_alias}.predicate = '{c_uri}' "
-                    f"AND {c_alias}.subject = {_ref(var_s)}"
-                )
-                if var_o in var_bindings:
-                    not_exists += f" AND {c_alias}.object = {_ref(var_o)}"
-                not_exists += ")"
-                obj_expr = _ref(var_o) if var_o in var_bindings else "''"
-                selects.append(
-                    f"SELECT DISTINCT {_ref(var_s)} AS subject, "
-                    f"'{c_uri}' AS predicate, {obj_expr} AS object\n"
-                    f"FROM {from_part}\n" + "\n".join(join_parts) + "\n"
-                    f"WHERE {' AND '.join(where_parts)}\n"
-                    f"  AND {not_exists}"
-                )
-
+        selects = _consequent_inference_selects(
+            self._escape, table, cons_atoms, var_bindings, from_part,
+            join_parts, where_parts, _ref, _next, base_uri, uri_map,
+        )
         if not selects:
             return None
 

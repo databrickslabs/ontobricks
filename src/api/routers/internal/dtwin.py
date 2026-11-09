@@ -1487,10 +1487,8 @@ async def start_dataquality_checks(
             run.shapes,
             triplestore_table,
             run.total,
-            swrl_rules=run.swrl_rules,
+            if_then_rules=run.if_then_rules,
             ontology_dict=run.ontology_dict,
-            decision_tables=run.decision_tables,
-            aggregate_rules=run.aggregate_rules,
             violation_limit=run.violation_limit,
         )
 
@@ -1521,14 +1519,12 @@ async def start_reasoning(
     data = await request.json()
     options = {
         "tbox": data.get("tbox", True),
-        "swrl": data.get("swrl", True),
+        "if_then": data.get("if_then", True),
         "graph": data.get("graph", True),
-        "decision_tables": data.get("decision_tables", False),
         "sparql_rules": data.get("sparql_rules", False),
-        "aggregate_rules": data.get("aggregate_rules", False),
     }
     # Per-rule name filters (optional; empty set = run all rules in that phase)
-    for key in ("swrl_rule_names", "decision_table_names", "sparql_rule_names", "aggregate_rule_names"):
+    for key in ("if_then_rule_names", "sparql_rule_names"):
         names = data.get(key)
         if names:
             options[key] = set(names)
@@ -1655,7 +1651,7 @@ async def dtwin_classes(
 ):
     """Return session-domain classes and Graph Chat action metadata."""
     domain = get_domain(session_mgr)
-    swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
+    if_then_rules = NodeBusinessRuleService.domain_if_then_rules(domain)
     return {
         "success": True,
         "domain_name": _chat_resolve_domain_name(domain),
@@ -1675,7 +1671,7 @@ async def dtwin_classes(
                     drop_unavailable=False,
                 ),
                 "actions": NodeContextService.class_action_entries(cls),
-                "business_rules": NodeBusinessRuleService.class_entries(cls, swrl_rules),
+                "business_rules": NodeBusinessRuleService.class_entries(cls, if_then_rules),
                 "virtualAttributes": VirtualAttributeService.class_entries(cls),
             }
             for cls in (domain.get_classes() or [])

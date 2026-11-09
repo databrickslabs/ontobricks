@@ -208,7 +208,7 @@ window.DataQualityModule = {
             : '';
 
         return `
-        <div class="dq-shape-card ${opacity} mb-2" data-shape-id="${shape.id}">
+        <div class="ob-rule-card dq-shape-card ${opacity} mb-2" data-shape-id="${shape.id}">
             <div class="d-flex align-items-start justify-content-between">
                 <div class="flex-grow-1">
                     <div class="d-flex align-items-center gap-2 mb-1">

@@ -1,9 +1,9 @@
-"""Translate SWRL rules to Cypher for the flat-triple Neo4j model.
+"""Translate IF-THEN rules to Cypher for the flat-triple Neo4j model.
 
 **STATUS: scaffolding only.** This class exists so the architecture is in
 place (``GraphDBBackend.get_query_translator`` returns this for Cypher
 flat-model engines) and so the reasoning UI does not crash when Neo4j is
-the active engine. **Actual SWRL → Cypher translation is not implemented
+the active engine. **Actual IF-THEN → Cypher translation is not implemented
 yet** — every method here returns ``None`` and logs a clear warning.
 
 Why this is scaffolded rather than fully implemented:
@@ -67,28 +67,28 @@ class ShaclFlatCypherBackend:
 
     @classmethod
     def _atoms(cls, expression: str) -> list[tuple[str, list[str]]]:
-        """Parse graph-shaped SWRL atoms; reject unsupported builtins clearly."""
+        """Parse graph-shaped IF-THEN atoms; reject unsupported builtins clearly."""
         atoms = []
         for raw in re.split(r"\s*(?:∧|AND)\s*", expression or ""):
             match = cls._ATOM.match(raw)
             if not match:
                 raise ValidationError(
-                    f"Neo4j SWRL does not support atom '{raw}'; "
+                    f"Neo4j IF-THEN does not support atom '{raw}'; "
                     "only class and object-property atoms are supported."
                 )
             args = [arg.strip() for arg in match.group(2).split(",")]
             if len(args) not in (1, 2) or any(not arg for arg in args):
-                raise ValidationError(f"Neo4j SWRL cannot parse atom '{raw}'")
+                raise ValidationError(f"Neo4j IF-THEN cannot parse atom '{raw}'")
             atoms.append((match.group(1), args))
         if not atoms:
-            raise ValidationError("Neo4j SWRL rule has no antecedent atoms")
+            raise ValidationError("Neo4j IF-THEN rule has no antecedent atoms")
         return atoms
 
     @staticmethod
     def _var(arg: str) -> str:
         if not arg.startswith("?"):
             raise ValidationError(
-                f"Neo4j SWRL constant argument '{arg}' is unsupported"
+                f"Neo4j IF-THEN constant argument '{arg}' is unsupported"
             )
         return "v_" + _sanitise_ident(arg[1:])
 
@@ -120,7 +120,7 @@ class ShaclFlatCypherBackend:
         consequent = self._atoms(params.get("consequent", ""))
         if len(consequent) != 1 or len(consequent[0][1]) != 2:
             raise ValidationError(
-                "Neo4j SWRL supports one object-property consequent per rule"
+                "Neo4j IF-THEN supports one object-property consequent per rule"
             )
         name, args = consequent[0]
         predicate = str(uri_map.get(name.lower(), name))
@@ -142,15 +142,15 @@ class ShaclFlatCypherBackend:
     def build_violation_cypher(
         self, table: str, params: Dict[str, Any]
     ) -> Optional[str]:
-        """Build Cypher that finds subjects violating a SWRL rule.
+        """Build Cypher that finds subjects violating an IF-THEN rule.
 
-        Returns ``None`` — Cypher SWRL violation queries are not
+        Returns ``None`` — Cypher IF-THEN violation queries are not
         translated in this version. Reasoning on Neo4j will report
         zero violations until the dedicated translator PR lands.
         """
         logger.warning(
             "ShaclFlatCypherBackend.build_violation_cypher: "
-            "SWRL→Cypher translation is not implemented yet. "
+            "IF-THEN→Cypher translation is not implemented yet. "
             "Returning None (rule produces no violations on Neo4j)."
         )
         return None
@@ -158,7 +158,7 @@ class ShaclFlatCypherBackend:
     def build_antecedent_count_cypher(
         self, table: str, params: Dict[str, Any]
     ) -> Optional[str]:
-        """Cypher that counts how often a SWRL antecedent matches.
+        """Cypher that counts how often an IF-THEN antecedent matches.
 
         Returns ``None`` — see class docstring.
         """

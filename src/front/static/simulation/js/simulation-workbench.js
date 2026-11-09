@@ -295,7 +295,7 @@ const SimulationWorkbench = {
                 return;
             }
             const key = cb.dataset.phase;
-            cb.checked = phases ? !!phases[key] : (key === 'swrl' || key === 'graph');
+            cb.checked = phases ? !!phases[key] : (key === 'if_then' || key === 'graph');
             cb.indeterminate = false;
         });
         if (window.SimulationRules) SimulationRules.apply(ruleNames || null);

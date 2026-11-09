@@ -32,7 +32,7 @@ src/api/routers/digitaltwin.py:967: error: Missing named argument "graph" for "I
 src/api/routers/digitaltwin.py:967: error: Missing named argument "materialize" for "InferenceRequest"  [call-arg]
 src/api/routers/digitaltwin.py:967: error: Missing named argument "materialize_table" for "InferenceRequest"  [call-arg]
 src/api/routers/digitaltwin.py:967: error: Missing named argument "sparql_rules" for "InferenceRequest"  [call-arg]
-src/api/routers/digitaltwin.py:967: error: Missing named argument "swrl" for "InferenceRequest"  [call-arg]
+src/api/routers/digitaltwin.py:967: error: Missing named argument "if_then" for "InferenceRequest"  [call-arg]
 src/api/routers/digitaltwin.py:967: error: Missing named argument "tbox" for "InferenceRequest"  [call-arg]
 src/api/routers/internal/domain.py:187: error: Item "str" of "UploadFile | str" has no attribute "read"  [union-attr]
 src/api/routers/internal/domain.py:748: error: Item "str" of "UploadFile | str" has no attribute "filename"  [union-attr]

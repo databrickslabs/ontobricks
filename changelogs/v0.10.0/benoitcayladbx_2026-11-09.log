@@ -1,0 +1,824 @@
+================================================================================
+Collapsible generated-code panes in the business-rule editors
+================================================================================
+
+Context:
+The visual IF/THEN editor now shows the SHACL-AF a rule compiles to. Two
+follow-ups: (1) hide that generated SHACL behind a "Show SHACL code" button so
+the editor stays uncluttered by default, and (2) give the Decision Table and
+Aggregate rule editors the same affordance. Those two rule types have no SHACL
+form — the reasoner compiles each to a SQL SELECT against the flat
+(subject, predicate, object) triple table — so their pane shows the generated
+Spark SQL. All three panes are read-only (transpilation / compilation is
+one-directional) and collapsed by default, revealed on click.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_business_rules.html —
+   - IF/THEN editor: wrapped the generated-SHACL preview in a collapsed
+     `#swrlPreviewWrap` and added a `#swrlToggleShacl` ("Show SHACL code")
+     toggle button; the advanced/read-only note stays visible outside the wrap.
+   - Decision Table modal: added a "Show SQL code" toggle (`#dtToggleSql`,
+     data-br-action="dt-toggle-sql") + collapsed `#dtSqlWrap` / `#dtSqlCode`
+     below the "What this table does" preview.
+   - Aggregate modal: same pattern (`#aggToggleSql`, "agg-toggle-sql",
+     `#aggSqlWrap` / `#aggSqlCode`).
+2. src/front/static/ontology/js/ontology-swrl.js —
+   - Added `toggleShaclPreview()`; `_refreshShaclPreview()` now no-ops while the
+     pane is collapsed (skips the fetch); `_resetEditor()` re-collapses the pane
+     and resets the button on every open.
+3. src/front/static/ontology/js/ontology-business-rules.js —
+   - Added `dtToggleSql()` / `aggToggleSql()`, debounced
+     `_dtRenderSqlPreview()` / `_aggRenderSqlPreview()` (no-op while collapsed,
+     token-guarded), a shared `_fetchRuleSql()` helper, and `_resetSqlPane()`
+     called from `dtOpenEditor` / `aggOpenEditor`. The existing describe-preview
+     handlers also refresh the SQL when the pane is open. Wired the two new
+     `data-br-action`s into the delegated dispatch.
+4. src/front/static/ontology/css/ontology-business-rules.css —
+   - Added `.br-sql-code` (dark monospaced code block, matching the IF/THEN
+     SHACL pane) with scroll + wrap for long SQL.
+5. src/api/routers/internal/ontology.py —
+   - New read-only route POST /ontology/rules/{rule_type}/preview-sql
+     (decision_tables | aggregate_rules). Resolves the name-based form rule to
+     URIs via the engine's own resolver, then builds the SQL with
+     DecisionTableEngine.build_violation_sql / AggregateRuleEngine.build_sql
+     against a placeholder "triples" table. Nothing is persisted; no store.
+
+Tests:
+6. tests/units/ontology/test_rule_sql_preview.py (new, 4 tests) — replicates the
+   route's resolve + build path: DT conditions -> SELECT with resolved
+   property/class URIs and LEFT JOINs; empty table -> None; aggregate threshold
+   -> GROUP BY / HAVING / SUM with resolved URIs; non-numeric threshold -> None.
+7. tests/units/front/test_decision_table_editor_help.py — added
+   test_generated_sql_is_collapsed_behind_a_toggle (collapsed `#dtSqlWrap`,
+   toggle button + JS wiring).
+8. tests/units/front/test_aggregate_rule_editor_help.py — added the aggregate
+   equivalent.
+9. tests/units/front/test_swrl_text_pane.py — added
+   test_generated_shacl_is_collapsed_behind_a_toggle.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-swrl.js
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- src/api/routers/internal/ontology.py
+- tests/units/ontology/test_rule_sql_preview.py (new)
+- tests/units/front/test_decision_table_editor_help.py
+- tests/units/front/test_aggregate_rule_editor_help.py
+- tests/units/front/test_swrl_text_pane.py
+
+Test result:
+- node --check on both edited JS modules: OK.
+- uv run --frozen pytest -q tests/units/ontology/test_rule_sql_preview.py
+  tests/units/front/test_decision_table_editor_help.py
+  tests/units/front/test_aggregate_rule_editor_help.py
+  tests/units/front/test_swrl_text_pane.py — all green.
+- Full suite: uv run --frozen pytest -q -m "not scenario" —
+  10200 passed, 325 skipped, 1 failed. The sole failure
+  (test_no_function_grows_beyond_budget: agent_dtwin_chat/engine.py::run_agent
+  198 -> 200) is pre-existing and unrelated to this change.
+
+
+================================================================================
+Remove Decision Table and Aggregate rule types; rename Simple / Complex
+================================================================================
+
+Context:
+Decision Tables and Aggregate Rules are dropped entirely — UI and code. They
+compiled to SQL (no SHACL form) and overlapped awkwardly with the SHACL-AF and
+SPARQL paradigms; the product keeps only two business-rule families. In the UI
+these are relabelled: the former "If-Then" (SWRL, SHACL-AF) family is now
+"Simple" and the former "SPARQL" (CONSTRUCT) family is now "Complex". Internal
+rule-type keys and routes are unchanged (swrl_rules / sparql_rules) — only the
+user-visible labels moved. Persisted DT/Agg data is tolerated: the app stops
+reading and writing it and leaves older versioned files untouched. This also
+reverts the Decision Table / Aggregate "Show SQL code" panes and their
+preview-sql route added in the previous section.
+
+Changes:
+1. Reasoning engine — deleted DecisionTableEngine / AggregateRuleEngine and all
+   wiring:
+   - src/back/core/reasoning/rules/{DecisionTableEngine,AggregateRuleEngine}.py
+     removed; rules/__init__.py and reasoning/__init__.py export SPARQLRuleEngine
+     only.
+   - src/back/core/reasoning/ReasoningService.py — dropped the decision_tables /
+     aggregate_rules phases and their run_* methods and options.
+   - src/back/core/reasoning/results/RuleViolation.py — rule-type comment trimmed
+     to swrl / sparql.
+2. Digital twin / data quality:
+   - src/back/objects/digitaltwin/quality/SqlQualityChecks.py — dropped the DT /
+     Agg params and _eval_dt_rule / _eval_agg_rule; _run_jobs_serial now
+     shacl/swrl only.
+   - src/back/objects/digitaltwin/{DigitalTwin,TwinBackgroundTasks}.py and
+     quality/TwinDataQualityRun.py — removed DT / Agg params, pass-throughs,
+     dataclass fields and the phases log line.
+   - src/back/core/w3c/shacl/constants.py — removed DECISION_TABLE_ID_PREFIX /
+     AGGREGATE_ID_PREFIX / BUSINESS_RULE_CATEGORY; RULE_FAMILY_CATEGORIES is now
+     swrl only.
+3. Session / ontology / git-sync / scheduler / simulation:
+   - src/back/objects/session/DomainSession.py — removed decision_tables /
+     aggregate_rules defaults, properties/setters and export entries.
+   - src/back/objects/ontology/{Rules,Ontology}.py — removed the DT / Agg
+     reference-error validators; dispatch is swrl / sparql only.
+   - src/back/objects/registry/gitsync/DomainRepoLayout.py — ONTOLOGY_SPLIT drops
+     decision_tables / aggregate_rules file paths.
+   - src/back/objects/registry/schedule/reasoning.py and
+     src/back/objects/simulation/Spec.py — phases reduced to swrl + sparql_rules.
+4. Routers / routes:
+   - src/api/routers/internal/ontology.py — removed the preview-sql route and all
+     DT / Agg handling (validate, accept-suggestions, generate result, rule
+     signature / validator dispatch, selectable families, _RULE_TYPES).
+   - src/api/routers/internal/dtwin.py, src/api/routers/digitaltwin.py — dropped
+     DT / Agg options from the reasoning / data-quality start payloads and the
+     InferenceRequest model.
+   - src/front/routes/{simulation,dtwin}.py — dropped decision_tables_count /
+     aggregate_rules_count from the view context.
+5. Generator agent:
+   - src/agents/agent_business_rules_generator/engine.py — AgentResult and the
+     SYSTEM_PROMPT output shape reduced to swrl_rules + sparql_rules;
+     total_rules() simplified. (Eval delta deferred as follow-up debt.)
+6. Frontend:
+   - src/front/templates/partials/ontology/_ontology_business_rules.html —
+     removed the Decision Table and Aggregate tabs, panes and editor modals;
+     tabs are now Simple (swrl) and Complex (sparql); SPARQL modal title is
+     "Add Complex Rule".
+   - src/front/static/ontology/js/ontology-business-rules.js — deleted every DT /
+     Agg method, the SQL-pane helpers (_fetchRuleSql / _resetSqlPane / toggles),
+     the suggest sections and dispatch entries; coordinates swrl + sparql only.
+   - src/front/static/ontology/js/ontology-swrl.js — editor titles "Add/Edit/View
+     If-Then Rule" -> "… Simple Rule".
+   - src/front/static/ontology/css/ontology-business-rules.css — removed the
+     decision-table grid rules and the now-unused .br-sql-code block.
+   - src/front/templates/partials/dtwin/_query_reasoning.html and
+     partials/simulation/_sim_workbench.html — removed the DT / Agg tiles;
+     relabelled SWRL -> "Simple rules" and SPARQL -> "Complex rules".
+   - src/front/templates/partials/settings/_settings_schedule.html — removed the
+     DT / Agg phase checkboxes; relabelled the remaining ones.
+   - src/front/static/query/js/query-reasoning.js,
+     src/front/static/query/js/query-dataquality.js,
+     src/front/static/simulation/js/simulation-rules.js — dropped DT / Agg rule
+     types, fetches and family labels; relabelled to Simple / Complex.
+
+Tests:
+7. Deleted the DT / Agg-specific suites: tests/units/ontology/
+   {test_decision_table_semantics,test_rule_sql_preview}.py and
+   tests/units/front/{test_decision_table_editor_help,test_aggregate_rule_editor_help}.py.
+8. Pruned the DT / Agg cases from the shared suites: test_business_rules.py,
+   test_business_rules_accept.py, test_v090_ontology_rules.py,
+   test_v090_dq_sql_checks.py, test_v090_twin_background_tasks.py,
+   test_sql_literal_escaping.py, test_dataquality.py, test_simulation_core.py,
+   test_github_layout.py, test_scheduler_tasks.py, test_dq_run_selection.py,
+   test_dq_rule_list.py, test_dq_rule_checkboxes.py,
+   test_agent_business_rules_generator.py and the two opt-in scenarios.
+
+Docs:
+9. Updated docs/{user-guide,development,architecture,advanced_features}.md,
+   docs/diagrams/class-hierarchy.mmd and README.md to drop Decision Table /
+   Aggregate Rule references and adopt the Simple / Complex wording.
+
+Modified files:
+- src/back/core/reasoning/__init__.py
+- src/back/core/reasoning/rules/__init__.py
+- src/back/core/reasoning/rules/DecisionTableEngine.py (deleted)
+- src/back/core/reasoning/rules/AggregateRuleEngine.py (deleted)
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/results/RuleViolation.py
+- src/back/core/w3c/shacl/constants.py
+- src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+- src/back/objects/digitaltwin/quality/TwinDataQualityRun.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/ontology/Rules.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/registry/gitsync/DomainRepoLayout.py
+- src/back/objects/registry/schedule/reasoning.py
+- src/back/objects/simulation/Spec.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/digitaltwin.py
+- src/front/routes/simulation.py
+- src/front/routes/dtwin.py
+- src/agents/agent_business_rules_generator/engine.py
+- src/agents/agent_business_rules_generator/__init__.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/js/ontology-swrl.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/query/js/query-dataquality.js
+- src/front/static/simulation/js/simulation-rules.js
+- docs/user-guide.md, docs/development.md, docs/architecture.md,
+  docs/advanced_features.md, docs/diagrams/class-hierarchy.mmd, README.md
+- tests (deletions + pruning listed above)
+
+Test result:
+- node --check on every edited JS module: OK.
+- Full suite: uv run --frozen pytest -q -m "not scenario" —
+  10116 passed, 325 skipped, 1 failed. The sole failure
+  (test_no_function_grows_beyond_budget: agent_dtwin_chat/engine.py::run_agent
+  198 -> 200) is pre-existing and unrelated to this change.
+
+
+================================================================================
+Rename UI label "Complexe" -> "Complex"
+================================================================================
+
+Context:
+Spelling fix on the business-rule family label introduced in the previous
+section: the French spelling "Complexe" becomes the English "Complex"
+everywhere it is shown to the user. Internal rule-type keys and routes
+(sparql_rules) are unchanged — this is a display-string change only.
+
+Changes:
+1. Business Rules UI:
+   - src/front/templates/partials/ontology/_ontology_business_rules.html — the
+     Complex tab label, the auto-generate tooltip, the empty-state message
+     ("No Complex rules defined") and the SPARQL editor modal title
+     ("Add Complex Rule"); pane/modal comments updated too.
+   - src/front/static/ontology/js/ontology-business-rules.js — default rule name
+     ("Complex Rule N"), the editor title ("Add/Edit Complex Rule") and the
+     SUGGEST_SECTIONS label; header/section comments updated.
+   - src/front/static/ontology/css/ontology-business-rules.css — comment.
+2. Reasoning / simulation / scheduler surfaces:
+   - src/front/templates/partials/dtwin/_query_reasoning.html — header text and
+     the "Complex Rules" tile title.
+   - src/front/templates/partials/simulation/_sim_workbench.html — "Complex
+     rules" tile title.
+   - src/front/templates/partials/settings/_settings_schedule.html — "Complex
+     rules" phase checkbox label.
+   - src/front/static/query/js/query-reasoning.js — execution-report phase label
+     "Complex Rules"; module docstring.
+   - src/front/static/simulation/js/simulation-rules.js — module docstring.
+3. Docs / README / changelog — adopted the "Complex" spelling across
+   docs/{user-guide,development,architecture,advanced_features}.md, README.md,
+   the prior section of this changelog, and the two test module docstrings
+   (test_agent_business_rules_generator.py, test_business_rules_accept.py).
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/simulation/js/simulation-rules.js
+- docs/user-guide.md, docs/development.md, docs/architecture.md,
+  docs/advanced_features.md, README.md
+- tests/units/agents/test_agent_business_rules_generator.py
+- tests/units/ontology/test_business_rules_accept.py
+
+Test result:
+- node --check on every edited JS module: OK.
+- Full suite: uv run --frozen pytest -q -m "not scenario" —
+  10116 passed, 325 skipped, 1 failed. The sole failure
+  (test_no_function_grows_beyond_budget: agent_dtwin_chat/engine.py::run_agent
+  198 -> 200) is pre-existing and unrelated to this change.
+
+================================================================================
+Explorer business rules — show IF/THEN instead of raw SWRL text
+================================================================================
+
+Context:
+Running a business rule from the Graph Explorer opened a confirmation modal that
+displayed the stored SWRL body verbatim
+(`Customer(?x) ^ ... ^ swrlb:contains(?status, "active") -> owns(?x, ?w)`).
+SWRL is no longer a user-facing surface (SHACL-AF is the runtime and the editor
+authors IF/THEN), so the modal now renders a read-only IF / THEN view. Stored
+rule data and the request/confirm flow are unchanged; only the display changed.
+
+Changes:
+1. src/front/static/query/js/query-business-rules.js — new helpers
+   `_brIfThenHtml(antecedent, consequent, esc)`, `_brAtomPhrase`,
+   `_brSideItems`, `_brSplitTopLevel`, `_brArg` and the `_BR_BUILTIN_WORDS` /
+   `_BR_ATOM_RE` constants. Class atoms read "x is a Customer", binary atoms
+   "x hasclaim y", literal objects "x priority = "high"", comparison built-ins
+   "status contains "active"" / "n ≥ 1000". IF is blue and THEN red, matching
+   the editor legend. The confirmation modal now renders this view instead of
+   the `antecedent → consequent` code line.
+2. tests/units/front/test_entity_business_rules_ui.py — contract that the modal
+   uses `_brIfThenHtml` and no longer prints the raw arrow line; a Node-runtime
+   test (skipped when node is absent) that renders the reported rule and asserts
+   no `?`, `^`, `swrlb`, `&rarr;` or `→` leaks into the output.
+
+Not changed (still show raw SWRL, follow-up candidates):
+- src/front/static/ontology/js/ontology-business-rules.js (`_suggestMeta`, suggestion list)
+- src/front/static/ontology/js/ontology-shared-panels.js (business-rule picker rows)
+- src/front/static/ontology/js/ontology-swrl.js (rule card list, `_refreshShaclPreview` fallback)
+
+Modified files:
+- src/front/static/query/js/query-business-rules.js
+- tests/units/front/test_entity_business_rules_ui.py
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/test_entity_business_rules_ui.py: 8 passed.
+- Full suite: uv run --frozen pytest -q -m "not scenario" — 10118 passed,
+  325 skipped, 1 failed. The sole failure (test_no_function_grows_beyond_budget:
+  agents/agent_dtwin_chat/engine.py::run_agent 198 -> 200) is pre-existing and
+  unrelated (file not modified in this change).
+
+================================================================================
+Complex rules: fail-closed SPARQL CONSTRUCT -> SQL compiler
+================================================================================
+
+Context:
+Complex (SPARQL CONSTRUCT) rules were translated by a regex-based translator
+that kept only the first CONSTRUCT triple, read a single FILTER, ignored
+OPTIONAL / UNION / NOT EXISTS, and returned zero triples (logged warning) when
+it could not parse a query. "Validate" only checked that the text looked like a
+CONSTRUCT, so a rule could save and then do nothing (or something partial) at
+run time. Numeric filters also emitted Spark TRY_CAST on Lakebase Postgres,
+where it is a syntax error. Complex rules now go through a compiler built on
+rdflib's SPARQL algebra that accepts an explicit subset and refuses everything
+else, both on save and at run time. Simple (IF/THEN, SHACL-AF) rules are
+unchanged.
+
+Scope note: the recommendation to push Complex-rule materialisation into SQL
+INSERTs (like Simple rules) was not applied. The reasoning `materialize` option
+means "write to an external Delta table", yet with it Simple rules also INSERT
+into the graph table reference, which is the union VIEW on Delta (the INSERT
+fails) and the live graph on Lakebase. Writes for Complex rules stay on the
+existing append path (materialize_inferred / append_graph); that flag overload
+is a follow-up.
+
+Changes:
+1. src/back/core/reasoning/rules/SparqlConstructCompiler.py (new)
+   Compiles a CONSTRUCT into `SELECT s, p, o` on the flat triple table (Spark /
+   Postgres): connected triple patterns (disconnected patterns refused rather
+   than cross-joined), FILTER with = != < > <= >=, && / ||, CONTAINS /
+   STRSTARTS / STRENDS (LIKE with ESCAPE), NOT EXISTS of triple patterns, and
+   any number of head triples (UNION ALL). Each head triple skips triples
+   already in the store (NOT EXISTS). Undeclared prefixes resolve through the
+   ontology URI map as before; declared PREFIXes keep their IRI. OPTIONAL,
+   UNION, BIND, GROUP BY, LIMIT, property paths, variable predicates,
+   sub-queries, EXISTS and unbound head/filter variables raise ValidationError.
+2. src/back/core/reasoning/rules/SPARQLRuleEngine.py
+   Delegates translation to the compiler; removed the regex translator
+   (_construct_to_sql, _term_sql, _resolve_term, _translate_filter) and the
+   ignored `materialize` parameter; query/compile failures now surface as
+   stats `errors` / `error_details` instead of being swallowed;
+   validate_rule() requires the query to compile.
+3. src/back/core/reasoning/shacl_rules/RuleBuiltinRegistry.py
+   New public numeric_sql(expr, dialect): TRY_CAST on Spark, regex-guarded
+   ::float8 on Postgres (reuses _pg_try_cast).
+4. src/back/core/reasoning/ReasoningService.py
+   run_sparql_rules() drops the dead `materialize` argument; the phase copies
+   errors to sparql_rules_errors / sparql_rules_error_details; module/class
+   docstrings no longer list decision tables / aggregate rules.
+5. src/api/routers/internal/ontology.py
+   /rules/sparql_rules/save rejects an enabled rule that does not compile (a
+   disabled rule still saves, so a legacy rule can be switched off);
+   /validate puts the reasons in the error message (detail is stripped in
+   production).
+6. src/front/static/ontology/js/ontology-business-rules.js,
+   src/front/templates/partials/ontology/_ontology_business_rules.html
+   Validate shows the server reason; the Complex pane lists the supported
+   subset.
+7. Stale decision-table / aggregate references removed: docstrings/comments in
+   src/api/routers/digitaltwin.py (inference/start description),
+   src/back/objects/simulation/Reasoning.py,
+   src/back/objects/digitaltwin/quality/SqlQualityChecks.py,
+   src/back/objects/ontology/Ontology.py,
+   src/back/core/w3c/shacl/ShapeConditions.py,
+   src/front/static/ontology/js/ontology-conditions.js,
+   src/front/static/query/js/query-dataquality.js,
+   src/front/templates/ontology.html; the "Decision tables & aggregate rules"
+   bullet in src/front/templates/about.html; unused AGG_FUNCTIONS /
+   AGG_OPERATORS in src/back/core/reasoning/constants.py (DT_* operator maps
+   kept: Data Quality conditional shapes use them).
+8. docs/user-guide.md, docs/architecture.md
+   New "Complex Rules (SPARQL CONSTRUCT)" section (supported subset, save
+   rejection, example); architecture tree and reasoning-translation table
+   updated.
+9. Tests
+   - tests/units/reasoning/test_sparql_construct_compiler.py (new): rules run on
+     an in-memory SQLite triple table (inferred triples, dedup against known
+     triples, multi-triple heads, joins, multi-triple NOT EXISTS, string
+     filters with LIKE metacharacters, OR, declared prefixes), Spark/Postgres
+     numeric casts, and a fail-closed battery.
+   - tests/units/core/test_sql_literal_escaping.py: SPARQL-engine injection
+     tests rewritten for the compiler (payload in a valid SPARQL string/IRI).
+   - tests/units/ontology/test_business_rules.py: validation of unsupported
+     constructs, error reporting without executing SQL, provenance of rows.
+   - tests/units/api/test_routes.py: save accepts a compilable rule, rejects an
+     uncompilable one (400 with the reason), still saves it when disabled.
+
+Modified files:
+- src/back/core/reasoning/rules/SparqlConstructCompiler.py (new)
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- src/back/core/reasoning/shacl_rules/RuleBuiltinRegistry.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/constants.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/digitaltwin.py
+- src/back/objects/simulation/Reasoning.py
+- src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+- src/back/objects/ontology/Ontology.py
+- src/back/core/w3c/shacl/ShapeConditions.py
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/js/ontology-conditions.js
+- src/front/static/query/js/query-dataquality.js
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/ontology.html
+- src/front/templates/about.html
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/reasoning/test_sparql_construct_compiler.py (new)
+- tests/units/core/test_sql_literal_escaping.py
+- tests/units/ontology/test_business_rules.py
+- tests/units/api/test_routes.py
+
+Test result:
+- Targeted: uv run --frozen pytest -q tests/units/reasoning
+  tests/units/core/test_sql_literal_escaping.py tests/units/ontology
+  tests/units/api/test_routes.py tests/units/dtwin -> 1994 passed.
+- Full suite: uv run --frozen pytest -q -m "not scenario" -> before a
+  concurrent SWRL -> If-Then rename started in this worktree: 10144 passed,
+  325 skipped, 1 failed (pre-existing test_no_function_grows_beyond_budget:
+  agents/agent_dtwin_chat/engine.py::run_agent 198 -> 200, file not modified).
+  Re-run during that rename: 13 failed, all in its files (if_then naming in
+  agent_business_rules_generator, Rules._ref_local_name, sidebar inventory,
+  entity business-rules UI) plus the same pre-existing budget failure; none
+  in the files of this change.
+- node --check on the edited JS modules: OK.
+
+================================================================================
+Remove SWRL naming everywhere -> IF-THEN
+================================================================================
+
+Context:
+The user asked to remove every visible and internal "SWRL" reference, scope
+"everything": UI text, docs, comments, code identifiers, file names, HTTP
+routes, API fields and stored keys. SWRL is no longer a product surface (the
+runtime is SHACL-AF and the editor authors IF/THEN rules), so the naming is
+now IF-THEN throughout. Persisted data and external contracts that already
+exist in saved domains, OWL files, git-sync repositories and simulations are
+read in their legacy form; new writes use the new names.
+
+Changes:
+1. Rules and builtins (canonical prefix `builtin:`)
+   - src/back/core/reasoning/shacl_rules/RuleBuiltinRegistry.py: `_normalize`
+     strips any prefix (`builtin:`, legacy `swrlb:`) to the local name.
+   - src/back/objects/ontology/Rules.py: `_IF_THEN_BUILTIN_PREFIXES` accepts
+     the legacy `swrlb` prefix on read.
+   - src/front/static/query/js/query-business-rules.js: builtin detection
+     accepts `builtin` and legacy `swrlb`.
+   - src/back/core/reasoning/shacl_rules/IfThenToShaclTranspiler.py
+     (was SwrlToShaclTranspiler.py) and src/back/core/reasoning/shacl_rules/
+     ShaclRule.py: class and docstring renamed.
+2. Persisted domain data (read compatibility, new writes use `if_then_rules`)
+   - src/back/objects/domain/payload.py: `read_if_then_rules` and
+     `migrate_legacy_if_then_key`; legacy key `swrl_rules` is read from
+     versioned and flat documents.
+   - src/back/objects/session/DomainSession.py: `_migrate_legacy_if_then_key`
+     runs on load and on import; `_reset_content_sections` extracted to keep
+     the size budget.
+   - src/back/core/w3c/owl/OntologyParser.py: `_if_then_rule_nodes` reads
+     `ontobricks:IfThenRule` and legacy `ontobricks:SWRLRule` (deduplicated).
+   - src/back/objects/registry/gitsync/DomainRepoLayout.py: split file is
+     `ontology/rules/if_then.json`; the legacy `ontology/rules/swrl.json` is
+     still read.
+3. Simulations (read compatibility)
+   - src/back/objects/simulation/Spec.py: `_legacy_phase_map` maps the stored
+     `swrl` phase and rule-name keys to `if_then`; `to_dict` writes only the
+     new keys.
+   - tests/units/simulation/test_simulation_core.py: new test
+     `test_spec_saved_with_legacy_phase_keys_still_loads`.
+4. HTTP and API (breaking for external clients)
+   - src/api/routers/internal/ontology.py: routes `/ontology/swrl/list|save|delete`
+     -> `/ontology/if-then/list|save|delete`.
+   - Inference request field `swrl` -> `if_then`; phase value `"swrl"` ->
+     `"if_then"`; provenance prefix `swrl:` -> `if_then:`; quality/DQ
+     violation flag `IS_SWRL_VIOLATION` -> `IS_IF_THEN_VIOLATION`.
+   - Audit action `swrl_removed` -> `if_then_removed`; Lakebase entity_type
+     for new writes `swrl` -> `if_then`.
+5. Ontology model and OWL output
+   - OWL/RDF class `ontobricks:SWRLRule` -> `ontobricks:IfThenRule` (written);
+     the legacy class is still read.
+   - src/back/objects/ontology/Ontology.py: `validate_swrl_rule` ->
+     `validate_if_then_rule` (delegates to Rules.py).
+6. Front end
+   - src/front/static/ontology/js/ontology-if-then.js (was ontology-swrl.js),
+     src/front/static/ontology/css/ontology-if-then.css (was ontology-swrl.css),
+     globals `IfThenModule`, data attributes `data-if-then-action`, CSS/JS
+     identifiers and labels.
+   - src/front/config/menu_config.json and src/front/static/ontology/js/
+     ontology-init.js: sidebar section id `swrl` -> `if-then`.
+   - src/front/templates/partials/layout/help_modal.html: "IF-THEN" entry.
+   - src/front/templates/partials/ontology/_ontology_business_rules.html and
+     the other templates: visible labels and handlers.
+7. Agent (business-rules generator)
+   - src/agents/agent_business_rules_generator/engine.py: result field
+     `AgentResult.if_then_rules`; log message `if_then=%d`. The prompt text and
+     the LLM wire key `swrl_rules` (and the `swrlb:` example in the prompt) are
+     intentionally unchanged: changing the prompt or wire contract requires an
+     eval delta and a linked MLflow run (.cursor/12-ai-feature-lifecycle.mdc).
+   - tests/units/agents/test_agent_business_rules_generator.py: fake-LLM wire
+     keys stay `swrl_rules`; assertions use `result.if_then_rules`.
+8. Renamed files
+   - tests/units/ontology/test_swrl_engine.py -> test_if_then_engine.py
+   - tests/units/ontology/test_swrl_text_codec.py -> test_if_then_text_codec.py
+   - tests/units/ontology/test_swrl_builtin_defects.py -> test_if_then_builtin_defects.py
+   - tests/units/reasoning/test_swrl_flat_cypher_translator.py -> test_if_then_flat_cypher_translator.py
+   - tests/units/reasoning/test_swrl_to_shacl_regression.py -> test_if_then_to_shacl_regression.py
+   - tests/units/front/test_swrl_attribute_conditions.py -> test_if_then_attribute_conditions.py
+   - tests/units/front/test_swrl_text_pane.py -> test_if_then_text_pane.py
+   - docs/superpowers/specs/2026-11-07-swrl-to-shacl-rules-study.md ->
+     2026-11-07-if-then-to-shacl-rules-study.md
+9. Docs and text
+   - README.md, docs/*.md (api, user-guide, architecture, backend, mcp, ...),
+     docs/diagrams/*.mmd and docs/images/*.svg: IF-THEN wording and new
+     route/field names.
+   - Historical changelogs/ and releases/ are not rewritten.
+   - The W3C SWRL built-in namespace IRI (`http://www.w3.org/2003/11/swrlb#`)
+     is kept where it documents the standard.
+
+Intentionally kept (exceptions):
+- src/agents/agent_business_rules_generator/engine.py prompt text, `swrl_rules`
+  wire key and `swrlb:` example (AI lifecycle gate; eval run required).
+- Legacy read shims: payload.py `LEGACY_IF_THEN_RULES_KEY`, OntologyParser
+  `SWRLRule`, DomainRepoLayout `ontology/rules/swrl.json`, Spec legacy phase
+  keys, Rules.py / RuleBuiltinRegistry.py / query-business-rules.js `swrlb`.
+- W3C namespace IRI in RuleBuiltinRegistry.py and
+  tests/units/ontology/test_if_then_builtin_defects.py.
+- Historical changelogs/ and releases/ entries.
+
+Breaking changes (for external clients):
+- HTTP routes `/ontology/swrl/*` -> `/ontology/if-then/*`.
+- Inference API field `swrl` -> `if_then`; phase `swrl` -> `if_then`.
+- Provenance prefix `swrl:` -> `if_then:` and violation flag
+  `IS_SWRL_VIOLATION` -> `IS_IF_THEN_VIOLATION` for newly computed results
+  (already-materialised triples keep their old provenance until recomputed).
+- Audit action `swrl_removed` -> `if_then_removed` for new entries.
+- New OWL exports use `ontobricks:IfThenRule`; legacy `SWRLRule` is still read.
+
+Modified files:
+- .cursor/02-project-overview.mdc
+- .cursor/04-project-structure.mdc
+- CONTRIBUTORS.md
+- README.md
+- docs/README.md
+- docs/advanced_features.md
+- docs/api.md
+- docs/architecture.md
+- docs/backend.md
+- docs/deployment.md
+- docs/development.md
+- docs/diagrams/architecture-layers.mmd
+- docs/diagrams/class-hierarchy.mmd
+- docs/getting-started.md
+- docs/images/architecture-overview.svg
+- docs/images/data-flow.svg
+- docs/images/semantic-web-stack.svg
+- docs/mcp.md
+- docs/product.md
+- docs/user-guide.md
+- mypy_baseline.txt
+- resources/examples/mcp_client.py
+- src/.coding_rules.md
+- src/agents/agent_business_rules_generator/__init__.py
+- src/agents/agent_business_rules_generator/engine.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/domains.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/ontology.py
+- src/back/core/graph_analysis/CohortBuilder.py
+- src/back/core/graphdb/delta/BuildPipeline.py
+- src/back/core/graphdb/interfaces/GraphBackend.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/core/industry/cdisc/CdiscImportService.py
+- src/back/core/industry/fhir/FhirImportService.py
+- src/back/core/industry/fibo/FiboImportService.py
+- src/back/core/industry/iof/IofImportService.py
+- src/back/core/mcp_tools.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/reasoning/__init__.py
+- src/back/core/reasoning/constants.py
+- src/back/core/reasoning/results/InferredTriple.py
+- src/back/core/reasoning/results/RuleViolation.py
+- src/back/core/reasoning/rules/AggregateRuleEngine.py
+- src/back/core/reasoning/rules/DecisionTableEngine.py
+- src/back/core/reasoning/rules/SPARQLRuleEngine.py
+- src/back/core/reasoning/rules/SparqlConstructCompiler.py
+- src/back/core/reasoning/rules/__init__.py
+- src/back/core/reasoning/shacl_rules/IfThenToShaclTranspiler.py
+- src/back/core/reasoning/shacl_rules/RuleBuiltin.py
+- src/back/core/reasoning/shacl_rules/RuleBuiltinRegistry.py
+- src/back/core/reasoning/shacl_rules/RuleExpressionParser.py
+- src/back/core/reasoning/shacl_rules/RuleTextCodec.py
+- src/back/core/reasoning/shacl_rules/ShaclFlatCypherBackend.py
+- src/back/core/reasoning/shacl_rules/ShaclFlatSqlBackend.py
+- src/back/core/reasoning/shacl_rules/ShaclRule.py
+- src/back/core/reasoning/shacl_rules/ShaclRuleEngine.py
+- src/back/core/reasoning/shacl_rules/SwrlToShaclTranspiler.py
+- src/back/core/reasoning/shacl_rules/__init__.py
+- src/back/core/reasoning/shacl_rules/rule_serializer.py
+- src/back/core/w3c/owl/OntologyConflictDetector.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/shacl/ShapeConditions.py
+- src/back/core/w3c/shacl/constants.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/back/objects/digitaltwin/build/_build_pipeline.py
+- src/back/objects/digitaltwin/models.py
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/digitaltwin/quality/QualitySqlBuilder.py
+- src/back/objects/digitaltwin/quality/SqlQualityChecks.py
+- src/back/objects/digitaltwin/quality/TwinDataQualityRun.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/payload.py
+- src/back/objects/ontology/Editor.py
+- src/back/objects/ontology/Import.py
+- src/back/objects/ontology/JsonViews.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/ontology/Owl.py
+- src/back/objects/ontology/Rules.py
+- src/back/objects/registry/gitsync/DomainRepoLayout.py
+- src/back/objects/registry/schedule/build.py
+- src/back/objects/registry/schedule/reasoning.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/session/DomainSession.py
+- src/back/objects/simulation/Reasoning.py
+- src/back/objects/simulation/Runner.py
+- src/back/objects/simulation/Sandbox.py
+- src/back/objects/simulation/Simulation.py
+- src/back/objects/simulation/Spec.py
+- src/front/config/menu_config.json
+- src/front/routes/dtwin.py
+- src/front/routes/simulation.py
+- src/front/static/config/js/schedule.js
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/global/css/ontology.css
+- src/front/static/global/js/ontology-core.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- src/front/static/ontology/css/ontology-if-then.css
+- src/front/static/ontology/css/ontology-swrl.css
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/js/ontology-conditions.js
+- src/front/static/ontology/js/ontology-if-then.js
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-swrl.js
+- src/front/static/query/js/query-business-rules.js
+- src/front/static/query/js/query-dataquality.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/templates/about.html
+- src/front/templates/ontology.html
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/partials/settings/_settings_schedule.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/mcp-server/server/formatting.py
+- src/mcp-server/server/tools.py
+- src/shared/fastapi/main.py
+- tests/conftest.py
+- tests/e2e/ontology/test_sidebar_flows.py
+- tests/e2e/scenarios/README.md
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- tests/e2e/scenarios/test_scenario_05_zero_copy_entity_features.py
+- tests/e2e/scenarios/test_scenario_validation.py
+- tests/fixtures/factories/ontology_factory.py
+- tests/fixtures/sample_domain.json
+- tests/integration/neo4j_smoke_test.md
+- tests/units/agents/test_agent_business_rules_generator.py
+- tests/units/api/test_api_service.py
+- tests/units/api/test_dq_rule_list.py
+- tests/units/api/test_dq_run_selection.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/api/test_external_api.py
+- tests/units/api/test_node_shacl_endpoint.py
+- tests/units/api/test_ontology_generate_route.py
+- tests/units/api/test_routes.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/architecture/baseline.json
+- tests/units/core/test_sql_literal_escaping.py
+- tests/units/domain/test_domain_session.py
+- tests/units/dtwin/test_build_pipeline_streaming.py
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/dtwin/test_run_inference_task.py
+- tests/units/dtwin/test_v090_dq_sql_builder.py
+- tests/units/dtwin/test_v090_dq_sql_checks.py
+- tests/units/dtwin/test_v090_twin_background_tasks.py
+- tests/units/dtwin/test_v090_twin_build_prepare.py
+- tests/units/front/test_aggregate_rule_editor_help.py
+- tests/units/front/test_decision_table_editor_help.py
+- tests/units/front/test_dq_rule_checkboxes.py
+- tests/units/front/test_dq_run_payload.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/front/test_entity_panel_tabs.py
+- tests/units/front/test_if_then_attribute_conditions.py
+- tests/units/front/test_if_then_text_pane.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_swrl_attribute_conditions.py
+- tests/units/front/test_swrl_text_pane.py
+- tests/units/mcp/test_business_rule_tool.py
+- tests/units/ontology/test_business_rules.py
+- tests/units/ontology/test_business_rules_accept.py
+- tests/units/ontology/test_conflict_detector.py
+- tests/units/ontology/test_dataquality.py
+- tests/units/ontology/test_decision_table_semantics.py
+- tests/units/ontology/test_if_then_builtin_defects.py
+- tests/units/ontology/test_if_then_engine.py
+- tests/units/ontology/test_if_then_text_codec.py
+- tests/units/ontology/test_ontology_service.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/ontology/test_owl_import_fidelity.py
+- tests/units/ontology/test_owl_parser.py
+- tests/units/ontology/test_reasoning.py
+- tests/units/ontology/test_reasoning_service.py
+- tests/units/ontology/test_swrl_builtin_defects.py
+- tests/units/ontology/test_swrl_engine.py
+- tests/units/ontology/test_swrl_text_codec.py
+- tests/units/ontology/test_v090_ontology_import.py
+- tests/units/ontology/test_v090_ontology_rules.py
+- tests/units/ontology/test_workflow_owl_roundtrip.py
+- tests/units/reasoning/test_if_then_flat_cypher_translator.py
+- tests/units/reasoning/test_if_then_to_shacl_regression.py
+- tests/units/reasoning/test_shacl_rule_engine.py
+- tests/units/reasoning/test_sparql_construct_compiler.py
+- tests/units/reasoning/test_swrl_flat_cypher_translator.py
+- tests/units/reasoning/test_swrl_to_shacl_regression.py
+- tests/units/registry/test_github_layout.py
+- tests/units/registry/test_schedule_store.py
+- tests/units/registry/test_scheduler_crud.py
+- tests/units/registry/test_scheduler_tasks.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_fact_generation.py
+- tests/units/simulation/test_simulation_runner_api.py
+
+Test result:
+- Ad-hoc legacy compatibility check (outside the repo): 11/11 passed (saved
+  domain versioned/flat keys, new-key precedence, migration, legacy `swrlb`
+  builtin parsing, canonical `builtin:`, OWL legacy+new classes, git-sync
+  legacy file, simulation spec legacy keys).
+- Full suite: uv run --frozen pytest -q -m "not scenario" -> 10145 passed,
+  325 skipped, 8 deselected, 1 failed. The sole failure is the pre-existing
+  test_no_function_grows_beyond_budget (agents/agent_dtwin_chat/engine.py::run_agent
+  198 -> 200); that file is not modified by this change.
+- node --check on the edited JS modules: OK.
+
+================================================================================
+Business Rules list UI matches Data Quality; Simple-tab toolbar
+================================================================================
+
+Context:
+Business Rules Simple/Complex list rows looked different from Data Quality
+shape cards (Bootstrap cards / flat hover fill). Auto-generate and SHACL also
+lived in the section header; they belong with the Simple (IF-THEN) workflow.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_business_rules.html
+   Moved Auto-generate and SHACL into the Simple tab top-right; section header
+   keeps Add Rule (+ discuss).
+2. src/front/static/global/css/ontology.css
+   Shared `.ob-rule-card` list-item style (border + primary hover ring).
+3. src/front/static/ontology/css/ontology-dataquality.css
+   Dropped local `.dq-shape-card` visual rules (now owned by `.ob-rule-card`).
+4. src/front/static/ontology/css/ontology-business-rules.css
+   Removed the old `.br-rule-card` visual overrides.
+5. src/front/static/ontology/js/ontology-dataquality.js
+   Shape cards use `ob-rule-card dq-shape-card`.
+6. src/front/static/ontology/js/ontology-if-then.js
+   Simple rows render as `.ob-rule-card` with the Data Quality layout
+   (badge, fw-medium title, muted code line, btn-group).
+7. src/front/static/ontology/js/ontology-business-rules.js
+   Complex rows use the same shared card markup.
+8. src/front/static/global/css/permissions.css
+   Read-only gate also covers `.ob-rule-card` action buttons.
+9. tests/units/front/test_business_rules_list_ui.py
+   Contracts for Simple-tab toolbar placement and shared card class.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/global/css/ontology.css
+- src/front/static/ontology/css/ontology-dataquality.css
+- src/front/static/ontology/css/ontology-business-rules.css
+- src/front/static/ontology/js/ontology-dataquality.js
+- src/front/static/ontology/js/ontology-if-then.js
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- Targeted: uv run --frozen pytest -q tests/units/front/test_business_rules_list_ui.py
+  tests/units/front/test_if_then_text_pane.py tests/units/front/test_no_llm_ui_gate.py
+  tests/units/front/test_sidebar_content_stretch_contract.py -> 151 passed.
+- Full suite: uv run --frozen pytest -q -m "not scenario" -> 10148 passed,
+  325 skipped, 8 deselected, 1 failed (pre-existing
+  test_no_function_grows_beyond_budget on agents/agent_dtwin_chat/engine.py::run_agent;
+  file not modified by this change).

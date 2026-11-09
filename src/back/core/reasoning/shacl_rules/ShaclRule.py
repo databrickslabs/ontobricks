@@ -1,8 +1,8 @@
 """Canonical SHACL-AF rule model.
 
 A :class:`ShaclRule` is the intermediate representation the reasoning engine
-executes instead of raw SWRL text.  It is produced by
-:class:`SwrlToShaclTranspiler` from the IF/THEN rules authored in the UI and
+executes instead of raw IF-THEN text.  It is produced by
+:class:`IfThenToShaclTranspiler` from the IF/THEN rules authored in the UI and
 carries three views of the same logic:
 
 - ``rule_type`` / ``turtle`` — the canonical SHACL-AF serialisation
@@ -12,11 +12,11 @@ carries three views of the same logic:
   the Turtle for ``sh:SPARQLRule`` shapes);
 - ``antecedent`` / ``consequent`` — the executable body, kept so the flat
   triple-store SQL backend can generate identical SQL (capability parity with
-  the legacy SWRL engine).
+  the legacy IF-THEN engine).
 
 The executable body is intentionally preserved: a ``sh:SPARQLRule`` CONSTRUCT
 over the flat ``(subject, predicate, object)`` table is semantically the same
-graph pattern as the originating SWRL rule, so the proven flat-triple SQL
+graph pattern as the originating IF-THEN rule, so the proven flat-triple SQL
 backend can be reused to guarantee identical inference results at scale.
 """
 
@@ -31,7 +31,7 @@ SPARQL_RULE = "sh:SPARQLRule"
 
 @dataclass
 class ShaclRule:
-    """A single SHACL-AF rule transpiled from a SWRL IF/THEN rule."""
+    """A single SHACL-AF rule transpiled from an IF-THEN rule."""
 
     id: str
     name: str

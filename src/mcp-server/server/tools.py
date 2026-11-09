@@ -895,7 +895,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         rule: str,
         domain_name: Optional[str] = None,
     ) -> str:
-        """Trigger a SWRL business rule declared on an entity's class.
+        """Trigger an IF-THEN business rule declared on an entity's class.
 
         Pass ``domain_name`` when the client does not reuse an MCP session.
         Requires the Builder role on that domain. Discover the available rules with

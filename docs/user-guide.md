@@ -317,19 +317,25 @@ the generated SHACL-AF live as you build a rule.
    - Right-click a class or relationship on the graph to open the context menu
    - Choose **Add to IF** or **Add to THEN** to add atoms
    - Variable names (e.g., `?x`, `?y`) are assigned automatically
-   - The **Generated SHACL rule** preview updates live as you add atoms
-4. **Advanced rules**: rules using built-ins, negation, or derived classes that
+   - Click **Show SHACL code** to reveal a collapsible pane with the generated
+     SHACL-AF for the rule; it updates live as you add atoms (hidden by default)
+4. **Set attributes (THEN)**: beside adding relationships, a rule can set a
+   **data property** to a literal value — add a row under **THEN &rarr; Set
+   attributes**, pick the entity and attribute, and type the value (e.g.
+   `priority = "high"`). This is a **replace** update: any existing value for
+   that attribute on the matched entity is removed and the new one set.
+5. **Advanced rules**: rules using built-ins, negation, or derived classes that
    the visual graph cannot fully represent are shown read-only (their generated
    SHACL-AF is displayed and preserved on save).
-5. Enter a **Rule Name** and optional **Description**
-6. Click **Save Rule**
+6. Enter a **Rule Name** and optional **Description**
+7. Click **Save Rule**
 
 **View/Export**: Click the header **SHACL** button to open a modal
 (same pattern as Data Quality → SHACL). It shows all rules as their generated
 **SHACL-AF** Turtle (read-only, since transpilation is one-directional) and
 Export downloads a `.ttl` file.
 
-**Example SWRL Rules:**
+**Example IF-THEN Rules:**
 
 ```
 Rule: InferGrandparent
@@ -342,6 +348,40 @@ Consequent: hasManager(?x, ?y)
 ```
 
 Rules are compiled to **Spark/Postgres SQL** for execution in the Reasoning pipeline. The capability flags on `GraphDBBackend` reserve a slot for a future Cypher / Gremlin engine.
+
+#### Complex Rules (SPARQL CONSTRUCT)
+
+The **Complex** tab holds rules written as a SPARQL `CONSTRUCT { … } WHERE { … }`
+query, for patterns the IF/THEN editor cannot draw (several inferred triples,
+`OR` conditions, string tests, multi-triple `NOT EXISTS`). Undeclared prefixes
+such as `:Order` or `ex:total` resolve against the domain's ontology; a
+declared `PREFIX` keeps its IRI.
+
+Like Simple rules, Complex rules compile to Spark/Postgres SQL on the triple
+store and only return triples that are not already in the graph. Only this
+subset compiles:
+
+- triple patterns that are connected through shared variables;
+- `FILTER` with `=`, `!=`, `<`, `>`, `<=`, `>=` (numbers are compared as
+  numbers), `&&`, `||`, `CONTAINS`, `STRSTARTS`, `STRENDS`, and
+  `NOT EXISTS { … }` made of triple patterns;
+- any number of triples in the `CONSTRUCT` head, each using variables bound in
+  `WHERE`.
+
+Anything else (`OPTIONAL`, `UNION`, `BIND`, `GROUP BY`, `LIMIT`, property
+paths, variable predicates, sub-queries…) is refused: **Validate** shows the
+reason, and an enabled rule cannot be saved until it compiles. A disabled rule
+can still be saved, so an older rule that no longer compiles can be switched
+off. If such a rule is still enabled, the reasoning run skips it and reports it
+in the phase errors (`sparql_rules_errors`).
+
+```sparql
+CONSTRUCT { ?o a :LargeOrder . ?o :reviewStatus "pending" }
+WHERE {
+  ?o a :Order . ?o :total ?t .
+  FILTER(?t > 10000 && NOT EXISTS { ?o :approvedBy ?m })
+}
+```
 
 #### Expressions & Axioms
 
@@ -417,8 +457,7 @@ Click **Data Quality** in the sidebar to define data quality rules using W3C SHA
 **Conditional rules (the IF block)**: a conformance or consistency rule can be
 guarded so it only applies to the instances matching a set of conditions —
 *IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*.
-Each condition is a property, an operator and a value, built the same way as a
-decision-table condition in Business Rules. The **All / Any** toggle combines
+Each condition is a property, an operator and a value. The **All / Any** toggle combines
 the rows with AND or OR. Conditions may reference any attribute of the target
 entity, or a relationship with the `exists` / `does not exist` operators. A rule
 with no conditions applies to every instance, exactly as before.
@@ -523,15 +562,15 @@ alone.
 > trade for a value that is always current. Use a mapped attribute when you need
 > to query it.
 
-### Inference Rules on an Entity (SWRL)
+### Inference Rules on an Entity (IF-THEN)
 
-An entity type can also expose **inference rules**: SWRL rules from
-**Ontology → Business Rules → SWRL** that a user can trigger on a single entity
+An entity type can also expose **inference rules**: IF-THEN rules from
+**Ontology → Business Rules → IF-THEN** that a user can trigger on a single entity
 from the Graph Explorer. Unlike functions and jobs, a rule **writes to the
 graph**: the triples it infers for that entity are materialised.
 
 1. Go to **Ontology** → **Entities** and select an entity type
-2. Open the **Behaviour** tab and find the **Inference rules (SWRL)** section
+2. Open the **Behaviour** tab and find the **Inference rules (IF-THEN)** section
 3. Click **Add** — the picker lists the rules that use this class or one of its
    parents
 4. Click **Apply** (writes into the session; publish the domain to persist)
@@ -551,7 +590,7 @@ each section does:
 | **General** | Name, label, icon, description, group |
 | **Attrs.** | Mapped attributes (data properties), then **Virtual attributes** (computed when viewed) |
 | **Model** | Inherits from, inherited relationships, equivalent to, disjoint with, bridges to other domains |
-| **Behaviour** | What the Knowledge Graph can run on one entity, each section tagged with its effect: **Functions** (return a result), **Jobs** (run in background), **Inference rules (SWRL)** (write to the graph) |
+| **Behaviour** | What the Knowledge Graph can run on one entity, each section tagged with its effect: **Functions** (return a result), **Jobs** (run in background), **Inference rules (IF-THEN)** (write to the graph) |
 | **Links** | Dashboard and datasets |
 
 Every section inside a tab has the same layout:
@@ -963,7 +1002,7 @@ graph **UNION** the sandbox after-picture: simulated predicates overlay
 live ones, and the rest of each entity (existing properties and relations)
 stays visible. API, MCP and Explorer always read that overlay. Explorer
 behaviour is otherwise unchanged (search, expand, hops, max entities).
-Entity **Inference rules (SWRL)** run against the sandbox (not the live
+Entity **Inference rules (IF-THEN)** run against the sandbox (not the live
 graph) and write inferred triples there, so a rule such as attach-meter
 can see extra contracts asserted by the scenario. Opening Explorer from a
 scenario Results URI (or the Results **Explorer** button) lands on that
@@ -1217,7 +1256,7 @@ Click **Data Quality** in the Knowledge Graph sidebar to run SHACL shape validat
 Click **Inference** in the Knowledge Graph sidebar to run the multi-phase reasoning pipeline:
 
 1. **OWL 2 RL** — Forward-chaining deductive closure on the ontology (infers subclass hierarchies, domain/range typing, property entailments)
-2. **SWRL Rules** — Evaluates user-defined rules (violation detection and optional materialization)
+2. **IF-THEN Rules** — Evaluates user-defined rules (violation detection and optional materialization)
 3. **Graph Reasoning** — Transitive closure and symmetric expansion based on OWL property characteristics
 4. **Constraint Checking** — Validates cardinality, functional properties, value constraints, and global rules
 
@@ -1273,8 +1312,8 @@ Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into 
    - **Remove** retracts one.
 4. **Reason**: the reasoning phases you ticked run against the sandbox, so your
    rules react to the new facts. These are the same engines as Knowledge Graph
-   → Inference (SWRL, graph reasoning, decision tables, SPARQL and aggregate
-   rules, OWL 2 RL). Their conclusions are written into the sandbox too.
+   → Inference (Simple rules, graph reasoning, Complex rules, OWL 2 RL). Their
+   conclusions are written into the sandbox too.
 5. **Compare**: the final sandbox is the **after** picture. OntoBricks compares
    it with the before picture.
    - Every triple that appeared is listed as **Added**. It is tagged *your
@@ -1294,7 +1333,7 @@ press **Compare**. One graph is drawn with distinct colour-coding for entities (
   - **Red**: removed — exists in the live graph only (all relations removed or detached in the sandbox).
 - **Links (Relationships)**:
   - **Grey**: unchanged — relationship present in both graphs;
-  - **Green**: added — relationship added in the sandbox (either asserted by a hypothetical fact patch or derived by a reasoning rule like SWRL; click to inspect the rule);
+  - **Green**: added — relationship added in the sandbox (either asserted by a hypothetical fact patch or derived by a reasoning rule like IF-THEN; click to inspect the rule);
   - **Red**: removed — relationship present in the live graph but retracted or overwritten in the sandbox.
 
 Click a node or an edge for its details (changed attributes, origin, the rule
@@ -1321,12 +1360,12 @@ graph. Deleting a scenario drops its sandbox.
   narrow the scope and run again.
 - Result lists keep the first 2000 rows, but the counts are always exact.
 
-**What a slice means for rules.** Ticked reasoning phases (SWRL, graph, …)
+**What a slice means for rules.** Ticked reasoning phases (IF-THEN, graph, …)
 run automatically after the hypotheses are applied, against the sandbox.
 Rules only see what was copied. Each hypothetical entity that was not
 already in the scope is copied from live with one neighbour hop (so an
-extra contract brings its meters), then SWRL can attach those meters to
-the customer. If SWRL is ticked and the rules cannot run (none in the
+extra contract brings its meters), then IF-THEN can attach those meters to
+the customer. If IF-THEN is ticked and the rules cannot run (none in the
 domain, or a query error), the run **fails** with that message instead of
 finishing as ready with zero inferences. A rule that needs a
 global aggregate still will not fire on a neighbourhood slice — widen the
@@ -1413,7 +1452,7 @@ rules, or results, shows the brand spinner over that pane.
    You can still paste a URI by hand.
    Ontology predicate URIs are resolved to the mapped data predicate when
    the sandbox applies the fact, so an added relationship participates in
-   SWRL joins with the existing graph. A relationship object that is only a
+   IF-THEN joins with the existing graph. A relationship object that is only a
    local id (``ECON00018``) is expanded to the instance URI
    (``…/Contract/ECON00018``) at run time. Attaching an existing contract to
    the scoped person copies that contract's own facts and outgoing parts
@@ -1425,10 +1464,10 @@ rules, or results, shows the brand spinner over that pane.
    exact subject, predicate, and claim URI. Contract termination does not
    implicitly remove claims.
 3. **Reasoning** — the same phase tiles as Graph → Inference.
-   SWRL and graph reasoning are on by default; decision tables, SPARQL
-   CONSTRUCT, aggregate rules and OWL 2 RL are optional. Expand a SWRL /
-   decision-table / SPARQL / aggregate tile to tick individual rules; the
-   scenario stores that selection and only those rules run in the sandbox.
+   Simple rules and graph reasoning are on by default; Complex rules and
+   OWL 2 RL are optional. Expand a Simple / Complex tile to tick individual
+   rules; the scenario stores that selection and only those rules run in the
+   sandbox.
 4. **Results** — KPIs (entities in scope, triples before / after, new
    inferences, removed triples, affected entities) and two paged,
    searchable tables for this scenario's last run: **Added** — each row
@@ -1452,7 +1491,7 @@ the navbar **Background Tasks** hourglass (click the row to return to the
 editor) and on the workbench progress bar (same striped bar as Knowledge
 Graph **Build**), which follows the phases (scope, seed, facts, reasoning,
 diff). Hypothetical entities you **Add** (for example extra contracts) are
-copied from the live graph with one hop of neighbours so SWRL can chain to
+copied from the live graph with one hop of neighbours so IF-THEN can chain to
 meters, invoices, and the rest. When it finishes the bar disappears; open
 the **Results** tab or the clipboard icon on the Scenarios list for the
 before/after diff. If a previous run is still marked running (stuck worker
@@ -1535,7 +1574,7 @@ you back to **Domain → General → AI** and does not start an LLM request.
 The AI tab and **Browse** picker remain usable. Select and save an AI Gateway
 model service or Model Serving endpoint to make the LLM actions available
 again without reloading the page. Deterministic features remain available with
-No LLM, including OWL/SWRL reasoning, SHACL validation, and cohort operations.
+No LLM, including OWL/IF-THEN reasoning, SHACL validation, and cohort operations.
 
 #### Triple Store Tab
 
@@ -1653,7 +1692,7 @@ unrecoverable.
 | **Bridges** | Cross-domain links declared between ontology classes. |
 | **Actions** | Unity Catalog functions declared on a class. |
 | **Virtual attributes** | Class attributes computed on demand by a Unity Catalog function instead of being mapped. |
-| **Business rules** | SWRL rules attached to a class that can be run on an entity (`run_entity_business_rule`). |
+| **Business rules** | IF-THEN rules attached to a class that can be run on an entity (`run_entity_business_rule`). |
 
 > **The Actions overlap.** The `invoke_entity_action` *tool* and the
 > **Actions** *context element* are two switches over the same feature.
@@ -1805,7 +1844,7 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
     published, reopened) with the actor, timestamp, comment, and the `from → to` status
     snapshot for lifecycle transitions. Ontology and mapping edits live on their own tabs
     as compact `entity | field | old → new` rows (relationships are object properties;
-    SWRL, SHACL, groups, axioms, expressions, and business-rule CRUD are included). The
+    IF-THEN, SHACL, groups, axioms, expressions, and business-rule CRUD are included). The
     **GitHub** tab lists mirror commits, tags, and generation warnings for that version
     (see [Configuration → GitHub](#configuration--github-repository-mirror)). Entries
     appear after the domain is saved to the registry. The Generate wizard still records one
@@ -2015,7 +2054,7 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 | `describe_entity` | Full-text description of an entity with BFS traversal |
 | `get_entity_context` | Linked dataset rows (all linked UC tables/views/metric views), cross-domain bridges, and class actions for a node |
 | `invoke_entity_action` | Run a class action: UC function (entity ID as the single argument) or Databricks Job (`job:<id>`) |
-| `run_entity_business_rule` | Run a SWRL business rule attached to the entity's class and materialise the inferred triples (Builder role) |
+| `run_entity_business_rule` | Run an IF-THEN business rule attached to the entity's class and materialise the inferred triples (Builder role) |
 | `check_entity_shacl_facets` | Check one entity against the SHACL shapes of its class, its ancestors and the whole graph (pass / fail / not applicable / not evaluated / error, with the values found) |
 | `get_graphql_schema` | Auto-generated GraphQL schema (SDL) for the domain |
 | `query_graphql` | Execute a GraphQL query with structured results |
@@ -2295,7 +2334,7 @@ domains/<Domain>/
     info.json                          # domain options (LLM endpoint, MCP, graph backend, ...)
     ontology/ontology.json             # classes, properties, groups, base URI, ...
     ontology/constraints.json | axioms.json | expressions.json | shacl_shapes.json
-    ontology/rules/swrl.json | sparql.json | decision_tables.json | aggregate.json | cohort.json
+    ontology/rules/if_then.json | sparql.json | cohort.json
     ontology/<Domain>.owl.ttl          # OWL ontology (Turtle, generated)
     ontology/shacl.ttl                 # SHACL shapes (Turtle, when shapes exist)
     mapping/assignment.json            # entity / relationship mappings
@@ -2752,13 +2791,13 @@ Reasoning discovers new facts (inferred triples) from your ontology rules:
 
 1. Select the reasoning **phases** to run:
    - **T-Box (OWL 2 RL)**: Infers class hierarchies, property inheritance, and domain/range constraints
-   - **SWRL Rules**: Executes your custom business rules (e.g., "if Person hasParent Parent and Parent hasParent Grandparent, then Person hasGrandparent Grandparent")
+   - **IF-THEN Rules**: Executes your custom business rules (e.g., "if Person hasParent Parent and Parent hasParent Grandparent, then Person hasGrandparent Grandparent")
    - **Structural**: Applies transitivity, symmetry, and other property characteristics
 2. Optionally enable **Materialization** to write inferred triples back to the triple store
 3. Click **Start Reasoning**
 4. Review the inferred triples — each shows the source rule and reasoning phase
 
-> **Note**: Reasoning is most effective when you have SWRL rules defined (Ontology > Business Rules) and a rich ontology with property characteristics.
+> **Note**: Reasoning is most effective when you have IF-THEN rules defined (Ontology > Business Rules) and a rich ontology with property characteristics.
 
 ---
 
@@ -2889,7 +2928,7 @@ Import an ontology written in the **Web Ontology Language (OWL)**.
 1. Open **Ontology > Import > OWL**.
 2. Click **Choose File** and select an OWL file (`.ttl`, `.owl`, `.rdf`, `.xml`).
 3. Click **Import**.
-4. OntoBricks parses the file and loads all classes, properties, constraints, SWRL rules, and axioms.
+4. OntoBricks parses the file and loads all classes, properties, constraints, IF-THEN rules, and axioms.
 
 OntoBricks keeps the ontology IRI and label from the file, full IRIs for
 external `rdfs:subClassOf`, domain, and range references, language tags on
@@ -3107,11 +3146,10 @@ After import you can:
 - **Ontology Studio (menu)**: Primary visual ontology workspace under **Ontology → Studio** — OntoViz canvas, toolbar, and floating AI Assistant (the sidebar label is *Studio*, not “Model”). The assistant uses the LLM saved in **Domain → General → AI** (Unity AI Gateway or Model Serving); it is unavailable when **No LLM** is selected.
 - **Visual Ontology Editor (OntoViz)**: Drag-and-drop canvas to create entities, relationships, and inheritance hierarchies with icons and attributes.
 - **Class Hierarchies**: Define rdfs:subClassOf relationships with automatic property inheritance from parent to child entities.
-- **If-Then Rules**: Create inference rules using a **graphical D3-based editor** — fullscreen modal with IF/THEN atom builders, ontology-aware context menu, and a live **Generated SHACL rule** preview. Rules run as SHACL-AF. A header **SHACL** button opens a modal (mirroring Data Quality’s SHACL) to view and export the generated SHACL-AF rules (read-only, one-directional).
+- **Business Rules — Simple & Complex**: Two paradigms under **Business Rules**. **Simple** rules are IF/THEN inference rules authored in a **graphical D3-based editor** — fullscreen modal with IF/THEN atom builders, ontology-aware context menu, and a collapsible **Show SHACL code** pane with the live generated SHACL-AF; they run as SHACL-AF. A header **SHACL** button opens a modal (mirroring Data Quality’s SHACL) to view and export the generated SHACL-AF rules (read-only, one-directional). **Complex** rules are user-authored SPARQL `CONSTRUCT` queries that infer new triples from graph patterns.
 - **OWL Constraints**: Define cardinality, value restrictions, and property characteristics (functional, transitive, symmetric).
 - **SHACL Data Quality Shapes**: Define data quality rules using W3C SHACL — six categories (completeness, cardinality, uniqueness, consistency, conformance, structural), Turtle round-trip (generate/import), and SQL compilation for triple store execution.
-- **Decision Tables & Aggregate Rules**: Both editors explain each field and show a live plain-English preview of what the rule does, with warnings for combinations the engine cannot apply. In a decision table, each column reads one attribute and each row is an AND of conditions. A cell only requires its attribute when it holds a condition, so instances missing that attribute still match *any* or empty cells. The output either **sets a value** (`riskTier = high`) or **assigns an entity** (types the instance, e.g. `HighRiskCustomer`). The hit policy decides what happens when several OR rows match the same instance: *First* keeps the first row, *All* fires every row, and *Unique* reports a conflict and applies no output.
-- **Conditional data quality rules**: Guard a conformance or consistency rule with an optional IF block — *IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*. Conditions use the same property/operator/value rows as the Business Rules decision table, plus `exists` / `does not exist` on relationships, and compile to a SHACL-AF `sh:SPARQLTarget` on export.
+- **Conditional data quality rules**: Guard a conformance or consistency rule with an optional IF block — *IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*. Conditions use property/operator/value rows, plus `exists` / `does not exist` on relationships, and compile to a SHACL-AF `sh:SPARQLTarget` on export.
 - **OWL Axioms**: Express class relationships, property chains, and complex expressions (equivalent, disjoint, union, intersection).
 - **OWL Generation**: Automatic generation of W3C-compliant OWL/Turtle from visual design. **Ontology → Generate** also reads Unity Catalog **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Domain → Metadata.
 - **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the LLM saved in **Domain → General → AI** (Ontology Studio toolbar). Entities that still use the default icon are mapped immediately; if every entity already has a custom icon, the toolbar asks for confirmation before remapping all of them. Unavailable when **No LLM** is selected.
@@ -3167,7 +3205,7 @@ After import you can:
 - **Class Actions (Unity Catalog functions)**: Bind any number of UC functions to an ontology class in **Ontology → Studio → Behaviour → Functions**, each with its own description. Run them on a node from the details pane or its right-click menu; the result (scalar or table) opens in a popup. Each function must take exactly one argument — the entity's ID — and the invocation endpoint enforces an allow-list so only functions declared on the node's own class can be called. The same actions are surfaced to the MCP server through `get_entity_context` and `invoke_entity_action`.
 - **Class Actions (Databricks Jobs)**: In the same **Behaviour** tab (**Jobs** section), bind workspace Jobs that declare an `entity_id` parameter. OntoBricks only starts the Job (`run_now`); Spark still uses the Job's run-as identity. On Lakehouse domains in App mode the trigger is on-behalf-of the signed-in user. Triggering a Job from Explorer opens a popup that checks the run actually started and tells you right away whether it is **Running** or **Queued**, with a link to the run in Databricks. The popup keeps following the run while it is open (Running → Succeeded / Failed), and you can close it at any time: the run stays in the navbar **Background Tasks** hourglass, which shows its live state and the same run link. Invoke the same `job:<job_id>` name from Explorer or MCP `invoke_entity_action`.
 
-- **Entity Inference Rules (SWRL)**: In **Ontology → Studio → Behaviour → Inference rules (SWRL)**, attach one or more SWRL rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the SWRL editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
+- **Entity Inference Rules (IF-THEN)**: In **Ontology → Studio → Behaviour → Inference rules (IF-THEN)**, attach one or more IF-THEN rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the IF-THEN editor updates the class references. Neo4j supports graph-shaped rules with class and object-property atoms; unsupported literal or builtin atoms report an explicit rule error.
 - **Virtual Attributes (computed on demand)**: A class of attribute that no mapping feeds and no build materialises — a Unity Catalog function computes it from the entity's ID when someone asks. Declare them in **Ontology → Studio → Attrs. → Virtual attributes** by picking a UC function that takes exactly one parameter; one attribute is created per returned column (or a single one for a scalar function), read from `information_schema`. In the Graph Explorer they appear in their own **Virtual Attributes** section under the mapped ones with a per-function **Compute** button, a **Compute all**, and a right-click shortcut; computed values are cached per entity for the page's lifetime, with **Recompute** as the refresh. Over MCP the declarations always ride along with `get_entity_context`; when a question is about a virtual attribute's value, the model should call `compute_virtual_attributes(entity_uri)` to run the UC function — nothing is computed unless asked. A failing function reports its error without denying the attributes that still resolve. Because they are never materialised, virtual attributes are **not queryable** in SPARQL or GraphQL and take no part in mappings, R2RML, SHACL or data-quality checks.
 - **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
 check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. **View → Quality rings** hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.

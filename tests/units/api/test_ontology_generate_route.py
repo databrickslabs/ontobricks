@@ -44,7 +44,7 @@ async def test_generate_owl_uses_session_extras_missing_from_payload(monkeypatch
             "rdf_extras": info["rdf_extras"],
         },
         constraints=[],
-        swrl_rules=[],
+        if_then_rules=[],
         axioms=[],
         expressions=[],
         groups=[],

@@ -22,7 +22,7 @@ Operator guides for this version. Full details:
 | Three-stage Ontology Generate (detect → review → complete) | [User Guide](user-guide.md#option-c-ai-powered-wizard) |
 | Knowledge Store (parsed text in Lakebase, no Volume) | [User Guide](user-guide.md#knowledge-store), [Get Started](getting-started.md#upload-documents-to-the-knowledge-store-optional) |
 | Ontology Studio (renamed Designer), entity panel tabs | [User Guide](user-guide.md#ontology-studio-map-full-graph) |
-| Entity Data Quality Checks, SWRL on an entity, Jobs as class actions | [User Guide](user-guide.md#feature-inventory), [MCP](mcp.md) |
+| Entity Data Quality Checks, IF-THEN on an entity, Jobs as class actions | [User Guide](user-guide.md#feature-inventory), [MCP](mcp.md) |
 | SPARQL playground | [User Guide](user-guide.md#sparql-playground) |
 | GitHub domain mirror | [User Guide](user-guide.md#github-mirror), [Advanced features](advanced_features.md#load-from-github-repository) |
 | Load opens Domain → General | [User Guide](user-guide.md#domain-saveload) |

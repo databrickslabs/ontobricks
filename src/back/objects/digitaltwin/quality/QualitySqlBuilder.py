@@ -14,9 +14,9 @@ from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 
 
 class QualitySqlBuilder:
-    """Build SQL for SHACL-style cardinality, value, property, label, orphan, and SWRL checks."""
+    """Build SQL for SHACL-style cardinality, value, property, label, orphan, and IF-THEN checks."""
 
-    _swrl_sql_translator = None
+    _if_then_sql_translator = None
 
     @staticmethod
     def build_quality_sql(check_type: str, table: str, params: dict) -> Optional[str]:
@@ -37,8 +37,8 @@ class QualitySqlBuilder:
             return QualitySqlBuilder._build_require_labels_sql(table, params)
         elif check_type == "noOrphans":
             return QualitySqlBuilder._build_no_orphans_sql(table, params)
-        elif check_type == "swrl":
-            return QualitySqlBuilder._build_swrl_sql(table, params)
+        elif check_type == "if_then":
+            return QualitySqlBuilder._build_if_then_sql(table, params)
         return None
 
     @staticmethod
@@ -198,15 +198,15 @@ class QualitySqlBuilder:
         )
 
     @staticmethod
-    def _get_swrl_translator():
-        if QualitySqlBuilder._swrl_sql_translator is None:
+    def _get_if_then_translator():
+        if QualitySqlBuilder._if_then_sql_translator is None:
             from back.core.reasoning import ShaclFlatSqlBackend
 
-            QualitySqlBuilder._swrl_sql_translator = ShaclFlatSqlBackend()
-        return QualitySqlBuilder._swrl_sql_translator
+            QualitySqlBuilder._if_then_sql_translator = ShaclFlatSqlBackend()
+        return QualitySqlBuilder._if_then_sql_translator
 
     @staticmethod
-    def _build_swrl_sql(table, params):
-        return QualitySqlBuilder._get_swrl_translator().build_violation_sql(
+    def _build_if_then_sql(table, params):
+        return QualitySqlBuilder._get_if_then_translator().build_violation_sql(
             table, params
         )

@@ -41,9 +41,9 @@
         shacl_added: { icon: 'plus-circle', cls: 'text-success', label: 'SHACL shape added' },
         shacl_updated: { icon: 'pencil', cls: 'text-primary', label: 'SHACL shape updated' },
         shacl_removed: { icon: 'trash', cls: 'text-danger', label: 'SHACL shape removed' },
-        swrl_added: { icon: 'plus-circle', cls: 'text-success', label: 'SWRL rule added' },
-        swrl_updated: { icon: 'pencil', cls: 'text-primary', label: 'SWRL rule updated' },
-        swrl_removed: { icon: 'trash', cls: 'text-danger', label: 'SWRL rule removed' },
+        if_then_added: { icon: 'plus-circle', cls: 'text-success', label: 'IF-THEN rule added' },
+        if_then_updated: { icon: 'pencil', cls: 'text-primary', label: 'IF-THEN rule updated' },
+        if_then_removed: { icon: 'trash', cls: 'text-danger', label: 'IF-THEN rule removed' },
         group_added: { icon: 'plus-circle', cls: 'text-success', label: 'Group added' },
         group_updated: { icon: 'pencil', cls: 'text-primary', label: 'Group updated' },
         group_removed: { icon: 'trash', cls: 'text-danger', label: 'Group removed' },
@@ -472,7 +472,7 @@
         if (type === 'property' || action.indexOf('property_') === 0) return 'relationship';
         if (type.indexOf('mapping') === 0 || action.indexOf('mapping_') === 0) return 'mapping';
         if (type === 'shacl' || action.indexOf('shacl_') === 0) return 'shape';
-        if (type === 'swrl' || action.indexOf('swrl_') === 0) return 'rule';
+        if (type === 'if_then' || action.indexOf('if_then_') === 0) return 'rule';
         if (type === 'group' || action.indexOf('group_') === 0) return 'group';
         if (type === 'axiom' || action.indexOf('axiom_') === 0) return 'axiom';
         if (type === 'expression' || action.indexOf('expression_') === 0) return 'expression';

@@ -1,12 +1,10 @@
 """Tests for all business rule enhancements.
 
 Covers:
-- Phase 1: SWRL built-ins (registry, parser, SQL translation)
+- Phase 1: IF-THEN built-ins (registry, parser, SQL translation)
 - Phase 2: SHACL rules (service method)
 - Phase 3: Closed-world negation (parser, SQL translation)
-- Phase 4: Decision tables (engine, SQL generation, validation)
 - Phase 5: SPARQL CONSTRUCT rules (engine, SQL generation, validation)
-- Phase 6: Aggregate rules (engine, SQL generation, validation)
 - Cross-cutting: RuleViolation model, ReasoningService orchestration
 """
 
@@ -20,14 +18,12 @@ from back.core.reasoning.shacl_rules.RuleExpressionParser import RuleExpressionP
 from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import ShaclFlatSqlBackend
 from back.core.reasoning.shacl_rules.RuleBuiltin import RuleBuiltin
 from back.core.reasoning.shacl_rules.RuleBuiltinRegistry import RuleBuiltinRegistry
-from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
 from back.core.reasoning.rules.SPARQLRuleEngine import SPARQLRuleEngine
-from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
 from back.core.reasoning.ReasoningService import ReasoningService
 
 
 # ===========================================================================
-# Phase 1: SWRL Built-ins
+# Phase 1: IF-THEN Built-ins
 # ===========================================================================
 
 
@@ -92,7 +88,7 @@ class TestRuleBuiltinRegistry:
         assert "contains" in result
 
 
-class TestParseSwrlAtomsWithBuiltins:
+class TestParseIfThenAtomsWithBuiltins:
     def test_builtin_atoms_detected(self):
         expr = "Customer(?x), hasAge(?x, ?age), greaterThan(?age, 65)"
         atoms = RuleExpressionParser.parse_atoms(expr)
@@ -131,7 +127,7 @@ class TestParseSwrlAtomsWithBuiltins:
         assert len(atoms) == 3
 
 
-class TestSWRLSQLBuiltinTranslation:
+class TestIfThenSQLBuiltinTranslation:
     def test_violation_sql_with_builtin(self):
         translator = ShaclFlatSqlBackend()
         params = {
@@ -175,101 +171,6 @@ class TestNegationSQL:
 
 
 # ===========================================================================
-# Phase 4: Decision Tables
-# ===========================================================================
-
-
-class TestDecisionTableEngine:
-    @pytest.fixture
-    def sample_table(self):
-        return {
-            "id": "dt_test",
-            "name": "Customer Discount",
-            "target_class": "Customer",
-            "target_class_uri": "http://test.org/ontology#Customer",
-            "input_columns": [
-                {
-                    "property": "tier",
-                    "property_uri": "http://test.org/ontology/tier",
-                    "label": "Tier",
-                },
-                {
-                    "property": "amount",
-                    "property_uri": "http://test.org/ontology/amount",
-                    "label": "Amount",
-                },
-            ],
-            "output_column": {
-                "property": "discount",
-                "property_uri": "http://test.org/ontology/discount",
-            },
-            "rows": [
-                {
-                    "conditions": [
-                        {"op": "eq", "value": "Gold"},
-                        {"op": "gt", "value": "1000"},
-                    ],
-                    "action": "15",
-                },
-                {
-                    "conditions": [
-                        {"op": "eq", "value": "Gold"},
-                        {"op": "lte", "value": "1000"},
-                    ],
-                    "action": "10",
-                },
-                {"conditions": [{"op": "any"}, {"op": "any"}], "action": "0"},
-            ],
-            "hit_policy": "first",
-            "enabled": True,
-        }
-
-    def test_build_violation_sql(self, sample_table):
-        engine = DecisionTableEngine()
-        sql = engine.build_violation_sql(
-            sample_table, "triples", "http://test.org/ontology#"
-        )
-        assert sql is not None
-        assert "SELECT DISTINCT" in sql
-        assert "http://test.org/ontology#Customer" in sql
-        assert "http://test.org/ontology/tier" in sql
-
-    def test_numeric_condition_tolerates_non_numeric_values(self, sample_table):
-        # Warehouses run with ANSI mode on, where a bare CAST aborts the whole
-        # statement on the first amount that is not a number.
-        engine = DecisionTableEngine()
-        sql = engine.build_violation_sql(
-            sample_table, "triples", "http://test.org/ontology#"
-        )
-        assert "TRY_CAST(inp1.object AS DOUBLE)" in sql
-        assert "CAST(" not in sql.replace("TRY_CAST(", "")
-
-    def test_validate_valid_table(self, sample_table):
-        errors = DecisionTableEngine.validate_table(sample_table)
-        assert errors == []
-
-    def test_validate_missing_name(self):
-        errors = DecisionTableEngine.validate_table(
-            {
-                "target_class": "X",
-                "input_columns": [{}],
-                "rows": [{"conditions": [{}]}],
-            }
-        )
-        assert any("name" in e.lower() for e in errors)
-
-    def test_validate_missing_rows(self):
-        errors = DecisionTableEngine.validate_table(
-            {
-                "name": "Test",
-                "target_class": "X",
-                "input_columns": [{}],
-            }
-        )
-        assert any("row" in e.lower() for e in errors)
-
-
-# ===========================================================================
 # Phase 5: SPARQL CONSTRUCT Rules
 # ===========================================================================
 
@@ -303,191 +204,36 @@ class TestSPARQLRuleEngine:
         )
         assert any("CONSTRUCT" in e for e in errors)
 
-    def test_construct_to_sql(self, sample_rule):
-        engine = SPARQLRuleEngine()
-        sql = engine._construct_to_sql(
-            sample_rule["query"],
-            "triples",
-            {"base_uri": "http://test.org/ontology#"},
-        )
-        assert sql is not None
-        assert "SELECT DISTINCT" in sql
-
-
-# ===========================================================================
-# Phase 6: Aggregate Rules
-# ===========================================================================
-
-
-class TestAggregateRuleEngine:
-    @pytest.fixture
-    def sample_rule(self):
-        return {
-            "id": "ar_test",
-            "name": "High Order Count",
-            "target_class": "Customer",
-            "target_class_uri": "http://test.org/ontology#Customer",
-            "group_by_property": "hasOrder",
-            "group_by_property_uri": "http://test.org/ontology/hasOrder",
-            "aggregate_property": "",
-            "aggregate_property_uri": "",
-            "aggregate_function": "count",
-            "operator": "gt",
-            "threshold": "5",
-            "result_class": "FrequentBuyer",
-            "result_class_uri": "http://test.org/ontology#FrequentBuyer",
-            "enabled": True,
-        }
-
-    def test_build_sql(self, sample_rule):
-        engine = AggregateRuleEngine()
-        sql = engine.build_sql(sample_rule, "triples", "http://test.org/ontology#")
-        assert sql is not None
-        assert "GROUP BY" in sql
-        assert "HAVING" in sql
-        assert "> 5" in sql
-
-    def test_sum_tolerates_non_numeric_values(self, sample_rule):
-        # Summing a property whose values are not all numbers must skip them
-        # rather than abort the statement, which a bare CAST would do.
-        engine = AggregateRuleEngine()
-        sql = engine.build_sql(
+    def test_validate_rejects_unsupported_construct(self):
+        errors = SPARQLRuleEngine.validate_rule(
             {
-                **sample_rule,
-                "aggregate_property": "amount",
-                "aggregate_property_uri": "http://test.org/ontology/amount",
-                "aggregate_function": "sum",
-            },
-            "triples",
-            "http://test.org/ontology#",
-        )
-        assert "SUM(TRY_CAST(t_agg.object AS DOUBLE))" in sql
-        assert "CAST(" not in sql.replace("TRY_CAST(", "")
-
-    def test_validate_valid_rule(self, sample_rule):
-        errors = AggregateRuleEngine.validate_rule(sample_rule)
-        assert errors == []
-
-    def test_validate_missing_name(self):
-        errors = AggregateRuleEngine.validate_rule(
-            {
-                "target_class": "X",
-                "aggregate_function": "count",
-                "group_by_property": "p",
+                "name": "Opt",
+                "query": "CONSTRUCT { ?o a :X } WHERE { ?o a :Order OPTIONAL { ?o :n ?n } }",
             }
         )
-        assert any("name" in e.lower() for e in errors)
+        assert errors == ["Complex rules do not support OPTIONAL."]
 
-    def test_validate_invalid_function(self):
-        errors = AggregateRuleEngine.validate_rule(
-            {
-                "name": "Test",
-                "target_class": "X",
-                "aggregate_function": "median",
-                "group_by_property": "p",
-            }
-        )
-        assert any("function" in e.lower() for e in errors)
+    def test_execute_reports_uncompilable_rule_as_error(self):
+        store = MagicMock()
+        store.sql_flavor.return_value = "spark"
+        store.sql_table_reference.return_value = "triples"
+        rule = {"name": "Opt", "query": "CONSTRUCT { ?o a :X } WHERE { ?o a :O } LIMIT 1"}
+        result = SPARQLRuleEngine().execute_rules([rule], store, "t", {})
+        store.execute_query.assert_not_called()
+        assert result.stats["errors"] == 1
+        assert "LIMIT" in result.stats["error_details"]
 
-    def test_build_sql_with_agg_property(self):
-        engine = AggregateRuleEngine()
-        rule = {
-            "target_class_uri": "http://test.org/Dept",
-            "group_by_property_uri": "http://test.org/hasMember",
-            "aggregate_property_uri": "http://test.org/tenure",
-            "aggregate_function": "avg",
-            "operator": "lt",
-            "threshold": "2",
-        }
-        sql = engine.build_sql(rule, "triples", "http://test.org/")
-        assert sql is not None
-        assert "AVG" in sql
-        assert "< 2" in sql
-
-    def test_build_sql_count_only(self):
-        """COUNT entities of a type with no group-by or aggregate property."""
-        engine = AggregateRuleEngine()
-        rule = {
-            "target_class_uri": "http://test.org/Customer",
-            "group_by_property_uri": "",
-            "aggregate_property_uri": "",
-            "aggregate_function": "count",
-            "operator": "gt",
-            "threshold": "100",
-        }
-        sql = engine.build_sql(rule, "triples", "http://test.org/")
-        assert sql is not None
-        assert "COUNT" in sql
-        assert "> 100" in sql
-
-    def test_build_sql_group_by_sum(self):
-        """Group-by only with SUM should use SUM, not COUNT."""
-        engine = AggregateRuleEngine()
-        rule = {
-            "target_class_uri": "http://test.org/Customer",
-            "group_by_property_uri": "http://test.org/orderAmount",
-            "aggregate_property_uri": "",
-            "aggregate_function": "sum",
-            "operator": "gt",
-            "threshold": "1000",
-        }
-        sql = engine.build_sql(rule, "triples", "http://test.org/")
-        assert sql is not None
-        assert "SUM" in sql
-        assert "COUNT" not in sql
-
-    def test_validate_count_only_no_properties(self):
-        """COUNT-only rules are valid without group_by or aggregate_property."""
-        errors = AggregateRuleEngine.validate_rule(
-            {
-                "name": "CountCustomers",
-                "target_class": "Customer",
-                "aggregate_function": "count",
-                "operator": "gt",
-            }
-        )
-        assert errors == []
-
-    def test_validate_sum_requires_property(self):
-        """Non-COUNT functions require at least one property."""
-        errors = AggregateRuleEngine.validate_rule(
-            {
-                "name": "SumWithout",
-                "target_class": "Customer",
-                "aggregate_function": "sum",
-                "operator": "gt",
-            }
-        )
-        assert any("group_by" in e.lower() or "aggregate" in e.lower() for e in errors)
-
-    def test_resolve_rule_with_data_properties(self):
-        """dataProperties on classes should be resolved in the URI map."""
-        ontology = {
-            "base_uri": "http://test.org/ontology#",
-            "classes": [
-                {
-                    "name": "Customer",
-                    "uri": "http://test.org/ontology#Customer",
-                    "dataProperties": [
-                        {"name": "age", "uri": "http://test.org/ontology/age"},
-                        {"name": "score", "localName": "score"},
-                    ],
-                }
-            ],
-            "properties": [],
-        }
-        rule = {
-            "target_class": "Customer",
-            "group_by_property": "age",
-            "aggregate_property": "score",
-            "aggregate_function": "avg",
-            "operator": "gt",
-            "threshold": "5",
-        }
-        resolved = AggregateRuleEngine._resolve_rule(rule, ontology)
-        assert resolved["target_class_uri"] == "http://test.org/ontology#Customer"
-        assert resolved["group_by_property_uri"] == "http://test.org/ontology/age"
-        assert "score" in resolved["aggregate_property_uri"]
+    def test_execute_returns_inferred_rows(self, sample_rule):
+        store = MagicMock()
+        store.sql_flavor.return_value = "spark"
+        store.sql_table_reference.return_value = "triples"
+        store.execute_query.return_value = [
+            {"s": "http://x/1", "p": "http://p", "o": "http://test.org/HighValue"}
+        ]
+        result = SPARQLRuleEngine().execute_rules([sample_rule], store, "t", {})
+        assert [t.provenance for t in result.inferred_triples] == [
+            "sparql:High Value Customer"
+        ]
 
 
 # ===========================================================================
@@ -501,28 +247,28 @@ class TestRuleViolationModel:
             rule_name="test",
             subject="http://ex.org/X",
             message="failed",
-            check_type="decision_table",
-            rule_type="decision_table",
+            check_type="sparql",
+            rule_type="sparql",
         )
-        assert v.rule_type == "decision_table"
+        assert v.rule_type == "sparql"
 
     def test_rule_type_default(self):
         v = RuleViolation(
             rule_name="test",
             subject="http://ex.org/X",
             message="failed",
-            check_type="swrl",
+            check_type="if_then",
         )
         assert v.rule_type == ""
 
     def test_to_dict_includes_rule_type(self):
         r = ReasoningResult(
             violations=[
-                RuleViolation("r1", "s1", "msg", "swrl", rule_type="swrl"),
+                RuleViolation("r1", "s1", "msg", "if_then", rule_type="if_then"),
             ],
         )
         d = r.to_dict()
-        assert d["violations"][0]["rule_type"] == "swrl"
+        assert d["violations"][0]["rule_type"] == "if_then"
 
 
 # ===========================================================================
@@ -539,52 +285,40 @@ class TestReasoningServiceNewPhases:
             "classes": [],
             "properties": [],
             "constraints": [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "shacl_shapes": [],
-            "decision_tables": [],
             "sparql_rules": [],
-            "aggregate_rules": [],
         }
         ontology.update(overrides.get("ontology_extras", {}))
         domain.ontology = ontology
         domain.generated_owl = overrides.get("owl", "")
-        domain.swrl_rules = ontology.get("swrl_rules", [])
+        domain.if_then_rules = ontology.get("if_then_rules", [])
         domain.info = {"name": "test_graph"}
         domain.current_version = "1"
         return domain
-
-    def test_decision_tables_skipped_when_empty(self):
-        svc = ReasoningService(self._domain_session())
-        result = svc.run_decision_tables()
-        assert result.stats.get("skipped") is True
 
     def test_sparql_rules_skipped_when_empty(self):
         svc = ReasoningService(self._domain_session())
         result = svc.run_sparql_rules()
         assert result.stats.get("skipped") is True
 
-    def test_aggregate_rules_skipped_when_empty(self):
-        svc = ReasoningService(self._domain_session())
-        result = svc.run_aggregate_rules()
-        assert result.stats.get("skipped") is True
-
-    def test_decision_tables_skipped_no_store(self):
+    def test_sparql_rules_skipped_no_store(self):
         domain = self._domain_session(
             ontology_extras={
-                "decision_tables": [{"id": "dt1", "name": "Test", "rows": [{}]}],
+                "sparql_rules": [
+                    {"id": "sr1", "name": "Test", "query": "CONSTRUCT {} WHERE {}"}
+                ],
             },
         )
         svc = ReasoningService(domain, triplestore_backend=None)
-        result = svc.run_decision_tables()
+        result = svc.run_sparql_rules()
         assert result.stats.get("skipped") is True
 
     def test_full_reasoning_new_phases_disabled_by_default(self):
         domain = self._domain_session()
         svc = ReasoningService(domain)
-        result = svc.run_full_reasoning({"tbox": False, "swrl": False, "graph": False})
-        assert result.stats.get("decision_tables_skipped") is True
+        result = svc.run_full_reasoning({"tbox": False, "if_then": False, "graph": False})
         assert result.stats.get("sparql_rules_skipped") is True
-        assert result.stats.get("aggregate_rules_skipped") is True
 
     def test_full_reasoning_enables_new_phases(self):
         domain = self._domain_session()
@@ -592,15 +326,13 @@ class TestReasoningServiceNewPhases:
         result = svc.run_full_reasoning(
             {
                 "tbox": False,
-                "swrl": False,
+                "if_then": False,
                 "graph": False,
                 "constraints": False,
-                "decision_tables": True,
                 "sparql_rules": True,
-                "aggregate_rules": True,
             }
         )
         assert (
-            "decision_tables_skipped" in result.stats
-            or "decision_tables_duration_seconds" in result.stats
+            "sparql_rules_skipped" in result.stats
+            or "sparql_rules_duration_seconds" in result.stats
         )

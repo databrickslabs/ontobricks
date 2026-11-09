@@ -1,9 +1,9 @@
-<!-- Inference Section - OWL + SWRL + Graph + Business Rules inference -->
+<!-- Inference Section - OWL + IF-THEN + Graph + Business Rules inference -->
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div class="me-auto">
             <h4 class="mb-1"><i class="bi bi-lightning me-2"></i>Inference{% include "partials/dtwin/_kg_status_indicator.html" %}</h4>
-            <p class="text-muted mb-0 small">OWL 2 RL inference, SWRL rules, graph reasoning, and business rules</p>
+            <p class="text-muted mb-0 small">OWL 2 RL inference, Simple &amp; Complex rules, and graph reasoning</p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <button class="btn btn-sm btn-outline-primary" onclick="ReasoningModule.runReasoning()" id="runReasoningBtn">
@@ -117,27 +117,27 @@
                             </label>
                         </div>
 
-                        <!-- SWRL Rules -->
+                        <!-- Simple Rules (IF-THEN) -->
                         <div class="col-4">
-                            <label class="reasoning-tile active w-100" for="reasoningSwrl" id="tileSwrl">
-                                <input class="form-check-input rt-check" type="checkbox" id="reasoningSwrl" checked
+                            <label class="reasoning-tile active w-100" for="reasoningIfThen" id="tileIfThen">
+                                <input class="form-check-input rt-check" type="checkbox" id="reasoningIfThen" checked
                                        onchange="ReasoningModule._syncTile(this)">
                                 <i class="bi bi-code-square rt-icon text-indigo"></i>
-                                <span class="rt-title">SWRL Rules</span>
-                                {% if reasoning_ctx.swrl_rules_count > 0 %}
-                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.swrl_rules_count }} rule{{ 's' if reasoning_ctx.swrl_rules_count != 1 else '' }}</span>
+                                <span class="rt-title">Simple Rules</span>
+                                {% if reasoning_ctx.if_then_rules_count > 0 %}
+                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.if_then_rules_count }} rule{{ 's' if reasoning_ctx.if_then_rules_count != 1 else '' }}</span>
                                 {% else %}
                                 <span class="badge bg-secondary rt-badge">no rules</span>
                                 {% endif %}
                                 <span class="rt-desc">IF-THEN business rules &rarr; Inferred triples</span>
-                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="swrl"
-                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('swrl')"
+                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="if_then"
+                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('if_then')"
                                         title="Show/hide individual rules">
                                     <i class="bi bi-chevron-down dq-expand-chevron"></i>
                                     <span class="dq-rules-count"></span>
                                 </button>
                             </label>
-                            <div class="dq-rule-list d-none" data-r-rulelist="swrl"></div>
+                            <div class="dq-rule-list d-none" data-r-rulelist="if_then"></div>
                         </div>
 
                         <!-- Graph Inference -->
@@ -152,36 +152,13 @@
                             </label>
                         </div>
 
-                        <!-- Decision Tables -->
-                        <div class="col-4">
-                            <label class="reasoning-tile active w-100" for="reasoningDecisionTables" id="tileDecisionTables">
-                                <input class="form-check-input rt-check" type="checkbox" id="reasoningDecisionTables" checked
-                                       onchange="ReasoningModule._syncTile(this)">
-                                <i class="bi bi-table rt-icon text-warning"></i>
-                                <span class="rt-title">Decision Tables</span>
-                                {% if reasoning_ctx.decision_tables_count > 0 %}
-                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.decision_tables_count }} table{{ 's' if reasoning_ctx.decision_tables_count != 1 else '' }}</span>
-                                {% else %}
-                                <span class="badge bg-secondary rt-badge">no tables</span>
-                                {% endif %}
-                                <span class="rt-desc">DMN-style tabular rules &rarr; Inferred triples</span>
-                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="decision_tables"
-                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('decision_tables')"
-                                        title="Show/hide individual rules">
-                                    <i class="bi bi-chevron-down dq-expand-chevron"></i>
-                                    <span class="dq-rules-count"></span>
-                                </button>
-                            </label>
-                            <div class="dq-rule-list d-none" data-r-rulelist="decision_tables"></div>
-                        </div>
-
-                        <!-- SPARQL CONSTRUCT Rules -->
+                        <!-- Complex Rules (SPARQL CONSTRUCT) -->
                         <div class="col-4">
                             <label class="reasoning-tile active w-100" for="reasoningSparqlRules" id="tileSparqlRules">
                                 <input class="form-check-input rt-check" type="checkbox" id="reasoningSparqlRules" checked
                                        onchange="ReasoningModule._syncTile(this)">
                                 <i class="bi bi-braces rt-icon text-danger"></i>
-                                <span class="rt-title">SPARQL CONSTRUCT</span>
+                                <span class="rt-title">Complex Rules</span>
                                 {% if reasoning_ctx.sparql_rules_count > 0 %}
                                 <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.sparql_rules_count }} rule{{ 's' if reasoning_ctx.sparql_rules_count != 1 else '' }}</span>
                                 {% else %}
@@ -196,29 +173,6 @@
                                 </button>
                             </label>
                             <div class="dq-rule-list d-none" data-r-rulelist="sparql_rules"></div>
-                        </div>
-
-                        <!-- Aggregate Rules -->
-                        <div class="col-4">
-                            <label class="reasoning-tile active w-100" for="reasoningAggregateRules" id="tileAggregateRules">
-                                <input class="form-check-input rt-check" type="checkbox" id="reasoningAggregateRules" checked
-                                       onchange="ReasoningModule._syncTile(this)">
-                                <i class="bi bi-calculator rt-icon text-purple"></i>
-                                <span class="rt-title">Aggregate Rules</span>
-                                {% if reasoning_ctx.aggregate_rules_count > 0 %}
-                                <span class="badge bg-primary bg-opacity-75 rt-badge">{{ reasoning_ctx.aggregate_rules_count }} rule{{ 's' if reasoning_ctx.aggregate_rules_count != 1 else '' }}</span>
-                                {% else %}
-                                <span class="badge bg-secondary rt-badge">no rules</span>
-                                {% endif %}
-                                <span class="rt-desc">GROUP BY / HAVING stats &rarr; Inferred triples</span>
-                                <button type="button" class="dq-rules-toggle d-none" data-r-expand="aggregate_rules"
-                                        onclick="event.preventDefault();event.stopPropagation();ReasoningModule._toggleRuleList('aggregate_rules')"
-                                        title="Show/hide individual rules">
-                                    <i class="bi bi-chevron-down dq-expand-chevron"></i>
-                                    <span class="dq-rules-count"></span>
-                                </button>
-                            </label>
-                            <div class="dq-rule-list d-none" data-r-rulelist="aggregate_rules"></div>
                         </div>
 
                     </div>

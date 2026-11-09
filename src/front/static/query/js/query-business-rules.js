@@ -1,7 +1,7 @@
 /**
  * Entity business rules in the Graph Explorer.
  *
- * A business rule is a SWRL rule declared on the entity's ontology class
+ * A business rule is an IF-THEN rule declared on the entity's ontology class
  * (Ontology > Studio > Actions). Triggering it runs the rule for this
  * entity only and writes the inferred triples to the graph, so it needs the
  * Builder role and an explicit confirmation (request -> confirm token).
@@ -13,7 +13,7 @@ function canRunBusinessRules() {
 }
 
 /**
- * Render SWRL rule buttons for the Explorer Behaviour section.
+ * Render IF-THEN rule buttons for the Explorer Behaviour section.
  *
  * @param {string} entityUri Instance URI of the node.
  * @param {Array} rules Class business rules: [{ name, description }].
@@ -39,7 +39,7 @@ function renderBusinessRuleSection(entityUri, rules) {
  * Open the confirmation modal for a business rule, then run it.
  *
  * @param {string} entityUri Full entity URI.
- * @param {string} ruleName Business rule (SWRL rule) name.
+ * @param {string} ruleName Business rule (IF-THEN rule) name.
  */
 async function openEntityBusinessRuleModal(entityUri, ruleName) {
     const esc = (typeof escapeHtml === 'function') ? escapeHtml : function (s) { return String(s == null ? '' : s); };
@@ -98,8 +98,8 @@ async function openEntityBusinessRuleModal(entityUri, ruleName) {
     body.innerHTML = `
         ${pending.description ? `<p class="text-muted small mb-2">${esc(pending.description)}</p>` : ''}
         <div class="mb-2 small"><span class="fw-semibold">Entity:</span> <code>${esc(pending.entity_label)}</code></div>
-        <div class="p-2 border rounded bg-light small mb-3">
-            <code class="text-break">${esc(pending.antecedent)} &rarr; ${esc(pending.consequent)}</code>
+        <div class="p-2 border rounded bg-light mb-3">
+            ${_brIfThenHtml(pending.antecedent, pending.consequent, esc)}
         </div>
         <div class="alert alert-warning py-2 mb-0 small">
             <i class="bi bi-exclamation-triangle me-1"></i>
@@ -132,6 +132,99 @@ async function openEntityBusinessRuleModal(entityUri, ruleName) {
             body.innerHTML = `<div class="alert alert-danger mb-0">${esc(err.message)}</div>`;
         }
     }, { once: true });
+}
+
+/** Readable words for the comparison built-ins (``builtin:`` prefix). */
+const _BR_BUILTIN_WORDS = {
+    greaterThan: '>', greaterThanOrEqual: '≥', lessThan: '<', lessThanOrEqual: '≤',
+    equal: '=', notEqual: '≠', startsWith: 'starts with', endsWith: 'ends with', contains: 'contains'
+};
+
+/** Atom shape: optional ``prefix:`` then ``name(args)``. */
+const _BR_ATOM_RE = /^(?:([A-Za-z]+):)?([A-Za-z_][\w.-]*)\s*\(([\s\S]*)\)$/;
+
+/**
+ * Split on top-level separators, ignoring those inside parentheses or quotes.
+ *
+ * @param {string} text Authored rule text.
+ * @param {string[]} separators Single-character separators.
+ * @returns {string[]} Trimmed, non-empty parts.
+ */
+function _brSplitTopLevel(text, separators) {
+    const parts = [];
+    let depth = 0;
+    let quoted = false;
+    let cur = '';
+    for (const ch of String(text || '')) {
+        if (ch === '"') quoted = !quoted;
+        else if (!quoted && ch === '(') depth++;
+        else if (!quoted && ch === ')') depth--;
+        if (!quoted && depth === 0 && separators.includes(ch)) {
+            if (cur.trim()) parts.push(cur.trim());
+            cur = '';
+        } else {
+            cur += ch;
+        }
+    }
+    if (cur.trim()) parts.push(cur.trim());
+    return parts;
+}
+
+/** Variables read as plain names (``?x`` -> ``x``); literals are kept as-is. */
+function _brArg(arg, esc) {
+    const a = String(arg).trim();
+    return esc(a.startsWith('?') ? a.slice(1) : a);
+}
+
+/**
+ * One atom as a plain sentence: ``Customer(?x)`` -> "x is a Customer",
+ * ``hasclaim(?x, ?y)`` -> "x hasclaim y", ``builtin:contains(?s, "a")`` ->
+ * "s contains "a"". Anything unrecognised falls back to ``name(args)``.
+ */
+function _brAtomPhrase(atom, esc) {
+    const m = _BR_ATOM_RE.exec(atom);
+    if (!m) return esc(atom);
+    const prefix = m[1] || '';
+    const name = m[2];
+    const raw = _brSplitTopLevel(m[3], [',']);
+    const args = raw.map(function (a) { return _brArg(a, esc); });
+    // 'swrlb' is the builtin prefix of rules saved before the rename.
+    if ((prefix === 'builtin' || prefix === 'swrlb') && args.length === 2) {
+        return `${args[0]} ${esc(_BR_BUILTIN_WORDS[name] || name)} ${args[1]}`;
+    }
+    if (args.length === 1) return `${args[0]} is a ${esc(name)}`;
+    if (args.length === 2) {
+        // A literal object (quoted, numeric or boolean) reads as "attribute = value".
+        const literal = /^("|-?\d|true$|false$)/.test(raw[1]);
+        return literal
+            ? `${args[0]} ${esc(name)} = ${args[1]}`
+            : `${args[0]} ${esc(name)} ${args[1]}`;
+    }
+    return `${esc(name)}(${args.join(', ')})`;
+}
+
+function _brSideItems(body, esc) {
+    const atoms = _brSplitTopLevel(body, ['^', '∧']);
+    if (!atoms.length) return '<li class="text-muted">none</li>';
+    return atoms.map(function (a) { return `<li>${_brAtomPhrase(a, esc)}</li>`; }).join('');
+}
+
+/**
+ * Read-only IF / THEN view of a business rule, in the editor's colours
+ * (IF blue, THEN red). The stored IF-THEN text is never shown.
+ *
+ * @param {string} antecedent Stored IF body.
+ * @param {string} consequent Stored THEN body.
+ * @param {function(string): string} esc HTML escaper.
+ * @returns {string} HTML.
+ */
+function _brIfThenHtml(antecedent, consequent, esc) {
+    return '<div class="small">' +
+        '<div class="fw-semibold text-primary">IF</div>' +
+        `<ul class="list-unstyled ps-3 mb-2">${_brSideItems(antecedent, esc)}</ul>` +
+        '<div class="fw-semibold text-danger">THEN</div>' +
+        `<ul class="list-unstyled ps-3 mb-0">${_brSideItems(consequent, esc)}</ul>` +
+        '</div>';
 }
 
 function _brSimulationId() {

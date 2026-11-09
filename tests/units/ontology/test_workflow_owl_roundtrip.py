@@ -44,7 +44,7 @@ FULL_OWL = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
     owl:minCardinality "1"^^xsd:nonNegativeInteger
 ] .
 
-:_swrlRule_ValidateAge a ontobricks:SWRLRule ;
+:_ifThenRule_ValidateAge a ontobricks:IfThenRule ;
     rdfs:label "ValidateAge" ;
     rdfs:comment "Ensure age positive" ;
     ontobricks:antecedent "Customer(?c) ^ age(?c, ?a)" ;
@@ -62,7 +62,7 @@ class TestOWLRoundtrip:
         classes = parser1.get_classes()
         properties = parser1.get_properties()
         constraints = parser1.get_constraints()
-        swrl_rules = parser1.get_swrl_rules()
+        if_then_rules = parser1.get_if_then_rules()
         split = parser1.get_axioms_and_expressions()
         axioms = split["axioms"]
         expressions = split["expressions"]
@@ -79,7 +79,7 @@ class TestOWLRoundtrip:
             classes=classes,
             properties=properties,
             constraints=constraints,
-            swrl_rules=swrl_rules,
+            if_then_rules=if_then_rules,
             axioms=axioms,
             expressions=expressions,
         )
@@ -112,9 +112,9 @@ class TestOWLRoundtrip:
         functional2 = [c for c in constraints2 if c["type"] == "functional"]
         assert len(functional2) >= 1
 
-    def test_swrl_rules_preserved(self):
+    def test_if_then_rules_preserved(self):
         parser = OntologyParser(FULL_OWL)
-        rules = parser.get_swrl_rules()
+        rules = parser.get_if_then_rules()
         assert len(rules) >= 1
 
         info = parser.get_ontology_info()
@@ -123,11 +123,11 @@ class TestOWLRoundtrip:
             ontology_name=info["label"],
             classes=parser.get_classes(),
             properties=parser.get_properties(),
-            swrl_rules=rules,
+            if_then_rules=rules,
         )
         owl2 = gen.generate()
         parser2 = OntologyParser(owl2)
-        rules2 = parser2.get_swrl_rules()
+        rules2 = parser2.get_if_then_rules()
         assert len(rules2) >= 1
         assert rules2[0]["name"] == "ValidateAge"
 

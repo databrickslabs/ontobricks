@@ -1,6 +1,6 @@
 """Rule built-in registry — maps built-in names to SQL / Cypher expressions.
 
-Built-ins use SWRL-style authoring syntax (``swrlb:greaterThan`` ...), which is
+Built-ins use IF-THEN-style authoring syntax (``builtin:greaterThan`` ...), which is
 the vocabulary surfaced in the UI; execution lives entirely in this SHACL rule
 layer.
 
@@ -27,7 +27,7 @@ _TRY_CAST_RE = re.compile(
 
 
 class RuleBuiltinRegistry:
-    """Class-based registry for rule built-in predicates (SWRL-style syntax).
+    """Class-based registry for rule built-in predicates (IF-THEN-style syntax).
 
     All methods are class-level or static; no instance is needed.
     The registry is populated once at class-definition time.
@@ -264,6 +264,13 @@ class RuleBuiltinRegistry:
             return template
         return cls._spark_sql_to_postgres(template)
 
+    @classmethod
+    def numeric_sql(cls, expr: str, dialect: Optional[str] = None) -> str:
+        """Cast *expr* to a number for *dialect*, NULL when it is not one."""
+        if (dialect or "").lower() == SQL_DIALECT_POSTGRES:
+            return cls._pg_try_cast(expr, "DOUBLE")
+        return f"TRY_CAST({expr} AS DOUBLE)"
+
     @staticmethod
     def _pg_try_cast(inner: str, pg_type: str) -> str:
         if pg_type == "DOUBLE":
@@ -298,15 +305,13 @@ class RuleBuiltinRegistry:
     def _normalize(name: str) -> str:
         """Case-fold *name* and drop its namespace.
 
-        Accepts the bare name, the editor's ``swrlb:``/``swrl:`` prefix and a
-        full IRI (``http://www.w3.org/2003/11/swrlb#greaterThanOrEqual``).
-        The local name is the part after the last ``#`` or ``/``.
+        Accepts the bare name, any ``prefix:`` (``builtin:`` is canonical; rules
+        saved before the rename use ``swrlb:``) and a full IRI
+        (``http://www.w3.org/2003/11/swrlb#greaterThanOrEqual``). The local name
+        is the part after the last ``#`` or ``/``, then after the last ``:``.
         """
         local = re.split(r"[#/]", name)[-1].lower()
-        for prefix in ("swrlb:", "swrl:"):
-            if local.startswith(prefix):
-                return local[len(prefix) :]
-        return local
+        return local.rsplit(":", 1)[-1]
 
     @classmethod
     def get(cls, name: str) -> Optional[RuleBuiltin]:
@@ -351,7 +356,7 @@ class RuleBuiltinRegistry:
 
     @staticmethod
     def literal_sql(token: str) -> str:
-        """Convert a SWRL literal token to a SQL literal expression."""
+        """Convert an IF-THEN literal token to a SQL literal expression."""
         if token.startswith('"') and token.endswith('"'):
             return f"'{token[1:-1]}'"
         if token.startswith("'") and token.endswith("'"):
@@ -364,7 +369,7 @@ class RuleBuiltinRegistry:
 
     @staticmethod
     def literal_cypher(token: str) -> str:
-        """Convert a SWRL literal token to a Cypher literal expression."""
+        """Convert an IF-THEN literal token to a Cypher literal expression."""
         if token.startswith('"') and token.endswith('"'):
             return token
         if token.startswith("'") and token.endswith("'"):

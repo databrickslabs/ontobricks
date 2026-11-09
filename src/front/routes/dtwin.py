@@ -47,13 +47,11 @@ async def query_page(
     reasoning_ctx = {
         "classes_count": len(ont.get("classes", [])),
         "properties_count": len(props),
-        "swrl_rules_count": len(ont.get("swrl_rules", [])),
+        "if_then_rules_count": len(ont.get("if_then_rules", [])),
         "object_properties_count": sum(
             1 for p in props if p.get("type") == "ObjectProperty"
         ),
-        "decision_tables_count": len(ont.get("decision_tables", [])),
         "sparql_rules_count": len(ont.get("sparql_rules", [])),
-        "aggregate_rules_count": len(ont.get("aggregate_rules", [])),
         "cohort_rules_count": len(ont.get("cohort_rules", [])),
         "owlrl_available": DigitalTwin.is_owlrl_available(),
         "backend_type": DigitalTwin(domain_session).effective_backend_label(),

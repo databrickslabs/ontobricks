@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function resetReasoningFields() {
         TYPES.reasoning.applyConfig({
-            phases: { tbox: true, swrl: true, graph: true },
+            phases: { tbox: true, if_then: true, graph: true },
             materialize_graph: true,
             materialize_delta: false,
             materialize_table: '',

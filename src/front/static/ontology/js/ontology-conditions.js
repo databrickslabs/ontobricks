@@ -5,7 +5,7 @@
  * A condition is `{ property, property_uri, op, value }`. Rows live in the DOM
  * and are read back with `collect()`, so callers keep no mirror state.
  *
- * Operator names match the decision-table vocabulary used by the backend
+ * Operator names match the condition vocabulary used by the backend
  * (`DT_OP_SQL`), plus `exists` / `notExists` for relationships.
  */
 window.ConditionRowsModule = {

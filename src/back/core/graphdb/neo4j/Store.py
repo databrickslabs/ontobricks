@@ -328,7 +328,7 @@ class Store(MaterializedGraphBackend):
         """Run a translator-produced read-only Cypher query.
 
         This intentionally remains separate from ``execute_query``: callers
-        cannot use it for graph mutations and the SWRL translator is the only
+        cannot use it for graph mutations and the IF-THEN translator is the only
         producer of these MATCH/RETURN statements.
         """
         normalized = " ".join((query or "").upper().split())

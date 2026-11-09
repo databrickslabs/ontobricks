@@ -1,4 +1,4 @@
-"""Contract: SWRL attribute conditions offer every selected IF entity.
+"""Contract: IF-THEN attribute conditions offer every selected IF entity.
 
 Selecting N entities as IF must propose the same N entities as condition
 subjects. Attribute resolution walks the parent chain (inherited attributes
@@ -10,18 +10,18 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SWRL_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-swrl.js"
+IF_THEN_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-if-then.js"
 
 
 def _source() -> str:
-    return SWRL_JS.read_text(encoding="utf-8")
+    return IF_THEN_JS.read_text(encoding="utf-8")
 
 
 def _method_body(name: str) -> str:
     """Return the body of the ``[async ]name(...) { ... }`` object method."""
     source = _source()
     match = re.search(rf"\n    (?:async\s+)?{re.escape(name)}\(", source)
-    assert match, f"method {name} not found in ontology-swrl.js"
+    assert match, f"method {name} not found in ontology-if-then.js"
     start = match.start()
     i = source.index("{", start) + 1
     depth = 1

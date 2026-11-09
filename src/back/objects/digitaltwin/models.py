@@ -36,13 +36,13 @@ class DomainSnapshot:
 
         self.assignment = dict(getattr(domain, "assignment", None) or {})
         self.constraints = list(getattr(domain, "constraints", None) or [])
-        self.swrl_rules = list(getattr(domain, "swrl_rules", None) or [])
+        self.if_then_rules = list(getattr(domain, "if_then_rules", None) or [])
         self.axioms = list(getattr(domain, "axioms", None) or [])
         self.expressions = list(getattr(domain, "expressions", None) or [])
         self.shacl_shapes = list(getattr(domain, "shacl_shapes", None) or [])
         self._classes = self._copy_classes(domain)
-        if not self.swrl_rules:
-            self.swrl_rules = list(self.ontology.get("swrl_rules") or [])
+        if not self.if_then_rules:
+            self.if_then_rules = list(self.ontology.get("if_then_rules") or [])
         if not self.ontology.get("classes") and self._classes:
             self.ontology["classes"] = list(self._classes)
         getter = getattr(domain, "get_properties", None)

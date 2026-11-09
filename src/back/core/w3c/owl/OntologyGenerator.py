@@ -26,7 +26,7 @@ class OntologyGenerator:
         classes: List[Dict],
         properties: List[Dict],
         constraints: List[Dict] = None,
-        swrl_rules: List[Dict] = None,
+        if_then_rules: List[Dict] = None,
         axioms: List[Dict] = None,
         expressions: List[Dict] = None,
         groups: List[Dict] = None,
@@ -41,7 +41,7 @@ class OntologyGenerator:
             classes: List of class definitions
             properties: List of property definitions
             constraints: List of property constraints (cardinality, characteristics)
-            swrl_rules: List of SWRL rules
+            if_then_rules: List of IF-THEN rules
             axioms: List of OWL axioms (logical assertions)
             expressions: List of OWL class expressions (unionOf, intersectionOf, etc.)
             groups: List of entity group definitions (name, label, color, icon, members)
@@ -58,7 +58,7 @@ class OntologyGenerator:
         self.classes = classes or []
         self.properties = properties or []
         self.constraints = constraints or []
-        self.swrl_rules = swrl_rules or []
+        self.if_then_rules = if_then_rules or []
         self.axioms = axioms or []
         self.expressions = expressions or []
         self.groups = groups or []
@@ -116,9 +116,9 @@ class OntologyGenerator:
         for constraint in self.constraints:
             self._add_constraint(constraint)
 
-        # Add SWRL rules
-        for rule in self.swrl_rules:
-            self._add_swrl_rule(rule)
+        # Add IF-THEN rules
+        for rule in self.if_then_rules:
+            self._add_if_then_rule(rule)
 
         # Add OWL axioms and class expressions
         for axiom in self.axioms:
@@ -637,7 +637,7 @@ class OntologyGenerator:
                 (class_uri, ONTOBRICKS_NS.actions, Literal(json.dumps(actions)))
             )
 
-        # Add referenced SWRL business rules (by rule name) as JSON string
+        # Add referenced IF-THEN business rules (by rule name) as JSON string
         business_rules = cls.get("business_rules", [])
         if business_rules:
             self.graph.add(
@@ -872,10 +872,10 @@ class OntologyGenerator:
 
         # Note: Relationship attributes are not supported - relationships are simple ObjectProperties
 
-    def _add_swrl_rule(self, rule: Dict):
-        """Add a SWRL rule to the ontology as OntoBricks annotation.
+    def _add_if_then_rule(self, rule: Dict):
+        """Add an IF-THEN rule to the ontology as OntoBricks annotation.
 
-        Note: Full SWRL requires RIF or SWRL XML format. Here we store as annotations
+        Note: Full IF-THEN requires RIF or IF-THEN XML format. Here we store as annotations
         that can be parsed back and used by OntoBricks for quality checks.
 
         Args:
@@ -887,10 +887,10 @@ class OntologyGenerator:
 
         # Sanitize name for URI
         safe_name = self._sanitize_name(name)
-        rule_uri = URIRef(self.base_uri + f"_swrlRule_{safe_name}")
+        rule_uri = URIRef(self.base_uri + f"_ifThenRule_{safe_name}")
 
-        # Add rule as OntoBricks SWRL rule resource
-        self.graph.add((rule_uri, RDF.type, ONTOBRICKS_NS.SWRLRule))
+        # Add rule as OntoBricks IF-THEN rule resource
+        self.graph.add((rule_uri, RDF.type, ONTOBRICKS_NS.IfThenRule))
         self.graph.add((rule_uri, RDFS.label, Literal(name)))
 
         # Add description
@@ -908,7 +908,7 @@ class OntologyGenerator:
         if consequent:
             self.graph.add((rule_uri, ONTOBRICKS_NS.consequent, Literal(consequent)))
 
-        logger.debug("Added SWRL rule: %s", name)
+        logger.debug("Added IF-THEN rule: %s", name)
 
     def _add_axiom(self, axiom: Dict):
         """Add an OWL axiom to the ontology.

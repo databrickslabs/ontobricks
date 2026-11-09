@@ -76,7 +76,7 @@ class Import:
             classes,
             properties,
             constraints,
-            swrl_rules,
+            if_then_rules,
             axioms,
             expressions,
             groups,
@@ -100,7 +100,7 @@ class Import:
                         "uri": rdfs_info.get("uri", ""),
                     }
                     classes, properties = rdfs_classes, rdfs_props
-                    constraints, swrl_rules, axioms, expressions, groups = [], [], [], [], []
+                    constraints, if_then_rules, axioms, expressions, groups = [], [], [], [], []
             except Exception:
                 pass
 
@@ -109,7 +109,7 @@ class Import:
             classes,
             properties,
             constraints,
-            swrl_rules,
+            if_then_rules,
             axioms,
             expressions,
             groups=groups,
@@ -122,7 +122,7 @@ class Import:
                 classes,
                 properties,
                 constraints,
-                swrl_rules,
+                if_then_rules,
                 axioms,
                 expressions,
                 resolved_name,
@@ -132,7 +132,7 @@ class Import:
                 classes,
                 properties,
                 constraints,
-                swrl_rules,
+                if_then_rules,
                 axioms,
                 expressions,
             )
@@ -262,7 +262,7 @@ class Import:
                 "classes": classes,
                 "properties": properties,
                 "constraints": [],
-                "swrl_rules": [],
+                "if_then_rules": [],
                 "axioms": [],
                 "expressions": [],
                 "groups": [],
@@ -275,16 +275,16 @@ class Import:
                 classes,
                 properties,
                 constraints,
-                swrl_rules,
+                if_then_rules,
                 axioms,
                 expressions,
                 groups,
             ) = result
             logger.debug(
                 "analyze_import: OWL parsed — classes=%d properties=%d "
-                "constraints=%d swrl_rules=%d axioms=%d expressions=%d groups=%d",
+                "constraints=%d if_then_rules=%d axioms=%d expressions=%d groups=%d",
                 len(classes), len(properties), len(constraints),
-                len(swrl_rules), len(axioms), len(expressions or []), len(groups or []),
+                len(if_then_rules), len(axioms), len(expressions or []), len(groups or []),
             )
             # Auto-fallback: OWL parser found nothing → try RDFS/SKOS
             if not classes and not properties:
@@ -296,14 +296,14 @@ class Import:
                             "(classes=%d properties=%d)", len(rdfs_classes), len(rdfs_props)
                         )
                         classes, properties = rdfs_classes, rdfs_props
-                        constraints, swrl_rules, axioms, expressions, groups = [], [], [], [], []
+                        constraints, if_then_rules, axioms, expressions, groups = [], [], [], [], []
                 except Exception:
                     pass
             incoming = {
                 "classes": classes,
                 "properties": properties,
                 "constraints": constraints,
-                "swrl_rules": swrl_rules,
+                "if_then_rules": if_then_rules,
                 "axioms": axioms,
                 "expressions": expressions or [],
                 "groups": groups or [],
@@ -367,7 +367,7 @@ class Import:
             classes,
             properties,
             constraints,
-            swrl_rules,
+            if_then_rules,
             axioms,
             expressions,
             groups,
@@ -383,7 +383,7 @@ class Import:
                         "(classes=%d properties=%d)", len(rdfs_classes), len(rdfs_props)
                     )
                     classes, properties = rdfs_classes, rdfs_props
-                    constraints, swrl_rules, axioms, expressions, groups = [], [], [], [], []
+                    constraints, if_then_rules, axioms, expressions, groups = [], [], [], [], []
             except Exception:
                 pass
 
@@ -391,7 +391,7 @@ class Import:
                 "classes": classes,
                 "properties": properties,
                 "constraints": constraints,
-                "swrl_rules": swrl_rules,
+                "if_then_rules": if_then_rules,
                 "axioms": axioms,
                 "expressions": expressions or [],
                 "groups": groups or [],
@@ -399,9 +399,9 @@ class Import:
 
         logger.debug(
             "merge_parsed_owl_to_domain: OWL parsed — classes=%d properties=%d "
-            "constraints=%d swrl_rules=%d axioms=%d groups=%d",
+            "constraints=%d if_then_rules=%d axioms=%d groups=%d",
             len(classes), len(properties), len(constraints),
-            len(swrl_rules), len(axioms), len(groups or []),
+            len(if_then_rules), len(axioms), len(groups or []),
         )
 
         detector = OntologyConflictDetector()
@@ -422,8 +422,8 @@ class Import:
         ont["constraints"] = self._apply_resolutions(
             "constraint", ont.get("constraints") or [], report, resolutions
         )
-        ont["swrl_rules"] = self._apply_resolutions(
-            "swrl_rule", ont.get("swrl_rules") or [], report, resolutions
+        ont["if_then_rules"] = self._apply_resolutions(
+            "if_then_rule", ont.get("if_then_rules") or [], report, resolutions
         )
         ont["groups"] = self._apply_resolutions(
             "group", ont.get("groups") or [], report, resolutions
@@ -494,7 +494,7 @@ class Import:
             "classes": classes,
             "properties": properties,
             "constraints": [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "axioms": [],
             "expressions": [],
             "groups": [],
@@ -665,7 +665,7 @@ class Import:
                     "classes": result["classes"],
                     "properties": result["properties"],
                     "constraints": result["constraints"],
-                    "swrl_rules": result["swrl_rules"],
+                    "if_then_rules": result["if_then_rules"],
                     "axioms": result["axioms"],
                     "expressions": result["expressions"],
                     "rdf_extras": {},
@@ -696,7 +696,7 @@ class Import:
         classes: list,
         properties: list,
         constraints: list,
-        swrl_rules: list,
+        if_then_rules: list,
         axioms: list,
         expressions: list = None,
         *,
@@ -729,7 +729,7 @@ class Import:
                 "classes": classes,
                 "properties": properties,
                 "constraints": constraints,
-                "swrl_rules": swrl_rules,
+                "if_then_rules": if_then_rules,
                 "axioms": axioms,
                 "expressions": expressions or [],
                 "groups": groups or [],
@@ -762,7 +762,7 @@ class Import:
         classes: list,
         properties: list,
         constraints: list,
-        swrl_rules: list,
+        if_then_rules: list,
         axioms: list,
         expressions: list = None,
         resolved_name: str = "",
@@ -784,7 +784,7 @@ class Import:
                 "classes": len(classes),
                 "properties": len(properties),
                 "constraints": len(constraints),
-                "swrl_rules": len(swrl_rules),
+                "if_then_rules": len(if_then_rules),
                 "axioms": len(axioms),
                 "expressions": len(expressions or []),
             },
@@ -795,7 +795,7 @@ class Import:
         classes: list,
         properties: list,
         constraints: list,
-        swrl_rules: list,
+        if_then_rules: list,
         axioms: list,
         expressions: list = None,
     ) -> Dict[str, Any]:
@@ -806,7 +806,7 @@ class Import:
                 "classes": len(classes),
                 "properties": len(properties),
                 "constraints": len(constraints),
-                "swrl_rules": len(swrl_rules),
+                "if_then_rules": len(if_then_rules),
                 "axioms": len(axioms),
                 "expressions": len(expressions or []),
             },

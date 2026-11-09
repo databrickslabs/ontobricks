@@ -185,12 +185,12 @@ class TestGeneratedFactsCheckResults:
             before,
             sandbox.triples(),
             patch_added=asserted,
-            provenance={risk_key: "swrl:Risk"},
+            provenance={risk_key: "if_then:Risk"},
         )
         by_pred = {r["predicate"]: r for r in diff["added"]}
         assert by_pred[patch.predicate]["origin"] == "patch"
         assert by_pred[inferred["predicate"]]["origin"] == "inferred"
-        assert by_pred[inferred["predicate"]]["provenance"] == "swrl:Risk"
+        assert by_pred[inferred["predicate"]]["provenance"] == "if_then:Risk"
         assert diff["summary"]["added_patch_count"] == 1
         assert diff["summary"]["added_inferred_count"] == 1
 

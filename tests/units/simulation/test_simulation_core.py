@@ -388,8 +388,8 @@ class TestSpec:
         assert spec.phases == Spec.DEFAULT_PHASES
         opts = spec.reasoning_options()
         assert opts["materialize"] is False
-        assert opts["tbox"] is False and opts["swrl"] is True
-        assert "swrl_rule_names" not in opts
+        assert opts["tbox"] is False and opts["if_then"] is True
+        assert "if_then_rule_names" not in opts
         assert spec.rule_names == {}
 
     def test_cap_is_clamped_to_default(self):
@@ -445,24 +445,34 @@ class TestSpec:
     def test_selected_rule_names_filter_reasoning_options(self):
         spec = Spec.from_dict(
             self._body(
-                phases={"swrl": True, "graph": False},
-                rule_names={"swrl": ["AttachMeter", "AttachMeter", ""], "decision_tables": []},
+                phases={"if_then": True, "graph": False},
+                rule_names={"if_then": ["AttachMeter", "AttachMeter", ""], "sparql_rules": []},
             ),
             default_hops=2,
             default_cap=10,
         )
-        assert spec.rule_names == {"swrl": ["AttachMeter"]}
+        assert spec.rule_names == {"if_then": ["AttachMeter"]}
         opts = spec.reasoning_options()
-        assert opts["swrl_rule_names"] == {"AttachMeter"}
-        assert "decision_table_names" not in opts
+        assert opts["if_then_rule_names"] == {"AttachMeter"}
+        assert "sparql_rule_names" not in opts
 
     def test_rule_names_ignored_when_phase_off(self):
         spec = Spec.from_dict(
-            self._body(phases={"swrl": False}, rule_names={"swrl": ["AttachMeter"]}),
+            self._body(phases={"if_then": False}, rule_names={"if_then": ["AttachMeter"]}),
             default_hops=2,
             default_cap=10,
         )
-        assert "swrl_rule_names" not in spec.reasoning_options()
+        assert "if_then_rule_names" not in spec.reasoning_options()
+
+    def test_spec_saved_with_legacy_phase_keys_still_loads(self):
+        spec = Spec.from_dict(
+            self._body(phases={"swrl": False, "graph": True}, rule_names={"swrl": ["AttachMeter"]}),
+            default_hops=2,
+            default_cap=10,
+        )
+        assert spec.phases["if_then"] is False
+        assert spec.rule_names == {"if_then": ["AttachMeter"]}
+        assert "swrl" not in spec.to_dict()["phases"]
 
 
 class _LiveStore:
@@ -541,14 +551,14 @@ class TestDiff:
         patch_key = Diff.key(_t("a", "score", "300"))
         risk_key = Diff.key(_t("a", "risk", "high"))
         diff = Diff.compute(
-            before, after, patch_added={patch_key}, provenance={risk_key: "swrl:Risk"}
+            before, after, patch_added={patch_key}, provenance={risk_key: "if_then:Risk"}
         )
         s = diff["summary"]
         assert (s["added_count"], s["added_patch_count"], s["added_inferred_count"]) == (2, 1, 1)
         assert s["removed_count"] == 1
         assert s["touched_entity_count"] == 1
         inferred = [r for r in diff["added"] if r["origin"] == "inferred"]
-        assert inferred[0]["provenance"] == "swrl:Risk"
+        assert inferred[0]["provenance"] == "if_then:Risk"
         assert diff["removed"][0]["object"] == "700"
         assert diff["removed"][0]["origin"] == "patch"
 
@@ -724,14 +734,14 @@ class TestSandboxApply:
         assert EX + "c2" in seeded
         assert EX + "m1" in seeded
 
-    def test_seed_focus_for_swrl_copies_sandbox_objects(self):
+    def test_seed_focus_for_if_then_copies_sandbox_objects(self):
         sandbox = object.__new__(Sandbox)
         calls = []
         sandbox.seed_neighbourhood = (
             lambda uris, hops=1: calls.append((list(uris), hops)) or len(uris)
         )
         sandbox.uri_objects_of = lambda subject: [EX + "c2", subject]
-        sandbox.seed_focus_for_swrl(EX + "cust")
+        sandbox.seed_focus_for_if_then(EX + "cust")
         assert calls[0] == ([EX + "cust"], 2)
         assert calls[1] == ([EX + "c2"], 1)
 
@@ -800,18 +810,18 @@ def test_reasoning_service_targets_sandbox():
     assert svc._get_graph_name() == "dom_v1__sim_s1"
 
 
-def test_domain_snapshot_loads_swrl_from_ontology():
+def test_domain_snapshot_loads_if_then_from_ontology():
     from back.objects.digitaltwin.models import DomainSnapshot
 
     domain = SimpleNamespace(
         info={},
         databricks={},
         ontology={
-            "swrl_rules": [{"name": "AttachMeter"}],
+            "if_then_rules": [{"name": "AttachMeter"}],
             "classes": [],
             "properties": [],
         },
         generated={},
     )
     snap = DomainSnapshot(domain)
-    assert snap.swrl_rules[0]["name"] == "AttachMeter"
+    assert snap.if_then_rules[0]["name"] == "AttachMeter"

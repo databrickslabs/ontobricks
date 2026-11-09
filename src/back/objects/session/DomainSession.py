@@ -29,6 +29,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
+from back.objects.domain.payload import migrate_legacy_if_then_key
 from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
@@ -119,10 +120,8 @@ def get_empty_domain() -> Dict[str, Any]:
             "properties": [],
             "constraints": [],
             "shacl_shapes": [],
-            "swrl_rules": [],
-            "decision_tables": [],
+            "if_then_rules": [],
             "sparql_rules": [],
-            "aggregate_rules": [],
             "cohort_rules": [],
             "axioms": [],
             "expressions": [],
@@ -205,6 +204,7 @@ class DomainSession:
         self._fill_default_domain_subkeys(data, empty)
         self._fill_default_top_level_keys(data, empty)
         self._migrate_triplestore_node(data, empty)
+        self._migrate_legacy_if_then_key(data)
         self._migrate_legacy_ontology_root_keys(data)
         self._split_mixed_axioms(data)
         self._migrate_mapping_to_assignment(data)
@@ -336,15 +336,26 @@ class DomainSession:
         info.pop("triplestore_table", None)
 
     @staticmethod
+    def _migrate_legacy_if_then_key(data: Dict) -> None:
+        """Rename the pre-rename rules key at root, ontology and version level."""
+        versions = data.get("versions")
+        for doc in [data, *(versions.values() if isinstance(versions, dict) else [])]:
+            if not isinstance(doc, dict):
+                continue
+            migrate_legacy_if_then_key(doc)
+            if isinstance(doc.get("ontology"), dict):
+                migrate_legacy_if_then_key(doc["ontology"])
+
+    @staticmethod
     def _migrate_legacy_ontology_root_keys(data: Dict) -> None:
-        """Move root-level ``constraints``/``swrl_rules``/``axioms`` into ``ontology``."""
+        """Move root-level ``constraints``/``if_then_rules``/``axioms`` into ``ontology``."""
         if "constraints" in data and data["constraints"]:
             data["ontology"]["constraints"] = data["constraints"]
-        if "swrl_rules" in data and data["swrl_rules"]:
-            data["ontology"]["swrl_rules"] = data["swrl_rules"]
+        if "if_then_rules" in data and data["if_then_rules"]:
+            data["ontology"]["if_then_rules"] = data["if_then_rules"]
         if "axioms" in data and data["axioms"]:
             data["ontology"]["axioms"] = data["axioms"]
-        for k in ("constraints", "swrl_rules", "axioms"):
+        for k in ("constraints", "if_then_rules", "axioms"):
             data.pop(k, None)
 
     @staticmethod
@@ -691,7 +702,7 @@ class DomainSession:
                 "classes": [],
                 "properties": [],
                 "constraints": [],
-                "swrl_rules": [],
+                "if_then_rules": [],
                 "axioms": [],
                 "expressions": [],
                 "groups": [],
@@ -944,21 +955,13 @@ class DomainSession:
             )
 
     @property
-    def swrl_rules(self) -> List[Dict]:
-        """Get SWRL rules."""
-        return self._data["ontology"].get("swrl_rules", [])
+    def if_then_rules(self) -> List[Dict]:
+        """Get IF-THEN rules."""
+        return self._data["ontology"].get("if_then_rules", [])
 
-    @swrl_rules.setter
-    def swrl_rules(self, value: List[Dict]):
-        self._data["ontology"]["swrl_rules"] = value
-
-    @property
-    def decision_tables(self) -> List[Dict]:
-        return self._data["ontology"].get("decision_tables", [])
-
-    @decision_tables.setter
-    def decision_tables(self, value: List[Dict]):
-        self._data["ontology"]["decision_tables"] = value
+    @if_then_rules.setter
+    def if_then_rules(self, value: List[Dict]):
+        self._data["ontology"]["if_then_rules"] = value
 
     @property
     def sparql_rules(self) -> List[Dict]:
@@ -967,14 +970,6 @@ class DomainSession:
     @sparql_rules.setter
     def sparql_rules(self, value: List[Dict]):
         self._data["ontology"]["sparql_rules"] = value
-
-    @property
-    def aggregate_rules(self) -> List[Dict]:
-        return self._data["ontology"].get("aggregate_rules", [])
-
-    @aggregate_rules.setter
-    def aggregate_rules(self, value: List[Dict]):
-        self._data["ontology"]["aggregate_rules"] = value
 
     @property
     def cohort_rules(self) -> List[Dict]:
@@ -1177,7 +1172,7 @@ class DomainSession:
                 owl_content = Ontology.generate_owl(
                     self.ontology,
                     self.constraints,
-                    self.swrl_rules,
+                    self.if_then_rules,
                     self.axioms,
                     self.expressions,
                     self.groups,
@@ -1225,7 +1220,7 @@ class DomainSession:
             }
 
         Excludes: Databricks/registry settings and preferences; generated R2RML, OWL,
-        and SQL (rebuilt from source). Constraints, SWRL rules, and axioms live only
+        and SQL (rebuilt from source). Constraints, IF-THEN rules, and axioms live only
         under ``ontology``, not at the project root.
         """
         # Get current version from domain node
@@ -1293,10 +1288,8 @@ class DomainSession:
             "properties": self._data["ontology"].get("properties", []),
             "constraints": self._data["ontology"].get("constraints", []),
             "shacl_shapes": self._data["ontology"].get("shacl_shapes", []),
-            "swrl_rules": self._data["ontology"].get("swrl_rules", []),
-            "decision_tables": self._data["ontology"].get("decision_tables", []),
+            "if_then_rules": self._data["ontology"].get("if_then_rules", []),
             "sparql_rules": self._data["ontology"].get("sparql_rules", []),
-            "aggregate_rules": self._data["ontology"].get("aggregate_rules", []),
             "cohort_rules": self._data["ontology"].get("cohort_rules", []),
             "axioms": self._data["ontology"].get("axioms", []),
             "expressions": self._data["ontology"].get("expressions", []),
@@ -1329,33 +1322,12 @@ class DomainSession:
 
         return export
 
-    def import_from_file(self, data: Dict[str, Any], version: str = None):
-        """Import domain data from loaded file.
+    def _reset_content_sections(self, empty: Dict[str, Any]) -> None:
+        """Reset all content sections to empty defaults.
 
-        Args:
-            data: Domain data dictionary
-            version: Optional specific version to load (for versioned format)
-
-        Supports multiple formats:
-        1. New versioned format: { info: {...}, versions: { "1": { ontology, mapping, design_layout } } }
-        2. Legacy flat format: { info: {...}, ontology: {...}, mapping: {...}, ... }
-        3. Very old format: constraints/swrl_rules/axioms at top level
-
-        Note:
-        - Databricks connection settings are NOT imported (credentials stay local).
-        - R2RML output is NOT imported (it's regenerated from mappings).
-        - Root-level constraints/swrl_rules/axioms are migrated to ontology.
+        Switching between domains must never leak groups, layout, mappings or
+        other characteristics from the previously loaded domain.
         """
-        if isinstance(data, dict):
-            wrapped = data.get("domain") or data.get("project")
-            if isinstance(wrapped, dict) and "info" in wrapped and "info" not in data:
-                data = wrapped
-
-        empty = get_empty_domain()
-
-        # Reset all content sections to empty defaults so that switching
-        # between domains never leaks groups, layout, mappings, or other
-        # characteristics from the previously loaded domain.
         self._data["ontology"] = copy.deepcopy(empty["ontology"])
         self._data["assignment"] = copy.deepcopy(empty["assignment"])
         self._data["design_layout"] = copy.deepcopy(empty["design_layout"])
@@ -1372,6 +1344,32 @@ class DomainSession:
         # different domain/version must never resurrect it — cross-domain/
         # version leakage.
         self._data["generate_draft"] = None
+
+    def import_from_file(self, data: Dict[str, Any], version: str = None):
+        """Import domain data from loaded file.
+
+        Args:
+            data: Domain data dictionary
+            version: Optional specific version to load (for versioned format)
+
+        Supports multiple formats:
+        1. New versioned format: { info: {...}, versions: { "1": { ontology, mapping, design_layout } } }
+        2. Legacy flat format: { info: {...}, ontology: {...}, mapping: {...}, ... }
+        3. Very old format: constraints/if_then_rules/axioms at top level
+
+        Note:
+        - Databricks connection settings are NOT imported (credentials stay local).
+        - R2RML output is NOT imported (it's regenerated from mappings).
+        - Root-level constraints/if_then_rules/axioms are migrated to ontology.
+        """
+        if isinstance(data, dict):
+            wrapped = data.get("domain") or data.get("project")
+            if isinstance(wrapped, dict) and "info" in wrapped and "info" not in data:
+                data = wrapped
+
+        self._migrate_legacy_if_then_key(data)
+        empty = get_empty_domain()
+        self._reset_content_sections(empty)
 
         # Import info into domain.info
         if "info" in data:
@@ -1492,12 +1490,12 @@ class DomainSession:
                     merged_ont["expressions"] = ex
                 self._data["ontology"] = merged_ont
 
-            # Handle very old files where constraints/swrl_rules/axioms are at top level
+            # Handle very old files where constraints/if_then_rules/axioms are at top level
             if "constraints" in data and "constraints" not in data.get("ontology", {}):
                 self._data["ontology"]["constraints"] = data["constraints"]
 
-            if "swrl_rules" in data and "swrl_rules" not in data.get("ontology", {}):
-                self._data["ontology"]["swrl_rules"] = data["swrl_rules"]
+            if "if_then_rules" in data and "if_then_rules" not in data.get("ontology", {}):
+                self._data["ontology"]["if_then_rules"] = data["if_then_rules"]
 
             if "axioms" in data and "axioms" not in data.get("ontology", {}):
                 all_ax = data["axioms"]

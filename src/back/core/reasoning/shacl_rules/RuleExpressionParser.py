@@ -1,6 +1,6 @@
 """Rule expression parser — shared parsing utilities for the SHACL rule layer.
 
-Parses IF/THEN rule expressions (SWRL-style authoring syntax) into atoms and
+Parses IF/THEN rule expressions (IF-THEN-style authoring syntax) into atoms and
 provides URI resolution, violation-subject detection, and variable
 connectivity analysis used by both the SQL and Cypher translation backends.
 """
@@ -8,21 +8,21 @@ connectivity analysis used by both the SQL and Cypher translation backends.
 from typing import Dict, List, Optional
 
 from back.core.logging import get_logger
-from back.core.reasoning.constants import SWRL_ATOM_RE, NEGATED_ATOM_RE
+from back.core.reasoning.constants import IF_THEN_ATOM_RE, NEGATED_ATOM_RE
 from back.core.reasoning.shacl_rules.RuleAtomPartition import RuleAtomPartition
 
 logger = get_logger(__name__)
 
 
 class RuleExpressionParser:
-    """Parse and analyse IF/THEN rule expressions (SWRL-style syntax).
+    """Parse and analyse IF/THEN rule expressions (IF-THEN-style syntax).
 
     All methods are static — no instance state is needed.
     """
 
     @staticmethod
     def partition_rule_atoms(rule: Dict) -> Optional[RuleAtomPartition]:
-        """Parse and partition a SWRL rule's atoms for translation.
+        """Parse and partition an IF-THEN rule's atoms for translation.
 
         Returns ``None`` if the antecedent or consequent is empty, or if
         the antecedent has no class atoms.
@@ -61,7 +61,7 @@ class RuleExpressionParser:
 
     @staticmethod
     def parse_atoms(expression: str) -> List[Dict]:
-        """Parse a SWRL expression into a list of atom dicts.
+        """Parse an IF-THEN expression into a list of atom dicts.
 
         Supported forms:
 
@@ -95,7 +95,7 @@ class RuleExpressionParser:
 
         cleaned = NEGATED_ATOM_RE.sub("", remaining)
 
-        for m in SWRL_ATOM_RE.finditer(cleaned):
+        for m in IF_THEN_ATOM_RE.finditer(cleaned):
             name = m.group(1)
             if name.lower() == "not":
                 continue
@@ -138,7 +138,7 @@ class RuleExpressionParser:
         cons_atoms: List[Dict],
         ante_class_atoms: List[Dict],
     ) -> Optional[str]:
-        """Return the SWRL variable whose instances are reported as violations.
+        """Return the IF-THEN variable whose instances are reported as violations.
 
         Prefers the subject of the first consequent property atom, then
         the first consequent class atom variable, then the first antecedent
@@ -156,7 +156,7 @@ class RuleExpressionParser:
 
     @staticmethod
     def find_connected_vars(start_var: str, prop_atoms: List[Dict]) -> set:
-        """Return all SWRL variables reachable from *start_var* through property atoms."""
+        """Return all IF-THEN variables reachable from *start_var* through property atoms."""
         connected = {start_var}
         changed = True
         while changed:

@@ -157,7 +157,7 @@
   <g filter="url(#shadow)">
     <rect x="650" y="368" width="200" height="80" rx="8" fill="url(#reasonGrad)"/>
     <text x="750" y="391" text-anchor="middle" font-size="13" font-weight="bold" fill="white">5. Reasoning</text>
-    <text x="750" y="410" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.95)">OWL 2 RL + SWRL inference</text>
+    <text x="750" y="410" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.95)">OWL 2 RL + IF-THEN inference</text>
     <text x="750" y="426" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.9)">Inferred triples → store</text>
   </g>
   

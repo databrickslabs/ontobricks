@@ -45,7 +45,7 @@ tags_metadata = [
     {
         "name": "Ontology",
         "description": "Ontology management - Create and manage OWL ontologies with classes, "
-        "properties, relationships, constraints, and SWRL rules.",
+        "properties, relationships, constraints, and IF-THEN rules.",
     },
     {
         "name": "Mapping",

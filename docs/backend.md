@@ -1267,7 +1267,7 @@ Key decisions:
 
 1. **Query dialect**: If your engine speaks Cypher, set `supports_cypher = True`
    and `query_dialect = "cypher"`. Override the named query methods with native
-   Cypher implementations and ship a matching `SWRLCypherTranslator` (the SQL
+   Cypher implementations and ship a matching `IfThenCypherTranslator` (the SQL
    translator stays the default for SQL engines).
 
 2. **Graph model**: If your engine uses typed node/relationship tables, set
