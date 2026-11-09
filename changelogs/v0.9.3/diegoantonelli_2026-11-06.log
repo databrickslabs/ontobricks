@@ -1,0 +1,41 @@
+================================================================================
+## Make Graph Chat max_tokens configurable and raise default to 8192
+================================================================================
+
+Context: The Graph Chat (Digital Twin assistant) called the LLM with a
+hardcoded `max_tokens=2048`. Reasoning models could exhaust that budget on
+reasoning before emitting any answer text, so users got the fallback
+"I couldn't display that answer. Please try again." The budget is now a
+setting (`ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS`, default 8192) passed by both chat
+routes, so admins can retune a deployed app without a code change.
+
+Changes:
+
+1. src/shared/config/settings.py
+   New `dtwin_chat_max_tokens` field (alias `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS`, default 8192).
+2. src/agents/agent_dtwin_chat/engine.py
+   `run_agent()` takes `max_tokens` (default `DEFAULT_MAX_TOKENS = 8192`) instead of hardcoded 2048.
+3. src/api/routers/internal/dtwin.py
+   Blocking and streaming chat routes pass `settings.dtwin_chat_max_tokens`.
+4. app.yaml.template
+   Expose `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` for deployed apps.
+5. docs/getting-started.md
+   Document the new env var in the table and `.env` example.
+6. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Assert default and explicit `max_tokens` reach `call_serving_endpoint`.
+7. tests/units/settings/test_app_yaml_template.py
+   Template value must match the `Settings` default.
+8. tests/units/architecture/baseline.json
+   Bump size budget for `run_agent` (198→201) and both chat routes (+1) for the new parameter.
+
+Modified files:
+- src/shared/config/settings.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+- app.yaml.template
+- docs/getting-started.md
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- tests/units/settings/test_app_yaml_template.py
+- tests/units/architecture/baseline.json
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 9630 passed, 326 skipped, 8 deselected in 67.14s

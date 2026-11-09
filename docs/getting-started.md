@@ -564,6 +564,12 @@ the workspace token (locally) or the SP token (in Apps).
 |----------|-------------|---------|
 | `ONTOBRICKS_URL` | URL of the main OntoBricks app (used by the MCP server) | `http://localhost:8000` |
 
+#### Graph Chat (Digital Twin Assistant)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` | Output-token budget per LLM call of the Graph Chat, including the model's reasoning. When it runs out before any answer text, the chat shows "I couldn't display that answer". Must be between 1 and 8192 (Foundation Model output ceiling). | `8192` |
+
 #### Knowledge Graph Analytics
 
 | Variable | Description | Default |
@@ -610,6 +616,7 @@ ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # Community detection in-memory triple 
 ONTOBRICKS_ANALYTICS_TOP_N=100           # Top nodes per metric returned by the Lakeflow job
 ONTOBRICKS_ANALYTICS_JOB_ENABLED=false   # Initial value; admins override it in Settings → Global
 # ONTOBRICKS_GITHUB_TOKEN=ghp_...          # Local GitHub mirror only; prefer a Databricks secret in Apps
+ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS=8192    # Graph Chat output tokens per LLM call (incl. reasoning)
 ```
 
 #### Shell Export

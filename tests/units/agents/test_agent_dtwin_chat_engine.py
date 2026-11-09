@@ -5,8 +5,14 @@ from unittest.mock import patch
 
 import pytest
 
-from agents.agent_dtwin_chat.engine import AgentResult, normalize_reply_content, run_agent
+from agents.agent_dtwin_chat.engine import (
+    DEFAULT_MAX_TOKENS,
+    AgentResult,
+    normalize_reply_content,
+    run_agent,
+)
 from agents.tools.context import ToolContext
+from shared.config.settings import Settings
 
 _PENDING_ACTION = {
     "token": "tok",
@@ -71,6 +77,40 @@ def _run_with_scripted_llm(llm_side_effect):
             session_cookies={},
             user_message="recompute risk",
         )
+
+
+def _final_answer_response():
+    return {
+        "choices": [{"message": {"content": "Answer", "tool_calls": None}}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+
+
+def test_engine_default_max_tokens_matches_settings_default():
+    assert DEFAULT_MAX_TOKENS == Settings.model_fields["dtwin_chat_max_tokens"].default
+
+
+@pytest.mark.parametrize("configured, expected", [(None, 8192), (4096, 4096)])
+def test_run_agent_sends_the_configured_max_tokens(configured, expected):
+    extra = {} if configured is None else {"max_tokens": configured}
+    with patch(
+        "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+        return_value=_final_answer_response(),
+    ) as llm:
+        result = run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="endpoint",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="hello",
+            **extra,
+        )
+
+    assert result.reply == "Answer"
+    assert llm.call_args.kwargs["max_tokens"] == expected
 
 
 def test_run_agent_preserves_pending_action_on_llm_error():
