@@ -67,7 +67,7 @@ LLM picks it automatically.
 | `describe_ontology` | Returns the selected domain's ontology **structure** — a class inventory (with dataset/bridge/action/virtual-attribute tags) plus the raw OWL/Turtle that carries the full attribute and relationship (domain/range) detail. Reads the ontology schema only, so it works without a built graph and is the sole domain tool an ontology-only domain exposes |
 | `list_entity_types` | Returns a human-readable overview of the selected domain's graph viewer: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
 | `describe_entity` | Searches for an entity by name/type and returns a **full-text description** — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal) |
-| `get_entity_context` | Returns a node's external context: linked Unity Catalog dataset (optionally with rows), cross-domain bridges, the Unity Catalog function **actions** configured on its class, and its **virtual attributes** (declared always; values via `compute_virtual_attributes` or the inline `compute_virtual_attributes=True` flag) |
+| `get_entity_context` | Returns a node's external context: linked Unity Catalog datasets (all linked tables, views, or metric views, optionally with preview rows), cross-domain bridges, the Unity Catalog function **actions** configured on its class, and its **virtual attributes** (declared always; values via `compute_virtual_attributes` or the inline `compute_virtual_attributes=True` flag) |
 | `compute_virtual_attributes` | Runs the Unity Catalog functions that compute an entity's **virtual attributes** and returns their live values. Call this when the user asks about a virtual attribute — those values are not stored in the graph. Only functions declared on the entity's class can be invoked |
 | `invoke_entity_action` | Runs a class action: a Unity Catalog function (one argument: the entity ID) or a Databricks Job (`job:<job_id>`, must declare `entity_id`). Jobs start asynchronously and are tracked in Background Tasks. Only actions declared on the entity's ontology class can be invoked |
 | `run_entity_business_rule` | Runs one of the SWRL **business rules** attached to the entity's class, scoped to that entity, and materialises the inferred triples into the graph (no confirmation step). Requires the Builder role on the domain; only rules declared on the class can be run. On Neo4j-backed domains it currently infers nothing |
@@ -209,7 +209,8 @@ Found 1 matching entity (33 triples across 3 entities, depth=2)
     • label: Service_Activation via in_person
 
   [Context — class: Customer]
-  Dataset: main.crm.customers  (key: customer_id = 'CUST00094')
+  Datasets:
+    • [TABLE] main.crm.customers  (key: customer_id = 'CUST00094')
     → call get_entity_context(fetch_dataset_rows=True) to retrieve rows
   Bridges:
     → finance / Contract  "Owns contracts"

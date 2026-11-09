@@ -842,9 +842,14 @@ BFS-based entity search with depth control.
 #### `GET /api/v1/digitaltwin/nodes/context`
 
 Resolve the ontology class for an entity URI and return its external context:
-linked Unity Catalog dataset (optionally with rows), cross-domain bridges, the
-Unity Catalog function actions declared on the class, and its virtual attributes
-(optionally computed). No action is executed here.
+linked Unity Catalog datasets (all linked tables, views, and metric views, optionally
+with rows), cross-domain bridges, the Unity Catalog function actions declared on the
+class, and its virtual attributes (optionally computed). No action is executed here.
+
+The payload exposes `datasets: [...]` listing every linked UC asset (with its kind:
+`TABLE`, `VIEW`, or `METRIC_VIEW`, and preview rows if requested), while keeping the
+singular `dataset` (the first entry) for backward compatibility. Metric views use
+metric-aware SQL (`MEASURE()` + `GROUP BY` + key filter) rather than raw `SELECT *`.
 
 **Parameters:**
 - `entity_uri` (query): Full URI of the entity node
@@ -998,7 +1003,9 @@ and one `facets` entry per shape with its `status`:
 502 with a readable `message`.
 
 `/api/v1/digitaltwin/nodes/context` and `/api/v1/domain/classes` expose the
-matching `shacl_shape_count`. The Graph Explorer starts the same check on the
+matching `shacl_shape_count`. `/api/v1/domain/classes` also exposes the list of
+`datasets: [...]` configured on each class (with `dataset` kept for single-dataset back-compat).
+The Graph Explorer starts the same check on the
 session domain with `POST /dtwin/nodes/shacl/start` and polls `/tasks/{id}`
 so the popup can show a live activity log; `GET /dtwin/nodes/shacl` remains
 for MCP and other synchronous callers.

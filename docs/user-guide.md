@@ -393,6 +393,21 @@ with no conditions applies to every instance, exactly as before.
 
 **Validation**: Shapes are executed in the Knowledge Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on Lakebase, Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.
 
+### Linked Datasets (Unity Catalog tables, views, and metric views)
+
+An entity type can link **one or more Unity Catalog datasets** (tables, views,
+or metric views) to provide underlying row context in the Knowledge Graph,
+MCP tools, and Graph Chat.
+
+1. Go to **Ontology** → **Entities** and select an entity type
+2. Open the **Links** tab and find the **Datasets** section
+3. Click **+ Add** to open the dataset picker:
+   - Select a catalog, schema, and table, view, or **metric view** (badged with `METRIC VIEW`)
+   - Select the **Key column** that matches the entity's identifier (for metric views, dimension columns are preferred)
+   - Add an optional description explaining what this dataset contributes
+4. Click **Apply** to link the dataset; repeat to link additional datasets for the same class
+5. In Graph Explorer, selecting an entity node surfaces all linked datasets as equal peers, with metric-aware aggregation queries automatically used for metric views
+
 ### Dashboard Mapping
 
 You can assign Databricks dashboards to entity types for embedded visualization in the Knowledge Graph:
@@ -524,12 +539,12 @@ Every section inside a tab has the same layout:
 - a header with the section icon and title, a count of its items, an effect
   chip where relevant, and a **+ Add** button on the right (a small menu on
   **Mapped attributes**: *From data assets* or *Manually*; **Change** on
-  Dashboard and Dataset once one is linked);
+  Dashboard once linked; **+ Add** on Datasets to link multiple assets);
 - a one-line explanation, with the longer help behind the ⓘ button;
 - one row per item (icon, name, kind, full name, remove button), or a dashed
   empty state with a direct "Add …" link.
 
-Descriptions on functions, jobs, virtual attributes and the dataset are always
+Descriptions on functions, jobs, virtual attributes and datasets are always
 editable in place: the field shows its border only when hovered or focused.
 **Equivalent to** and **Disjoint with** show the chosen entities as chips;
 pick another entity from **+ Add entity…** and click a chip's × to remove it.
