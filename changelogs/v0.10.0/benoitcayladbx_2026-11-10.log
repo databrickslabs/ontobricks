@@ -459,3 +459,27 @@ Modified files:
 
 Test result:
 - Targeted Simple/Complex rule tests: 58 passed.
+
+
+Shrink Graph Chat run_agent under the size budget
+
+Context: test_no_function_grows_beyond_budget failed because
+agents/agent_dtwin_chat/engine.py::run_agent grew from 198 to 200 lines
+(pre-existing, not from the rules work). Extract the history replay and the
+tool-call batch so the function shrinks instead of raising the baseline.
+
+Changes:
+1. src/agents/agent_dtwin_chat/engine.py
+   Extracted `_append_history` and `_dispatch_tool_calls`. `run_agent` is 140
+   lines (was 200). Behaviour is unchanged.
+2. tests/units/architecture/baseline.json
+   Oversized-function budget for `run_agent` 198 -> 140.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- tests/units/architecture/baseline.json
+
+Test result:
+- uv run --frozen pytest -q tests/units/architecture/test_size_budget.py
+  tests/units/agents/test_agent_dtwin_chat_engine.py — 21 passed (with
+  test_class_per_file).

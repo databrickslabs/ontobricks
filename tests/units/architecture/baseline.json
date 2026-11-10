@@ -81,7 +81,7 @@
     "agents/agent_cohort/engine.py::run_agent": 174,
     "agents/agent_cohort/tools.py::tool_list_properties_of": 115,
     "agents/agent_complex_rule_builder/engine.py::run_agent": 168,
-    "agents/agent_dtwin_chat/engine.py::run_agent": 198,
+    "agents/agent_dtwin_chat/engine.py::run_agent": 140,
     "agents/agent_graph_interpreter/engine.py::run_agent": 144,
     "agents/agent_mapping_pge/engine.py::_run_entity_item": 246,
     "agents/agent_mapping_pge/engine.py::_run_relationship_item": 255,
