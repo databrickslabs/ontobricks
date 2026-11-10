@@ -1,0 +1,41 @@
+================================================================================
+## Address review on Graph Chat max_tokens (PR follow-ups)
+================================================================================
+
+Context: Review on the Graph Chat `max_tokens` PR. The branch was rebased onto
+`0.9.3` (0.9.2 was merged and archived), so the changelog moved to
+`changelogs/v0.9.3/`. The engine default and the `Settings` default could drift
+apart; the env var sat in the analytics test map and docs table; the setting had
+no bounds although Foundation Model endpoints cap output at ~8192 tokens.
+
+Changes:
+
+1. src/shared/config/constants.py
+   New `DTWIN_CHAT_MAX_TOKENS = 8192`, the single source of truth for the default and ceiling.
+2. src/shared/config/settings.py
+   `dtwin_chat_max_tokens` defaults to the constant and is bounded `ge=1, le=8192`.
+3. src/agents/agent_dtwin_chat/engine.py
+   `DEFAULT_MAX_TOKENS` now derives from the shared constant.
+4. app.yaml.template
+   Comment states the default is also the maximum.
+5. docs/getting-started.md
+   Move the env var into a new "Graph Chat (Digital Twin Assistant)" subsection; document bounds.
+6. tests/units/settings/test_app_yaml_template.py
+   Split `DTWIN_CHAT_VARS` / `TestDtwinChatDefaultsMatchSettings` out of the analytics map; reject out-of-bounds values.
+7. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Assert engine and `Settings` defaults match; override test uses 4096 (within the ceiling).
+8. changelogs/v0.9.3/diegoantonelli_2026-11-06.log
+   Moved from `changelogs/v0.9.1/` to match the target release.
+
+Modified files:
+- src/shared/config/constants.py
+- src/shared/config/settings.py
+- src/agents/agent_dtwin_chat/engine.py
+- app.yaml.template
+- docs/getting-started.md
+- tests/units/settings/test_app_yaml_template.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- changelogs/v0.9.3/diegoantonelli_2026-11-06.log
+
+Tests: uv run --frozen pytest -q -m 'not scenario' → 9671 passed, 326 skipped, 8 deselected in 60.79s
+Eval: python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS

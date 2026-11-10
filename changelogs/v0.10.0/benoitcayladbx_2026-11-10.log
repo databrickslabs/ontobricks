@@ -483,3 +483,91 @@ Test result:
 - uv run --frozen pytest -q tests/units/architecture/test_size_budget.py
   tests/units/agents/test_agent_dtwin_chat_engine.py — 21 passed (with
   test_class_per_file).
+## Port Graph Chat max_tokens fix (PR #223) to 0.10.0
+================================================================================
+
+Context: PR #223 (squash 2024650d) landed on 0.9.3. The same hardcoded
+`max_tokens=2048` existed on 0.10.0, so Graph Chat still hit the
+"I couldn't display that answer" fallback on reasoning models. This entry
+ports the change to 0.10.0 by cherry-picking the squash commit.
+
+Conflict resolution (0.10.0 already had `endpoint_kind` on `run_agent`):
+- `run_agent()` keeps `endpoint_kind` and adds `max_tokens` after it.
+- Test file keeps the existing `test_run_agent_forwards_domain_endpoint_kind`
+  and adds the `max_tokens` tests.
+- `baseline.json`: kept 0.10.0 values, bumped `run_agent` 198->201 and the
+  two chat routes by +1 for the new parameter.
+
+Changes:
+
+1. src/shared/config/constants.py
+   New `DTWIN_CHAT_MAX_TOKENS = 8192` (single source of truth).
+2. src/shared/config/settings.py
+   `dtwin_chat_max_tokens` setting (alias `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS`),
+   default 8192, bounded `ge=1, le=8192`.
+3. src/agents/agent_dtwin_chat/engine.py
+   `run_agent()` takes `max_tokens` (default `DEFAULT_MAX_TOKENS = 8192`)
+   instead of the hardcoded 2048.
+4. src/api/routers/internal/dtwin.py
+   Blocking and streaming chat routes pass `settings.dtwin_chat_max_tokens`.
+5. app.yaml.template
+   Exposes `ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS` for deployed apps.
+6. docs/getting-started.md
+   New "Graph Chat (Digital Twin Assistant)" env var table + `.env` example.
+7. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Engine default matches Settings default; configured max_tokens reaches
+   `call_serving_endpoint`.
+8. tests/units/settings/test_app_yaml_template.py
+   Template value matches Settings default; out-of-bounds values rejected.
+9. tests/units/architecture/baseline.json
+   Size budget bumps for the new parameter.
+10. changelogs/v0.10.0/diegoantonelli_2026-11-06.log
+    changelogs/v0.10.0/diegoantonelli_2026-11-09.log
+    Moved from changelogs/v0.9.3/ to the 0.10.0 release folder.
+
+Modified files:
+- app.yaml.template
+- docs/getting-started.md
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+- src/shared/config/constants.py
+- src/shared/config/settings.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- tests/units/settings/test_app_yaml_template.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/diegoantonelli_2026-11-06.log (moved)
+- changelogs/v0.10.0/diegoantonelli_2026-11-09.log (moved)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log (new)
+
+Tests: uv run --frozen pytest -q -m 'not scenario' -> 10148 passed, 325 skipped,
+8 deselected (full suite, exit 0). Architecture guardrails: 33 passed (scoped run,
+incl. settings template tests).
+Note: an isolated run of test_agent_dtwin_chat_engine.py hits a pre-existing
+circular import (back.core.w3c <-> back.objects.ontology) when collected first;
+it passes inside the full suite.
+
+
+Merge origin/0.10.0 into feature/swrl-to-shacl-rules
+================================================================================
+
+Context: 0.10.0 gained 6afb9943 (Graph Chat max_tokens setting), which also
+touches agents/agent_dtwin_chat/engine.py::run_agent. Merging it into the
+feature branch to open a conflict-free PR against 0.10.0.
+
+Conflict resolution:
+1. changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+   Kept both sections (this branch's entries and the 0.10.0 max_tokens entry).
+2. tests/units/architecture/baseline.json
+   Kept the complex_rule_builder entry from this branch. Set
+   agents/agent_dtwin_chat/engine.py::run_agent to 143: the measured size of
+   the merged function (our extraction at 140 plus 3 lines for max_tokens).
+   Base 0.10.0 had 203.
+
+Modified files:
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+- tests/units/architecture/baseline.json
+
+Test result:
+- uv run --frozen pytest -q tests/units/architecture -> 11 passed.
+- uv run --frozen pytest -q -m "not scenario" -> 10265 passed, 325 skipped,
+  8 deselected, 0 failed.
