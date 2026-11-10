@@ -586,7 +586,7 @@
 
         {
             "id": "simulation",
-            "label": "Simulation",
+            "label": "Intelligence",
             "icon": "bi-sliders2-vertical",
             "route": "/simulation/",
             "requires_domain_saved": true,
@@ -617,7 +617,7 @@
                 },
                 {
                     "id": "simulation-scenarios",
-                    "title": "Sandbox",
+                    "title": "Simulation",
                     "icon": "bi-sliders2-vertical",
                     "items": [
                         {

@@ -1408,3 +1408,23 @@ Modified files:
 - tests/units/front/test_studio_views_groups_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10260 passed, 323 skipped, 8 deselected.
+
+================================================================================
+Menu: rename Simulation menu to Intelligence, Sandbox group to Simulation
+================================================================================
+
+Context:
+The Level 2 navigation showed a "Simulation" menu whose first sub-menu group
+was titled "Sandbox". Renamed the top menu to "Intelligence" and the group to
+"Simulation" so the group matches the feature name. Routes, ids and API paths
+are unchanged.
+
+Changes:
+1. src/front/config/menu_config.json
+   Menu `simulation` label "Simulation" → "Intelligence".
+   Group `simulation-scenarios` title "Sandbox" → "Simulation".
+
+Modified files:
+- src/front/config/menu_config.json
+
+Tests: uv run --frozen pytest -q tests/units/front tests/units/config → 1794 passed.
