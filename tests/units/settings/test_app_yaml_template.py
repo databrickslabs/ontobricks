@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from shared.config.settings import Settings
 
@@ -30,6 +31,10 @@ ANALYTICS_VARS = {
     "ONTOBRICKS_ANALYTICS_JOB_NAME": "analytics_job_name",
     "ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS": "analytics_job_pagerank_iterations",
     "ONTOBRICKS_ANALYTICS_JOB_PIVOTS": "analytics_job_pivots",
+}
+
+DTWIN_CHAT_VARS = {
+    "ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS": "dtwin_chat_max_tokens",
 }
 
 
@@ -71,7 +76,7 @@ class TestTemplateRenders:
 class TestAnalyticsDefaultsMatchSettings:
     @pytest.mark.parametrize("var,field", sorted(ANALYTICS_VARS.items()))
     def test_var_is_declared(self, env_map, var, field):
-        assert var in env_map, f"{var} missing — {field} is not tunable on a deploy"
+        _assert_declared(env_map, var, field)
 
     @pytest.mark.parametrize("var,field", sorted(ANALYTICS_VARS.items()))
     def test_value_round_trips_to_the_settings_default(self, env_map, var, field, monkeypatch):
@@ -81,8 +86,32 @@ class TestAnalyticsDefaultsMatchSettings:
         it catches `"True"` vs `"true"` and `"1e5"` vs `500000` without pinning
         the template to one spelling.
         """
-        monkeypatch.setenv(var, str(env_map[var]))
-        assert getattr(Settings(), field) == getattr(Settings.model_fields[field], "default")
+        _assert_round_trips(env_map, var, field, monkeypatch)
+
+
+class TestDtwinChatDefaultsMatchSettings:
+    @pytest.mark.parametrize("var,field", sorted(DTWIN_CHAT_VARS.items()))
+    def test_var_is_declared(self, env_map, var, field):
+        _assert_declared(env_map, var, field)
+
+    @pytest.mark.parametrize("var,field", sorted(DTWIN_CHAT_VARS.items()))
+    def test_value_round_trips_to_the_settings_default(self, env_map, var, field, monkeypatch):
+        _assert_round_trips(env_map, var, field, monkeypatch)
+
+    @pytest.mark.parametrize("value", ["0", "8193"])
+    def test_max_tokens_outside_bounds_is_rejected(self, value, monkeypatch):
+        monkeypatch.setenv("ONTOBRICKS_DTWIN_CHAT_MAX_TOKENS", value)
+        with pytest.raises(ValidationError):
+            Settings()
+
+
+def _assert_declared(env_map: dict, var: str, field: str) -> None:
+    assert var in env_map, f"{var} missing — {field} is not tunable on a deploy"
+
+
+def _assert_round_trips(env_map: dict, var: str, field: str, monkeypatch) -> None:
+    monkeypatch.setenv(var, str(env_map[var]))
+    assert getattr(Settings(), field) == getattr(Settings.model_fields[field], "default")
 
 
 class TestJobToggleIsOptIn:
