@@ -4,10 +4,29 @@
     min-height: 0;
 }
 
+#graphql-section > .section-header {
+    flex-shrink: 0;
+}
+
+#graphql-section .query-card-fill {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#graphql-section .query-card-fill > .card-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .query-language-content {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -15,6 +34,7 @@
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
+    min-height: 0;
 }
 
 .query-pane-toolbar {

@@ -571,3 +571,74 @@ Test result:
 - uv run --frozen pytest -q tests/units/architecture -> 11 passed.
 - uv run --frozen pytest -q -m "not scenario" -> 10265 passed, 325 skipped,
   8 deselected, 0 failed.
+
+
+Graph → Query: GraphQL / SPARQL tabs use the standard OntoBricks tab style
+================================================================================
+
+Context: the GraphQL / SPARQL language tabs in Graph → Query used the compact
+`ob-tabs--compact` density and had no icons, unlike the other Graph and
+Ontology tab rails. Align them with the standard `ob-tabs` treatment while
+keeping the free-standing rail above the playgrounds (visual-only change).
+
+Changes:
+1. src/front/templates/partials/dtwin/_query_query.html
+   `#queryLanguageTabs` drops `ob-tabs--compact` (standard density). Each tab
+   gets a leading Bootstrap icon: GraphQL `bi-diagram-3`, SPARQL `bi-braces`.
+   Ids, `data-bs-*` wiring, the `query-language-tabs` hook and the pane markup
+   are unchanged.
+2. tests/units/front/test_query_language_tabs_style.py (new)
+   Contract: standard `ob-tabs` density without `ob-tabs--compact`; each tab
+   starts with its icon; Bootstrap pane wiring is preserved.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_query.html
+- tests/units/front/test_query_language_tabs_style.py (new)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/test_query_language_tabs_style.py
+  tests/units/front/test_kg_graph_source.py
+  tests/units/front/test_sparql_playground_contract.py
+  tests/units/front/test_kg_section_headers.py
+  tests/units/front/test_kg_readiness_indicator.py
+  tests/units/front/test_help_center_menu_sync.py -> 74 passed.
+- Browser check (web-devloop-tester, local app): desktop 1440x900 and mobile
+  390x844. Standard tab metrics (14.4px font, 8px/14px padding), focus outline
+  2px, SPARQL/GraphQL switching works, labels single-line, no page overflow.
+  The GraphiQL CDN failure in the sandbox is environmental.
+
+
+Graph → Query tabs match Data Quality card-integrated style
+===========================================================
+
+Context: Graph → Query GraphQL / SPARQL tabs still sat as a free-standing rail
+above the playgrounds, while Graph → Data Quality uses the card-integrated
+`ob-tabs nav-fill` pattern (section header `mb-4`, full-height card, padded
+panes). Align Query to that same header and tab treatment.
+
+Changes:
+1. src/front/templates/partials/dtwin/_query_query.html
+   Section header spacing uses `mb-4`. GraphQL / SPARQL rail and panes move
+   into a full-height `query-card-fill` card with
+   `nav nav-tabs ob-tabs nav-fill flex-shrink-0`, matching Data Quality.
+2. src/front/static/query/css/query-sparql.css
+   Stretch rules for `#graphql-section .query-card-fill` mirror
+   `#dataquality-section .dq-card-fill` so the card fills below the header.
+3. tests/units/front/test_query_language_tabs_style.py
+   Contract extended: header spacing, card-integrated markup, and fill CSS.
+4. tests/units/front/test_sidebar_content_stretch_contract.py
+   Asserts the new Query card fill chain beside the SPARQL playground chain.
+5. tests/e2e/navigation/test_sidebar_bottom_alignment.py
+   KG Query primary pane selector targets `#graphql-section > .query-card-fill`.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_query.html
+- src/front/static/query/css/query-sparql.css
+- tests/units/front/test_query_language_tabs_style.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/e2e/navigation/test_sidebar_bottom_alignment.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10271 passed, 325 skipped, 8 deselected, 0 failed in 46.89s

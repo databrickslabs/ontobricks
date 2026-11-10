@@ -483,6 +483,14 @@ def test_existing_internal_scroll_variants_have_complete_flex_chains():
             QUERY_SPARQL_CSS,
             (
                 (
+                    "#graphql-section .query-card-fill",
+                    {"flex": "1", "min-height": "0", "overflow": "hidden"},
+                ),
+                (
+                    "#graphql-section .query-card-fill > .card-body",
+                    {"flex": "1", "min-height": "0", "overflow": "hidden"},
+                ),
+                (
                     ".query-language-content",
                     {
                         "flex": r"1\s+1\s+auto",

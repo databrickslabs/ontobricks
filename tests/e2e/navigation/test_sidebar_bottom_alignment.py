@@ -31,7 +31,13 @@ SIDEBAR_PRIMARY_PANES = [
     ),
     pytest.param("/mapping", "design", "#design-section", True, id="mapping-designer"),
     pytest.param("/dtwin/", "sigmagraph", "#sigmagraph-section", True, id="kg-explorer"),
-    pytest.param("/dtwin/", "graphql", "#graphql-section", True, id="kg-query"),
+    pytest.param(
+        "/dtwin/",
+        "graphql",
+        "#graphql-section > .query-card-fill",
+        True,
+        id="kg-query",
+    ),
     pytest.param("/dtwin/?section=chat", "chat", "#chat-section", True, id="kg-chat"),
     pytest.param(
         "/dtwin/?section=dataquality",
