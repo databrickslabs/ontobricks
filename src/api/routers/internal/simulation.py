@@ -148,7 +148,7 @@ def _facts_failure_message(error: Optional[str]) -> str:
     if "endpoint_not_found" in low or "endpoint does not exist" in low:
         return (
             "Could not propose hypothetical facts: the selected LLM was not found. "
-            "Pick a model in Domain → General → AI."
+            "Pick a model in Configuration → AI."
         )
     if "max iterations" in low:
         return (

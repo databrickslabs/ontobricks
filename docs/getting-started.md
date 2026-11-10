@@ -239,7 +239,7 @@ In local development mode, there are no restrictions — all users have full adm
 
 ### Upload documents to the Knowledge Store (optional)
 
-Use **Domain → Knowledge Store** to upload specifications or glossaries
+Use **Context → Knowledge Store** to upload specifications or glossaries
 before Generate or Auto-Map. OntoBricks parses each file once
 (`ai_parse_document` on the SQL warehouse) and stores **only the parsed
 text** in Lakebase. There is a 10 MB per-file cap. Generate and Mapping
@@ -280,7 +280,7 @@ Alternatively, use the traditional form interface:
 
 1. Click **General** in the sidebar
 2. Set an **Ontology Name** (e.g., "MyOrganization")
-3. The **Base URI** is auto-generated from the configured domain
+3. The **Base URI** is auto-generated from the configured context
 
 #### Add Entities
 1. Click **Entities** in the sidebar
@@ -303,11 +303,11 @@ Alternatively, use the traditional form interface:
 
 1. Open **Studio** and click **Export** (top right) to download the generated ontology as Turtle
 2. Click **Validate** to check your ontology
-3. Click **Save** to write the domain to the Lakebase registry
+3. Click **Save** to write the context to the Lakebase registry
 
 ### 5. Assign Data Assets
 
-Load Unity Catalog tables from **Domain → Data Assets → Add Data Asset**
+Load Unity Catalog tables from **Context → Data Assets → Add Data Asset**
 (catalog and schema picker). Editors and Builders can do this with `CAN_USE`;
 they do not need `CAN_MANAGE`. Viewers cannot import or remove sources.
 
@@ -336,7 +336,7 @@ Then map those tables on the **Mapping** page:
 
 #### R2RML Output
 1. Open **Mapping → Studio** and click **Export** (top right) to download the generated R2RML
-2. You can also view the mapping under **Domain → R2RML**
+2. You can also view or copy the mapping under **Mapping → Export**
 3. Copy or download as needed
 
 4. Click **Validate** (in navbar) to verify all mappings are complete
@@ -389,8 +389,8 @@ The OntoBricks interface has a navigation bar with status indicators:
 | **Mapping** | Shows ✓ (green) when R2RML mapping exists, ✗ (red) otherwise |
 | **Graph** | Access the build, graph viewer, and quality checks interface |
 | **Settings** | Manage Databricks connection and settings |
-| **Versions** (navbar popup) | Switch or reload versions (then opens Domain → General); **New Version** branches the open domain without opening Domain → Versions |
-| **Load Domain** | Loads a registry domain/version and always opens **Domain → General** |
+| **Versions** (navbar popup) | Switch or reload versions (then opens Context → Configuration); **New Version** branches the open context without opening Context → Versions |
+| **Load Context** | Loads a registry context/version and always opens **Context → Configuration** |
 
 ## SQL warehouses and Explorer timing
 
@@ -476,7 +476,7 @@ scripts/setup.sh
 ### Sync or Graph Viewer Fails
 
 - Ensure both Ontology and Mapping have green checkmarks in the navbar
-- Check that the R2RML mapping is generated (visible in Domain → Export)
+- Check that the R2RML mapping is generated (visible in Mapping → Export)
 - Verify the SQL Warehouse is running and accessible
 - Check browser console for any errors
 

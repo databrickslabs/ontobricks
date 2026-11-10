@@ -47,7 +47,7 @@ def test_gate_blocks_pointer_and_activation_keys_in_capture_phase():
     assert "event.key !== 'Enter' && event.key !== ' '" in permissions
     assert "event.preventDefault()" in permissions
     assert (
-        "'No LLM selected. Select one in Domain → General → AI.'" in permissions
+        "'No LLM selected. Select one in Configuration → AI.'" in permissions
     )
 
 

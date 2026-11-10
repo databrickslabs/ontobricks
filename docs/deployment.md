@@ -246,8 +246,9 @@ All four layers must be satisfied before the application is fully functional. Th
 ║  CATALOG  <source_catalog>            USE CATALOG                      Data Source picker ║
 ║  SCHEMA   <src_cat>.<src_sch>         USE SCHEMA                       R2RML builds       ║
 ║  TABLE    <src_cat>.<src_sch>.<tbl>   SELECT                           per mapping entry  ║
-║  MODEL SERVICE  <cat>.<sch>.<svc>     EXECUTE (or inherited            Domain → General    ║
-║                                       ALL_PRIVILEGES)                  → AI Gateway picker ║
+║  MODEL SERVICE  <cat>.<sch>.<svc>     EXECUTE (or inherited            Context →           ║
+║                                       ALL_PRIVILEGES)                  Configuration → AI  ║
+║                                                                        Gateway picker      ║
 ║                                                                                         ║
 ║  ► Grant once as UC admin (see §3 for full SQL snippets)                                ║
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
@@ -409,7 +410,7 @@ MLFLOW_TRACKING_URI=databricks
 #### Graph backend selection (No Backend / Lakebase / Delta / Neo4j)
 
 The Graph DB engine is chosen **per domain** (`graph_backend`: `none`,
-`lakebase`, `databricks`, or `neo4j`) under **Domain → General → Knowledge
+`lakebase`, `databricks`, or `neo4j`) under **Context → Configuration → Knowledge
 Graph**; `none` creates an ontology-only domain and requires no graph
 infrastructure. Connection knobs live under **Settings → Back end**. Lakebase
 and the Delta (`databricks`) engine need no extra credentials beyond the
@@ -944,7 +945,7 @@ The main app's service principal performs the following operations at runtime. E
 | 6 | File I/O under `/Volumes/<registry_catalog>/<registry_schema>/<registry_volume>/` (projects, domains, history log, registry artefacts) | Registry volume | `READ VOLUME` + `WRITE VOLUME`. |
 | 7 | `POST /api/2.1/unity-catalog/volumes` — only triggered from **Settings → Registry → Initialize** when the volume does not yet exist | Registry schema | Schema `CREATE VOLUME` (skip if you create the volume manually up front). |
 | 8 | `CREATE SCHEMA IF NOT EXISTS`, `CREATE TABLE`, `INSERT … COPY FROM STDIN`, `SELECT`, `DELETE` on the App-bound Lakebase Postgres database (Graph DB engine + optionally registry hybrid backend) | Lakebase database | Lakebase user role with privileges on the configured schema (default `ontobricks_graph`). Authentication uses the App-injected OAuth token. |
-| 9 | List and invoke Unity AI Gateway model services selected in Domain → General → AI (Ontology Assistant, Wizard, Auto-Map, Graph Chat, …) | Each Gateway model service (and its catalog/schema) | `USE CATALOG` + `USE SCHEMA` + `EXECUTE`. An inherited effective `ALL_PRIVILEGES` grant also counts as executable. Legacy Model Serving endpoints use Serving permissions, not this UC chain. |
+| 9 | List and invoke Unity AI Gateway model services selected in Context → Configuration → AI (Ontology Assistant, Wizard, Auto-Map, Graph Chat, …) | Each Gateway model service (and its catalog/schema) | `USE CATALOG` + `USE SCHEMA` + `EXECUTE`. An inherited effective `ALL_PRIVILEGES` grant also counts as executable. Legacy Model Serving endpoints use Serving permissions, not this UC chain. |
 
 All the above run through the **SQL Warehouse** bound to the app (`sql-warehouse` resource) on behalf of the app SP. The `CAN_USE` grant on the warehouse covers compute access; data access is controlled by UC.
 
@@ -1014,7 +1015,7 @@ If any mapping `sql_query` joins tables from multiple schemas or catalogs, repea
 
 ### 3.3.1 — AI Gateway model services
 
-Custom Unity AI Gateway services selected in **Domain → General → AI** must
+Custom Unity AI Gateway services selected in **Context → Configuration → AI** must
 be executable by the app service principal. Discovery lists a service only when
 effective privileges include `EXECUTE` or inherited `ALL_PRIVILEGES`
 (`GET /api/2.1/unity-catalog/effective-permissions/model_service/{name}`).
@@ -1719,7 +1720,7 @@ Serving). In a Databricks App, these are resolved automatically via the service
 principal. If you see this error:
 
 1. Verify the app is running as a Databricks App (not locally)
-2. Check that an LLM is saved in Domain → General → AI (or choose **No LLM** if AI is intentionally disabled)
+2. Check that an LLM is saved in Context → Configuration → AI (or choose **No LLM** if AI is intentionally disabled)
 3. Review app logs for OAuth token resolution errors
 
 ### Connection Errors

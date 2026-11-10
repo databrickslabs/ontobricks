@@ -3,16 +3,16 @@
  *
  * Business-user home page:
  *   - Settings / About quick links
- *   - "All Domains" gateway grid (the open door to every domain)
+ *   - "All Contexts" gateway grid (the open door to every domain)
  *   - My Tasks review worklist
  *
- * The current-domain KPI / health band lives on Domain → General
+ * The current-domain KPI / health band lives on Context → General
  * (see domain-information.js); it is no longer rendered here.
  */
 
 
 /* ──────────────────────────────────────────────────────────────────────────
-   All Domains gateway — the open door
+   All Contexts gateway — the open door
    ────────────────────────────────────────────────────────────────────────── */
 async function loadDomainGateway() {
     const container = document.getElementById('domainGateway');
@@ -150,7 +150,7 @@ async function openDomain(name, version) {
             return;
         }
         if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-        // Open lands on Domain → General, not a Home reload.
+        // Open lands on Context → General, not a Home reload.
         if (typeof navigateToDomainGeneral === 'function') {
             navigateToDomainGeneral();
         } else {

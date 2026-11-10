@@ -477,6 +477,82 @@ async function expandStudioGroup(name) {
     await initOntologyMap();
 }
 
+/**
+ * Right pane for a Studio ontology group: lists every member entity.
+ * A member row selects that entity on the canvas, which opens its entity panel.
+ * @param {string} groupName
+ */
+async function openStudioGroupPanel(groupName) {
+    const g = _studioGroupsDefs.find(d => d.name === groupName);
+    if (!g) return;
+    await checkDirtyBeforeSwitch();
+    sharedPanelEditType = null;
+    sharedPanelEditIndex = -1;
+    sharedPanelOriginalName = null;
+    sharedPanelViewOnly = true;
+    sharedPanelOnSaveCallback = null;
+    sharedPanelDirty = false;
+    openSharedPanel();
+
+    const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
+    if (!panel) return;
+
+    setSharedPanelHeader(
+        panel,
+        `${escapeHtml(g.icon || '📁')} <span id="sharedPanelItemName">${escapeHtml(g.label || g.name)}</span>`,
+        ''
+    );
+
+    const classByName = new Map((OntologyState.config.classes || []).map(c => [c.name, c]));
+    const members = g.members || [];
+    const rows = members.map(name => {
+        const cls = classByName.get(name);
+        const emoji = cls?.emoji || OntologyState.defaultClassEmoji || '📦';
+        return `
+            <button type="button" class="panel-item panel-group-member" data-group-member="${escapeHtml(name)}" data-panel-passive>
+                <div class="panel-item-head">
+                    <span class="panel-item-icon" aria-hidden="true">${escapeHtml(emoji)}</span>
+                    <div class="panel-item-text"><div class="panel-item-title">${escapeHtml(name)}</div></div>
+                </div>
+            </button>`;
+    }).join('');
+
+    const body = panel.querySelector('#sharedPanelBody');
+    if (!body) return;
+    const canEdit = typeof _canEditOntologyPanel === 'function'
+        ? _canEditOntologyPanel()
+        : (window.isActiveVersion !== false);
+    const editBtn = canEdit
+        ? `<button type="button" class="btn btn-sm btn-outline-secondary panel-group-edit" data-edit-group="${escapeHtml(g.name)}" data-panel-passive>
+                <i class="bi bi-pencil me-1"></i>Edit group
+           </button>`
+        : '';
+    body.innerHTML = `
+        ${editBtn}
+        ${panelSectionHeader({
+            targetId: 'studioGroupMembers',
+            icon: 'bi-collection',
+            title: 'Entities',
+            subtitle: 'Entities in this group. Click one to open it.',
+        })}
+        <div class="panel-group-members">
+            ${rows || panelEmptyState('No entities in this group yet.', '', '', true)}
+        </div>`;
+    _updatePanelSection('studioGroupMembers', { count: members.length });
+
+    body.querySelectorAll('[data-group-member]').forEach(btn => {
+        btn.addEventListener('click', () => _setMapSelection([btn.dataset.groupMember]));
+    });
+    const editEl = body.querySelector('[data-edit-group]');
+    if (editEl) {
+        editEl.addEventListener('click', () => {
+            if (window.OntologyGroups && typeof OntologyGroups.editGroupByName === 'function') {
+                OntologyGroups.editGroupByName(editEl.dataset.editGroup);
+            }
+        });
+    }
+}
+
 window.refreshStudioGroups = async function () {
     _snapshotStudioEntityPositions(ontologyMapNodes);
     await loadStudioGroups();
@@ -1683,12 +1759,17 @@ async function initOntologyMap() {
 
     // Click to edit entity (only if not dragging)
     nodeElements.on('click', function(event, d) {
-        // Group super-nodes are anchors only — no entity panel / connections.
+        // Group super-nodes open the group panel (member list) — no entity connections.
         if (d.isGroup) {
             event.stopPropagation();
             if (isDragging) {
                 isDragging = false;
+                return;
             }
+            hideMapContextMenu();
+            hideMapRelationshipActions();
+            _clearMapSelection({ closePanel: false });
+            openStudioGroupPanel(d.groupName);
             return;
         }
 

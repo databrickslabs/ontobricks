@@ -12,7 +12,7 @@
 - [Step 2: Map Data Assets (Mapping)](#step-2-map-data-assets-mapping)
 - [Step 3: Graph (Sync & Explore)](#step-3-graph-sync--explore)
 - [Step 4: Simulation (What-if Sandboxes)](#step-4-simulation-what-if-sandboxes)
-- [Domain Management & Version Control](#domain-management--version-control)
+- [Context Management & Version Control](#context-management--version-control)
 - [Best Practices](#best-practices)
 - [GraphQL API](#graphql-api)
 - [MCP Server (Databricks Playground)](#mcp-server-databricks-playground)
@@ -93,7 +93,7 @@ configured Registry schema?"
 
 ## Knowledge Store
 
-Use **Domain → Knowledge Store** to upload specifications, glossaries, and other
+Use **Context → Knowledge Store** to upload specifications, glossaries, and other
 evidence for ontology Generate and Mapping. OntoBricks parses each supported
 file once after upload and stores **only the parsed text** in Lakebase (the
 original binary is **not** retained). Both agents then read the same durable
@@ -168,7 +168,7 @@ An entity or relationship **ID** is also the local part of its URI. Renaming one
 
 Each entity supports:
 - **Icon**: Click the icon button (🎨) to select an emoji
-- **Auto-Map Icons**: In the **Model** view, click the smiley face button (😊) in the toolbar to automatically assign emoji icons to all entities that still have the default icon. This uses the LLM saved in **Domain → General → AI**. With **No LLM** selected, the control stays visible but unavailable.
+- **Auto-Map Icons**: In the **Model** view, click the smiley face button (😊) in the toolbar to automatically assign emoji icons to all entities that still have the default icon. This uses the LLM saved in **Context → Configuration → AI**. With **No LLM** selected, the control stays visible but unavailable.
 - **Description**: Click the description button (📝) to add notes
 - **Attributes**: Add data properties directly on the entity
 
@@ -415,7 +415,7 @@ Click **Expr. & Axioms** in the sidebar to define OWL class expressions and axio
 
 Open **Ontology → Sanity Checks** (last entry of the **Design** sidebar group) to lint the schema itself (not instance data). Checks are **advisory**: they never block save, mapping, Knowledge Graph build, or publish. Click **Refresh** after edits. Click a finding to jump to the entity, relationship, or group. Attribute findings open the owning entity when they have a domain. Orphaned attributes (no domain) are not listed under Relationships.
 
-**Auto-fix.** Most findings show an **Auto-fix** button (and **Fix all** when a rule has two or more fixable findings). Clicking it opens a confirmation modal that explains the proposed change(s), offers ranked alternatives when a decision is needed (for orphan attributes: attach to an entity or remove), and applies only after you confirm. Mechanical rules (broken refs, naming) are fixed deterministically; judgement rules (descriptions, orphan ownership, near-duplicates) use the domain LLM when one is selected in **Domain → General → AI**. With **No LLM**, Auto-fix still works for mechanical rules, missing labels (humanised ID), and orphan attributes (entity picker + Remove). Duplicate URI (DC-E06) and deep hierarchy (DC-I05) have no Auto-fix — they need a manual decision.
+**Auto-fix.** Most findings show an **Auto-fix** button (and **Fix all** when a rule has two or more fixable findings). Clicking it opens a confirmation modal that explains the proposed change(s), offers ranked alternatives when a decision is needed (for orphan attributes: attach to an entity or remove), and applies only after you confirm. Mechanical rules (broken refs, naming) are fixed deterministically; judgement rules (descriptions, orphan ownership, near-duplicates) use the domain LLM when one is selected in **Context → Configuration → AI**. With **No LLM**, Auto-fix still works for mechanical rules, missing labels (humanised ID), and orphan attributes (entity picker + Remove). Duplicate URI (DC-E06) and deep hierarchy (DC-I05) have no Auto-fix — they need a manual decision.
 
 | ID | Severity | What it flags |
 |----|----------|----------------|
@@ -436,7 +436,7 @@ Open **Ontology → Sanity Checks** (last entry of the **Design** sidebar group)
 | DC-I04 | info | Near-duplicate names (edit distance 1) |
 | DC-I05 | info | Hierarchy deeper than 5 |
 
-Domain → Validation shows the same error / warning / info counts under Consistency checks, with a link to this section.
+Context → General shows the same error / warning / info counts under Consistency checks, with a link to this section.
 
 #### Data Quality (SHACL Shapes)
 
@@ -659,13 +659,13 @@ in progress survives a page reload:
 If your data sources, documents, or ontology change after detection, a
 banner flags the draft as stale and offers a one-click **Re-detect**.
 
-Generation uses the LLM saved in **Domain → General → AI** (an executable
+Generation uses the LLM saved in **Context → Configuration → AI** (an executable
 Unity AI Gateway model service or a legacy Model Serving endpoint). With
 **No LLM** selected, **Detect Entities** stays visible but unavailable.
 
 #### Documents (PDF and other formats)
 
-Documents uploaded under **Domain → Knowledge Store** feed the Wizard. Files are
+Documents uploaded under **Context → Knowledge Store** feed the Wizard. Files are
 parsed once at upload using the Databricks `ai_parse_document` function (called
 inline with the uploaded bytes as base64), which runs on your configured **SQL
 warehouse** — so a warehouse must be configured. No Volume access grant is
@@ -700,7 +700,7 @@ LLM as the Wizard. Open it, type a request (for example “Show me all
 relationships”), and the agent reads or edits the in-session ontology.
 
 It does **not** pick a model of its own. Select and save an AI Gateway model
-service or Model Serving endpoint in **Domain → General → AI** first. With
+service or Model Serving endpoint in **Context → Configuration → AI** first. With
 **No LLM**, the assistant stays visible but unavailable.
 
 ### Option D: Import Industry-Standard Ontologies
@@ -722,8 +722,8 @@ Open **Ontology → General** and switch to the **OWL** tab to preview the gener
 ### Save Your Ontology
 
 - **Validate**: Click to check for issues
-- **Save**: Write the domain to the Lakebase registry
-- **Load**: Load an existing domain (opens **Domain → General**)
+- **Save**: Write the context to the Lakebase registry
+- **Load**: Load an existing context (opens **Context → Configuration**)
 
 ---
 
@@ -757,7 +757,7 @@ Click **Studio** in the sidebar to use the visual mapping interface. This view p
 
 1. Click on any entity node in the graph to open the mapping panel
 2. The panel has three tabs:
-   - **Wizard**: AI-powered SQL generation using the domain LLM from **Domain → General → AI** and table metadata
+   - **Wizard**: AI-powered SQL generation using the domain LLM from **Context → Configuration → AI** and table metadata
    - **SQL**: Direct SQL editing
     - **Mapping**: Interactive column-mapping grid with data preview
 3. For **already-assigned** entities, the preview query runs automatically on first access. Switching away and back reuses the preview while the entity SQL and row limit remain unchanged; use **Refresh** to run it again explicitly.
@@ -841,7 +841,7 @@ Two bulk-action buttons are available at the top of the attributes table:
 Click **Auto-Map** in the sidebar to batch-assign all unmapped entities and relationships:
 
 1. The page shows counts of unassigned entities and relationships, including how many are excluded (`· N excl.`).
-2. If tables or columns are missing `COMMENT` descriptions, a **metadata quality warning** is displayed with a collapsible list and a link to the Domain → Metadata editor. Poor descriptions reduce LLM mapping accuracy.
+2. If tables or columns are missing `COMMENT` descriptions, a **metadata quality warning** is displayed with a collapsible list and a link to the Context → Data Assets editor. Poor descriptions reduce LLM mapping accuracy.
 3. Click **Start Auto-Map** to launch an asynchronous task. Loaded **Unity Catalog metric views** are mapped with metric-aware SQL (dimensions projected, measures wrapped in `MEASURE()`, `GROUP BY` the dimensions — never `SELECT *`).
 4. Progress is tracked with a progress bar — you can navigate away and return later.
 5. Results are displayed in a report table showing success/failure per item.
@@ -850,7 +850,7 @@ Click **Auto-Map** in the sidebar to batch-assign all unmapped entities and rela
 
 **Cancelling a run**: **Cancel** stops the agent at the next item boundary instead of at the end of the batch. Everything already mapped is kept, and the run is recorded as cancelled.
 
-**Execution report in the Audit Trail**: every auto-map run — completed, failed, or cancelled — writes an **Auto-mapping agent run** entry on the **Mapping** tab of **Domain → Audit trail**, with the status, the entity/relationship counts, the duration, and the full ordered step list the overlay showed live. Like the individual mapping change entries, it appears once the domain version has been saved to the registry.
+**Execution report in the Audit Trail**: every auto-map run — completed, failed, or cancelled — writes an **Auto-mapping agent run** entry on the **Mapping** tab of **Context → Governance → Audit trail**, with the status, the entity/relationship counts, the duration, and the full ordered step list the overlay showed live. Like the individual mapping change entries, it appears once the domain version has been saved to the registry.
 
 **Re-Assign Missing Attributes**: If some entities are assigned but have incomplete attribute mappings, a third card appears showing the count and a **Re-Assign Missing Attributes** button. This re-runs auto-mapping only for those specific entities to fill in the missing *included* attribute mappings (excluded attributes are ignored).
 
@@ -1187,14 +1187,14 @@ Use the **Top N** input at the top of the results section to control how many en
 
 After an analysis completes, an **Interpret** button (✦ icon) appears in the toolbar.
 
-1. Click **Interpret** — an AI agent (`agent_graph_interpreter`) calls the LLM saved in **Domain → General → AI**. The agent may call `get_entity_details` one or more times to look up specific top-ranked entities before writing its insights.
+1. Click **Interpret** — an AI agent (`agent_graph_interpreter`) calls the LLM saved in **Context → Configuration → AI**. The agent may call `get_entity_details` one or more times to look up specific top-ranked entities before writing its insights.
 2. The **AI Insights** card renders three structured sections:
    - **Key Findings** — 2–4 sentences on the graph structure and standout patterns
    - **Notable Entities** — up to 5 entities with reasons they stand out; clicking an entity name navigates to the Graph Viewer
    - **Recommendations** — 2–4 actionable suggestions
 3. Click **Add to audit trail** (journal icon in the card header) to save the AI insights as a comment on the current domain version. The discussion panel opens automatically so you can see the new entry.
 
-> **Tip**: The LLM target used is the one saved in **Domain → General → AI**.
+> **Tip**: The LLM target used is the one saved in **Context → Configuration → AI**.
 > With **No LLM** selected, Interpret remains visible but unavailable and
 > provides guidance to configure a model.
 
@@ -1522,23 +1522,23 @@ registry with the domain version and is copied when you branch a new version.
 
 ---
 
-## Domain Management & Version Control
+## Context Management & Version Control
 
-OntoBricks stores domains in the **Lakebase registry** (Postgres) with built-in version control. Navigate to the **Domain** page by clicking "Domain" in the navigation bar.
+OntoBricks stores contexts in the **Lakebase registry** (Postgres) with built-in version control. Navigate to the **Context** page by clicking "Context" in the navigation bar.
 
-### Domain Structure
+### Context Structure
 
-Each domain is a named row family in the Lakebase registry (not a Unity Catalog Volume):
+Each context is a named row family in the Lakebase registry (not a Unity Catalog Volume):
 - **Name**: CamelCase identifier (sanitized for catalog objects)
 - **Versions**: Integer versions (`v1`, `v2`, …) with Draft / In Review / Published lifecycle
-- **Contents**: Ontology, mappings, design layout, Knowledge Store parsed documents, and domain metadata
+- **Contents**: Ontology, mappings, design layout, Knowledge Store parsed documents, and context metadata
 - **Optional GitHub mirror**: reviewable commits of the same documents; Lakebase stays the source of truth
 
 **What is Saved:**
 - ✅ Ontology (classes, properties, constraints, rules, axioms)
 - ✅ Mappings (entity and relationship mappings)
 - ✅ Design layout (OntoViz positions and visual configuration)
-- ✅ Domain metadata (name, description, author)
+- ✅ Context metadata (name, description, author)
 
 **What is NOT Saved (Security):**
 - ❌ Databricks credentials (host, token)
@@ -1546,18 +1546,18 @@ Each domain is a named row family in the Lakebase registry (not a Unity Catalog 
 - ❌ R2RML output (regenerated on load)
 - ❌ Generated OWL (regenerated on load)
 
-### Domain → General (Global Tab)
+### Context → Configuration (Global Tab)
 
-The **Global** tab in the Domain → General section contains the main domain settings:
+The **Global** tab in the Context → Configuration section contains the main context settings:
 
 | Field | Description |
 |-------|-------------|
-| **Domain Name** | CamelCase, alphanumeric only (e.g. `MyOntologyDomain`). Defaults to `NewDomain`. Non-alphanumeric characters are stripped automatically and words are capitalized as you type. |
+| **Context Name** | CamelCase, alphanumeric only (e.g. `MyOntologyContext`). Defaults to `NewContext`. Non-alphanumeric characters are stripped automatically and words are capitalized as you type. |
 | **Version** | Current version number with version selector. |
-| **Base URI** | The base namespace for all ontology entities. By default, auto-generated from `Settings → Default Base URI Domain / DomainName#`. Toggle the **Custom** switch to enter a custom URI. |
-| **Description** | Free-text description of the domain. |
+| **Base URI** | The base namespace for all ontology entities. By default, auto-generated from `Settings → Default Base URI Domain / ContextName#`. Toggle the **Custom** switch to enter a custom URI. |
+| **Description** | Free-text description of the context. |
 | **Author** | Automatically pre-filled with the current Databricks user email. Editable. |
-| **API / MCP** | Toggle **Expose via API & MCP** to make this domain visible through the REST API (`/api/v1/domains`) and the MCP server. Disabled by default. Once exposed, the [MCP tab](#mcp-tab) narrows down which tools and ontology attachments the domain actually publishes. |
+| **API / MCP** | Toggle **Expose via API & MCP** to make this context visible through the REST API (`/api/v1/domains`) and the MCP server. Disabled by default. Once exposed, the [MCP tab](#mcp-tab) narrows down which tools and ontology attachments the context actually publishes. |
 
 #### LLM Tab
 
@@ -1581,7 +1581,7 @@ Selecting **No LLM** and saving the domain is a strict domain-level opt-out.
 All domain-scoped LLM actions remain visible but unavailable: Ontology
 generation, Assistant and automatic icons, AI Business Rules, Mapping Auto-Map
 and SQL generation, Graph Chat, and Analytics Interpret. Activating one points
-you back to **Domain → General → AI** and does not start an LLM request.
+you back to **Context → Configuration → AI** and does not start an LLM request.
 
 The AI tab and **Browse** picker remain usable. Select and save an AI Gateway
 model service or Model Serving endpoint to make the LLM actions available
@@ -1638,7 +1638,7 @@ Short version:
 
 #### Materialization modes (Lakehouse)
 
-A Lakehouse domain chooses how `…_data` is built, in **Domain → General →
+A Lakehouse domain chooses how `…_data` is built, in **Context → Configuration →
 Backend → Access type**. The rest of the object family is identical
 either way, and a change takes effect on the next Build.
 
@@ -1753,19 +1753,19 @@ When you save an existing domain:
 - The current version file is **overwritten**
 - Use **Create New Version** to preserve history
 
-### Domain Cockpit (Validation)
+### General page (Cockpit)
 
-Under **Domain → Validation** (Cockpit), tiles summarise registry and build readiness. The **Published Version** tile shows the numeric-latest **PUBLISHED** registry version. The external API and MCP can target **any** version (`domain_version`); when omitted they use the numeric-latest version regardless of status. That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint.
+Under **Context → General** (the first item of the Context menu, before **Configuration**), tiles summarise registry and build readiness. The **Published Version** tile shows the numeric-latest **PUBLISHED** registry version. The external API and MCP can target **any** version (`domain_version`); when omitted they use the numeric-latest version regardless of status. That can differ from the version you have **loaded** in the editor; when it does, the tile adds a *(not loaded)* hint.
 
 #### Version lifecycle (DRAFT / IN-REVIEW / PUBLISHED)
 
-Every domain version carries a **lifecycle status**, shown as a colour-coded badge wherever the domain + version appears (navbar, Domain → General, Registry → Browse, Domain → Versions, and the query headers):
+Every domain version carries a **lifecycle status**, shown as a colour-coded badge wherever the domain + version appears (navbar, Context → Configuration, Registry → Browse, Context → Versions, and the query headers):
 
 - **DRAFT** (amber) — editable. New versions always start here.
 - **IN-REVIEW** (blue) — locked for editing, pending review. Requires a successful build first.
 - **PUBLISHED** (green) — locked for editing. The API/MCP also serve DRAFT and IN-REVIEW versions.
 
-Transitions are made from **Registry → Browse** (or Domain → General):
+Transitions are made from **Registry → Browse** (or Context → Configuration):
 DRAFT → IN-REVIEW → PUBLISHED (admin or builder), IN-REVIEW → DRAFT (admin or builder), and PUBLISHED → DRAFT (admin only). While a version is **not DRAFT**, its ontology/mapping editors and metadata/document writes stay locked. Builders and admins can still use **Build** (`/dtwin/sync/start`), **Load** (`/dtwin/sync/load`), and reasoning materialisation to refresh graph data from the frozen design without reverting the version to DRAFT. Read-only Knowledge Graph operations (Explorer filter/expand, stats, status, etc.) also remain fully accessible regardless of lifecycle status.
 
 #### Single-editor concurrency (open in edit vs. view) & the Close button
@@ -1785,18 +1785,18 @@ To keep two people from silently overwriting each other, a **DRAFT** version can
   domain is open, so an actively-used session never expires. **Hover the domain name in the
   top navbar** while you are editing to see a live countdown of the remaining lease (the time
   before it would expire if the tab went idle).
-- **Opening a different domain closes the current one for you.** Loading another domain
-  (navbar **Load Domain**, or **Registry → Browse → Load**) releases your lock on the
-  previously-open domain **before** the new one opens, so you never hold two locks at once.
-  Switching to another **version of the same domain** releases the old version's lock
+- **Opening a different context closes the current one for you.** Loading another context
+  (navbar **Load Context**, or **Registry → Browse → Load**) releases your lock on the
+  previously-open context **before** the new one opens, so you never hold two locks at once.
+  Switching to another **version of the same context** releases the old version's lock
   **after** the new version loads.
 
-**Closing a domain** — the top sub-navigation shows the domain name and its version (`vN ▾`), then
-**Close** and **Save** (persist the domain to the registry). The version crumb opens the version
+**Closing a context** — the top sub-navigation shows the context name and its version (`vN ▾`), then
+**Close** and **Save** (persist the context to the registry). The version crumb opens the version
 switcher (see below). Clicking **Close** asks whether to *save
 before closing* (**Save & Close** / **Close without saving** / **Cancel**), then releases the
 edit lock and returns you to the Home page. Once you close, the next person can open the
-domain in edit mode.
+context in edit mode.
 
 **Switching version** — click the version crumb (`vN ▾`, right after the domain name) to open a popup
 listing every version of the currently open domain, with the current one flagged. The popup also has
@@ -1835,7 +1835,7 @@ so viewers know exactly who to ask to close the domain.
 > The same user opening the domain in two tabs shares one lock (it is keyed by e-mail), so
 > a reload or a second tab never locks you out of your own domain.
 
-#### Validation & Review workflow (My Tasks + Domain → Validation)
+#### Validation & Review workflow (My Tasks + Context → Governance → Publication)
 
 For a guided, business-user-oriented review on top of the raw lifecycle, OntoBricks adds a
 review workflow that collects reviewer sign-offs and keeps a durable audit trail.
@@ -1846,13 +1846,13 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
   on a built DRAFT), **Review & sign off** (any domain member, on an IN-REVIEW version), or
   **Publish** (builders/admins, once the quorum is met). "Review & sign off" loads the domain
   and opens its Validation workspace.
-- **Domain → Validation** — the per-version review workspace:
+- **Context → Governance → Publication** — the per-version review workspace:
   - **Consistency checks** — a soft readiness summary (ontology valid, mapping complete,
     warehouse configured, Knowledge Graph built) with a shortcut to the Cockpit.
     These checks are advisory and never block publishing.
   - **Your actions** — context-aware buttons: Submit for review, **Approve** / **Request
     changes** (with an optional comment for the audit trail), Publish, or Reopen.
-  - **Audit trail** — Domain → Audit trail **Status** tab lists every decision (submitted, approved, changes requested,
+  - **Audit trail** — Context → Governance → Audit trail **Status** tab lists every decision (submitted, approved, changes requested,
     published, reopened) with the actor, timestamp, comment, and the `from → to` status
     snapshot for lifecycle transitions. Ontology and mapping edits live on their own tabs
     as compact `entity | field | old → new` rows (relationships are object properties;
@@ -1865,7 +1865,7 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
   builder only once the **sign-off quorum** is reached; an **admin** (app-level or domain-level)
   may **publish at any time, overriding the quorum** (the override is flagged in the audit
   trail). The quorum is a **per-domain** setting (default `1`), configured on
-  **Domain → General → Global** ("Sign-off quorum") and applied to every version of that
+  **Context → Configuration → Global** ("Sign-off quorum") and applied to every version of that
   domain. **Sign-off** (approve / request changes) is open to any principal with a role on the
   domain; **request changes** sends the version back to DRAFT for editing. **Reopen**
   (PUBLISHED → DRAFT) is admin-only.
@@ -1873,9 +1873,9 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
   registry table, so the full "who validated what, when" history survives restarts and is
   queryable.
 
-### Version Management (Domain → Versions)
+### Version Management (Context → Versions)
 
-Domain → Versions presents saved versions as newest-first cards. Each card
+Context → Versions presents saved versions as newest-first cards. Each card
 shows lifecycle status, description, author, last update, last build, and
 whether the version is Loaded or Latest. Lifecycle status is independent from
 the API/MCP **Active** selection managed in **Registry → Browse**.
@@ -1899,16 +1899,16 @@ the API/MCP **Active** selection managed in **Registry → Browse**.
 
 #### Creating a New Version
 
-1. Open **Domain** → **Versions** → **New Version**, or click **New Version** in the navbar **Versions** popup. Both entry points share the same ungated create-version workflow.
+1. Open **Context** → **Versions** → **New Version**, or click **New Version** in the navbar **Versions** popup. Both entry points share the same ungated create-version workflow.
 2. OntoBricks increments the version number, saves under `/domains/<folder>/V<n>/`, and keeps prior versions. After you confirm from the popup, the popup closes and the branded loading overlay stays until the new version is loaded; a failure restores the popup.
 
-#### Loading a Domain from Registry
+#### Loading a Context from Registry
 
-1. Use **Load Domain** in the top navbar (or **Registry → Browse** → **Load** on a version row, **Home → Open**, or Domain → Versions load/reload).
+1. Use **Load Context** in the top navbar (or **Registry → Browse** → **Load** on a version row, **Home → Open**, or Context → Versions load/reload).
 2. Pick a domain and version in the dialog. Editability follows lifecycle
    status: Draft versions are editable, while In Review and Published versions
    are read-only, whether or not they are the latest.
-3. OntoBricks always opens **Domain → General** (`/domain/?section=information`).
+3. OntoBricks always opens **Context → Configuration** (`/domain/?section=information`).
    It does not stay on Home or reload Registry Browse. Publication and
    Validation entry points that already jump to `?section=review` are unchanged.
 
@@ -1928,9 +1928,9 @@ Four related ideas:
 | **Lifecycle status** | The version's Draft, In Review, or Published review state. Card actions change this state; it does not select the API/MCP version. |
 | **Active (API/MCP)** | The one version flagged for external tools and MCP — shown on the Cockpit **Active Version** tile and changed only from **Registry → Browse**. |
 
-### Domain Save/Load
+### Context Save/Load
 
-Domains are saved as versioned documents in the Lakebase registry. Use the **Save** button (in the domain sub-navigation; a yellow dot means there are registry changes not yet saved, and **Ctrl+S** / **⌘S** saves) and the **Load Domain** option in the top menu to persist and restore your work; after a generic load the app opens **Domain → General**. The version crumb (`vN ▾`) reloads the current domain or loads another of its versions from the Registry (that also lands on General), and the **Close** button releases the edit lock and returns you to the Home page.
+Contexts are saved as versioned documents in the Lakebase registry. Use the **Save** button (in the context sub-navigation; a yellow dot means there are registry changes not yet saved, and **Ctrl+S** / **⌘S** saves) and the **Load Context** option in the top menu to persist and restore your work; after a generic load the app opens **Context → Configuration**. The version crumb (`vN ▾`) reloads the current context or loads another of its versions from the Registry (that also lands on Configuration), and the **Close** button releases the edit lock and returns you to the Home page.
 
 ### Best Practices for Version Control
 
@@ -1964,7 +1964,7 @@ Domains are saved as versioned documents in the Lakebase registry. Use the **Sav
 5. **Exclude Irrelevant Attributes Early**: Before running Auto-Map, open each entity's Status tab and uncheck attributes you don't need. Auto-Map will skip excluded attributes, producing leaner SQL with no extra columns.
 6. **Quote Special Column Names**: If a source column contains spaces, hyphens, or dots, use backtick quoting in your SQL (`` `column name` AS column_name ``) so the mapping and R2RML export work correctly.
 7. **Quote Unity Catalog tables per segment**: Write `catalog.schema.table` or `` `catalog`.`schema`.`table` ``. A single pair of backticks around the whole three-level name is illegal Spark SQL; Mapping save, Auto-Map, and Diagnostics rewrite or flag it.
-8. **Use Metadata Quality Warning**: Check the Auto-Map page for the metadata quality warning before running Auto-Map — adding table and column descriptions in Domain → Metadata significantly improves mapping accuracy.
+8. **Use Metadata Quality Warning**: Check the Auto-Map page for the metadata quality warning before running Auto-Map — adding table and column descriptions in Context → Data Assets significantly improves mapping accuracy.
 
 ### Knowledge Graph Tips
 
@@ -2087,18 +2087,18 @@ app, or publish a single MCP domain. See [docs/mcp.md](mcp.md).
 3. Select **mcp-ontobricks** from the MCP Servers list
 4. Ask questions like *"What entity types are in the graph viewer?"* or *"Tell me about Jacob Martinez"*
 
-### Enabling Domains for MCP
+### Enabling Contexts for MCP
 
-Domains must have the **API / MCP** flag enabled to be visible through the MCP server:
+Contexts must have the **API / MCP** flag enabled to be visible through the MCP server:
 
-1. Go to **Domain > General > Global** tab
+1. Go to **Context > Configuration > Global** tab
 2. Toggle **Expose via API & MCP** to ON
-3. Save the domain
+3. Save the context
 
-### Tailoring what a domain publishes
+### Tailoring what a context publishes
 
-Exposure is all-or-nothing; what happens next is not. Open **Domain >
-General > MCP** to choose which of the seven domain-scoped tools the
+Exposure is all-or-nothing; what happens next is not. Open **Context >
+Configuration > MCP** to choose which of the seven domain-scoped tools the
 domain publishes, and whether datasets, bridges and actions are **Preferred**,
 **Normal** or **Disabled**. The tool list is recomputed when the client calls
 `select_domain`, so changes land without restarting the MCP server, and a tool
@@ -2326,7 +2326,7 @@ Published versions are tagged `<Domain>/V<n>`. There is no `git` clone on the
 app host: commits go through the GitHub Git Data API.
 
 **History in the Audit trail.** Every push that produced a commit (or a
-warning) is logged on the **GitHub** tab of **Domain → Audit trail**, per
+warning) is logged on the **GitHub** tab of **Context → Governance → Audit trail**, per
 version: who triggered it, a link to the commit, the release tag for published
 versions, and any OWL / R2RML / SHACL generation warnings. Failed pushes are
 logged there too with the error. Pushes that change nothing are not logged.
@@ -2555,11 +2555,11 @@ The connection status indicator in the navbar should turn green.
 
 ---
 
-### Step 2: Set Up the Domain
+### Step 2: Set Up the Context
 
-Navigate to **Domain** in the top navbar, then open the **General** sidebar section.
+Navigate to **Context** in the top navbar, then open the **Configuration** sidebar section.
 
-1. Enter a **Domain Name** (e.g., `CustomerAnalytics`).
+1. Enter a **Context Name** (e.g., `CustomerAnalytics`).
 2. Set the **Base URI** for your ontology (e.g., `https://ontobricks.com/ontology/`). This is the namespace for all generated RDF resources.
 3. Open the **LLM** tab, click **Browse**, search the AI Gateway and legacy
    Model Serving groups, and select the model used for ontology generation,
@@ -2570,7 +2570,7 @@ Navigate to **Domain** in the top navbar, then open the **General** sidebar sect
 
 ### Step 3: Import Table Metadata
 
-Navigate to **Domain > Metadata** in the sidebar.
+Navigate to **Context > Data Assets** in the sidebar.
 
 This step tells OntoBricks about the Databricks tables you want to model in your ontology.
 
@@ -2633,7 +2633,7 @@ longer knows about.
 
 Navigate to **Ontology** in the top navbar, then open **Generate** in the sidebar.
 
-The Wizard uses the LLM saved in **Domain → General → AI** and the
+The Wizard uses the LLM saved in **Context → Configuration → AI** and the
 imported metadata to design an ontology, across three steps — **Configure &
 Detect**, **Review Entities**, **Complete** — shown as a stepper at the top
 of the section. You can navigate away at any point; the in-progress draft
@@ -2750,7 +2750,7 @@ error state; build information and actions remain hidden until loading succeeds.
 
 > **Note**: If the triple store table already exists, you can choose to **drop and recreate** it or append to the existing data.
 
-> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine (Lakebase Postgres, Lakehouse, or Neo4j). The backend is chosen **per domain** under **Domain → General → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
+> **Triple Store Backend**: OntoBricks always materializes a Delta view in Unity Catalog (governance + lineage) and a flat triple table in the domain's Graph DB engine (Lakebase Postgres, Lakehouse, or Neo4j). The backend is chosen **per domain** under **Context → Configuration → Knowledge Graph** (engine *connection* settings live under **Settings → Back end**).
 
 ---
 
@@ -2834,8 +2834,8 @@ Open **Explorer** in the sidebar to explore the graph viewer interactively:
 | Step | Where | Action | Automated? |
 |------|-------|--------|------------|
 | 1 | Settings | Configure Databricks connection | Manual (one-time) |
-| 2 | Domain > General | Set LLM target and triple store table | Manual (one-time) |
-| 3 | Domain > Metadata | Import table metadata from Unity Catalog | One click |
+| 2 | Context > Configuration | Set LLM target and triple store table | Manual (one-time) |
+| 3 | Context > Data Assets | Import table metadata from Unity Catalog | One click |
 | 4 | Ontology > Generate | Detect → review → complete ontology from metadata using LLM | Detect + Continue |
 | 5 | Mapping > Auto-Map | Auto-map entities and relationships to SQL | One click |
 | 6 | Knowledge Graph > Build | Synchronize to triple store | One click |
@@ -3155,7 +3155,7 @@ After import you can:
 ## Feature inventory
 
 ### Ontology Design
-- **Ontology Studio (menu)**: Primary visual ontology workspace under **Ontology → Studio** — OntoViz canvas, toolbar, and floating AI Assistant (the sidebar label is *Studio*, not “Model”). The assistant uses the LLM saved in **Domain → General → AI** (Unity AI Gateway or Model Serving); it is unavailable when **No LLM** is selected.
+- **Ontology Studio (menu)**: Primary visual ontology workspace under **Ontology → Studio** — OntoViz canvas, toolbar, and floating AI Assistant (the sidebar label is *Studio*, not “Model”). The assistant uses the LLM saved in **Context → Configuration → AI** (Unity AI Gateway or Model Serving); it is unavailable when **No LLM** is selected.
 - **Visual Ontology Editor (OntoViz)**: Drag-and-drop canvas to create entities, relationships, and inheritance hierarchies with icons and attributes.
 - **Class Hierarchies**: Define rdfs:subClassOf relationships with automatic property inheritance from parent to child entities.
 - **Business Rules — Simple & Complex**: Two paradigms under **Business Rules**. **Simple** rules are IF/THEN inference rules authored in a **graphical D3-based editor** — fullscreen modal with IF/THEN atom builders, ontology-aware context menu, and a collapsible **Show SHACL code** pane with the live generated SHACL-AF; they run as SHACL-AF. A header **SHACL** button opens a modal (mirroring Data Quality’s SHACL) to view and export the generated SHACL-AF rules (read-only, one-directional). **Complex** rules are user-authored SPARQL `CONSTRUCT` queries that infer new triples from graph patterns.
@@ -3163,24 +3163,24 @@ After import you can:
 - **SHACL Data Quality Shapes**: Define data quality rules using W3C SHACL — six categories (completeness, cardinality, uniqueness, consistency, conformance, structural), Turtle round-trip (generate/import), and SQL compilation for triple store execution.
 - **Conditional data quality rules**: Guard a conformance or consistency rule with an optional IF block — *IF `status` = active AND `amount` > 1000, THEN `email` must match the pattern*. Conditions use property/operator/value rows, plus `exists` / `does not exist` on relationships, and compile to a SHACL-AF `sh:SPARQLTarget` on export.
 - **OWL Axioms**: Express class relationships, property chains, and complex expressions (equivalent, disjoint, union, intersection).
-- **OWL Generation**: Automatic generation of W3C-compliant OWL/Turtle from visual design. **Ontology → Generate** also reads Unity Catalog **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Domain → Metadata.
-- **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the LLM saved in **Domain → General → AI** (Ontology Studio toolbar). Entities that still use the default icon are mapped immediately; if every entity already has a custom icon, the toolbar asks for confirmation before remapping all of them. Unavailable when **No LLM** is selected.
+- **OWL Generation**: Automatic generation of W3C-compliant OWL/Turtle from visual design. **Ontology → Generate** also reads Unity Catalog **metric views**: dimension columns are entity evidence, measures are never proposed as classes. The Generate source list badges metric views the same way as Context → Data Assets.
+- **LLM-Powered Auto-Map Icons**: Automatically assign emoji icons to entities based on their names using the LLM saved in **Context → Configuration → AI** (Ontology Studio toolbar). Entities that still use the default icon are mapped immediately; if every entity already has a custom icon, the toolbar asks for confirmation before remapping all of them. Unavailable when **No LLM** is selected.
 - **Ontology Studio (D3 Graph)**: Force-directed graph view of the full ontology under **Ontology → Studio**. Selecting an entity or relationship shows its URI under the name in the side panel. Click an entity to select it, open its panel, and highlight its 1-hop neighbourhood (connected links + neighbours dimmed). The toolbar **Select** toggle (bounding-box icon) turns click-to-toggle and empty-canvas marquee on without holding a modifier; Ctrl/Cmd-click and Ctrl/Cmd-drag still work when the toggle is off. Ctrl/Cmd-click toggles an entity in a multi-selection without opening the panel. Ctrl/Cmd-drag on empty canvas draws a marquee that replaces the selection with every entity inside the rectangle (an empty marquee leaves the current set). Plain drag on empty canvas still pans; Escape clears a multi-selection (after connection mode, if any). Dragging one selected node moves the whole set. Right-click a multi-selection offers **Create Business View** and **Delete N entities** only — Create Business View writes `Auto_Selection` (numeric suffix on collision) with exactly the selected entities plus object-property/inheritance links whose both endpoints are selected, then opens Business Views. Single-entity right-click still creates `Auto_<entity>` plus the 1-hop neighbourhood. Click a relationship to highlight its two endpoints. Subclasses show dashed inherited outgoing relations from ancestor object-properties (read-only; Mapping reuses the declaring class’s mapping). Toggle inheritance links and the OntoViz-style dotted canvas grid (both persisted). Search any entity by name to pan/zoom to it with neighbourhood highlight. Metadata-only saves (label, icon, reference, relationship direction) refresh visible nodes in place; topology changes still rebuild the map.
 - **Import Entity (Studio)**: The Studio header **Import entity** button copies entities from another registry domain (latest version). A modal lists the source entities with their 1-hop related entities (opt-in), previews the entity/relationship counts, flags name conflicts (keep existing or rename), and imports the selection with attributes, icon, description, resolvable parent, and the relationships whose endpoints are imported or already exist. Source URIs are kept (rename rewrites the local name under the source namespace) and each copy records `importedFrom`. Mappings, rules, constraints and groups are not imported.
 - **Dashboard Mapping**: Assign Databricks dashboards to entity types with parameter mapping for embedded display in the Graph Viewer.
 
 ### Data Mapping
 - **Mapping Studio**: Map ontology classes and relationships to Databricks tables with an interactive Studio canvas. Subclass entities show inherited outgoing relations as dashed edges and Status-tab links; mapping stays one SQL per property URI on the declaring class.
-- **Unity Catalog Metric Views as sources**: UC Metric Views load alongside tables and views in Domain → Metadata (each source carries an `object_kind` of `table`, `view`, or `metric_view`; metric-view columns are additionally tagged `dimension` or `measure`). The picker and loaded-sources list flag metric views with a dedicated badge. When a metric view is mapped, the `agent_mapping_pge` agent generates metric-aware SQL — dimensions are projected directly, measures are wrapped in `MEASURE(<col>) AS <col>`, and a `GROUP BY` over the projected dimensions is added — never `SELECT *`. A deterministic evaluator rejects any metric-view mapping that selects `*`, leaves a measure unwrapped, or omits the required `GROUP BY`.
+- **Unity Catalog Metric Views as sources**: UC Metric Views load alongside tables and views in Context → Data Assets (each source carries an `object_kind` of `table`, `view`, or `metric_view`; metric-view columns are additionally tagged `dimension` or `measure`). The picker and loaded-sources list flag metric views with a dedicated badge. When a metric view is mapped, the `agent_mapping_pge` agent generates metric-aware SQL — dimensions are projected directly, measures are wrapped in `MEASURE(<col>) AS <col>`, and a `GROUP BY` over the projected dimensions is added — never `SELECT *`. A deterministic evaluator rejects any metric-view mapping that selects `*`, leaves a measure unwrapped, or omits the required `GROUP BY`.
 - **Direct Edit Mode**: Clicking an already-assigned entity or relationship immediately loads the editable column-mapping grid (no extra Edit button click needed).
-- **AI-Powered Wizard**: Generate SQL queries using the domain LLM from **Domain → General → AI** with table context from project metadata. Unavailable when **No LLM** is selected.
+- **AI-Powered Wizard**: Generate SQL queries using the domain LLM from **Context → Configuration → AI** with table context from project metadata. Unavailable when **No LLM** is selected.
 - **Attribute-Level Mapping**: Map individual ontology attributes to SQL columns with multi-pass matching (exact, normalized, substring, positional).
 - **Per-Attribute Include / Exclude**: Each attribute in the **Status tab** of the bottom panel has a checkbox. Unchecking an attribute excludes it from the mapping — excluded attributes are shown with strikethrough styling and a dash icon, are skipped in gap reporting, are not generated in the R2RML export, and are hidden from the auto-mapping agent. Exclusions survive Unmap/re-map cycles and are never overwritten by Auto-Map.
 - **Auto-Exclude Unmapped Attributes**: The Status tab exposes an **Auto-Exclude unmapped** button that bulk-excludes all attributes that have no column assignment yet. Useful for quickly scoping a mapping to only the attributes you care about.
 - **Partial Mapping Detection (includes-aware)**: Entities with incomplete attribute mappings are highlighted orange on the Studio canvas. The check now considers only *included* attributes — an entity is green when every included attribute has a column assignment, regardless of how many attributes are excluded.
 - **Auto-Map**: Batch-map all unmapped entities and relationships asynchronously with progress tracking.
 - **Auto-Map KPI — Excluded Counts**: Entity, Relationship, and Attribute KPI tiles on the Auto-Map page show the number of excluded items alongside mapped/total counts (e.g. `13 / 13 · 1 excl.`).
-- **Metadata Quality Warning**: The Auto-Map page detects tables and columns with missing `COMMENT` descriptions and displays a collapsible warning. Poor metadata quality reduces LLM mapping accuracy; a direct link opens the Domain → Metadata editor.
+- **Metadata Quality Warning**: The Auto-Map page detects tables and columns with missing `COMMENT` descriptions and displays a collapsible warning. Poor metadata quality reduces LLM mapping accuracy; a direct link opens the Context → Data Assets editor.
 - **Re-Assign Missing Attributes**: Targeted re-mapping for entities that have some included attributes unmapped (excluded attributes are ignored by this check).
 - **Column Names with Spaces / Special Characters**: The auto-mapping agent is instructed to backtick-quote unsafe column names and alias them to safe `snake_case` names. The R2RML generator double-quotes column names (per R2RML spec §7.4) in `rr:column` values and `rr:template` column references whenever a name is not a plain SQL identifier.
 - **Unity Catalog table names**: Mapping SQL must use `catalog.schema.table` or separately quoted segments (`` `catalog`.`schema`.`table` ``). A single pair of backticks around the full three-level name is rewritten on save/submit and flagged by Mapping → Diagnostics (`uc_fqn_quoting`).
@@ -3207,11 +3207,11 @@ After import you can:
 - **SHACL Validation**: Run SHACL shapes against the triple store — shapes are compiled to SQL and executed against the triple-store VIEW, with violation reporting and pass rates.
 - **Triples Grid**: Interactive data grid with sorting, filtering, and grouping capabilities to browse triple store contents.
 - **Graph Viewer**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, depth control, and entity detail panels. **Find Path** highlights the shortest undirected path(s) between two loaded entities (text search picker) without querying the rest of the store. The bottom-left stopwatch reports the latest search's Preview, Expansion, Display, and Total times (seed-selection dwell excluded). Delta/Lakehouse expansion traverses and fetches the bounded subgraph in one Query Warehouse statement; other graph backends retain native or iterative traversal. Graph status on first paint is cache-first so Explorer is not blocked on full triple `COUNT(*)` scans.
-- **Search cache switch**: Domain → General → Backend (Lakehouse / Lakebase) enables or disables adjacency, entity-search, and property companions. Default on; re-enable requires Build or Refresh cache. Public find, session find/filter, GraphQL, and MCP `describe_entity` accept `cache` to force companions on or off for one request.
+- **Search cache switch**: Context → Configuration → Backend (Lakehouse / Lakebase) enables or disables adjacency, entity-search, and property companions. Default on; re-enable requires Build or Refresh cache. Public find, session find/filter, GraphQL, and MCP `describe_entity` accept `cache` to force companions on or off for one request.
 - **Lakehouse//RT query path**: Administrators can enable **Use Lakehouse//RT for queries** under **Settings → Lakehouse → SQL Warehouse**. Builds stay on a classic or serverless **Build** warehouse; Query is a distinct optional warehouse because RT compute rejects `CREATE VIEW` / CTAS. The native Kernel backend, bounded retries, and an optional **Use CloudFetch** toggle (**Settings → Databricks**) keep RT reads working in Databricks Apps.
 - **Data Cluster Detection**: Detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; color-by-cluster mode, adjustable resolution slider, cluster collapse/expand into super-nodes, and cluster member details on click.
 - **Graph Analytics**: Dedicated **Analytics** sidebar section that computes five centrality metrics over the mapped knowledge graph using a serverless Databricks Lakeflow job: PageRank (global influence), Betweenness Centrality (bridging, Brandes–Pich estimate), Degree Centrality (raw connectivity), Closeness Centrality (reachability, Brandes–Pich estimate), and Clustering Coefficient (local density). Results are organised in three tabs — **Dashboard**, **Data Model Health**, and **AI Insights**. The Dashboard shows a KPI row, then a **distribution strip** of five small histogram tiles (one per metric) summarising **every scored node in the graph** — so you can tell whether a top-ranked score is an outlier or typical — followed by a single full-width ranked **point-and-line chart** for the selected metric across **all scored nodes** (sorted by rank). Each metric switch uses one `/dtwin/metrics/series` response. The backend runs one exhaustive ordered query and, when totals exceed **5,000** nodes, returns **2,000 retained source points** with original ranks using server-side visual sampling; the chart renders those retained points directly and reports exhaustive total vs rendered points in the status line. Click a distribution tile or use the segmented control to switch metrics; a **Log scale** toggle redraws the histograms on a logarithmic count axis for heavy-tailed metrics. Histograms use 20 linear bins; median and p90 are interpolated approximations and labelled as such. Betweenness and Closeness are Brandes–Pich estimates and may be unavailable for a run (depth cap / pivots disabled) — their tiles then read "Not computed for this run". Legacy cached results (computed before this redesign) still render KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis. Clicking a ranking point navigates directly to the entity in the Graph Viewer. A PageRank Detail Table shows all five scores side-by-side with relative mini-bars, and **Top N now controls this table only** (not the chart). The ranking chart card has an explanatory popup (formula, worked example, importance). **Run Analysis** opens an **Analysis scope** dialog where an optional entity type restricts the run to a single class; the scope resets to the full graph each time it opens, and the funnel line above the results always names the scope the displayed result was computed with. Requires the admin toggle enabled, the job bundle deployed, and the domain built (which materialises the Delta snapshot the job reads).
-- **AI Graph Interpretation**: After running an Analytics computation, click **Interpret** to invoke the `agent_graph_interpreter` AI agent. The agent uses the LLM saved in **Domain → General → AI**, may call `get_entity_details` to look up top-ranked entities, and produces three structured insight sections (Key Findings, Notable Entities, Recommendations). Results are rendered as styled Bootstrap cards with markdown support. Clickable entity names in "Notable Entities" jump to the Graph Viewer. Unavailable when **No LLM** is selected.
+- **AI Graph Interpretation**: After running an Analytics computation, click **Interpret** to invoke the `agent_graph_interpreter` AI agent. The agent uses the LLM saved in **Context → Configuration → AI**, may call `get_entity_details` to look up top-ranked entities, and produces three structured insight sections (Key Findings, Notable Entities, Recommendations). Results are rendered as styled Bootstrap cards with markdown support. Clickable entity names in "Notable Entities" jump to the Graph Viewer. Unavailable when **No LLM** is selected.
 - **Audit Trail Integration**: From the AI Insights card, click **Add to audit trail** to post the AI-generated interpretation as a comment on the current domain version (markdown-formatted). The discussion panel opens automatically to show the new entry.
 - **Dashboard Embedding**: View assigned Databricks dashboards with entity-specific parameters directly in the Graph Viewer.
 - **Class Actions (Unity Catalog functions)**: Bind any number of UC functions to an ontology class in **Ontology → Studio → Behaviour → Functions**, each with its own description. Run them on a node from the details pane or its right-click menu; the result (scalar or table) opens in a popup. Each function must take exactly one argument — the entity's ID — and the invocation endpoint enforces an allow-list so only functions declared on the node's own class can be called. The same actions are surfaced to the MCP server through `get_entity_context` and `invoke_entity_action`.
@@ -3222,21 +3222,21 @@ After import you can:
 - **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
 check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. **View → Quality rings** hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.
 - **Graph Chat ↔ MCP alignment**: Graph → Chat discovers Datasets, Bridges, and Class Actions the same way MCP does (`get_entity_context`). Executing an Action from Graph Chat is **confirmation-gated**: the agent proposes via `request_entity_action`, the UI shows a Confirm/Cancel card, and only Confirm runs the allow-listed UC function. Graph Chat does **not** expose MCP's direct `invoke_entity_action` tool.
-- **Named Neo4j connections**: Settings → Neo4j holds multiple named Bolt profiles (URI, database, username, Databricks secret). Domains with Graph Backend = Neo4j must pick one connection on Domain → General → Knowledge Graph; Test connection / Objects operate on the selected profile.
+- **Named Neo4j connections**: Settings → Neo4j holds multiple named Bolt profiles (URI, database, username, Databricks secret). Domains with Graph Backend = Neo4j must pick one connection on Context → Configuration → Knowledge Graph; Test connection / Objects operate on the selected profile.
 - **Violation Details**: View quality check violations in a detailed modal with entity information.
 
 ### Project Management
 - **Lakebase registry**: Save and load domains from the Postgres registry (optional GitHub mirror; Unity Catalog Volume is for ad-hoc export bundles only).
-- **Version Control**: Domain → Versions presents newest-first cards with Loaded and Latest badges, metadata, and inline lifecycle actions that immediately synchronize global badges and read-only state. App administrators can permanently delete only older, unloaded Draft versions; loaded, latest, In Review, and Published versions are protected, and the destructive Lakebase statement atomically rechecks Draft status before Knowledge Store cleanup. Registry-row deletion and Knowledge Store cleanup cannot share one transaction; a cleanup failure therefore returns a truthful 5xx partial-deletion error rather than success. Lifecycle status (Draft / In Review / Published) is separate from the **Active** version exposed through API/MCP, which is selected in **Registry → Browse**.
+- **Version Control**: Context → Versions presents newest-first cards with Loaded and Latest badges, metadata, and inline lifecycle actions that immediately synchronize global badges and read-only state. App administrators can permanently delete only older, unloaded Draft versions; loaded, latest, In Review, and Published versions are protected, and the destructive Lakebase statement atomically rechecks Draft status before Knowledge Store cleanup. Registry-row deletion and Knowledge Store cleanup cannot share one transaction; a cleanup failure therefore returns a truthful 5xx partial-deletion error rather than success. Lifecycle status (Draft / In Review / Published) is separate from the **Active** version exposed through API/MCP, which is selected in **Registry → Browse**.
 - **Single-editor concurrency**: A DRAFT domain version can only be **edited by one user at a time**. The first opener edits; anyone else opening the same version is automatically **read-only** with a banner naming the current editor. The lock uses a **renew-only lease** — the editor's browser keeps it alive while the domain is open, so an active session never expires, but a lock left behind (crashed/abandoned tab) auto-releases once its lease lapses (configurable in **Settings → Global → Edit Lock Lease**, or via `ONTOBRICKS_EDIT_LOCK_TTL_S`; default 10 min; `0` disables). It is also released immediately when the editor clicks **Close** (which prompts *Save before closing?* and returns to Home) or an **app-admin takes over**. The **Save** and **Close** buttons sit together in the domain sub-navigation.
-- **Domain Cockpit (Validation)**: Readiness tiles including **Active Version** — the version currently exposed via API/MCP (from the registry), with a *(not loaded)* hint when it differs from the version open in the session. Distinct from “latest on disk” vs read-only UI gating (still driven by whether the loaded version is the latest).
-- **Audit Trail**: Domain → Audit trail splits ontology vs mapping into tabs (plus Status, Builds, and GitHub). Change rows are compact: the icon is the action, and the line names the asset with previous → new values on edits. Events are buffered in the working session and flushed to the registry (`domain_change_events`) on **Save to registry**. A version dropdown scopes the timeline. GitHub pushes that produced a commit or warning appear on the GitHub tab.
-- **New-domain loading**: After **New Domain** from the navbar, a full-page spinner runs until Domain → General has finished its initial fetches (LLM endpoints, version status, domain info).
-- **Load lands on Domain → General**: Home → Open, navbar **Load Domain**, Registry → Browse → Load, Domain → Versions load/reload, and domain import navigate to `/domain/?section=information` instead of reloading the current page. Publication / Validation jumps keep `?section=review`.
-- **CamelCase domain names**: New domains must use alphanumeric CamelCase names (no spaces or special characters); the creation UI sanitizes as you type and the backend rejects invalid names.
-- **Domain → General — Knowledge Graph fields**: Triple-store FQN and Graph DB table name (e.g. Lakebase `g_<domain>_v<version>`) refresh when the domain name is **committed** (blur / `change`) or the version changes, so previews match naming rules before save. When the backend is Neo4j, a required **Neo4j connection** dropdown lists Settings profiles (no per-domain database override).
-- **Duplicate domain names**: Save to registry is blocked when the sanitized name already exists (`/domain/check-name` + guard on **Save**); inline validation clears when the name is cleared or the check errors.
-- **Navbar domain identity**: Top bar name/version invalidate cached `/navbar/state` (and related caches) after domain mutations so reloads and navigations do not show stale labels for up to 15 seconds.
+- **Context General (Cockpit)**: Readiness tiles including **Active Version** — the version currently exposed via API/MCP (from the registry), with a *(not loaded)* hint when it differs from the version open in the session. Distinct from “latest on disk” vs read-only UI gating (still driven by whether the loaded version is the latest).
+- **Audit Trail**: Context → Governance → Audit trail splits ontology vs mapping into tabs (plus Status, Builds, and GitHub). Change rows are compact: the icon is the action, and the line names the asset with previous → new values on edits. Events are buffered in the working session and flushed to the registry (`domain_change_events`) on **Save to registry**. A version dropdown scopes the timeline. GitHub pushes that produced a commit or warning appear on the GitHub tab.
+- **New-domain loading**: After **New Context** from the navbar, a full-page spinner runs until Context → Configuration has finished its initial fetches (LLM endpoints, version status, domain info).
+- **Load lands on Context → Configuration**: Home → Open, navbar **Load Context**, Registry → Browse → Load, Context → Versions load/reload, and domain import navigate to `/domain/?section=information` instead of reloading the current page. Publication / Validation jumps keep `?section=review`.
+- **CamelCase context names**: New contexts must use alphanumeric CamelCase names (no spaces or special characters); the creation UI sanitizes as you type and the backend rejects invalid names.
+- **Context → Configuration — Knowledge Graph fields**: Triple-store FQN and Graph DB table name (e.g. Lakebase `g_<domain>_v<version>`) refresh when the domain name is **committed** (blur / `change`) or the version changes, so previews match naming rules before save. When the backend is Neo4j, a required **Neo4j connection** dropdown lists Settings profiles (no per-domain database override).
+- **Duplicate context names**: Save to registry is blocked when the sanitized name already exists (`/domain/check-name` + guard on **Save**); inline validation clears when the name is cleared or the check errors.
+- **Navbar context identity**: Top bar name/version invalidate cached `/navbar/state` (and related caches) after domain mutations so reloads and navigations do not show stale labels for up to 15 seconds.
 - **Import/Export**: Import OWL and RDFS ontologies, import industry-standard ontologies (FIBO, CDISC, IOF, HL7 FHIR R4/R4B/R5), import/export R2RML mappings, and export OWL files.
 - **Registry OBX Export/Import**: Export one or more registry domains to a portable `.obx` file directly from **Registry → Browse** with per-domain version-mode selection (Latest / Active / All / Choose). Import with per-domain selection checkboxes plus conflict resolution (Skip / Overwrite / Rename). An integer `format_version` field ensures backward compatibility as the format evolves.
 - **GitHub Repository Mirror**: One GitHub repository per instance (**Settings → GitHub**) receives a commit on every registry save, organised by domain and version, with the OWL and R2RML Turtle files next to the JSON sources (ontology, rules, mappings, layouts, options). Restore with **Import → Load from GitHub repository**. See [Configuration → GitHub](#configuration--github-repository-mirror).
@@ -3246,7 +3246,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Native Unity Catalog Support**: Browse catalogs, schemas, tables, and volumes directly from the UI. Table, schema, and catalog names may start with a digit (for example `5_g_subscribers`) when they are backtick-quoted, matching Unity Catalog.
 - **SQL Warehouse Connectivity**: Connect to Databricks SQL Warehouses for query execution, with a dedicated Build warehouse and an optional Lakehouse Query warehouse (see Graph → Lakehouse//RT query path).
 - **Dashboard Integration**: Fetch and embed Databricks dashboards with dynamic parameter mapping.
-- **LLM picker**: Domain → General → AI (and New Domain) browse Unity AI Gateway model services first, then legacy Model Serving endpoints. **No LLM** is a strict domain-level opt-out for every in-app LLM action.
+- **LLM picker**: Context → Configuration → AI (and New Context) browse Unity AI Gateway model services first, then legacy Model Serving endpoints. **No LLM** is a strict domain-level opt-out for every in-app LLM action.
 - **Secure Credentials**: Databricks credentials are never saved to project files.
 
 ### GraphQL API
@@ -3262,7 +3262,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Project Selection**: Two-step workflow — `list_domains` to browse available graph viewers, `select_domain` to activate one.
 - **Entity Discovery**: `list_entity_types` and `describe_entity` provide human-readable text descriptions with BFS traversal. `describe_entity` accepts optional `cache` (true = require companions, false = live SPO).
 - **GraphQL via MCP**: `get_graphql_schema` and `query_graphql` tools let LLM agents introspect and query the typed GraphQL API.
-- **Per-Domain MCP Policy**: Each domain picks, in **Domain → General → MCP**, which of the eight domain-scoped tools it publishes and how its ontology attachments (Datasets, Bridges, Actions, Virtual attributes) are surfaced — **Preferred** (the hint becomes a directive instruction), **Normal**, or **Disabled** (withheld from every MCP *and* external REST response). The four registry-level tools stay always-on, since they run before a domain is resolved. An unconfigured domain behaves exactly as before.
+- **Per-Domain MCP Policy**: Each domain picks, in **Context → Configuration → MCP**, which of the eight domain-scoped tools it publishes and how its ontology attachments (Datasets, Bridges, Actions, Virtual attributes) are surfaced — **Preferred** (the hint becomes a directive instruction), **Normal**, or **Disabled** (withheld from every MCP *and* external REST response). The four registry-level tools stay always-on, since they run before a domain is resolved. An unconfigured domain behaves exactly as before.
 - **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. The selected domain is isolated per MCP session id; clients that do not reuse a session (Playground) must pass `domain_name` or set `MCP_DEFAULT_DOMAIN`.
 - **Databricks Playground**: Deployed as `mcp-ontobricks`, auto-discoverable by LLM agents in the Databricks Playground.
 - **Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client.
@@ -3271,8 +3271,8 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Configurable UI branding**: Admins set application title, primary color, brand icon, and default entity icon under **Settings → Configuration → UI**. Title/color/logo are previewed locally then saved atomically to the registry `global_config.ui_branding` object; the default entity icon is written immediately to `default_emoji`. **Default** restores factory title/color/logo as a preview (Save to persist) and restores 📦 immediately. All users see the saved brand; only admins can change it.
 - **Deep-Linkable Sections**: Sidebar section changes push `?section=<id>` to browser history — sections are bookmarkable and navigable with Back/Forward.
 - **Registry modal from navbar**: Open **Registry → Browse** as a modal overlay from the top navbar without leaving the current domain; legacy `/registry/` URLs redirect into Home with the modal opened.
-- **Registry Browse for “Active” version**: Expand a domain in **Registry → Browse** to set which version is **Active** (API/MCP); the Domain app no longer exposes a per-version toggle on **Domain → Versions** (badge only).
-- **Versions popup New Version**: The navbar Versions popup can create the next DRAFT version of the open domain; Domain → Versions uses the same action. The loaded-domain badge stays visible across Settings navigation and transient navbar refresh failures.
+- **Registry Browse for “Active” version**: Expand a domain in **Registry → Browse** to set which version is **Active** (API/MCP); the Domain app no longer exposes a per-version toggle on **Context → Versions** (badge only).
+- **Versions popup New Version**: The navbar Versions popup can create the next DRAFT version of the open domain; Context → Versions uses the same action. The loaded-domain badge stays visible across Settings navigation and transient navbar refresh failures.
 - **Navigation context**: The L2 row shows the domain and version (`vN ▾`), the active workspace, and the Close / Save actions; the sidebar shows the active section.
 - **Keyboard Shortcuts**: `Cmd/Ctrl+S` to save domain, `Cmd/Ctrl+K` to focus sidebar search, `?` for a shortcut overlay.
 - **Toast Notifications**: All user feedback uses non-blocking toast notifications (no `alert()` dialogs).

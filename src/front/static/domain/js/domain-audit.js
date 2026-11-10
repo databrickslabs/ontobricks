@@ -1,5 +1,5 @@
 /**
- * Domain → Audit trail
+ * Context → Audit trail
  *
  * Ontology and mapping change feeds (plus status, build and GitHub tabs) from
  * GET /domain/audit-trail. GitHub mirror pushes are change events with

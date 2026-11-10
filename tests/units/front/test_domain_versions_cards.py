@@ -489,7 +489,7 @@ def test_registry_domain_delete_asks_github_when_mirror_enabled():
 
             await context.deleteRegistryDomain('acme');
 
-            assert.equal(confirmation.title, 'Delete Domain');
+            assert.equal(confirmation.title, 'Delete Context');
             assert.equal(confirmation.checkboxLabel, 'Also delete this domain from GitHub');
             assert.equal(request.url, '/settings/registry/domains/acme?delete_github=1');
             assert.equal(request.options.method, 'DELETE');

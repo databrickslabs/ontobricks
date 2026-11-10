@@ -174,7 +174,7 @@ class SQLHelpers:
         )
         if not name:
             raise ValidationError(
-                "Domain name is required to derive the triple-store view name"
+                "Context name is required to derive the triple-store view name"
             )
         safe = re.sub(r"[^a-z0-9_]", "_", name.lower())
         view_name = f"triplestore_{safe}_V{version}"

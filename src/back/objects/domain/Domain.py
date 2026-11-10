@@ -384,7 +384,7 @@ class Domain:
                 domain_name
             ):
                 raise ValidationError(
-                    "Domain name must be CamelCase alphanumeric only "
+                    "Context name must be CamelCase alphanumeric only "
                     "(letters and digits, no spaces or special characters), "
                     "e.g. MyOntologyDomain",
                 )
@@ -749,7 +749,7 @@ class Domain:
 
         return {
             "success": True,
-            "message": "Domain imported",
+            "message": "Context imported",
             "name": self._s.info.get("name", "NewDomain"),
             "version": self._s.current_version,
             "stats": {
@@ -782,7 +782,7 @@ class Domain:
                 raise ValidationError("Registry not configured")
             folder = self._s.uc_domain_folder
             if not folder:
-                raise ValidationError("Domain not saved to registry")
+                raise ValidationError("Context not saved to registry")
             runs = svc.load_build_runs(folder, version=version, limit=limit)
             return {
                 "success": True,
@@ -819,7 +819,7 @@ class Domain:
                 raise ValidationError("Registry not configured")
             folder = self._s.uc_domain_folder
             if not folder:
-                raise ValidationError("Domain not saved to registry")
+                raise ValidationError("Context not saved to registry")
             return {
                 "success": True,
                 "domain_folder": folder,
@@ -1008,7 +1008,7 @@ class Domain:
 
             folder = self._s.uc_domain_folder
             if not folder:
-                raise ValidationError("Domain not saved to registry")
+                raise ValidationError("Context not saved to registry")
 
             sorted_versions = svc.list_versions_sorted(folder)
             if not sorted_versions:
@@ -1119,7 +1119,7 @@ class Domain:
             is_new_domain = not self._s.domain_folder
             if is_new_domain and not is_valid_domain_name((raw_name or "").strip()):
                 raise ValidationError(
-                    "Domain name must be CamelCase alphanumeric only "
+                    "Context name must be CamelCase alphanumeric only "
                     "(letters and digits, no spaces or special characters), "
                     "e.g. MyOntologyDomain",
                 )
@@ -1207,7 +1207,7 @@ class Domain:
                 invalidate_registry_cache()
                 reg_path = f"{c.catalog}.{c.schema}.{c.volume}/domains/{folder}/V{version}/V{version}.json"
                 logger.info("Domain saved to registry: %s", reg_path)
-                return {"success": True, "message": "Domain saved"}
+                return {"success": True, "message": "Context saved"}
             raise InfrastructureError(
                 "Failed to save domain to Unity Catalog registry", detail=message
             )
@@ -1231,7 +1231,7 @@ class Domain:
         """
         try:
             if not domain_name:
-                raise ValidationError("Domain name is required")
+                raise ValidationError("Context name is required")
             if not version:
                 active_ver, _ = svc.find_mcp_version(domain_name)
                 if active_ver:
@@ -1304,7 +1304,7 @@ class Domain:
             # still fully editable.
             lifecycle = (self._s.info.get("status") or "DRAFT").upper()
             label = "editable" if lifecycle == "DRAFT" else f"{lifecycle}, read-only"
-            msg = f"Domain loaded: {domain_name} v{version} ({label})"
+            msg = f"Context loaded: {domain_name} v{version} ({label})"
             return {
                 "success": True,
                 "message": msg,
@@ -1328,7 +1328,7 @@ class Domain:
         try:
             reg = self._s.registry
             if not reg.get("catalog") or not self._s.domain_folder:
-                raise ValidationError("Domain must be saved to Unity Catalog first")
+                raise ValidationError("Context must be saved to Unity Catalog first")
             if not self._s.is_active_version:
                 raise ConflictError(
                     "Cannot create a new version from an older version. Load the latest version first."

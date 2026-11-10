@@ -90,7 +90,7 @@
                             <div class="help-pipeline">
                                 <div class="help-step"><span class="help-step-num">1</span><div><strong>Registry</strong><br><small>Browse and select a domain</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">2</span><div><strong>Domain</strong><br><small>Define metadata, documents, data assets</small></div></div>
+                                <div class="help-step"><span class="help-step-num">2</span><div><strong>Context</strong><br><small>Define metadata, documents, data assets</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">3</span><div><strong>Ontology</strong><br><small>Design entities &amp; relationships (OWL)</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
@@ -119,22 +119,22 @@
                                 <div class="help-step-card">
                                     <div class="help-step-badge">1</div>
                                     <div>
-                                        <h5><i class="bi bi-plus-circle me-2"></i>Create a Domain</h5>
-                                        <p>As an Admin (<code>CAN_MANAGE</code>), open <strong>Registry</strong> &rarr; click <em>New Domain</em>. Give it a name (e.g. <code>sales_demo</code>), then open the <strong>Domain</strong> tab and click <em>Save Domain</em> (<kbd>Cmd/Ctrl+S</kbd>). Editors and Builders open an assigned domain from Home or Registry Browse. The domain must be saved before ontology, mapping and digital-twin features unlock.</p>
+                                        <h5><i class="bi bi-plus-circle me-2"></i>Create a Context</h5>
+                                        <p>As an Admin (<code>CAN_MANAGE</code>), open <strong>Registry</strong> &rarr; click <em>New Context</em>. Give it a name (e.g. <code>sales_demo</code>), then open the <strong>Configuration</strong> tab and click <em>Save Context</em> (<kbd>Cmd/Ctrl+S</kbd>). Editors and Builders open an assigned domain from Home or Registry Browse. The domain must be saved before ontology, mapping and digital-twin features unlock.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge">2</div>
                                     <div>
                                         <h5><i class="bi bi-database me-2"></i>Import Metadata</h5>
-                                        <p>Go to <strong>Domain &rarr; Data Assets</strong>, pick your <em>catalog</em> and <em>schema</em>, then click <em>Import Metadata</em>. OntoBricks fetches table and column metadata from Unity Catalog.</p>
+                                        <p>Go to <strong>Configuration &rarr; Data Assets</strong>, pick your <em>catalog</em> and <em>schema</em>, then click <em>Import Metadata</em>. OntoBricks fetches table and column metadata from Unity Catalog.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card help-step-optional">
                                     <div class="help-step-badge help-step-badge-optional"><i class="bi bi-plus-lg"></i></div>
                                     <div>
                                         <h5><i class="bi bi-file-earmark-text me-2"></i>Import Documents <span class="help-optional-tag">Optional</span></h5>
-                                        <p>Before generating, open <strong>Domain &rarr; Documents</strong> and attach any reference material (PDFs, schemas, data dictionaries, glossaries, &hellip;). The LLM uses these documents as additional context when producing the ontology &mdash; improving entity names, descriptions, and relationships.</p>
+                                        <p>Before generating, open <strong>Configuration &rarr; Documents</strong> and attach any reference material (PDFs, schemas, data dictionaries, glossaries, &hellip;). The LLM uses these documents as additional context when producing the ontology &mdash; improving entity names, descriptions, and relationships.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
@@ -183,8 +183,8 @@
                                             <p>The Registry is the central index of all domains (ontology + mapping + triple store) stored in your Unity Catalog Volume.</p>
                                             <ul>
                                                 <li><strong>Browse</strong> &mdash; list and open existing domains</li>
-                                                <li><strong>New Domain</strong> (Admin only) &mdash; create a fresh domain</li>
-                                                <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from UC</li>
+                                                <li><strong>New Context</strong> (Admin only) &mdash; create a fresh domain</li>
+                                                <li><strong>Load Context</strong> (navbar) &mdash; open an existing domain from UC</li>
                                                 <li><strong>Export / Import</strong> &mdash; move domains between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/advanced-features#registry-import-and-export" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="registry-import-and-export">Registry import and export</a> guide)</li>
                                                 <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one graph viewer to another</li>
                                             </ul>
@@ -193,23 +193,23 @@
                                     </div>
                                 </div>
 
-                                <!-- Domain -->
+                                <!-- Context -->
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw2">
-                                            <i class="bi bi-box me-2"></i><strong>2. Domain</strong> &mdash; configure metadata, sources, documents
+                                            <i class="bi bi-box me-2"></i><strong>2. Context</strong> &mdash; configure metadata, sources, documents
                                         </button>
                                     </h2>
                                     <div id="hw2" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
                                             <ul>
-                                                <li><strong>General</strong> &mdash; name, description, base URI, custom URI override</li>
+                                                <li><strong>General</strong> &mdash; overall readiness dashboard (ontology &check;, mapping &check;, sync &check;)</li>
+                                                <li><strong>Configuration</strong> &mdash; name, description, base URI, custom URI override</li>
                                                 <li><strong>Versions</strong> &mdash; manage snapshots of your domain</li>
-                                                <li><strong>Cockpit</strong> &mdash; overall readiness dashboard (ontology &check;, mapping &check;, sync &check;)</li>
                                                 <li><strong>Data Assets</strong> &mdash; import Unity Catalog metadata (catalog, schema, tables, columns)</li>
                                                 <li><strong>Knowledge Store</strong> &mdash; upload documents; parsed text is stored in Lakebase and shared by Generate and Mapping</li>
                                             </ul>
-                                            <p>Loading a domain (Home, navbar Load, Registry, Versions) always opens <strong>Domain &rarr; General</strong>.</p>
+                                            <p>Loading a domain (Home, navbar Load, Registry, Versions) always opens <strong>Configuration</strong>.</p>
                                             <p><strong>Save</strong> your domain (<kbd>Cmd/Ctrl+S</kbd>) before moving to Ontology or Mapping.</p>
                                         </div>
                                     </div>
@@ -411,11 +411,11 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>
-                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each domain also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Domain &rarr; General &rarr; Knowledge Graph</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
+                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each domain also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Configuration &rarr; Backend</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
-                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Domain &rarr; General</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry (a load always opens <em>Configuration</em>), then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Graph then become enabled.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
@@ -427,7 +427,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">Can I version my ontology?</button></h2>
-                                    <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Use <strong>Domain &rarr; Versions</strong> to snapshot the current state. You can roll back or fork a version at any time.</div></div>
+                                    <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Yes. Use <strong>Configuration &rarr; Versions</strong> to snapshot the current state. You can roll back or fork a version at any time.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq8">How do I share a link to a specific section?</button></h2>
@@ -470,7 +470,7 @@
                             </div>
                             <div class="help-trouble">
                                 <h5><i class="bi bi-exclamation-circle text-warning me-2"></i>&ldquo;I see &lsquo;requires domain saved&rsquo; tooltips everywhere.&rdquo;</h5>
-                                <p>An Admin (<code>CAN_MANAGE</code>) must first create and save a domain: Registry &rarr; <em>New Domain</em> &rarr; then on the Domain page press <kbd>Cmd/Ctrl+S</kbd>. Editors and Builders can then open assigned domains from Home or Registry Browse.</p>
+                                <p>An Admin (<code>CAN_MANAGE</code>) must first create and save a domain: Registry &rarr; <em>New Context</em> &rarr; then on the Configuration page press <kbd>Cmd/Ctrl+S</kbd>. Editors and Builders can then open assigned domains from Home or Registry Browse.</p>
                             </div>
                         </section>
 

@@ -245,7 +245,7 @@
         </div>
     </nav>
 
-    <!-- Level 2 contextual navigation — Ontology | Mapping | Graph | Domain dropdown -->
+    <!-- Level 2 contextual navigation — Ontology | Mapping | Graph | Context dropdown -->
     {% set ontology_m = namespace(v=none) %}
     {% set mapping_m  = namespace(v=none) %}
     {% set kg_m       = namespace(v=none) %}
@@ -270,7 +270,7 @@
                        href="{{ domain_m.v.route }}"
                        id="domainContextTrigger"
                        title="Open workspace map"
-                       aria-label="Open workspace map for Domain">
+                       aria-label="Open workspace map for Context">
                         <span class="ob-subnav-context-copy">
                             <span id="currentDomainName" class="ob-subnav-context-name">{{ domain_m.v.label }}</span>
                         </span>
@@ -295,9 +295,9 @@
                     <a class="ob-subnav-link dropdown-toggle" href="{{ domain_m.v.route }}" id="subnavDomainDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
                        data-subnav-route="{{ domain_m.v.route }}"
-                       title="Domain">
+                       title="{{ domain_m.v.label }}">
                         <i class="bi {{ domain_m.v.icon }}"></i>
-                        <span class="ob-subnav-label">Domain</span>
+                        <span class="ob-subnav-label">{{ domain_m.v.label }}</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavDomainDropdown" id="subnavDomainDropdownMenu">
                         {% set ns = namespace(first_group=true) %}
@@ -509,7 +509,7 @@
     <!-- LLM endpoint picker -->
     {% include "partials/layout/llm_endpoint_picker_modal.html" %}
 
-    <!-- Workspace Map Modal (Domain + version badge) -->
+    <!-- Workspace Map Modal (Context + version badge) -->
     {% include "partials/layout/_workspace_map_modal.html" %}
     
     <!-- Bootstrap JS -->

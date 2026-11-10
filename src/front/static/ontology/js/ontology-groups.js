@@ -286,6 +286,31 @@ var OntologyGroups = (function () {
             bootstrap.Modal.getOrCreateInstance(el).show();
         },
 
+        /**
+         * Populate and show the Edit Group modal for a known group payload.
+         * @param {number} idx
+         * @param {Object} g
+         */
+        _showEditModal: function (idx, g) {
+            if (!g) return;
+            _editIndex = idx;
+            _ensureModalAtBody();
+            _wireStudioToolbar();
+            var el = document.getElementById('groupModal');
+            if (!el) { console.error('[Groups] groupModal element not found'); return; }
+            document.getElementById('groupModalTitle').innerHTML = '<i class="bi bi-collection me-2"></i>Edit Group';
+            document.getElementById('groupName').value = g.name || '';
+            document.getElementById('groupName').disabled = true;
+            document.getElementById('groupLabel').value = g.label || '';
+            document.getElementById('groupDescription').value = g.description || '';
+            document.getElementById('groupColor').value = g.color || '#4A90D9';
+            _setDeleteVisible(true);
+            _ensureIconPicker();
+            if (_picker) _picker.setEmoji(g.icon);
+            _populateMembersCheckboxes(g.members || [], g.name);
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        },
+
         editGroup: function (idx) {
             fetch('/ontology/groups/list')
                 .then(function (r) { return r.json(); })
@@ -293,23 +318,20 @@ var OntologyGroups = (function () {
                     if (!data.success) return;
                     var groups = data.groups || [];
                     if (idx < 0 || idx >= groups.length) return;
-                    var g = groups[idx];
-                    _editIndex = idx;
-                    _ensureModalAtBody();
-                    _wireStudioToolbar();
-                    var el = document.getElementById('groupModal');
-                    if (!el) { console.error('[Groups] groupModal element not found'); return; }
-                    document.getElementById('groupModalTitle').innerHTML = '<i class="bi bi-collection me-2"></i>Edit Group';
-                    document.getElementById('groupName').value = g.name || '';
-                    document.getElementById('groupName').disabled = true;
-                    document.getElementById('groupLabel').value = g.label || '';
-                    document.getElementById('groupDescription').value = g.description || '';
-                    document.getElementById('groupColor').value = g.color || '#4A90D9';
-                    _setDeleteVisible(true);
-                    _ensureIconPicker();
-                    if (_picker) _picker.setEmoji(g.icon);
-                    _populateMembersCheckboxes(g.members || [], g.name);
-                    bootstrap.Modal.getOrCreateInstance(el).show();
+                    OntologyGroups._showEditModal(idx, groups[idx]);
+                });
+        },
+
+        editGroupByName: function (name) {
+            if (!name) return;
+            fetch('/ontology/groups/list')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) return;
+                    var groups = data.groups || [];
+                    var idx = groups.findIndex(function (g) { return g.name === name; });
+                    if (idx < 0) return;
+                    OntologyGroups._showEditModal(idx, groups[idx]);
                 });
         },
 

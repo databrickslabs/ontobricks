@@ -1,4 +1,4 @@
-/* Domain → Validation (review workflow) */
+/* Context → Validation (review workflow) */
 
 .review-banner {
     border: 1px solid var(--db-border);
@@ -206,7 +206,7 @@
     background: var(--db-text-muted);
 }
 
-/* ── Domain access (member roster) ─────────────────── */
+/* ── Context access (member roster) ─────────────────── */
 .review-role-group:last-child {
     margin-bottom: 0 !important;
 }

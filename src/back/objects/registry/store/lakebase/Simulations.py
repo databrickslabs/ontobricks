@@ -227,7 +227,7 @@ class Simulations:
             )
             if cur.rowcount == 0:
                 raise InfrastructureError(
-                    "Domain is not registered — save it to the registry first",
+                    "Context is not registered — save it to the registry first",
                     detail=folder,
                 )
 

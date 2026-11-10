@@ -131,7 +131,7 @@ class TestSaveSchedule:
         assert kwargs == {"target_key": "rule-1", "enabled": False, "version": "3", "config": {"warm": True}}
 
     def test_missing_domain_raises_validation(self, scheduler):
-        with pytest.raises(ValidationError, match="Domain name is required"):
+        with pytest.raises(ValidationError, match="Context name is required"):
             ScheduleSettings.save_schedule_result({"task_type": "build"}, MagicMock(), MagicMock())
         scheduler.save_schedule.assert_not_called()
 

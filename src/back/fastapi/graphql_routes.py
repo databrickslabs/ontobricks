@@ -395,7 +395,7 @@ async def graphql_execute(
     cache: Optional[str] = Query(
         None,
         description="true/false: force search companions on or off. "
-        "Omitted uses Domain → General → Backend Search cache.",
+        "Omitted uses Configuration → Backend → Search cache.",
     ),
     domain_version: Optional[str] = Query(
         None, description="Registry version (any lifecycle status)."

@@ -4018,7 +4018,7 @@ async function _openGraphSwitcherModal() {
         '<div class="modal-dialog modal-lg modal-dialog-centered" style="max-height:50vh;">' +
         '<div class="modal-content" style="max-height:50vh;">' +
         '<div class="modal-header flex-shrink-0">' +
-        '<h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Switch Domain</h5>' +
+        '<h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Switch Context</h5>' +
         '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>' +
         '</div>' +
         '<div class="modal-body" style="overflow-y:auto;">' +

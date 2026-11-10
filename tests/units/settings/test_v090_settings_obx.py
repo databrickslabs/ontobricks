@@ -109,7 +109,7 @@ class TestExportRegistryObx:
         assert result["version_count"] == 1
         assert result["filename"].startswith("ontobricks-") and result["filename"].endswith(".obx")
         assert result["warnings"] == [
-            "Domain entry without a name was skipped",
+            "Context entry without a name was skipped",
             'No versions to export for domain "empty"',
             "broken v1: unreadable",
             "good v1: unreadable",
@@ -274,7 +274,7 @@ class TestImportRegistryObx:
 
     def test_nameless_entry_reported(self, svc, raw_envelope):
         result = self._import(raw_envelope([{"name": ""}]), [])
-        assert result["errors"] == ["Domain entry without a name was skipped"]
+        assert result["errors"] == ["Context entry without a name was skipped"]
         assert result["message"] == "Imported 0 version(s) across 0 domain(s)"
         _ss.invalidate_registry_cache.assert_called_once()
 

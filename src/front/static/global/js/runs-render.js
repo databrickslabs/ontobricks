@@ -10,7 +10,7 @@
  * that turns a run object into HTML lives here so the two cannot drift.
  *
  * The row builders take an ``opts`` object rather than being duplicated per
- * page: ``domain: true`` inserts the Domain cell that only the cross-domain
+ * page: ``domain: true`` inserts the Context cell that only the cross-domain
  * page needs, and ``handler`` names the global function its Details button
  * calls. The modal builders RETURN HTML instead of writing to the DOM, so each
  * page can inject into its own modal body.
@@ -176,14 +176,14 @@ window.RunsRender = (function () {
             + '<tbody>' + rows + '</tbody></table>';
     }
 
-    // The Domain line only appears when the row carries one, so per-domain
+    // The Context line only appears when the row carries one, so per-domain
     // rows (which have no ``domain`` key) render exactly as they always did.
     function buildRunDetailsHtml(run) {
         const stats = run.stats || {};
         let html = '<div class="row g-2 mb-3">';
         html += kv('Run ID', esc(run.id || '—'));
         html += kv('Status', buildStatusBadge(run.status));
-        if (run.domain) html += kv('Domain', esc(run.domain));
+        if (run.domain) html += kv('Context', esc(run.domain));
         html += kv('Version', versionBadge(run.version));
         html += kv('Trigger', kindBadge(run.build_kind));
         html += kv('Started', fmtTs(run.started_at));
@@ -233,7 +233,7 @@ window.RunsRender = (function () {
 
         let html = '<div class="row g-2 mb-3">';
         html += kv('Status', analyticsStatusBadge(run.status));
-        if (run.domain) html += kv('Domain', esc(run.domain));
+        if (run.domain) html += kv('Context', esc(run.domain));
         html += kv('Version', versionBadge(run.version));
         html += kv('When', fmtTs(run.computed_at));
         html += kv('Duration', esc(fmtMillis(run.duration_ms)));

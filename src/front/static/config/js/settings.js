@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
     // The graph backend *selection* moved to a mandatory per-domain choice
-    // (Domain -> General -> Knowledge Graph tab). The Settings Graph DB pages
+    // (Context -> General -> Knowledge Graph tab). The Settings Graph DB pages
     // now only configure the engine *connections* (Lakebase / Neo4j / Delta).
 
     loadCurrentConfig();
@@ -3033,7 +3033,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function dropDeltaDomainObjects(domainKey) {
         const entry = _dtDomainRegistry[domainKey];
         if (!entry) {
-            showNotification('Domain not found: ' + domainKey, 'danger');
+            showNotification('Context not found: ' + domainKey, 'danger');
             return;
         }
         // Analytics tables come last: the triple-store drop order (views before
@@ -3259,7 +3259,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 + ' <span><i class="bi bi-eye-slash me-1"></i>Registry schema'
                 + ' (<code>' + escapeHtmlSettings(regSchema) + '</code>) hidden.</span></p>';
 
-            // Domain groups — custom collapse cards, one per domain, collapsed by default
+            // Context groups — custom collapse cards, one per domain, collapsed by default
             const domainKeys = Object.keys(_lkDomainRegistry).sort();
             if (domainKeys.length > 0) {
                 html += '<div class="lk-domain-cards">';
@@ -3690,7 +3690,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function dropDomainObjects(domainKey) {
         const entry = _lkDomainRegistry[domainKey];
         if (!entry) {
-            showNotification('Domain not found: ' + domainKey, 'danger');
+            showNotification('Context not found: ' + domainKey, 'danger');
             return;
         }
         const { schema, sortedItems: items } = entry;
@@ -4393,7 +4393,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /** Persist the graph engine *connection* JSON config + Delta warehouse
      *  selection (used by global Save). The backend *selection* is per-domain
-     *  now (Domain -> General -> Knowledge Graph tab), so nothing is chosen
+     *  now (Context -> General -> Knowledge Graph tab), so nothing is chosen
      *  here — only the Lakebase / Neo4j / Delta connection settings. */
     async function saveGraphDbSettings(errors) {
         const ta = document.getElementById('graphEngineConfig');

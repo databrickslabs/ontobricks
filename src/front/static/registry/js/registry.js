@@ -54,7 +54,7 @@ function createRegistryVersionDeleteControl(v, domainName) {
 
 async function deleteRegistryDomain(domainName) {
     const options = {
-        title: 'Delete Domain',
+        title: 'Delete Context',
         message: 'Permanently delete domain "' + escapeHtml(domainName)
             + '" and all its versions from the registry? This permanently '
             + 'removes all Knowledge Store content and cannot be undone.',
@@ -399,7 +399,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Lifecycle/workflow actions are NOT surfaced here. The Browse view is
     // read-only with respect to the review workflow: each version exposes a
     // "Validate" button that loads the version (if needed) and jumps to the
-    // Domain → Validation workspace, the single place to drive the workflow.
+    // Context → Validation workspace, the single place to drive the workflow.
 
     // --- Registry domain list ---
 
@@ -631,7 +631,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadRegistryDomainVersion(domainName, version) {
         const confirmed = await showConfirmDialog({
-            title: 'Load Domain',
+            title: 'Load Context',
             message: 'Load <strong>' + escapeHtml(domainName) + '</strong> version <strong>v' + escapeHtml(version) + '</strong>? Any unsaved changes to the current domain will be lost.',
             confirmText: 'Load',
             confirmClass: 'btn-primary',
@@ -649,9 +649,9 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             const data = await resp.json();
             if (data.success) {
-                showNotification(data.message || 'Domain loaded!', 'success');
+                showNotification(data.message || 'Context loaded!', 'success');
                 if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
-                // Generic loads open Domain → General; do not reload Browse.
+                // Generic loads open Context → General; do not reload Browse.
                 setTimeout(() => {
                     if (typeof navigateToDomainGeneral === 'function') {
                         navigateToDomainGeneral();
@@ -667,7 +667,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Jump to the Domain → Validation workspace for a registry version,
+    // Jump to the Context → Validation workspace for a registry version,
     // loading it from Unity Catalog first when it is not already current.
     async function openVersionInValidation(domainName, version, alreadyLoaded) {
         if (alreadyLoaded) {
@@ -1444,7 +1444,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        // Domain group circles
+        // Context group circles
         const domainG = g.append('g').attr('class', 'bridges-domains-layer');
         groups.forEach(domain => {
             const dg = domainG.append('g')
@@ -1719,7 +1719,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         '<thead><tr>' +
                             '<th>Source Entity</th>' +
                             '<th style="width:3rem;"></th>' +
-                            '<th>Target Domain</th>' +
+                            '<th>Target Context</th>' +
                             '<th>Target Entity</th>' +
                             '<th>Label</th>' +
                         '</tr></thead><tbody>';

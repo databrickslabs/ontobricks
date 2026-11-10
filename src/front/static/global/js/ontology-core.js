@@ -38,8 +38,8 @@ const OntologyState = {
 // =====================================================
 
 /**
- * Load base URI from domain session (managed on the Domain page)
- * Base URI is no longer auto-generated — it is managed on Domain → General.
+ * Load base URI from domain session (managed on the Context page)
+ * Base URI is no longer auto-generated — it is managed on Context → General.
  */
 function generateBaseUri() {
     // This function is kept for backward compatibility but no longer auto-generates
@@ -318,7 +318,7 @@ async function autoGenerateOwl() {
     if (!name) {
         issues.push('Ontology name is required');
     } else if (name === 'myontology' || name === 'newproject' || name === 'newdomain') {
-        warnings.push('Ontology name is still set to the default. Set a Domain Name in Domain → General.');
+        warnings.push('Ontology name is still set to the default. Set a Context Name in Configuration.');
     }
     
     if (!baseUri) {

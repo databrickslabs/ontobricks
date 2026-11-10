@@ -1,5 +1,5 @@
 /**
- * Domain → Validation (review workflow)
+ * Context → Validation (review workflow)
  *
  * Business-user-oriented validation workspace for the loaded domain
  * version: a soft consistency-check summary, reviewer sign-off panel
@@ -282,7 +282,7 @@
             '<div id="reviewReadiness">' + spinner('Checking...') + '</div>' +
             '<div class="d-flex gap-2 mt-3">' +
             '<a class="btn btn-sm btn-outline-secondary" href="/domain/?section=validation">' +
-            '<i class="bi bi-speedometer2 me-1"></i>Open Cockpit</a>' +
+            '<i class="bi bi-compass me-1"></i>Open General</a>' +
             '</div></div></div>';
     }
 
@@ -326,10 +326,10 @@
             icon + '<span class="small">' + escapeHtml(label) + '</span></div>';
     }
 
-    /* ── Domain access (who can view / edit / build) ───── */
+    /* ── Context access (who can view / edit / build) ───── */
     function teamCard() {
         return '<div class="card review-card mb-3"><div class="card-body">' +
-            '<h6 class="card-title"><i class="bi bi-people me-2"></i>Domain access</h6>' +
+            '<h6 class="card-title"><i class="bi bi-people me-2"></i>Context access</h6>' +
             '<p class="text-muted small mb-3">People and groups with a role on ' +
             'this domain. Roles are managed by administrators in ' +
             'Settings &rarr; Admin &rarr; Teams.</p>' +

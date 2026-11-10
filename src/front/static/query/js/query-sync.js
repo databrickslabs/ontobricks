@@ -697,7 +697,7 @@ function renderTripleStoreStatus(data) {
         if (reason.toLowerCase().includes('does not exist')) {
             msg = 'Knowledge Graph not built yet. Click <strong>Build</strong> to create the VIEW and graph.';
         } else if (reason.toLowerCase().includes('not configured')) {
-            msg = 'Knowledge Graph is not configured. Set it in <a href="/domain/#information">Domain Settings</a>.';
+            msg = 'Knowledge Graph is not configured. Set it in <a href="/domain/#information">Context Settings</a>.';
         } else {
             msg = 'Graph is empty. Run <strong>Synchronize</strong> to generate triples.';
         }
@@ -1103,7 +1103,7 @@ async function startTripleStoreSync() {
     const triplestoreTable = tableEl ? tableEl.value.trim() : '';
 
     if (!triplestoreTable) {
-        showNotification('Triple store table not configured. Please set it in Domain Settings.', 'warning');
+        showNotification('Triple store table not configured. Please set it in Context Settings.', 'warning');
         return;
     }
 
@@ -1389,7 +1389,7 @@ async function loadTripleStore(options = {}) {
     }
 
     if (!triplestoreTable) {
-        if (!silent) showNotification('Triple store table not configured. Please set it in Domain Settings.', 'warning');
+        if (!silent) showNotification('Triple store table not configured. Please set it in Context Settings.', 'warning');
         return;
     }
 

@@ -124,7 +124,7 @@ class ReviewEvents:
                     ),
                 )
                 if cur.rowcount == 0:
-                    return False, f"Domain '{folder}' not found"
+                    return False, f"Context '{folder}' not found"
             return True, ""
         except Exception as exc:  # noqa: BLE001
             logger.warning(

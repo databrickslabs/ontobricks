@@ -854,6 +854,316 @@ Test result:
 - uv run --frozen pytest -q -m "not scenario" → 10258 passed, 323 skipped, 8 deselected, 0 failed in 52.86s
 - e2e/scenario suites updated but not executed (opt-in).
 
+Rename Domain tab to Configuration, move Cockpit to a first "General" tab, drop the KPI band
+===========================================================================================
+
+Context: The domain sub-navigation had "Domain" as its first tab with the Cockpit
+(validation readiness) page nested in its Management group. The tab is renamed
+"Configuration", the Cockpit becomes its own first tab labelled "General" (new
+compass icon, Configuration icon changed to bi-sliders2), and the KPI band
+(Entities, Relationships, Mappings, Status, Version) at the top of the General
+(information) section is removed. User-facing "Domain → …" menu paths now read
+"Configuration → …".
+
+Changes:
+1. src/front/config/menu_config.json
+   New `cockpit` menu (label "General", icon bi-compass, item `validation`) placed
+   before `domain`. `domain` relabelled "Configuration" with icon bi-sliders2 (group
+   icon updated too). Cockpit removed from the Management group (Audit trail stays).
+2. src/front/templates/base.html
+   Level-2 subnav renders the General tab before the Configuration dropdown. The
+   dropdown label and title come from menu_config instead of a hardcoded "Domain".
+3. src/front/static/global/js/navbar.js
+   `initSubnavActiveState`: section-pinned links (`data-subnav-section`) are active
+   only when `?section=` matches, and the unpinned Configuration tab yields on the
+   General page.
+4. src/front/routes/domain.py
+   Passes the `section` query parameter to the template as `initial_section`.
+5. src/front/templates/domain.html
+   Page title "Configuration". The sidebar uses the `cockpit` menu when
+   `section=validation`, and the `domain` menu otherwise.
+6. src/front/templates/partials/domain/_domain_information.html
+   Removed the KPI band markup.
+7. src/front/static/domain/js/domain-information.js
+   Removed the KPI band loader (IIFE with `loadDomainKpis`), now unused.
+8. src/front/static/global/css/components.css
+   Removed the now-unused `.ob-kpi-band` grid rules.
+9. src/front/templates/partials/domain/_domain_validation.html
+   Cockpit heading renamed "General" with the bi-compass icon.
+10. src/front/static/domain/js/domain-review.js
+    "Open Cockpit" link renamed "Open General" with the bi-compass icon.
+11. User-visible copy "Domain → General/…" → "Configuration → General/…":
+    src/front/templates/partials/layout/help_modal.html (workflow step, tab names;
+    the Cockpit bullet became a General paragraph), .../ontology/_ontology_information.html,
+    .../ontology/_ontology_wizard.html, src/front/templates/settings.html,
+    .../settings/_settings_github.html, src/front/static/global/js/utils.js (New Domain
+    dialog), .../global/js/ontology-core.js, .../global/js/permissions.js,
+    src/back/core/helpers/DatabricksHelpers.py, src/back/core/graphdb/GraphDBFactory.py
+    (log), src/back/fastapi/graphql_routes.py, src/api/routers/digitaltwin.py,
+    src/api/routers/internal/simulation.py (API messages).
+12. Tests updated to the new contract: tests/units/api/test_ui_rendering.py (title,
+    sidebar links, General sidebar and tab order, KPI band absent),
+    tests/units/front/test_workspace_map_modal.py (domain icon),
+    tests/units/front/test_mobile_subnav_contract.py (8 subnav labels),
+    tests/units/front/test_no_llm_ui_gate.py, tests/units/core/test_domain_llm_guard.py,
+    tests/units/api/test_dtwin_assistant_chat.py, tests/units/front/test_no_backend_ui.py,
+    tests/units/front/test_ontology_generate_wizard_staged.py,
+    tests/e2e/navigation/test_navigation_flows.py (opt-in suite, not executed).
+13. Docs: README.md (two menu paths), docs/user-guide.md (Cockpit section now "General tab").
+
+Intentionally not changed: src/agents/tools/documents.py message (agent tool output,
+falls under the AI feature gate), code comments and docstrings, the
+.cursor/11-frontend-design.mdc example, and the remaining "Domain → …" menu paths in
+docs/ (about 80 lines across 11 files, to be swept separately).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/routes/domain.py
+- src/front/templates/domain.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/global/css/components.css
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/static/domain/js/domain-review.js
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/ontology/_ontology_information.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/templates/settings.html
+- src/front/templates/partials/settings/_settings_github.html
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/permissions.js
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/simulation.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_workspace_map_modal.py
+- tests/units/front/test_mobile_subnav_contract.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/core/test_domain_llm_guard.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- tests/e2e/navigation/test_navigation_flows.py
+- README.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Browser check of the subnav and General page not performed in this session.
+
+Swap labels: Cockpit page is "General", former General page is "Configuration"
+===========================================================================
+
+Context: The Cockpit (validation readiness) page is the top "General" tab. The
+page previously called "General" (the domain information section under the
+Configuration tab) is renamed "Configuration", so the Configuration dropdown and
+its sidebar start with "Configuration". The inner tabs are Global, AI, Backend
+and MCP, so paths now read "Configuration → AI" and "Configuration → Backend"
+instead of "Configuration → General → …" (the old "Knowledge Graph" tab is
+labelled "Backend" in the UI).
+
+Changes:
+1. src/front/config/menu_config.json
+   Domain menu `information` item label "General" → "Configuration".
+2. src/front/templates/partials/domain/_domain_information.html
+   Section header "General" → "Configuration".
+3. src/front/templates/domain.html
+   Template comment updated (no behaviour change).
+4. Paths and messages "Configuration → General → X" → "Configuration → X" or
+   "Configuration → Backend": help_modal.html (Configuration item, load and FAQ
+   text), _ontology_information.html, settings.html, utils.js (New Domain dialog),
+   ontology-core.js, permissions.js, DatabricksHelpers.py, GraphDBFactory.py (log),
+   graphql_routes.py, api/routers/digitaltwin.py, api/routers/internal/simulation.py.
+5. Tests: test_domain_llm_guard.py, test_dtwin_assistant_chat.py,
+   test_no_llm_ui_gate.py, test_no_backend_ui.py, test_ui_rendering.py (docstring).
+6. README.md: load and AI path wording.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/domain.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/ontology/_ontology_information.html
+- src/front/templates/settings.html
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/ontology-core.js
+- src/front/static/global/js/permissions.js
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/fastapi/graphql_routes.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/simulation.py
+- tests/units/core/test_domain_llm_guard.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- tests/units/front/test_no_llm_ui_gate.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/api/test_ui_rendering.py
+- README.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page checked through the test client: subnav "General, Configuration"; Configuration dropdown and sidebar start with "Configuration".
+
+Move General (Cockpit) under the Domain menu, before Configuration
+===========================================================================
+
+Context: The General (Cockpit validation) page was a separate top-level subnav
+tab. It moves back into the Domain menu as its first item, ahead of
+Configuration, so the subnav keeps only the Domain dropdown. The temporary
+top-level menu and its plumbing are removed.
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the `cockpit` menu. Added the `validation` item (label "General",
+   icon bi-compass) as the first item of the Domain `domain-main` group.
+2. src/front/templates/base.html
+   Removed the standalone General subnav tab and its lookup.
+3. src/front/static/global/js/navbar.js
+   Restored `initSubnavActiveState` to its original route-prefix behaviour.
+4. src/front/routes/domain.py
+   Removed the `initial_section` template variable.
+5. src/front/templates/domain.html
+   Sidebar uses the `domain` menu again.
+6. src/front/templates/partials/layout/help_modal.html
+   The Domain menu list has General (overall readiness dashboard) first.
+7. docs/user-guide.md
+   Cockpit section points to Configuration → General.
+8. Tests: test_ui_rendering.py (validation back in the sidebar section list;
+   General precedes Configuration in the Domain dropdown), test_mobile_subnav_contract.py
+   (back to 7 subnav labels).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/base.html
+- src/front/static/global/js/navbar.js
+- src/front/routes/domain.py
+- src/front/templates/domain.html
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_mobile_subnav_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page: Domain dropdown and sidebar read General, Configuration, Versions, Publication, ...; top bar shows only Configuration.
+
+Rename the top menu's first item to Context
+===========================================================================
+
+Context: The first item of the top sub-navigation (the Domain menu, previously
+labelled Configuration) is renamed Context. Its inner items keep their names.
+
+Changes:
+1. src/front/config/menu_config.json
+   Domain menu `label` "Configuration" → "Context". The inner Configuration page
+   item is unchanged.
+2. src/front/templates/partials/layout/help_modal.html
+   Workflow step 2 title "Configuration" → "Context" (menu card and accordion header).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page: top bar reads "Context"; dropdown reads General, Configuration, Versions, ...
+
+## Top menu icon restored to the cube
+
+Context: the top-bar Domain/Context entry had been switched to `bi-sliders2`. The user asked to restore the original cube icon.
+
+Changes:
+1. src/front/config/menu_config.json
+   Domain menu `icon` "bi-sliders2" → "bi-box" (top bar). The dropdown group icon (`domain-main`) is unchanged.
+2. src/front/templates/partials/layout/help_modal.html
+   Workflow step 2 accordion icon "bi-sliders2" → "bi-box", matching the top menu.
+3. tests/units/front/test_workspace_map_modal.py
+   `_COLUMN_ICONS["domain"]` "bi-sliders2" → "bi-box", to match the menu config.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_workspace_map_modal.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Rendered Domain page: top item shows `bi-box` with the label "Context".
+
+## Context menu: Management group moved before Metadata
+
+Context: in the Context (Domain) dropdown, the Management group (Audit trail) was rendered last. The user asked to move it before Metadata.
+
+Changes:
+1. src/front/config/menu_config.json
+   Group `domain-management` moved from the end of the Context menu's `groups` to the position right after `domain-main` and before `domain-metadata`. Resulting group order: domain-main, domain-management, domain-metadata, domain-collaboration. Group and item definitions are unchanged.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json parses as valid JSON; Context group order verified.
+
+## Context menu: Publication moved into Management
+
+Context: the Publication item (`review`) sat in the `domain-main` group of the Context menu. The user asked to move it inside the Management group.
+
+Changes:
+1. src/front/config/menu_config.json
+   Item `review` (label "Publication", icon bi-patch-check) removed from `domain-main` and appended to `domain-management` after `audit` (Audit trail). Item id, icon, and requirements are unchanged, so routes (`/domain/?section=review`) keep working.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json parses as valid JSON; resulting groups: domain-main [validation, information, versions]; domain-management [audit, review].
+
+## Context menu: Management renamed Governance, Publication above Audit trail
+
+Context: the Context menu group `domain-management` was titled "Management" and listed Audit trail before Publication. The user asked to rename the group to Governance and put Publication above Audit trail.
+
+Changes:
+1. src/front/config/menu_config.json
+   Group `domain-management` title "Management" → "Governance" (the Context menu only; `digitaltwin-management` in the Graph menu is unchanged).
+2. src/front/config/menu_config.json
+   Items in `domain-management` reordered to [review (Publication), audit (Audit trail)].
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json parses as valid JSON; Context groups: domain-main [General, Configuration, Versions]; domain-management "Governance" [Publication, Audit trail]; domain-metadata "Metadata" [Data Assets, Knowledge Store]; domain-collaboration "Collaboration" [My Tasks, Discussions].
+
+## Context menu: General icon aligned with Ontology
+
+Context: the General entry (first item of the Context menu, `validation`) used bi-compass. The user asked for the same icon as the General entry in the Ontology menu.
+
+Changes:
+1. src/front/config/menu_config.json
+   Context menu item `validation` (label "General") icon "bi-compass" → "bi-info-circle", matching the Ontology menu's General item (`information`). The General page heading and the "Open General" link in domain-review.js keep bi-compass (not in scope).
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+
 ## Ontology menu: Sanity Checks moved to the end of Ontology Design
 
 Context: the Sanity Checks item (`designchecks`) sat in the Ontology "Advanced" group. The user asked to move it to the end of the "Ontology Design" section.
@@ -923,3 +1233,150 @@ Test result:
 - uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed (after updating 14 expected-string assertions to the new labels).
 - Residual: whole-word "Domain" remains only in intentional places (Postgres naming comment in settings.js, `Domain.py` filename in query-cohorts.js comment) and in excluded surfaces listed above.
 - Not done: docs/ (Sphinx, user guide, README) still say "Domain"; the public API/OpenAPI tags and agent/MCP prompts were kept as-is (AI feature gate requires an eval before prompt changes).
+
+================================================================================
+Studio: collapse group circle at clicked entity
+================================================================================
+
+Context:
+Collapsing an ontology group on the Studio canvas always placed the colored
+group circle on the first member of the group definition. Users expect the
+circle where they clicked (the entity whose − badge they used).
+
+Changes:
+1. src/front/static/ontology/js/ontology-map.js
+   Track a per-group collapse anchor (`_studioGroupAnchors`); pass the clicked
+   entity into `collapseStudioGroup`; resolve group-node position via
+   `_resolveStudioGroupAnchor`; keep drag sync on that same anchor; clear on
+   expand / stale group reload.
+2. tests/units/front/test_studio_views_groups_contract.py
+   Contract asserts the click passes `d.name` and stores the anchor.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10258 passed, 323 skipped, 8 deselected; 1 pre-existing unrelated failure (docs/user-guide.md stale TOC). Contract suite test_studio_views_groups_contract.py → 10 passed.
+
+================================================================================
+Studio: group click lists member entities in the right pane
+================================================================================
+
+Context:
+Clicking an ontology group super-node on the Studio canvas did nothing. Users
+want the right-hand detail pane to list every entity in the group.
+
+Changes:
+1. src/front/static/ontology/js/ontology-map.js
+   Group node click now clears the entity selection and calls the new
+   openStudioGroupPanel(groupName); drag-end clicks still do nothing.
+   New openStudioGroupPanel() renders the group header, an "Entities" section
+   with count, and one passive row per member; a row click selects that
+   entity on the canvas (opens its entity panel).
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   .panel-group-member: button reset for the member rows, primary tint on hover/focus.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Contract test for the group click wiring, the member rows and the CSS hook.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected; 1 pre-existing unrelated failure (docs/user-guide.md stale TOC). Contract suite test_studio_views_groups_contract.py → 11 passed.
+
+Documentation & Sphinx: Aligned user guides and docs with Context navigation
+================================================================================
+
+Context:
+Following the restructuring of the top menu (Context) and sub-navigation (General,
+Configuration, Governance, Metadata, Collaboration), the product documentation
+(docs/ and README.md) and in-app online help center still referenced "Domain → General",
+"Domain → Metadata", and legacy path patterns. The user asked to update the docs
+and online documentation accordingly.
+
+Changes:
+1. README.md
+   Updated quickstart table and setup sections: "Domain > Metadata" → "Context > Data Assets",
+   "Run a domain without an LLM" → "Run a context without an LLM", and load behavior
+   referencing Context.
+2. docs/README.md
+   Updated overview table and navigation targets: "Domain → General" → "Context → Configuration",
+   and added Context General (cockpit) description.
+3. docs/user-guide.md
+   - Replaced all obsolete "Domain → General → *" paths with "Context → Configuration → *" (AI, Knowledge Graph, Backend, Global, MCP).
+   - Replaced "Domain → Metadata" with "Context → Data Assets".
+   - Replaced "Domain → Audit trail" with "Context → Governance → Audit trail".
+   - Replaced "Domain → Validation" with "Context → General" (Cockpit overview) or "Context → Governance → Publication" (Review workflow).
+   - Replaced "Domain → Versions" with "Context → Versions".
+   - Replaced "Domain → Knowledge Store" with "Context → Knowledge Store".
+   - Updated headings and body text: "## Context Management & Version Control", "### Context Structure", "### Context → Configuration (Global Tab)", "### General page (Cockpit)", "### Context Save/Load", "### Enabling Contexts for MCP".
+   - Updated the Feature inventory section to reflect the new Context menu and page names.
+   - Regenerated Table of Contents via `make docs-toc`.
+4. docs/getting-started.md
+   Updated guided tutorial steps: "Context → Knowledge Store", "Context → Data Assets",
+   navbar "Load Context", and version branching.
+5. docs/deployment.md
+   Updated AI Gateway model service selection paths and Graph DB engine selection paths
+   to "Context → Configuration → AI" and "Context → Configuration → Knowledge Graph".
+6. docs/backend.md
+   Updated Graph DB engine configuration and search cache settings paths to
+   "Context → Configuration → Knowledge Graph" and "Context → Configuration → Backend → Search cache".
+7. docs/architecture.md
+   Updated backend engine selection and MCP policy paths to "Context → Configuration → *".
+8. docs/mcp.md
+   Updated per-domain MCP policy path to "Context → Configuration → MCP" and version management
+   to "Context → Versions".
+9. docs/product.md
+   Updated overview pipeline table: "Context > Data Assets".
+10. docs/api.md
+    Updated MCP policy and auto-assign icon documentation paths to "Context → Configuration → *".
+11. docs/sphinx/changelog.rst
+    Updated cross-reference from "Domain → Metadata" to "Context → Data Assets".
+12. ci/build_docs.sh
+    Verified clean Sphinx documentation build.
+
+Modified files:
+- README.md
+- docs/README.md
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/deployment.md
+- docs/backend.md
+- docs/architecture.md
+- docs/mcp.md
+- docs/product.md
+- docs/api.md
+- docs/sphinx/changelog.rst
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- `uv run --frozen pytest -q -m "not scenario"` → 10260 passed, 323 skipped, 8 deselected, 0 failed.
+- `./ci/build_docs.sh clean && ./ci/build_docs.sh` → Sphinx build succeeded without errors.
+
+================================================================================
+Studio: Edit group link on the group detail pane
+================================================================================
+
+Context:
+The Studio group right pane listed members but had no way to open the existing
+Edit Group modal. Add an Edit group action for editors.
+
+Changes:
+1. src/front/static/ontology/js/ontology-groups.js
+   Extract _showEditModal; add editGroupByName(name) for Studio callers.
+2. src/front/static/ontology/js/ontology-map.js
+   openStudioGroupPanel shows an "Edit group" button (editors only) that calls
+   OntologyGroups.editGroupByName.
+3. src/front/static/ontology/css/ontology-shared-panels.css
+   Full-width spacing for .panel-group-edit.
+4. tests/units/front/test_studio_views_groups_contract.py
+   Contract asserts the edit button and editGroupByName wiring.
+
+Modified files:
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q tests/units/front/test_studio_views_groups_contract.py → 11 passed.

@@ -20,7 +20,7 @@
 
         {
             "id": "domain",
-            "label": "Domain",
+            "label": "Context",
             "icon": "bi-box",
             "route": "/domain/",
             "requires_domain_saved": false,
@@ -49,11 +49,18 @@
                 {
                     "id": "domain-main",
                     "title": "",
-                    "icon": "bi-box",
+                    "icon": "bi-sliders2",
                     "items": [
                         {
-                            "id": "information",
+                            "id": "validation",
                             "label": "General",
+                            "icon": "bi-info-circle",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "information",
+                            "label": "Configuration",
                             "icon": "bi-info-circle",
                             "default": true,
                             "requires": null
@@ -64,11 +71,25 @@
                             "icon": "bi-123",
                             "default": false,
                             "requires": "domain_saved"
-                        },
+                        }
+                    ]
+                },
+                {
+                    "id": "domain-management",
+                    "title": "Governance",
+                    "icon": "bi-gear",
+                    "items": [
                         {
                             "id": "review",
                             "label": "Publication",
                             "icon": "bi-patch-check",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "audit",
+                            "label": "Audit trail",
+                            "icon": "bi-journal-text",
                             "default": false,
                             "requires": "domain_saved"
                         }
@@ -111,27 +132,6 @@
                             "id": "discussions",
                             "label": "Discussions",
                             "icon": "bi-chat-left-text",
-                            "default": false,
-                            "requires": "domain_saved"
-                        }
-                    ]
-                },
-                {
-                    "id": "domain-management",
-                    "title": "Management",
-                    "icon": "bi-gear",
-                    "items": [
-                        {
-                            "id": "validation",
-                            "label": "Cockpit",
-                            "icon": "bi-speedometer2",
-                            "default": false,
-                            "requires": "domain_saved"
-                        },
-                        {
-                            "id": "audit",
-                            "label": "Audit trail",
-                            "icon": "bi-journal-text",
                             "default": false,
                             "requires": "domain_saved"
                         }

@@ -21,7 +21,7 @@
 // the lifecycle status — they remain usable on PUBLISHED / IN-REVIEW
 // versions, still guarded by the builder role.
 //
-// Domain-role gating (viewer vs editor vs builder) is also done
+// Context-role gating (viewer vs editor vs builder) is also done
 // declaratively now — viewers get ``body.role-viewer`` from
 // ``permissions.js`` synchronously at parse time, no round-trip
 // required.

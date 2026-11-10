@@ -304,7 +304,7 @@ class TestTheAddDomainDialogDefaultsToLakehouse:
 
     def test_the_dialog_explains_the_choices_and_where_to_change_them(self):
         dialog = self._dialog()
-        assert "Domain → General" in dialog
+        assert "<strong>Configuration</strong>" in dialog
         for choice in ("Lakehouse", "Lakebase", "Neo4j", "No Backend"):
             assert choice in dialog
 

@@ -26,7 +26,7 @@ class TestNavigation:
             ("/settings", "Settings"),
             ("/ontology", "Ontology"),
             ("/mapping", "Mapping"),
-            ("/domain", "Domain"),
+            ("/domain", "Configuration"),
             ("/dtwin/", "Graph"),
             ("/about", "About"),
         ],
@@ -77,7 +77,7 @@ class TestHomePage:
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
         assert page.locator("#domainGateway").is_visible()
-        assert page.get_by_role("button", name="New Domain").is_visible()
+        assert page.get_by_role("button", name="New Context").is_visible()
 
 
 class TestAboutPage:

@@ -120,7 +120,7 @@
         event.stopPropagation();
         event.stopImmediatePropagation();
         showNotification(
-            'No LLM selected. Select one in Domain → General → AI.',
+            'No LLM selected. Select one in Configuration → AI.',
             'warning'
         );
     }

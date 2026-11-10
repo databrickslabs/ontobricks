@@ -65,7 +65,7 @@ async def save_domain_info(
     data = await request.json()
     domain = get_domain(session_mgr)
     response_info = Domain(domain).save_domain_info(data)
-    return {"success": True, "info": response_info, "message": "Domain info saved"}
+    return {"success": True, "info": response_info, "message": "Context info saved"}
 
 
 # ===========================================
@@ -216,7 +216,7 @@ async def reset_domain(session_mgr: SessionManager = Depends(get_session_manager
     domain = get_domain(session_mgr)
     domain.reset()
     domain.clear_uc_metadata()
-    return {"success": True, "message": "Domain reset"}
+    return {"success": True, "message": "Context reset"}
 
 
 @router.post("/clear")
@@ -245,7 +245,7 @@ async def close_domain(
     domain = get_domain(session_mgr)
     domain.reset()
     domain.clear_uc_metadata()
-    return {"success": True, "message": "Domain closed"}
+    return {"success": True, "message": "Context closed"}
 
 
 # ===========================================
@@ -326,7 +326,7 @@ async def save_domain_config(
     Note: warehouse_id is no longer stored per-project (it is instance-global).
     Catalog/schema are NOT stored -- they are selected dynamically when needed.
     """
-    return {"success": True, "message": "Domain configuration saved"}
+    return {"success": True, "message": "Context configuration saved"}
 
 
 # ===========================================
@@ -613,7 +613,7 @@ async def delete_domain_version(
     # unrelated saved domain from an unsaved same-name session.
     folder = (domain.domain_folder or "").strip()
     if not folder:
-        raise ValidationError("Domain not saved to the registry")
+        raise ValidationError("Context not saved to the registry")
     return SettingsService.delete_registry_version_result(
         folder,
         version,
@@ -1036,7 +1036,7 @@ async def list_documents(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
 
         parse_service = _make_document_parse_service(domain, settings)
         rows = parse_service.list_documents(folder, version)
@@ -1072,7 +1072,7 @@ async def upload_documents(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
 
         parse_service = _make_document_parse_service(domain, settings)
 
@@ -1179,7 +1179,7 @@ async def retry_document_parse(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
         parse_service = _make_document_parse_service(domain, settings)
         try:
             submission = parse_service.retry(folder, version, filename)
@@ -1234,7 +1234,7 @@ async def delete_document(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
 
         parse_service = _make_document_parse_service(domain, settings)
         try:
@@ -1272,7 +1272,7 @@ async def preview_document(
         domain = get_domain(session_mgr)
         folder, version = _resolve_document_scope(domain)
         if not folder:
-            raise ValidationError("Domain not saved to the registry")
+            raise ValidationError("Context not saved to the registry")
 
         parse_service = _make_document_parse_service(domain, settings)
         doc = parse_service.read_document(folder, version, filename)

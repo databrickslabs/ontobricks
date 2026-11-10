@@ -66,7 +66,7 @@ class TestNeo4jConnectionPickerWiring:
         assert guard >= 0 and guard < payload
 
     def test_save_refreshes_saved_value_baseline(self, domain_js):
-        idx = domain_js.find("Domain info saved successfully!")
+        idx = domain_js.find("Context info saved successfully!")
         assert idx >= 0
         body = domain_js[idx : idx + 500]
         assert "dataset.savedValue" in body

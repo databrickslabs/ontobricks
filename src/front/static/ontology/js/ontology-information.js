@@ -493,7 +493,7 @@ function showOwlImportReport(filename, onto, details) {
                                 <thead class="table-light sticky-top">
                                     <tr>
                                         <th>ID</th>
-                                        <th>Domain (From)</th>
+                                        <th>Context (From)</th>
                                         <th>Range (To)</th>
                                     </tr>
                                 </thead>
@@ -872,7 +872,7 @@ function showRdfsImportReport(filename, onto, details) {
                                 <thead class="table-light sticky-top">
                                     <tr>
                                         <th>ID</th>
-                                        <th>Domain (From)</th>
+                                        <th>Context (From)</th>
                                         <th>Range (To)</th>
                                     </tr>
                                 </thead>

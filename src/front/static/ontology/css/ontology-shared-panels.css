@@ -359,6 +359,26 @@
     gap: 0.5rem;
 }
 
+/* Studio group pane: edit opens the group modal; member rows select entities. */
+.shared-detail-panel .panel-group-edit {
+    width: 100%;
+    margin-bottom: 0.75rem;
+}
+
+.shared-detail-panel .panel-group-member {
+    display: block;
+    width: 100%;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.shared-detail-panel .panel-group-member:hover .panel-item-title,
+.shared-detail-panel .panel-group-member:focus-visible .panel-item-title {
+    color: var(--db-primary);
+}
+
 .shared-detail-panel .panel-item-icon {
     flex-shrink: 0;
     width: 1rem;

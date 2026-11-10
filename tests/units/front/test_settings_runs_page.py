@@ -211,9 +211,9 @@ class TestRunsSection:
         html = _html(client, "/settings")
         section = html[html.index('id="runs-section"'):]
         build = section[section.index('id="srBuildTableBody"'):]
-        assert section.count(">Domain<") >= 2
-        assert ">Domain<" in section[: section.index('id="srBuildTableBody"')]
-        assert ">Domain<" in build
+        assert section.count(">Context<") >= 2
+        assert ">Context<" in section[: section.index('id="srBuildTableBody"')]
+        assert ">Context<" in build
 
     def test_there_is_no_version_filter(self, client):
         """Version is a column here, as on the Knowledge Graph page — a

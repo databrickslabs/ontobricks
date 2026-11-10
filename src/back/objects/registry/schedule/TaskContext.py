@@ -53,7 +53,7 @@ def load_domain_headless(svc, domain_name: str, version: str, host: str, reg: di
     else:
         ok, data, loaded_version, err = svc.load_latest_domain_data(domain_name)
         if not ok:
-            raise NotFoundError(err or f"Domain '{domain_name}' not found in registry")
+            raise NotFoundError(err or f"Context '{domain_name}' not found in registry")
 
     domain = DomainSession(_FakeSessionMgr())
     domain.import_from_file(data, version=loaded_version)

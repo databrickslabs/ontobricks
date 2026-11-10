@@ -1017,8 +1017,8 @@ OntoBricks separates two concerns:
 2. **Graph DB** — the queryable graph engine used by the Knowledge Graph, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction. When the per-domain backend is `databricks`, the Graph DB *is* those Delta tables; when it is `lakebase` or `neo4j`, Build also mirrors triples into that engine.
 
 The active Graph DB engine is chosen **per domain** via `graph_backend`
-(`none` | `lakebase` | `databricks` | `neo4j`), set under **Domain →
-General → Knowledge Graph**; connection settings live under **Settings →
+(`none` | `lakebase` | `databricks` | `neo4j`), set under **Context →
+Configuration → Knowledge Graph**; connection settings live under **Settings →
 Back end**. `none` is the ontology-only mode: no graph is built and the MCP
 surface exposes ontology information only.
 
@@ -1038,7 +1038,7 @@ rows; **no copy** means a VIEW that re-reads the source on each query.
 
 | Capability | Lakehouse · table (copy) | Lakehouse · views only (no mapped copy) | Lakebase · `app_managed` | Lakebase · `managed_synced` | Neo4j |
 |------------|--------------------------|-----------------------------------------|--------------------------|-----------------------------|-------|
-| Chosen where | Domain → Knowledge Graph, backend `databricks`, materialization `table` | Same backend, materialization `view` | Domain backend `lakebase`; Settings → Lakebase `sync_mode` | Same backend, `sync_mode=managed_synced` | Domain backend `neo4j` |
+| Chosen where | Context → Knowledge Graph, backend `databricks`, materialization `table` | Same backend, materialization `view` | Domain backend `lakebase`; Settings → Lakebase `sync_mode` | Same backend, `sync_mode=managed_synced` | Domain backend `neo4j` |
 | Mapped triples | `_data` **TABLE** — CTAS from the R2RML VIEW, then `OPTIMIZE` / Liquid Clustering | `_data` **VIEW** — pass-through over the R2RML VIEW; no row copy | UC `_data` is always a **TABLE** (analytics needs a Delta scan). Postgres `_sync` is a second copy loaded by the app (`COPY FROM STDIN`) | UC `_data` **TABLE**. Postgres `_sync` is a second copy kept by Lakeflow | UC `_data` **TABLE**. Neo4j nodes are a second copy (`MERGE`) |
 | Inferred / app writes | `_inferred` **TABLE** (truncated on full Build, then refilled) | Same `_inferred` **TABLE** — inferred rows have no source table | Postgres `__app` companion; UC `_inferred` still exists for the UC family | Same `__app` companion; Lakeflow never writes it | Stored as Neo4j triples in the same store label; no `_adj_*` |
 | Interactive read façade | `_graph` VIEW = `_data UNION ALL _inferred` | Same `_graph` VIEW (each read re-runs mapping SQL through `_data`) | Postgres union view `g_<dom>_v<n>` = `_sync UNION ALL __app` | Same union view | Bolt / Cypher against the store |
@@ -1090,7 +1090,7 @@ source tables
 
 **Materialization modes** are a per-domain Lakehouse setting (`info['lakehouse_materialization']`, resolved by `GraphDBFactory.resolve_lakehouse_materialization`, applied by `materialize.apply_data_relation`):
 
-- `view` (new-domain default, **Domain → General → Backend → Access type**) — no copy at all. `_data` is a view over the gateway, so every read re-executes the mapping SQL against the source tables and always sees live data. Builds only run DDL, and `OPTIMIZE` is skipped since there is nothing to compact.
+- `view` (new-domain default, **Context → Configuration → Backend → Access type**) — no copy at all. `_data` is a view over the gateway, so every read re-executes the mapping SQL against the source tables and always sees live data. Builds only run DDL, and `OPTIMIZE` is skipped since there is nothing to compact.
 - `table` — CTAS + `OPTIMIZE`. One copy of the triples; reads are a single clustered Delta scan. A missing or unrecognised value still normalises to `table` so Lakehouse domains created before the option existed keep their copy.
 
 Lakebase and Neo4j domains always get the table: the resolver returns `table` for any backend other than `databricks`, because their own graph is not what the analytics job reads.
@@ -1991,7 +1991,7 @@ The following sections were previously separate documents.
 
 OntoBricks uses **LLM-powered agents** to automate complex, multi-step tasks that would otherwise require significant manual effort. Each agent follows an MCP-style (Model Context Protocol) pattern: an autonomous loop where the LLM reasons about the task, calls tools to gather context or perform actions, and iterates until the goal is achieved.
 
-All in-app agents use the **LLM saved on the domain** (`Domain → General → AI`):
+All in-app agents use the **LLM saved on the domain** (`Context → Configuration → AI`):
 an executable Unity Catalog **AI Gateway** model service
 (`kind: "ai_gateway"`, `POST /ai-gateway/mlflow/v1/chat/completions` with
 `model` set to the three-part name) or a legacy **Model Serving** endpoint
@@ -3127,7 +3127,7 @@ traffic. Data-plane routes are fail-closed when no user identity is forwarded.
 
 > **Per-domain policy.** The first three tools are registry-level and always
 > available. The rest are domain-scoped: a domain can hide any of them from
-> **Domain → General → MCP**, and can set its dataset / bridges / actions
+> **Context → Configuration → MCP**, and can set its dataset / bridges / actions
 > attachments to *disabled*. Because the MCP server is a proxy, the disabling
 > is enforced **at the endpoints above**, not in the proxy — `nodes/context`
 > and `domain/classes` omit the element, and `nodes/action` refuses. Hiding a

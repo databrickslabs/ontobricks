@@ -1,40 +1,9 @@
 <!-- JS: /static/domain/js/domain-information.js -->
-<!-- Domain information section -->
+<!-- Context information section -->
 <div class="content-section">
     <div class="section-header mb-4">
-        <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>General</h4>
+        <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>Configuration</h4>
         <p class="text-muted mb-0 small">Define your domain details</p>
-    </div>
-
-    <!-- Current-domain KPI / health band (moved from the Home page) -->
-    <div class="domain-panel mb-4" id="domainKpiPanel">
-        <div class="ob-kpi-band">
-            <div class="ob-kpi-tile tile-muted" id="kpiEntitiesTile">
-                <div class="ob-kpi-tile-icon"><i class="bi bi-diagram-3"></i></div>
-                <div class="ob-kpi-tile-value" id="kpiEntities">-</div>
-                <div class="ob-kpi-tile-label">Entities</div>
-            </div>
-            <div class="ob-kpi-tile tile-muted" id="kpiRelationshipsTile">
-                <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
-                <div class="ob-kpi-tile-value" id="kpiRelationships">-</div>
-                <div class="ob-kpi-tile-label">Relationships</div>
-            </div>
-            <div class="ob-kpi-tile tile-muted" id="kpiMappingsTile">
-                <div class="ob-kpi-tile-icon"><i class="bi bi-link-45deg"></i></div>
-                <div class="ob-kpi-tile-value" id="kpiMappings">-</div>
-                <div class="ob-kpi-tile-label">Mappings</div>
-            </div>
-            <div class="ob-kpi-tile tile-muted" id="kpiStatusTile">
-                <div class="ob-kpi-tile-icon"><i class="bi bi-flag"></i></div>
-                <div class="ob-kpi-tile-value" id="kpiStatus">-</div>
-                <div class="ob-kpi-tile-label">Status</div>
-            </div>
-            <div class="ob-kpi-tile tile-muted" id="kpiVersionTile">
-                <div class="ob-kpi-tile-icon"><i class="bi bi-tag"></i></div>
-                <div class="ob-kpi-tile-value" id="kpiVersion">-</div>
-                <div class="ob-kpi-tile-label">Version</div>
-            </div>
-        </div>
     </div>
 
     <form id="domainForm" class="card h-100 ob-tabs-wrap">
@@ -74,7 +43,7 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="domainName" class="form-label">
-                                    <i class="bi bi-tag"></i> Domain Name
+                                    <i class="bi bi-tag"></i> Context Name
                                 </label>
                                 <input type="text" class="form-control domain-editable" id="domainName" 
                                        placeholder="NewDomain" 
@@ -104,7 +73,7 @@
                                 <div class="form-control-plaintext bg-light p-2 rounded font-monospace small" id="registryLocationDisplay">
                                     {{ domain.registry.get('catalog', '') }}.{{ domain.registry.get('schema', '') }}.{{ domain.registry.get('volume', '') }}/domains/{{ domain.domain_folder }}
                                 </div>
-                                <small class="text-muted"><i class="bi bi-info-circle"></i> Domain location in the registry Volume</small>
+                                <small class="text-muted"><i class="bi bi-info-circle"></i> Context location in the registry Volume</small>
                             </div>
                         </div>
                         {% endif %}

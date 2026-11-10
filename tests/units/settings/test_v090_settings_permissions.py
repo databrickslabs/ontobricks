@@ -248,7 +248,7 @@ class TestDomainPermissions:
         [
             ("claims", {"principal": "  "}, "Principal"),
             ("claims", {"principal": "a@x", "role": "admin"}, "Role must be"),
-            ("", {"principal": "a@x"}, "Domain name is required"),
+            ("", {"principal": "a@x"}, "Context name is required"),
         ],
     )
     def test_add_validation(self, perm, ctx, domain, data, match):

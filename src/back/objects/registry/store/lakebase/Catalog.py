@@ -484,7 +484,7 @@ class Catalog:
                 )
                 row = cur.fetchone()
                 if not row:
-                    return False, f"Domain '{folder}' not found"
+                    return False, f"Context '{folder}' not found"
                 domain_id = row[0]
                 cur.execute(
                     f"DELETE FROM {self._q(self._schema)}.domain_permissions "
@@ -507,7 +507,7 @@ class Catalog:
                             e.get("role", "viewer"),
                         ),
                     )
-            return True, "Domain permissions saved"
+            return True, "Context permissions saved"
         except Exception as exc:  # noqa: BLE001
             return False, str(exc)
 

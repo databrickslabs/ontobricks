@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}{{ brand_page_title('Domain') }}{% endblock %}
+{% block title %}{{ brand_page_title('Configuration') }}{% endblock %}
 
 {% block extra_css %}
-<!-- Domain module styles (extracted from partials) -->
+<!-- Context module styles (extracted from partials) -->
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sync.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-information.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-metadata.css') }}?v={{ asset_version }}">
@@ -26,7 +26,7 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
-            <!-- General section (id remains information) -->
+            <!-- Configuration section (id remains information) -->
             <div id="information-section" class="sidebar-section active">
                 {% include "partials/domain/_domain_information.html" %}
             </div>
@@ -113,7 +113,7 @@
 }
 </script>
 
-<!-- Domain page JavaScript (extracted from templates) -->
+<!-- Context page JavaScript (extracted from templates) -->
 <script src="{{ url_for('static', filename='domain/js/domain.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-information.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-metadata.js') }}?v={{ asset_version }}"></script>

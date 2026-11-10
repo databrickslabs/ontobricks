@@ -1,5 +1,5 @@
 /**
- * Domain → Collaboration
+ * Context → Collaboration
  *
  * Two sections that concentrate every collaborative signal for the loaded
  * domain in one place:
@@ -176,7 +176,7 @@
         return '<div class="mb-2 fw-medium small text-uppercase text-muted">' +
             '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
             '<div class="table-responsive mb-4"><table class="table table-sm align-middle mb-0">' +
-            '<thead><tr><th>Task</th><th>Domain</th><th>From</th><th>Status</th>' +
+            '<thead><tr><th>Task</th><th>Context</th><th>From</th><th>Status</th>' +
             '<th>Due</th><th class="text-end">Action</th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table></div>';
     }
@@ -199,7 +199,7 @@
         return '<div class="mb-2 fw-medium small text-uppercase text-muted">' +
             '<i class="bi bi-ui-checks me-1"></i>Review worklist</div>' +
             '<div class="table-responsive mb-2"><table class="table table-sm align-middle mb-0">' +
-            '<thead><tr><th>Domain</th><th>Version</th><th>Status</th>' +
+            '<thead><tr><th>Context</th><th>Version</th><th>Status</th>' +
             '<th>Approvals</th><th>Last activity</th><th class="text-end">Your action</th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table></div>';
     }

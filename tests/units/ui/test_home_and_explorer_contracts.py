@@ -20,7 +20,7 @@ _MENU = _FRONT / "config" / "menu_config.json"
 def test_home_is_all_domains_gateway_with_new_domain_cta():
     html = _HOME.read_text(encoding="utf-8")
     assert 'id="domainGateway"' in html
-    assert "New Domain" in html
+    assert "New Context" in html
     assert "workflow-card" not in html
     assert 'id="classCount"' not in html
     assert 'id="propCount"' not in html

@@ -1,7 +1,7 @@
 <!-- JS: /static/config/js/settings-runs.js -->
 <!-- Settings → Automation → Runs: build and analytics history across EVERY
      domain in the registry (admin only). Same two-tab layout as Knowledge
-     Graph → Management → Runs, plus a Domain column, a Domain filter whose
+     Graph → Management → Runs, plus a Context column, a Context filter whose
      default is every domain, and server-side pagination — cross-domain
      history has no natural bound the way one domain's does.
 
@@ -27,7 +27,7 @@
 
     <div class="row g-2 mb-3">
         <div class="col-sm-6 col-md-4">
-            <label for="settingsRunsDomain" class="form-label fw-semibold small mb-1">Domain</label>
+            <label for="settingsRunsDomain" class="form-label fw-semibold small mb-1">Context</label>
             <select class="form-select form-select-sm" id="settingsRunsDomain">
                 <option value="">All domains</option>
             </select>
@@ -83,7 +83,7 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th class="text-end" style="width:7%;">ID</th>
-                                        <th style="width:18%;">Domain</th>
+                                        <th style="width:18%;">Context</th>
                                         <th style="width:21%;">Date &amp; Time</th>
                                         <th class="text-center" style="width:13%;">Version</th>
                                         <th class="text-center" style="width:15%;">Status</th>
@@ -154,7 +154,7 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th>Date &amp; Time</th>
-                                        <th>Domain</th>
+                                        <th>Context</th>
                                         <th>Scope</th>
                                         <th class="text-center">Version</th>
                                         <th class="text-center">Status</th>

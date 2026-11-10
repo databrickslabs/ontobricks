@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
  *
  * Cross-domain ``/resolve`` bridges switch the session server-side and
  * land with ``?domain_switched=1``. Bust the navbar cache *before* the
- * first fetch so the Domain name/version update immediately.
+ * first fetch so the Context name/version update immediately.
  */
 function initNavbar() {
     const params = new URLSearchParams(window.location.search);
@@ -124,7 +124,7 @@ function initSubnavActiveState() {
 }
 
 /**
- * The current L2 area (Domain / Ontology / Mapping / KG) already has its
+ * The current L2 area (Context / Ontology / Mapping / KG) already has its
  * sections in the left sidebar, so the matching L2 dropdown is redundant.
  * Drop Bootstrap dropdown wiring and the menu, keep a static active tab.
  */
@@ -147,7 +147,7 @@ function disableCurrentSubnavDropdown(toggle) {
 /**
  * Load the consolidated navbar state in a single round-trip and
  * apply domain info and warehouse icon to the DOM.
- * Validation indicators have moved to the Domain Validation page.
+ * Validation indicators have moved to the Context Validation page.
  */
 const DOMAIN_INFO_STORAGE_KEY = 'ontobricks:last-confirmed-domain-info';
 
@@ -251,7 +251,7 @@ const DOMAIN_GENERAL_HREF = '/domain/?section=information';
 
 /**
  * After a domain is loaded (navbar, home, registry, import), land on
- * Domain → General. Reloading the current page would keep the user on
+ * Context → General. Reloading the current page would keep the user on
  * Home with only the top menus updated.
  */
 function navigateToDomainGeneral() {
@@ -352,7 +352,7 @@ function applyDomainInfo(data) {
             currentDomainNameEl.textContent = domainName;
             applyDomainStatusBadge(currentDomainNameEl, status);
         } else {
-            currentDomainNameEl.textContent = 'Domain';
+            currentDomainNameEl.textContent = 'Context';
             applyDomainStatusBadge(currentDomainNameEl, null);
         }
     }
@@ -362,7 +362,7 @@ function applyDomainInfo(data) {
 
     const mapLabel = document.getElementById('workspaceMapDomainLabel');
     if (mapLabel) {
-        mapLabel.textContent = hasDomain ? `${domainName} V${version}` : 'Domain';
+        mapLabel.textContent = hasDomain ? `${domainName} V${version}` : 'Context';
         applyDomainStatusBadge(mapLabel, hasDomain ? status : null);
     }
     const contextTrigger = document.getElementById('domainContextTrigger');
@@ -373,7 +373,7 @@ function applyDomainInfo(data) {
                 `Open workspace map for ${domainName}, version ${version}, ${statusLabel(status)}`
             );
         } else {
-            contextTrigger.setAttribute('aria-label', 'Open workspace map for Domain');
+            contextTrigger.setAttribute('aria-label', 'Open workspace map for Context');
         }
     }
     const settingsReturnLink = document.getElementById('settingsDomainReturnLink');
@@ -530,8 +530,8 @@ function updateNewDomainMessage(showMessage) {
                 <div id="newDomainMessage" class="alert alert-info d-flex align-items-center mt-3" role="alert">
                     <i class="bi bi-info-circle-fill me-2 fs-5"></i>
                     <div>
-                        <strong>New Domain</strong> - Please fill in the <strong>Domain Name</strong> and <strong>Base URI</strong>, 
-                        then click <strong>Save Domain to Unity Catalog</strong> to enable all features.
+                        <strong>New Context</strong> - Please fill in the <strong>Context Name</strong> and <strong>Base URI</strong>, 
+                        then click <strong>Save Context to Unity Catalog</strong> to enable all features.
                     </div>
                 </div>
             `;
@@ -588,7 +588,7 @@ window.refreshDigitalTwinStatus = refreshNavbarIndicators;
 
 
 // ==========================================
-// Domain lifecycle (navbar)
+// Context lifecycle (navbar)
 // ==========================================
 
 /**
@@ -620,8 +620,8 @@ async function domainNew() {
 
         invalidateDomainCaches();
 
-        // Sync any stale Domain → General form on the current page with the NEW
-        // domain values. When "New Domain" is triggered from another domain's
+        // Sync any stale Context → General form on the current page with the NEW
+        // domain values. When "New Context" is triggered from another domain's
         // General page, #domainName still holds the previously-loaded
         // domain's name. doDomainSave()'s pre-save duplicate-name guard reads
         // that field, so without this it would validate (and reject) the OLD
@@ -786,7 +786,7 @@ function buildMcpPolicy() {
 }
 
 /**
- * Build the ``/domain/info`` payload from the Domain → General form.
+ * Build the ``/domain/info`` payload from the Context → General form.
  *
  * Single source of truth for both save entry points (the General form's
  * own Save and the auto-save that runs before a UC save) so the two cannot
@@ -848,7 +848,7 @@ function buildDomainInfoPayload() {
 window.buildDomainInfoPayload = buildDomainInfoPayload;
 
 /**
- * True when the Domain → General form can be persisted.
+ * True when the Context → General form can be persisted.
  *
  * A Neo4j domain must name a connection — the server rejects a blank one, so
  * catch it here with a message that names the fix.
@@ -887,7 +887,7 @@ async function saveDomainInfoBeforeSave() {
 
         // Only save if we have something to save
         if (Object.keys(domainInfoPayload).length > 0) {
-            console.log('[Domain] Auto-saving domain info before UC save:', domainInfoPayload);
+            console.log('[Context] Auto-saving domain info before UC save:', domainInfoPayload);
             try {
                 const response = await fetch('/domain/info', {
                     method: 'POST',
@@ -897,7 +897,7 @@ async function saveDomainInfoBeforeSave() {
                 });
                 const data = await response.json();
                 if (!response.ok || data.success !== true) {
-                    throw new Error(data.message || 'Domain info save failed');
+                    throw new Error(data.message || 'Context info save failed');
                 }
                 window.OB?.updateLlmAvailability(
                     Boolean((data.info?.llm_endpoint || '').trim())
@@ -953,7 +953,7 @@ async function doDomainSave(opts = {}) {
         if (data.success) {
             if (typeof clearRegistryDirty === 'function') clearRegistryDirty();
             clearAllDomainDirty();
-            showNotification(data.message || 'Domain saved successfully!', 'success');
+            showNotification(data.message || 'Context saved successfully!', 'success');
             enableMenusAfterSave();
             await refreshNavbarIndicators();
             loadDomainName();
@@ -972,7 +972,7 @@ async function doDomainSave(opts = {}) {
 }
 
 // ==========================================
-// Domain close (release edit lock + return home)
+// Context close (release edit lock + return home)
 // ==========================================
 
 /**
@@ -1071,7 +1071,7 @@ function showCloseDomainDialog(options = {}) {
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title"><i class="bi bi-x-circle me-2"></i>Close Domain</h5>
+                            <h5 class="modal-title"><i class="bi bi-x-circle me-2"></i>Close Context</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
@@ -1113,13 +1113,13 @@ function showCloseDomainDialog(options = {}) {
 }
 
 // ==========================================
-// Domain switch (reload current / load another version)
+// Context switch (reload current / load another version)
 // ==========================================
 
 /**
  * Create a new version from the current domain state.
  *
- * This global action is shared by the Versions popup and Domain > Versions.
+ * This global action is shared by the Versions popup and Context > Versions.
  * Branching remains available for read-only or incomplete domain versions.
  */
 async function createNewDomainVersion(options = {}) {
@@ -1227,7 +1227,7 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
                     </div>
                     <div class="modal-body">
                         <p class="mb-2 small text-muted">
-                            <i class="bi bi-diagram-3 me-1"></i>Domain: <strong>${escapeHtmlAttr(domainName)}</strong>
+                            <i class="bi bi-diagram-3 me-1"></i>Context: <strong>${escapeHtmlAttr(domainName)}</strong>
                         </p>
                         <div class="mb-3">
                             <label class="form-label" for="switchVersionSelect">Version to load</label>
@@ -1433,7 +1433,7 @@ function showDomainLoadDialog() {
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-cloud-download"></i> Load Domain from Registry</h5>
+                        <h5 class="modal-title"><i class="bi bi-cloud-download"></i> Load Context from Registry</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
@@ -1441,7 +1441,7 @@ function showDomainLoadDialog() {
                             <span class="spinner-border spinner-border-sm me-1"></span> Checking registry...
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Domain</label>
+                            <label class="form-label">Context</label>
                             <select class="form-select" id="loadDomainSelect" disabled>
                                 <option value="">Loading domains...</option>
                             </select>
@@ -1578,7 +1578,7 @@ async function doDomainLoad(domainSlug, version) {
         });
         const data = await response.json();
         if (data.success) {
-            showNotification(data.message || 'Domain loaded successfully!', 'success');
+            showNotification(data.message || 'Context loaded successfully!', 'success');
             // The server session already points at the new domain. Drop the
             // stale remembered badge and repaint from the fresh /navbar/state
             // *before* reloading, so the navbar never keeps showing the
@@ -1714,7 +1714,7 @@ async function importDomainDirect(importedDomain) {
  */
 function handleImportResponse(data) {
     if (data.success) {
-        let msg = 'Domain loaded';
+        let msg = 'Context loaded';
         if (data.version) msg += ` (v${data.version})`;
         msg += '! ' + data.stats.entities + ' entities, ' + 
                data.stats.relationships + ' relationships, ' + 

@@ -93,7 +93,7 @@ class ScheduleSettings:
                 config = {}
 
             if not domain_name:
-                raise ValidationError("Domain name is required")
+                raise ValidationError("Context name is required")
 
             _, host, token, registry_cfg = SettingsService._resolve_context(
                 session_mgr, settings
@@ -374,7 +374,7 @@ class ScheduleSettings:
             ok, data, version, err = svc.load_latest_domain_data(domain_name)
             if not ok:
                 raise NotFoundError(
-                    err or f"Domain '{domain_name}' not found in registry"
+                    err or f"Context '{domain_name}' not found in registry"
                 )
 
             doc = data if isinstance(data, dict) else {}

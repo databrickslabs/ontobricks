@@ -2,7 +2,7 @@
  * Settings → Automation → Runs (admin only).
  *
  * The cross-domain twin of Knowledge Graph → Management → Runs: one tab per
- * run kind, spanning every domain in the registry unless the Domain filter
+ * run kind, spanning every domain in the registry unless the Context filter
  * narrows it, one page at a time.
  *
  * Backed by:

@@ -1,6 +1,6 @@
 /**
  * OntoBricks - domain-versions.js
- * Version list management for the Domain > Versions submenu.
+ * Version list management for the Context > Versions submenu.
  */
 
 var versionsGithubEnabled = false;
@@ -364,7 +364,7 @@ async function loadVersionFromList(version, triggerButton = null) {
         if (data.success) {
             showNotification(data.message || 'Version loaded!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            // Version load opens Domain → General rather than staying on Versions.
+            // Version load opens Context → General rather than staying on Versions.
             if (typeof navigateToDomainGeneral === 'function') {
                 navigateToDomainGeneral();
             } else {
@@ -400,7 +400,7 @@ async function reloadLastSavedVersion() {
         const currentVersion = (statusData && statusData.version) || '1';
 
         if (!domainFolder) {
-            showNotification('Domain must be saved to the registry first', 'warning');
+            showNotification('Context must be saved to the registry first', 'warning');
             return;
         }
 

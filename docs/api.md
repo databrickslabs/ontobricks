@@ -628,7 +628,7 @@ List all domains that have at least one version in the registry.
 ```
 
 `mcp_policy` is the domain's [per-domain MCP policy](mcp.md#per-domain-mcp-policy),
-authored in **Domain → General → MCP**. Only non-default entries are
+authored in **Context → Configuration → MCP**. Only non-default entries are
 stored, so `{}` means "every tool exposed, every ontology attachment surfaced
 normally" — the pre-0.8 behaviour. `disabled_tools` never contains a
 registry-level tool, and a missing `context` key defaults to `normal`.
@@ -2582,7 +2582,7 @@ The `last_modified` field is retrieved from the Unity Catalog Delta table metada
 
 #### Auto-Map Entity Icons (LLM)
 
-Use the LLM saved in **Domain → General → AI** to suggest emoji icons for entity names.
+Use the LLM saved in **Context → Configuration → AI** to suggest emoji icons for entity names.
 
 ```http
 POST /dtwin/auto-assign-icons
@@ -2608,7 +2608,7 @@ POST /dtwin/auto-assign-icons
 }
 ```
 
-> **Note**: Requires a saved LLM on the domain (`llm_endpoint`). An empty target (**No LLM**) returns HTTP 400 with guidance to select a model in Domain → General → AI.
+> **Note**: Requires a saved LLM on the domain (`llm_endpoint`). An empty target (**No LLM**) returns HTTP 400 with guidance to select a model in Context → Configuration → AI.
 
 ---
 
@@ -3091,8 +3091,8 @@ GET /mapping/wizard/llm-endpoints
 ```
 
 Returns executable Unity AI Gateway model services first (`kind: "ai_gateway"`),
-then legacy Model Serving endpoints (`kind: "serving"`). Domain → General →
-**Browse** and New Domain use this same list. Gateway rows require Unity Catalog
+then legacy Model Serving endpoints (`kind: "serving"`). Context → Configuration →
+**Browse** and New Context use this same list. Gateway rows require Unity Catalog
 `EXECUTE` or an effective `ALL_PRIVILEGES` grant for the application service
 principal. Saving a row on the domain is what Ontology Assistant, Wizard,
 Auto-Map, and the other in-app agents actually call.

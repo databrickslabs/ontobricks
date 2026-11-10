@@ -1,13 +1,13 @@
 /* ==========================================================================
    Home Page — business-user landing
    - KPI / health band for the current domain (reuses shared .ob-kpi-tile)
-   - "All Domains" gateway grid (.ob-domain-card)
+   - "All Contexts" gateway grid (.ob-domain-card)
    - "Build & Manage" header layout
    All colours via --db-* tokens (see 11-frontend-design.mdc).
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   All Domains — the open door
+   All Contexts — the open door
    -------------------------------------------------------------------------- */
 .ob-domain-grid {
     display: grid;

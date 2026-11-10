@@ -40,7 +40,7 @@ AI Playground) cannot reuse `select_domain`. Pass optional `domain_name` on
 every domain-scoped tool, or set `MCP_DEFAULT_DOMAIN`, or publish a single
 MCP domain (the server then uses that one).
 
-**Which version?** For each domain folder, the registry stores exactly one **Active** (MCP/API-enabled) version at a time. Operators set that version in the main OntoBricks app under **Registry → Browse** (expand the domain, then **Set as Active** on a row). **Domain → Versions** shows the outcome as a read-only badge but does not change it.
+**Which version?** For each domain folder, the registry stores exactly one **Active** (MCP/API-enabled) version at a time. Operators set that version in the main OntoBricks app under **Registry → Browse** (expand the domain, then **Set as Active** on a row). **Context → Versions** shows the outcome as a read-only badge but does not change it.
 
 **Advanced — GraphQL querying:**
 
@@ -368,7 +368,7 @@ than a lookup.
 
 ## Per-domain MCP policy
 
-Each domain decides what it publishes over MCP, from **Domain → General
+Each domain decides what it publishes over MCP, from **Context → Configuration
 → MCP**. A domain that has never been configured behaves exactly as before
 0.8: every tool exposed, every attachment surfaced normally.
 

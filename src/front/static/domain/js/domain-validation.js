@@ -126,7 +126,7 @@ function updateHealthBanner(data) {
     if (ready && dtwin.indicator === 'green' && hasWarehouse) {
         banner.className = 'validation-health-banner health-ready mb-4';
         banner.innerHTML = '<i class="bi bi-check-circle-fill health-icon"></i>' +
-            '<div><strong>Domain fully operational</strong> — Ontology, Mapping, Warehouse and Knowledge Graph are all healthy.</div>';
+            '<div><strong>Context fully operational</strong> — Ontology, Mapping, Warehouse and Knowledge Graph are all healthy.</div>';
         return;
     }
 

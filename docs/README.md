@@ -25,7 +25,7 @@ Operator guides for this version. Full details:
 | Entity Data Quality Checks, IF-THEN on an entity, Jobs as class actions | [User Guide](user-guide.md#feature-inventory), [MCP](mcp.md) |
 | SPARQL playground | [User Guide](user-guide.md#sparql-playground) |
 | GitHub domain mirror | [User Guide](user-guide.md#github-mirror), [Advanced features](advanced_features.md#load-from-github-repository) |
-| Load opens Domain → General | [User Guide](user-guide.md#domain-saveload) |
+| Load opens Context → Configuration | [User Guide](user-guide.md#context-saveload) |
 | No LLM, AI Gateway picker, OBO / MCP Team gate | [User Guide](user-guide.md#no-llm-mode), [Deployment](deployment.md) |
 | App `/health` vs readiness, CSRF | [API](api.md#csrf-protection), [Deployment](deployment.md) |
 
@@ -46,7 +46,7 @@ release until this documentation is published.
 
 | Guide | What you'll find |
 |-------|------------------|
-| [User Guide](user-guide.md) | Domain cockpit, Studio, Knowledge Store, staged Generate, mapping, Explorer quality/rules/jobs, SPARQL, GitHub mirror. Ends with the [feature inventory](user-guide.md#feature-inventory) |
+| [User Guide](user-guide.md) | Context General (cockpit), Configuration, Studio, Knowledge Store, staged Generate, mapping, Explorer quality/rules/jobs, SPARQL, GitHub mirror. Ends with the [feature inventory](user-guide.md#feature-inventory) |
 | [Advanced features](advanced_features.md) | [Ontology specifics](advanced_features.md#ontology-specifics) (`name` vs `label`, URI minting, `ontobricks:` vocabulary), [registry import and export](advanced_features.md#registry-import-and-export) (OBX, `registry_transfer.sh`), [cohort discovery](advanced_features.md#cohort-discovery) |
 | [MCP](mcp.md) | MCP server, Playground, clients, [Unity Catalog + Genie One registration](mcp.md#register-the-mcp-in-unity-catalog-and-genie-one) |
 

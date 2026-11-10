@@ -116,6 +116,27 @@ def test_map_exposes_view_and_group_apis():
     assert "_studioGroupAnchors.set(name, anchorEntityName)" in js
 
 
+def test_clicking_group_opens_member_list_in_right_pane():
+    """Clicking a group super-node lists all its entities in the detail pane."""
+    js = _read(MAP_JS)
+    assert "openStudioGroupPanel(d.groupName)" in js
+    assert "async function openStudioGroupPanel(" in js
+    assert "data-group-member=" in js
+    # Row click selects the member entity (opens its entity panel).
+    assert "_setMapSelection([btn.dataset.groupMember])" in js
+    # Member rows are passive so they never mark the panel dirty.
+    assert 'class="panel-item panel-group-member"' in js
+    assert "data-panel-passive" in js
+    # Edit group opens the existing group modal by name.
+    assert 'data-edit-group="' in js
+    assert "OntologyGroups.editGroupByName" in js
+    groups_js = _read(GROUPS_JS)
+    assert "editGroupByName:" in groups_js
+    css = _read(REPO_ROOT / "src/front/static/ontology/css/ontology-shared-panels.css")
+    assert ".panel-group-member" in css
+    assert ".panel-group-edit" in css
+
+
 def test_group_toggle_css_exists():
     css = _read(MAP_CSS)
     assert ".studio-group-toggle" in css

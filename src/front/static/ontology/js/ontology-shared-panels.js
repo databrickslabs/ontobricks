@@ -2797,7 +2797,7 @@ async function openBridgeSelectorModal() {
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">
-                            <i class="bi bi-signpost-2 me-2"></i>Add Bridge to Another Domain
+                            <i class="bi bi-signpost-2 me-2"></i>Add Bridge to Another Context
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
@@ -3771,7 +3771,7 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                     <input type="text" class="form-control form-control-sm" id="sharedRelLabel" value="${escapeHtml(prop?.label || prop?.name || '')}" ${disabled} placeholder="Defaults to ID if empty">
                 </div>
                 <div class="mb-3">
-                    <label for="sharedRelDomain" class="form-label">Source (Domain) <span class="text-danger">*</span></label>
+                    <label for="sharedRelDomain" class="form-label">Source (Context) <span class="text-danger">*</span></label>
                     <select class="form-select form-select-sm" id="sharedRelDomain" ${disabled} required>
                         <option value="">-- Select --</option>${classOptions}
                     </select>
@@ -4250,7 +4250,7 @@ async function openMetadataAttributePicker() {
         const data = await response.json();
         
         if (!data.success || !data.has_metadata || !data.metadata?.tables?.length) {
-            tableList.innerHTML = '<div class="text-muted small p-2"><i class="bi bi-exclamation-circle me-1"></i>No data assets loaded. Load data assets in Domain settings first.</div>';
+            tableList.innerHTML = '<div class="text-muted small p-2"><i class="bi bi-exclamation-circle me-1"></i>No data assets loaded. Load data assets in Context settings first.</div>';
             return;
         }
         

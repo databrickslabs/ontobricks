@@ -25,8 +25,8 @@ function enforceCamelCase(value) {
 // Configure sidebar navigation
 window.SIDEBAR_NAV_MANUAL_INIT = true;
 document.addEventListener('DOMContentLoaded', function() {
-    // Show the global domain-loading overlay while the Domain → General
-    // page boots up after a "New Domain" action. domain-information.js
+    // Show the global domain-loading overlay while the Context → General
+    // page boots up after a "New Context" action. domain-information.js
     // hides it once its Promise.all (info + version-status + LLM
     // endpoints) resolves. Flag is set by domainNew() in navbar.js right
     // before it navigates here.
@@ -277,11 +277,11 @@ async function saveDomainInfo() {
 
     const domainName = nameEl.value.trim();
     if (!domainName) {
-        showNotification('Domain name is required', 'warning');
+        showNotification('Context name is required', 'warning');
         return;
     }
     if (!/^[A-Z][a-zA-Z0-9]*$/.test(domainName)) {
-        showNotification('Domain Name must be CamelCase and alphanumeric only', 'warning');
+        showNotification('Context Name must be CamelCase and alphanumeric only', 'warning');
         return;
     }
 
@@ -326,7 +326,7 @@ async function saveDomainInfo() {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('Domain info saved successfully!', 'success');
+            showNotification('Context info saved successfully!', 'success');
             window.OB?.updateLlmAvailability(
                 Boolean((data.info?.llm_endpoint || '').trim())
             );
@@ -347,12 +347,12 @@ async function saveDomainInfo() {
                 invalidateDomainCaches();
                 const currentDomainNameEl = document.getElementById('currentDomainName');
                 if (currentDomainNameEl) {
-                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Domain';
+                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Context';
                 }
             } else {
                 const currentDomainNameEl = document.getElementById('currentDomainName');
                 if (currentDomainNameEl) {
-                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Domain';
+                    currentDomainNameEl.textContent = domainInfoPayload.name || 'Context';
                 }
             }
         } else {
@@ -384,7 +384,7 @@ async function handleDomainFileUpload(input) {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('Domain loaded successfully!', 'success');
+            showNotification('Context loaded successfully!', 'success');
             if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
             setTimeout(() => location.reload(), 1000);
         } else {
@@ -401,7 +401,7 @@ async function handleDomainFileUpload(input) {
 
 async function newDomain() {
     const confirmed = await showConfirmDialog({
-        title: 'New Domain',
+        title: 'New Context',
         message: 'Start a new domain? This will clear all current data.',
         confirmText: 'Start New',
         confirmClass: 'btn-warning',

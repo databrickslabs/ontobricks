@@ -60,7 +60,7 @@ def test_documents_tab_copy_reads_knowledge_store():
     assert "Domain Documents" not in html
     # The deep link into the domain page keeps its section id.
     assert 'href="/domain/?section=documents"' in html
-    assert "Domain &gt; Knowledge Store" in html
+    assert "Configuration &gt; Knowledge Store" in html
 
 
 def test_docs_preview_pane_revealed_with_explicit_block():

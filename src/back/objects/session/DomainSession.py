@@ -163,7 +163,7 @@ class DomainSession:
         classes = domain.ontology.classes
 
         # Set values
-        domain.info.name = "My Domain"
+        domain.info.name = "My Context"
         domain.ontology.classes.append(new_class)
 
         # Save changes

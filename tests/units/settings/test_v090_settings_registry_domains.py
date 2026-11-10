@@ -146,7 +146,7 @@ class TestDeleteRegistryDomain:
         result = RegistryDomainSettings.delete_registry_domain_result(
             "claims", MagicMock(), MagicMock()
         )
-        assert result == {"success": True, "message": 'Domain "claims" deleted from registry'}
+        assert result == {"success": True, "message": 'Context "claims" deleted from registry'}
         svc.delete_domain.assert_called_once_with("claims")
 
     def test_opt_in_github_delete_runs_after_registry_delete(self, svc, monkeypatch):

@@ -539,7 +539,7 @@ class TestMappingPage:
 class TestDomainPage:
     def test_title(self, client):
         html = _html(client, "/domain")
-        assert "Domain" in _title_text(html)
+        assert "Configuration" in _title_text(html)
 
     def test_sidebar_present(self, client):
         html = _html(client, "/domain")
@@ -555,6 +555,16 @@ class TestDomainPage:
         tags = _tags(html)
         found = any(t == "a" and a.get("data-section") == section for t, a in tags)
         assert found, f"Sidebar link for section '{section}' not found"
+
+    def test_general_precedes_configuration_in_domain_menu(self, client):
+        """General (Cockpit) is the first item of the Domain menu, before
+        Configuration, in the subnav dropdown."""
+        html = _html(client, "/domain")
+        dropdown = html[html.index('id="subnavDomainDropdownMenu"'):]
+        dropdown = dropdown[: dropdown.index("</ul>")]
+        general = dropdown.index('href="/domain/?section=validation"')
+        configuration = dropdown.index('href="/domain/?section=information"')
+        assert general < configuration
 
     @pytest.mark.parametrize(
         "section_id",
@@ -596,16 +606,15 @@ class TestDomainPage:
         assert _find(_tags(html), id_="domainDiscussionsContainer") is not None
         assert _find(_tags(html), id_="domainMyTasksContainer") is not None
 
-    def test_kpi_band(self, client):
-        """The current-domain KPI / health band, moved here from the Home
-        page, sits at the top of Domain → General."""
+    def test_kpi_band_removed(self, client):
+        """The KPI band no longer sits at the top of the Configuration page."""
         html = _html(client, "/domain")
-        assert _find(_tags(html), id_="domainKpiPanel") is not None
+        assert _find(_tags(html), id_="domainKpiPanel") is None
         for kpi_id in (
             "kpiEntities", "kpiRelationships", "kpiMappings",
             "kpiStatus", "kpiVersion",
         ):
-            assert _find(_tags(html), id_=kpi_id) is not None
+            assert _find(_tags(html), id_=kpi_id) is None
 
 
 # =====================================================

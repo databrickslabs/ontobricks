@@ -166,7 +166,7 @@
 
 /* Rendered markdown bodies (agent reports + comments). Tight, bubble-friendly
    spacing so block elements don't blow the thread/timeline layout out. Used by
-   the Discussion panel (.oc-text.oc-md) and the Domain → Discussions timeline
+   the Discussion panel (.oc-text.oc-md) and the Context → Discussions timeline
    (.oc-tl-text.oc-md). */
 .oc-md {
     white-space: normal;

@@ -478,7 +478,7 @@ class PermissionService:
                 domain_folder,
                 store.backend,
             )
-            return True, "Domain permissions saved"
+            return True, "Context permissions saved"
         except Exception as e:
             logger.error("Error saving domain permissions for %s: %s", domain_folder, e)
             return False, str(e)

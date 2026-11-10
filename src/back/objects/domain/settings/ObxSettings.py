@@ -102,7 +102,7 @@ class ObxSettings:
             for entry in entries:
                 name = (entry.get("name") or "").strip()
                 if not name:
-                    errors.append("Domain entry without a name was skipped")
+                    errors.append("Context entry without a name was skipped")
                     continue
                 mode = entry.get("mode") or "latest"
                 explicit = entry.get("versions")
@@ -350,7 +350,7 @@ class ObxSettings:
             for entry in envelope.get("domains", []):
                 raw_name = (entry.get("name") or "").strip()
                 if not raw_name:
-                    summary["errors"].append("Domain entry without a name was skipped")
+                    summary["errors"].append("Context entry without a name was skipped")
                     continue
 
                 folder = _ss.sanitize_domain_folder(raw_name)

@@ -832,7 +832,7 @@ function enforceDomainNameCamelCase(value) {
 }
 
 /**
- * Domain names must be CamelCase alphanumeric (no spaces or special characters).
+ * Context names must be CamelCase alphanumeric (no spaces or special characters).
  */
 function isValidDomainName(name) {
     return /^[A-Z][a-zA-Z0-9]*$/.test(String(name || '').trim());
@@ -851,14 +851,14 @@ function showNewDomainDialog() {
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">
-                                <i class="bi bi-file-earmark-plus me-2"></i>New Domain
+                                <i class="bi bi-file-earmark-plus me-2"></i>New Context
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <p class="text-muted small mb-3">Enter a name for your new domain. You can add more details later.</p>
                             <div class="mb-3">
-                                <label for="${modalId}_name" class="form-label fw-semibold">Domain name <span class="text-danger">*</span></label>
+                                <label for="${modalId}_name" class="form-label fw-semibold">Context name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control new-domain-field" id="${modalId}_name"
                                        placeholder="e.g. PatientCare, SupplyChain…" autocomplete="off" maxlength="64"
                                        pattern="[A-Z][A-Za-z0-9]*" inputmode="text" spellcheck="false">
@@ -873,7 +873,7 @@ function showNewDomainDialog() {
                             <div class="alert alert-light border small py-2 mb-3">
                                 <i class="bi bi-hdd-network me-1"></i>
                                 This domain uses the <strong>Lakehouse</strong> graph backend by default. You can
-                                change it anytime in <strong>Domain → General</strong>:
+                                change it anytime in <strong>Configuration</strong>:
                                 <ul class="mb-0 mt-1 ps-3">
                                     <li><strong>Lakehouse</strong> — graph stored as Delta tables in Unity Catalog (default).</li>
                                     <li><strong>Lakebase</strong> — graph stored in a managed Postgres instance.</li>
@@ -901,7 +901,7 @@ function showNewDomainDialog() {
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="${modalId}_cancel">Cancel</button>
                             <button type="button" class="btn btn-primary" id="${modalId}_confirm">
-                                <i class="bi bi-check2 me-1"></i>Create Domain
+                                <i class="bi bi-check2 me-1"></i>Create Context
                             </button>
                         </div>
                     </div>

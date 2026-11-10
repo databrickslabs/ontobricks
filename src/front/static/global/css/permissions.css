@@ -100,7 +100,7 @@ body[data-app-role="admin"] .ob-domain-empty-cta[data-requires-app="admin"] {
 }
 
 /* ==========================================================================
-   Domain-role gates (builder / editor)
+   Context-role gates (builder / editor)
    ========================================================================== */
 
 [data-requires="builder"],
@@ -130,7 +130,7 @@ body[data-domain-role="editor"] [data-requires="editor"] {
    below rather than to a JS query-selector sweep.
    ========================================================================== */
 
-/* --- Domain > Metadata: every write button + ``data-meta-action`` write. */
+/* --- Context > Metadata: every write button + ``data-meta-action`` write. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #loadMetadataBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #removeTablesBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #updateMetadataBtn,
@@ -147,7 +147,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) [data-meta-action="
 body:is(.read-only-version, .role-viewer, .read-only-locked) button[onclick*="saveTableDetails"],
 body:is(.read-only-version, .role-viewer, .read-only-locked) button[onclick*="saveTableComment"],
 body:is(.read-only-version, .role-viewer, .read-only-locked) button[onclick*="clearMetadata"],
-/* --- Domain > Documents: dropzone + delete-file in dynamically rendered list. */
+/* --- Context > Documents: dropzone + delete-file in dynamically rendered list. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #docDropZone,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #docUploadBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #docClearQueueBtn,
@@ -191,7 +191,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #studioGroupsBtn,
 /* --- Ontology > Data Quality: every per-rule action button. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) .dq-shape-card .btn-group button,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .ob-rule-card .btn-group button,
-/* --- Save Domain navbar item: still rendered, but neutralised. */
+/* --- Save Context navbar item: still rendered, but neutralised. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #menuSaveDomain {
     pointer-events: none !important;
     opacity: 0.5 !important;
@@ -256,11 +256,11 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
      - ``#switchVersionSelect``                    navbar Switch-version modal
        (L2 subnav → Switch). Readers on an IN-REVIEW / PUBLISHED version must
        still be able to pick another version to load.
-     - ``#loadDomainSelect`` / ``#loadVersionSelect`` Load-Domain modal
-       (navbar → Load Domain). Viewers must still be able to navigate
+     - ``#loadDomainSelect`` / ``#loadVersionSelect`` Load-Context modal
+       (navbar → Load Context). Viewers must still be able to navigate
        between domains and pick a version to load — without this, the
        Load button stays disabled because the select can't be focused.
-     - ``#auditVersionFilter`` version filter on Domain → Audit trail.
+     - ``#auditVersionFilter`` version filter on Context → Audit trail.
        This only filters the read-only timeline by version; a reader on
        an IN-REVIEW / PUBLISHED version must still be able to switch the
        filter. (The ``[id*="filter"]`` input exemption above is
@@ -271,7 +271,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
        admin "Back to Draft" / Publish on an IN-REVIEW or PUBLISHED
        version — opens this modal to capture an audit note, so the box
        must stay editable precisely when the domain is read-only.
-     - ``.new-domain-field`` fields in the New Domain modal. Creating a
+     - ``.new-domain-field`` fields in the New Context modal. Creating a
        separate domain is independent of the currently loaded domain's
        lifecycle status or edit lock.
      - ``.ob-confirm-check`` the optional checkbox on ``showConfirmDialog``
@@ -311,7 +311,7 @@ body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="dig
     cursor: not-allowed !important;
 }
 
-/* --- MCP policy controls (Domain → General → MCP).
+/* --- MCP policy controls (Context → General → MCP).
    Their ids are derived from the tool / context-feature name
    (``#mcpTool_<tool>`` / ``#mcpContext_<feature>``), so the tool named
    ``query_graphql`` yields ``#mcpTool_query_graphql`` and slips through the

@@ -43,7 +43,7 @@
 - **OBX Import as**: rename a domain on import; a renamed copy does not reuse the previous graph objects.
 - **Faster Explorer**: indexed search, paged expansion and no blocking `COUNT(*)` on first load.
 - **Ontology Studio**: the renamed Designer adds multi-select, Business Views, cross-domain import, and OWL/R2RML export from the canvas.
-- **Load opens Domain → General**: opening a domain from Home, the navbar, Registry, or Versions lands on Domain → General instead of staying on the current page.
+- **Load opens Configuration**: opening a context from Home, the navbar, Registry, or Versions lands on Configuration instead of staying on the current page.
 - **Security hardening**: stricter CSRF, a `/health` that leaks no internals, dialect-aware SQL escaping and sanitised Markdown.
 
 Full details are in the [Release Notes](releases/ReleaseNotes_V0.9.0.md).
@@ -90,7 +90,7 @@ months-long integration project.
 
 | Step | Action | What happens | Powered by |
 |------|--------|--------------|------------|
-| **1** | **Import Metadata** — Domain &gt; Metadata | Fetches table &amp; column metadata from Unity Catalog | Unity Catalog |
+| **1** | **Import Metadata** — Context &gt; Data Assets | Fetches table &amp; column metadata from Unity Catalog | Unity Catalog |
 | **2** | **Generate Ontology** — Ontology &gt; Wizard | The LLM designs entities, relationships &amp; attributes from your metadata | AI Gateway / Model Serving |
 | **3** | **Auto-Map** — Mapping &gt; Auto-Map | The LLM generates SQL mappings for every entity and relationship | AI Gateway / Model Serving |
 | **4** | **Synchronize** — Graph &gt; Build | Executes the mappings and populates the triple store | SQL Warehouse |
@@ -99,11 +99,11 @@ Prefer full control? Every step is also available as a guided **manual
 workflow** — design, map, build, query, and reason at column-level precision.
 See the [User Guide](docs/user-guide.md).
 
-### Run a domain without an LLM
+### Run a context without an LLM
 
-Selecting **No LLM** is a strict domain-level opt-out. LLM actions remain
+Selecting **No LLM** is a strict context-level opt-out. LLM actions remain
 visible but unavailable and direct API calls are rejected with guidance to
-select a model in **Domain → General → AI**. Select and save an LLM there to
+select a model in **Configuration → AI**. Select and save an LLM there to
 make those actions available again without reloading the page. Deterministic
 reasoning and validation, including OWL/IF-THEN inference and SHACL data-quality
 checks, remain available while No LLM is selected.

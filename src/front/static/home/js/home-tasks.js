@@ -2,7 +2,7 @@
  * Home → My Tasks
  *
  * Compact review worklist surfaced on the home page, just below the
- * Current Domain panel. Only reveals itself when the current user
+ * Current Context panel. Only reveals itself when the current user
  * actually has pending review tasks.
  *
  * Data source: GET /review/my-tasks (see ReviewService.my_tasks).
@@ -56,7 +56,7 @@
             ? '<div class="table-responsive">' +
               '<table class="table table-sm align-middle my-tasks-table mb-0">' +
               '<thead><tr>' +
-              '<th>Domain</th><th>Version</th><th>Status</th>' +
+              '<th>Context</th><th>Version</th><th>Status</th>' +
               '<th>Approvals</th><th class="text-end">Review</th>' +
               '</tr></thead><tbody>' + rows + '</tbody></table></div>'
             : '';
@@ -96,7 +96,7 @@
             '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
             '<div class="table-responsive">' +
             '<table class="table table-sm align-middle my-tasks-table mb-0">' +
-            '<thead><tr><th>Task</th><th>Domain</th><th>Status</th>' +
+            '<thead><tr><th>Task</th><th>Context</th><th>Status</th>' +
             '<th class="text-end">Action</th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table></div>';
     }
@@ -137,7 +137,7 @@
     }
 
     // The worklist no longer drives the workflow inline. Every task links
-    // to the Domain → Validation workspace (loading the version first), the
+    // to the Context → Validation workspace (loading the version first), the
     // single place to submit / approve / publish / send back to draft.
     function validateButton(task) {
         return '<button type="button" class="btn btn-sm btn-outline-info ms-1" ' +

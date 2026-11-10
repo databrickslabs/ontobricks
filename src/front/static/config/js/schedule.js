@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let html = '<div class="table-responsive">' +
                 '<table class="table table-sm table-hover align-middle mb-0">' +
                 '<thead><tr>' +
-                    '<th class="ps-3" style="width:22%;">Domain</th>' +
+                    '<th class="ps-3" style="width:22%;">Context</th>' +
                     '<th style="width:18%;">Type</th>' +
                     '<th>Details</th>' +
                     '<th style="width:11rem;">Frequency</th>' +

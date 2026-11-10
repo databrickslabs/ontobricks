@@ -156,7 +156,7 @@ class RegistryDomainSettings:
 
             return {
                 "success": True,
-                "message": f'Domain "{domain_name}" deleted from registry',
+                "message": f'Context "{domain_name}" deleted from registry',
             }
         except OntoBricksError:
             raise

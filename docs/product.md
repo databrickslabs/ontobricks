@@ -134,7 +134,7 @@ flowchart LR
 
 | Step  | Where in OntoBricks      | What happens                                                                        | Powered by        |
 | ----- | ------------------------ | ----------------------------------------------------------------------------------- | ----------------- |
-| **1** | Domain > Metadata       | Fetches table and column metadata from Unity Catalog                                | Unity Catalog API |
+| **1** | Context > Data Assets    | Fetches table and column metadata from Unity Catalog                                | Unity Catalog API |
 | **2** | Ontology > Generate      | LLM designs entities, relationships, attributes, and inheritance from your metadata | AI Gateway / Model Serving |
 | **3** | Mapping > Auto-Map | LLM generates SQL queries and column mappings for every entity and relationship     | AI Gateway / Model Serving |
 | **4** | Knowledge Graph > Build     | Executes all mappings and populates the triple store table                          | SQL Warehouse     |

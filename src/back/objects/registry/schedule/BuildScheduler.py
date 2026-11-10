@@ -247,7 +247,7 @@ class BuildScheduler:
         try:
             spec = get_task_type(task_type)
             if not domain_name:
-                raise ValidationError("Domain name is required")
+                raise ValidationError("Context name is required")
             if interval_minutes < _MIN_INTERVAL_MINUTES:
                 raise ValidationError(
                     f"Minimum interval is {_MIN_INTERVAL_MINUTES} minutes"
