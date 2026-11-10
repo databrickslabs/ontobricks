@@ -31,6 +31,8 @@ let _studioCollapsedHydrated = false;  // All-view collapsedGroups loaded from m
 let _studioGroupsDefs = [];
 let _studioCollapsedGroups = new Set();
 let _studioMemberToGroup = {};  // entityName → groupName
+// groupName → entityName clicked to collapse (anchors the group circle).
+let _studioGroupAnchors = new Map();
 // Live entity positions (name → {x,y,fx,fy}). Survives collapse/expand rebuilds
 // so members reappear at the exact coordinates they had before collapse.
 let _studioEntityPositions = new Map();
@@ -347,6 +349,11 @@ async function loadStudioGroups() {
         _studioCollapsedGroups = new Set(
             [..._studioCollapsedGroups].filter(name => known.has(name))
         );
+        for (const [gName, entityName] of [..._studioGroupAnchors.entries()]) {
+            if (!known.has(gName) || _studioMemberToGroup[entityName] !== gName) {
+                _studioGroupAnchors.delete(gName);
+            }
+        }
     } catch (err) {
         console.warn('[Studio] Could not load groups:', err);
     }
@@ -404,6 +411,32 @@ function _applyStudioEntityPosition(node, savedPos) {
 }
 
 /**
+ * Resolve which member positions the collapsed group circle.
+ * Prefers the entity clicked to collapse; falls back to the first visible member.
+ * @param {Object} g
+ * @param {Map} [nodeByName]
+ * @param {Array} [visibleMembers]
+ * @returns {string|null}
+ */
+function _resolveStudioGroupAnchor(g, nodeByName, visibleMembers) {
+    if (!g) return null;
+    const preferred = _studioGroupAnchors.get(g.name);
+    if (preferred) {
+        if (nodeByName ? nodeByName.has(preferred) : (g.members || []).includes(preferred)) {
+            return preferred;
+        }
+    }
+    if (nodeByName) {
+        return (g.members || []).find(m => nodeByName.has(m))
+            || (visibleMembers && visibleMembers[0] && visibleMembers[0].name)
+            || null;
+    }
+    return (g.members || []).find(m => _studioEntityPositions.has(m))
+        || (g.members || [])[0]
+        || null;
+}
+
+/**
  * When a group super-node is dragged, keep the anchor member's cached
  * position in sync so the circle stays coherent across collapse cycles.
  * @param {Object} groupNode
@@ -412,7 +445,7 @@ function _syncGroupAnchorPosition(groupNode) {
     if (!groupNode || !groupNode.isGroup || !groupNode.groupName) return;
     const g = _studioGroupsDefs.find(d => d.name === groupNode.groupName);
     if (!g || !g.members || !g.members.length) return;
-    const anchorName = g.members.find(m => _studioEntityPositions.has(m)) || g.members[0];
+    const anchorName = _resolveStudioGroupAnchor(g);
     if (!anchorName) return;
     const x = groupNode.fx != null ? groupNode.fx : groupNode.x;
     const y = groupNode.fy != null ? groupNode.fy : groupNode.y;
@@ -420,9 +453,14 @@ function _syncGroupAnchorPosition(groupNode) {
     _studioEntityPositions.set(anchorName, { x: x, y: y, fx: x, fy: y });
 }
 
-async function collapseStudioGroup(name) {
+async function collapseStudioGroup(name, anchorEntityName) {
     if (!name) return;
     _snapshotStudioEntityPositions(ontologyMapNodes);
+    if (anchorEntityName && _studioMemberToGroup[anchorEntityName] === name) {
+        _studioGroupAnchors.set(name, anchorEntityName);
+    } else {
+        _studioGroupAnchors.delete(name);
+    }
     _studioCollapsedGroups.add(name);
     await persistStudioCollapsedGroups();
     await initOntologyMap();
@@ -434,6 +472,7 @@ async function expandStudioGroup(name) {
     // already live in `_studioEntityPositions` from the last collapse/drag.
     _snapshotStudioEntityPositions(ontologyMapNodes);
     _studioCollapsedGroups.delete(name);
+    _studioGroupAnchors.delete(name);
     await persistStudioCollapsedGroups();
     await initOntologyMap();
 }
@@ -1120,9 +1159,8 @@ async function initOntologyMap() {
             if (!visibleMembers.length) return;
 
             visibleMembers.forEach(m => collapsedMemberNames.add(m.name));
-            // Prefer the first member that still has a cached position (stable
-            // across collapse cycles); fall back to members[0] order.
-            const anchorName = (g.members || []).find(m => nodeByName.has(m))
+            // Prefer the entity clicked to collapse; else first visible member.
+            const anchorName = _resolveStudioGroupAnchor(g, nodeByName, visibleMembers)
                 || visibleMembers[0].name;
             const anchor = nodeByName.get(anchorName) || visibleMembers[0];
             const ax = anchor.fx != null ? anchor.fx : anchor.x;
@@ -1525,7 +1563,7 @@ async function initOntologyMap() {
             toggle.on('click', function (event) {
                 event.preventDefault();
                 event.stopPropagation();
-                collapseStudioGroup(gName);
+                collapseStudioGroup(gName, d.name);
             });
         });
 

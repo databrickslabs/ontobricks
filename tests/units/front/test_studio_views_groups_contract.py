@@ -101,6 +101,8 @@ def test_map_exposes_view_and_group_apis():
         "_snapshotStudioEntityPositions",
         "_applyStudioEntityPosition",
         "_studioEntityPositions",
+        "_studioGroupAnchors",
+        "_resolveStudioGroupAnchor",
     ):
         assert name in js
     assert "SidebarNav.switchTo('design')" not in js
@@ -109,6 +111,9 @@ def test_map_exposes_view_and_group_apis():
     # Collapse/expand must await persist + rebuild so layout cannot race.
     assert "await persistStudioCollapsedGroups()" in js
     assert "await initOntologyMap()" in js
+    # Group circle anchors on the entity whose − badge was clicked.
+    assert "collapseStudioGroup(gName, d.name)" in js
+    assert "_studioGroupAnchors.set(name, anchorEntityName)" in js
 
 
 def test_group_toggle_css_exists():
