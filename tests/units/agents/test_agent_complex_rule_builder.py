@@ -159,6 +159,13 @@ class TestSystemPrompt:
         assert "Name" in prompt and "Description" in prompt
         assert "ready=true" in prompt
 
+    def test_prompt_explains_existing_rule_first(self):
+        prompt = cr_engine.SYSTEM_PROMPT
+        assert "EDITING AN EXISTING RULE" in prompt
+        lower = prompt.lower()
+        assert "first message" in lower
+        assert "matches" in lower and "infers" in lower
+
 
 class TestTools:
     def test_overview_lists_classes_and_properties(self):

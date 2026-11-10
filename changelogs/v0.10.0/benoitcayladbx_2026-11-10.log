@@ -1,0 +1,47 @@
+================================================================================
+Complex rule builder: pre-save validate + rename gate, explain-on-open
+================================================================================
+
+Context:
+In the Complex (SPARQL CONSTRUCT) rule editor, Save saved immediately — it did
+not check that the query compiles, nor make the user review the agent-proposed
+Name/Description. Opening an existing rule also did not reliably explain what
+the current query does. Save is now a two-step gate (always validate, then ask
+to review/rename before confirming), and the assistant explains an existing
+rule up front.
+
+Changes:
+1. src/front/static/ontology/js/ontology-business-rules.js — Save flow reworked:
+   - new _craValidate() (shared backend validation) and _craShowValidation();
+     sparqlValidate() (manual button) now delegates to them.
+   - sparqlSave() is a two-step gate: it always validates and informs in the
+     chat; an invalid query is refused (error posted in chat); a valid query
+     posts a success message and, on the first click, asks the user to review /
+     rename the Name & Description and switches the button to "Confirm & Save";
+     the second click performs the real save via the new _craDoSave().
+   - _craSaveConfirmed / _craSetSaveConfirmUI / _craResetSaveConfirm manage the
+     confirm state; it resets on modal open, on manual edits to
+     name/description/query (input listeners), and when the agent rewrites the
+     draft (_craApplyResponse).
+2. src/agents/agent_complex_rule_builder/engine.py — SYSTEM_PROMPT "EDITING AN
+   EXISTING RULE" now requires the assistant's FIRST message to explain, in
+   plain language, what the current CONSTRUCT matches and infers before asking
+   what to change (and never to ask the user to paste the query).
+3. tests/units/agents/test_agent_complex_rule_builder.py — asserts the prompt
+   explains an existing rule first (matches/infers, first message).
+4. tests/units/front/test_business_rules_list_ui.py — contract tests for the
+   two-step validate/confirm Save and the confirm-state reset.
+
+Note: the SYSTEM_PROMPT change is a prompt change under CNS §3.5 — it adds to
+the deferred eval debt already tracked for agent_complex_rule_builder.
+
+Modified files:
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/agents/agent_complex_rule_builder/engine.py
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10187 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).

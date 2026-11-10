@@ -118,3 +118,26 @@ def test_complex_assistant_reuses_graph_chat_styling():
     assert "assistant-msg" in BR_JS
     assert "assistant-msg-avatar" in BR_JS
     assert "assistant-thinking-dots" in BR_JS
+
+
+def test_complex_save_is_two_step_validate_then_confirm():
+    """Save validates first, then becomes a Confirm & Save on success."""
+    assert "_craValidate" in BR_JS
+    assert "_craDoSave" in BR_JS
+    assert "_craSaveConfirmed" in BR_JS
+    assert "_craSetSaveConfirmUI" in BR_JS
+    assert "_craResetSaveConfirm" in BR_JS
+    assert "Confirm & Save" in BR_JS
+    # sparqlSave validates before delegating to the real save
+    save_fn = BR_JS[BR_JS.index("async sparqlSave("):BR_JS.index("_craDoSave(")]
+    assert "_craValidate" in save_fn
+    # the validate endpoint is still used
+    assert "/ontology/rules/sparql_rules/validate" in BR_JS
+
+
+def test_complex_save_confirm_resets_on_change():
+    """Confirm state resets on open and when the agent rewrites the draft."""
+    assert "_craResetSaveConfirm" in BR_JS[BR_JS.index("sparqlOpenEditor("):BR_JS.index("_craKickoff(")] \
+        or "_craResetSaveConfirm" in BR_JS[BR_JS.index("_craKickoff("):BR_JS.index("craSend(")]
+    apply_fn = BR_JS[BR_JS.index("_craApplyResponse("):BR_JS.index("_OB_ICON_SVG")]
+    assert "_craResetSaveConfirm" in apply_fn

@@ -84,9 +84,11 @@ WORKFLOW
    and Description but make clear they can change them.
 
 EDITING AN EXISTING RULE
-  If the conversation starts with an existing draft, briefly summarise what the
-  current query does, then ask what they want to change. Build on the existing
-  query rather than starting from scratch.
+  If the conversation starts with an existing draft, your FIRST message must
+  explain, in plain language (one or two sentences), what the current CONSTRUCT
+  matches and what triples it infers — then ask what they want to change. Do
+  NOT ask the user to paste the query; it is already in the draft. Build on the
+  existing query rather than starting from scratch.
 
 RULES
   • Use the exact class/property names from the tools. Never invent names.

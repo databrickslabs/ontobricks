@@ -66,6 +66,12 @@ window.BusinessRulesModule = {
                 }
             });
         }
+
+        // Manual edits to the rule invalidate a pending "Confirm & Save".
+        ['sparqlName', 'sparqlDescription', 'sparqlQuery'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => this._craResetSaveConfirm());
+        });
     },
 
     // ── Ontology items (classes / properties for dropdowns) ──
@@ -368,6 +374,7 @@ window.BusinessRulesModule = {
         document.getElementById('sparqlEditorTitle').innerHTML = `<i class="bi bi-braces me-2"></i>${isNew ? 'Add' : 'Edit'} Complex Rule`;
         const svm = document.getElementById('sparqlValidationMsg');
         if (svm) svm.classList.add('d-none');
+        this._craResetSaveConfirm();
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
         this._craKickoff(isNew);
     },
@@ -451,9 +458,9 @@ window.BusinessRulesModule = {
             if (typeof data.draft.query === 'string') {
                 document.getElementById('sparqlQuery').value = data.draft.query;
             }
+            // The rule changed — require a fresh validate + review before saving.
+            this._craResetSaveConfirm();
         }
-        const saveBtn = document.getElementById('sparqlSaveBtn');
-        if (saveBtn) saveBtn.classList.toggle('cra-save-ready', !!data.ready);
     },
 
     // OntoBricks mark — same avatar glyph the Graph chat uses for bot bubbles.
@@ -521,10 +528,11 @@ window.BusinessRulesModule = {
         if (btn) btn.disabled = on;
     },
 
-    async sparqlValidate() {
-        const query = document.getElementById('sparqlQuery').value.trim();
+    // Validate the current query via the backend; shared by the manual
+    // Validate button and the pre-save gate.
+    async _craValidate() {
         const name = document.getElementById('sparqlName').value.trim();
-        const msgEl = document.getElementById('sparqlValidationMsg');
+        const query = document.getElementById('sparqlQuery').value.trim();
         try {
             const resp = await fetch('/ontology/rules/sparql_rules/validate', {
                 method: 'POST',
@@ -532,22 +540,80 @@ window.BusinessRulesModule = {
                 body: JSON.stringify({ rule: { name, query } }),
             });
             const data = await resp.json();
-            msgEl.classList.remove('d-none');
-            if (data.valid) {
-                msgEl.className = 'alert alert-success small py-2';
-                msgEl.textContent = 'Query is valid and compiles to SQL.';
-            } else {
-                msgEl.className = 'alert alert-danger small py-2';
-                msgEl.textContent = data.message || 'Validation failed';
-            }
+            return { valid: !!data.valid, message: data.message || '' };
         } catch (e) {
-            msgEl.classList.remove('d-none');
-            msgEl.className = 'alert alert-danger small py-2';
-            msgEl.textContent = 'Validation request failed';
+            return { valid: false, message: 'Validation request failed' };
         }
     },
 
+    _craShowValidation(check) {
+        const msgEl = document.getElementById('sparqlValidationMsg');
+        if (!msgEl) return;
+        msgEl.classList.remove('d-none');
+        if (check.valid) {
+            msgEl.className = 'alert alert-success small py-2';
+            msgEl.textContent = 'Query is valid and compiles to SQL.';
+        } else {
+            msgEl.className = 'alert alert-danger small py-2';
+            msgEl.textContent = check.message || 'Validation failed';
+        }
+    },
+
+    async sparqlValidate() {
+        this._craShowValidation(await this._craValidate());
+    },
+
+    _craSaveConfirmed: false,
+
+    _craSetSaveConfirmUI(on) {
+        const btn = document.getElementById('sparqlSaveBtn');
+        if (!btn) return;
+        btn.classList.toggle('cra-save-ready', !!on);
+        btn.innerHTML = on
+            ? '<i class="bi bi-check-lg me-1"></i>Confirm & Save'
+            : '<i class="bi bi-check-lg me-1"></i>Save';
+    },
+
+    _craResetSaveConfirm() {
+        this._craSaveConfirmed = false;
+        this._craSetSaveConfirmUI(false);
+    },
+
+    // Two-step save: 1st click validates + asks to review Name/Description;
+    // 2nd click (Confirm & Save) performs the save.
     async sparqlSave() {
+        const query = (document.getElementById('sparqlQuery').value || '').trim();
+        if (!query) {
+            this._craAppendBubble('assistant', "There's no query to save yet — let's build the CONSTRUCT first.");
+            return;
+        }
+        const check = await this._craValidate();
+        this._craShowValidation(check);
+        if (!check.valid) {
+            this._craAppendBubble(
+                'assistant',
+                "I can't save this yet — the query doesn't compile:\n\n> " +
+                (check.message || 'the CONSTRUCT is not valid') +
+                "\n\nTell me what it should do and I'll fix it.",
+                true,
+            );
+            this._craResetSaveConfirm();
+            return;
+        }
+        this._craAppendBubble('assistant', 'The query is valid and compiles to SQL.');
+        if (!this._craSaveConfirmed) {
+            this._craSaveConfirmed = true;
+            this._craSetSaveConfirmUI(true);
+            this._craAppendBubble(
+                'assistant',
+                'Please review the **Name** and **Description** on the right and rename them if needed, then click **Confirm & Save**.',
+            );
+            return;
+        }
+        await this._craDoSave();
+    },
+
+    async _craDoSave() {
         const index = parseInt(document.getElementById('sparqlEditIndex').value, 10);
         const rule = {
             name: document.getElementById('sparqlName').value.trim(),
