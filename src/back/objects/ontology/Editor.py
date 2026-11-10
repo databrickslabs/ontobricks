@@ -156,7 +156,7 @@ class Editor:
         )
 
         existing_constraints = s.constraints
-        existing_swrl_rules = s.swrl_rules
+        existing_if_then_rules = s.if_then_rules
         existing_axioms = s.axioms
         existing_expressions = s.expressions
 
@@ -185,7 +185,7 @@ class Editor:
                 "classes": ontology_config.get("classes", []),
                 "properties": ontology_config.get("properties", []),
                 "constraints": ontology_config.get("constraints", existing_constraints),
-                "swrl_rules": ontology_config.get("swrl_rules", existing_swrl_rules),
+                "if_then_rules": ontology_config.get("if_then_rules", existing_if_then_rules),
                 "axioms": ontology_config.get("axioms", existing_axioms),
                 "expressions": ontology_config.get("expressions", existing_expressions),
             }

@@ -45,8 +45,8 @@ ontology validation in the build pipeline (Benoit's C2 safeguard:
 "l'entrée se fait par l'ontologie").
 
 Reasoning translation (``get_query_translator``) returns a
-:class:`SWRLFlatCypherTranslator` that is currently scaffolded only —
-full SWRL → Cypher translation lands in a follow-up PR.
+:class:`ShaclFlatCypherBackend` that is currently scaffolded only —
+full rule → Cypher translation lands in a follow-up PR.
 """
 
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -262,18 +262,18 @@ class Store(MaterializedGraphBackend):
     # ======================================================================
 
     def get_query_translator(self, table_name: str = "") -> Any:
-        """Return the SWRL/rule translator for this engine.
+        """Return the rule translator for this engine.
 
-        Returns a :class:`SWRLFlatCypherTranslator` — currently scaffolded
+        Returns a :class:`ShaclFlatCypherBackend` — currently scaffolded
         (every translation returns ``None``), so reasoning on Neo4j
         reports zero violations / zero inferences instead of crashing.
-        Full SWRL → Cypher translation is a follow-up PR.
+        Full rule → Cypher translation is a follow-up PR.
         """
-        from back.core.reasoning.swrl.SWRLFlatCypherTranslator import (
-            SWRLFlatCypherTranslator,
+        from back.core.reasoning.shacl_rules.ShaclFlatCypherBackend import (
+            ShaclFlatCypherBackend,
         )
 
-        return SWRLFlatCypherTranslator(node_label=self.get_node_table(table_name))
+        return ShaclFlatCypherBackend(node_label=self.get_node_table(table_name))
 
     # ======================================================================
     #  TripleStoreBackend — write delegators (→ WriteOps)
@@ -328,7 +328,7 @@ class Store(MaterializedGraphBackend):
         """Run a translator-produced read-only Cypher query.
 
         This intentionally remains separate from ``execute_query``: callers
-        cannot use it for graph mutations and the SWRL translator is the only
+        cannot use it for graph mutations and the IF-THEN translator is the only
         producer of these MATCH/RETURN statements.
         """
         normalized = " ".join((query or "").upper().split())

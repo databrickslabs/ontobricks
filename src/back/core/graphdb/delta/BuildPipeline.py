@@ -451,7 +451,7 @@ class BuildPipeline:
                     getattr(self.domain_snap, "ontology", {}),
                     getattr(self.domain_snap, "assignment", {}),
                     constraints=getattr(self.domain_snap, "constraints", None),
-                    swrl_rules=getattr(self.domain_snap, "swrl_rules", None),
+                    if_then_rules=getattr(self.domain_snap, "if_then_rules", None),
                     axioms=getattr(self.domain_snap, "axioms", None),
                     shacl_shapes=getattr(self.domain_snap, "shacl_shapes", None),
                 ),

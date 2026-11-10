@@ -26,28 +26,12 @@
     {% endif %}
 
     <div class="card h-100">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle mb-0 sim-table" id="simScenariosTable">
-                    <thead>
-                        <tr>
-                            <th>Scenario</th>
-                            <th>Scope</th>
-                            <th class="text-end">Patches</th>
-                            <th>Status</th>
-                            <th class="text-end">Added</th>
-                            <th class="text-end">Removed</th>
-                            <th>Last run</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="simScenariosBody">
-                        <tr><td colspan="8" class="text-center text-muted py-4">
-                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                            Loading scenarios…
-                        </td></tr>
-                    </tbody>
-                </table>
+        <div class="card-body p-3">
+            <div id="simScenariosBody" class="sim-scenarios-list">
+                <div class="text-center text-muted py-4">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Loading scenarios…
+                </div>
             </div>
         </div>
     </div>

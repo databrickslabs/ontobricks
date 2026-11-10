@@ -331,7 +331,7 @@ class TestDomainDesignStatus:
         domain.get_entity_mappings.return_value = []
         domain.get_relationship_mappings.return_value = []
         domain.shacl_shapes = []
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.get_r2rml.return_value = ""
         mock_dt.resolve_domain.return_value = domain
         mock_dt.is_datatype_range = DigitalTwin_is_datatype_range
@@ -372,7 +372,7 @@ class TestDomainDesignStatus:
         domain.get_entity_mappings.return_value = []
         domain.get_relationship_mappings.return_value = []
         domain.shacl_shapes = []
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.get_r2rml.return_value = ""
         mock_dt.resolve_domain.return_value = domain
         mock_dt.is_datatype_range = DigitalTwin_is_datatype_range
@@ -549,7 +549,7 @@ class TestDigitalTwinDataQuality:
         """When no shapes or rules are enabled, returns success=False."""
         domain = MagicMock()
         domain.shacl_shapes = []
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {}
         domain._data = {}
         mock_dt.resolve_domain.return_value = domain
@@ -569,7 +569,7 @@ class TestDigitalTwinDataQuality:
         domain.shacl_shapes = [
             {"name": "shape1", "enabled": True, "category": "cardinality"},
         ]
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {"classes": [], "properties": []}
         domain._data = {"ontology": {}}
         mock_dt.resolve_domain.return_value = domain
@@ -592,7 +592,7 @@ class TestDigitalTwinDataQuality:
             {"name": "shape1", "enabled": True, "category": "cardinality"},
             {"name": "shape2", "enabled": True, "category": "value"},
         ]
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {}
         domain._data = {"ontology": {}}
         mock_dt.resolve_domain.return_value = domain
@@ -620,7 +620,7 @@ class TestDigitalTwinDataQualityProgress:
         """Start a task and immediately poll for it — should find the task."""
         domain = MagicMock()
         domain.shacl_shapes = [{"name": "s", "enabled": True}]
-        domain.swrl_rules = []
+        domain.if_then_rules = []
         domain.ontology = {}
         domain._data = {"ontology": {}}
         mock_dt.resolve_domain.return_value = domain
@@ -669,14 +669,14 @@ class TestDigitalTwinInference:
             "/api/v1/digitaltwin/inference/start",
             json={
                 "tbox": False,
-                "swrl": True,
+                "if_then": True,
                 "graph": False,
                 "constraints": False,
             },
         )
         assert response.status_code == 200
         data = response.json()
-        assert "swrl" in data["message"].lower()
+        assert "if_then" in data["message"].lower()
         assert "tbox" not in data["message"].lower()
 
     @patch("api.routers.digitaltwin.DigitalTwin")

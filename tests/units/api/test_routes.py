@@ -199,11 +199,11 @@ class TestOntologyRoutes:
         response = client.post("/ontology/constraints/save", json=data)
         assert response.status_code == 404
 
-    def test_swrl_list(self, client):
-        response = client.get("/ontology/swrl/list")
+    def test_if_then_list(self, client):
+        response = client.get("/ontology/if-then/list")
         assert response.status_code == 200
 
-    def test_swrl_save(self, client):
+    def test_if_then_save(self, client):
         data = {
             "rule": {
                 "name": "TestRule",
@@ -213,8 +213,53 @@ class TestOntologyRoutes:
             },
             "index": -1,
         }
-        response = client.post("/ontology/swrl/save", json=data)
+        response = client.post("/ontology/if-then/save", json=data)
         assert response.status_code == 200
+
+    _COMPLEX_OK = "CONSTRUCT { ?o a :Big } WHERE { ?o a :Order . ?o :total ?t FILTER(?t > 10) }"
+    _COMPLEX_BAD = "CONSTRUCT { ?o a :Big } WHERE { ?o a :Order OPTIONAL { ?o :total ?t } }"
+
+    def test_complex_rule_save_accepts_compilable_query(self, client):
+        rule = {"name": "Big", "query": self._COMPLEX_OK, "enabled": True}
+        response = client.post("/ontology/rules/sparql_rules/save", json={"rule": rule, "index": -1})
+        assert response.status_code == 200
+
+    def test_complex_rule_save_rejects_uncompilable_query(self, client):
+        rule = {"name": "Big", "query": self._COMPLEX_BAD, "enabled": True}
+        response = client.post("/ontology/rules/sparql_rules/save", json={"rule": rule, "index": -1})
+        assert response.status_code == 400
+        assert "OPTIONAL" in response.json()["message"]
+
+    def test_complex_rule_save_allows_disabling_a_legacy_rule(self, client):
+        rule = {"name": "Big", "query": self._COMPLEX_BAD, "enabled": False}
+        response = client.post("/ontology/rules/sparql_rules/save", json={"rule": rule, "index": -1})
+        assert response.status_code == 200
+
+    def test_shacl_rules_text(self, client):
+        response = client.get("/ontology/shacl-rules/text")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert "@prefix sh:" in body["text"]
+
+    def test_shacl_rules_export(self, client):
+        response = client.get("/ontology/shacl-rules/export")
+        assert response.status_code == 200
+        assert "text/turtle" in response.headers["content-type"]
+        assert "_shacl_rules.ttl" in response.headers["content-disposition"]
+
+    def test_shacl_rules_preview(self, client):
+        data = {"name": "r", "antecedent": "A(?x)", "consequent": "B(?x)"}
+        response = client.post("/ontology/shacl-rules/preview", json=data)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert body["turtle"].strip()
+        assert body["rule_type"] in ("sh:TripleRule", "sh:SPARQLRule")
+
+    def test_legacy_if_then_text_removed(self, client):
+        assert client.get("/ontology/if-then/text").status_code == 404
+        assert client.post("/ontology/if-then/import", json={"text": ""}).status_code == 404
 
     def test_axioms_list(self, client):
         response = client.get("/ontology/axioms/list")
@@ -514,7 +559,7 @@ class TestDomainRoutes:
                         "classes": [],
                         "properties": [],
                         "constraints": [],
-                        "swrl_rules": [],
+                        "if_then_rules": [],
                         "axioms": [],
                         "expressions": [],
                     },

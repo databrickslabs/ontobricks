@@ -1,12 +1,12 @@
 """The run request always names the selected dimensions.
 
-SWRL rules, decision tables and aggregate rules have no checkbox: the backend
+IF-THEN rules, decision tables and aggregate rules have no checkbox: the backend
 includes them based on the dimensions. Sending only ``shape_ids`` — which is
 what happened as soon as a domain had any shape — left the backend with no
-selection to apply, so every SWRL rule ran under Structural even when only
+selection to apply, so every IF-THEN rule ran under Structural even when only
 Conformance was ticked.
 
-``runAllChecks`` is executed under node against a stubbed DOM and fetch.
+``runAllChecks`` is executed under node against a stubbed PhaseTree and fetch.
 """
 
 import json
@@ -30,23 +30,16 @@ global.showNotification = (message) => { notifications.push(message); };
 const notifications = [];
 let sent = null;
 
-const dimensionBoxes = __DIMENSIONS__.map(
-    ([dimension, checked]) => ({ dataset: { dimension }, checked, indeterminate: false })
-);
-const ruleBoxes = __RULES__.map(
-    ([dqRuleId, checked]) => ({ dataset: { dqRuleId }, checked })
-);
-
-const query = (selector) => {
-    if (selector === '[data-dimension]') return dimensionBoxes;
-    if (selector === '.dq-rule-cb:checked') return ruleBoxes.filter(cb => cb.checked);
-    if (selector === '.dq-rule-cb') return ruleBoxes;
-    return [];
-};
 global.document = {
-    querySelectorAll: (selector) => ({ forEach: (fn) => query(selector).forEach(fn) }),
+    querySelectorAll: () => ({ forEach() {} }),
     querySelector: () => null,
     getElementById: () => ({ classList: { add() {}, remove() {} }, style: {}, value: '10', innerHTML: '', scrollTop: 0, scrollHeight: 0 }),
+};
+// What the shared phase tree reports for the current tick state.
+const tree = {
+    phases: () => (__DIMENSIONS__),
+    checkedValues: () => (__RULES__),
+    setBusy() {},
 };
 global.fetch = async (url, options) => {
     sent = { url, body: JSON.parse(options.body) };
@@ -56,7 +49,7 @@ global.fetch = async (url, options) => {
 eval(fs.readFileSync(__SOURCE__, 'utf8'));
 const dq = window.DQExecModule;
 dq._shapesLoaded = true;
-dq._shapesCache = __SHAPES__;
+dq._tree = tree;
 dq._showError = () => {};
 
 dq.runAllChecks().then(() => {
@@ -65,13 +58,16 @@ dq.runAllChecks().then(() => {
 """
 
 
-def _run_checks(dimensions, rules, shapes=None, config=None):
-    """Click Run with the given tick state and return the request that went out."""
+def _run_checks(dimensions, rules, config=None):
+    """Click Run with the given tick state and return the request that went out.
+
+    ``dimensions`` maps a dimension to whether it is on (checked or partly
+    ticked); ``rules`` is a list of ``(rule id, ticked)``.
+    """
     script = (
         _HARNESS.replace("__SOURCE__", json.dumps(str(DQ_EXEC_JS)))
-        .replace("__DIMENSIONS__", json.dumps(dimensions))
-        .replace("__RULES__", json.dumps(rules))
-        .replace("__SHAPES__", json.dumps(shapes if shapes is not None else [{"id": "s1"}]))
+        .replace("__DIMENSIONS__", json.dumps(dict(dimensions)))
+        .replace("__RULES__", json.dumps([rid for rid, on in rules if on]))
         .replace(
             "__CONFIG__",
             json.dumps(
@@ -111,9 +107,9 @@ class TestPayload:
         assert outcome["sent"]["body"]["dimensions"] == ["conformance"]
 
     def test_a_dimension_with_no_shape_can_run_alone(self):
-        """Structural may hold only SWRL rules, which have no checkbox."""
+        """Structural may hold only IF-THEN rules, which have no checkbox."""
         outcome = _run_checks(
-            dimensions=[["structural", True]], rules=[], shapes=[{"id": "s1"}]
+            dimensions=[["structural", True]], rules=[]
         )
         assert outcome["sent"]["body"]["dimensions"] == ["structural"]
         assert "shape_ids" not in outcome["sent"]["body"]
@@ -125,14 +121,14 @@ class TestPayload:
 
 
 class TestRuleFamilySelection:
-    """A picked SWRL rule reaches the request the way a picked shape does."""
+    """A picked IF-THEN rule reaches the request the way a picked shape does."""
 
     def test_a_family_rule_id_travels_as_a_shape_id(self):
         outcome = _run_checks(
             dimensions=[["structural", True]],
-            rules=[["swrl:no_orphans", True], ["swrl:unique_ids", False]],
+            rules=[["if_then:no_orphans", True], ["if_then:unique_ids", False]],
         )
-        assert outcome["sent"]["body"]["shape_ids"] == ["swrl:no_orphans"]
+        assert outcome["sent"]["body"]["shape_ids"] == ["if_then:no_orphans"]
 
 
 class TestExecutionTarget:

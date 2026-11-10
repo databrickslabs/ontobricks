@@ -35,7 +35,7 @@ scope:
 2. Use `__all__` when the public surface is well-defined.
 3. Keep `__init__.py` files short — only imports and `__all__`.
 4. When moving, renaming, or converting code into class methods, **update every caller (src and tests) in the same change** and delete the old module. Do not add backward-compatible wrappers, aliases, or shim modules. Only external contracts keep their names: REST `v1` endpoints, MCP tools, and entry points referenced by string (`app.yaml`, DAB job files).
-5. **Group by topic when a folder gets crowded.** When a package holds more than ~12 modules, or three or more modules share a topic (a common prefix such as `SWRL*`, or a common job such as build / quality / settings), move them into a lowercase topic sub-package (`reasoning/swrl/`, `digitaltwin/build/`, `domain/settings/`). Keep the package's entry-point class (`ReasoningService`, `DigitalTwin`, `Domain`) at the root. Each sub-package `__init__.py` re-exports its public classes (rule 1). Don't create a sub-package for one or two files.
+5. **Group by topic when a folder gets crowded.** When a package holds more than ~12 modules, or three or more modules share a topic (a common prefix such as `Rule*` / `Shacl*`, or a common job such as build / quality / settings), move them into a lowercase topic sub-package (`reasoning/shacl_rules/`, `digitaltwin/build/`, `domain/settings/`). Keep the package's entry-point class (`ReasoningService`, `DigitalTwin`, `Domain`) at the root. Each sub-package `__init__.py` re-exports its public classes (rule 1). Don't create a sub-package for one or two files.
 
 **Where to Put New Code**
 

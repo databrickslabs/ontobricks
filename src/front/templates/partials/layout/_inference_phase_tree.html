@@ -1,0 +1,38 @@
+{#
+  Inference phases (T-Box, Simple rules, Graph reasoning, Complex rules) on the
+  shared tree. Used by Graph → Inference and Simulation → Reasoning so both
+  list the same phases with the same counts.
+
+  Context (pass with {% with %}):
+    tree_id, tree_ctx (owlrl_available, if_then_rules_count,
+    object_properties_count, sparql_rules_count), tree_ids (phase key → input id),
+    tree_checked (phase keys on at first paint), tree_lock_tbox (lock T-Box when owlrl is missing)
+#}
+{% set _n_if = tree_ctx.if_then_rules_count or 0 %}
+{% set _n_sp = tree_ctx.sparql_rules_count or 0 %}
+{% set _n_op = tree_ctx.object_properties_count or 0 %}
+{% set tree_caption = "Inference phases" %}
+{% set tree_nodes = [
+    {"key": "tbox", "input_id": tree_ids.tbox, "icon": "bi-diagram-3", "tone": "text-primary",
+     "title": "T-Box (OWL 2 RL)", "desc": "Deductive closure over the ontology axioms",
+     "checked": "tbox" in tree_checked,
+     "locked": tree_lock_tbox and not tree_ctx.owlrl_available,
+     "badge": "owlrl ready" if tree_ctx.owlrl_available else "owlrl missing",
+     "badge_cls": "text-bg-success" if tree_ctx.owlrl_available else "text-bg-warning"},
+    {"key": "if_then", "input_id": tree_ids.if_then, "icon": "bi-code-square", "tone": "text-indigo",
+     "title": "Simple rules", "desc": "IF-THEN business rules",
+     "checked": "if_then" in tree_checked, "expandable": true, "leaf_icon": "bi-signpost-split",
+     "badge": (_n_if ~ " rule" ~ ("s" if _n_if != 1 else "")) if _n_if else "no rules",
+     "badge_cls": "text-bg-primary" if _n_if else "text-bg-secondary"},
+    {"key": "graph", "input_id": tree_ids.graph, "icon": "bi-share", "tone": "text-info",
+     "title": "Graph reasoning", "desc": "Transitive / symmetric / inverse closure",
+     "checked": "graph" in tree_checked,
+     "badge": _n_op ~ " object prop" ~ ("s" if _n_op != 1 else ""),
+     "badge_cls": "text-bg-info"},
+    {"key": "sparql_rules", "input_id": tree_ids.sparql_rules, "icon": "bi-braces", "tone": "text-danger",
+     "title": "Complex rules", "desc": "SPARQL CONSTRUCT queries",
+     "checked": "sparql_rules" in tree_checked, "expandable": true, "leaf_icon": "bi-file-earmark-code",
+     "badge": (_n_sp ~ " rule" ~ ("s" if _n_sp != 1 else "")) if _n_sp else "no rules",
+     "badge_cls": "text-bg-primary" if _n_sp else "text-bg-secondary"},
+] %}
+{% include "partials/layout/_phase_tree.html" %}

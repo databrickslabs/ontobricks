@@ -159,7 +159,7 @@ flowchart LR
 | LLM-Powered Wizard        | Point to Unity Catalog tables; the LLM generates a complete OWL ontology from metadata       |
 | Industry Standards        | One-click import of FIBO (6 domains), CDISC (5 standards), IOF (3 domains)                   |
 | OWL/RDFS Import           | Load existing ontologies from files or Unity Catalog Volumes                                 |
-| Constraints and Rules     | Cardinality, value constraints, property characteristics, SWRL rules, expressions and axioms |
+| Constraints and Rules     | Cardinality, value constraints, property characteristics, IF-THEN rules, expressions and axioms |
 
 
 #### Mapping (Data Mapping)
@@ -320,7 +320,7 @@ databricks apps deploy --app-name ontobricks
 
 OntoBricks is a **Graph Viewer Builder for Databricks** that brings **graph database capabilities and formal reasoning** to the Lakehouse — without requiring separate graph infrastructure. It transforms relational tables stored in Unity Catalog into a structured graph viewer by leveraging semantic web standards (OWL, R2RML, RDF), a Lakebase Postgres graph engine, OWL 2 RL reasoning, and LLM-powered automation.
 
-Users can design ontologies visually or import industry standards (FIBO for finance, CDISC for clinical data, IOF for manufacturing), map ontology entities to Databricks tables, materialize the result into a Delta-backed triple store mirrored on Lakebase Postgres, run **formal reasoning** (OWL 2 RL deductive closure, SWRL rules, transitive/symmetric inference), and explore the graph viewer through interactive visualization. The entire pipeline — from raw tables to a reasoned, queryable graph viewer — can be completed in as few as four clicks thanks to LLM-driven ontology generation and automatic data mapping.
+Users can design ontologies visually or import industry standards (FIBO for finance, CDISC for clinical data, IOF for manufacturing), map ontology entities to Databricks tables, materialize the result into a Delta-backed triple store mirrored on Lakebase Postgres, run **formal reasoning** (OWL 2 RL deductive closure, IF-THEN rules, transitive/symmetric inference), and explore the graph viewer through interactive visualization. The entire pipeline — from raw tables to a reasoned, queryable graph viewer — can be completed in as few as four clicks thanks to LLM-driven ontology generation and automatic data mapping.
 
 OntoBricks runs as a **Databricks App**, making it natively integrated with the Databricks platform: Unity Catalog for storage and metadata, SQL Warehouses for query execution, and AI Gateway or Model Serving for LLM features.
 
@@ -365,7 +365,7 @@ OntoBricks provides an end-to-end, web-based solution that runs directly on Data
 #### Reasoning & Inference
 
 - **OWL 2 RL Reasoner**: Forward-chaining deductive closure on the ontology using the `owlrl` library — infers subclass hierarchies, property entailments, domain/range typing, and class axioms.
-- **SWRL Rule Engine**: User-defined Horn-clause rules with a **graphical D3-based editor** — compiled to SQL (Spark SQL on Delta, Postgres SQL on Lakebase) for violation detection and triple materialization.
+- **IF-THEN Rule Engine**: User-defined Horn-clause rules with a **graphical D3-based editor** — compiled to SQL (Spark SQL on Delta, Postgres SQL on Lakebase) for violation detection and triple materialization.
 - **Graph Reasoning**: Automatic transitive closure and symmetric expansion based on OWL property characteristics.
 - **Constraint Validation**: Formal checking of cardinality, functional/inverse-functional properties, value constraints, and global rules (no orphans, require labels).
 
@@ -399,7 +399,7 @@ OntoBricks provides an end-to-end, web-based solution that runs directly on Data
 | **dbt + Semantic Layer**       | SQL-based semantic modeling                 | No ontology/OWL support; no graph visualization; limited to dimensional modeling concepts            |
 
 
-**Gap**: No existing solution provides an integrated, Databricks-native experience that combines ontology design, industry-standard import, LLM-powered automation, **graph database capabilities (embedded Cypher engine)**, **formal OWL 2 RL reasoning**, **SWRL rule evaluation**, **W3C SHACL data quality validation**, triple store materialization in Delta, and visual graph viewer exploration — all deployable as a Databricks App without requiring separate graph infrastructure.
+**Gap**: No existing solution provides an integrated, Databricks-native experience that combines ontology design, industry-standard import, LLM-powered automation, **graph database capabilities (embedded Cypher engine)**, **formal OWL 2 RL reasoning**, **IF-THEN rule evaluation**, **W3C SHACL data quality validation**, triple store materialization in Delta, and visual graph viewer exploration — all deployable as a Databricks App without requiring separate graph infrastructure.
 
 ---
 
@@ -421,7 +421,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Data understanding**       | Domain experts can visually model and explore entity relationships without writing SQL                                                                                                     |
 | **Knowledge graph adoption** | Removes the infrastructure barrier — no separate graph database needed; triples live in Delta or an embedded graph engine                                                                  |
-| **Formal reasoning**         | OWL 2 RL deductive closure and SWRL rules bring inference capabilities to the Lakehouse — discovering implicit relationships, enforcing constraints, and enriching data with derived facts |
+| **Formal reasoning**         | OWL 2 RL deductive closure and IF-THEN rules bring inference capabilities to the Lakehouse — discovering implicit relationships, enforcing constraints, and enriching data with derived facts |
 | **Graph capabilities**       | Lakebase Postgres flat-store graph engine (with a pluggable `GraphDBBackend` for future Cypher / Gremlin engines) provides traversal, shortest path, transitive closure, and BFS without deploying Neo4j or Neptune                           |
 | **Industry compliance**      | FIBO, CDISC, and IOF ontologies become accessible directly from the Databricks platform                                                                                                    |
 | **Time to value**            | LLM automation reduces the manual effort from weeks of custom development to minutes of guided interaction                                                                                 |
@@ -446,7 +446,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 | Layer      | Technology                                                                                |
 | ---------- | ----------------------------------------------------------------------------------------- |
 | Backend    | Python 3.11+, FastAPI, RDFLib, Databricks SDK                                             |
-| Reasoning  | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom SWRL engine (SQL translator) |
+| Reasoning  | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom IF-THEN engine (SQL translator) |
 | Graph DB   | Lakebase Postgres flat triple store (`psycopg`, `COPY FROM STDIN`, optional Lakeflow synced tables); pluggable behind `GraphDBBackend` |
 | Graph Analysis | NetworkX 3.0+ (community detection: Louvain, Label Propagation, Greedy Modularity)    |
 | Frontend   | Bootstrap 5, Sigma.js, Graphology (+ communities-louvain), D3.js, OntoViz (custom), Vanilla JS |
@@ -462,7 +462,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 - Tested with CRM, IoT, energy, and healthcare ontologies
 - Industry-standard imports operational (FIBO, CDISC, IOF)
 - LLM-powered wizard and auto-map working with Unity AI Gateway model services and Model Serving endpoints
-- **Reasoning engine operational**: OWL 2 RL deductive closure, SWRL rule engine (SQL translator) with graphical D3 editor, graph reasoning (transitive closure, symmetric expansion), constraint validation, and SHACL data quality shapes (PySHACL + SQL compilation)
+- **Reasoning engine operational**: OWL 2 RL deductive closure, IF-THEN rule engine (SQL translator) with graphical D3 editor, graph reasoning (transitive closure, symmetric expansion), constraint validation, and SHACL data quality shapes (PySHACL + SQL compilation)
 - **Triple store + Graph DB layers**: Delta view (Unity Catalog) + Lakebase Postgres flat store, pluggable behind `GraphDBFactory`
 - MCP server deployed and operational for Databricks Playground
 - **Entity Groups**: OWL-compliant class grouping via `owl:equivalentClass` + `owl:unionOf`, with expand/collapse super-nodes in the Graph Viewer visualization

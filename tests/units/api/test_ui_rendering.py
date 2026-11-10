@@ -448,7 +448,7 @@ class TestOntologyPage:
             "relationships",
             "dataquality",
             "designchecks",
-            "swrl",
+            "if-then",
             "axioms",
         ],
     )
@@ -469,7 +469,7 @@ class TestOntologyPage:
             "relationships-section",
             "dataquality-section",
             "designchecks-section",
-            "swrl-section",
+            "if-then-section",
             "axioms-section",
         ],
     )

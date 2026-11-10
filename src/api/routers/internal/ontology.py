@@ -43,10 +43,8 @@ from back.core.industry.fhir import get_fhir_versions
 from back.core.logging import get_logger
 from back.core.w3c import SHACLService
 from back.core.w3c.shacl.constants import (
-    AGGREGATE_ID_PREFIX,
-    DECISION_TABLE_ID_PREFIX,
     RULE_FAMILY_CATEGORIES,
-    SWRL_ID_PREFIX,
+    IF_THEN_ID_PREFIX,
     rule_check_id,
 )
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
@@ -282,13 +280,13 @@ async def generate_owl_endpoint(
             if key not in ontology_data and key in domain.ontology:
                 ontology_data[key] = domain.ontology[key]
         constraints = data.get("constraints") or domain.constraints
-        swrl_rules = data.get("swrl_rules") or domain.swrl_rules
+        if_then_rules = data.get("if_then_rules") or domain.if_then_rules
         axioms = data.get("axioms") or domain.axioms
         expressions = data.get("expressions") or domain.expressions
         groups = data.get("groups") or domain.groups
 
         owl_content = Ontology.generate_owl(
-            ontology_data, constraints, swrl_rules, axioms, expressions, groups
+            ontology_data, constraints, if_then_rules, axioms, expressions, groups
         )
         domain.generated["owl"] = owl_content
         domain.save()
@@ -325,7 +323,7 @@ async def export_owl(session_mgr: SessionManager = Depends(get_session_manager))
         owl_content = Ontology.generate_owl(
             domain.ontology,
             domain.constraints,
-            domain.swrl_rules,
+            domain.if_then_rules,
             domain.axioms,
             domain.expressions,
             domain.groups,
@@ -521,14 +519,8 @@ def _selectable_rule_families(domain) -> list:
     select it: the ``id`` is the same check id the run reports, so ticking one
     here is what the run filters on.
     """
-    ontology_dict = getattr(domain, "ontology", None)
-    if not isinstance(ontology_dict, dict):
-        ontology_dict = domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
-
     families = (
-        (SWRL_ID_PREFIX, domain.swrl_rules or [], "SWRL Rule"),
-        (DECISION_TABLE_ID_PREFIX, ontology_dict.get("decision_tables", []), "Decision Table"),
-        (AGGREGATE_ID_PREFIX, ontology_dict.get("aggregate_rules", []), "Aggregate Rule"),
+        (IF_THEN_ID_PREFIX, domain.if_then_rules or [], "IF-THEN Rule"),
     )
     rules = []
     for prefix, family, fallback in families:
@@ -555,7 +547,7 @@ async def list_shapes(
     """List all SHACL data-quality shapes, optionally filtered by category.
 
     ``rules`` carries the non-SHACL families a data quality run also executes
-    (SWRL rules, decision tables, aggregate rules) so they can be selected one
+    (IF-THEN rules) so they can be selected one
     by one like a shape. They are kept out of ``shapes`` because the ontology
     editor manages actual shapes only.
     """
@@ -935,34 +927,33 @@ async def accept_suggested_shapes(
 
 
 # ===========================================
-# SWRL Rules Management
+# IF-THEN Rules Management
 # ===========================================
 
 
-@router.get("/swrl/list")
-async def list_swrl_rules(session_mgr: SessionManager = Depends(get_session_manager)):
-    """Get list of SWRL rules from session."""
+@router.get("/if-then/list")
+async def list_if_then_rules(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Get list of IF-THEN rules from session."""
     domain = get_domain(session_mgr)
-    return {"success": True, "rules": domain.swrl_rules}
+    return {"success": True, "rules": domain.if_then_rules}
 
 
-@router.post("/swrl/save")
-async def save_swrl_rule(
+@router.post("/if-then/save")
+async def save_if_then_rule(
     request: Request, session_mgr: SessionManager = Depends(get_session_manager)
 ):
-    """Save a SWRL rule (add or update)."""
-    with map_route_errors("Saving SWRL rule failed", logger):
+    """Save an IF-THEN rule (add or update)."""
+    with map_route_errors("Saving IF-THEN rule failed", logger):
         data = await request.json()
         rule = data.get("rule", {})
         index = data.get("index", -1)
 
-        if not rule.get("name"):
-            raise ValidationError("Rule name is required")
-        if not rule.get("antecedent") or not rule.get("consequent"):
-            raise ValidationError("Rule antecedent and consequent are required")
+        errors = Rules.validate_if_then_rule(rule)
+        if errors:
+            raise ValidationError("; ".join(errors))
 
         domain = get_domain(session_mgr)
-        rules = domain.swrl_rules
+        rules = domain.if_then_rules
 
         is_update = 0 <= index < len(rules)
         old = dict(rules[index]) if is_update else {}
@@ -971,35 +962,35 @@ async def save_swrl_rule(
         else:
             rules.append(rule)
 
-        domain.swrl_rules = rules
+        domain.if_then_rules = rules
         if is_update:
             Rules.rename_business_rule_refs(
                 domain.get_classes(), old.get("name", ""), rule.get("name", "")
             )
         domain.record_change(
-            "swrl_updated" if is_update else "swrl_added",
-            entity_type="swrl", entity_ref=rule.get("name", ""),
+            "if_then_updated" if is_update else "if_then_added",
+            entity_type="if_then", entity_ref=rule.get("name", ""),
             summary=rule.get("name", ""),
             meta=domain.diff_meta(old, rule),
         )
         domain.save()
         return {
             "success": True,
-            "message": "SWRL rule saved successfully",
+            "message": "IF-THEN rule saved successfully",
             "rules": rules,
         }
 
 
-@router.post("/swrl/delete")
-async def delete_swrl_rule(
+@router.post("/if-then/delete")
+async def delete_if_then_rule(
     request: Request, session_mgr: SessionManager = Depends(get_session_manager)
 ):
-    """Delete a SWRL rule by index."""
-    with map_route_errors("Deleting SWRL rule failed", logger):
+    """Delete an IF-THEN rule by index."""
+    with map_route_errors("Deleting IF-THEN rule failed", logger):
         data = await request.json()
         index = data.get("index", -1)
         domain = get_domain(session_mgr)
-        rules = domain.swrl_rules
+        rules = domain.if_then_rules
 
         if not (0 <= index < len(rules)):
             raise ValidationError("Invalid rule index")
@@ -1007,112 +998,97 @@ async def delete_swrl_rule(
         removed = dict(rules[index]) if isinstance(rules[index], dict) else {}
         removed_name = removed.get("name", "")
         rules.pop(index)
-        domain.swrl_rules = rules
+        domain.if_then_rules = rules
         if removed_name and not any(
             isinstance(r, dict) and r.get("name") == removed_name for r in rules
         ):
             Rules.drop_business_rule_refs(domain.get_classes(), removed_name)
         domain.record_change(
-            "swrl_removed", entity_type="swrl",
+            "if_then_removed", entity_type="if_then",
             entity_ref=removed_name, summary=removed_name,
             meta=domain.diff_meta(removed, {}),
         )
         domain.save()
-        return {"success": True, "message": "SWRL rule deleted", "rules": rules}
+        return {"success": True, "message": "IF-THEN rule deleted", "rules": rules}
 
 
-@router.post("/swrl/validate")
-async def validate_swrl_rule(request: Request):
-    """Validate a SWRL rule syntax."""
+@router.post("/if-then/validate")
+async def validate_if_then_rule(request: Request):
+    """Validate an IF-THEN rule syntax."""
     data = await request.json()
-    errors = Ontology.validate_swrl_rule(data.get("rule", {}))
+    errors = Ontology.validate_if_then_rule(data.get("rule", {}))
     if errors:
-        raise ValidationError("SWRL rule is invalid", detail="; ".join(str(e) for e in errors))
+        raise ValidationError("IF-THEN rule is invalid", detail="; ".join(str(e) for e in errors))
     return {"success": True, "valid": True, "message": "Rule syntax is valid"}
 
 
-@router.get("/swrl/text")
-async def get_swrl_text(session_mgr: SessionManager = Depends(get_session_manager)):
-    """Serialize all SWRL rules as OntoBricks SWRL text."""
-    from back.core.reasoning.swrl.SWRLTextCodec import serialize_rules
+@router.get("/shacl-rules/text")
+async def get_shacl_rules_text(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Serialize all IF/THEN rules as a combined SHACL-AF Turtle document."""
+    from back.core.reasoning.shacl_rules.rule_serializer import (
+        serialize_rules_to_turtle,
+    )
 
     domain = get_domain(session_mgr)
-    return {"success": True, "text": serialize_rules(domain.swrl_rules)}
+    text = serialize_rules_to_turtle(domain.if_then_rules, domain.ontology)
+    return {"success": True, "text": text}
 
 
-@router.get("/swrl/export")
-async def export_swrl(session_mgr: SessionManager = Depends(get_session_manager)):
-    """Download SWRL rules as an OntoBricks SWRL text file."""
+@router.get("/shacl-rules/export")
+async def export_shacl_rules(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Download the generated SHACL-AF rules as a Turtle (.ttl) file."""
     from fastapi.responses import Response
-    from back.core.reasoning.swrl.SWRLTextCodec import serialize_rules
+    from back.core.reasoning.shacl_rules.rule_serializer import (
+        serialize_rules_to_turtle,
+    )
 
     domain = get_domain(session_mgr)
-    text = serialize_rules(domain.swrl_rules)
+    text = serialize_rules_to_turtle(domain.if_then_rules, domain.ontology)
     export_name = (
         domain._data["domain"].get("info", {}).get("name", DEFAULT_GRAPH_NAME)
     )
-    filename = f"{export_name}_swrl_rules.swrl"
+    filename = f"{export_name}_shacl_rules.ttl"
     return Response(
         content=text,
-        media_type="text/plain",
+        media_type="text/turtle",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
-@router.post("/swrl/import")
-async def import_swrl(
+@router.post("/shacl-rules/preview")
+async def preview_shacl_rule(
     request: Request, session_mgr: SessionManager = Depends(get_session_manager)
 ):
-    """Import SWRL rules from OntoBricks SWRL text (always append)."""
-    from back.core.reasoning.swrl.SWRLTextCodec import parse_rules
+    """Transpile a single IF/THEN rule to its generated SHACL-AF form.
 
-    with map_route_errors("SWRL import failed", logger):
+    Read-only: used by the visual editor to show the SHACL a rule compiles to
+    as it is built. Transpilation is one-directional (no SHACL→rule parser).
+    """
+    from back.core.reasoning.shacl_rules.rule_serializer import preview_rule_shacl
+
+    with map_route_errors("SHACL rule preview failed", logger):
         data = await request.json()
-        text = data.get("text", "")
-        if not text or not str(text).strip():
-            raise ValidationError("No SWRL text provided")
-        try:
-            imported = parse_rules(text)
-        except ValueError as e:
-            raise ValidationError(str(e)) from e
-        if not imported:
-            raise ValidationError("No valid SWRL rules found in the provided text")
-        for rule in imported:
-            errors = Ontology.validate_swrl_rule(rule)
-            if errors:
-                raise ValidationError(
-                    f"Invalid rule '{rule.get('name', '')}': {'; '.join(errors)}"
-                )
         domain = get_domain(session_mgr)
-        rules = list(domain.swrl_rules)
-        rules.extend(imported)
-        domain.swrl_rules = rules
-        names = [r.get("name", "") for r in imported if isinstance(r, dict)]
-        domain.record_change(
-            "swrl_added",
-            entity_type="swrl",
-            entity_ref=f"{len(imported)} imported",
-            summary=f"Imported {len(imported)} SWRL rule(s)",
-            meta=domain.diff_meta({}, {"name": ", ".join(n for n in names if n)}),
+        result = preview_rule_shacl(
+            data.get("name", ""),
+            data.get("antecedent", ""),
+            data.get("consequent", ""),
+            domain.ontology,
         )
-        domain.save()
-        return {
-            "success": True,
-            "message": f"Imported {len(imported)} rules",
-            "rules": rules,
-            "imported_count": len(imported),
-        }
+        return {"success": True, **result}
 
 
 # ===========================================
 # Business Rules — Generic CRUD for new rule types
-# (decision_tables, sparql_rules, aggregate_rules)
+# (sparql_rules)
 # ===========================================
 
 _RULE_TYPES = {
-    "decision_tables": "decision_tables",
     "sparql_rules": "sparql_rules",
-    "aggregate_rules": "aggregate_rules",
 }
 
 
@@ -1128,6 +1104,69 @@ async def list_rules(
     domain = get_domain(session_mgr)
     rules = (domain.ontology or {}).get(key, [])
     return {"success": True, "rules": rules}
+
+
+@router.get("/rules/export")
+async def export_rules(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Download Simple and Complex rules as one versioned JSON document."""
+    import json
+
+    from fastapi.responses import Response
+
+    from back.objects.ontology.RulesPackage import build_package
+
+    domain = get_domain(session_mgr)
+    export_name = domain._data["domain"].get("info", {}).get("name", DEFAULT_GRAPH_NAME)
+    package = build_package(
+        export_name,
+        domain.if_then_rules,
+        (domain.ontology or {}).get("sparql_rules", []),
+    )
+    return Response(
+        content=json.dumps(package, indent=2, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{export_name}_rules.json"'},
+    )
+
+
+@router.post("/rules/import")
+async def import_rules(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Upsert Simple and Complex rules from a rules file; invalid rules are reported."""
+    from back.objects.ontology.RulesPackage import apply_package
+
+    with map_route_errors("Importing rules failed", logger):
+        try:
+            data = await request.json()
+        except ValueError as exc:
+            raise ValidationError("The file is not valid JSON") from exc
+
+        domain = get_domain(session_mgr)
+        existing_sparql = list((domain.ontology or {}).get("sparql_rules", []))
+        result = apply_package(data, list(domain.if_then_rules), existing_sparql)
+
+        domain.if_then_rules = result.if_then_rules
+        domain._data["ontology"]["sparql_rules"] = result.sparql_rules
+        # Same audit actions as the single-rule save routes (if_then_added,
+        # if_then_updated, sparql_rules_added, sparql_rules_updated).
+        for kind, action, name in result.changes:
+            entity_type = "if_then" if kind == "if_then_rules" else kind
+            verb = "added" if action == "added" else "updated"
+            domain.record_change(
+                f"{entity_type}_{verb}",
+                entity_type=entity_type,
+                entity_ref=name,
+                summary=name,
+            )
+        domain.save()
+        return {
+            "success": True,
+            "added": result.added,
+            "replaced": result.replaced,
+            "rejected": result.rejected,
+        }
 
 
 @router.post("/rules/{rule_type}/save")
@@ -1147,6 +1186,14 @@ async def save_rule(
 
         if not rule.get("name"):
             raise ValidationError("Rule name is required")
+        # A disabled rule may be saved as-is so a legacy rule that no longer
+        # compiles can still be switched off.
+        if rule.get("enabled", True):
+            from back.core.reasoning import SPARQLRuleEngine
+
+            errors = SPARQLRuleEngine.validate_rule(rule)
+            if errors:
+                raise ValidationError("; ".join(errors))
 
         domain = get_domain(session_mgr)
         rules = list((domain.ontology or {}).get(key, []))
@@ -1214,24 +1261,13 @@ async def validate_rule(rule_type: str, request: Request):
     errors: list = []
 
     with map_route_errors("Rule validation failed", logger):
-        if key == "decision_tables":
-            from back.core.reasoning import DecisionTableEngine
-
-            errors = DecisionTableEngine.validate_table(rule)
-        elif key == "sparql_rules":
+        if key == "sparql_rules":
             from back.core.reasoning import SPARQLRuleEngine
 
             errors = SPARQLRuleEngine.validate_rule(rule)
-        elif key == "aggregate_rules":
-            from back.core.reasoning import AggregateRuleEngine
-
-            errors = AggregateRuleEngine.validate_rule(rule)
 
     if errors:
-        raise ValidationError(
-            f"{rule_type.replace('_', ' ').title()} rule is invalid",
-            detail="; ".join(str(e) for e in errors),
-        )
+        raise ValidationError("; ".join(str(e) for e in errors))
     return {"success": True, "valid": True, "message": "Rule is valid"}
 
 
@@ -1239,8 +1275,8 @@ async def validate_rule(rule_type: str, request: Request):
 # Business Rules — Auto-generate via Agent
 # ===========================================
 
-# Maps each rule list to its engine validator. SWRL is validated via Ontology.
-_RULE_VALIDATORS_KEYS = ("swrl_rules", "decision_tables", "sparql_rules", "aggregate_rules")
+# Maps each rule list to its engine validator. IF-THEN is validated via Ontology.
+_RULE_VALIDATORS_KEYS = ("if_then_rules", "sparql_rules")
 
 
 def _ontology_name_sets(domain) -> tuple:
@@ -1276,20 +1312,12 @@ def _validate_business_rule(
     checked so it only references entities/relationships present in the ontology
     (derived consequent subtypes / result classes / output columns excepted).
     """
-    if key == "swrl_rules":
-        errors = Ontology.validate_swrl_rule(rule)
-    elif key == "decision_tables":
-        from back.core.reasoning import DecisionTableEngine
-
-        errors = DecisionTableEngine.validate_table(rule)
+    if key == "if_then_rules":
+        errors = Ontology.validate_if_then_rule(rule)
     elif key == "sparql_rules":
         from back.core.reasoning import SPARQLRuleEngine
 
         errors = SPARQLRuleEngine.validate_rule(rule)
-    elif key == "aggregate_rules":
-        from back.core.reasoning import AggregateRuleEngine
-
-        errors = AggregateRuleEngine.validate_rule(rule)
     else:
         return [f"Unknown rule type: {key}"]
 
@@ -1303,7 +1331,7 @@ def _validate_business_rule(
 def _norm_ws(value) -> str:
     """Canonicalise a rule string for duplicate detection.
 
-    Collapses whitespace, normalises the SWRL conjunction glyph, and removes
+    Collapses whitespace, normalises the IF-THEN conjunction glyph, and removes
     spacing around commas so cosmetic formatting differences don't defeat the
     duplicate check.
     """
@@ -1317,29 +1345,10 @@ def _rule_signature(key: str, rule: dict) -> tuple:
     Two rules with the same logical content collide even if named
     differently, so re-accepting an already-stored suggestion is a no-op.
     """
-    if key == "swrl_rules":
-        return ("swrl", _norm_ws(rule.get("antecedent")), _norm_ws(rule.get("consequent")))
+    if key == "if_then_rules":
+        return ("if_then", _norm_ws(rule.get("antecedent")), _norm_ws(rule.get("consequent")))
     if key == "sparql_rules":
         return ("sparql", _norm_ws(rule.get("query")))
-    if key == "decision_tables":
-        cols = tuple(
-            str((c or {}).get("property", "")).lower()
-            for c in rule.get("input_columns") or []
-        )
-        out = str((rule.get("output_column") or {}).get("property", "")).lower()
-        rows = json.dumps(rule.get("rows") or [], sort_keys=True, default=str)
-        return ("dt", str(rule.get("target_class", "")).lower(), cols, out, rows)
-    if key == "aggregate_rules":
-        fields = (
-            "target_class",
-            "group_by_property",
-            "aggregate_property",
-            "aggregate_function",
-            "operator",
-            "threshold",
-            "result_class",
-        )
-        return ("agg",) + tuple(str(rule.get(f, "")).lower() for f in fields)
     return ("raw", json.dumps(rule, sort_keys=True, default=str))
 
 
@@ -1351,9 +1360,9 @@ async def generate_business_rules_async(
 ):
     """Start business-rules generation via ``agent_business_rules_generator``.
 
-    Proposes SWRL, decision-table, SPARQL, and aggregate rules from the live
-    ontology design and the domain's uploaded documents. Poll
-    ``GET /tasks/{task_id}`` for ``result`` containing the four candidate
+    Proposes IF-THEN and SPARQL rules from the live ontology design and the
+    domain's uploaded documents. Poll
+    ``GET /tasks/{task_id}`` for ``result`` containing the candidate
     rule lists; the user reviews and accepts them via
     ``POST /ontology/business-rules/accept-suggestions``.
     """
@@ -1410,20 +1419,16 @@ async def generate_business_rules_async(
             tm.complete_task(
                 task.id,
                 result={
-                    "swrl_rules": agent_result.swrl_rules,
-                    "decision_tables": agent_result.decision_tables,
+                    "if_then_rules": agent_result.if_then_rules,
                     "sparql_rules": agent_result.sparql_rules,
-                    "aggregate_rules": agent_result.aggregate_rules,
                     "agent_steps": serialize_agent_steps(agent_result.steps),
                     "agent_iterations": agent_result.iterations,
                     "agent_usage": agent_result.usage,
                 },
                 message=(
                     f"Proposed {agent_result.total_rules()} rule(s): "
-                    f"{len(agent_result.swrl_rules)} SWRL, "
-                    f"{len(agent_result.decision_tables)} decision table(s), "
-                    f"{len(agent_result.sparql_rules)} SPARQL, "
-                    f"{len(agent_result.aggregate_rules)} aggregate"
+                    f"{len(agent_result.if_then_rules)} IF-THEN, "
+                    f"{len(agent_result.sparql_rules)} SPARQL"
                 ),
             )
         except Exception as e:
@@ -1442,10 +1447,10 @@ async def accept_business_rules_suggestions(
 ):
     """Validate and persist the rules the user selected from the suggestions.
 
-    Body: ``{ swrl_rules: [...], decision_tables: [...], sparql_rules: [...],
-    aggregate_rules: [...] }``. Each rule is validated with its engine
-    validator; valid rules are appended to the session and saved. Invalid
-    rules are reported back (with reasons) and skipped.
+    Body: ``{ if_then_rules: [...], sparql_rules: [...] }``. Each rule is
+    validated with its engine validator; valid rules are appended to the
+    session and saved. Invalid rules are reported back (with reasons) and
+    skipped.
     """
     with map_route_errors("Accepting business rule suggestions failed", logger):
         data = await request.json()
@@ -1462,8 +1467,8 @@ async def accept_business_rules_suggestions(
             if not isinstance(candidates, list) or not candidates:
                 continue
 
-            if key == "swrl_rules":
-                existing = domain.swrl_rules
+            if key == "if_then_rules":
+                existing = domain.if_then_rules
             else:
                 existing = list((domain.ontology or {}).get(key, []))
 
@@ -1500,8 +1505,8 @@ async def accept_business_rules_suggestions(
             if count:
                 dirty = True
                 added[key] = count
-                if key == "swrl_rules":
-                    domain.swrl_rules = existing
+                if key == "if_then_rules":
+                    domain.if_then_rules = existing
                 else:
                     domain._data["ontology"][key] = existing
 
@@ -1515,10 +1520,8 @@ async def accept_business_rules_suggestions(
             "rejected": rejected,
             "duplicates": duplicates,
             "duplicates_total": len(duplicates),
-            "swrl_rules": domain.swrl_rules,
-            "decision_tables": (domain.ontology or {}).get("decision_tables", []),
+            "if_then_rules": domain.if_then_rules,
             "sparql_rules": (domain.ontology or {}).get("sparql_rules", []),
-            "aggregate_rules": (domain.ontology or {}).get("aggregate_rules", []),
         }
 
 
@@ -2530,6 +2533,93 @@ async def ontology_assistant_chat(
         )
 
     return response
+
+
+# ===========================================
+# Complex Rule Builder — conversational SPARQL assistant
+# ===========================================
+
+
+@router.post("/business-rules/complex-assistant/chat")
+async def complex_rule_assistant_chat(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Process a single turn of the Complex (SPARQL CONSTRUCT) rule builder.
+
+    Expects a JSON body::
+
+        {
+            "message": "Flag high-balance customers as VIP",
+            "history": [{"role": "user"|"assistant", "content": "..."}, ...],
+            "current_draft": {"name": "...", "description": "...", "query": "..."}
+        }
+
+    and responds with::
+
+        {
+            "success": true,
+            "reply": "...markdown...",
+            "draft": {"name", "description", "query"} | null,
+            "ready": true|false,
+            "options": {"question", "options": [...], "multi"} | null,
+            "usage": {...}
+        }
+    """
+    from agents.agent_complex_rule_builder import run_agent as run_rule_builder
+
+    data = await request.json()
+    user_message = (data.get("message") or "").strip()
+    history = data.get("history") or []
+    current_draft = data.get("current_draft") or None
+
+    if not user_message:
+        raise ValidationError("No message provided")
+
+    domain = get_domain(session_mgr)
+    host, token, llm_endpoint, llm_endpoint_kind = require_domain_llm(domain, settings)
+
+    classes = list(domain.get_classes())
+    properties = list(domain.get_properties())
+    base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
+
+    logger.info(
+        "ComplexRuleBuilder: user_message=%s, classes=%d, properties=%d",
+        user_message[:80],
+        len(classes),
+        len(properties),
+    )
+
+    with map_route_errors("Complex rule builder request failed", logger):
+        agent_result = await asyncio.to_thread(
+            run_rule_builder,
+            host=host,
+            token=token,
+            endpoint_name=llm_endpoint,
+            endpoint_kind=llm_endpoint_kind,
+            classes=classes,
+            properties=properties,
+            base_uri=base_uri,
+            user_message=user_message,
+            current_draft=current_draft,
+            conversation_history=history,
+        )
+
+    if not agent_result.success:
+        raise InfrastructureError(
+            "Complex rule builder failed",
+            detail=agent_result.error or None,
+        )
+
+    return {
+        "success": True,
+        "reply": agent_result.reply,
+        "draft": agent_result.draft,
+        "ready": agent_result.ready,
+        "options": agent_result.options,
+        "usage": agent_result.usage,
+    }
 
 
 # ===========================================

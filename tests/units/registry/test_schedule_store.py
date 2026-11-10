@@ -185,7 +185,7 @@ class TestSaveSchedules:
                     "interval_minutes": 120,
                     "enabled": True,
                     "version": "3",
-                    "config": {"phases": {"swrl": True}, "materialize_graph": True},
+                    "config": {"phases": {"if_then": True}, "materialize_graph": True},
                 }
             }
         )
@@ -196,7 +196,7 @@ class TestSaveSchedules:
         assert params[2] == "Acme"
         assert params[3] == ""
         assert json.loads(params[8]) == {
-            "phases": {"swrl": True},
+            "phases": {"if_then": True},
             "materialize_graph": True,
         }
 

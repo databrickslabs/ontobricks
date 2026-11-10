@@ -111,35 +111,12 @@ body.ontology-page {
 }
 
 /* ==========================================================================
-   Advanced Sections (SWRL, Constraints, Axioms)
+   Advanced Sections (IF-THEN, Constraints, Axioms)
    ========================================================================== */
 
 /* Placeholder icons */
 .icon-lg {
     font-size: 3rem;
-}
-
-/* SWRL Rules */
-.swrl-rule-card {
-    border-left: 3px solid #6f42c1;
-    transition: box-shadow 0.2s ease;
-}
-
-.swrl-rule-card:hover {
-    box-shadow: 0 2px 8px rgba(111, 66, 193, 0.15);
-}
-
-.swrl-rule-code {
-    font-family: 'Fira Code', 'Monaco', monospace;
-    font-size: 0.85rem;
-    background: #ffffff;
-    padding: 4px 8px;
-    border-radius: 4px;
-    display: inline-block;
-}
-
-.swrl-rule-code code {
-    color: #6f42c1;
 }
 
 /* Constraints */
@@ -152,17 +129,7 @@ body.ontology-page {
     box-shadow: 0 2px 8px rgba(13, 110, 253, 0.15);
 }
 
-/* Axioms */
-.axiom-card {
-    border-left: 3px solid #198754;
-    transition: box-shadow 0.2s ease;
-}
-
-.axiom-card:hover {
-    box-shadow: 0 2px 8px rgba(25, 135, 84, 0.15);
-}
-
-/* Clickable chips for SWRL predicates */
+/* Clickable chips for IF-THEN predicates */
 .clickable-chip {
     cursor: pointer;
     transition: transform 0.1s ease, opacity 0.1s ease;
@@ -506,4 +473,5 @@ body.ontology-page {
     }
 
 }
+
 

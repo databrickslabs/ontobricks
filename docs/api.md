@@ -933,17 +933,17 @@ with `success: false` and nothing is executed. Table-valued UC functions run as
 
 #### `POST /api/v1/digitaltwin/nodes/business-rule`
 
-Run one of the SWRL business rules attached to the node's class (Ontology →
-Studio → Behaviour → **Inference rules (SWRL)**), **scoped to that entity**, and
+Run one of the IF-THEN business rules attached to the node's class (Ontology →
+Studio → Behaviour → **Inference rules (IF-THEN)**), **scoped to that entity**, and
 materialise the inferred triples into the graph.
 
 **Body:**
 - `entity_uri`: Instance URI of the node the rule is triggered on
-- `rule`: Name of a SWRL rule declared in the class's `business_rules` list
+- `rule`: Name of an IF-THEN rule declared in the class's `business_rules` list
 - `domain_name` / `domain_version` (optional): Registry domain and version
 
 Only rules declared on the resolved class (and still present and enabled in the
-domain's SWRL rules) can be run — the ontology is the allow-list. The rule's
+domain's IF-THEN rules) can be run — the ontology is the allow-list. The rule's
 antecedent gets an extra predicate binding the class variable(s) to
 `entity_uri`, so only facts involving that entity are inferred. Re-running is
 idempotent: facts already in the graph are not inserted twice.
@@ -956,7 +956,7 @@ idempotent: facts already in the graph are not inserted twice.
 > domain sets **Business rules** to **Disabled** in its MCP policy, every call
 > is refused.
 >
-> **Neo4j.** The Cypher translation of SWRL rules is not implemented yet, so on
+> **Neo4j.** The Cypher translation of IF-THEN rules is not implemented yet, so on
 > a Neo4j-backed domain the call succeeds with `inferred_count: 0`.
 
 The Graph Explorer uses a confirm-gated internal flow instead:
@@ -1138,7 +1138,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | GitHub mirror | `/settings/github` | Instance repository config, test/claim, sync-all, OBX rebuild (admin) |
 | Scheduled Builds | `/settings/schedules` | Automated triple store build scheduling |
 | Ontology | `/ontology` | Ontology design, OWL operations |
-| SWRL Rules | `/ontology/swrl` | SWRL rule management |
+| IF-THEN Rules | `/ontology/if_then` | IF-THEN rule management |
 | Constraints | `/ontology/constraints` | Property constraints |
 | Axioms | `/ontology/axioms` | OWL expressions & axioms |
 | SHACL Data Quality | `/ontology/dataquality` | SHACL shape CRUD, Turtle import/export |
@@ -1146,7 +1146,7 @@ This document describes the REST API endpoints available in OntoBricks.
 | SQL Wizard | `/mapping/wizard` | LLM-assisted SQL generation for mappings |
 | Knowledge Graph | `/dtwin` | Sync, graph viewer, quality checks, internal query execution |
 | Data Quality Execution | `/dtwin/dataquality` | Run SHACL checks against triple store |
-| Reasoning | `/dtwin/reasoning` | OWL 2 RL + SWRL inference, inferred triples |
+| Reasoning | `/dtwin/reasoning` | OWL 2 RL + IF-THEN inference, inferred triples |
 | GraphQL | `/graphql` (UI); `/api/v1/graphql` (external API mount) | Auto-generated typed GraphQL schema from ontology |
 | Domain | `/domain` | Domain save/load operations (UI route) |
 
@@ -1756,14 +1756,14 @@ fields are ignored.
 
 ---
 
-### SWRL Rules Endpoints
+### IF-THEN Rules Endpoints
 
-SWRL (Semantic Web Rule Language) rules for automatic inference.
+IF-THEN rules for automatic inference.
 
-#### List SWRL Rules
+#### List IF-THEN Rules
 
 ```http
-GET /ontology/swrl/list
+GET /ontology/if-then/list
 ```
 
 **Response:**
@@ -1781,10 +1781,10 @@ GET /ontology/swrl/list
 }
 ```
 
-#### Save SWRL Rule
+#### Save IF-THEN Rule
 
 ```http
-POST /ontology/swrl/save
+POST /ontology/if-then/save
 ```
 
 **Request Body:**
@@ -1802,10 +1802,53 @@ POST /ontology/swrl/save
 
 **Note:** Set `index` to -1 for new rules, or the rule index to update existing.
 
-#### Delete SWRL Rule
+#### Export Rules
 
 ```http
-POST /ontology/swrl/delete
+GET /ontology/rules/export
+```
+
+Downloads all Simple (`if_then_rules`) and Complex (`sparql_rules`) rules of the active domain as one JSON document (`Content-Disposition: attachment; filename="<domain>_rules.json"`):
+
+```json
+{
+  "format": "ontobricks-rules",
+  "version": 1,
+  "exported_at": "2026-11-10T09:00:00Z",
+  "domain": "MyDomain",
+  "if_then_rules": [
+    {"name": "InferGrandparent", "description": "", "antecedent": "...", "consequent": "...", "enabled": true}
+  ],
+  "sparql_rules": [
+    {"name": "CustomerHasClaim", "description": "", "query": "CONSTRUCT { ... } WHERE { ... }", "enabled": true}
+  ]
+}
+```
+
+#### Import Rules
+
+```http
+POST /ontology/rules/import
+```
+
+**Request Body:** a document in the format above. Files with another `format`, or a `version` above `1`, are rejected with a 4xx error and nothing is saved.
+
+**Behaviour:** upsert by name. A rule with a known name replaces the existing one in place; a new name is appended. Each rule is validated with the same checks as the single-rule save routes (Simple: `Rules.validate_if_then_rule`; enabled Complex: `SPARQLRuleEngine.validate_rule`). Invalid rules are skipped and reported; the valid ones are still saved.
+
+**Response:**
+```json
+{
+  "success": true,
+  "added": ["NewRule"],
+  "replaced": ["InferGrandparent"],
+  "rejected": [{"type": "if_then_rules", "name": "Broken", "reason": "Rule antecedent is required"}]
+}
+```
+
+#### Delete IF-THEN Rule
+
+```http
+POST /ontology/if-then/delete
 ```
 
 **Request Body:**
@@ -1815,10 +1858,10 @@ POST /ontology/swrl/delete
 }
 ```
 
-#### Validate SWRL Rule
+#### Validate IF-THEN Rule
 
 ```http
-POST /ontology/swrl/validate
+POST /ontology/if-then/validate
 ```
 
 **Request Body:**
@@ -2626,7 +2669,7 @@ Returns a `task_id` for progress polling via `GET /tasks/{task_id}/status`.
 
 ### Reasoning Endpoints
 
-Run OWL 2 RL inference and SWRL rule execution against the triple store.
+Run OWL 2 RL inference and IF-THEN rule execution against the triple store.
 
 #### Start Reasoning (Async)
 
@@ -2637,13 +2680,13 @@ POST /dtwin/reasoning/start
 **Request Body:**
 ```json
 {
-  "phases": ["tbox", "swrl", "structural"],
+  "phases": ["tbox", "if_then", "structural"],
   "materialize": true,
   "target_table": "catalog.schema.triples_inferred"
 }
 ```
 
-Returns a `task_id`. Reasoning runs OWL 2 RL T-Box closure, SWRL rules, and optional structural reasoning (transitivity, symmetry).
+Returns a `task_id`. Reasoning runs OWL 2 RL T-Box closure, IF-THEN rules, and optional structural reasoning (transitivity, symmetry).
 
 #### Get Inferred Triples
 
@@ -2662,7 +2705,7 @@ GET /dtwin/reasoning/inferred
       "predicate": "https://example.org/ontology#hasGrandparent",
       "object": "https://example.org/Person/P003",
       "rule": "InferGrandparent",
-      "phase": "swrl"
+      "phase": "if_then"
     }
   ]
 }

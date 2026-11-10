@@ -1206,7 +1206,7 @@ These have sensible **defaults** that you should **override** as needed:
 | `sync_from_remote(uc_path, volume_service)` | No-op | Same, for restore on cold start. |
 | `local_path()` | `None` | Your engine stores data locally. |
 | `remote_archive_path(uc_domain_path)` | `None` | Your engine has a remote archive naming convention. |
-| `get_query_translator(table_name)` | `SWRLSQLTranslator()` | Your engine needs a custom SWRL/rule translator for reasoning. |
+| `get_query_translator(table_name)` | `ShaclFlatSqlBackend()` | Your engine needs a custom rule translator for reasoning. |
 
 #### 2.3 Capability interfaces & the import boundary
 
@@ -1267,15 +1267,15 @@ Key decisions:
 
 1. **Query dialect**: If your engine speaks Cypher, set `supports_cypher = True`
    and `query_dialect = "cypher"`. Override the named query methods with native
-   Cypher implementations and ship a matching `SWRLCypherTranslator` (the SQL
+   Cypher implementations and ship a matching `IfThenCypherTranslator` (the SQL
    translator stays the default for SQL engines).
 
 2. **Graph model**: If your engine uses typed node/relationship tables, set
    `supports_graph_model = True` and implement `get_graph_schema()`. If it uses
    a flat triple table (like the shipped `FlatStore`), leave it `False`.
 
-3. **Reasoning translator**: Return the appropriate `SWRL*Translator` from
-   `get_query_translator()`. For SQL engines, the default `SWRLSQLTranslator`
+3. **Reasoning translator**: Return the appropriate rule backend from
+   `get_query_translator()`. For SQL engines, the default `ShaclFlatSqlBackend`
    works.
 
 4. **Sync**: If your engine stores data as local files, implement

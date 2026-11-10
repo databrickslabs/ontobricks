@@ -1,60 +1,3 @@
-/* Inference / reasoning panel (dtwin partial) */
-
-.reasoning-tile {
-    border: 1px solid var(--bs-border-color);
-    border-radius: .5rem;
-    padding: .75rem;
-    cursor: pointer;
-    transition: border-color .15s, box-shadow .15s, background-color .15s;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: .35rem;
-    min-height: 120px;
-    justify-content: center;
-    user-select: none;
-    position: relative;
-}
-
-.reasoning-tile:hover {
-    border-color: var(--bs-primary);
-    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .12);
-}
-
-.reasoning-tile.active {
-    border-color: var(--bs-primary);
-    background-color: rgba(var(--bs-primary-rgb), .06);
-    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .18);
-}
-
-.reasoning-tile .rt-icon {
-    font-size: 1.5rem;
-    line-height: 1;
-}
-
-.reasoning-tile .rt-check {
-    position: absolute;
-    top: .5rem;
-    right: .5rem;
-}
-
-.reasoning-tile .rt-title {
-    font-size: .78rem;
-    font-weight: 600;
-    line-height: 1.2;
-}
-
-.reasoning-tile .rt-badge {
-    font-size: .6rem;
-}
-
-.reasoning-tile .rt-desc {
-    font-size: .65rem;
-    color: var(--bs-secondary-color);
-    line-height: 1.3;
-}
-
 /* Shared micro typography (replaces repeated inline font-size on badges / captions) */
 .query-reasoning-fs-tiny {
     font-size: .65rem;
@@ -94,82 +37,6 @@
     width: 15%;
 }
 
-/* ── Per-rule expand toggle ──────────────────────────────── */
-
-.dq-rules-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: .25rem;
-    background: none;
-    border: 1px solid var(--bs-border-color);
-    border-radius: .375rem;
-    padding: .15rem .45rem;
-    font-size: .65rem;
-    color: var(--bs-secondary-color);
-    cursor: pointer;
-    transition: border-color .15s, color .15s;
-    margin-top: .25rem;
-}
-
-.dq-rules-toggle:hover {
-    border-color: var(--bs-primary);
-    color: var(--bs-primary);
-}
-
-.dq-rules-toggle:disabled {
-    opacity: .5;
-    cursor: not-allowed;
-}
-
-.dq-expand-chevron {
-    font-size: .6rem;
-    transition: transform .2s ease;
-}
-
-.dq-expand-chevron.dq-chevron-open {
-    transform: rotate(180deg);
-}
-
-/* ── Per-rule list container ─────────────────────────────── */
-
-.dq-rule-list {
-    border: 1px solid var(--bs-border-color);
-    border-top: none;
-    border-radius: 0 0 .5rem .5rem;
-    padding: .4rem .5rem;
-    background: var(--bs-body-bg);
-    max-height: 180px;
-    overflow-y: auto;
-}
-
-.dq-rule-item {
-    display: flex;
-    align-items: baseline;
-    gap: .4rem;
-    padding: .1rem 0;
-    font-size: .72rem;
-}
-
-.dq-rule-item .form-check-input {
-    flex-shrink: 0;
-    margin-top: .15rem;
-}
-
-.dq-rule-item .form-check-label {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: calc(100% - 1.4rem);
-    cursor: pointer;
-    color: var(--bs-body-color);
-}
-
-.dq-rule-item .dq-rule-family {
-    flex-shrink: 0;
-    font-size: .6rem;
-    padding: .1rem .3rem;
-}
-
 /* A failed check reports the engine's error, which runs long. Two lines keep
    the row scannable; the full text is on the cell's tooltip. */
 .dq-col-msg {
@@ -177,4 +44,190 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+/* ── Inference phase tree (partials/layout/_phase_tree.html) ─ */
+
+.ob-phase-tree {
+    border: 1px solid var(--db-border, var(--bs-border-color));
+    border-radius: var(--db-radius-control, .375rem);
+    background: var(--bs-body-bg);
+    overflow: hidden;
+}
+
+.ob-phase-tree.is-busy {
+    opacity: .6;
+}
+
+.ob-phase-tree-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .4rem .6rem;
+    border-bottom: 1px solid var(--db-border, var(--bs-border-color));
+    background: var(--bs-tertiary-bg);
+}
+
+.ob-phase-tree-caption {
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+.ob-tree,
+.ob-tree-children {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.ob-tree > .ob-tree-node + .ob-tree-node {
+    border-top: 1px solid var(--bs-border-color-translucent);
+}
+
+.ob-tree-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-height: 2.5rem;
+    padding: .4rem .6rem;
+    transition: background-color .15s, box-shadow .15s;
+}
+
+.ob-tree-row:hover {
+    background: rgba(var(--db-primary-rgb, var(--bs-primary-rgb)), .04);
+}
+
+.ob-tree > .ob-tree-node.is-on > .ob-tree-row {
+    box-shadow: inset 3px 0 0 var(--db-primary, var(--bs-primary));
+}
+
+.ob-tree-row .form-check-input {
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.ob-tree-twisty {
+    flex: 0 0 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: .25rem;
+    background: none;
+    color: var(--bs-secondary-color);
+}
+
+button.ob-tree-twisty:hover:not(:disabled) {
+    color: var(--db-primary, var(--bs-primary));
+    background: var(--bs-secondary-bg);
+}
+
+button.ob-tree-twisty:disabled {
+    visibility: hidden;
+}
+
+.ob-tree-twisty i {
+    font-size: .75rem;
+    transition: transform .15s ease;
+}
+
+.ob-tree-node[aria-expanded="true"] > .ob-tree-row .ob-tree-twisty i {
+    transform: rotate(90deg);
+}
+
+.ob-tree-label {
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.ob-tree-icon {
+    flex-shrink: 0;
+    align-self: center;
+    font-size: 1rem;
+}
+
+.ob-tree-title {
+    font-size: .85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Rule editor host (rule-editor-loader.js). The editor modals stay in layout
+   so Bootstrap can show them fullscreen; only the rule list markup inside the
+   host is hidden. Do not use display:none on the host itself. */
+#if-then-section.rule-editor-host > .content-section {
+    display: none;
+}
+
+.ob-tree-desc {
+    min-width: 0;
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ob-tree-badge {
+    flex-shrink: 0;
+    font-size: .68rem;
+    font-weight: 500;
+}
+
+.ob-tree-badge:empty {
+    display: none;
+}
+
+.ob-tree-children {
+    max-height: 260px;
+    overflow-y: auto;
+    padding-bottom: .35rem;
+}
+
+.ob-tree-children .ob-tree-row {
+    position: relative;
+    min-height: 1.9rem;
+    padding: .2rem .6rem .2rem 2.35rem;
+}
+
+.ob-tree-children .ob-tree-row::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1.2rem;
+    border-left: 1px dashed var(--bs-border-color);
+}
+
+.ob-tree-children .ob-tree-icon {
+    font-size: .85rem;
+    color: var(--bs-secondary-color);
+}
+
+.ob-tree-children .ob-tree-title {
+    font-size: .8rem;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 575.98px) {
+    .ob-tree-desc {
+        display: none;
+    }
 }

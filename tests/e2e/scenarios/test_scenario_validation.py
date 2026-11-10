@@ -345,10 +345,8 @@ class TestScenarioValidation:
             )
 
             rule_counts = {
-                "swrl": _first_list_len(get("/ontology/swrl/list")),
-                "decision_tables": _first_list_len(get("/ontology/rules/decision_tables/list")),
+                "if_then": _first_list_len(get("/ontology/if-then/list")),
                 "sparql": _first_list_len(get("/ontology/rules/sparql_rules/list")),
-                "aggregate": _first_list_len(get("/ontology/rules/aggregate_rules/list")),
             }
             total_rules = sum(rule_counts.values())
             # Soft: the agent legitimately proposes zero rules on some runs.

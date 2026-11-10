@@ -52,8 +52,8 @@ class Ontology:
         """Run ``agent_business_rules_generator`` for this project (blocking).
 
         Feeds the live ontology design (classes/attributes + relationships) and
-        the domain's uploaded documents to the agent, which proposes SWRL,
-        decision-table, SPARQL, and aggregate rules for the user to review.
+        the domain's uploaded documents to the agent, which proposes Simple
+        (IF-THEN) and Complex (SPARQL CONSTRUCT) rules for the user to review.
 
         Typical use: call from a background thread; poll task status from HTTP.
         """
@@ -366,36 +366,24 @@ class Ontology:
         }
 
     @staticmethod
-    def validate_swrl_rule(rule: Dict[str, Any]) -> List[str]:
-        return Rules.validate_swrl_rule(rule)
+    def validate_if_then_rule(rule: Dict[str, Any]) -> List[str]:
+        return Rules.validate_if_then_rule(rule)
 
-    _SWRL_ATOM_RE = Rules._SWRL_ATOM_RE
+    _IF_THEN_ATOM_RE = Rules._IF_THEN_ATOM_RE
 
-    _SWRL_BUILTIN_PREFIXES = Rules._SWRL_BUILTIN_PREFIXES
+    _IF_THEN_BUILTIN_PREFIXES = Rules._IF_THEN_BUILTIN_PREFIXES
 
     @staticmethod
-    def swrl_reference_errors(
+    def if_then_reference_errors(
         rule: Dict[str, Any],
         class_names: Set[str],
         property_names: Set[str],
     ) -> List[str]:
-        return Rules.swrl_reference_errors(rule, class_names, property_names)
+        return Rules.if_then_reference_errors(rule, class_names, property_names)
 
     @staticmethod
     def _ref_local_name(term: str):
         return Rules._ref_local_name(term)
-
-    @staticmethod
-    def decision_table_reference_errors(
-        rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
-    ) -> List[str]:
-        return Rules.decision_table_reference_errors(rule, class_names, property_names)
-
-    @staticmethod
-    def aggregate_reference_errors(
-        rule: Dict[str, Any], class_names: Set[str], property_names: Set[str]
-    ) -> List[str]:
-        return Rules.aggregate_reference_errors(rule, class_names, property_names)
 
     @staticmethod
     def sparql_reference_errors(
@@ -463,12 +451,12 @@ class Ontology:
     def generate_owl(
         data,
         constraints=None,
-        swrl_rules=None,
+        if_then_rules=None,
         axioms=None,
         expressions=None,
         groups=None,
     ):
-        return Owl.generate_owl(data, constraints, swrl_rules, axioms, expressions, groups)
+        return Owl.generate_owl(data, constraints, if_then_rules, axioms, expressions, groups)
 
     @staticmethod
     def parse_owl(content, extract_advanced=True):
@@ -503,14 +491,14 @@ class Ontology:
         classes: list,
         properties: list,
         constraints: list,
-        swrl_rules: list,
+        if_then_rules: list,
         axioms: list,
         expressions: list = None,
         *,
         groups: list = None,
         name_fallback_to_domain: bool = True,
     ) -> str:
-        return Import(self._domain).apply_parsed_owl_to_domain(ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, groups=groups, name_fallback_to_domain=name_fallback_to_domain)
+        return Import(self._domain).apply_parsed_owl_to_domain(ontology_info, classes, properties, constraints, if_then_rules, axioms, expressions, groups=groups, name_fallback_to_domain=name_fallback_to_domain)
 
     def build_import_owl_success_payload(
         self,
@@ -526,23 +514,23 @@ class Ontology:
         classes: list,
         properties: list,
         constraints: list,
-        swrl_rules: list,
+        if_then_rules: list,
         axioms: list,
         expressions: list = None,
         resolved_name: str = "",
     ) -> Dict[str, Any]:
-        return Import(self._domain).build_parse_owl_success_payload(ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, resolved_name)
+        return Import(self._domain).build_parse_owl_success_payload(ontology_info, classes, properties, constraints, if_then_rules, axioms, expressions, resolved_name)
 
     def build_load_owl_file_success_payload(
         self,
         classes: list,
         properties: list,
         constraints: list,
-        swrl_rules: list,
+        if_then_rules: list,
         axioms: list,
         expressions: list = None,
     ) -> Dict[str, Any]:
-        return Import(self._domain).build_load_owl_file_success_payload(classes, properties, constraints, swrl_rules, axioms, expressions)
+        return Import(self._domain).build_load_owl_file_success_payload(classes, properties, constraints, if_then_rules, axioms, expressions)
 
     @staticmethod
     def _turtle_to_camel(words: list, is_pascal: bool) -> str:

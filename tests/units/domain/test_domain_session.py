@@ -398,7 +398,7 @@ class TestGenerateDraftIntegration:
                             "classes": [],
                             "properties": [],
                             "constraints": [],
-                            "swrl_rules": [],
+                            "if_then_rules": [],
                             "axioms": [],
                             "expressions": [],
                         },
@@ -471,7 +471,7 @@ class TestExportImport:
                         "classes": [{"name": "Imp"}],
                         "properties": [],
                         "constraints": [],
-                        "swrl_rules": [],
+                        "if_then_rules": [],
                         "axioms": [],
                         "expressions": [],
                     },
@@ -596,7 +596,7 @@ class TestExportImport:
                 "1": {
                     "ontology": {
                         "name": "O", "base_uri": "http://x#", "classes": [],
-                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "properties": [], "constraints": [], "if_then_rules": [],
                         "axioms": [], "expressions": [],
                     },
                     "assignment": {"entities": [], "relationships": []},
@@ -616,7 +616,7 @@ class TestExportImport:
                 "1": {
                     "ontology": {
                         "name": "O", "base_uri": "http://x#", "classes": [],
-                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "properties": [], "constraints": [], "if_then_rules": [],
                         "axioms": [], "expressions": [],
                     },
                     "assignment": {"entities": [], "relationships": []},
@@ -635,7 +635,7 @@ class TestExportImport:
                 "1": {
                     "ontology": {
                         "name": "O", "base_uri": "http://x#", "classes": [],
-                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "properties": [], "constraints": [], "if_then_rules": [],
                         "axioms": [], "expressions": [],
                     },
                     "assignment": {"entities": [], "relationships": []},
@@ -660,7 +660,7 @@ class TestExportImport:
                         "classes": [{"name": "Imp"}],
                         "properties": [],
                         "constraints": [],
-                        "swrl_rules": [],
+                        "if_then_rules": [],
                         "axioms": [],
                         "expressions": [],
                     },
@@ -690,7 +690,7 @@ class TestExportImport:
                         "classes": [{"name": "CustomerV1"}],
                         "properties": [],
                         "constraints": [],
-                        "swrl_rules": [],
+                        "if_then_rules": [],
                         "axioms": [],
                         "expressions": [],
                     },
@@ -704,7 +704,7 @@ class TestExportImport:
                         "classes": [{"name": "CustomerV2"}],
                         "properties": [],
                         "constraints": [],
-                        "swrl_rules": [],
+                        "if_then_rules": [],
                         "axioms": [],
                         "expressions": [],
                     },
@@ -731,7 +731,7 @@ class TestLegacyMigration:
                     "properties": [],
                 },
                 "constraints": [{"type": "functional", "property": "p"}],
-                "swrl_rules": [],
+                "if_then_rules": [],
                 "axioms": [],
             },
         )

@@ -52,11 +52,10 @@ def _doc(with_mapping: bool = True) -> dict:
                     ],
                     "properties": [],
                     "constraints": [],
-                    "swrl_rules": [{"name": "r1", "body": "Customer(?x)"}],
+                    "if_then_rules": [{"name": "r1", "body": "Customer(?x)"}],
                     "axioms": [],
                     "expressions": [],
                     "groups": [],
-                    "decision_tables": [],
                 },
                 "assignment": {"entities": entities, "relationships": []},
                 "design_layout": {
@@ -140,8 +139,7 @@ class TestSplitMerge:
             "manifest.json",
             "info.json",
             "ontology/ontology.json",
-            "ontology/rules/swrl.json",
-            "ontology/rules/decision_tables.json",
+            "ontology/rules/if_then.json",
             "mapping/assignment.json",
             "layout/design.json",
             "layout/map.json",
@@ -150,7 +148,7 @@ class TestSplitMerge:
             "metadata/tables.json",
         ):
             assert rel in files, rel
-        assert "swrl_rules" not in json.loads(files["ontology/ontology.json"])
+        assert "if_then_rules" not in json.loads(files["ontology/ontology.json"])
 
     def test_secrets_and_volatile_fields_are_stripped(self):
         files, _ = DomainRepoLayout.split_version(_doc(), "Sales", "2")

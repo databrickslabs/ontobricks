@@ -1,5 +1,5 @@
-"""Reasoning service — orchestrates T-Box, SWRL, Graph, Constraint,
-Decision Table, SPARQL CONSTRUCT, and Aggregate rule phases."""
+"""Reasoning service — orchestrates T-Box, IF-THEN, Graph, Constraint, and
+SPARQL CONSTRUCT rule phases."""
 
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -18,14 +18,15 @@ class ReasoningService:
     Phases (in order):
 
     - **T-Box** — OWL 2 RL closure via owlrl on the ontology graph.
-    - **SWRL** — Rule execution (violation and materialisation) on the
-      triple-store backend (SQL or Cypher).  Supports built-in predicates
-      (comparison, math, string, date) and negated atoms (closed-world).
+    - **IF-THEN** — IF/THEN rules authored in the UI, transpiled to canonical
+      SHACL-AF rules (``sh:TripleRule`` / ``sh:SPARQLRule``) and executed by
+      :class:`ShaclRuleEngine` on the triple-store backend (SQL or Cypher).
+      Supports built-in predicates (comparison, math, string, date) and
+      negated atoms (closed-world).  Provenance and stats are unchanged.
     - **Graph** — Structural reasoning (transitive closure, symmetric
       expansion, etc.).
-    - **Decision Tables** — DMN-style tabular business rules.
-    - **SPARQL Rules** — SPARQL CONSTRUCT inference rules.
-    - **Aggregate Rules** — GROUP BY / HAVING statistical rules.
+    - **SPARQL Rules** — Complex rules: SPARQL CONSTRUCT queries compiled
+      to SQL by :class:`SparqlConstructCompiler` (fail-closed subset).
 
     .. note::
 
@@ -119,18 +120,16 @@ class ReasoningService:
         inf_limit = opts.get("inference_limit") or None
 
         # Per-rule name filters (None = run all rules in that phase)
-        swrl_names = opts.get("swrl_rule_names") or None
-        dt_names = opts.get("decision_table_names") or None
+        if_then_names = opts.get("if_then_rule_names") or None
         sparql_names = opts.get("sparql_rule_names") or None
-        agg_names = opts.get("aggregate_rule_names") or None
 
         phases = [
             ("tbox", "tbox", True, lambda: self.run_tbox_reasoning(), True, {}),
             (
-                "swrl",
-                "swrl",
+                "if_then",
+                "if_then",
                 True,
-                lambda rn=swrl_names: self.run_swrl_rules(
+                lambda rn=if_then_names: self.run_if_then_rules(
                     materialize=mat,
                     inference_limit=inf_limit,
                     progress_callback=progress_callback,
@@ -138,35 +137,23 @@ class ReasoningService:
                 ),
                 True,
                 {
-                    "rules_count": "swrl_rules_count",
-                    "errors": "swrl_errors",
-                    "error_details": "swrl_error_details",
+                    "rules_count": "if_then_rules_count",
+                    "errors": "if_then_errors",
+                    "error_details": "if_then_error_details",
                 },
             ),
             ("graph", "graph", True, lambda: self.run_graph_reasoning(opts), False, {}),
             (
-                "decision_tables",
-                "decision_tables",
-                False,
-                lambda rn=dt_names: self.run_decision_tables(materialize=mat, rule_names=rn),
-                False,
-                {"tables_count": "decision_tables_count"},
-            ),
-            (
                 "sparql_rules",
                 "sparql_rules",
                 False,
-                lambda rn=sparql_names: self.run_sparql_rules(materialize=mat, rule_names=rn),
+                lambda rn=sparql_names: self.run_sparql_rules(rule_names=rn),
                 True,
-                {"rules_count": "sparql_rules_count"},
-            ),
-            (
-                "aggregate_rules",
-                "aggregate_rules",
-                False,
-                lambda rn=agg_names: self.run_aggregate_rules(materialize=mat, rule_names=rn),
-                False,
-                {"rules_count": "aggregate_rules_count"},
+                {
+                    "rules_count": "sparql_rules_count",
+                    "errors": "sparql_rules_errors",
+                    "error_details": "sparql_rules_error_details",
+                },
             ),
         ]
 
@@ -223,7 +210,7 @@ class ReasoningService:
         reasoner = OWLRLReasoner()
         return reasoner.compute_closure(owl_content)
 
-    def run_swrl_rules(
+    def run_if_then_rules(
         self,
         materialize: bool = False,
         inference_limit: Optional[int] = None,
@@ -231,37 +218,37 @@ class ReasoningService:
         rule_names: Optional[set] = None,
         focus: Optional[Dict[str, Any]] = None,
     ) -> ReasoningResult:
-        """Execute SWRL rules against the triple store.
+        """Execute IF-THEN rules against the triple store.
 
         *focus* (``{"vars": [...], "uri": "..."}``) restricts inference to the
         triples involving a single entity.
         """
-        rules = self._get_swrl_rules()
+        rules = self._get_if_then_rules()
         if rule_names:
             rules = [r for r in rules if r.get("name") in rule_names]
         if not rules:
             return ReasoningResult(
                 stats={
-                    "phase": "swrl",
+                    "phase": "if_then",
                     "skipped": True,
-                    "reason": "No SWRL rules defined in ontology",
+                    "reason": "No IF-THEN rules defined in ontology",
                 }
             )
 
         if self._store is None:
-            logger.warning("No triple-store backend for SWRL execution")
+            logger.warning("No triple-store backend for IF-THEN execution")
             return ReasoningResult(
                 stats={
-                    "phase": "swrl",
+                    "phase": "if_then",
                     "skipped": True,
                     "reason": "No triple-store backend available",
                 }
             )
 
-        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
+        from back.core.reasoning.shacl_rules.ShaclRuleEngine import ShaclRuleEngine
 
         ontology = self._get_ontology_dict()
-        engine = SWRLEngine(ontology=ontology)
+        engine = ShaclRuleEngine(ontology=ontology)
         table_name = self._get_graph_name()
         return engine.execute_rules(
             rules,
@@ -396,46 +383,7 @@ class ReasoningService:
             }
         )
 
-    def run_decision_tables(
-        self, materialize: bool = False, rule_names: Optional[set] = None
-    ) -> ReasoningResult:
-        """Execute decision tables against the triple store."""
-        ontology = self._get_ontology_dict()
-        tables = ontology.get("decision_tables", [])
-        if rule_names:
-            tables = [t for t in tables if t.get("name") in rule_names]
-        if not tables:
-            return ReasoningResult(
-                stats={
-                    "phase": "decision_tables",
-                    "skipped": True,
-                    "reason": "No decision tables defined",
-                }
-            )
-        if self._store is None:
-            return ReasoningResult(
-                stats={
-                    "phase": "decision_tables",
-                    "skipped": True,
-                    "reason": "No triple-store backend available",
-                }
-            )
-
-        from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
-
-        engine = DecisionTableEngine()
-        table_name = self._get_graph_name()
-        return engine.execute_tables(
-            tables,
-            self._store,
-            table_name,
-            ontology,
-            materialize=materialize,
-        )
-
-    def run_sparql_rules(
-        self, materialize: bool = False, rule_names: Optional[set] = None
-    ) -> ReasoningResult:
+    def run_sparql_rules(self, rule_names: Optional[set] = None) -> ReasoningResult:
         """Execute SPARQL CONSTRUCT rules against the triple store."""
         ontology = self._get_ontology_dict()
         rules = ontology.get("sparql_rules", [])
@@ -462,50 +410,7 @@ class ReasoningService:
 
         engine = SPARQLRuleEngine()
         table_name = self._get_graph_name()
-        return engine.execute_rules(
-            rules,
-            self._store,
-            table_name,
-            ontology,
-            materialize=materialize,
-        )
-
-    def run_aggregate_rules(
-        self, materialize: bool = False, rule_names: Optional[set] = None
-    ) -> ReasoningResult:
-        """Execute aggregate rules against the triple store."""
-        ontology = self._get_ontology_dict()
-        rules = ontology.get("aggregate_rules", [])
-        if rule_names:
-            rules = [r for r in rules if r.get("name") in rule_names]
-        if not rules:
-            return ReasoningResult(
-                stats={
-                    "phase": "aggregate_rules",
-                    "skipped": True,
-                    "reason": "No aggregate rules defined",
-                }
-            )
-        if self._store is None:
-            return ReasoningResult(
-                stats={
-                    "phase": "aggregate_rules",
-                    "skipped": True,
-                    "reason": "No triple-store backend available",
-                }
-            )
-
-        from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
-
-        engine = AggregateRuleEngine()
-        table_name = self._get_graph_name()
-        return engine.execute_rules(
-            rules,
-            self._store,
-            table_name,
-            ontology,
-            materialize=materialize,
-        )
+        return engine.execute_rules(rules, self._store, table_name, ontology)
 
     def materialize_inferred(self, result: ReasoningResult) -> int:
         """Insert inferred triples into the triplestore.
@@ -582,12 +487,12 @@ class ReasoningService:
         data = getattr(self._domain, "_data", {})
         return data.get("generated", {}).get("owl", "")
 
-    def _get_swrl_rules(self) -> List[Dict]:
-        rules = getattr(self._domain, "swrl_rules", None)
+    def _get_if_then_rules(self) -> List[Dict]:
+        rules = getattr(self._domain, "if_then_rules", None)
         if rules:
             return list(rules)
         ontology = self._get_ontology_dict()
-        return list(ontology.get("swrl_rules") or [])
+        return list(ontology.get("if_then_rules") or [])
 
     def _get_ontology_dict(self) -> Dict:
         ontology = getattr(self._domain, "ontology", None)
@@ -613,7 +518,7 @@ class ReasoningService:
     ) -> str:
         """Normalize a property URI to the data namespace used by R2RML.
 
-        Mirrors the logic in ``SWRLEngine._build_uri_map`` so that
+        Mirrors the logic in ``shacl_rules.rule_uri_map.build_uri_map`` so that
         predicate URIs match those stored in the triple store.
         """
         if not uri and name:

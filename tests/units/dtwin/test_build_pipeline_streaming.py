@@ -380,7 +380,7 @@ class TestCollectDomainStats:
             "relationships": [{"excluded": False}],
         }
         stats = collect_domain_stats(
-            ontology, assignment, swrl_rules=[{"r": 1}], axioms=[], shacl_shapes=[{}]
+            ontology, assignment, if_then_rules=[{"r": 1}], axioms=[], shacl_shapes=[{}]
         )
 
         assert stats["ontology"] == {
@@ -389,7 +389,7 @@ class TestCollectDomainStats:
             "object_properties": 2,
             "attributes": 1,
             "constraints": 1,
-            "swrl_rules": 1,
+            "if_then_rules": 1,
             "axioms": 0,
             "shacl_shapes": 1,
         }

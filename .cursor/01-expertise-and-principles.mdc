@@ -42,7 +42,7 @@ section; they do not restate it.
 - Prefer **iteration and modularization** over code duplication.
 - Use descriptive variable names with auxiliary verbs (e.g., `is_active`, `has_permission`).
 - Follow proper **naming conventions**:
-  - Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `SWRLSQLTranslator.py`).
+  - Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `ShaclFlatSqlBackend.py`).
   - Python files without a primary class: **lowercase with underscores** (e.g., `constants.py`, `uri_helpers.py`). Record files are named after their aggregate root (`ConflictReport.py`), not `models.py`.
   - CSS/JS assets: lowercase with dashes, organised by feature area under `front/static/`.
 

@@ -43,7 +43,7 @@ function _initSectionByName(section) {
         updateClassesList();
     } else if (section === 'relationships' && typeof updatePropertiesList === 'function') {
         updatePropertiesList();
-    } else if (section === 'swrl' && typeof BusinessRulesModule !== 'undefined') {
+    } else if (section === 'if-then' && typeof BusinessRulesModule !== 'undefined') {
         BusinessRulesModule.init();
     } else if (section === 'dataquality' && typeof DataQualityModule !== 'undefined') {
         DataQualityModule.init();

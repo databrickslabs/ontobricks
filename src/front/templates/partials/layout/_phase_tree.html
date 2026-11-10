@@ -1,0 +1,64 @@
+{#
+  Generic icon tree: Graph → Inference, Simulation → Reasoning, Graph → Data quality.
+  Behaviour lives in PhaseTree (global/js/phase-tree.js); rule rows are rendered client-side.
+
+  Context (pass with {% with %}):
+    tree_id       id of the root element
+    tree_caption  toolbar caption
+    tree_nodes    list of node dicts:
+                    key, title, desc, icon, tone, input_id,
+                    checked (bool), locked (bool), expandable (bool),
+                    leaf_icon (rule icon, expandable only),
+                    badge (text, optional), badge_cls (optional)
+#}
+<div class="ob-phase-tree" id="{{ tree_id }}">
+    <div class="ob-phase-tree-toolbar">
+        <span class="ob-phase-tree-caption"><i class="bi bi-diagram-2 me-1"></i>{{ tree_caption }}</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="{{ tree_caption }} actions">
+            <button type="button" class="btn btn-outline-secondary" data-tree-action="all" title="Select all">
+                <i class="bi bi-check2-all"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-tree-action="none" title="Unselect all">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-tree-action="expand" title="Expand all">
+                <i class="bi bi-arrows-expand"></i>
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-tree-action="collapse" title="Collapse all">
+                <i class="bi bi-arrows-collapse"></i>
+            </button>
+        </div>
+    </div>
+    <ul class="ob-tree" role="tree" aria-label="{{ tree_caption }}">
+        {% for p in tree_nodes %}
+        {% set _on = p.checked and not p.locked %}
+        <li class="ob-tree-node{% if _on %} is-on{% endif %}" role="treeitem" data-tree-node="{{ p.key }}"
+            {% if p.expandable %}aria-expanded="false"{% endif %}>
+            <div class="ob-tree-row">
+                {% if p.expandable %}
+                <button type="button" class="ob-tree-twisty" data-tree-toggle="{{ p.key }}"
+                        aria-label="Show {{ p.title|lower }} rules" disabled>
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                {% else %}
+                <span class="ob-tree-twisty" aria-hidden="true"></span>
+                {% endif %}
+                <input class="form-check-input" type="checkbox" id="{{ p.input_id }}" data-phase="{{ p.key }}"
+                       {% if _on %}checked{% endif %}{% if p.locked %} disabled data-tree-locked{% endif %}>
+                <label class="ob-tree-label" for="{{ p.input_id }}">
+                    <i class="bi {{ p.icon }} ob-tree-icon {{ p.tone }}"></i>
+                    <span class="ob-tree-title">{{ p.title }}</span>
+                    <span class="ob-tree-desc">{{ p.desc }}</span>
+                </label>
+                {% if p.badge or p.expandable %}
+                <span class="badge {{ p.badge_cls or 'text-bg-secondary' }} ob-tree-badge"{% if p.expandable %} data-tree-count="{{ p.key }}"{% endif %}>{{ p.badge or '' }}</span>
+                {% endif %}
+            </div>
+            {% if p.expandable %}
+            <ul class="ob-tree-children" role="group" data-tree-children="{{ p.key }}"
+                data-leaf-icon="{{ p.leaf_icon }}" hidden></ul>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>

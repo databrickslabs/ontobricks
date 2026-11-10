@@ -839,7 +839,7 @@ Content-Type: application/json
             </div>
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
-                    Start OWL 2 RL inference, SWRL rule execution, graph reasoning,
+                    Start OWL 2 RL inference, IF-THEN rule execution, graph reasoning,
                     and constraint checking as an asynchronous task. Each phase can be toggled independently.
                     Optionally append inferred triples to the graph viewer or materialise to a Delta table.
                     Returns a <code>task_id</code> to poll progress via <code>GET /inference/{task_id}</code>.
@@ -858,7 +858,7 @@ Content-Type: application/json
                     <thead class="text-muted"><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
                     <tbody>
                         <tr><td><code>tbox</code></td><td>boolean</td><td><code>true</code></td><td>Run T-Box (OWL 2 RL) inference</td></tr>
-                        <tr><td><code>swrl</code></td><td>boolean</td><td><code>true</code></td><td>Run SWRL rule execution</td></tr>
+                        <tr><td><code>if_then</code></td><td>boolean</td><td><code>true</code></td><td>Run IF-THEN rule execution</td></tr>
                         <tr><td><code>graph</code></td><td>boolean</td><td><code>true</code></td><td>Run graph-structural reasoning</td></tr>
                         <tr><td><code>constraints</code></td><td>boolean</td><td><code>true</code></td><td>Run constraint checks</td></tr>
                         <tr><td><code>append_graph</code></td><td>boolean</td><td><code>false</code></td><td>Append inferred triples to the graph viewer</td></tr>
@@ -873,7 +873,7 @@ Content-Type: application/json
 
 {
   "tbox": true,
-  "swrl": true,
+  "if_then": true,
   "graph": true,
   "constraints": true,
   "append_graph": false,
@@ -884,7 +884,7 @@ Content-Type: application/json
 <pre class="small mb-2"><code>{
   "success": true,
   "task_id": "rs-xyz789",
-  "message": "Inference started (phases: tbox, swrl, graph, constraints)"
+  "message": "Inference started (phases: tbox, if_then, graph, constraints)"
 }</code></pre>
             </div>
         </div>
@@ -923,7 +923,7 @@ Content-Type: application/json
     "violations_count": 3,
     "stats": {
       "tbox_duration": 1.2,
-      "swrl_duration": 0.8,
+      "if_then_duration": 0.8,
       "graph_duration": 0.5,
       "constraints_duration": 0.3
     }
@@ -1052,7 +1052,7 @@ Content-Type: application/json
                         <tr><td><code>description</code></td><td>string</td><td>""</td><td>General-tab prose</td></tr>
                         <tr><td><code>scope</code></td><td>object</td><td>{}</td><td><code>type</code>, <code>focus</code>, <code>hops</code></td></tr>
                         <tr><td><code>patches</code></td><td>array</td><td>[]</td><td>Hypothetical facts</td></tr>
-                        <tr><td><code>phases</code></td><td>object</td><td>{}</td><td>Reasoning phases (<code>swrl</code>, <code>graph</code>, …)</td></tr>
+                        <tr><td><code>phases</code></td><td>object</td><td>{}</td><td>Reasoning phases (<code>if_then</code>, <code>graph</code>, …)</td></tr>
                     </tbody>
                 </table>
                 <h6 class="small fw-semibold mb-1">Sample Request</h6>

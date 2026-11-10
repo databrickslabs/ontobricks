@@ -1877,7 +1877,7 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-table', 'Datasets', dsBody);
         }
 
-        // Behaviour: UC functions, jobs, and SWRL rules — one section.
+        // Behaviour: UC functions, jobs, and IF-THEN rules — one section.
         var nodeActions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
         var nodeRules = (classInfo && classInfo.businessRules) || [];
         var behaviourBody = '';

@@ -486,7 +486,7 @@ async function showEntityDetails(entity) {
         `;
     }
 
-    // Behaviour: UC functions, jobs, SWRL rules, and what-if — one section.
+    // Behaviour: UC functions, jobs, IF-THEN rules, and what-if — one section.
     const actions = entityMapping?.actions || classInfo?.actions || [];
     const businessRules = classInfo?.businessRules || [];
     let behaviourBody = '';

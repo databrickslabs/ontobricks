@@ -8,7 +8,10 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from back.core.logging import get_logger
-from back.core.w3c import OntologyGenerator, OntologyParser
+# Import from the OWL submodule, not the back.core.w3c barrel: the barrel
+# re-exports these while its own __init__ is still running, and a top-level
+# import from the barrel re-enters that incomplete package.
+from back.core.w3c.owl import OntologyGenerator, OntologyParser
 from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
@@ -30,7 +33,7 @@ class Owl:
             "classes": len(config.get("classes", [])),
             "properties": len(config.get("properties", [])),
             "constraints": len(config.get("constraints", [])),
-            "swrl_rules": len(config.get("swrl_rules", [])),
+            "if_then_rules": len(config.get("if_then_rules", [])),
             "axioms": len(config.get("axioms", [])),
             "expressions": len(config.get("expressions", [])),
         }
@@ -46,7 +49,7 @@ class Owl:
     def generate_owl(
         data,
         constraints=None,
-        swrl_rules=None,
+        if_then_rules=None,
         axioms=None,
         expressions=None,
         groups=None,
@@ -56,7 +59,7 @@ class Owl:
         Args:
             data: dict with base_uri, name, classes, properties
             constraints: list of property constraints (optional)
-            swrl_rules: list of SWRL rules (optional)
+            if_then_rules: list of IF-THEN rules (optional)
             axioms: list of OWL axioms (optional)
             expressions: list of OWL class expressions (optional)
             groups: list of entity group definitions (optional)
@@ -71,7 +74,7 @@ class Owl:
             properties=data.get("properties", []),
             label_lang=data.get("label_lang"),
             constraints=constraints,
-            swrl_rules=swrl_rules,
+            if_then_rules=if_then_rules,
             axioms=axioms,
             expressions=expressions,
             groups=groups,
@@ -85,11 +88,11 @@ class Owl:
 
         Args:
             content: OWL/Turtle content
-            extract_advanced: If True, also extract constraints, SWRL rules, axioms, expressions, and groups
+            extract_advanced: If True, also extract constraints, IF-THEN rules, axioms, expressions, and groups
 
         Returns:
             tuple: (ontology_info, classes, properties) or
-                   (ontology_info, classes, properties, constraints, swrl_rules, axioms, expressions, groups)
+                   (ontology_info, classes, properties, constraints, if_then_rules, axioms, expressions, groups)
                    if extract_advanced=True
         """
         parser = OntologyParser(content)
@@ -102,7 +105,7 @@ class Owl:
 
         if extract_advanced:
             constraints = parser.get_constraints()
-            swrl_rules = parser.get_swrl_rules()
+            if_then_rules = parser.get_if_then_rules()
             split = parser.get_axioms_and_expressions()
             groups = parser.get_groups()
             return (
@@ -110,7 +113,7 @@ class Owl:
                 classes,
                 properties,
                 constraints,
-                swrl_rules,
+                if_then_rules,
                 split["axioms"],
                 split["expressions"],
                 groups,

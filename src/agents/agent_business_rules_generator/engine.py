@@ -3,14 +3,12 @@ OntoBricks Business Rules Generator Agent Engine.
 
 Implements an agentic loop that uses the Databricks Foundation Model API with
 function calling to autonomously gather context (ontology design + uploaded
-documents) and propose business rules across four paradigms:
+documents) and propose business rules across two paradigms:
 
-  * SWRL rules            (IF/THEN antecedent → consequent)
-  * Decision tables       (tabular condition → action)
+  * IF-THEN rules         (IF/THEN antecedent → consequent)
   * SPARQL CONSTRUCT rules (graph-pattern inference)
-  * Aggregate rules       (GROUP BY / HAVING statistical conditions)
 
-The agent emits a single JSON object with the four rule lists as its final
+The agent emits a single JSON object with the two rule lists as its final
 text answer (mirrors ``agent_owl_generator`` which emits Turtle). The engine
 parses and normalises it; the route then validates each rule and lets the
 user review/accept before persistence.
@@ -48,8 +46,10 @@ LLM_TIMEOUT = 180
 
 _TRACE_NAME = "business_rules_generator"
 
-# Rule-list keys the agent produces, in the order they are presented.
-_RULE_KEYS = ("swrl_rules", "decision_tables", "sparql_rules", "aggregate_rules")
+# Rule lists the agent produces, as (wire key, AgentResult field). The wire key
+# is part of the prompt contract: renaming it needs an eval run first
+# (.cursor/12-ai-feature-lifecycle.mdc).
+_RULE_KEYS = (("swrl_rules", "if_then_rules"), ("sparql_rules", "sparql_rules"))
 
 
 # =====================================================
@@ -62,22 +62,15 @@ class AgentResult:
     """Outcome of a full business-rules generation run."""
 
     success: bool
-    swrl_rules: List[dict] = field(default_factory=list)
-    decision_tables: List[dict] = field(default_factory=list)
+    if_then_rules: List[dict] = field(default_factory=list)
     sparql_rules: List[dict] = field(default_factory=list)
-    aggregate_rules: List[dict] = field(default_factory=list)
     steps: List[AgentStep] = field(default_factory=list)
     iterations: int = 0
     error: str = ""
     usage: Dict[str, int] = field(default_factory=dict)
 
     def total_rules(self) -> int:
-        return (
-            len(self.swrl_rules)
-            + len(self.decision_tables)
-            + len(self.sparql_rules)
-            + len(self.aggregate_rules)
-        )
+        return len(self.if_then_rules) + len(self.sparql_rules)
 
 
 # =====================================================
@@ -103,7 +96,7 @@ anything yourself.
 2. Call list_documents, then read the relevant ones to find business logic,
    thresholds, classifications, and constraints worth encoding as rules.
 3. Output ONLY a single JSON object (no prose, no markdown fences) with the
-   four rule lists described below. Use ONLY class/property names that exist
+   two rule lists described below. Use ONLY class/property names that exist
    in the ontology design. If a rule type does not apply, return an empty list
    for it. Aim for quality over quantity (typically 1–6 rules per applicable
    type).
@@ -119,20 +112,6 @@ anything yourself.
       "enabled": true
     }
   ],
-  "decision_tables": [
-    {
-      "name": "RiskTier",
-      "target_class": "Account",
-      "hit_policy": "first",            // "first" | "all" | "unique"
-      "row_logic": "and",               // "and" = all conditions in a row, "or"
-      "input_columns": [ { "property": "balance", "label": "Balance" } ],
-      "output_column": { "property": "riskTier", "action": "set", "value": "" },
-      "rows": [
-        { "conditions": [ { "op": "gt", "value": "100000" } ], "action_value": "high" }
-      ],
-      "enabled": true
-    }
-  ],
   "sparql_rules": [
     {
       "name": "FlagBigOrder",
@@ -140,32 +119,12 @@ anything yourself.
       "query": "CONSTRUCT { ?o a :LargeOrder } WHERE { ?o a :Order . ?o :total ?t . FILTER(?t > 10000) }",
       "enabled": true
     }
-  ],
-  "aggregate_rules": [
-    {
-      "name": "FrequentBuyer",
-      "target_class": "Customer",
-      "group_by_property": "placesOrder",
-      "aggregate_property": "",
-      "aggregate_function": "count",    // count | sum | avg | min | max
-      "operator": "gte",                // lt | gt | eq | lte | gte | neq
-      "threshold": "10",
-      "result_class": "FrequentBuyer",
-      "enabled": true
-    }
   ]
 }
 
 # RULES OF THUMB
-• Decision tables: every row's "conditions" array MUST have exactly one entry
-  per input column, in the same order. Decision-table condition operators:
-  eq, neq, gt, gte, lt, lte, startsWith, endsWith, contains (use "any" to skip
-  a column in a row).
 • SPARQL rules MUST be a CONSTRUCT { ... } WHERE { ... } query. Prefix-less
   local names (e.g. :Order, :total) resolve against the domain base URI.
-• Aggregate rules: aggregate_function ∈ {count, sum, avg, min, max};
-  operator ∈ {lt, gt, eq, lte, gte, neq}. For count you may leave
-  aggregate_property empty. Provide a result_class to classify matches.
 • SWRL antecedent/consequent are space-separated atoms joined with " ^ ".
 • SWRL — the consequent MUST be semantically tied to the antecedent:
   - Every variable used in the consequent MUST be bound in the antecedent.
@@ -251,13 +210,13 @@ def _extract_json_object(text: str) -> Optional[dict]:
 
 
 def _normalise_result(parsed: dict, result: AgentResult) -> None:
-    """Copy the four rule lists from *parsed* onto *result* (defensive)."""
-    for key in _RULE_KEYS:
-        value = parsed.get(key, [])
+    """Copy the rule lists from *parsed* onto *result* (defensive)."""
+    for wire_key, field_name in _RULE_KEYS:
+        value = parsed.get(wire_key, [])
         rules = [r for r in value if isinstance(r, dict)] if isinstance(value, list) else []
         for r in rules:
             r.setdefault("enabled", True)
-        setattr(result, key, rules)
+        setattr(result, field_name, rules)
 
 
 def _ontology_name_sets(ontology_design: dict) -> tuple:
@@ -286,18 +245,17 @@ def _drop_rules_with_unknown_refs(
 ) -> None:
     """Remove generated rules that reference non-existent ontology terms.
 
-    Applies to all four rule types. Derived/inferred targets (SWRL consequent
-    subtypes, SPARQL CONSTRUCT heads, aggregate ``result_class``, decision-table
-    ``output_column``) may be new; everything a rule *reads* (antecedent /
-    WHERE pattern / target class / input columns / grouped properties) must
-    exist. This is a hard guarantee so the review modal never shows rules that
-    mention entities/relationships absent from the ontology.
+    Applies to both rule types. Derived/inferred targets (IF-THEN consequent
+    subtypes, SPARQL CONSTRUCT heads) may be new; everything a rule *reads*
+    (antecedent / WHERE pattern) must exist. This is a hard guarantee so the
+    review modal never shows rules that mention entities/relationships absent
+    from the ontology.
     """
     from back.objects.ontology import Ontology
 
     class_names, property_names = _ontology_name_sets(ontology_design)
     total_dropped = 0
-    for key in _RULE_KEYS:
+    for _wire_key, key in _RULE_KEYS:
         rules = getattr(result, key)
         if not rules:
             continue
@@ -542,8 +500,8 @@ def run_agent(
                         "role": "user",
                         "content": (
                             "That was not valid JSON. Output ONLY a single JSON "
-                            "object with keys swrl_rules, decision_tables, "
-                            "sparql_rules, aggregate_rules. No prose, no code fences."
+                            "object with keys swrl_rules, sparql_rules. "
+                            "No prose, no code fences."
                         ),
                     }
                 )
@@ -557,13 +515,11 @@ def run_agent(
         result.success = True
         result.usage = total_usage
         logger.info(
-            "===== BUSINESS RULES AGENT DONE ===== iterations=%d, swrl=%d, dt=%d, "
-            "sparql=%d, agg=%d, prompt_tokens=%d, completion_tokens=%d",
+            "===== BUSINESS RULES AGENT DONE ===== iterations=%d, if_then=%d, "
+            "sparql=%d, prompt_tokens=%d, completion_tokens=%d",
             result.iterations,
-            len(result.swrl_rules),
-            len(result.decision_tables),
+            len(result.if_then_rules),
             len(result.sparql_rules),
-            len(result.aggregate_rules),
             total_usage["prompt_tokens"],
             total_usage["completion_tokens"],
         )

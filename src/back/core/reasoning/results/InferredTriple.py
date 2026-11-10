@@ -10,5 +10,5 @@ class InferredTriple:
     subject: str
     predicate: str
     object: str
-    provenance: str  # e.g. "owlrl", "swrl:RuleName", "graph:transitive"
+    provenance: str  # e.g. "owlrl", "if_then:RuleName", "graph:transitive"
     rule_name: str = ""

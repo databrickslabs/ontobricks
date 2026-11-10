@@ -131,7 +131,7 @@ blank-node restriction or leftover RDF.
 | **Cardinality / value restriction** | `owl:Restriction` on `subClassOf` | `min`/`max`/`exactCardinality`, `allValuesFrom`, `someValuesFrom`, `hasValue` |
 | **Property characteristic** | extra `rdf:type` on the property | functional, inverseFunctional, transitive, symmetric, asymmetric, reflexive, irreflexive |
 | **Value constraint** | `ontobricks:ValueConstraint` | String/regex-style checks, **not** OWL |
-| **SWRL rule** | `ontobricks:SWRLRule` | Stored as text annotations, compiled to SQL |
+| **IF-THEN rule** | `ontobricks:IfThenRule` | Stored as text annotations, compiled to SQL |
 | **Global DQ rule** | `ontobricks:GlobalRule` | e.g. `noOrphans`, `requireLabels` |
 | **SHACL shape** | separate SHACL graph | Data quality, not OWL TBox |
 | **Ontology header** | `owl:Ontology` | label, optional lang, leftover DCTERMS/PROV/`owl:versionInfo` |
@@ -159,10 +159,10 @@ Databricks/product layer.
 | `ontobricks:actions` | class | JSON: UC functions, **exactly one arg = entity local ID** |
 | `ontobricks:virtualAttributes` | class | JSON: computed attrs via UC functions (same 1-arg ID contract); **not** emitted as `owl:DatatypeProperty` |
 | `ontobricks:bridges` | class | JSON: cross-project bridges |
-| `ontobricks:businessRules` | class | JSON: SWRL rule names attached to the class |
+| `ontobricks:businessRules` | class | JSON: IF-THEN rule names attached to the class |
 | `ontobricks:ValueConstraint` + `appliesTo` / `onAttribute` / `checkType` / `checkValue` / `caseSensitive` / `hasValueConstraint` | class | Product value checks |
 | `ontobricks:GlobalRule` + `ruleName` | ontology | Graph-wide DQ (`requireLabels`, `noOrphans`) |
-| `ontobricks:SWRLRule` + `antecedent` / `consequent` | ontology | Rule text |
+| `ontobricks:IfThenRule` + `antecedent` / `consequent` | ontology | Rule text |
 
 Session-only (not always OWL): `importedFrom` on entities copied from another
 domain.
@@ -233,7 +233,7 @@ The explorer is a **projection** of triples:
 | **Typed entity** | Has `rdf:type` to an ontology class; icon/color/group from that class |
 | **Orphan** | Subject with no `rdf:type` (`noOrphans` rule) |
 | **Literal** | Not a node; attributes hang off the entity |
-| **Inferred** | Triples from OWL-RL / SWRL / decision tables; shown with provenance, can be purged |
+| **Inferred** | Triples from OWL-RL / Simple (IF-THEN) / Complex (SPARQL) rules; shown with provenance, can be purged |
 | **Group collapse** | UI grouping of types that share an `ontobricks:isGroup` class |
 | **External / imported class** | Badge when the class IRI is outside the domain namespace |
 
@@ -292,13 +292,13 @@ Implementation: `OntologyRdfExtras` (`CONSUMED_PREDICATES` +
 
 - **Class-first editor.** You design entities; OWL is a serialization of
   session JSON (`classes`, `properties`, `constraints`, `axioms`,
-  `expressions`, `groups`, `swrl_rules`, `rdf_extras`).
+  `expressions`, `groups`, `if_then_rules`, `rdf_extras`).
 - **Design layout** is separate from OWL (positions, views). It is
   reconciled when classes, attributes, or relationships change.
 - **One parent in the designer** (`parent` / first named `subClassOf`). Extra
   named parents or annotations can survive only via extras or axioms.
 - **Groups are union classes**, not SKOS collections or RDF named graphs.
-- **SWRL is annotation + SQL**, not a full W3C SWRL/RIF document.
+- **IF-THEN is annotation + SQL**, not a full W3C IF-THEN/RIF document.
 - **SHACL is a sibling artifact** (shapes file / session list), compiled to
   SQL against the triple VIEW.
 - **Generate wizard** keeps a draft `id` (UUID-like) distinct from the
@@ -710,8 +710,8 @@ right choice for automated promotion pipelines and full-registry migrations.
 Cohort Discovery turns the question *"which entities travel together?"* into a
 deterministic, explainable, idempotent rule that any business user can author,
 preview, materialise, and re-run.  It complements — not replaces — the
-existing reasoning engines (OWL 2 RL, SWRL, SPARQL CONSTRUCT, Decision
-Tables, Aggregate Rules); cohort rules live in their own slot
+existing reasoning engines (OWL 2 RL, Simple/IF-THEN, Complex/SPARQL CONSTRUCT
+rules); cohort rules live in their own slot
 (`ontology.cohort_rules`) and never interfere with W3C standard reasoning.
 
 This document is the canonical user/developer reference.  The release-
@@ -895,7 +895,7 @@ The **Configure outputs** modal exposes two safety nets:
 
 ### 4. Persistence (where rules live)
 
-Cohort rules live alongside SWRL/SPARQL/aggregate rules in
+Cohort rules live alongside Simple (IF-THEN) / Complex (SPARQL) rules in
 `session.ontology.cohort_rules`.  They are versioned and persisted by the
 existing registry layer:
 
@@ -906,7 +906,7 @@ existing registry layer:
   rule-agnostic, so no schema migration was needed.
 
 In-memory access goes through `DomainSession.cohort_rules` (property +
-setter, mirroring `aggregate_rules`).  `export_for_save()` includes the
+setter, mirroring `sparql_rules`).  `export_for_save()` includes the
 list automatically.  Activating an older domain version reloads its
 historical rules transparently.
 

@@ -8,7 +8,7 @@ Repository layout (relative to the configured base path)::
         info.json
         ontology/ontology.json                   # classes, properties, groups, ...
         ontology/{constraints,axioms,expressions,shacl_shapes}.json
-        ontology/rules/{swrl,sparql,decision_tables,aggregate,cohort}.json
+        ontology/rules/{if_then,sparql,cohort}.json
         ontology/<Folder>.owl.ttl                # generated OWL (Turtle)
         ontology/shacl.ttl                       # generated SHACL (when shapes exist)
         mapping/assignment.json
@@ -47,11 +47,13 @@ class DomainRepoLayout:
         "axioms": "ontology/axioms.json",
         "expressions": "ontology/expressions.json",
         "shacl_shapes": "ontology/shacl_shapes.json",
-        "swrl_rules": "ontology/rules/swrl.json",
+        "if_then_rules": "ontology/rules/if_then.json",
         "sparql_rules": "ontology/rules/sparql.json",
-        "decision_tables": "ontology/rules/decision_tables.json",
-        "aggregate_rules": "ontology/rules/aggregate.json",
         "cohort_rules": "ontology/rules/cohort.json",
+    }
+    # Repositories written before the rename keep their IF-THEN rules here.
+    LEGACY_ONTOLOGY_SPLIT: Dict[str, str] = {
+        "if_then_rules": "ontology/rules/swrl.json",
     }
 
     VOLATILE_INFO_KEYS = ("last_update", "last_build", "graph_cache_state")
@@ -203,7 +205,7 @@ class DomainRepoLayout:
             files[cls.owl_path(folder)] = Owl.generate_owl(
                 ontology,
                 ontology.get("constraints"),
-                ontology.get("swrl_rules"),
+                ontology.get("if_then_rules"),
                 ontology.get("axioms"),
                 ontology.get("expressions"),
                 ontology.get("groups"),
@@ -357,6 +359,9 @@ class DomainRepoLayout:
         ontology = load("ontology/ontology.json", {})
         for key, rel in cls.ONTOLOGY_SPLIT.items():
             if rel in files:
+                ontology[key] = load(rel, [])
+        for key, rel in cls.LEGACY_ONTOLOGY_SPLIT.items():
+            if key not in ontology and rel in files:
                 ontology[key] = load(rel, [])
 
         layout = load("layout/design.json", {})

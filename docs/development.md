@@ -466,7 +466,7 @@ tests/
   test_permissions.py               # Permission service tests
   test_reasoning.py                 # Reasoning engine tests
   test_reasoning_service.py         # Reasoning service orchestration
-  test_swrl_engine.py               # SWRL rule compilation and execution
+  test_if_then_engine.py               # IF-THEN rule compilation and execution
   test_business_rules.py            # Business rules engine tests
   test_dataquality.py               # SHACL data quality shapes and SQL generation
   test_errors.py                    # Centralized error hierarchy
@@ -511,8 +511,8 @@ These test the pure-logic modules that implement OntoBricks' semantic web capabi
 
 | Test File | Tests | Module Under Test | What Is Verified |
 |-----------|-------|-------------------|------------------|
-| `test_owl_parser.py` | 24 | `back.core.w3c.owl.OntologyParser` | Initialization, `_to_camel_case`, `get_classes`, `get_properties`, `get_ontology_info`, `get_constraints`, `get_swrl_rules`, `get_axioms` |
-| `test_owl_generator.py` | 18 | `back.core.w3c.owl.OntologyGenerator` | Basic generation, classes with hierarchy, datatype/object properties, property constraints, SWRL rules, axioms, generate-then-parse roundtrip |
+| `test_owl_parser.py` | 24 | `back.core.w3c.owl.OntologyParser` | Initialization, `_to_camel_case`, `get_classes`, `get_properties`, `get_ontology_info`, `get_constraints`, `get_if_then_rules`, `get_axioms` |
+| `test_owl_generator.py` | 18 | `back.core.w3c.owl.OntologyGenerator` | Basic generation, classes with hierarchy, datatype/object properties, property constraints, IF-THEN rules, axioms, generate-then-parse roundtrip |
 | `test_r2rml_generator.py` | 11 | `back.core.w3c.r2rml.R2RMLGenerator` | Initialization, entity mapping (SQL query, label, attributes, exclusion flag), relationship mapping, `generate_r2rml_from_config` convenience function |
 | `test_r2rml_parser.py` | 9 | `back.core.w3c.r2rml.R2RMLParser` | Valid/invalid R2RML parsing, entity extraction, `_parse_table_name` helper, `parse_r2rml_content` convenience, generate-then-parse roundtrip |
 
@@ -523,7 +523,7 @@ Test the business-logic service functions that sit between routes and core modul
 | Test File | Tests | Module Under Test | What Is Verified |
 |-----------|-------|-------------------|------------------|
 | `test_sparql_service.py` | 9 | `back.core.w3c.sparql` | SQL dialect helpers, `extract_r2rml_mappings`, `execute_local_query` (SELECT, LIMIT), `translate_sparql_to_spark` (non-SELECT rejection, basic SELECT) |
-| `test_ontology_service.py` | 50 | `back.objects.ontology.Ontology` | `ensure_uris`, `get_ontology_stats`, `normalize_property_domain_range`, `prune_mappings_to_ontology_uris`, `save_ontology_config_from_editor`, `delete_class_by_uri`, `delete_property_by_uri`, `add_class`, `update_class`, `add_property`, `update_property`, `ingest_owl`, `apply_parsed_rdfs_to_project`, `rename_relationship_references`, `apply_agent_ontology_changes`, `validate_swrl_rule`, `merge_icon_suggestions`, `postprocess_generated_owl`, `build_class_from_data`, `build_property_from_data`, `validate_constraint`, `generate_owl`, `parse_owl` |
+| `test_ontology_service.py` | 50 | `back.objects.ontology.Ontology` | `ensure_uris`, `get_ontology_stats`, `normalize_property_domain_range`, `prune_mappings_to_ontology_uris`, `save_ontology_config_from_editor`, `delete_class_by_uri`, `delete_property_by_uri`, `add_class`, `update_class`, `add_property`, `update_property`, `ingest_owl`, `apply_parsed_rdfs_to_project`, `rename_relationship_references`, `apply_agent_ontology_changes`, `validate_if_then_rule`, `merge_icon_suggestions`, `postprocess_generated_owl`, `build_class_from_data`, `build_property_from_data`, `validate_constraint`, `generate_owl`, `parse_owl` |
 | `test_home_service.py` | 13 | `back.services.home` | `get_session_status`, `get_ontology_status`, `validate_ontology`, `validate_mapping`, `validate_status`, `get_detailed_validation` |
 | `test_dtwin_service.py` | 13 | `back.objects.digitaltwin` | `_normalize_base_uri`, `_safe_class_label`, `augment_mappings_from_config`, `augment_relationships_from_config` |
 
@@ -562,7 +562,7 @@ End-to-end HTTP tests using Starlette's `TestClient`. These verify that routes a
 | `TestHealthRoutes` | `GET /health` (public liveness probe — minimal payload, `/health/detailed` retired) and the admin-only `GET /settings/diagnostics/readiness` |
 | `TestMainPages` | `GET /`, `GET /about`, `GET /session-status`, `GET /ontology-status`, `GET /validate/*` |
 | `TestSettingsRoutes` | `GET /settings`, `GET /settings/current`, `POST /settings/save`, `GET /settings/get-default-emoji`, `GET /settings/get-base-uri` |
-| `TestOntologyRoutes` | Page loads, load/save config, class/property CRUD, generate/import OWL, constraints list/save, SWRL list/save, axioms list |
+| `TestOntologyRoutes` | Page loads, load/save config, class/property CRUD, generate/import OWL, constraints list/save, IF-THEN list/save, axioms list |
 | `TestMappingRoutes` | Page loads, load/save config, entity/relationship CRUD, generate R2RML |
 | `TestProjectRoutes` | Page loads, info/save, export/import, config, session debug, design/map layout, design views |
 | `TestQueryRoutes` | `GET /dtwin/` |
@@ -576,7 +576,7 @@ These exercise multi-module pipelines to verify that components work together co
 
 | Test File | Tests | Pipeline | What Is Verified |
 |-----------|-------|----------|------------------|
-| `test_workflow_owl_roundtrip.py` | 4 | Parse OWL -> Regenerate -> Re-parse | Classes, properties, constraints, SWRL rules, axioms survive a full roundtrip |
+| `test_workflow_owl_roundtrip.py` | 4 | Parse OWL -> Regenerate -> Re-parse | Classes, properties, constraints, IF-THEN rules, axioms survive a full roundtrip |
 | `test_workflow_mapping.py` | 3 | Ontology config -> Build mappings -> Generate R2RML -> Parse R2RML | Entity exclusion, relationship direction, and overall pipeline integrity |
 | `test_workflow_sparql.py` | 2 | Ontology + Mapping -> R2RML -> Extraction -> SPARQL-to-SQL | End-to-end translation of SPARQL queries to Spark SQL via R2RML mappings |
 | `test_workflow_domain.py` | 3 | Create domain -> Set data -> Export -> Import -> Verify | Full domain roundtrip data integrity, secret exclusion from exports |
@@ -1334,7 +1334,7 @@ All code follows a strict three-layer stack: **routes (HTTP)** → **domain clas
 
 #### 1.2 Naming conventions
 
-- Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `SWRLSQLTranslator.py`).
+- Python files containing a class: **PascalCase** matching the class name (e.g., `OWLRLReasoner.py`, `ShaclFlatSqlBackend.py`).
 - Python files without a primary class: **lowercase with underscores** (e.g., `constants.py`, `models.py`).
 - CSS/JS assets: lowercase with dashes, organised by feature area under `front/static/`.
 
@@ -1429,7 +1429,7 @@ back/core/
 ├── w3c/              <- W3C standard parsers/generators (OWL, RDFS, R2RML, SPARQL, SHACL)
 ├── industry/         <- Standard industry ontology importers (CDISC, FIBO, IOF)
 ├── graph_analysis/   <- Community detection (NetworkX backend)
-├── reasoning/        <- OWL 2 RL, SWRL, decision tables, SPARQL rules, aggregates
+├── reasoning/        <- OWL 2 RL, IF-THEN (Simple), SPARQL rules (Complex)
 ├── sqlwizard/        <- LLM-assisted SQL generation
 ├── mcp_tools.py      <- Catalog of the configurable MCP surface + policy coercion
 └── query_limits.py   <- Shared query/row caps

@@ -17,24 +17,20 @@ class Spec:
 
     DEFAULT_PHASES = {
         "tbox": False,
-        "swrl": True,
+        "if_then": True,
         "graph": True,
-        "decision_tables": False,
         "sparql_rules": False,
-        "aggregate_rules": False,
     }
     RULE_NAME_PHASES = (
-        "swrl",
-        "decision_tables",
+        "if_then",
         "sparql_rules",
-        "aggregate_rules",
     )
     _RULE_OPTION_KEYS = {
-        "swrl": "swrl_rule_names",
-        "decision_tables": "decision_table_names",
+        "if_then": "if_then_rule_names",
         "sparql_rules": "sparql_rule_names",
-        "aggregate_rules": "aggregate_rule_names",
     }
+    # Phase key used by specs saved before the IF-THEN rename (read-only).
+    LEGACY_PHASE_KEY = "swrl"
     MAX_PATCHES = 500
     MAX_LABEL_LEN = 200
     MAX_FACT_PROMPT = 4000
@@ -77,7 +73,7 @@ class Spec:
             raise ValidationError("Patches must be a list")
         if len(raw_patches) > cls.MAX_PATCHES:
             raise ValidationError(f"At most {cls.MAX_PATCHES} patches per simulation")
-        raw_phases = data.get("phases") or {}
+        raw_phases = cls._legacy_phase_map(data.get("phases") or {})
         if not isinstance(raw_phases, dict):
             raise ValidationError("Phases must be an object")
         phases = {
@@ -94,7 +90,9 @@ class Spec:
             ),
             patches=[Patch.from_dict(p) for p in raw_patches],
             phases=phases,
-            rule_names=cls._parse_rule_names(data.get("rule_names")),
+            rule_names=cls._parse_rule_names(
+                cls._legacy_phase_map(data.get("rule_names"))
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -117,6 +115,15 @@ class Spec:
             if names and opts.get(phase):
                 opts[option_key] = set(names)
         return opts
+
+    @classmethod
+    def _legacy_phase_map(cls, raw: Any) -> Any:
+        """Rename the phase key of a map saved before the IF-THEN rename."""
+        if isinstance(raw, dict) and cls.LEGACY_PHASE_KEY in raw and "if_then" not in raw:
+            renamed = {k: v for k, v in raw.items() if k != cls.LEGACY_PHASE_KEY}
+            renamed["if_then"] = raw[cls.LEGACY_PHASE_KEY]
+            return renamed
+        return raw
 
     @classmethod
     def _parse_fact_prompt(cls, raw: Any) -> str:

@@ -305,7 +305,7 @@ def run(ctx: TaskContext) -> RunOutcome:
                 getattr(domain, "ontology", {}),
                 getattr(domain, "assignment", {}),
                 constraints=getattr(domain, "constraints", None),
-                swrl_rules=getattr(domain, "swrl_rules", None),
+                if_then_rules=getattr(domain, "if_then_rules", None),
                 axioms=getattr(domain, "axioms", None),
                 shacl_shapes=getattr(domain, "shacl_shapes", None),
             ),

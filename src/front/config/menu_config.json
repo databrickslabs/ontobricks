@@ -243,7 +243,7 @@
                             "requires": null
                         },
                         {
-                            "id": "swrl",
+                            "id": "if-then",
                             "label": "Business Rules",
                             "icon": "bi-lightning",
                             "default": false,
@@ -596,7 +596,7 @@
                         },
                         {
                             "id": "reasoning",
-                            "label": "Inference",
+                            "label": "Business rules",
                             "icon": "bi-lightning",
                             "default": false,
                             "requires": null

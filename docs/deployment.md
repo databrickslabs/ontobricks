@@ -2221,8 +2221,8 @@ Add another copy of this subsection for each additional source or workload.
   [ ] Joins across tables  [ ] Complex SQL transformations  [ ] Mixed
 - **Optional — Maximum tables joined by one mapping:** _______________________
 - **Optional — Reasoning features used:** [ ] None  [ ] OWL 2 RL
-  [ ] SWRL rules  [ ] SHACL validation
-- **Optional — Estimated number of SWRL rules:** ____________________________
+  [ ] IF-THEN rules  [ ] SHACL validation
+- **Optional — Estimated number of IF-THEN rules:** ____________________________
 - **Optional — Estimated number of SHACL shapes:** __________________________
 - **Optional — Documents or binary artifacts stored per domain:**
   __________________ [ ] GB  [ ] TB
@@ -2242,7 +2242,7 @@ Add another copy of this subsection for each additional source or workload.
 - **Optional — Largest expected graph:** __________________ [ ] million
   [ ] billion triples
 - **Optional — Reasoning or validation executed during each build:**
-  [ ] None  [ ] OWL 2 RL  [ ] SWRL  [ ] SHACL
+  [ ] None  [ ] OWL 2 RL  [ ] IF-THEN  [ ] SHACL
 - **Optional — Build-time availability requirement:** [ ] Queries may pause
   [ ] Existing graph must remain queryable
 

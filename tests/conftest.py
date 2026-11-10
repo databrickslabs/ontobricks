@@ -151,7 +151,7 @@ def sample_ontology_config():
             },
         ],
         "constraints": [],
-        "swrl_rules": [],
+        "if_then_rules": [],
         "axioms": [],
         "expressions": [],
     }

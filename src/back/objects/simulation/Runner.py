@@ -99,7 +99,7 @@ class Runner:
 
         The fact picker supplies ontology URIs (normally ``...#hascontract``),
         while mapped triples use ``.../hascontract``. Applying the raw URI
-        creates a disconnected sandbox edge that SWRL cannot join.
+        creates a disconnected sandbox edge that IF-THEN cannot join.
 
         Bare local ids on object properties (``ECON00018``) are expanded to
         ``{data_ns}{Range}/{id}`` so the link is a real entity, not a literal.
@@ -192,21 +192,21 @@ class Runner:
         else:
             sandbox.seed(uris)
 
-    def _require_swrl(self, stats: Dict[str, Any]) -> None:
-        """Fail the run when the SWRL phase was requested but did not execute."""
-        if not self._spec.phases.get("swrl", True):
+    def _require_if_then(self, stats: Dict[str, Any]) -> None:
+        """Fail the run when the IF-THEN phase was requested but did not execute."""
+        if not self._spec.phases.get("if_then", True):
             return
-        if stats.get("swrl_error"):
-            raise InfrastructureError(f"SWRL failed: {stats['swrl_error']}")
-        if stats.get("swrl_skipped"):
-            reason = stats.get("swrl_reason") or "SWRL did not run"
-            raise InfrastructureError(f"SWRL did not run: {reason}")
-        errors = stats.get("swrl_errors") or 0
+        if stats.get("if_then_error"):
+            raise InfrastructureError(f"IF-THEN failed: {stats['if_then_error']}")
+        if stats.get("if_then_skipped"):
+            reason = stats.get("if_then_reason") or "IF-THEN did not run"
+            raise InfrastructureError(f"IF-THEN did not run: {reason}")
+        errors = stats.get("if_then_errors") or 0
         if not errors:
             return
-        details = stats.get("swrl_error_details") or ""
+        details = stats.get("if_then_error_details") or ""
         suffix = f": {details}" if details else ""
-        raise InfrastructureError(f"SWRL failed on {errors} rule(s){suffix}")
+        raise InfrastructureError(f"IF-THEN failed on {errors} rule(s){suffix}")
 
     def _relink_hypothesis(self, sandbox: Any) -> None:
         """After patches, copy objects of new links only (not the patched subjects).
@@ -383,13 +383,13 @@ class Runner:
         self._progress(50, "Running reasoning in the sandbox")
         svc = Reasoning(self._domain, sandbox.store, sandbox.table)
 
-        def _swrl_progress(idx: int, total: int, rule_name: str) -> None:
-            self._progress(50 + int((idx / max(total, 1)) * 30), f"SWRL {idx + 1}/{total}: {rule_name}")
+        def _if_then_progress(idx: int, total: int, rule_name: str) -> None:
+            self._progress(50 + int((idx / max(total, 1)) * 30), f"IF-THEN {idx + 1}/{total}: {rule_name}")
 
         reasoning = svc.run_full_reasoning(
-            self._spec.reasoning_options(), progress_callback=_swrl_progress
+            self._spec.reasoning_options(), progress_callback=_if_then_progress
         )
-        self._require_swrl(reasoning.stats or {})
+        self._require_if_then(reasoning.stats or {})
         provenance = {
             Diff.key(
                 {"subject": t.subject, "predicate": t.predicate, "object": t.object}
@@ -416,12 +416,12 @@ class Runner:
                 "entity_count": len(entities),
                 "patch_count": len(self._spec.patches),
                 "inferred_total": len(reasoning.inferred_triples),
-                "swrl_inferred_count": stats.get("swrl_inferred_count"),
-                "swrl_rules_count": stats.get("swrl_rules_count"),
-                "swrl_skipped": stats.get("swrl_skipped"),
-                "swrl_reason": stats.get("swrl_reason"),
-                "swrl_errors": stats.get("swrl_errors"),
-                "swrl_error_details": stats.get("swrl_error_details"),
+                "if_then_inferred_count": stats.get("if_then_inferred_count"),
+                "if_then_rules_count": stats.get("if_then_rules_count"),
+                "if_then_skipped": stats.get("if_then_skipped"),
+                "if_then_reason": stats.get("if_then_reason"),
+                "if_then_errors": stats.get("if_then_errors"),
+                "if_then_error_details": stats.get("if_then_error_details"),
                 "phase_errors": {
                     k[: -len("_error")]: v for k, v in stats.items() if k.endswith("_error")
                 },

@@ -14,9 +14,7 @@ from typing import Optional
 from back.core.helpers import sql_escape as escape_sql_value
 from back.core.logging import get_logger
 from back.core.w3c.shacl.constants import (
-    AGGREGATE_ID_PREFIX,
-    DECISION_TABLE_ID_PREFIX,
-    SWRL_ID_PREFIX,
+    IF_THEN_ID_PREFIX,
     rule_check_id,
 )
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
@@ -31,7 +29,7 @@ def _dt():
 
 
 class SqlQualityChecks:
-    """Classify predicates and run SHACL / SWRL / decision-table / aggregate SQL checks."""
+    """Classify predicates and run SHACL / IF-THEN SQL checks."""
 
     #: A failed check used to report only that it failed, which left the reader
     #: no way to tell a broken rule from a warehouse problem without the server
@@ -242,12 +240,14 @@ class SqlQualityChecks:
         return rule.get("check_id") or rule_check_id(prefix, rule, index)
 
     @staticmethod
-    def _swrl_target_class_uri(rule, base_uri, uri_map):
-        """Return the class URI of the SWRL violation subject."""
-        from back.core.reasoning.swrl.SWRLParser import SWRLParser
+    def _if_then_target_class_uri(rule, base_uri, uri_map):
+        """Return the class URI of the rule's violation subject."""
+        from back.core.reasoning.shacl_rules.RuleExpressionParser import (
+            RuleExpressionParser,
+        )
 
-        ante_atoms = SWRLParser.parse_atoms(rule.get("antecedent", ""))
-        cons_atoms = SWRLParser.parse_atoms(rule.get("consequent", ""))
+        ante_atoms = RuleExpressionParser.parse_atoms(rule.get("antecedent", ""))
+        cons_atoms = RuleExpressionParser.parse_atoms(rule.get("consequent", ""))
         class_atoms = [
             a
             for a in ante_atoms
@@ -256,17 +256,21 @@ class SqlQualityChecks:
         if not class_atoms:
             return None
 
-        viol_var = SWRLParser.determine_violation_subject(cons_atoms, class_atoms)
+        viol_var = RuleExpressionParser.determine_violation_subject(
+            cons_atoms, class_atoms
+        )
         for ca in class_atoms:
             if ca["args"][0] == viol_var:
-                return SWRLParser.resolve_uri(ca["name"], base_uri, uri_map)
-        return SWRLParser.resolve_uri(class_atoms[0]["name"], base_uri, uri_map)
+                return RuleExpressionParser.resolve_uri(ca["name"], base_uri, uri_map)
+        return RuleExpressionParser.resolve_uri(
+            class_atoms[0]["name"], base_uri, uri_map
+        )
 
     @staticmethod
-    def _swrl_antecedent_population_sql(translator, store, table, params):
-        """Count entities matching the SWRL antecedent (the rule's scope)."""
+    def _if_then_antecedent_population_sql(translator, store, table, rule, ctx):
+        """Count entities matching the IF-THEN antecedent (the rule's scope)."""
         try:
-            count_sql = translator.build_antecedent_count_sql(table, params)
+            count_sql = translator.build_antecedent_count_sql(table, rule, ctx)
             if not count_sql:
                 return None
             rows = store.execute_query(count_sql) or []
@@ -283,14 +287,12 @@ class SqlQualityChecks:
         store,
         t0,
         total,
-        swrl_rules=None,
+        if_then_rules=None,
         ontology=None,
-        decision_tables=None,
-        aggregate_rules=None,
         violation_limit=None,
         parallel=False,
     ):
-        """Execute SHACL shapes, SWRL, decision tables and aggregate rules as SQL against the VIEW backend."""
+        """Execute SHACL shapes and IF-THEN rules as SQL against the VIEW backend."""
         available_predicates = SqlQualityChecks._load_predicates_from_table(
             store, triplestore_table
         )
@@ -298,9 +300,7 @@ class SqlQualityChecks:
         pop_lock = threading.Lock()
         jobs = SqlQualityChecks._build_check_jobs(
             shapes,
-            swrl_rules,
-            decision_tables,
-            aggregate_rules,
+            if_then_rules,
             ontology,
             triplestore_table,
             store,
@@ -321,9 +321,7 @@ class SqlQualityChecks:
                 total,
                 triplestore_table,
                 n_shapes=len(shapes or []),
-                n_swrl=len(swrl_rules or []),
-                n_dt=len(decision_tables or []),
-                n_agg=len(aggregate_rules or []),
+                n_if_then=len(if_then_rules or []),
             )
         if results is None:
             return
@@ -341,9 +339,7 @@ class SqlQualityChecks:
     @staticmethod
     def _build_check_jobs(
         shapes,
-        swrl_rules,
-        decision_tables,
-        aggregate_rules,
+        if_then_rules,
         ontology,
         table,
         store,
@@ -371,81 +367,31 @@ class SqlQualityChecks:
                     ),
                 )
             )
-        for idx, rule in enumerate(swrl_rules or []):
+        for idx, rule in enumerate(if_then_rules or []):
             if not rule.get("enabled", True):
                 continue
             jobs.append(
                 (
-                    rule.get("name", f"SWRL Rule {idx + 1}"),
-                    "swrl",
+                    rule.get("name", f"IF-THEN Rule {idx + 1}"),
+                    "if_then",
                     idx,
-                    lambda r=rule, i=idx: SqlQualityChecks._eval_swrl_rule(
+                    lambda r=rule, i=idx: SqlQualityChecks._eval_if_then_rule(
                         r, i, table, store, ontology, violation_limit
-                    ),
-                )
-            )
-        for idx, dt in enumerate(decision_tables or []):
-            if not dt.get("enabled", True):
-                continue
-            jobs.append(
-                (
-                    dt.get("name", f"Decision Table {idx + 1}"),
-                    "dt",
-                    idx,
-                    lambda d=dt, i=idx: SqlQualityChecks._eval_dt_rule(
-                        d,
-                        i,
-                        table,
-                        store,
-                        ontology,
-                        pop_cache,
-                        pop_lock,
-                        violation_limit,
-                    ),
-                )
-            )
-        for idx, rule in enumerate(aggregate_rules or []):
-            if not rule.get("enabled", True):
-                continue
-            jobs.append(
-                (
-                    rule.get("name", f"Aggregate Rule {idx + 1}"),
-                    "agg",
-                    idx,
-                    lambda r=rule, i=idx: SqlQualityChecks._eval_agg_rule(
-                        r,
-                        i,
-                        table,
-                        store,
-                        ontology,
-                        pop_cache,
-                        pop_lock,
-                        violation_limit,
                     ),
                 )
             )
         return jobs
 
     @staticmethod
-    def _run_jobs_serial(
-        tm, task, jobs, total, table, *, n_shapes, n_swrl, n_dt, n_agg
-    ):
+    def _run_jobs_serial(tm, task, jobs, total, table, *, n_shapes, n_if_then):
         results = []
         for label, kind, idx, fn in jobs:
             if kind == "shacl":
                 progress = int((idx / total) * 100) if total else 0
                 message = f"Check {idx + 1}/{total}: {label}"
-            elif kind == "swrl":
-                progress = int(((n_shapes + idx) / total) * 100) if total else 0
-                message = f"SWRL {idx + 1}/{n_swrl}: {label}"
-            elif kind == "dt":
-                progress = int(((n_shapes + n_swrl + idx) / total) * 100) if total else 0
-                message = f"DT {idx + 1}/{n_dt}: {label}"
             else:
-                progress = (
-                    int(((n_shapes + n_swrl + n_dt + idx) / total) * 100) if total else 0
-                )
-                message = f"Agg {idx + 1}/{n_agg}: {label}"
+                progress = int(((n_shapes + idx) / total) * 100) if total else 0
+                message = f"IF-THEN {idx + 1}/{n_if_then}: {label}"
             tm.update_progress(task.id, progress, message)
             result = fn()
             if result is SqlQualityChecks._MISSING_VIEW:
@@ -554,21 +500,26 @@ class SqlQualityChecks:
                 label, cat, shape.get("id"), sql, exc
             )
 
-    def _eval_swrl_rule(rule, idx, table, store, ontology, violation_limit):
-        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
-        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+    def _eval_if_then_rule(rule, idx, table, store, ontology, violation_limit):
+        from back.core.reasoning.shacl_rules.ShaclFlatSqlBackend import (
+            ShaclFlatSqlBackend,
+        )
+        from back.core.reasoning.shacl_rules.ShaclRuleEngine import ShaclRuleEngine
+        from back.core.reasoning.shacl_rules.ShaclRuleSqlTranslator import (
+            ShaclRuleSqlTranslator,
+        )
 
-        label = rule.get("name", f"SWRL Rule {idx + 1}")
-        check_id = SqlQualityChecks._rule_check_id(SWRL_ID_PREFIX, rule, idx)
+        label = rule.get("name", f"IF-THEN Rule {idx + 1}")
+        check_id = SqlQualityChecks._rule_check_id(IF_THEN_ID_PREFIX, rule, idx)
         ontology = ontology or {}
-        translator = SWRLSQLTranslator()
-        params = {
-            "antecedent": rule.get("antecedent", ""),
-            "consequent": rule.get("consequent", ""),
+        engine = ShaclRuleEngine(ontology=ontology)
+        translator = ShaclRuleSqlTranslator(ShaclFlatSqlBackend())
+        shacl_rule = engine._transpiler.transpile(rule)
+        ctx = {
             "base_uri": ontology.get("base_uri", ""),
-            "uri_map": SWRLEngine(ontology=ontology)._build_uri_map(),
+            "uri_map": engine._build_uri_map(),
         }
-        sql = translator.build_violation_sql(table, params)
+        sql = translator.build_violation_sql(table, shacl_rule, ctx)
         if not sql:
             return {
                 "name": label,
@@ -602,150 +553,20 @@ class SqlQualityChecks:
             }
             pop = None
             if violations:
-                pop = SqlQualityChecks._swrl_antecedent_population_sql(
-                    translator, store, table, params
+                pop = SqlQualityChecks._if_then_antecedent_population_sql(
+                    translator, store, table, shacl_rule, ctx
                 )
             SqlQualityChecks._enrich_with_population(result, pop)
             logger.info(
-                "SWRL rule '%s': %d violations (%.2fs)",
+                "IF-THEN rule '%s': %d violations (%.2fs)",
                 label,
                 violation_total,
                 time.time() - t_rule,
             )
             return result
         except Exception as exc:
-            logger.exception("SWRL DQ check '%s' SQL failed: %s", label, exc)
+            logger.exception("IF-THEN DQ check '%s' SQL failed: %s", label, exc)
             return SqlQualityChecks._failed_check_result(
                 label, "structural", check_id, sql, exc
             )
 
-    @staticmethod
-    def _eval_dt_rule(
-        dt, idx, table, store, ontology, pop_cache, pop_lock, violation_limit
-    ):
-        from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
-
-        dt_name = dt.get("name", f"Decision Table {idx + 1}")
-        check_id = SqlQualityChecks._rule_check_id(DECISION_TABLE_ID_PREFIX, dt, idx)
-        ontology = ontology or {}
-        engine = DecisionTableEngine()
-        base_uri = ontology.get("base_uri", "")
-        resolved = engine._resolve_dt(dt, engine._build_uri_map(ontology), base_uri)
-        sql = engine.build_violation_sql(resolved, table, base_uri)
-        if not sql:
-            return {
-                "name": dt_name,
-                "category": "conformance",
-                "shape_id": check_id,
-                "status": "info",
-                "message": "Cannot translate to SQL",
-                "violations": [],
-                "sql": "",
-            }
-        try:
-            t_rule = time.time()
-            violations, violation_total, status, msg = (
-                SqlQualityChecks._apply_sql_violation_limit(
-                    store,
-                    sql,
-                    violation_limit,
-                    row_mapper=lambda r: {"s": r.get("s", "")},
-                )
-            )
-            result = {
-                "name": dt_name,
-                "category": "conformance",
-                "shape_id": check_id,
-                "status": status,
-                "message": msg,
-                "violations": violations,
-                "sql": sql,
-                "severity": "sh:Violation",
-                "violation_total": violation_total,
-            }
-            if violations:
-                with pop_lock:
-                    pop = SqlQualityChecks._count_class_population_sql(
-                        store, table, resolved.get("target_class_uri", ""), pop_cache
-                    )
-                SqlQualityChecks._enrich_with_population(result, pop)
-            logger.info(
-                "DT rule '%s': %d violations (%.2fs)",
-                dt_name,
-                violation_total,
-                time.time() - t_rule,
-            )
-            return result
-        except Exception as exc:
-            logger.exception("Decision table DQ check '%s' SQL failed: %s", dt_name, exc)
-            return SqlQualityChecks._failed_check_result(
-                dt_name, "conformance", check_id, sql, exc
-            )
-
-    @staticmethod
-    def _eval_agg_rule(
-        rule, idx, table, store, ontology, pop_cache, pop_lock, violation_limit
-    ):
-        from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
-
-        agg_name = rule.get("name", f"Aggregate Rule {idx + 1}")
-        check_id = SqlQualityChecks._rule_check_id(AGGREGATE_ID_PREFIX, rule, idx)
-        ontology = ontology or {}
-        engine = AggregateRuleEngine()
-        base_uri = ontology.get("base_uri", "")
-        resolved = engine._resolve_rule(dict(rule), ontology)
-        sql = engine.build_sql(resolved, table, base_uri)
-        if not sql:
-            return {
-                "name": agg_name,
-                "category": "conformance",
-                "shape_id": check_id,
-                "status": "info",
-                "message": "Cannot translate to SQL",
-                "violations": [],
-                "sql": "",
-            }
-        try:
-            t_rule = time.time()
-            violations, violation_total, status, msg = (
-                SqlQualityChecks._apply_sql_violation_limit(
-                    store,
-                    sql,
-                    violation_limit,
-                    row_mapper=lambda r: {
-                        "s": r.get("s", ""),
-                        "agg_val": r.get("agg_val", ""),
-                    },
-                )
-            )
-            result = {
-                "name": agg_name,
-                "category": "conformance",
-                "shape_id": check_id,
-                "status": status,
-                "message": msg,
-                "violations": violations,
-                "sql": sql,
-                "severity": "sh:Violation",
-                "violation_total": violation_total,
-            }
-            if violations:
-                with pop_lock:
-                    pop = SqlQualityChecks._count_class_population_sql(
-                        store, table, resolved.get("target_class_uri", ""), pop_cache
-                    )
-                SqlQualityChecks._enrich_with_population(result, pop)
-            logger.info(
-                "Agg rule '%s': %d violations (%.2fs)",
-                agg_name,
-                violation_total,
-                time.time() - t_rule,
-            )
-            return result
-        except Exception as exc:
-            logger.exception(
-                "Aggregate rule DQ check '%s' SQL failed: %s", agg_name, exc
-            )
-            return SqlQualityChecks._failed_check_result(
-                agg_name, "conformance", check_id, sql, exc
-            )

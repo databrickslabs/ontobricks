@@ -1,4 +1,4 @@
-"""Scheduled inference run (SWRL / reasoning + materialisation).
+"""Scheduled inference run (IF-THEN / reasoning + materialisation).
 
 Runs the selected reasoning phases against the domain's graph and
 optionally writes the inferred triples back — to the graph store's
@@ -25,11 +25,9 @@ logger = get_logger(__name__)
 #: Reasoning tab shows them. Values are the defaults for a new schedule.
 PHASES: Dict[str, bool] = {
     "tbox": True,
-    "swrl": True,
+    "if_then": True,
     "graph": True,
-    "decision_tables": False,
     "sparql_rules": False,
-    "aggregate_rules": False,
 }
 
 

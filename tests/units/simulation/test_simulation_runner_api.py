@@ -491,7 +491,7 @@ class _FakeReasoning:
     def run_full_reasoning(self, options, progress_callback=None):
         assert options["materialize"] is False
         return ReasoningResult(
-            inferred_triples=[InferredTriple(EX + "acme", EX + "risk", "high", "swrl:Risk")],
+            inferred_triples=[InferredTriple(EX + "acme", EX + "risk", "high", "if_then:Risk")],
             stats={"graph_error": "boom"},
         )
 
@@ -769,47 +769,47 @@ class TestRunner:
         assert reg.runs[-1]["status"] == "error"
         assert tm.failed and "secret" not in tm.failed[0]
 
-    def test_swrl_skip_fails_the_run(self, monkeypatch):
-        class _SkipSwrl(_FakeReasoning):
+    def test_if_then_skip_fails_the_run(self, monkeypatch):
+        class _SkipIfThen(_FakeReasoning):
             def run_full_reasoning(self, options, progress_callback=None):
                 return ReasoningResult(
                     stats={
-                        "swrl_skipped": True,
-                        "swrl_reason": "No SWRL rules defined in ontology",
+                        "if_then_skipped": True,
+                        "if_then_reason": "No IF-THEN rules defined in ontology",
                     }
                 )
 
         _FakeSandbox.instances = []
         monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "Reasoning", _SkipSwrl)
+        monkeypatch.setattr(runner_mod, "Reasoning", _SkipIfThen)
         monkeypatch.setattr(
             Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
         reg, tm = _Registry(), _TM()
         _runner(reg, tm).run()
-        assert tm.failed == ["SWRL did not run: No SWRL rules defined in ontology"]
+        assert tm.failed == ["IF-THEN did not run: No IF-THEN rules defined in ontology"]
         assert reg.rows["s1"]["status"] == "failed"
 
-    def test_swrl_sql_errors_fail_the_run(self, monkeypatch):
-        class _BrokenSwrl(_FakeReasoning):
+    def test_if_then_sql_errors_fail_the_run(self, monkeypatch):
+        class _BrokenIfThen(_FakeReasoning):
             def run_full_reasoning(self, options, progress_callback=None):
                 return ReasoningResult(
                     stats={
-                        "swrl_errors": 1,
-                        "swrl_error_details": "attach: function try_cast does not exist",
+                        "if_then_errors": 1,
+                        "if_then_error_details": "attach: function try_cast does not exist",
                     }
                 )
 
         _FakeSandbox.instances = []
         monkeypatch.setattr(runner_mod, "Sandbox", _FakeSandbox)
-        monkeypatch.setattr(runner_mod, "Reasoning", _BrokenSwrl)
+        monkeypatch.setattr(runner_mod, "Reasoning", _BrokenIfThen)
         monkeypatch.setattr(
             Scope, "resolve_entities", lambda self, store, g, **kw: [EX + "acme"]
         )
         reg, tm = _Registry(), _TM()
         _runner(reg, tm).run()
         assert tm.failed == [
-            "SWRL failed on 1 rule(s): attach: function try_cast does not exist"
+            "IF-THEN failed on 1 rule(s): attach: function try_cast does not exist"
         ]
 
     def test_validation_error_message_is_surfaced(self, monkeypatch):

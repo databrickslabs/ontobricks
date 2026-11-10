@@ -231,8 +231,8 @@ class TestDataQualityTask:
         ):
             TwinBackgroundTasks.run_data_quality_task(
                 tm, "t1", "settings", domain, ["shape"], table, total,
-                swrl_rules=["r"], ontology_dict={"o": 1}, decision_tables=["d"],
-                aggregate_rules=["a"], violation_limit=50, **kw,
+                if_then_rules=["r"], ontology_dict={"o": 1},
+                violation_limit=50, **kw,
             )
         return tm, get_graphdb, checks, statements
 
@@ -423,12 +423,12 @@ _LIT_T = _T("http://ex.org/s", "http://ex.org/p", "literal")
 
 
 def _infer(options, *, build_kind="scheduled", graphdb_returns=(), client="default",
-           triples=(_URI_T,), violations=(), delta_exc=None, swrl_calls=()):
+           triples=(_URI_T,), violations=(), delta_exc=None, if_then_calls=()):
     tm = MagicMock()
     svc = MagicMock()
 
     def _full(opts, progress_callback=None):
-        for call in swrl_calls:
+        for call in if_then_calls:
             progress_callback(*call)
         return _Res(triples, violations)
 
@@ -451,21 +451,21 @@ class TestInferenceTaskBranches:
     def test_missing_graph_store_falls_back_to_the_view(self):
         view_store = MagicMock(name="view")
         tm, cls, _svc, get_graphdb = _infer(
-            {"swrl": True}, graphdb_returns=[None, view_store]
+            {"if_then": True}, graphdb_returns=[None, view_store]
         )
         assert get_graphdb.call_args_list[1].kwargs == {"engine": "view"}
         assert cls.call_args.args == ("snap", view_store)
         tm.complete_task.assert_called_once()
 
-    def test_swrl_progress_is_mapped_into_the_30_to_80_band(self):
-        tm, *_ = _infer({"swrl": True}, swrl_calls=[(0, 4, "r1"), (3, 4, "r4")])
+    def test_if_then_progress_is_mapped_into_the_30_to_80_band(self):
+        tm, *_ = _infer({"if_then": True}, if_then_calls=[(0, 4, "r1"), (3, 4, "r4")])
         progress = [c.args[1:] for c in tm.update_progress.call_args_list]
-        assert (30, "SWRL 1/4: r1") in progress
-        assert (67, "SWRL 4/4: r4") in progress
+        assert (30, "IF-THEN 1/4: r1") in progress
+        assert (67, "IF-THEN 4/4: r4") in progress
 
     def test_append_without_graph_store_reports_error(self):
         tm, _cls, svc, _g = _infer(
-            {"swrl": True, "append_graph": True},
+            {"if_then": True, "append_graph": True},
             graphdb_returns=[MagicMock(), None],
         )
         result = tm.complete_task.call_args.kwargs["result"]
@@ -496,14 +496,14 @@ class TestInferenceTaskBranches:
         cls.materialize_to_delta.assert_not_called()
 
     def test_api_run_keeps_violations_and_counts_them_in_the_message(self):
-        tm, *_ = _infer({"swrl": True}, build_kind="api", violations=("v1", "v2"))
+        tm, *_ = _infer({"if_then": True}, build_kind="api", violations=("v1", "v2"))
         kwargs = tm.complete_task.call_args.kwargs
         assert kwargs["result"]["violations_count"] == 2
         assert kwargs["result"]["violations"] == ["v", "v"]
         assert kwargs["message"] == "Inference complete: 1 inferred, 2 violations"
 
     def test_session_run_strips_violations(self):
-        tm, *_ = _infer({"swrl": True}, build_kind="session", violations=("v1",))
+        tm, *_ = _infer({"if_then": True}, build_kind="session", violations=("v1",))
         result = tm.complete_task.call_args.kwargs["result"]
         assert "violations" not in result
         assert "violations_count" not in result

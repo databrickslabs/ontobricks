@@ -1,4 +1,4 @@
-"""SqlQualityChecks: SHACL / SWRL / decision-table / aggregate SQL data-quality runs (0.9.0 extract)."""
+"""SqlQualityChecks: SHACL / IF-THEN / decision-table / aggregate SQL data-quality runs (0.9.0 extract)."""
 
 import re
 import threading
@@ -6,8 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
-from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
 from back.objects.digitaltwin.quality.SqlQualityChecks import SqlQualityChecks
 from back.objects.digitaltwin.constants import RDF_TYPE, RDFS_LABEL
 
@@ -101,9 +99,7 @@ def run(shapes, store, **kw):
     if total is None:
         total = (
             len(shapes)
-            + len(kw.get("swrl_rules") or [])
-            + len(kw.get("decision_tables") or [])
-            + len(kw.get("aggregate_rules") or [])
+            + len(kw.get("if_then_rules") or [])
         ) or 1
     SqlQualityChecks.run_sql_checks(tm, task, shapes, TABLE, store, 0.0, total, **kw)
     return tm
@@ -307,12 +303,12 @@ def test_sql_error_detail_falls_back_to_exception_class_name():
 
 def test_failed_check_result_carries_cause_and_sql_as_warning():
     res = SqlQualityChecks._failed_check_result(
-        "Rule", "structural", "swrl:Rule", "SELECT 1", RuntimeError("[PARSE_ERROR] bad")
+        "Rule", "structural", "if_then:Rule", "SELECT 1", RuntimeError("[PARSE_ERROR] bad")
     )
     assert res == {
         "name": "Rule",
         "category": "structural",
-        "shape_id": "swrl:Rule",
+        "shape_id": "if_then:Rule",
         "status": "warning",
         "message": "Query failed: [PARSE_ERROR] bad",
         "violations": [],
@@ -321,48 +317,56 @@ def test_failed_check_result_carries_cause_and_sql_as_warning():
 
 
 def test_rule_check_id_prefers_stamped_check_id_then_name_then_index():
-    assert SqlQualityChecks._rule_check_id("swrl", {"check_id": "swrl:3", "name": "X"}, 0) == "swrl:3"
-    assert SqlQualityChecks._rule_check_id("dt", {"name": "Tier"}, 4) == "dt:Tier"
-    assert SqlQualityChecks._rule_check_id("agg", {}, 4) == "agg:4"
+    assert SqlQualityChecks._rule_check_id("if_then", {"check_id": "if_then:3", "name": "X"}, 0) == "if_then:3"
+    assert SqlQualityChecks._rule_check_id("if_then", {"name": "Senior"}, 4) == "if_then:Senior"
+    assert SqlQualityChecks._rule_check_id("if_then", {}, 4) == "if_then:4"
 
 
 # ---------------------------------------------------------------------------
-# SWRL helpers
+# IF-THEN helpers
 
 
-def test_swrl_target_class_is_the_violation_subject_class():
+def test_if_then_target_class_is_the_violation_subject_class():
     rule = {"antecedent": "Order(?o) ^ Customer(?c) ^ hasOrder(?c, ?o)", "consequent": "VIP(?c)"}
-    assert SqlQualityChecks._swrl_target_class_uri(rule, BASE, {}) == CUSTOMER
+    assert SqlQualityChecks._if_then_target_class_uri(rule, BASE, {}) == CUSTOMER
 
 
-def test_swrl_target_class_falls_back_to_first_class_atom():
+def test_if_then_target_class_falls_back_to_first_class_atom():
     rule = {"antecedent": "Customer(?c) ^ hasOrder(?c, ?o)", "consequent": "Flag(?o)"}
-    assert SqlQualityChecks._swrl_target_class_uri(rule, BASE, {"customer": "urn:C"}) == "urn:C"
+    assert SqlQualityChecks._if_then_target_class_uri(rule, BASE, {"customer": "urn:C"}) == "urn:C"
 
 
-def test_swrl_target_class_none_without_class_atoms():
+def test_if_then_target_class_none_without_class_atoms():
     rule = {"antecedent": "hasOrder(?c, ?o)", "consequent": "VIP(?c)"}
-    assert SqlQualityChecks._swrl_target_class_uri(rule, BASE, {}) is None
+    assert SqlQualityChecks._if_then_target_class_uri(rule, BASE, {}) is None
 
 
-def test_swrl_antecedent_population_counts_rule_scope():
-    translator = SimpleNamespace(build_antecedent_count_sql=lambda t, p: f"SELECT COUNT(*) AS cnt FROM {t}")
+def test_if_then_antecedent_population_counts_rule_scope():
+    translator = SimpleNamespace(
+        build_antecedent_count_sql=lambda t, r, c: f"SELECT COUNT(*) AS cnt FROM {t}"
+    )
     store = FakeStore(default=[{"cnt": "8"}])
-    assert SqlQualityChecks._swrl_antecedent_population_sql(translator, store, TABLE, {}) == 8
+    assert (
+        SqlQualityChecks._if_then_antecedent_population_sql(translator, store, TABLE, None, {})
+        == 8
+    )
     assert store.sql == [f"SELECT COUNT(*) AS cnt FROM {TABLE}"]
 
 
 @pytest.mark.parametrize(
     "build, store",
     [
-        (lambda t, p: None, FakeStore()),
-        (lambda t, p: "SELECT 1", FakeStore(default=[])),
-        (lambda t, p: "SELECT 1", FakeStore([(starts("SELECT"), RuntimeError("x"))])),
+        (lambda t, r, c: None, FakeStore()),
+        (lambda t, r, c: "SELECT 1", FakeStore(default=[])),
+        (lambda t, r, c: "SELECT 1", FakeStore([(starts("SELECT"), RuntimeError("x"))])),
     ],
 )
-def test_swrl_antecedent_population_returns_none_when_unavailable(build, store):
+def test_if_then_antecedent_population_returns_none_when_unavailable(build, store):
     translator = SimpleNamespace(build_antecedent_count_sql=build)
-    assert SqlQualityChecks._swrl_antecedent_population_sql(translator, store, TABLE, {}) is None
+    assert (
+        SqlQualityChecks._if_then_antecedent_population_sql(translator, store, TABLE, None, {})
+        is None
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +479,7 @@ def test_missing_view_fails_whole_task_with_build_hint(error):
 
 
 # ---------------------------------------------------------------------------
-# run_sql_checks: SWRL rules
+# run_sql_checks: IF-THEN rules
 
 
 VIP_RULE = {
@@ -483,199 +487,82 @@ VIP_RULE = {
     "antecedent": "Customer(?c) ^ hasOrder(?c, ?o)",
     "consequent": "VIP(?c)",
 }
-IS_SWRL_VIOLATION = starts("SELECT DISTINCT a1.subject AS s")
-IS_SWRL_SCOPE = starts("SELECT COUNT(DISTINCT a1.subject) AS cnt")
+IS_IF_THEN_VIOLATION = starts("SELECT DISTINCT a1.subject AS s")
+IS_IF_THEN_SCOPE = starts("SELECT COUNT(DISTINCT a1.subject) AS cnt")
 
 
-def test_swrl_rule_violations_are_mapped_and_scoped_to_antecedent_population():
+def test_if_then_rule_violations_are_mapped_and_scoped_to_antecedent_population():
     store = FakeStore(
         [
-            (IS_SWRL_VIOLATION, [{"s": "urn:c1", "extra": 1}, {"s": "urn:c2"}]),
-            (IS_SWRL_SCOPE, [{"cnt": 10}]),
+            (IS_IF_THEN_VIOLATION, [{"s": "urn:c1", "extra": 1}, {"s": "urn:c2"}]),
+            (IS_IF_THEN_SCOPE, [{"cnt": 10}]),
         ]
     )
-    tm = run([], store, swrl_rules=[VIP_RULE], ontology=ONTOLOGY)
+    tm = run([], store, if_then_rules=[VIP_RULE], ontology=ONTOLOGY)
     [res] = results_of(tm)
     assert res["name"] == "VipCustomer"
     assert res["category"] == "structural"
-    assert res["shape_id"] == "swrl:VipCustomer"
+    assert res["shape_id"] == "if_then:VipCustomer"
     assert res["status"] == "error"
     assert res["violations"] == [{"s": "urn:c1"}, {"s": "urn:c2"}]
     assert res["violation_total"] == 2
     assert res["total_population"] == 10 and res["pass_pct"] == 80.0
     assert res["severity"] == "sh:Violation"
 
-    [violation_sql] = [s for s in store.sql if IS_SWRL_VIOLATION(s)]
+    [violation_sql] = [s for s in store.sql if IS_IF_THEN_VIOLATION(s)]
     assert f"FROM {TABLE} a1" in violation_sql
     assert f"a1.object = '{CUSTOMER}'" in violation_sql
     assert "NOT EXISTS" in violation_sql and "https://ex.com/onto#VIP" in violation_sql
-    assert tm.progress[0][2] == "SWRL 1/1: VipCustomer"
+    assert tm.progress[0][2] == "IF-THEN 1/1: VipCustomer"
 
 
-def test_swrl_rule_without_violations_skips_population_query():
-    store = FakeStore([(IS_SWRL_VIOLATION, [])])
-    tm = run([], store, swrl_rules=[VIP_RULE], ontology=ONTOLOGY)
+def test_if_then_rule_without_violations_skips_population_query():
+    store = FakeStore([(IS_IF_THEN_VIOLATION, [])])
+    tm = run([], store, if_then_rules=[VIP_RULE], ontology=ONTOLOGY)
     [res] = results_of(tm)
     assert res["status"] == "success"
     assert "total_population" not in res
-    assert not any(IS_SWRL_SCOPE(s) for s in store.sql)
+    assert not any(IS_IF_THEN_SCOPE(s) for s in store.sql)
 
 
-def test_swrl_rule_respects_violation_limit():
+def test_if_then_rule_respects_violation_limit():
     rows = [{"s": f"urn:c{i}"} for i in range(4)]
-    store = FakeStore([(IS_TRUE_COUNT, [{"cnt": 99}]), (IS_SWRL_VIOLATION, rows)])
-    tm = run([], store, swrl_rules=[VIP_RULE], ontology=ONTOLOGY, violation_limit=3)
+    store = FakeStore([(IS_TRUE_COUNT, [{"cnt": 99}]), (IS_IF_THEN_VIOLATION, rows)])
+    tm = run([], store, if_then_rules=[VIP_RULE], ontology=ONTOLOGY, violation_limit=3)
     [res] = results_of(tm)
     assert len(res["violations"]) == 3 and res["violation_total"] == 99
-    assert any(IS_SWRL_VIOLATION(s) and s.endswith(" LIMIT 4") for s in store.sql)
+    assert any(IS_IF_THEN_VIOLATION(s) and s.endswith(" LIMIT 4") for s in store.sql)
 
 
-def test_disabled_and_untranslatable_swrl_rules():
+def test_disabled_and_untranslatable_if_then_rules():
     rules = [
         {**VIP_RULE, "enabled": False},
-        {"antecedent": "hasOrder(?c, ?o)", "consequent": "VIP(?c)", "check_id": "swrl:7"},
+        {"antecedent": "hasOrder(?c, ?o)", "consequent": "VIP(?c)", "check_id": "if_then:7"},
     ]
-    tm = run([], FakeStore(), swrl_rules=rules, ontology=ONTOLOGY)
+    tm = run([], FakeStore(), if_then_rules=rules, ontology=ONTOLOGY)
     [res] = results_of(tm)
-    assert res["name"] == "SWRL Rule 2"
-    assert res["shape_id"] == "swrl:7"
+    assert res["name"] == "IF-THEN Rule 2"
+    assert res["shape_id"] == "if_then:7"
     assert res["status"] == "info" and res["message"] == "Cannot translate to SQL"
 
 
-def test_swrl_query_error_becomes_failed_check_with_rule_sql():
-    store = FakeStore([(IS_SWRL_VIOLATION, RuntimeError("UNRESOLVED_COLUMN a9"))])
-    tm = run([], store, swrl_rules=[VIP_RULE], ontology=ONTOLOGY)
+def test_if_then_query_error_becomes_failed_check_with_rule_sql():
+    store = FakeStore([(IS_IF_THEN_VIOLATION, RuntimeError("UNRESOLVED_COLUMN a9"))])
+    tm = run([], store, if_then_rules=[VIP_RULE], ontology=ONTOLOGY)
     [res] = results_of(tm)
     assert res["status"] == "warning"
     assert res["message"] == "Query failed: UNRESOLVED_COLUMN a9"
-    assert res["shape_id"] == "swrl:VipCustomer"
-    assert IS_SWRL_VIOLATION(res["sql"])
+    assert res["shape_id"] == "if_then:VipCustomer"
+    assert IS_IF_THEN_VIOLATION(res["sql"])
     assert not tm.failed
 
 
-def test_swrl_rule_works_without_ontology():
+def test_if_then_rule_works_without_ontology():
     rule = {"name": "R", "antecedent": "Customer(?c)", "consequent": "VIP(?c)"}
     store = FakeStore()
-    tm = run([], store, swrl_rules=[rule], ontology=None)
+    tm = run([], store, if_then_rules=[rule], ontology=None)
     [res] = results_of(tm)
     assert res["status"] in ("success", "info")
-
-
-# ---------------------------------------------------------------------------
-# run_sql_checks: decision tables
-
-
-TIER_DT = {
-    "name": "Tier",
-    "target_class": "Customer",
-    "input_columns": [{"property": "amount"}],
-    "output_column": {"property": "tier", "action": "set_value"},
-    "rows": [{"conditions": [{"op": "gt", "value": "100"}], "action_value": "gold"}],
-}
-IS_DT_VIOLATION = starts("SELECT DISTINCT t0.subject AS s")
-
-
-def test_decision_table_violations_include_sql_and_class_population():
-    store = FakeStore(
-        [
-            (IS_DT_VIOLATION, [{"s": "urn:c1", "noise": "x"}]),
-            (IS_POPULATION, [{"cnt": 4}]),
-        ]
-    )
-    tm = run([], store, decision_tables=[TIER_DT], ontology=ONTOLOGY)
-    [res] = results_of(tm)
-    assert res["name"] == "Tier"
-    assert res["category"] == "conformance"
-    assert res["shape_id"] == "dt:Tier"
-    assert res["violations"] == [{"s": "urn:c1"}]
-    assert res["total_population"] == 4 and res["pass_pct"] == 75.0
-    assert f"FROM {TABLE} t0" in res["sql"]
-    assert f"t0.object = '{CUSTOMER}'" in res["sql"]
-    assert "inp0.predicate = 'https://ex.com/onto/amount'" in res["sql"]
-    [pop_sql] = [s for s in store.sql if IS_POPULATION(s)]
-    assert f"object = '{CUSTOMER}'" in pop_sql
-    assert tm.progress[0][2] == "DT 1/1: Tier"
-
-
-def test_decision_table_without_violations_has_no_population():
-    tm = run([], FakeStore(), decision_tables=[TIER_DT], ontology=ONTOLOGY)
-    [res] = results_of(tm)
-    assert res["status"] == "success" and "total_population" not in res
-
-
-def test_disabled_and_untranslatable_decision_tables():
-    tables = [{**TIER_DT, "enabled": False}, {"target_class": "Customer", "rows": []}]
-    tm = run([], FakeStore(), decision_tables=tables, ontology=None)
-    [res] = results_of(tm)
-    assert res["name"] == "Decision Table 2"
-    assert res["shape_id"] == "dt:1"
-    assert res["status"] == "info" and res["sql"] == ""
-
-
-def test_decision_table_query_error_becomes_failed_check():
-    store = FakeStore([(IS_DT_VIOLATION, RuntimeError("CAST_INVALID_INPUT"))])
-    tm = run([], store, decision_tables=[TIER_DT], ontology=ONTOLOGY)
-    [res] = results_of(tm)
-    assert res["status"] == "warning"
-    assert res["category"] == "conformance"
-    assert res["message"] == "Query failed: CAST_INVALID_INPUT"
-    assert IS_DT_VIOLATION(res["sql"])
-
-
-# ---------------------------------------------------------------------------
-# run_sql_checks: aggregate rules
-
-
-ORDER_COUNT = {
-    "name": "TooManyOrders",
-    "target_class": "Customer",
-    "group_by_property": "hasOrder",
-    "aggregate_function": "count",
-    "operator": "gt",
-    "threshold": "5",
-}
-IS_AGG_VIOLATION = contains("AS agg_val")
-
-
-def test_aggregate_rule_violations_keep_aggregate_value_and_population():
-    store = FakeStore(
-        [
-            (IS_AGG_VIOLATION, [{"s": "urn:c1", "agg_val": 9, "x": 1}, {"s": "urn:c2"}]),
-            (IS_POPULATION, [{"cnt": 20}]),
-        ]
-    )
-    tm = run([], store, aggregate_rules=[ORDER_COUNT], ontology=ONTOLOGY)
-    [res] = results_of(tm)
-    assert res["shape_id"] == "agg:TooManyOrders"
-    assert res["category"] == "conformance"
-    assert res["violations"] == [{"s": "urn:c1", "agg_val": 9}, {"s": "urn:c2", "agg_val": ""}]
-    assert res["total_population"] == 20 and res["pass_pct"] == 90.0
-    assert f"FROM {TABLE} t0" in res["sql"]
-    assert "HAVING COUNT(t_grp.object) > 5" in res["sql"]
-    assert tm.progress[0][2] == "Agg 1/1: TooManyOrders"
-
-
-def test_aggregate_rule_without_violations_and_query_error():
-    rules = [ORDER_COUNT, {**ORDER_COUNT, "name": "Broken", "threshold": "7"}]
-    store = FakeStore([(contains("> 7"), RuntimeError("boom"))])
-    tm = run([], store, aggregate_rules=rules, ontology=ONTOLOGY)
-    ok, broken = results_of(tm)
-    assert ok["status"] == "success" and "total_population" not in ok
-    assert broken["status"] == "warning"
-    assert broken["message"] == "Query failed: boom"
-    assert broken["shape_id"] == "agg:Broken"
-
-
-def test_disabled_and_untranslatable_aggregate_rules():
-    rules = [
-        {**ORDER_COUNT, "enabled": False},
-        {"target_class": "Customer", "aggregate_function": "median"},
-    ]
-    tm = run([], FakeStore(), aggregate_rules=rules, ontology=None)
-    [res] = results_of(tm)
-    assert res["name"] == "Aggregate Rule 2"
-    assert res["shape_id"] == "agg:1"
-    assert res["status"] == "info" and res["message"] == "Cannot translate to SQL"
 
 
 # ---------------------------------------------------------------------------
@@ -687,19 +574,15 @@ def test_mixed_run_reports_every_family_in_order_with_summary():
     tm = run(
         [min_count_shape()],
         store,
-        swrl_rules=[VIP_RULE],
-        decision_tables=[TIER_DT],
-        aggregate_rules=[ORDER_COUNT],
+        if_then_rules=[VIP_RULE],
         ontology=ONTOLOGY,
     )
     res = results_of(tm)
     assert [r["shape_id"] for r in res] == [
         "shape-email",
-        "swrl:VipCustomer",
-        "dt:Tier",
-        "agg:TooManyOrders",
+        "if_then:VipCustomer",
     ]
-    assert tm.completed[0][1]["summary"] == {"total": 4, "passed": 4, "failed": 0, "warnings": 0}
+    assert tm.completed[0][1]["summary"] == {"total": 2, "passed": 2, "failed": 0, "warnings": 0}
     assert all(re.search(r"\b" + re.escape(TABLE) + r"\b", s) for s in store.sql)
 
 
@@ -707,33 +590,27 @@ def test_mixed_run_progress_increases_monotonically_per_check():
     tm = run(
         [min_count_shape()],
         FakeStore(default=[]),
-        swrl_rules=[VIP_RULE],
-        decision_tables=[TIER_DT],
-        aggregate_rules=[ORDER_COUNT],
+        if_then_rules=[VIP_RULE],
         ontology=ONTOLOGY,
     )
-    assert [p for _, p, _ in tm.progress] == [0, 25, 50, 75]
+    assert [p for _, p, _ in tm.progress] == [0, 50]
 
 
 def test_parallel_mixed_run_keeps_input_order():
     tm = run(
         [min_count_shape()],
         FakeStore(default=[]),
-        swrl_rules=[VIP_RULE],
-        decision_tables=[TIER_DT],
-        aggregate_rules=[ORDER_COUNT],
+        if_then_rules=[VIP_RULE],
         ontology=ONTOLOGY,
         parallel=True,
     )
     res = results_of(tm)
     assert [r["shape_id"] for r in res] == [
         "shape-email",
-        "swrl:VipCustomer",
-        "dt:Tier",
-        "agg:TooManyOrders",
+        "if_then:VipCustomer",
     ]
-    assert tm.completed[0][1]["summary"]["total"] == 4
-    assert len(tm.progress) == 4
+    assert tm.completed[0][1]["summary"]["total"] == 2
+    assert len(tm.progress) == 2
     assert all(msg.startswith("Check ") for _, _, msg in tm.progress)
 
 

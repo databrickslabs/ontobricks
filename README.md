@@ -36,7 +36,7 @@
 - **Knowledge Store**: parsed documents live in Lakebase and are shared by Generate and Mapping. No Volume grants are needed.
 - **Unity Catalog Metric Views**: Metric Views import as data assets with dimension/measure roles; Auto-Map emits `MEASURE(...)` SQL.
 - **Entity Data Quality Checks**: right-click a node in Explorer, or call it from MCP, to check that entity against every SHACL shape that applies, with gauges for each dimension.
-- **Entity business rules**: attach SWRL rules, aggregate rules and decision tables to a class, then run them on one entity from Explorer or MCP.
+- **Entity business rules**: attach Simple (IF/THEN) and Complex (SPARQL CONSTRUCT) rules to a class, then run them on one entity from Explorer or MCP.
 - **Databricks Jobs as class actions**: trigger a workspace Job for an entity next to Unity Catalog functions.
 - **SPARQL playground**: query the graph in SPARQL and inspect the generated SQL.
 - **GitHub domain mirror**: push the domain configuration (OWL, R2RML, SHACL, rules) to a GitHub repository and restore it from there.
@@ -105,7 +105,7 @@ Selecting **No LLM** is a strict domain-level opt-out. LLM actions remain
 visible but unavailable and direct API calls are rejected with guidance to
 select a model in **Domain → General → AI**. Select and save an LLM there to
 make those actions available again without reloading the page. Deterministic
-reasoning and validation, including OWL/SWRL inference and SHACL data-quality
+reasoning and validation, including OWL/IF-THEN inference and SHACL data-quality
 checks, remain available while No LLM is selected.
 
 ## What's inside
@@ -136,12 +136,12 @@ before they break your graph.
 
 ### Build, reason and explore
 Materialize triples incrementally, then **reason** over the graph with OWL 2 RL
-inference, SWRL rules and SHACL validation. Explore interactively: two-phase
+inference, IF-THEN rules and SHACL validation. Explore interactively: two-phase
 search, N-hop neighbour expansion, cross-domain bridge navigation, community
 detection (Louvain, Label Propagation, Greedy Modularity), and explainable
 **cohort discovery**. Right-click any entity to run its **Data Quality Checks**
 (every SHACL shape on its class, its parents and the global ones, with
-per-dimension gauges), one of its **SWRL business rules**, or a class action
+per-dimension gauges), one of its **IF-THEN business rules**, or a class action
 (Unity Catalog function or **Databricks Job**) — the same checks and actions are
 MCP tools. Lakehouse domains can optionally read from a **Lakehouse//RT**
 query warehouse while builds stay on a classic or serverless warehouse. Query
@@ -155,13 +155,13 @@ See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
 ### Simulate what-if scenarios
 The **Simulation** workspace copies an entity neighbourhood, a cohort or a class
 population into a private sandbox, applies hypothetical facts ("what if this
-customer's credit score drops to 300?"), re-runs your SWRL, graph and business
+customer's credit score drops to 300?"), re-runs your IF-THEN, graph and business
 rules there, and shows exactly which triples would be added or removed — the
 live knowledge graph is never modified. Start from **Scenarios → New scenario**
 or **Simulate from here** on any Explorer entity. After a run, pick the scenario
 in Explorer's **Graph** dropdown (or Results → **Explorer**) to walk the
 sandbox. Lakebase, Lakehouse (Delta), and Neo4j backends are supported; Neo4j
-supports graph-shaped SWRL rules (class and object-property atoms). See the
+supports graph-shaped IF-THEN rules (class and object-property atoms). See the
 [Simulation guide](docs/user-guide.md#step-4-simulation-what-if-sandboxes).
 
 ### Publish to AI agents (MCP)

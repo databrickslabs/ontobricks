@@ -721,7 +721,7 @@ class Domain:
                 owl_content = Ontology.generate_owl(
                     self._s.ontology,
                     self._s.constraints,
-                    self._s.swrl_rules,
+                    self._s.if_then_rules,
                     self._s.axioms,
                     self._s.expressions,
                     self._s.groups,

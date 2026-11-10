@@ -1,4 +1,4 @@
-"""Routes for triggering an entity business rule (SWRL) from the Explorer and MCP.
+"""Routes for triggering an entity business rule (IF-THEN) from the Explorer and MCP.
 
 Internal: ``/dtwin/nodes/business-rule/request`` mints a one-time token,
 ``/confirm`` consumes it and runs the rule once, ``/cancel`` discards it.
@@ -56,7 +56,7 @@ def domain():
     d = MagicMock()
     d.info = {"name": "Customer 360"}
     d.domain_folder = "customer-360"
-    d.swrl_rules = [_RULE]
+    d.if_then_rules = [_RULE]
     d.get_classes.return_value = _CLASSES
     return d
 
@@ -259,21 +259,21 @@ async def test_public_route_runs_for_builder(monkeypatch, domain):
     assert run.call_args.kwargs["rule_name"] == "VipCustomer"
 
 
-def test_swrl_rename_and_delete_cascade_to_class_refs(client, monkeypatch):
+def test_if_then_rename_and_delete_cascade_to_class_refs(client, monkeypatch):
     from api.routers.internal import ontology as ont
 
     classes = [{"name": "Customer", "business_rules": [{"name": "VipCustomer"}]}]
     d = MagicMock()
-    d.swrl_rules = [dict(_RULE)]
+    d.if_then_rules = [dict(_RULE)]
     d.get_classes.return_value = classes
     d.diff_meta.return_value = {}
     monkeypatch.setattr(ont, "get_domain", lambda _sm: d)
 
     renamed = {**_RULE, "name": "VipClient"}
-    resp = client.post("/ontology/swrl/save", json={"rule": renamed, "index": 0})
+    resp = client.post("/ontology/if-then/save", json={"rule": renamed, "index": 0})
     assert resp.status_code == 200
     assert classes[0]["business_rules"] == [{"name": "VipClient"}]
 
-    resp = client.post("/ontology/swrl/delete", json={"index": 0})
+    resp = client.post("/ontology/if-then/delete", json={"index": 0})
     assert resp.status_code == 200
     assert classes[0]["business_rules"] == []

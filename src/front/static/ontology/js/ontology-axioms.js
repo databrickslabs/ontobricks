@@ -200,62 +200,45 @@ window.AxiomsModule = {
         if (!container) return;
 
         if (countBadge) countBadge.textContent = items.length > 0 ? items.length : '';
+        // Same card renderer as Business Rules → Complex.
+        container.querySelectorAll('.br-rule-card').forEach(c => c.remove());
 
         if (items.length === 0) {
-            if (noMsg) noMsg.style.display = 'block';
-            const cards = container.querySelectorAll('.axiom-card');
-            cards.forEach(c => c.remove());
+            if (noMsg) noMsg.classList.remove('d-none');
             return;
         }
+        if (noMsg) noMsg.classList.add('d-none');
+        if (!window.BusinessRulesModule || !BusinessRulesModule._renderRuleCard) return;
 
-        if (noMsg) noMsg.style.display = 'none';
-        const canEdit = (window.OB && typeof window.OB.canEditOntology === 'function')
-            ? window.OB.canEditOntology()
-            : window.isActiveVersion !== false;
-
-        let html = '';
         for (const item of items) {
             const index = item._index;
             const collection = item._collection || 'axioms';
-            const badge = this.getAxiomTypeBadge(item.type);
-            const actionButtons = canEdit ? `
-                <div class="btn-group btn-group-sm ontology-edit-btn">
-                    <button class="btn btn-outline-secondary" onclick="AxiomsModule.editAxiom(${index}, '${collection}')" title="Edit">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-outline-danger" onclick="AxiomsModule.deleteAxiom(${index}, '${collection}')" title="Delete">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            ` : `
-                <button class="btn btn-sm btn-outline-secondary" onclick="AxiomsModule.viewAxiom(${index}, '${collection}')" title="View Details">
-                    <i class="bi bi-eye"></i> View
-                </button>
-            `;
-
-            html += `
-                <div class="card mb-2 axiom-card">
-                    <div class="card-body py-2 px-3">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <span class="badge ${badge} me-2">${this.getAxiomTypeLabel(item.type)}</span>
-                                <strong>${this.escapeHtml(item.subject)}</strong>
-                                ${item.objects && item.objects.length > 0 ?
-                                    `<span class="text-muted mx-2">${this.getAxiomSymbol(item.type)}</span>
-                                     <span class="text-primary">${item.objects.map(o => this.escapeHtml(o)).join(', ')}</span>` : ''}
-                                ${item.individuals ? `<span class="text-success ms-2">{${this.escapeHtml(item.individuals)}}</span>` : ''}
-                                ${item.chain ? `<span class="text-info ms-2">${item.chain.map(c => this.escapeHtml(c)).join(' ∘ ')}</span>` : ''}
-                                ${item.description ? `<small class="text-muted d-block">${this.escapeHtml(item.description)}</small>` : ''}
-                            </div>
-                            ${actionButtons}
-                        </div>
-                    </div>
-                </div>
-            `;
+            const badge =
+                `<span class="badge ${this.getAxiomTypeBadge(item.type)} bg-opacity-75 small">` +
+                `${this.escapeHtml(this.getAxiomTypeLabel(item.type))}</span>`;
+            BusinessRulesModule._renderRuleCard(container, {
+                name: item.subject || '(unnamed)',
+                meta: this._itemMeta(item),
+                badge,
+                onEdit: () => this.editAxiom(index, collection),
+                onDelete: () => this.deleteAxiom(index, collection),
+            });
         }
+    },
 
-        const noMsgHtml = noMsg ? noMsg.outerHTML : '';
-        container.innerHTML = html + noMsgHtml;
+    _itemMeta(item) {
+        const parts = [];
+        if (item.objects && item.objects.length > 0) {
+            const objs = item.objects.map(o => this.escapeHtml(o)).join(', ');
+            parts.push(`${this.getAxiomSymbol(item.type)} ${objs}`);
+        }
+        if (item.individuals) {
+            parts.push(`{${this.escapeHtml(item.individuals)}}`);
+        }
+        if (item.chain && item.chain.length) {
+            parts.push(item.chain.map(c => this.escapeHtml(c)).join(' ∘ '));
+        }
+        return parts.join(' · ');
     },
     
     getAxiomSymbol(type) {

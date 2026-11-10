@@ -1,7 +1,7 @@
 """Tests for the ReasoningService orchestration layer.
 
-Complements test_reasoning.py (models + OWLRL) and test_swrl_engine.py
-(SWRL translators + engine) by covering the service-level orchestration,
+Complements test_reasoning.py (models + OWLRL) and test_if_then_engine.py
+(IF-THEN translators + engine) by covering the service-level orchestration,
 phase skipping, graph reasoning, constraint checks, and helper functions.
 """
 
@@ -30,7 +30,7 @@ requires_owlrl = pytest.mark.skipif(not _has_owlrl, reason="owlrl not installed"
 def _domain_session(
     ontology=None,
     owl_content="",
-    swrl_rules=None,
+    if_then_rules=None,
     info=None,
 ):
     """Build a lightweight mock DomainSession."""
@@ -50,11 +50,11 @@ def _domain_session(
             },
         ],
         "constraints": [],
-        "swrl_rules": swrl_rules or [],
+        "if_then_rules": if_then_rules or [],
         "shacl_shapes": [],
     }
     domain.generated_owl = owl_content
-    domain.swrl_rules = swrl_rules or []
+    domain.if_then_rules = if_then_rules or []
     domain.info = info or {"name": "test_graph"}
     return domain
 
@@ -199,26 +199,26 @@ class TestFindPropertiesByCharacteristic:
 class TestRunFullReasoning:
     def test_all_phases_disabled(self):
         svc = ReasoningService(_domain_session())
-        result = svc.run_full_reasoning({"tbox": False, "swrl": False, "graph": False})
+        result = svc.run_full_reasoning({"tbox": False, "if_then": False, "graph": False})
         assert result.stats.get("tbox_skipped") is True
-        assert result.stats.get("swrl_skipped") is True
+        assert result.stats.get("if_then_skipped") is True
         assert result.stats.get("graph_skipped") is True
         assert "total_duration_seconds" in result.stats
 
     def test_tbox_skipped_when_no_owl(self):
         svc = ReasoningService(_domain_session(owl_content=""))
-        result = svc.run_full_reasoning({"swrl": False, "graph": False})
+        result = svc.run_full_reasoning({"if_then": False, "graph": False})
         assert result.stats.get("tbox_skipped") is True
 
-    def test_swrl_skipped_when_no_rules(self):
-        svc = ReasoningService(_domain_session(swrl_rules=[]))
+    def test_if_then_skipped_when_no_rules(self):
+        svc = ReasoningService(_domain_session(if_then_rules=[]))
         result = svc.run_full_reasoning({"tbox": False, "graph": False})
-        assert result.stats.get("swrl_skipped") is True
+        assert result.stats.get("if_then_skipped") is True
 
-    def test_swrl_uses_ontology_rules_when_attr_empty(self):
-        domain = _domain_session(swrl_rules=[])
-        domain.swrl_rules = []
-        domain.ontology["swrl_rules"] = [
+    def test_if_then_uses_ontology_rules_when_attr_empty(self):
+        domain = _domain_session(if_then_rules=[])
+        domain.if_then_rules = []
+        domain.ontology["if_then_rules"] = [
             {
                 "name": "keep",
                 "antecedent": "Customer(?x) \u2227 hasOrder(?x, ?y)",
@@ -227,13 +227,13 @@ class TestRunFullReasoning:
         ]
         store = MagicMock()
         store.execute_query.return_value = []
-        result = ReasoningService(domain, store).run_swrl_rules()
+        result = ReasoningService(domain, store).run_if_then_rules()
         assert result.stats.get("skipped") is not True
         assert result.stats.get("rules_count") == 1
 
     def test_graph_skipped_when_no_store(self):
         svc = ReasoningService(_domain_session(), triplestore_backend=None)
-        result = svc.run_full_reasoning({"tbox": False, "swrl": False})
+        result = svc.run_full_reasoning({"tbox": False, "if_then": False})
         assert result.stats.get("graph_skipped") is True
 
     @requires_owlrl
@@ -246,7 +246,7 @@ class TestRunFullReasoning:
             "ex:B a owl:Class ; rdfs:subClassOf ex:A .\n"
         )
         svc = ReasoningService(_domain_session(owl_content=owl))
-        result = svc.run_full_reasoning({"swrl": False, "graph": False})
+        result = svc.run_full_reasoning({"if_then": False, "graph": False})
         assert "tbox_duration_seconds" in result.stats
         assert result.stats.get("tbox_skipped") is not True
 
@@ -254,7 +254,7 @@ class TestRunFullReasoning:
         domain = _domain_session()
         domain.generated_owl = "invalid turtle!!!"
         svc = ReasoningService(domain)
-        result = svc.run_full_reasoning({"swrl": False, "graph": False})
+        result = svc.run_full_reasoning({"if_then": False, "graph": False})
         has_error = result.stats.get("tbox_error") or result.stats.get("tbox_skipped")
         assert has_error
 
@@ -286,22 +286,22 @@ class TestRunTboxReasoning:
 
 
 # ===========================================================================
-# run_swrl_rules
+# run_if_then_rules
 # ===========================================================================
 
 
-class TestRunSwrlRules:
+class TestRunIfThenRules:
     def test_no_rules(self):
-        svc = ReasoningService(_domain_session(swrl_rules=[]))
-        result = svc.run_swrl_rules()
+        svc = ReasoningService(_domain_session(if_then_rules=[]))
+        result = svc.run_if_then_rules()
         assert result.stats.get("skipped") is True
 
     def test_no_store(self):
         rules = [{"name": "r1", "antecedent": "A(?x)", "consequent": "B(?x)"}]
         svc = ReasoningService(
-            _domain_session(swrl_rules=rules), triplestore_backend=None
+            _domain_session(if_then_rules=rules), triplestore_backend=None
         )
-        result = svc.run_swrl_rules()
+        result = svc.run_if_then_rules()
         assert result.stats.get("skipped") is True
 
     def test_with_rules_and_store(self):
@@ -315,11 +315,11 @@ class TestRunSwrlRules:
         store = MagicMock()
         store.execute_query.return_value = [{"s": "http://test.org/data/c1"}]
         svc = ReasoningService(
-            _domain_session(swrl_rules=rules),
+            _domain_session(if_then_rules=rules),
             triplestore_backend=store,
         )
-        result = svc.run_swrl_rules()
-        assert result.stats["phase"] == "swrl"
+        result = svc.run_if_then_rules()
+        assert result.stats["phase"] == "if_then"
 
 
 # ===========================================================================
@@ -355,7 +355,7 @@ class TestRunGraphReasoning:
                 },
             ],
             "constraints": [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "shacl_shapes": [],
         }
         svc = ReasoningService(
@@ -389,7 +389,7 @@ class TestRunGraphReasoning:
                 },
             ],
             "constraints": [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "shacl_shapes": [],
         }
         svc = ReasoningService(
@@ -416,7 +416,7 @@ class TestRunGraphReasoning:
                 },
             ],
             "constraints": [],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "shacl_shapes": [],
         }
         svc = ReasoningService(
@@ -452,7 +452,7 @@ class TestRunConstraintChecks:
                     "cardinalityValue": 1,
                 }
             ],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "shacl_shapes": [],
         }
         svc = ReasoningService(
@@ -476,7 +476,7 @@ class TestRunConstraintChecks:
                     "cardinalityValue": 1,
                 }
             ],
-            "swrl_rules": [],
+            "if_then_rules": [],
             "shacl_shapes": [],
         }
         store = MagicMock()  # SQL-backed store

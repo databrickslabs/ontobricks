@@ -240,7 +240,7 @@
                                             <ul>
                                                 <li><strong>Data Quality (SHACL)</strong> &mdash; define shapes for completeness, cardinality, pattern, consistency...</li>
                                                 <li><strong>Sanity Checks</strong> &mdash; advisory ontology design lint (broken refs, orphans, naming, hierarchy)</li>
-                                                <li><strong>Business Rules (SWRL)</strong> &mdash; author inference rules using the graphical D3 editor</li>
+                                                <li><strong>Business Rules (IF-THEN)</strong> &mdash; author inference rules using the graphical D3 editor</li>
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
                                             </ul>
                                             <p>Export the generated OWL/Turtle from <strong>Studio</strong> with <strong>Export</strong> (top right).</p>
@@ -288,7 +288,7 @@
                                                 <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
                                                 <li><strong>Chat</strong> &mdash; ask natural-language questions over the materialized graph</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
-                                                <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning (SQL on Delta / Lakebase; Cypher on Neo4j)</li>
+                                                <li><strong>Business rules</strong> &mdash; OWL 2 RL &amp; IF-THEN reasoning (SQL on Delta / Lakebase; Cypher on Neo4j)</li>
                                             </ul>
                                             <p>A <em>Readiness Status</em> indicator tells you when ontology &amp; mapping are both ready to sync.</p>
                                         </div>
@@ -307,7 +307,7 @@
                                             <ul>
                                                 <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
                                                 <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
-                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Inference, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed by comparing the materialised sandbox after-picture to its before-picture companion; <em>Explorer</em> opens that sandbox in the graph viewer</li>
+                                                <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Business rules, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed by comparing the materialised sandbox after-picture to its before-picture companion; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Compare</strong> &mdash; overlay a ready sandbox on the current live graph (inferred or asserted only), on the same scope as the scenario: one colour-coded graph of unchanged, added (sandbox only) and removed (live only) triples, with exact counters and a details panel</li>
                                                 <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
                                             </ul>
@@ -354,7 +354,7 @@
                                 <div class="col-md-6">
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-lightning"></i></div>
-                                        <h5>SWRL Reasoning</h5>
+                                        <h5>IF-THEN Reasoning</h5>
                                         <p>Graphical D3 rule editor. Rules compile to SQL (Delta / Lakebase) or run as Cypher on Neo4j. Per-rule progress tracking during inference.</p>
                                     </div>
                                 </div>
@@ -512,7 +512,7 @@
                                 <dt>RDF / Triple</dt><dd>Subject-Predicate-Object statement &mdash; the native data model of the triple store.</dd>
                                 <dt>R2RML</dt><dd>W3C standard for mapping relational data (SQL tables) to RDF triples.</dd>
                                 <dt>SHACL</dt><dd>W3C Shapes Constraint Language &mdash; used for data quality validation.</dd>
-                                <dt>SWRL</dt><dd>Semantic Web Rule Language &mdash; &ldquo;IF ... THEN ...&rdquo; inference rules.</dd>
+                                <dt>IF-THEN</dt><dd>Inference rules written as &ldquo;IF ... THEN ...&rdquo;.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
                                 <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Simulation &rarr; Cohorts</em>, run under <em>Simulation &rarr; Run</em>.</dd>
@@ -571,7 +571,7 @@
                                             <li><a href="https://www.w3.org/TR/owl2-overview/" target="_blank" rel="noopener">OWL 2 <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                             <li><a href="https://www.w3.org/TR/r2rml/" target="_blank" rel="noopener">R2RML <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                             <li><a href="https://www.w3.org/TR/shacl/" target="_blank" rel="noopener">SHACL <i class="bi bi-box-arrow-up-right small"></i></a></li>
-                                            <li><a href="https://www.w3.org/submissions/SWRL/" target="_blank" rel="noopener">SWRL <i class="bi bi-box-arrow-up-right small"></i></a></li>
+                                            <li><a href="https://www.w3.org/submissions/IF-THEN/" target="_blank" rel="noopener">IF-THEN <i class="bi bi-box-arrow-up-right small"></i></a></li>
                                         </ul>
                                     </div>
                                 </div>

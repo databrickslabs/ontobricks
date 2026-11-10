@@ -85,7 +85,7 @@ let sharedPanelDatasets = [];
 let sharedPanelActions = [];
 // Databricks Jobs bound as class actions: { kind: 'job', job_id, job_name, fullName, description }.
 let sharedPanelJobs = [];
-// SWRL business rules referenced by name: [{ name }]. Only rules whose class
+// IF-THEN business rules referenced by name: [{ name }]. Only rules whose class
 // atoms cite this entity (or one of its parents) can be attached; they are
 // triggered on a single entity from the Knowledge Graph and over MCP.
 let sharedPanelBusinessRules = [];
@@ -896,9 +896,9 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                     <div id="sharedEntityJobs" class="panel-section-body"><div id="sharedEntityJobsContent"></div></div>
                 </section>
                 <section class="panel-section">
-                    ${panelSectionHeader({ targetId: 'sharedEntityBusinessRules', icon: 'bi-diagram-3', title: 'Inference rules (SWRL)', chip: 'graphWrite',
+                    ${panelSectionHeader({ targetId: 'sharedEntityBusinessRules', icon: 'bi-diagram-3', title: 'Inference rules (IF-THEN)', chip: 'graphWrite',
                         subtitle: 'Infer new facts for this entity.',
-                        help: 'SWRL rules from Ontology → Business Rules, triggered on a single entity. The inferred triples are written to the graph.',
+                        help: 'IF-THEN rules from Ontology → Business Rules, triggered on a single entity. The inferred triples are written to the graph.',
                         onAdd: 'openBusinessRuleSelectorModal()', viewOnly })}
                     <div id="sharedEntityBusinessRules" class="panel-section-body"><div id="sharedEntityBusinessRulesContent"></div></div>
                 </section>
@@ -2242,17 +2242,17 @@ function closeActionSelectorModal() {
 }
 
 // =====================================================
-// BUSINESS RULES (SWRL rules referenced by the entity)
+// BUSINESS RULES (IF-THEN rules referenced by the entity)
 // =====================================================
-// Mirrors OntologyRules.swrl_rule_classes / rules_for_class on the backend.
+// Mirrors OntologyRules.if_then_rule_classes / rules_for_class on the backend.
 
-const _SWRL_CLASS_ATOM_RE = /(?:(\w+):)?([A-Za-z_]\w*)\s*\(([^)]*)\)/g;
+const _IF_THEN_CLASS_ATOM_RE = /(?:(\w+):)?([A-Za-z_]\w*)\s*\(([^)]*)\)/g;
 let _businessRuleCandidates = [];
 
-function swrlRuleClassNames(rule) {
+function ifThenRuleClassNames(rule) {
     const names = new Set();
     ['antecedent', 'consequent'].forEach(part => {
-        for (const m of String((rule && rule[part]) || '').matchAll(_SWRL_CLASS_ATOM_RE)) {
+        for (const m of String((rule && rule[part]) || '').matchAll(_IF_THEN_CLASS_ATOM_RE)) {
             if (m[1]) continue;
             const args = m[3].split(',').map(a => a.trim()).filter(Boolean);
             if (args.length === 1) names.add(m[2].toLowerCase());
@@ -2268,7 +2268,7 @@ function rulesUsingClass(rules, classes, className, parentName) {
     const wanted = new Set(lineage.filter(Boolean).map(n => n.toLowerCase()));
     return (rules || []).filter(r => {
         if (!r || !r.name) return false;
-        for (const n of swrlRuleClassNames(r)) if (wanted.has(n)) return true;
+        for (const n of ifThenRuleClassNames(r)) if (wanted.has(n)) return true;
         return false;
     });
 }
@@ -2309,13 +2309,13 @@ async function openBusinessRuleSelectorModal() {
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-diagram-3 me-2"></i>Select inference rules (SWRL)</h5>
+                        <h5 class="modal-title"><i class="bi bi-diagram-3 me-2"></i>Select inference rules (IF-THEN)</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <div class="alert alert-info py-2 px-3 small">
                             <i class="bi bi-info-circle me-1"></i>
-                            Only SWRL rules that reference <strong>${escapeHtml(className)}</strong> or one of its parents are listed.
+                            Only IF-THEN rules that reference <strong>${escapeHtml(className)}</strong> or one of its parents are listed.
                         </div>
                         <div class="d-flex gap-2 mb-2">
                             <input type="text" class="form-control form-control-sm" id="businessRuleSearch" placeholder="Search rules..." oninput="_renderBusinessRuleCandidates()">
@@ -2338,11 +2338,11 @@ async function openBusinessRuleSelectorModal() {
 
     let rules = [];
     try {
-        const r = await fetch('/ontology/swrl/list', { credentials: 'same-origin' });
+        const r = await fetch('/ontology/if-then/list', { credentials: 'same-origin' });
         const d = await r.json();
         rules = d.rules || [];
     } catch (e) {
-        console.error('[SharedPanel] Could not load SWRL rules:', e);
+        console.error('[SharedPanel] Could not load IF-THEN rules:', e);
     }
     const attached = new Set(sharedPanelBusinessRules.map(b => b.name));
     _businessRuleCandidates = rulesUsingClass(rules, OntologyState.config.classes || [], className, parentName)
@@ -2354,7 +2354,7 @@ function _renderBusinessRuleCandidates() {
     const list = document.getElementById('businessRuleList');
     if (!list) return;
     if (!_businessRuleCandidates.length) {
-        list.innerHTML = '<div class="text-muted p-3 text-center">No SWRL rule references this entity or its parents.</div>';
+        list.innerHTML = '<div class="text-muted p-3 text-center">No IF-THEN rule references this entity or its parents.</div>';
         return;
     }
     const q = (document.getElementById('businessRuleSearch')?.value || '').toLowerCase();

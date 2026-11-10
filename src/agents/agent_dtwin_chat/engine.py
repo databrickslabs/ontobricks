@@ -185,6 +185,86 @@ LINKS TO THE KNOWLEDGE GRAPH (VERY IMPORTANT)
 """
 
 
+def _append_history(messages: List[dict], conversation_history: Optional[List[dict]]) -> None:
+    """Replay prior user/assistant turns onto *messages*."""
+    if not conversation_history:
+        return
+    for msg in conversation_history:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role in ("user", "assistant") and isinstance(content, str):
+            messages.append({"role": role, "content": content})
+
+
+def _dispatch_tool_calls(
+    tool_calls: list,
+    *,
+    iteration: int,
+    messages: List[dict],
+    result: AgentResult,
+    ctx: ToolContext,
+    on_event: Optional[Callable[["AgentStep"], None]],
+) -> None:
+    """Run one LLM tool-call batch and append the results to *messages*."""
+    for tc in tool_calls:
+        func = tc.get("function", {})
+        tool_name = func.get("name", "")
+        tool_id = tc.get("id", "")
+        raw_args = func.get("arguments", "{}")
+
+        try:
+            arguments = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+        except json.JSONDecodeError:
+            arguments = {}
+
+        logger.info(
+            "dtwin_chat: iteration %d -- tool_call '%s'",
+            iteration + 1,
+            tool_name,
+        )
+
+        call_step = AgentStep(
+            step_type="tool_call",
+            content=json.dumps(arguments, default=str),
+            tool_name=tool_name,
+        )
+        result.steps.append(call_step)
+        if on_event:
+            on_event(call_step)
+
+        tool_t0 = time.time()
+        tool_result = dispatch_tool(
+            TOOL_HANDLERS,
+            ctx,
+            tool_name,
+            arguments,
+            trace_name=_TRACE_NAME,
+        )
+        tool_elapsed = int((time.time() - tool_t0) * 1000)
+
+        # Full result, not truncated: the Graph Chat UI shows the
+        # complete thinking trace (the LLM already gets the full payload).
+        result_step = AgentStep(
+            step_type="tool_result",
+            content=tool_result,
+            tool_name=tool_name,
+            duration_ms=tool_elapsed,
+        )
+        result.steps.append(result_step)
+        if on_event:
+            on_event(result_step)
+
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_id,
+                "content": tool_result,
+            }
+        )
+
+
 def _tool_context(
     host: str,
     token: str,
@@ -278,15 +358,7 @@ def run_agent(
     )
 
     messages = [{"role": "system", "content": system_prompt}]
-    if conversation_history:
-        for msg in conversation_history:
-            if not isinstance(msg, dict):
-                continue
-            role = msg.get("role")
-            content = msg.get("content", "")
-            if role in ("user", "assistant") and isinstance(content, str):
-                messages.append({"role": role, "content": content})
-
+    _append_history(messages, conversation_history)
     messages.append({"role": "user", "content": user_message})
 
     for iteration in range(MAX_ITERATIONS):
@@ -334,66 +406,14 @@ def run_agent(
 
         if tool_calls:
             messages.append(message)
-
-            for tc in tool_calls:
-                func = tc.get("function", {})
-                tool_name = func.get("name", "")
-                tool_id = tc.get("id", "")
-                raw_args = func.get("arguments", "{}")
-
-                try:
-                    arguments = (
-                        json.loads(raw_args)
-                        if isinstance(raw_args, str)
-                        else raw_args
-                    )
-                except json.JSONDecodeError:
-                    arguments = {}
-
-                logger.info(
-                    "dtwin_chat: iteration %d -- tool_call '%s'",
-                    iteration + 1,
-                    tool_name,
-                )
-
-                call_step = AgentStep(
-                    step_type="tool_call",
-                    content=json.dumps(arguments, default=str),
-                    tool_name=tool_name,
-                )
-                result.steps.append(call_step)
-                if on_event:
-                    on_event(call_step)
-
-                tool_t0 = time.time()
-                tool_result = dispatch_tool(
-                    TOOL_HANDLERS,
-                    ctx,
-                    tool_name,
-                    arguments,
-                    trace_name=_TRACE_NAME,
-                )
-                tool_elapsed = int((time.time() - tool_t0) * 1000)
-
-                # Full result, not truncated: the Graph Chat UI shows the
-                # complete thinking trace (the LLM already gets the full payload).
-                result_step = AgentStep(
-                    step_type="tool_result",
-                    content=tool_result,
-                    tool_name=tool_name,
-                    duration_ms=tool_elapsed,
-                )
-                result.steps.append(result_step)
-                if on_event:
-                    on_event(result_step)
-
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_id,
-                        "content": tool_result,
-                    }
-                )
+            _dispatch_tool_calls(
+                tool_calls,
+                iteration=iteration,
+                messages=messages,
+                result=result,
+                ctx=ctx,
+                on_event=on_event,
+            )
         else:
             content = normalize_reply_content(content)
             result.success = True
