@@ -497,28 +497,10 @@ const SimulationEvaluate = {
     },
 
     _graphPng() {
-        const container = document.getElementById('simCompareCanvas');
-        if (!container) return '';
-        const canvases = Array.from(container.querySelectorAll('canvas'))
-            .filter((c) => c.width && c.height);
-        if (!canvases.length) return '';
-        const width = Math.max(...canvases.map((c) => c.width));
-        const height = Math.max(...canvases.map((c) => c.height));
-        const out = document.createElement('canvas');
-        out.width = width;
-        out.height = height;
-        const ctx = out.getContext('2d');
-        if (!ctx) return '';
-        const fill = getComputedStyle(document.documentElement)
-            .getPropertyValue('--db-canvas-warm').trim() || '#FAFAF9';
-        ctx.fillStyle = fill;
-        ctx.fillRect(0, 0, width, height);
-        canvases.forEach((c) => ctx.drawImage(c, 0, 0));
-        try {
-            return out.toDataURL('image/png');
-        } catch (_) {
-            return '';
-        }
+        // Prefer the snapshot taken while the Graphs pane was visible.
+        // Live canvas reads from Evaluate are blank (Sigma WebGL clears).
+        const cached = window.SimulationCompare && SimulationCompare.lastGraphPng;
+        return cached || '';
     },
 
     _mdColumn(title, markdown) {

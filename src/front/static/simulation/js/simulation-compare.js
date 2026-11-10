@@ -8,6 +8,8 @@ const SimulationCompare = {
     data: null,
     graph: null,
     renderer: null,
+    /** PNG data URL captured right after a visible Sigma refresh. */
+    lastGraphPng: '',
     _libsPromise: null,
     _requestSeq: 0,
     _lastId: '',
@@ -155,6 +157,7 @@ const SimulationCompare = {
         if (run) run.disabled = true;
         this._lastId = id;
         this._syncUrl(id, inferred);
+        this._teardown();
         this._showState('loading');
         try {
             const qs = new URLSearchParams({ include_inferred: inferred ? 'true' : 'false' });
@@ -170,6 +173,7 @@ const SimulationCompare = {
         } catch (err) {
             if (seq !== this._requestSeq) return;
             this.data = null;
+            this._teardown();
             this._showState('idle');
             showNotification(`Could not compare: ${err.message}`, 'error');
         } finally {
@@ -260,6 +264,41 @@ const SimulationCompare = {
         }
         this.renderer = null;
         this.graph = null;
+        this.lastGraphPng = '';
+    },
+
+    /**
+     * Composite Sigma's layered canvases into a PNG. Sigma's WebGL layers use
+     * ``preserveDrawingBuffer: false``, so the read must follow a synchronous
+     * ``refresh()`` in the same turn. A hidden container renders at 1×1
+     * (``allowInvalidContainer``), so a hidden pane keeps the last snapshot.
+     */
+    _snapshotGraphPng() {
+        const container = document.getElementById('simCompareCanvas');
+        if (!this.renderer || !container
+            || container.offsetWidth < 2 || container.offsetHeight < 2) {
+            return this.lastGraphPng;
+        }
+        this.renderer.refresh();
+        const canvases = Array.from(container.querySelectorAll('canvas'))
+            .filter((c) => c.width > 1 && c.height > 1);
+        if (!canvases.length) return this.lastGraphPng;
+        const width = Math.max(...canvases.map((c) => c.width));
+        const height = Math.max(...canvases.map((c) => c.height));
+        const out = document.createElement('canvas');
+        out.width = width;
+        out.height = height;
+        const ctx = out.getContext('2d');
+        if (!ctx) return this.lastGraphPng;
+        const fill = getComputedStyle(document.documentElement)
+            .getPropertyValue('--db-canvas-warm').trim() || '#FAFAF9';
+        ctx.fillStyle = fill;
+        ctx.fillRect(0, 0, width, height);
+        canvases.forEach((c) => ctx.drawImage(c, 0, 0));
+        try {
+            this.lastGraphPng = out.toDataURL('image/png');
+        } catch (_) { /* keep previous snapshot */ }
+        return this.lastGraphPng;
     },
 
     _buildGraph(data, colors) {
@@ -369,6 +408,7 @@ const SimulationCompare = {
             try {
                 this.renderer.resize();
                 this.renderer.refresh();
+                this._snapshotGraphPng();
             } catch (_) { /* ignore */ }
         });
         if (window.ResizeObserver && !this._resizeObserver) {
@@ -377,6 +417,7 @@ const SimulationCompare = {
                     try {
                         this.renderer.resize();
                         this.renderer.refresh();
+                        this._snapshotGraphPng();
                     } catch (_) { /* ignore */ }
                 }
             });

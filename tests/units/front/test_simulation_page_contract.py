@@ -596,6 +596,39 @@ def test_evaluate_opens_a_printable_report_after_insights_succeed():
     assert "Analysis" in js
 
 
+def test_evaluate_report_uses_compare_graph_snapshot_cached_after_refresh():
+    """Sigma WebGL canvases clear after composite (preserveDrawingBuffer:false).
+
+    The report opens from the Evaluate tab while the Graphs pane is
+    ``display:none``, so a live ``drawImage`` of those canvases yields an
+    empty square. Capture a PNG in the same turn as ``renderer.refresh()``
+    while the Graphs pane is visible, then reuse that snapshot in the report.
+    """
+    compare = _read(FRONT / "static/simulation/js/simulation-compare.js")
+    evaluate = _read(FRONT / "static/simulation/js/simulation-evaluate.js")
+
+    assert "lastGraphPng:" in compare or "lastGraphPng =" in compare
+    assert "_snapshotGraphPng" in compare
+    assert "this.renderer.refresh()" in compare
+    assert "this._snapshotGraphPng()" in compare
+    assert "this.lastGraphPng = ''" in compare or 'this.lastGraphPng = ""' in compare
+
+    snapshot = compare.split("_snapshotGraphPng() {", 1)[1].split("\n    },", 1)[0]
+    # Hidden pane renders at 1x1 — must not overwrite the good snapshot.
+    assert "container.offsetWidth < 2" in snapshot
+    assert "container.offsetHeight < 2" in snapshot
+    assert "return this.lastGraphPng;" in snapshot
+    # Synchronous refresh in the same turn as the WebGL read.
+    assert snapshot.index("this.renderer.refresh()") < snapshot.index("drawImage")
+    assert "c.width > 1 && c.height > 1" in snapshot
+
+    assert "SimulationCompare.lastGraphPng" in evaluate
+    # Must not re-read hidden WebGL canvases as the primary source.
+    graph_png = evaluate.split("_graphPng()", 1)[1].split("_mdColumn", 1)[0]
+    assert "querySelectorAll('canvas')" not in graph_png
+    assert "lastGraphPng" in graph_png
+
+
 def test_evaluate_css_fills_the_tab_height():
     css = _read(FRONT / "static/simulation/css/simulation.css")
     assert "#simCompareTabContent > .tab-pane.active" in css

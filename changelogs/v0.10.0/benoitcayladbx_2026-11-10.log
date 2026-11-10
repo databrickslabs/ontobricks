@@ -642,3 +642,130 @@ Modified files:
 
 Test result:
 - uv run --frozen pytest -q -m "not scenario" → 10271 passed, 325 skipped, 8 deselected, 0 failed in 46.89s
+
+
+Fix empty compare-graph image in Simulation Evaluate report
+===========================================================
+
+Context: Simulation → Compare → Evaluate report showed the comparison
+graph as an empty warm square. Sigma.js WebGL layers use
+``preserveDrawingBuffer: false``, and the report opened from the Evaluate
+tab while the Graphs pane was ``display:none``, so a live canvas composite
+read a cleared buffer.
+
+Changes:
+1. src/front/static/simulation/js/simulation-compare.js
+   Snapshot the layered canvases into ``lastGraphPng`` in the same turn as
+   ``renderer.refresh()`` (and on resize). Clear the snapshot on teardown /
+   failed compare.
+2. src/front/static/simulation/js/simulation-evaluate.js
+   Report graph image uses ``SimulationCompare.lastGraphPng`` instead of
+   re-reading hidden WebGL canvases.
+3. tests/units/front/test_simulation_page_contract.py
+   Contract: snapshot after refresh; evaluate report consumes the cache.
+
+Modified files:
+- src/front/static/simulation/js/simulation-compare.js
+- src/front/static/simulation/js/simulation-evaluate.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10272 passed, 325 skipped, 8 deselected, 0 failed in 45.25s
+
+
+Move OWL preview from Domain to Ontology → General (Informations | OWL tabs)
+===========================================================================
+
+Context: The generated OWL preview lived under Domain → W3C Standards → OWL,
+while the Ontology page already carried an orphaned OWL pane (no menu entry).
+Ontology → General now hosts both views as tabs: "Informations" (the former
+General content) and "OWL" (the Turtle preview, regenerated on open).
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the `owl-content` item from the Domain `domain-w3c` group (R2RML stays).
+2. src/front/templates/domain.html
+   Removed the `owl-content-section` block and the `domain-owl-content.js` include.
+3. src/front/static/domain/js/domain.js
+   Removed the `owl-content` section-change branch.
+4. src/front/templates/partials/domain/_domain_owl_content.html (deleted)
+5. src/front/static/domain/js/domain-owl-content.js (deleted)
+   Domain OWL partial and its loader (`/ontology/export-owl`) retired; the
+   Ontology OWL module now drives the preview from the live ontology state.
+6. src/front/templates/ontology.html
+   Removed the orphaned `owl-section` pane (its content moved into General).
+7. src/front/templates/partials/ontology/_ontology_information.html
+   General section is now a card with `ob-tabs` (Informations | OWL) using the
+   Business Rules / Data Quality tab pattern. Informations keeps the same fields
+   and IDs; Reset moved into the Informations pane.
+8. src/front/templates/partials/ontology/_ontology_owl_content.html
+   Converted to the OWL tab-pane body (toolbar, status alert, textarea); no
+   longer a standalone sidebar section.
+9. src/front/static/ontology/js/ontology-owl-content.js
+   Regenerates the OWL preview when the OWL tab is shown (`shown.bs.tab`).
+10. src/front/static/ontology/js/ontology-init.js
+   Removed the dead `owl` section branch.
+11. src/front/static/global/css/ontology.css
+   Replaced `#owl-section .card` with flex rules for the General tab content so
+   the OWL textarea fills the card.
+12. Tests: tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_sidebar_content_stretch_contract.py (section inventory
+   and stretch partial list), tests/e2e/domain/test_domain_flows.py,
+   tests/e2e/ontology/test_owl_export_flows.py (opens the OWL tab), tests/e2e/README.md.
+13. Docs: docs/development.md (sidebar inventory), docs/user-guide.md
+   ("Preview OWL Output" now points to Ontology → General → OWL).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/domain.html
+- src/front/static/domain/js/domain.js
+- src/front/templates/partials/domain/_domain_owl_content.html (deleted)
+- src/front/static/domain/js/domain-owl-content.js (deleted)
+- src/front/templates/ontology.html
+- src/front/templates/partials/ontology/_ontology_information.html
+- src/front/templates/partials/ontology/_ontology_owl_content.html
+- src/front/static/ontology/js/ontology-owl-content.js
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/global/css/ontology.css
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/e2e/domain/test_domain_flows.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- tests/e2e/README.md
+- docs/development.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10265 passed, 324 skipped, 8 deselected, 0 failed in 48.73s
+- Manual check (Playwright, dev server): Ontology → General shows Informations and OWL tabs; OWL tab renders the Turtle preview and Regenerate works; Domain sidebar has no OWL item.
+- e2e suites (tests/e2e/domain, tests/e2e/ontology) updated but not executed (opt-in).
+
+
+Fix compare-graph report image still blank (hidden-pane overwrite)
+==================================================================
+
+Context: the cached compare-graph snapshot was still an empty square. Sigma
+renders a hidden container at 1x1 (``allowInvalidContainer``); switching to
+the Evaluate tab fired the ResizeObserver, which re-snapshotted the 1x1 blank
+over the good image. Reproduced headless: same-turn snapshot after refresh
+has the graph, a later read has labels only, a hidden read is 1x1.
+
+Changes:
+1. src/front/static/simulation/js/simulation-compare.js
+   ``_snapshotGraphPng`` skips (keeps the last snapshot) when the canvas
+   container is smaller than 2px, runs a synchronous ``renderer.refresh()``
+   right before the WebGL read, and ignores 1x1 layers.
+2. tests/units/front/test_simulation_page_contract.py
+   Contract: hidden-pane guard, refresh-before-drawImage, 1x1 filter.
+
+Modified files:
+- src/front/static/simulation/js/simulation-compare.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- Headless check with the real simulation-compare.js: snapshot keeps 600x400
+  with graph pixels after the pane is hidden.
+- uv run --frozen pytest -q -m "not scenario" → 10265 passed, 324 skipped, 8 deselected, 0 failed in 45.87s
