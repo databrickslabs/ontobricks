@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.logging import get_logger
 from back.core.w3c.sparql.SparqlQueryRunner import SparqlQueryRunner
-from back.objects.domain.payload import resolve_domain_slice
 
 logger = get_logger(__name__)
 
@@ -44,6 +43,8 @@ class DomainQueryService:
             ValidationError: No R2RML mapping or unsupported engine.
             InfrastructureError: Query execution failure.
         """
+        from back.objects.domain.payload import resolve_domain_slice  # deferred: w3c↔objects cycle
+
         sl = resolve_domain_slice(domain_data)
         assignment = sl["assignment"]
         r2rml = assignment.get("r2rml_output", "")
@@ -74,6 +75,8 @@ class DomainQueryService:
     @staticmethod
     def generate_sample_queries(domain_data: Dict[str, Any]) -> List[Dict[str, str]]:
         """Generate sample SPARQL queries based on the ontology."""
+        from back.objects.domain.payload import resolve_domain_slice
+
         sl = resolve_domain_slice(domain_data)
         ontology = sl["ontology"]
         classes = ontology.get("classes", [])

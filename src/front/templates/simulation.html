@@ -33,6 +33,10 @@
                 </div>
                 <div id="simScenariosEditor" class="content-section d-none">
                     {% include "partials/simulation/_sim_workbench.html" %}
+                    <!-- Rule editors opened in place from the rule list (see rule-editor-loader.js) -->
+                    <div id="if-then-section" class="rule-editor-host">
+                        {% include "partials/ontology/_ontology_business_rules.html" %}
+                    </div>
                 </div>
             </div>
 
@@ -65,6 +69,7 @@
 
 <script defer src="{{ url_for('static', filename='simulation/js/simulation.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/phase-tree.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/rule-editor-loader.js') }}?v={{ asset_version }}" data-asset-version="{{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-rules.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-workbench.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-fact-wizard.js') }}?v={{ asset_version }}"></script>

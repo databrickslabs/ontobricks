@@ -162,6 +162,16 @@ button.ob-tree-twisty:disabled {
     font-size: .85rem;
     font-weight: 600;
     white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Rule editor host (rule-editor-loader.js). The editor modals stay in layout
+   so Bootstrap can show them fullscreen; only the rule list markup inside the
+   host is hidden. Do not use display:none on the host itself. */
+#if-then-section.rule-editor-host > .content-section {
+    display: none;
 }
 
 .ob-tree-desc {

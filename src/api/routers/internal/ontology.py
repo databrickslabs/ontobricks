@@ -948,10 +948,9 @@ async def save_if_then_rule(
         rule = data.get("rule", {})
         index = data.get("index", -1)
 
-        if not rule.get("name"):
-            raise ValidationError("Rule name is required")
-        if not rule.get("antecedent") or not rule.get("consequent"):
-            raise ValidationError("Rule antecedent and consequent are required")
+        errors = Rules.validate_if_then_rule(rule)
+        if errors:
+            raise ValidationError("; ".join(errors))
 
         domain = get_domain(session_mgr)
         rules = domain.if_then_rules
@@ -1105,6 +1104,69 @@ async def list_rules(
     domain = get_domain(session_mgr)
     rules = (domain.ontology or {}).get(key, [])
     return {"success": True, "rules": rules}
+
+
+@router.get("/rules/export")
+async def export_rules(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Download Simple and Complex rules as one versioned JSON document."""
+    import json
+
+    from fastapi.responses import Response
+
+    from back.objects.ontology.RulesPackage import build_package
+
+    domain = get_domain(session_mgr)
+    export_name = domain._data["domain"].get("info", {}).get("name", DEFAULT_GRAPH_NAME)
+    package = build_package(
+        export_name,
+        domain.if_then_rules,
+        (domain.ontology or {}).get("sparql_rules", []),
+    )
+    return Response(
+        content=json.dumps(package, indent=2, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{export_name}_rules.json"'},
+    )
+
+
+@router.post("/rules/import")
+async def import_rules(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Upsert Simple and Complex rules from a rules file; invalid rules are reported."""
+    from back.objects.ontology.RulesPackage import apply_package
+
+    with map_route_errors("Importing rules failed", logger):
+        try:
+            data = await request.json()
+        except ValueError as exc:
+            raise ValidationError("The file is not valid JSON") from exc
+
+        domain = get_domain(session_mgr)
+        existing_sparql = list((domain.ontology or {}).get("sparql_rules", []))
+        result = apply_package(data, list(domain.if_then_rules), existing_sparql)
+
+        domain.if_then_rules = result.if_then_rules
+        domain._data["ontology"]["sparql_rules"] = result.sparql_rules
+        # Same audit actions as the single-rule save routes (if_then_added,
+        # if_then_updated, sparql_rules_added, sparql_rules_updated).
+        for kind, action, name in result.changes:
+            entity_type = "if_then" if kind == "if_then_rules" else kind
+            verb = "added" if action == "added" else "updated"
+            domain.record_change(
+                f"{entity_type}_{verb}",
+                entity_type=entity_type,
+                entity_ref=name,
+                summary=name,
+            )
+        domain.save()
+        return {
+            "success": True,
+            "added": result.added,
+            "replaced": result.replaced,
+            "rejected": result.rejected,
+        }
 
 
 @router.post("/rules/{rule_type}/save")

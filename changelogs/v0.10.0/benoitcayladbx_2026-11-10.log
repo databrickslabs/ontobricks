@@ -169,3 +169,293 @@ Test result:
 - uv run --frozen pytest -q -m "not scenario" — 10198 passed, 325 skipped,
   1 failed (the pre-existing size-budget failure on
   agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+Rule links in the phase tree (Graph → Business rules and Simulation → Reasoning)
+
+Context: rule names in the Graph → Business rules tree and the Simulation →
+Reasoning tree were plain text. Users wanted to open a rule and edit it without
+leaving the page. The rule editors (IF-THEN graph editor for Simple rules, SPARQL
+editor for Complex rules) live on the Ontology page, which loads ontology-core.js
+and runs page-level setup. That script cannot run on Graph or Simulation, so the
+editor scripts are loaded on demand instead. The editor partial is included
+server-side in a hidden #if-then-section on both pages. Editing follows the
+Ontology rules: only users with ontology edit rights can save; others see the
+rule read-only. After Save, the list refreshes in place, ticked rules stay
+ticked, and the editor closes. No OWL regeneration is needed.
+
+Changes:
+1. src/front/static/global/js/phase-tree.js
+   Rule titles render as links (`ob-tree-rule-link`) when the item has `link`.
+   `fromNamedRules` sets `link: true`. A click emits `ob:rule-open` with
+   `{key, value}` and does not toggle the checkbox.
+2. src/front/static/ontology/js/ontology-if-then.js
+   Editor DOM bindings moved into `IfThenModule.bindEditorDom()` (idempotent).
+   New `IfThenModule.initStandalone()` for use outside the Ontology page.
+   `saveRule` dispatches `ob:rules-saved` with `{key: 'if_then'}`.
+3. src/front/static/ontology/js/ontology-business-rules.js
+   New `BusinessRulesModule.initStandalone()`. `sparqlOpenEditor(index, {readOnly})`
+   opens the Complex editor read-only (fields, assistant and validate disabled,
+   Save hidden). The editor is re-enabled on close. `_saveRule` dispatches
+   `ob:rules-saved` with `{key: ruleType}`.
+4. src/front/static/global/js/rule-editor-loader.js (new)
+   `RuleEditorLoader`: loads the editor CSS and JS once, in order, then runs the
+   standalone init. `open(key, name, {canEdit})` opens the right editor. If the
+   rule no longer exists, it shows a warning and refreshes the list. `attach(tree,
+   root)` wires a PhaseTree to `ob:rule-open` and `ob:rules-saved`, and refreshes
+   the list while keeping the selection. The asset version comes from the
+   `data-asset-version` attribute on the script tag (no inline script, per the
+   page contract tests).
+5. src/front/templates/dtwin.html
+   Hidden `#if-then-section` wrapper with the business-rules editor partial,
+   inside the reasoning section. `rule-editor-loader.js` added after `phase-tree.js`.
+6. src/front/templates/simulation.html
+   Same wrapper inside the Reasoning workbench, and the loader script added before
+   `simulation-rules.js`.
+7. src/front/static/query/js/query-reasoning.js
+   Calls `RuleEditorLoader.attach(this._tree, root)` after creating the tree.
+8. src/front/static/simulation/js/simulation-rules.js
+   Calls `RuleEditorLoader.attach(this._tree, root)` after creating the tree.
+9. tests/units/front/test_rule_links_contract.py (new)
+   Contract tests: link rendering and event, standalone init and idempotent
+   binding, read-only Complex editor, `ob:rules-saved` on both save paths, loader
+   asset list (no ontology-core.js), page wiring and script order, and no ID
+   clashes between the editor partial and the Inference / Simulation pages.
+10. docs/user-guide.md
+    Graph → Business rules and Simulation → Reasoning sections: rule links,
+    read-only behaviour, and refresh after save.
+11. docs/superpowers/specs/2026-11-10-rule-links-in-phase-tree-design.md and
+    docs/superpowers/plans/2026-11-10-rule-links-in-phase-tree.md (new)
+    Design and implementation plan for this change.
+
+Modified files:
+- src/front/static/global/js/phase-tree.js
+- src/front/static/global/js/rule-editor-loader.js (new)
+- src/front/static/ontology/js/ontology-if-then.js
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/query/js/query-reasoning.js
+- src/front/static/simulation/js/simulation-rules.js
+- src/front/templates/dtwin.html
+- src/front/templates/simulation.html
+- tests/units/front/test_rule_links_contract.py (new)
+- docs/user-guide.md
+- docs/superpowers/specs/2026-11-10-rule-links-in-phase-tree-design.md (new)
+- docs/superpowers/plans/2026-11-10-rule-links-in-phase-tree.md (new)
+
+Test result:
+- node --check on all changed JS files: OK.
+- uv run --frozen pytest -q tests/units/front/ — 1780 passed.
+- uv run --frozen pytest -q -m "not scenario" — 10209 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+- Browser verification (plan Task 8): not run in this session. Pending: desktop,
+  mobile, keyboard and console/network checks on a domain with Simple and
+  Complex rules.
+
+
+Rule links: fix editor modals hidden in the Graph / Simulation pages
+
+Context: browser checks on the rule links found two issues. (1) The editor
+modals were 0x0 because they sat inside the hidden `#if-then-section.d-none`
+wrapper, so clicking a rule did nothing visible. (2) Long rule names overflowed
+their tree row at 390 px.
+
+Changes:
+1. src/front/templates/dtwin.html, src/front/templates/simulation.html
+   The `#if-then-section` wrapper uses class `rule-editor-host` instead of
+   `d-none`. The modals stay in layout, and the list markup inside is hidden by CSS.
+2. src/front/static/query/css/query-reasoning.css
+   `#if-then-section.rule-editor-host > .content-section { display: none; }`.
+   `.ob-tree-title` gets `min-width: 0`, `overflow: hidden` and ellipsis.
+3. src/front/static/global/js/rule-editor-loader.js
+   Comment update only.
+4. tests/units/front/test_rule_links_contract.py
+   Two tests: the host keeps modals in layout (no d-none), and tree titles can shrink.
+
+Browser verification (Playwright, dev server, domain cust360auto, viewer role):
+Simple and Complex editors open at about 1425x900 with the rule loaded; Complex
+fields and assistant are read-only with Save hidden; keyboard Tab + Enter opens
+the editor and Escape closes it; Simulation → Reasoning opens the Simple editor;
+at 390 px the rule rows have 0 px horizontal overflow; no feature-related console
+or /static, /ontology network errors. Not verified: the editor-role Save path
+(needs an editor on a DRAFT version without an edit lock).
+
+Modified files:
+- src/front/templates/dtwin.html
+- src/front/templates/simulation.html
+- src/front/static/query/css/query-reasoning.css
+- src/front/static/global/js/rule-editor-loader.js
+- tests/units/front/test_rule_links_contract.py
+
+Test result:
+- uv run --frozen pytest -q tests/units/front/ tests/units/api/test_ui_rendering.py — 1906 passed.
+
+
+Rules export / import, separate from the OWL
+
+Context: Simple (IF-THEN) rules were written into the generated OWL as
+ontobricks:IfThenRule annotations, so moving rules between domains meant moving
+OWL. Rules are now managed as their own versioned JSON file: one export with all
+Simple and Complex rules, one import with upsert by name and per-rule validation.
+The generated OWL no longer contains Simple rules. OWL import still reads rules
+from files that carry the old annotations. No OWL regeneration is involved.
+
+Changes:
+1. src/back/core/w3c/owl/OntologyGenerator.py
+   Removed the IF-THEN emission loop and `_add_if_then_rule`. The `if_then_rules`
+   constructor argument is kept, so callers are unchanged.
+2. src/api/routers/internal/ontology.py
+   - `save_if_then_rule` uses `Rules.validate_if_then_rule` (one validator for the
+     save route and the import route); errors are joined with "; ".
+   - New `GET /ontology/rules/export`: attachment `<domain>_rules.json`.
+   - New `POST /ontology/rules/import`: parses the body (non-JSON gives a 4xx),
+     applies the package, saves the domain, records change-audit events with the
+     same actions as the single-rule routes (if_then_added/updated,
+     sparql_rules_added/updated), and returns added / replaced / rejected.
+3. src/back/objects/ontology/RulesPackage.py (new)
+   Pure functions: `build_package`, `apply_package` (header check, upsert by name,
+   per-rule validation: Simple via `Rules.validate_if_then_rule`, enabled Complex
+   via `SPARQLRuleEngine.validate_rule`). Disabled Complex rules are not compiled,
+   so a legacy rule can still be exported and re-imported.
+4. src/back/objects/ontology/ImportResult.py (new)
+   Dataclass with the merged lists, added / replaced / rejected and the change tuples.
+   Its own file, one public class per file (architecture rule). Re-exported from
+   `back/objects/ontology/__init__.py`.
+5. src/front/templates/partials/ontology/_ontology_business_rules.html
+   Header controls before "Add Rule": "Export rules" (link), "Import rules"
+   (button, class ontology-edit-btn) and a hidden file input.
+6. src/front/static/ontology/js/ontology-business-rules.js
+   `importRulesFile` (JSON parse, not-a-rules-file checks, confirmation, POST,
+   refresh of both lists and badges), `_showImportSummary` (Added / Replaced /
+   Rejected modal), and the import action and file-change listener in
+   `_bindBrStaticUiOnce`.
+7. tests/units/ontology/test_owl_generator.py, test_workflow_owl_roundtrip.py
+   Assert that Simple rules are no longer written to the OWL (the round-trip now
+   asserts an empty rule list on regeneration).
+8. tests/units/ontology/test_owl_parser.py
+   Regression guard: old OWL with IfThenRule annotations still yields its rules.
+9. tests/units/ontology/test_if_then_save_validation.py (new)
+   The shared validator reports each missing field and accepts a complete rule.
+10. tests/units/ontology/test_rules_package.py (new)
+    Export shape, header and version checks, upsert in place, per-rule rejects.
+11. tests/units/api/test_rules_package_routes.py (new)
+    Export attachment, import round trip (idempotent), wrong format, non-JSON
+    body, and partial import with rejects.
+12. tests/units/front/test_rules_export_import_ui.py (new)
+    Header order and controls, import flow contract, and no ID clash with the
+    Graph and Simulation pages.
+13. docs/user-guide.md, docs/api.md
+    Export and import in the Business rules section; the two endpoints with
+    request and response shapes; the note that Simple rules are no longer in the OWL.
+
+Known pre-existing issue (not changed here): `back.core.w3c` / `back.objects`
+import cycle. Collecting `tests/units/ontology/test_business_rules.py` or
+`test_owl_parser.py` on their own fails with a circular ImportError; the full
+suite is unaffected because other modules load the app first. Reproduced on a
+clean checkout of HEAD.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/api/routers/internal/ontology.py
+- src/back/objects/ontology/__init__.py
+- src/back/objects/ontology/RulesPackage.py (new)
+- src/back/objects/ontology/ImportResult.py (new)
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- tests/units/ontology/test_owl_generator.py
+- tests/units/ontology/test_workflow_owl_roundtrip.py
+- tests/units/ontology/test_owl_parser.py
+- tests/units/ontology/test_if_then_save_validation.py (new)
+- tests/units/ontology/test_rules_package.py (new)
+- tests/units/api/test_rules_package_routes.py (new)
+- tests/units/front/test_rules_export_import_ui.py (new)
+- docs/user-guide.md
+- docs/api.md
+
+Test result:
+- uv run --frozen pytest -q tests/units/ontology/test_rules_package.py tests/units/api/test_rules_package_routes.py tests/units/front/test_rules_export_import_ui.py — pass.
+- Browser (Playwright, dev server, cust360auto, read-only version): export downloads
+  Cust360Auto_rules.json with the documented shape; invalid JSON and non-rules files
+  show a notification and send no request; the confirm / cancel flow works; with the
+  import POST mocked in the page, the Import summary lists Added, Replaced and
+  Rejected correctly. The import button is hidden on read-only versions (as designed).
+  Not verified: a real import on an editable DRAFT version.
+- Full suite: see the final line below.
+- Full suite (uv run --frozen pytest -q -m "not scenario"): 10231 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on agent_dtwin_chat/engine.py::run_agent).
+
+
+Fix circular import between back.core.w3c and back.objects
+
+Context: collecting tests/units/ontology/test_owl_parser.py or
+test_business_rules.py alone failed with
+`ImportError: cannot import name 'OntologyGenerator' from partially initialized
+module 'back.core.w3c'`. Reproduced on a clean checkout of HEAD. The cycle was:
+SPARQLRuleEngine → back.core.w3c barrel → OntologyGenerator/OntologyParser →
+ClassModel → back.objects → Owl → back.core.w3c (still loading). DomainQueryService
+had the same pattern via resolve_domain_slice.
+
+Changes:
+1. src/back/core/w3c/owl/OntologyGenerator.py
+   Moved the ClassModel import into a module-level `_normalize_datasets` helper
+   so the module no longer pulls back.objects at import time.
+2. src/back/core/w3c/owl/OntologyParser.py
+   Same deferred ClassModel import via `_normalize_datasets`.
+3. src/back/core/w3c/sparql/DomainQueryService.py
+   Deferred `resolve_domain_slice` to the methods that need it.
+4. src/back/objects/ontology/Owl.py
+   Imports OntologyGenerator/OntologyParser from `back.core.w3c.owl` instead of
+   the unfinished package barrel.
+5. tests/units/architecture/test_w3c_import_cycle.py (new)
+   Clean-subprocess regression: import reasoning, w3c, and Owl without a cycle.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/sparql/DomainQueryService.py
+- src/back/objects/ontology/Owl.py
+- tests/units/architecture/test_w3c_import_cycle.py (new)
+
+Test result:
+- Isolated imports of test_owl_parser / test_business_rules: pass (was ImportError).
+- Full suite (uv run --frozen pytest -q -m "not scenario"): 10232 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on agent_dtwin_chat/engine.py::run_agent).
+
+
+More tests for Simple and Complex rules
+
+Context: expand coverage around the rules package, the export/import routes,
+the shared IF-THEN validator, the OWL non-emission of Simple rules, and the
+front contracts for rule links and import UI.
+
+Changes:
+1. tests/units/ontology/test_rules_package.py
+   Version 0/1 accepted; bad versions rejected; missing lists treated as empty;
+   non-list collections rejected; Complex upsert by name; mixed Simple+Complex
+   import; non-object entries rejected; Complex missing name/query rejected;
+   build_package copies rules; empty import is a no-op.
+2. tests/units/api/test_rules_package_routes.py
+   Export contains both rule types; Complex add/reject/disabled-legacy import;
+   replace Simple and Complex by name; IF-THEN save uses shared validation
+   messages; Complex save rejects enabled bad queries and allows disabled ones.
+3. tests/units/ontology/test_if_then_save_validation.py
+   Partial missing fields; falsy name.
+4. tests/units/ontology/test_owl_generator.py
+   Multiple Simple rules leave no IfThenRule / antecedent / consequent in OWL.
+5. tests/units/front/test_rules_export_import_ui.py
+   Import summary sections; invalid JSON / non-object handling; confirm copy;
+   refresh of both lists after import.
+6. tests/units/front/test_rule_links_contract.py
+   Loader opens Simple and Complex by key; list refresh after save; Complex
+   read-only mode disables fields and hides Save.
+
+Modified files:
+- tests/units/ontology/test_rules_package.py
+- tests/units/api/test_rules_package_routes.py
+- tests/units/ontology/test_if_then_save_validation.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/front/test_rules_export_import_ui.py
+- tests/units/front/test_rule_links_contract.py
+
+Test result:
+- Targeted Simple/Complex rule tests: 58 passed.

@@ -112,10 +112,12 @@ class TestOWLRoundtrip:
         functional2 = [c for c in constraints2 if c["type"] == "functional"]
         assert len(functional2) >= 1
 
-    def test_if_then_rules_preserved(self):
+    def test_if_then_rules_read_from_old_owl_but_not_written_back(self):
         parser = OntologyParser(FULL_OWL)
         rules = parser.get_if_then_rules()
+        # Old-format OWL still yields its Simple rules on import.
         assert len(rules) >= 1
+        assert rules[0]["name"] == "ValidateAge"
 
         info = parser.get_ontology_info()
         gen = OntologyGenerator(
@@ -127,9 +129,7 @@ class TestOWLRoundtrip:
         )
         owl2 = gen.generate()
         parser2 = OntologyParser(owl2)
-        rules2 = parser2.get_if_then_rules()
-        assert len(rules2) >= 1
-        assert rules2[0]["name"] == "ValidateAge"
+        assert parser2.get_if_then_rules() == []
 
     def test_axioms_preserved(self):
         parser = OntologyParser(FULL_OWL)

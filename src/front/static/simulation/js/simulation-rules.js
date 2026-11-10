@@ -12,6 +12,7 @@ const SimulationRules = {
         const root = document.getElementById('simWbPhases');
         if (!root || !window.PhaseTree) return;
         this._tree = new PhaseTree(root);
+        if (window.RuleEditorLoader) RuleEditorLoader.attach(this._tree, root);
         this.load();
     },
 

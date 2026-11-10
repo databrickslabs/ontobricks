@@ -10,10 +10,16 @@ from typing import List, Dict
 from back.core.logging import get_logger
 from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
 from back.core.w3c.owl.iri import serialize_turtle
-from back.objects.ontology.ClassModel import ClassModel
 from shared.config.constants import ONTOBRICKS_NS
 
 logger = get_logger(__name__)
+
+
+def _normalize_datasets(cls: Dict) -> List:
+    """Defer ClassModel so this module does not pull back.objects at import time."""
+    from back.objects.ontology.ClassModel import ClassModel
+
+    return ClassModel.normalize_datasets(cls)
 
 
 class OntologyGenerator:
@@ -116,9 +122,9 @@ class OntologyGenerator:
         for constraint in self.constraints:
             self._add_constraint(constraint)
 
-        # Add IF-THEN rules
-        for rule in self.if_then_rules:
-            self._add_if_then_rule(rule)
+        # IF-THEN (Simple) rules are not written to the OWL: they are managed
+        # as their own JSON package (see RulesPackage). OWL import still reads
+        # rules from older files that carry ontobricks:IfThenRule annotations.
 
         # Add OWL axioms and class expressions
         for axiom in self.axioms:
@@ -624,7 +630,7 @@ class OntologyGenerator:
             )
 
         # Linked Unity Catalog datasets (tables/views/metric views) as JSON array
-        datasets = ClassModel.normalize_datasets(cls)
+        datasets = _normalize_datasets(cls)
         if datasets:
             self.graph.add(
                 (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(datasets)))
@@ -871,44 +877,6 @@ class OntologyGenerator:
             self.graph.add((prop_uri, RDFS.range, range_uri))
 
         # Note: Relationship attributes are not supported - relationships are simple ObjectProperties
-
-    def _add_if_then_rule(self, rule: Dict):
-        """Add an IF-THEN rule to the ontology as OntoBricks annotation.
-
-        Note: Full IF-THEN requires RIF or IF-THEN XML format. Here we store as annotations
-        that can be parsed back and used by OntoBricks for quality checks.
-
-        Args:
-            rule: Rule definition with 'name', 'description', 'antecedent', 'consequent'
-        """
-        name = rule.get("name", "").strip()
-        if not name:
-            return
-
-        # Sanitize name for URI
-        safe_name = self._sanitize_name(name)
-        rule_uri = URIRef(self.base_uri + f"_ifThenRule_{safe_name}")
-
-        # Add rule as OntoBricks IF-THEN rule resource
-        self.graph.add((rule_uri, RDF.type, ONTOBRICKS_NS.IfThenRule))
-        self.graph.add((rule_uri, RDFS.label, Literal(name)))
-
-        # Add description
-        description = rule.get("description", "")
-        if description:
-            self.graph.add((rule_uri, RDFS.comment, Literal(description)))
-
-        # Add antecedent (IF part)
-        antecedent = rule.get("antecedent", "")
-        if antecedent:
-            self.graph.add((rule_uri, ONTOBRICKS_NS.antecedent, Literal(antecedent)))
-
-        # Add consequent (THEN part)
-        consequent = rule.get("consequent", "")
-        if consequent:
-            self.graph.add((rule_uri, ONTOBRICKS_NS.consequent, Literal(consequent)))
-
-        logger.debug("Added IF-THEN rule: %s", name)
 
     def _add_axiom(self, axiom: Dict):
         """Add an OWL axiom to the ontology.

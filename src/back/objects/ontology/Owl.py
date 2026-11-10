@@ -8,7 +8,10 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from back.core.logging import get_logger
-from back.core.w3c import OntologyGenerator, OntologyParser
+# Import from the OWL submodule, not the back.core.w3c barrel: the barrel
+# re-exports these while its own __init__ is still running, and a top-level
+# import from the barrel re-enters that incomplete package.
+from back.core.w3c.owl import OntologyGenerator, OntologyParser
 from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)

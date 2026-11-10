@@ -17,7 +17,10 @@ const ReasoningModule = {
             new bootstrap.Tooltip(el, { html: true });
         });
         const root = document.getElementById('reasoningPhaseTree');
-        if (root && window.PhaseTree) this._tree = new PhaseTree(root);
+        if (root && window.PhaseTree) {
+            this._tree = new PhaseTree(root);
+            if (window.RuleEditorLoader) RuleEditorLoader.attach(this._tree, root);
+        }
         this.checkAndResumeTask();
         this._loadRules();
     },

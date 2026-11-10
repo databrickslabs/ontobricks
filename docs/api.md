@@ -1802,6 +1802,49 @@ POST /ontology/if-then/save
 
 **Note:** Set `index` to -1 for new rules, or the rule index to update existing.
 
+#### Export Rules
+
+```http
+GET /ontology/rules/export
+```
+
+Downloads all Simple (`if_then_rules`) and Complex (`sparql_rules`) rules of the active domain as one JSON document (`Content-Disposition: attachment; filename="<domain>_rules.json"`):
+
+```json
+{
+  "format": "ontobricks-rules",
+  "version": 1,
+  "exported_at": "2026-11-10T09:00:00Z",
+  "domain": "MyDomain",
+  "if_then_rules": [
+    {"name": "InferGrandparent", "description": "", "antecedent": "...", "consequent": "...", "enabled": true}
+  ],
+  "sparql_rules": [
+    {"name": "CustomerHasClaim", "description": "", "query": "CONSTRUCT { ... } WHERE { ... }", "enabled": true}
+  ]
+}
+```
+
+#### Import Rules
+
+```http
+POST /ontology/rules/import
+```
+
+**Request Body:** a document in the format above. Files with another `format`, or a `version` above `1`, are rejected with a 4xx error and nothing is saved.
+
+**Behaviour:** upsert by name. A rule with a known name replaces the existing one in place; a new name is appended. Each rule is validated with the same checks as the single-rule save routes (Simple: `Rules.validate_if_then_rule`; enabled Complex: `SPARQLRuleEngine.validate_rule`). Invalid rules are skipped and reported; the valid ones are still saved.
+
+**Response:**
+```json
+{
+  "success": true,
+  "added": ["NewRule"],
+  "replaced": ["InferGrandparent"],
+  "rejected": [{"type": "if_then_rules", "name": "Broken", "reason": "Rule antecedent is required"}]
+}
+```
+
 #### Delete IF-THEN Rule
 
 ```http

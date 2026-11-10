@@ -36,6 +36,11 @@ window.BusinessRulesModule = {
         this._refreshAllBadges();
     },
 
+    // Standalone entry point for Graph / Simulation (see RuleEditorLoader).
+    initStandalone() {
+        return this.init();
+    },
+
     _bindBrStaticUiOnce() {
         if (this._brStaticUiBound) return;
         const root = document.getElementById('if-then-section');
@@ -51,6 +56,7 @@ window.BusinessRulesModule = {
             else if (act === 'suggest-select-all') this.selectAllSuggestions(true);
             else if (act === 'suggest-select-none') this.selectAllSuggestions(false);
             else if (act === 'suggest-accept') this.acceptSuggestions();
+            else if (act === 'import-rules') document.getElementById('brImportRulesFile')?.click();
             else if (act === 'sparql-validate') this.sparqlValidate();
             else if (act === 'sparql-save') this.sparqlSave();
             else if (act === 'cra-send') this.craSend();
@@ -72,6 +78,17 @@ window.BusinessRulesModule = {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', () => this._craResetSaveConfirm());
         });
+
+        // Re-enable the form when the editor closes (it may have been read-only).
+        const sparqlModal = document.getElementById('sparqlEditorModal');
+        if (sparqlModal) {
+            sparqlModal.addEventListener('hidden.bs.modal', () => this._setSparqlReadOnly(false));
+        }
+
+        const importFile = document.getElementById('brImportRulesFile');
+        if (importFile) {
+            importFile.addEventListener('change', (e) => this.importRulesFile(e.target));
+        }
     },
 
     // ── Ontology items (classes / properties for dropdowns) ──
@@ -216,6 +233,7 @@ window.BusinessRulesModule = {
                 if (typeof showNotification === 'function') showNotification('Rule saved', 'success');
                 await this._loadRules(ruleType);
                 this._refreshAllBadges();
+                document.dispatchEvent(new CustomEvent('ob:rules-saved', { detail: { key: ruleType } }));
             } else {
                 if (typeof showNotification === 'function') showNotification(data.message || 'Save failed', 'error');
             }
@@ -277,6 +295,90 @@ window.BusinessRulesModule = {
             case 'if_then': if (typeof IfThenModule !== 'undefined') IfThenModule.addRule(); break;
             case 'sparql': this.sparqlOpenEditor(-1); break;
         }
+    },
+
+    // ── Rules package (export / import) ─────────────────
+
+    async importRulesFile(input) {
+        const file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+
+        let pkg;
+        try {
+            pkg = JSON.parse(await file.text());
+        } catch (e) {
+            if (typeof showNotification === 'function') showNotification('The file is not valid JSON', 'error');
+            return;
+        }
+        if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) {
+            if (typeof showNotification === 'function') showNotification('This is not a rules file', 'error');
+            return;
+        }
+
+        const simple = Array.isArray(pkg.if_then_rules) ? pkg.if_then_rules.length : 0;
+        const complex = Array.isArray(pkg.sparql_rules) ? pkg.sparql_rules.length : 0;
+        const confirmed = await showConfirmDialog({
+            title: 'Import rules',
+            message: `Import ${simple} Simple and ${complex} Complex rule(s) from ${file.name}? Rules with the same name are replaced.`,
+            confirmText: 'Import',
+            confirmClass: 'btn-primary',
+            icon: 'upload',
+        });
+        if (!confirmed) return;
+
+        try {
+            const resp = await fetch('/ontology/rules/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pkg),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                if (typeof showNotification === 'function') showNotification(data.message || 'Import failed', 'error');
+                return;
+            }
+            this._showImportSummary(data);
+            await Promise.all([this._loadRules('sparql_rules'), IfThenModule.loadRules()]);
+            this._refreshAllBadges();
+        } catch (e) {
+            console.error('BusinessRulesModule: import failed', e);
+            if (typeof showNotification === 'function') showNotification('Import failed', 'error');
+        }
+    },
+
+    _showImportSummary(result) {
+        const list = (items) => items.length
+            ? `<ul class="mb-0">${items.map((n) => `<li>${this._esc(n)}</li>`).join('')}</ul>`
+            : '<span class="text-muted">None</span>';
+        const rejected = (result.rejected || []).length
+            ? `<ul class="mb-0">${result.rejected.map((r) =>
+                `<li><strong>${this._esc(r.name || '(unnamed)')}</strong> (${this._esc(r.type)}): ${this._esc(r.reason)}</li>`).join('')}</ul>`
+            : '<span class="text-muted">None</span>';
+
+        document.getElementById('brImportSummaryModal')?.remove();
+        document.body.insertAdjacentHTML('beforeend', `
+            <div class="modal fade" id="brImportSummaryModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header py-2">
+                            <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Import summary</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body small">
+                            <h6>Added</h6>${list(result.added || [])}
+                            <h6 class="mt-3">Replaced</h6>${list(result.replaced || [])}
+                            <h6 class="mt-3">Rejected</h6>${rejected}
+                        </div>
+                        <div class="modal-footer py-2">
+                            <button type="button" class="btn btn-sm btn-primary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`);
+        const el = document.getElementById('brImportSummaryModal');
+        el.addEventListener('hidden.bs.modal', () => el.remove());
+        bootstrap.Modal.getOrCreateInstance(el).show();
     },
 
     // ── Badge updates ───────────────────────────────────────
@@ -364,7 +466,7 @@ window.BusinessRulesModule = {
         });
     },
 
-    sparqlOpenEditor(index) {
+    sparqlOpenEditor(index, { readOnly = false } = {}) {
         const isNew = index < 0;
         const r = isNew ? {} : { ...this.sparqlRules[index] };
         document.getElementById('sparqlEditIndex').value = index;
@@ -375,8 +477,33 @@ window.BusinessRulesModule = {
         const svm = document.getElementById('sparqlValidationMsg');
         if (svm) svm.classList.add('d-none');
         this._craResetSaveConfirm();
+        this._setSparqlReadOnly(readOnly);
         new bootstrap.Modal(document.getElementById('sparqlEditorModal')).show();
-        this._craKickoff(isNew);
+        if (readOnly) {
+            const log = document.getElementById('craChatLog');
+            if (log) log.innerHTML = '';
+            this._craAppendBubble('assistant', 'You can view this rule. Editing requires the Editor role.');
+        } else {
+            this._craKickoff(isNew);
+        }
+    },
+
+    // Disable the form and the assistant while a read-only rule is shown.
+    _setSparqlReadOnly(on) {
+        ['sparqlName', 'sparqlDescription', 'sparqlQuery', 'craChatInput'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = on;
+        });
+        ['craSendBtn', 'sparqlSaveBtn'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('d-none', on);
+        });
+        const modal = document.getElementById('sparqlEditorModal');
+        if (modal) {
+            modal.querySelectorAll('[data-br-action="sparql-validate"]').forEach((el) => {
+                el.disabled = on;
+            });
+        }
     },
 
     // ── Complex rule assistant (conversational SPARQL builder) ──

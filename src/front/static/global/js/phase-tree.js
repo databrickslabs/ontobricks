@@ -38,7 +38,9 @@ class PhaseTree {
                            ${phaseOn ? 'checked' : ''}>
                     <label class="ob-tree-label" for="${esc(id)}" title="${esc(item.title || item.label)}">
                         <i class="bi ${esc(leafIcon)} ob-tree-icon"></i>
-                        <span class="ob-tree-title">${esc(item.label)}</span>
+                        <span class="ob-tree-title">${item.link
+                            ? `<a href="#" class="ob-tree-rule-link" data-rule-link="${esc(key)}" data-rule-value="${esc(item.value)}">${esc(item.label)}</a>`
+                            : esc(item.label)}</span>
                     </label>
                     ${badge}
                 </div>
@@ -57,6 +59,7 @@ class PhaseTree {
                 value: r.name || '',
                 label: name,
                 title: r.description || name,
+                link: true,
                 badge: r.enabled === false ? { text: 'off' } : null,
             };
         });
@@ -170,6 +173,18 @@ class PhaseTree {
     }
 
     _onClick(e) {
+        // Rule link: open the rule instead of toggling its checkbox. Only
+        // preventDefault() here, so the root listener still runs and the
+        // label's checkbox activation is cancelled.
+        const ruleLink = e.target.closest('[data-rule-link]');
+        if (ruleLink && this.root.contains(ruleLink)) {
+            e.preventDefault();
+            this.root.dispatchEvent(new CustomEvent('ob:rule-open', {
+                bubbles: true,
+                detail: { key: ruleLink.dataset.ruleLink, value: ruleLink.dataset.ruleValue },
+            }));
+            return;
+        }
         const twisty = e.target.closest('[data-tree-toggle]');
         if (twisty) {
             this.expand(twisty.dataset.treeToggle);

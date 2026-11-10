@@ -8,10 +8,16 @@ from typing import Any, Dict, List
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
 from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
-from back.objects.ontology.ClassModel import ClassModel
 from shared.config.constants import DEFAULT_BASE_URI, ONTOBRICKS_NS
 
 logger = get_logger(__name__)
+
+
+def _normalize_datasets(raw: Any) -> List[Dict]:
+    """Defer ClassModel so this module does not pull back.objects at import time."""
+    from back.objects.ontology.ClassModel import ClassModel
+
+    return ClassModel.normalize_datasets(raw)
 
 
 def _if_then_rule_nodes(graph: Graph) -> Dict[Any, None]:
@@ -296,7 +302,7 @@ class OntologyParser:
             # Linked UC datasets (JSON array, or legacy singular object)
             datasets: List[Dict] = []
             for ds in self.graph.objects(cls, ONTOBRICKS_NS.dataset):
-                try: datasets = ClassModel.normalize_datasets(json.loads(str(ds)))
+                try: datasets = _normalize_datasets(json.loads(str(ds)))
                 except (json.JSONDecodeError, ValueError): pass
                 break
 

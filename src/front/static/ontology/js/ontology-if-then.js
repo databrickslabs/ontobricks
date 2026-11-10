@@ -1473,6 +1473,7 @@ window.IfThenModule = {
                 }
                 if (typeof autoGenerateOwl === 'function') autoGenerateOwl();
                 if (typeof BusinessRulesModule !== 'undefined') BusinessRulesModule._refreshAllBadges();
+                document.dispatchEvent(new CustomEvent('ob:rules-saved', { detail: { key: 'if_then' } }));
             } else {
                 if (typeof showNotification === 'function')
                     showNotification('Error saving rule: ' + d.message, 'error');
@@ -1564,10 +1565,11 @@ window.IfThenModule = {
 
 // ── Bootstrap wiring ─────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', function () {
-    if (document.getElementById('if-then-section')?.classList.contains('active')) {
-        IfThenModule.init();
-    }
+// Editor DOM bindings. Idempotent, so both the Ontology page (DOMContentLoaded)
+// and the standalone path (RuleEditorLoader) can call it.
+IfThenModule.bindEditorDom = function () {
+    if (this._editorDomBound) return;
+    this._editorDomBound = true;
 
     const modal = document.getElementById('ifThenGraphEditorModal');
     if (modal) {
@@ -1609,4 +1611,18 @@ document.addEventListener('DOMContentLoaded', function () {
             else if (k === 'remove') IfThenModule.ctxRemove();
         });
     }
+};
+
+// Standalone entry point for pages without the Ontology section
+// (Graph → Inference, Simulation → Reasoning). Called by RuleEditorLoader.
+IfThenModule.initStandalone = function () {
+    this.bindEditorDom();
+    return Promise.all([this.loadRules(), this.loadOntologyItems()]);
+};
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (document.getElementById('if-then-section')?.classList.contains('active')) {
+        IfThenModule.init();
+    }
+    IfThenModule.bindEditorDom();
 });

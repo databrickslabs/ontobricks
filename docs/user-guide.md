@@ -305,6 +305,13 @@ OntoBricks provides advanced ontology features under the **Advanced** section in
 #### If-Then Rules (Graphical Editor)
 
 Click **Business Rules** in the sidebar to define IF–THEN inference rules.
+
+**Exporting and importing rules.** The Business rules header has two controls:
+
+- **Export rules** downloads `<domain>_rules.json`, one file with all Simple and Complex rules of the domain.
+- **Import rules** opens a file picker and then a confirmation. Rules are matched by name: a rule with the same name is replaced, a new name is added. Each rule is validated on its own. Invalid rules are listed in the **Import summary** and skipped; the valid ones are still imported.
+
+Simple rules are no longer written into the generated OWL. Use the rules file to move rules between domains. OWL files exported before this change still bring their Simple rules on import.
 OntoBricks provides a **graphical D3-based editor** for building rules visually.
 Rules are executed as **SHACL-AF** (SHACL Advanced Features); the editor shows
 the generated SHACL-AF live as you build a rule.
@@ -1262,6 +1269,8 @@ Click **Inference** in the Knowledge Graph sidebar to run the multi-phase reason
 
 Results are displayed as inferred triples and violations. Inferred triples can be **materialized** (written back) to the triple store.
 
+In the **Business rules** phase tree (Graph → Business rules), rule names are links: clicking one opens the rule editor in place (the IF-THEN graph editor for Simple rules, the SPARQL editor for Complex rules). Users without ontology edit rights see the rule read-only. After you save, the list refreshes and your ticked rules stay ticked.
+
 Builders can use **Purge Inferences** from **Build** (Lakebase and
 Lakehouse), **Inference**, or **Simulation → Run** to remove all materialized
 reasoning and cohort triples from the
@@ -1470,6 +1479,10 @@ rules, or results, shows the brand spinner over that pane.
    rules to tick individual rules. A phase with only some rules ticked shows
    a partial checkbox and an `n/total` badge. The scenario stores that
    selection and only those rules run in the sandbox.
+   Rule names are links: clicking one opens the rule editor in place (the IF-THEN
+   graph editor for Simple rules, the SPARQL editor for Complex rules). Users
+   without ontology edit rights see the rule read-only. After you save, the list
+   refreshes and your ticked rules stay ticked.
 4. **Results** — KPIs (entities in scope, triples before / after, new
    inferences, removed triples, affected entities) and two paged,
    searchable tables for this scenario's last run: **Added** — each row

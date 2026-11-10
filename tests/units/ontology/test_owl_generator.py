@@ -575,8 +575,29 @@ class TestIfThenGeneration:
         ]
         gen = _make_generator(if_then_rules=rules)
         owl = gen.generate()
-        assert "CheckAge" in owl
-        assert "IfThenRule" in owl
+        # Simple rules are managed as a JSON package, not written into the OWL.
+        assert "CheckAge" not in owl
+        assert "IfThenRule" not in owl
+
+    def test_multiple_simple_rules_leave_no_owl_annotations(self):
+        rules = [
+            {
+                "name": "RuleOne",
+                "antecedent": "Customer(?c) ^ age(?c, ?a)",
+                "consequent": "Adult(?c)",
+            },
+            {
+                "name": "RuleTwo",
+                "antecedent": "Order(?o)",
+                "consequent": "ValidOrder(?o)",
+            },
+        ]
+        owl = _make_generator(if_then_rules=rules).generate()
+        assert "IfThenRule" not in owl
+        assert "ontobricks:antecedent" not in owl
+        assert "ontobricks:consequent" not in owl
+        assert "RuleOne" not in owl
+        assert "RuleTwo" not in owl
 
 
 class TestAxiomGeneration:
@@ -772,7 +793,7 @@ class TestRoundtrip:
         functional = [c for c in parsed_constraints if c["type"] == "functional"]
         assert len(functional) >= 1
 
-    def test_roundtrip_if_then(self):
+    def test_if_then_rules_are_not_written_back_to_owl(self):
         rules = [
             {
                 "name": "TestRule",
@@ -785,9 +806,7 @@ class TestRoundtrip:
         owl = gen.generate()
 
         parser = OntologyParser(owl)
-        parsed_rules = parser.get_if_then_rules()
-        assert len(parsed_rules) == 1
-        assert parsed_rules[0]["name"] == "TestRule"
+        assert parser.get_if_then_rules() == []
 
     def test_roundtrip_axioms(self):
         axioms = [{"type": "equivalentClass", "subject": "A", "objects": ["B"]}]

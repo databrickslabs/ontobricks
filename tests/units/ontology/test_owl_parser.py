@@ -373,6 +373,13 @@ class TestGetIfThenRules:
         assert "InvalidAge" in rules[0]["consequent"]
 
 
+def test_old_owl_with_if_then_annotations_still_yields_rules():
+    """Regression guard: the generator no longer writes Simple rules into the OWL,
+    but OWL files exported before that change must still bring their rules on import."""
+    rules = OntologyParser(TURTLE_WITH_IF_THEN).get_if_then_rules()
+    assert "CheckAge" in [r["name"] for r in rules]
+
+
 class TestGetAxioms:
     def test_equivalent_class(self):
         parser = OntologyParser(TURTLE_WITH_AXIOMS)
