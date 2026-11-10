@@ -596,7 +596,7 @@
                         },
                         {
                             "id": "reasoning",
-                            "label": "Inference",
+                            "label": "Business rules",
                             "icon": "bi-lightning",
                             "default": false,
                             "requires": null

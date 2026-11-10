@@ -132,3 +132,40 @@ Test result:
 - uv run --frozen pytest -q -m "not scenario" — 10198 passed, 325 skipped,
   1 failed (the pre-existing size-budget failure on
   agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+================================================================================
+Graph — rename the "Inference" sub-menu to "Business rules"
+================================================================================
+
+Context:
+The Graph section's "Inference" sub-menu is renamed to "Business rules". The
+sub-menu label, the section page header, and the user-facing cross-references
+to "Graph → Inference" are updated to match. The help-center workflow copy is
+kept in sync (its menu-sync regression test asserts every Graph menu label
+appears in the workflow doc).
+
+Changes:
+1. src/front/config/menu_config.json — digitaltwin "reasoning" item label
+   "Inference" -> "Business rules".
+2. src/front/templates/partials/dtwin/_query_reasoning.html — section header
+   <h4> "Inference" -> "Business rules".
+3. src/front/templates/partials/layout/help_modal.html — Knowledge Graph
+   workflow list item and the "Graph → Inference" cross-reference updated to
+   "Business rules".
+4. src/front/templates/partials/simulation/_sim_workbench.html — "Same phases
+   as Graph → Inference" -> "Graph → Business rules".
+
+Note: the generic "Inference" background-task wording (FAQ) and the internal
+reasoning/provenance identifiers are unchanged — only the menu/section naming.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_reasoning.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/simulation/_sim_workbench.html
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10198 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
