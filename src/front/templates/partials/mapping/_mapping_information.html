@@ -1,4 +1,5 @@
-<!-- Mapping → General section (section id remains information) -->
+<!-- Mapping → General section (tabs: Informations | R2RML; section id remains information) -->
+<!-- JS: /static/global/js/mapping-information.js, /static/mapping/js/mapping-r2rml.js -->
 
 <div class="content-section">
 <!-- Loading placeholder (shown until JS loads data) -->
@@ -34,97 +35,135 @@
 
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div class="me-auto">
-        <h4 class="mb-1"><i class="bi bi-diagram-2 me-2"></i>Mapping Summary</h4>
-        <p class="text-muted mb-0 small">Overview of mappings between ontology and data assets</p>
+        <h4 class="mb-1"><i class="bi bi-diagram-2 me-2"></i>General</h4>
+        <p class="text-muted mb-0 small">Mapping overview and generated R2RML representation</p>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-danger me-2" id="resetMappingsBtn" title="Delete all entity and relationship mappings">
-        <i class="bi bi-arrow-counterclockwise me-1"></i> Unmap all
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-            title="Open the mappings discussion" onclick="openMappingDiscussion()">
-        <i class="bi bi-chat-dots"></i>
-    </button>
-</div>
-
-<!-- Prerequisite: Data Sources Check -->
-<div class="alert alert-secondary" id="metadataPrerequisite" role="alert">
-    <div class="d-flex align-items-center justify-content-between">
-        <div>
-            <span id="metadataCheckIcon"><i class="bi bi-database me-2"></i></span>
-            <strong>Data Assets:</strong>
-            <span id="metadataCheckStatus">Checking...</span>
-        </div>
-        <a href="/domain/?section=metadata" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-database"></i> Data Assets
-        </a>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-sm btn-outline-danger" id="resetMappingsBtn" title="Delete all entity and relationship mappings">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Unmap all
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the mappings discussion" onclick="openMappingDiscussion()">
+            <i class="bi bi-chat-dots"></i>
+        </button>
     </div>
 </div>
 
-<!-- Prerequisite: Ontology Check -->
-<div class="alert alert-secondary" id="ontologyPrerequisite" role="alert">
-    <div class="d-flex align-items-center justify-content-between">
-        <div>
-            <span id="ontologyCheckIcon"><i class="bi bi-diagram-3 me-2"></i></span>
-            <strong>Ontology:</strong>
-            <span id="ontologyCheckStatus">Checking...</span>
-        </div>
-        <a href="/ontology/" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-diagram-3"></i> Ontology Page
-        </a>
-    </div>
-</div>
+<div class="card h-100 ob-tabs-wrap">
+    <div class="card-body p-0 ob-tabs-wrap">
+        <!-- Tab navigation -->
+        <ul class="nav nav-tabs ob-tabs nav-fill" id="mappingGeneralTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="general-tab-informations" data-bs-toggle="tab"
+                        data-bs-target="#general-pane-informations" type="button" role="tab"
+                        aria-controls="general-pane-informations" aria-selected="true">
+                    <i class="bi bi-info-circle me-1"></i>Informations
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="general-tab-r2rml" data-bs-toggle="tab"
+                        data-bs-target="#general-pane-r2rml" type="button" role="tab"
+                        aria-controls="general-pane-r2rml" aria-selected="false">
+                    <i class="bi bi-link-45deg me-1"></i>R2RML
+                </button>
+            </li>
+        </ul>
 
-<!-- Mapping Summary Tiles + Gauges -->
-<div class="row g-3 mb-4">
-    <div class="col">
-        <div class="ob-kpi-tile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-box"></i></div>
-            <canvas id="gaugeMapEntities" width="130" height="72"></canvas>
-            <div class="small text-muted mt-1"><span id="entityMappingCount">0 / 0</span></div>
-            <div class="ob-kpi-tile-label">Entities Mapped</div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="ob-kpi-tile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-tags"></i></div>
-            <canvas id="gaugeMapAttributes" width="130" height="72"></canvas>
-            <div class="small text-muted mt-1"><span id="attributeMappingCount">0 / 0</span></div>
-            <div class="ob-kpi-tile-label">Attributes Mapped</div>
-        </div>
-    </div>
-    <div class="col">
-        <div class="ob-kpi-tile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
-            <canvas id="gaugeMapRelationships" width="130" height="72"></canvas>
-            <div class="small text-muted mt-1"><span id="relationshipMappingCount">0 / 0</span></div>
-            <div class="ob-kpi-tile-label">Relationships Mapped</div>
-        </div>
-    </div>
-</div>
+        <div class="tab-content" id="mappingGeneralTabContent">
 
-<!-- Status -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div id="mappingStatusMessage" class="text-muted small">
-        <i class="bi bi-info-circle"></i> Load or create entity and relationship to get started.
-    </div>
-    <span id="mappingStatusBadge" class="badge bg-secondary">Not Started</span>
-</div>
+            <!-- ======== Informations Tab ======== -->
+            <div class="tab-pane fade show active p-3" id="general-pane-informations" role="tabpanel"
+                 aria-labelledby="general-tab-informations">
 
-<!-- Detail Lists: Entities & Relationships -->
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="row" id="summaryDetailGrid">
-            <div class="col-md-6">
-                <h6 class="text-muted mb-2"><i class="bi bi-box"></i> Entities</h6>
-                <div class="summary-detail-list" id="entityDetailList">
-                    <div class="text-muted small fst-italic">No ontology loaded</div>
+                <!-- Prerequisite: Data Sources Check -->
+                <div class="alert alert-secondary" id="metadataPrerequisite" role="alert">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span id="metadataCheckIcon"><i class="bi bi-database me-2"></i></span>
+                            <strong>Data Assets:</strong>
+                            <span id="metadataCheckStatus">Checking...</span>
+                        </div>
+                        <a href="/domain/?section=metadata" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-database"></i> Data Assets
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Prerequisite: Ontology Check -->
+                <div class="alert alert-secondary" id="ontologyPrerequisite" role="alert">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span id="ontologyCheckIcon"><i class="bi bi-diagram-3 me-2"></i></span>
+                            <strong>Ontology:</strong>
+                            <span id="ontologyCheckStatus">Checking...</span>
+                        </div>
+                        <a href="/ontology/" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-diagram-3"></i> Ontology Page
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Mapping Summary Tiles + Gauges -->
+                <div class="row g-3 mb-4">
+                    <div class="col">
+                        <div class="ob-kpi-tile">
+                            <div class="ob-kpi-tile-icon"><i class="bi bi-box"></i></div>
+                            <canvas id="gaugeMapEntities" width="130" height="72"></canvas>
+                            <div class="small text-muted mt-1"><span id="entityMappingCount">0 / 0</span></div>
+                            <div class="ob-kpi-tile-label">Entities Mapped</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="ob-kpi-tile">
+                            <div class="ob-kpi-tile-icon"><i class="bi bi-tags"></i></div>
+                            <canvas id="gaugeMapAttributes" width="130" height="72"></canvas>
+                            <div class="small text-muted mt-1"><span id="attributeMappingCount">0 / 0</span></div>
+                            <div class="ob-kpi-tile-label">Attributes Mapped</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="ob-kpi-tile">
+                            <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
+                            <canvas id="gaugeMapRelationships" width="130" height="72"></canvas>
+                            <div class="small text-muted mt-1"><span id="relationshipMappingCount">0 / 0</span></div>
+                            <div class="ob-kpi-tile-label">Relationships Mapped</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div id="mappingStatusMessage" class="text-muted small">
+                        <i class="bi bi-info-circle"></i> Load or create entity and relationship to get started.
+                    </div>
+                    <span id="mappingStatusBadge" class="badge bg-secondary">Not Started</span>
+                </div>
+
+                <!-- Detail Lists: Entities & Relationships -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row" id="summaryDetailGrid">
+                            <div class="col-md-6">
+                                <h6 class="text-muted mb-2"><i class="bi bi-box"></i> Entities</h6>
+                                <div class="summary-detail-list" id="entityDetailList">
+                                    <div class="text-muted small fst-italic">No ontology loaded</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted mb-2"><i class="bi bi-arrow-left-right"></i> Relationships</h6>
+                                <div class="summary-detail-list" id="relationshipDetailList">
+                                    <div class="text-muted small fst-italic">No ontology loaded</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-6">
-                <h6 class="text-muted mb-2"><i class="bi bi-arrow-left-right"></i> Relationships</h6>
-                <div class="summary-detail-list" id="relationshipDetailList">
-                    <div class="text-muted small fst-italic">No ontology loaded</div>
-                </div>
+
+            <!-- ======== R2RML Tab ======== -->
+            <div class="tab-pane fade p-3 mapping-r2rml-pane" id="general-pane-r2rml" role="tabpanel"
+                 aria-labelledby="general-tab-r2rml">
+                {% include "partials/mapping/_mapping_r2rml.html" %}
             </div>
         </div>
     </div>
@@ -132,5 +171,3 @@
 
 </div><!-- /mappingLoadedContent -->
 </div>
-
-<!-- JS loaded from /static/js/mapping-information.js -->

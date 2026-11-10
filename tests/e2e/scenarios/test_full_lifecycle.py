@@ -151,10 +151,11 @@ class TestFullDomainLifecycle:
         assert len(mapping["relationships"]) >= 1
 
         # ── 6. Generate R2RML through the real "Regenerate" button ───────────
-        # R2RML lives under Domain → W3C Standards.
-        page.goto(f"{live_server}/domain")
+        # R2RML lives under Mapping → General as the "R2RML" tab.
+        page.goto(f"{live_server}/mapping/?section=information")
         page.wait_for_load_state("domcontentloaded")
-        page.evaluate('SidebarNav.switchTo("r2rml")')
+        page.locator("#general-tab-r2rml").wait_for(state="visible", timeout=10_000)
+        page.locator("#general-tab-r2rml").click()
         page.locator("#regenerateR2RMLBtn").wait_for(state="visible", timeout=10_000)
         page.click("#regenerateR2RMLBtn")
 

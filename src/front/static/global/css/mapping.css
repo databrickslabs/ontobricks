@@ -441,11 +441,56 @@
 }
 
 /* ==========================================================================
+   General section (Informations | R2RML tabs)
+   ========================================================================== */
+#information-section > .content-section {
+    position: relative;
+}
+
+#information-section #mappingLoadedContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#information-section #mappingLoadedContent > .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#mappingGeneralTabContent {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+#general-pane-informations.active {
+    overflow-y: auto;
+}
+
+#general-pane-r2rml.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#general-pane-r2rml #r2rmlPreview {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* ==========================================================================
    R2RML Preview
    ========================================================================== */
 #r2rmlPreview {
     font-size: 0.85rem;
-    min-height: 400px;
+    min-height: 280px;
     background-color: #1e1e1e !important;
     color: #d4d4d4 !important;
     border: 1px solid #333;

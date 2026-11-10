@@ -717,7 +717,7 @@ Industry-standard modules are fetched directly from their official servers/repos
 
 ### Preview OWL Output
 
-Open **Studio** and click **Export** (top right) to download the generated OWL in Turtle format.
+Open **Ontology → General** and switch to the **OWL** tab to preview the generated OWL in Turtle format. Use **Copy**, **Download** or **Regenerate** from that tab. **Studio** also offers **Export** (top right) to download the same OWL.
 
 ### Save Your Ontology
 
@@ -899,10 +899,7 @@ covers those.
 
 ### R2RML Output
 
-The R2RML mapping output is available from **Mapping → Studio → Export** (top right) and in the **Domain** section under **R2RML**. Navigate to Domain → R2RML to:
-- View the automatically generated R2RML mapping in Turtle format
-- Copy to clipboard
-- Download as `.ttl` file
+Open **Mapping → General** and switch to the **R2RML** tab to preview the generated R2RML in Turtle format. Use **Copy**, **Download** or **Regenerate** from that tab. **Studio** also offers **Export** (top right) to download the same R2RML.
 
 ---
 

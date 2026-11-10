@@ -96,13 +96,13 @@ tests/e2e/
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_mapping_flows.py` | `TestMappingSidebar` | All 6 sections (`information`, `design`, `manual`, `autoassign`, `r2rml`, `sparksql`) become visible via `SidebarNav.switchTo()` |
+| `test_mapping_flows.py` | `TestMappingSidebar` | All 5 sections (`information`, `design`, `manual`, `autoassign`, `sparksql`) become visible via `SidebarNav.switchTo()` |
 
 ### `domain/` — 6 tests
 
 | File | Class | What it tests |
 |---|---|---|
-| `test_domain_flows.py` | `TestDomainSidebar` | All 6 sections (`information`, `metadata`, `documents`, `validation`, `owl-content`, `r2rml`) switch correctly; CSS `pointer-events:none` bypassed via JS |
+| `test_domain_flows.py` | `TestDomainSidebar` | All 4 sections (`information`, `metadata`, `documents`, `validation`) switch correctly; CSS `pointer-events:none` bypassed via JS |
 
 ### `dtwin/` — 9 tests
 
@@ -152,7 +152,7 @@ Deep tests for the Ontology feature.
 | `test_class_crud_flows.py` | 15 | Entities DOM; `add_class` → load; `update` / `delete` by imported URI; `get-loaded-ontology` |
 | `test_property_crud_flows.py` | 15 | Relationships DOM; `add_property` → load; `update` / `delete` by imported URI |
 | `test_import_flows.py` | 22 | Import tabs DOM (5 tabs + file inputs + industry checkboxes); `import-owl` session effect; `parse-owl` response shape; industry catalog APIs |
-| `test_owl_export_flows.py` | 20 | OWL section DOM buttons; `export-owl` empty→404/import→Turtle; `generate-owl` inline config; full import→export round-trip |
+| `test_owl_export_flows.py` | 20 | OWL tab (Ontology → General) DOM buttons; `export-owl` empty→404/import→Turtle; `generate-owl` inline config; full import→export round-trip |
 
 ---
 

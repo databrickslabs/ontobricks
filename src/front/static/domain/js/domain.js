@@ -62,14 +62,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (section === 'audit' && typeof window.loadDomainAudit === 'function') {
                 window.loadDomainAudit();
             }
-            // Load OWL content when switching to owl-content section
-            if (section === 'owl-content' && typeof window.loadOwlContent === 'function') {
-                window.loadOwlContent();
-            }
-            // Load R2RML content when switching to r2rml section
-            if (section === 'r2rml' && typeof window.loadR2RMLContent === 'function') {
-                window.loadR2RMLContent();
-            }
         }
     });
     

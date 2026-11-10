@@ -136,28 +136,6 @@
                             "requires": "domain_saved"
                         }
                     ]
-                },
-                {
-                    "id": "domain-w3c",
-                    "title": "W3C Standards",
-                    "icon": "bi-filetype-xml",
-                    "sidebar_only": true,
-                    "items": [
-                        {
-                            "id": "owl-content",
-                            "label": "OWL",
-                            "icon": "bi-file-earmark-code",
-                            "default": false,
-                            "requires": "domain_saved"
-                        },
-                        {
-                            "id": "r2rml",
-                            "label": "R2RML",
-                            "icon": "bi-diagram-3",
-                            "default": false,
-                            "requires": "domain_saved"
-                        }
-                    ]
                 }
             ]
         },

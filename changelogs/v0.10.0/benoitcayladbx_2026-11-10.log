@@ -769,3 +769,87 @@ Test result:
 - Headless check with the real simulation-compare.js: snapshot keeps 600x400
   with graph pixels after the pane is hidden.
 - uv run --frozen pytest -q -m "not scenario" → 10265 passed, 324 skipped, 8 deselected, 0 failed in 45.87s
+
+
+Move Ontology → General Reset button back to the section header
+==============================================================
+
+Context: After nesting General into Informations | OWL tabs, Reset lived
+inside the Informations pane. Move it back to the section header top-right
+(next to Discuss), outside the tab card.
+
+Changes:
+1. src/front/templates/partials/ontology/_ontology_information.html
+   `#resetOntology` moved from `#general-pane-informations` into the
+   `.section-header` action group beside the discuss button.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_information.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- Playwright: `#resetOntology` is inside `.section-header`, not the Informations pane.
+- uv run --frozen pytest -q -m "not scenario" → 10265 passed, 324 skipped, 8 deselected, 0 failed in 53.12s
+
+
+Move R2RML preview from Domain to Mapping → General (Informations | R2RML tabs)
+===============================================================================
+
+Context: Mirror the OWL relocation. Generated R2RML lived under Domain → W3C
+Standards → R2RML, while Mapping kept an orphaned R2RML pane with no menu
+entry. Mapping → General now hosts both views as tabs: "Informations" (the
+former General summary) and "R2RML" (Turtle preview). The Domain W3C group is
+removed entirely (it had only R2RML left after the OWL move).
+
+Changes:
+1. src/front/config/menu_config.json
+   Removed the Domain `domain-w3c` group (R2RML was its last item).
+2. src/front/templates/domain.html
+   Removed the `r2rml-section` block and the `domain-r2rml.js` include.
+3. src/front/static/domain/js/domain.js
+   Removed the `r2rml` section-change branch.
+4. src/front/templates/partials/domain/_domain_r2rml.html (deleted)
+5. src/front/static/domain/js/domain-r2rml.js (deleted)
+6. src/front/templates/mapping.html
+   Removed the orphaned `r2rml-section` pane (content moved into General).
+7. src/front/templates/partials/mapping/_mapping_information.html
+   General section is now a card with `ob-tabs` (Informations | R2RML).
+   Unmap all and Discuss stay in the section header outside the tabs.
+8. src/front/templates/partials/mapping/_mapping_r2rml.html
+   Converted to the R2RML tab-pane body (toolbar, status, textarea).
+9. src/front/static/mapping/js/mapping-r2rml.js
+   Regenerates the preview when the R2RML tab is shown; dropped the old
+   full-section loading overlay.
+10. src/front/static/mapping/js/mapping-init.js
+    Removed the dead `r2rml` section branches.
+11. src/front/static/global/css/mapping.css
+    Flex rules so the General tab card and `#r2rmlPreview` fill the pane.
+12. Tests: stretch inventory, UI rendering Domain sidebar, e2e Domain flows,
+    e2e README, scenario lifecycle (opens Mapping → General → R2RML).
+13. Docs: docs/development.md, docs/user-guide.md ("R2RML Output").
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/domain.html
+- src/front/static/domain/js/domain.js
+- src/front/templates/partials/domain/_domain_r2rml.html (deleted)
+- src/front/static/domain/js/domain-r2rml.js (deleted)
+- src/front/templates/mapping.html
+- src/front/templates/partials/mapping/_mapping_information.html
+- src/front/templates/partials/mapping/_mapping_r2rml.html
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-init.js
+- src/front/static/global/css/mapping.css
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/domain/test_domain_flows.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/README.md
+- docs/development.md
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- Playwright: Domain has no R2RML item; Mapping → General shows Informations | R2RML; R2RML tab renders Turtle and Unmap all stays in the header.
+- uv run --frozen pytest -q -m "not scenario" → 10258 passed, 323 skipped, 8 deselected, 0 failed in 52.86s
+- e2e/scenario suites updated but not executed (opt-in).

@@ -6,6 +6,13 @@
 // OWL CONTENT SECTION - Regenerate, Copy & Download
 // =====================================================
 
+// Opening the OWL tab (General section) refreshes the preview from the current ontology
+document.getElementById('general-tab-owl')?.addEventListener('shown.bs.tab', function() {
+    if (typeof autoGenerateOwl === 'function') {
+        autoGenerateOwl();
+    }
+});
+
 // Regenerate OWL (manual trigger)
 document.getElementById('regenerateOwl')?.addEventListener('click', async function() {
     const btn = this;

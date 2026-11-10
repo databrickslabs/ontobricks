@@ -7,11 +7,24 @@ body.ontology-page {
     /* Marker class for page-specific JS behaviors */
 }
 
-/* OWL section - fill the shared sidebar flex pane. No overflow clamp: the
-   inner `#owlPreview` textarea is the native scroller, so clipping the card
-   would hide long Turtle content. */
-#owl-section .card {
-    flex: 1;
+/* General section (Informations | OWL tabs). The tab content is a flex column
+   so the OWL pane fills the card. No overflow clamp: the inner `#owlPreview`
+   textarea is the native scroller, so clipping the card would hide long
+   Turtle content. */
+#ontologyGeneralTabContent {
+    display: flex;
+    flex-direction: column;
+}
+
+#general-pane-owl.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#general-pane-owl #owlPreview {
+    flex: 1 1 auto;
     min-height: 0;
 }
 

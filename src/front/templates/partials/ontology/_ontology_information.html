@@ -1,10 +1,10 @@
-<!-- Ontology → General Section -->
-<!-- JS: /static/ontology/js/ontology-information.js -->
+<!-- Ontology → General Section (tabs: Informations | OWL) -->
+<!-- JS: /static/ontology/js/ontology-information.js, /static/ontology/js/ontology-owl-content.js -->
 <div class="content-section">
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
-    <div>
+    <div class="me-auto">
         <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>General</h4>
-        <p class="text-muted mb-0 small">Define your ontology name and base URI</p>
+        <p class="text-muted mb-0 small">Ontology identity and generated OWL representation</p>
     </div>
     <div class="d-flex align-items-center gap-2">
         <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetOntology">
@@ -16,25 +16,57 @@
         </button>
     </div>
 </div>
-<div class="card">
-    <div class="card-body">
-        <div class="mb-3">
-            <label for="ontologyName" class="form-label">Ontology Name <span class="text-danger">*</span></label>
-            <input type="text" class="form-control ob-form-readonly-muted" id="ontologyName" value="MyOntology" readonly disabled>
-            <small class="text-muted"><i class="bi bi-info-circle"></i> Derived from the <a href="/domain/">Domain Name</a> (lowercase). Change it in Domain → General.</small>
+
+<div class="card h-100 ob-tabs-wrap">
+    <div class="card-body p-0 ob-tabs-wrap">
+        <!-- Tab navigation -->
+        <ul class="nav nav-tabs ob-tabs nav-fill" id="ontologyGeneralTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="general-tab-informations" data-bs-toggle="tab"
+                        data-bs-target="#general-pane-informations" type="button" role="tab"
+                        aria-controls="general-pane-informations" aria-selected="true">
+                    <i class="bi bi-info-circle me-1"></i>Informations
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="general-tab-owl" data-bs-toggle="tab"
+                        data-bs-target="#general-pane-owl" type="button" role="tab"
+                        aria-controls="general-pane-owl" aria-selected="false">
+                    <i class="bi bi-file-earmark-code me-1"></i>OWL
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="ontologyGeneralTabContent">
+
+            <!-- ======== Informations Tab ======== -->
+            <div class="tab-pane fade show active p-3" id="general-pane-informations" role="tabpanel"
+                 aria-labelledby="general-tab-informations">
+                <div class="mb-3">
+                    <label for="ontologyName" class="form-label">Ontology Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control ob-form-readonly-muted" id="ontologyName" value="MyOntology" readonly disabled>
+                    <small class="text-muted"><i class="bi bi-info-circle"></i> Derived from the <a href="/domain/">Domain Name</a> (lowercase). Change it in Domain → General.</small>
+                </div>
+                <div class="mb-3">
+                    <label for="baseUri" class="form-label">Base URI</label>
+                    <input type="text" class="form-control ob-form-readonly-muted" id="baseUri" value="" readonly disabled>
+                    <small class="text-muted"><i class="bi bi-info-circle"></i> Managed in <a href="/domain/">Domain → General</a>. This URI is the namespace for all ontology entities.</small>
+                </div>
+
+                <!-- Validation Status (auto-updated) -->
+                <div class="mt-3 mb-3" id="ontologyValidationStatus">
+                    <span class="badge bg-secondary"><i class="bi bi-hourglass-split"></i> Checking...</span>
+                </div>
+
+                <p class="text-muted small mt-3">Use <a href="/domain/?section=import">Domain &gt; Import</a> to load OWL/RDFS ontologies.</p>
+            </div>
+
+            <!-- ======== OWL Tab (regenerated when opened) ======== -->
+            <div class="tab-pane fade p-3 ontology-owl-pane" id="general-pane-owl" role="tabpanel"
+                 aria-labelledby="general-tab-owl">
+                {% include "partials/ontology/_ontology_owl_content.html" %}
+            </div>
         </div>
-        <div class="mb-3">
-            <label for="baseUri" class="form-label">Base URI</label>
-            <input type="text" class="form-control ob-form-readonly-muted" id="baseUri" value="" readonly disabled>
-            <small class="text-muted"><i class="bi bi-info-circle"></i> Managed in <a href="/domain/">Domain → General</a>. This URI is the namespace for all ontology entities.</small>
-        </div>
-        
-        <!-- Validation Status (auto-updated) -->
-        <div class="mt-3 mb-3" id="ontologyValidationStatus">
-            <span class="badge bg-secondary"><i class="bi bi-hourglass-split"></i> Checking...</span>
-        </div>
-        
-        <p class="text-muted small mt-3">Use <a href="/domain/?section=import">Domain &gt; Import</a> to load OWL/RDFS ontologies.</p>
     </div>
 </div>
 </div>

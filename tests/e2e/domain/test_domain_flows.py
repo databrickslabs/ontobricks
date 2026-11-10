@@ -11,7 +11,7 @@ import pytest
 class TestDomainSidebar:
     @pytest.mark.parametrize(
         "section",
-        ["information", "metadata", "documents", "validation", "owl-content", "r2rml"],
+        ["information", "metadata", "documents", "validation"],
     )
     def test_sidebar_switches_section(self, page, live_server, section):
         page.goto(f"{live_server}/domain")

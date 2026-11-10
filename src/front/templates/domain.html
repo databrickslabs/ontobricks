@@ -66,16 +66,6 @@
                 {% include "partials/domain/_domain_documents.html" %}
             </div>
 
-            <!-- OWL Content Section -->
-            <div id="owl-content-section" class="sidebar-section">
-                {% include "partials/domain/_domain_owl_content.html" %}
-            </div>
-            
-            <!-- R2RML Section -->
-            <div id="r2rml-section" class="sidebar-section">
-                {% include "partials/domain/_domain_r2rml.html" %}
-            </div>
-
             <!-- Build / Sync Section -->
             <div id="sync-section" class="sidebar-section">
                 {% include "partials/dtwin/_query_sync.html" %}
@@ -137,8 +127,6 @@
 <script src="{{ url_for('static', filename='domain/js/domain-audit.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-collaboration.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-documents.js') }}?v={{ asset_version }}"></script>
-<script src="{{ url_for('static', filename='domain/js/domain-owl-content.js') }}?v={{ asset_version }}"></script>
-<script src="{{ url_for('static', filename='domain/js/domain-r2rml.js') }}?v={{ asset_version }}"></script>
 <!-- Build section (sync): parse injected JSON before query-sync -->
 <script src="{{ url_for('static', filename='domain/js/domain_init.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>

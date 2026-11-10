@@ -547,8 +547,8 @@ class TestDomainPage:
 
     @pytest.mark.parametrize(
         "section",
-        ["information", "metadata", "documents", "validation", "owl-content",
-         "r2rml", "mytasks", "discussions"],
+        ["information", "metadata", "documents", "validation",
+         "mytasks", "discussions"],
     )
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/domain")

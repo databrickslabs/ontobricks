@@ -3,73 +3,66 @@
  * Extracted from mapping templates per code_instructions.txt
  */
 
-// R2RML SECTION - R2RML Generation and Preview
+// R2RML TAB (Mapping → General) - Generation and Preview
 // =====================================================
-
-function hideR2RMLLoadingOverlay() {
-    const overlay = document.getElementById('r2rmlLoadingOverlay');
-    if (overlay) overlay.style.display = 'none';
-}
 
 // Load existing R2RML from MappingState, session, or generate new one
 async function generateR2RMLPreview() {
     const r2rmlPreview = document.getElementById('r2rmlPreview');
-    
+    if (!r2rmlPreview) return;
+
     // If textarea already has content, don't reload
     if (r2rmlPreview.value && r2rmlPreview.value.trim()) {
-        console.log('R2RML Section: Content already in textarea');
-        hideR2RMLLoadingOverlay();
+        console.log('R2RML Tab: Content already in textarea');
         return;
     }
-    
+
     // Check if we have R2RML in MappingState (from auto-generation)
     if (MappingState.r2rmlContent && MappingState.r2rmlContent.trim()) {
-        console.log('R2RML Section: Using content from MappingState');
+        console.log('R2RML Tab: Using content from MappingState');
         r2rmlPreview.value = MappingState.r2rmlContent;
-        hideR2RMLLoadingOverlay();
         return;
     }
-    
+
     if (!MappingState.config.entities || MappingState.config.entities.length === 0) {
         r2rmlPreview.value = '';
-        r2rmlPreview.placeholder = 'No entity mappings configured yet. Go to "Entities" section to create mappings first.';
-        hideR2RMLLoadingOverlay();
+        r2rmlPreview.placeholder = 'No entity mappings configured yet. Map entities first, then open this tab.';
         return;
     }
-    
+
     try {
         // Try to load existing R2RML from session
         const loadResponse = await fetch('/mapping/load', { credentials: 'same-origin' });
         const loadResult = await loadResponse.json();
-        
+
         if (loadResult.r2rml_output && loadResult.r2rml_output.trim()) {
-            console.log('R2RML Section: Loaded existing R2RML from session');
+            console.log('R2RML Tab: Loaded existing R2RML from session');
             r2rmlPreview.value = loadResult.r2rml_output;
             MappingState.r2rmlContent = loadResult.r2rml_output;
             return;
         }
-        
+
         // If no saved R2RML, generate new one
-        console.log('R2RML Section: No saved R2RML, generating new...');
+        console.log('R2RML Tab: No saved R2RML, generating new...');
         const response = await fetch('/mapping/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin'
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.r2rml) {
             r2rmlPreview.value = result.r2rml;
             MappingState.r2rmlContent = result.r2rml;
         } else {
             r2rmlPreview.value = '';
+            r2rmlPreview.placeholder = result.message || 'Failed to generate R2RML';
         }
     } catch (error) {
         console.error('Error loading R2RML:', error);
         r2rmlPreview.value = '';
-    } finally {
-        hideR2RMLLoadingOverlay();
+        r2rmlPreview.placeholder = 'Error loading R2RML content: ' + error.message;
     }
 }
 
@@ -108,6 +101,13 @@ window.forceRegenerateR2RML = forceRegenerateR2RML;
 // Attach button handlers once the DOM is fully parsed (the script loads
 // before the R2RML partial HTML, so elements don't exist at parse time).
 function _initR2RMLButtons() {
+    // Opening the R2RML tab (General section) refreshes the preview
+    document.getElementById('general-tab-r2rml')?.addEventListener('shown.bs.tab', function() {
+        if (typeof generateR2RMLPreview === 'function') {
+            generateR2RMLPreview();
+        }
+    });
+
     // Regenerate R2RML (manual trigger)
     document.getElementById('regenerateR2RMLBtn')?.addEventListener('click', async function() {
         const btn = this;

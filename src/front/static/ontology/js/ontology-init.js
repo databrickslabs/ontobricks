@@ -51,8 +51,6 @@ function _initSectionByName(section) {
         DesignChecksModule.init();
     } else if (section === 'axioms' && typeof AxiomsModule !== 'undefined') {
         AxiomsModule.init();
-    } else if (section === 'owl' && typeof autoGenerateOwl === 'function') {
-        autoGenerateOwl();
     }
 }
 

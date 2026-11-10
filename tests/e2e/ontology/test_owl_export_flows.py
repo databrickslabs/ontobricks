@@ -1,8 +1,8 @@
 """
 E2E — Ontology › OWL Export & Generation.
 
-Scenario A (UI): Ontology Designer exposes Export (OWL); the hidden
-#owl-section still holds copy/regenerate/preview controls.
+Scenario A (UI): Ontology Designer exposes Export (OWL); the OWL tab of
+Ontology → General (#general-pane-owl) holds copy/regenerate/preview controls.
 
 Scenario B (API — export): GET /ontology/export-owl
   - Returns 404 when the session has no classes.
@@ -63,27 +63,17 @@ def _import_owl(page, live_server: str, headers: dict, turtle: str = MINIMAL_OWL
 
 class TestOntologyOwlSection:
     def _open_owl(self, page, live_server: str) -> None:
-        # Ontology no longer has a sidebar item named "owl" (OWL lives under
-        # Domain as ``owl-content``). The pane is still on the ontology page
-        # as ``#owl-section``; activate it directly so the contract does not
-        # depend on a removed nav key.
+        # OWL lives in Ontology → General as the "OWL" tab next to Informations.
         page.goto(f"{live_server}/ontology")
         page.wait_for_load_state("domcontentloaded")
         page.wait_for_timeout(500)
-        page.evaluate(
-            """() => {
-                document.querySelectorAll('.sidebar-section').forEach(
-                    (section) => section.classList.remove('active')
-                );
-                const target = document.getElementById('owl-section');
-                if (target) target.classList.add('active');
-            }"""
-        )
+        page.evaluate('SidebarNav.switchTo("information")')
+        page.locator("#general-tab-owl").click()
         page.wait_for_timeout(400)
 
     def test_owl_section_visible(self, page, live_server):
         self._open_owl(page, live_server)
-        assert page.locator("#owl-section").is_visible()
+        assert page.locator("#general-pane-owl").is_visible()
 
     def test_copy_button_present(self, page, live_server):
         self._open_owl(page, live_server)
