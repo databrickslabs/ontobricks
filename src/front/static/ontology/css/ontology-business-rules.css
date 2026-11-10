@@ -130,3 +130,57 @@
 .cra-save-ready {
     box-shadow: 0 0 0 0.2rem rgba(var(--bs-success-rgb, 25, 135, 84), 0.5);
 }
+
+/* Agent-offered clickable answers inside the chat. */
+.cra-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.25rem 0 0.5rem 2.25rem; /* align under the bot bubble body */
+    align-items: center;
+}
+.cra-opt-pill {
+    border: 1px solid var(--bs-border-color, #ced4da);
+    background: var(--bs-body-bg, #fff);
+    color: var(--bs-body-color, #212529);
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+.cra-opt-pill:hover:not(:disabled) {
+    background: var(--db-primary-subtle, #eef2ff);
+    border-color: var(--db-primary, #4a6cf7);
+}
+.cra-opt-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 1px solid var(--bs-border-color, #ced4da);
+    border-radius: 0.5rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.cra-opt-send {
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.9rem;
+    font-size: 0.85rem;
+    color: #fff;
+    background: var(--db-primary, #4a6cf7);
+    cursor: pointer;
+}
+.cra-options-locked {
+    pointer-events: none;
+}
+.cra-options-locked .cra-opt-pill:not(.is-chosen),
+.cra-options-locked .cra-opt-check:not(.is-chosen) {
+    opacity: 0.45;
+}
+.cra-options-locked .is-chosen {
+    background: var(--db-primary, #4a6cf7);
+    border-color: var(--db-primary, #4a6cf7);
+    color: #fff;
+}

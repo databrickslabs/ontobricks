@@ -135,6 +135,38 @@ class TestRunAgent:
         assert _QUERY in system_msg["content"]
         assert "CURRENT DRAFT" in system_msg["content"]
 
+    def test_propose_options_surfaces_on_result(self):
+        opts_args = json.dumps(
+            {"question": "Match 'Active'?", "options": ["Yes", "No"], "multi": False}
+        )
+        responses = [
+            _tool_call_response("propose_options", opts_args),
+            _text_response("Does 'Active' sound right?"),
+        ]
+        result = _run(responses)
+        assert result.success is True
+        assert result.options == {
+            "question": "Match 'Active'?",
+            "options": ["Yes", "No"],
+            "multi": False,
+        }
+
+    def test_propose_options_multi_is_preserved(self):
+        opts_args = json.dumps(
+            {"question": "Pick props", "options": ["balance", "riskTier"], "multi": True}
+        )
+        responses = [
+            _tool_call_response("propose_options", opts_args),
+            _text_response("Which properties matter?"),
+        ]
+        result = _run(responses)
+        assert result.options["multi"] is True
+
+    def test_no_options_when_tool_unused(self):
+        responses = [_text_response("Tell me more about the rule.")]
+        result = _run(responses)
+        assert result.options is None
+
     def test_llm_failure_is_reported(self):
         with patch.object(
             cr_engine, "call_serving_endpoint", side_effect=RuntimeError("boom")
@@ -203,3 +235,31 @@ class TestTools:
         assert out["ok"] is True
         assert ctx.rule_draft == {"name": "R", "description": "d", "query": _QUERY}
         assert ctx.rule_draft_ready is True
+
+    def test_propose_options_writes_context(self):
+        ctx = ToolContext(host="", token="")
+        out = json.loads(
+            cr_tools.tool_propose_options(
+                ctx, question="Match 'Active'?", options=["Yes", "No"], multi=False
+            )
+        )
+        assert out == {"ok": True, "count": 2}
+        assert ctx.rule_options == {
+            "question": "Match 'Active'?",
+            "options": ["Yes", "No"],
+            "multi": False,
+        }
+
+    def test_propose_options_coerces_and_drops_empty(self):
+        ctx = ToolContext(host="", token="")
+        cr_tools.tool_propose_options(
+            ctx, question="Pick", options=["a", "", "  ", "b"], multi=True
+        )
+        assert ctx.rule_options["options"] == ["a", "b"]
+        assert ctx.rule_options["multi"] is True
+
+    def test_propose_options_empty_sets_none(self):
+        ctx = ToolContext(host="", token="")
+        out = json.loads(cr_tools.tool_propose_options(ctx, question="Q", options=[]))
+        assert out == {"ok": True, "count": 0}
+        assert ctx.rule_options is None

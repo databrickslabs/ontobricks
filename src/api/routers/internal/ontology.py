@@ -2501,6 +2501,7 @@ async def complex_rule_assistant_chat(
             "reply": "...markdown...",
             "draft": {"name", "description", "query"} | null,
             "ready": true|false,
+            "options": {"question", "options": [...], "multi"} | null,
             "usage": {...}
         }
     """
@@ -2554,6 +2555,7 @@ async def complex_rule_assistant_chat(
         "reply": agent_result.reply,
         "draft": agent_result.draft,
         "ready": agent_result.ready,
+        "options": agent_result.options,
         "usage": agent_result.usage,
     }
 

@@ -54,6 +54,7 @@ class ToolContext:
     # CONSTRUCT draft written through ``update_draft`` and surfaced to the UI.
     rule_draft: Optional[dict] = None  # {name, description, query}
     rule_draft_ready: bool = False
+    rule_options: Optional[dict] = None  # {question, options: [str], multi}
 
     # Design fixer (Sanity Checks Auto-fix) – terminal submit_fix_plan output
     submitted_fix_plan: Optional[dict] = None

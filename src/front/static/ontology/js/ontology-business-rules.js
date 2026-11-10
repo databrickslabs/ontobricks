@@ -394,6 +394,7 @@ window.BusinessRulesModule = {
 
     _craKickoff(isNew) {
         this._craHistory = [];
+        this._craPendingOptions = null;
         const log = document.getElementById('craChatLog');
         if (log) log.innerHTML = '';
         const input = document.getElementById('craChatInput');
@@ -410,6 +411,7 @@ window.BusinessRulesModule = {
         const text = input.value.trim();
         if (!text) return;
         input.value = '';
+        this._craLockPendingOptions();
         this._craTurn(text, { silentUser: false });
     },
 
@@ -461,6 +463,87 @@ window.BusinessRulesModule = {
             // The rule changed — require a fresh validate + review before saving.
             this._craResetSaveConfirm();
         }
+        if (data.options && Array.isArray(data.options.options) && data.options.options.length) {
+            this._craRenderOptions(data.options);
+        }
+    },
+
+    // Render agent-offered answers as clickable controls under the last bubble.
+    // single-select → pills (click sends immediately); multi → checkboxes + Send.
+    _craRenderOptions(opts) {
+        const log = document.getElementById('craChatLog');
+        if (!log) return;
+        this._craLockPendingOptions();           // only one live group at a time
+        const group = document.createElement('div');
+        group.className = 'cra-options' + (opts.multi ? ' cra-options-multi' : '');
+        (opts.options || []).forEach((label) => {
+            if (opts.multi) {
+                const wrap = document.createElement('label');
+                wrap.className = 'cra-opt-check';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = label;
+                const span = document.createElement('span');
+                span.textContent = label;
+                wrap.appendChild(cb);
+                wrap.appendChild(span);
+                group.appendChild(wrap);
+            } else {
+                const pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'cra-opt-pill';
+                pill.textContent = label;
+                pill.addEventListener('click', () => this._craChooseOption(group, [label]));
+                group.appendChild(pill);
+            }
+        });
+        if (opts.multi) {
+            const send = document.createElement('button');
+            send.type = 'button';
+            send.className = 'cra-opt-send';
+            send.textContent = 'Send';
+            send.addEventListener('click', () => {
+                const picked = Array.from(
+                    group.querySelectorAll('input[type=checkbox]:checked')
+                ).map((c) => c.value);
+                if (picked.length) this._craChooseOption(group, picked);
+            });
+            group.appendChild(send);
+        }
+        log.appendChild(group);
+        log.scrollTop = log.scrollHeight;
+        this._craPendingOptions = group;
+    },
+
+    _craChooseOption(group, labels) {
+        if (!group || group.classList.contains('cra-options-locked')) return;
+        group.classList.add('cra-options-locked');
+        const chosen = new Set(labels);
+        group.querySelectorAll('.cra-opt-pill').forEach((p) => {
+            if (chosen.has(p.textContent)) p.classList.add('is-chosen');
+            p.disabled = true;
+        });
+        group.querySelectorAll('.cra-opt-check').forEach((l) => {
+            const cb = l.querySelector('input[type=checkbox]');
+            if (cb && chosen.has(cb.value)) l.classList.add('is-chosen');
+            if (cb) cb.disabled = true;
+        });
+        const send = group.querySelector('.cra-opt-send');
+        if (send) send.remove();
+        if (this._craPendingOptions === group) this._craPendingOptions = null;
+        this._craTurn(labels.join(', '), { silentUser: false });
+    },
+
+    // Lock the pending option group without choosing anything (user typed instead).
+    _craLockPendingOptions() {
+        const group = this._craPendingOptions;
+        if (!group || group.classList.contains('cra-options-locked')) return;
+        group.classList.add('cra-options-locked');
+        group.querySelectorAll('.cra-opt-pill').forEach((p) => { p.disabled = true; });
+        group.querySelectorAll('.cra-opt-check input').forEach((cb) => { cb.disabled = true; });
+        const send = group.querySelector('.cra-opt-send');
+        if (send) send.remove();
+        this._craPendingOptions = null;
     },
 
     // OntoBricks mark — same avatar glyph the Graph chat uses for bot bubbles.

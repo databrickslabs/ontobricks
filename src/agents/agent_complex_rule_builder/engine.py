@@ -46,6 +46,7 @@ class AgentResult:
     reply: str = ""
     draft: Optional[dict] = None  # {name, description, query} — only when changed
     ready: bool = False
+    options: Optional[dict] = None  # {question, options, multi} — when offered
     steps: List[AgentStep] = field(default_factory=list)
     iterations: int = 0
     error: str = ""
@@ -67,6 +68,8 @@ TOOLS
     CONSTRUCT shown to the user in the code pane. Call it whenever the query
     materially changes. Set ready=true ONLY when the query is complete and
     self-consistent.
+  • propose_options(question, options, multi) – offer the user clickable answers
+    for a discrete-choice question (see step 2). Use sparingly.
 
 WORKFLOW
 1. Before your first substantive question, call get_ontology_overview so you
@@ -74,6 +77,13 @@ WORKFLOW
    to confirm the exact properties of a class you intend to reference.
 2. Ask ONE focused question at a time to pin down: which entities the rule
    matches, the condition(s), and what new triple(s) it should infer.
+   When — and ONLY when — the question you are asking has a small, well-defined
+   set of possible answers (a yes/no confirmation, a choice between a few named
+   values, a comparison operator, a short list of candidate properties), call
+   propose_options with those exact answers so the user can click instead of
+   type. Do NOT use propose_options for open-ended questions. Set multi=true
+   only when more than one answer can legitimately apply. Keep your reply to
+   the short question itself — do not also list the options as a bulleted list.
 3. As soon as you can express part of the rule, call update_draft with a
    first CONSTRUCT and keep refining it after each answer so the user watches
    it take shape.
@@ -110,6 +120,17 @@ def _snapshot(draft: Optional[dict]) -> Optional[dict]:
         "description": draft.get("description", "") or "",
         "query": draft.get("query", "") or "",
     }
+
+
+def _surface_state(
+    result: "AgentResult", ctx: ToolContext, initial_draft: Optional[dict]
+) -> None:
+    """Copy the turn's draft/ready/options from the context onto the result.
+    The draft is surfaced only when it actually changed this turn."""
+    if ctx.rule_draft is not None and ctx.rule_draft != initial_draft:
+        result.draft = ctx.rule_draft
+    result.ready = ctx.rule_draft_ready
+    result.options = ctx.rule_options
 
 
 def _build_system_prompt(initial_draft: Optional[dict]) -> str:
@@ -274,10 +295,7 @@ def run_agent(
         else:
             result.success = True
             result.reply = content
-            # Surface the draft only when it actually changed this turn.
-            if ctx.rule_draft is not None and ctx.rule_draft != initial_draft:
-                result.draft = ctx.rule_draft
-            result.ready = ctx.rule_draft_ready
+            _surface_state(result, ctx, initial_draft)
             result.steps.append(
                 AgentStep(step_type="output", content=content[:500])
             )
@@ -293,7 +311,5 @@ def run_agent(
 
     result.error = "Max iterations reached"
     result.reply = "I ran out of steps. Could you simplify the rule you need?"
-    if ctx.rule_draft is not None and ctx.rule_draft != initial_draft:
-        result.draft = ctx.rule_draft
-    result.ready = ctx.rule_draft_ready
+    _surface_state(result, ctx, initial_draft)
     return result

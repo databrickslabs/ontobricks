@@ -21,6 +21,9 @@ ONTOLOGY_CSS = (
 DQ_JS = (
     ROOT / "src/front/static/ontology/js/ontology-dataquality.js"
 ).read_text(encoding="utf-8")
+BR_CSS = (
+    ROOT / "src/front/static/ontology/css/ontology-business-rules.css"
+).read_text(encoding="utf-8")
 ONTOLOGY_HTML = (
     ROOT / "src/front/templates/ontology.html"
 ).read_text(encoding="utf-8")
@@ -133,6 +136,26 @@ def test_complex_save_is_two_step_validate_then_confirm():
     assert "_craValidate" in save_fn
     # the validate endpoint is still used
     assert "/ontology/rules/sparql_rules/validate" in BR_JS
+
+
+def test_complex_assistant_renders_clickable_options():
+    """Agent-offered options render as clickable pills / checkboxes."""
+    assert "_craRenderOptions" in BR_JS
+    assert "_craChooseOption" in BR_JS
+    assert "_craLockPendingOptions" in BR_JS
+    assert "cra-opt-pill" in BR_JS
+    assert "cra-opt-check" in BR_JS
+    assert "cra-opt-send" in BR_JS
+    assert "cra-options-locked" in BR_JS
+    # rendered only when options are present in the response
+    apply_fn = BR_JS[BR_JS.index("_craApplyResponse("):BR_JS.index("_craRenderOptions(")]
+    assert "data.options" in apply_fn
+
+
+def test_complex_assistant_options_styled():
+    assert ".cra-options" in BR_CSS
+    assert ".cra-opt-pill" in BR_CSS
+    assert ".cra-options-locked" in BR_CSS
 
 
 def test_complex_save_confirm_resets_on_change():

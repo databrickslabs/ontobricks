@@ -45,3 +45,61 @@ Test result:
 - uv run --frozen pytest -q -m "not scenario" — 10187 passed, 325 skipped,
   1 failed (the pre-existing size-budget failure on
   agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+================================================================================
+Complex rule builder: clickable answers for discrete-choice questions
+================================================================================
+
+Context:
+When the Complex rule assistant asks a question with a small, well-defined set
+of answers (a yes/no confirmation like "Does 'Active' sound like the right
+value to match?", a choice between a few named values, an operator, a short
+list of properties), it can now offer those answers as clickable controls in
+the chat so the user clicks instead of typing. The agent is instructed to use
+this ONLY for genuinely discrete questions, never for open-ended ones.
+Single-select renders as pills that send on click; multi-select renders as
+checkboxes + a Send button. Free-text input stays usable and answered groups
+lock.
+
+Changes:
+1. src/agents/tools/context.py — new ToolContext field rule_options
+   ({question, options: [str], multi}).
+2. src/agents/agent_complex_rule_builder/tools.py — new propose_options tool
+   (strips empty labels, stores the group or None), schema, and registration.
+3. src/agents/agent_complex_rule_builder/engine.py — AgentResult.options;
+   _surface_state() helper copies draft/ready/options onto the result (keeps
+   run_agent under its LOC budget); SYSTEM_PROMPT step 2 + TOOLS list instruct
+   the agent to call propose_options only for discrete-choice questions.
+4. src/api/routers/internal/ontology.py — complex_rule_assistant_chat returns
+   options in the JSON response.
+5. src/front/static/ontology/js/ontology-business-rules.js — _craApplyResponse
+   renders options via new _craRenderOptions / _craChooseOption /
+   _craLockPendingOptions (pills vs checkboxes+Send, lock on answer, single live
+   group); craSend/_craKickoff manage the pending group.
+6. src/front/static/ontology/css/ontology-business-rules.css — .cra-options /
+   .cra-opt-pill / .cra-opt-check / .cra-opt-send + locked/is-chosen states.
+7. tests/units/agents/test_agent_complex_rule_builder.py — tool + engine
+   surfacing tests (single/multi/none).
+8. tests/units/api/test_complex_rule_assistant_chat.py — options passthrough.
+9. tests/units/front/test_business_rules_list_ui.py — JS/CSS contract for the
+   clickable options.
+
+Note: propose_options is a prompt + tool change under CNS §3.5 — it adds to the
+deferred eval debt already tracked for agent_complex_rule_builder.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/agent_complex_rule_builder/tools.py
+- src/agents/agent_complex_rule_builder/engine.py
+- src/api/routers/internal/ontology.py
+- src/front/static/ontology/js/ontology-business-rules.js
+- src/front/static/ontology/css/ontology-business-rules.css
+- tests/units/agents/test_agent_complex_rule_builder.py
+- tests/units/api/test_complex_rule_assistant_chat.py
+- tests/units/front/test_business_rules_list_ui.py
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10196 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).

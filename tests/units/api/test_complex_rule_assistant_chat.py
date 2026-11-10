@@ -77,11 +77,20 @@ def test_happy_path_passes_through_reply_draft_ready(monkeypatch):
         "reply": "Review on the right.",
         "draft": draft,
         "ready": True,
+        "options": None,
         "usage": {"prompt_tokens": 10},
     }
     # current_draft + message forwarded to the agent
     assert captured["current_draft"] == {"query": "old"}
     assert captured["user_message"] == "Flag VIPs"
+
+
+def test_options_passthrough(monkeypatch):
+    options = {"question": "Match 'Active'?", "options": ["Yes", "No"], "multi": False}
+    result = AgentResult(success=True, reply="Does 'Active' sound right?", options=options, usage={})
+    captured: dict = {}
+    payload = _run({"message": "start"}, monkeypatch, captured, result)
+    assert payload["options"] == options
 
 
 def test_empty_message_rejected(monkeypatch):

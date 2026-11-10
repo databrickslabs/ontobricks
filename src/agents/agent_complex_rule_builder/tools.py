@@ -152,6 +152,33 @@ def tool_update_draft(
     return json.dumps({"ok": True, "ready": ctx.rule_draft_ready})
 
 
+def tool_propose_options(
+    ctx: ToolContext,
+    *,
+    question: str = "",
+    options=None,
+    multi: bool = False,
+    **_kwargs,
+) -> str:
+    """Offer the user a small set of clickable answers for the next question.
+
+    Rendered in the chat as pills (single-select) or checkboxes + Send
+    (multi-select). A per-turn hint only; it does not touch the draft.
+    """
+    clean = [str(o).strip() for o in (options or []) if str(o).strip()]
+    ctx.rule_options = (
+        {"question": question or "", "options": clean, "multi": bool(multi)}
+        if clean
+        else None
+    )
+    logger.info(
+        "agent_complex_rule_builder: propose_options (count=%d, multi=%s)",
+        len(clean),
+        bool(multi),
+    )
+    return json.dumps({"ok": True, "count": len(clean)})
+
+
 # =====================================================
 # Tool schemas
 # =====================================================
@@ -227,14 +254,53 @@ _UPDATE_DRAFT_DEF = {
     },
 }
 
+_PROPOSE_OPTIONS_DEF = {
+    "type": "function",
+    "function": {
+        "name": "propose_options",
+        "description": (
+            "Offer the user a short list of clickable answers for a "
+            "discrete-choice question you are asking this turn (e.g. a yes/no "
+            "confirmation, a choice between a few named values, an operator, a "
+            "set of properties). The UI renders them as pills (single choice) or "
+            "checkboxes with a Send button (multi). Use ONLY for questions with a "
+            "small, well-defined answer set — never for open-ended questions. "
+            "Set multi=true only when more than one answer can legitimately "
+            "apply. Keep your natural-language reply to the short question "
+            "itself; do not also list the options."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The short question being asked.",
+                },
+                "options": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "The candidate answers to show as controls.",
+                },
+                "multi": {
+                    "type": "boolean",
+                    "description": "True if the user may pick more than one answer.",
+                },
+            },
+            "required": ["options"],
+        },
+    },
+}
+
 TOOL_DEFINITIONS: List[dict] = [
     _GET_OVERVIEW_DEF,
     _DESCRIBE_CLASS_DEF,
     _UPDATE_DRAFT_DEF,
+    _PROPOSE_OPTIONS_DEF,
 ]
 
 TOOL_HANDLERS: Dict[str, Callable] = {
     "get_ontology_overview": tool_get_ontology_overview,
     "describe_class": tool_describe_class,
     "update_draft": tool_update_draft,
+    "propose_options": tool_propose_options,
 }
