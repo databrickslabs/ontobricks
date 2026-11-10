@@ -1380,3 +1380,31 @@ Modified files:
 - tests/units/front/test_studio_views_groups_contract.py
 
 Tests: uv run --frozen pytest -q tests/units/front/test_studio_views_groups_contract.py → 11 passed.
+
+================================================================================
+Edit Group: hide checkboxes for entities already in another group
+================================================================================
+
+Context:
+The Edit Group modal still offered checkboxes for entities that already
+belonged to another group (with a confirm-to-move dialog). Exclusive
+membership should make those entities non-selectable: listed, no checkbox.
+
+Changes:
+1. src/front/static/ontology/js/ontology-groups.js
+   Other-group members render as .group-member-locked rows (badge + no
+   checkbox). Removed _wireExclusiveMemberChecks / move-confirm flow.
+2. src/front/templates/partials/ontology/_ontology_groups.html
+   Copy updated: other-group entities appear without a checkbox.
+3. src/front/static/ontology/css/ontology-groups.css
+   Styles for .group-member-locked muted rows.
+4. tests/units/front/test_studio_views_groups_contract.py
+   Contract asserts locked rows and the removed confirm helper.
+
+Modified files:
+- src/front/static/ontology/js/ontology-groups.js
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/static/ontology/css/ontology-groups.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10260 passed, 323 skipped, 8 deselected.

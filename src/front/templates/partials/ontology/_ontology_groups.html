@@ -17,8 +17,8 @@
                     Groups cluster entities on the Studio canvas (collapse/expand).
                     Assign an entity to a group from its <strong>General</strong> tab,
                     the Studio right-click menu, or the member list below.
-                    <strong>An entity can belong to only one group</strong> — picking
-                    a member already in another group moves it here.
+                    <strong>An entity can belong to only one group</strong> — entities
+                    already in another group are listed without a checkbox.
                 </p>
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -52,8 +52,8 @@
                     <div class="col-12">
                         <label class="form-label">Members</label>
                         <p class="form-text mt-0 mb-2" id="groupMembersExclusiveHint">
-                            Select entities to include. Exclusive membership: one group per entity
-                            (entities already elsewhere are tagged and will move here if selected).
+                            Select entities to include. An entity can belong to only one group —
+                            members of another group appear disabled (no checkbox).
                         </p>
                         <div id="groupMembersList" class="group-members-grid border rounded p-2 group-members-list-scroll">
                         </div>

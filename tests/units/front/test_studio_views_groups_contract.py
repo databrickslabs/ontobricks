@@ -176,9 +176,11 @@ def test_groups_crud_refreshes_studio():
 def test_exclusive_group_membership_is_surfaced_in_ui():
     """An entity can belong to only one group — modal, panel, and Studio menus say so."""
     groups_js = _read(GROUPS_JS)
-    assert "_wireExclusiveMemberChecks" in groups_js
+    # Modal lists other-group members without a checkbox (not selectable).
+    assert "group-member-locked" in groups_js
     assert "data-other-group" in groups_js
-    assert "An entity can belong to only one group" in groups_js
+    assert "_wireExclusiveMemberChecks" not in groups_js
+    assert "Exclusive membership" in groups_js
 
     panels = _read(PANELS_JS)
     assert "sharedEntityGroupExclusiveHint" in panels
@@ -187,6 +189,10 @@ def test_exclusive_group_membership_is_surfaced_in_ui():
     groups_html = _read(GROUPS_HTML)
     assert "An entity can belong to only one group" in groups_html
     assert "groupMembersExclusiveHint" in groups_html
+    assert "without a checkbox" in groups_html
+
+    groups_css = _read(REPO_ROOT / "src/front/static/ontology/css/ontology-groups.css")
+    assert ".group-member-locked" in groups_css
 
     css = _read(MAP_CSS)
     assert ".map-context-submenu" in css

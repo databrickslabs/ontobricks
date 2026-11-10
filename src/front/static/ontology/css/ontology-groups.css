@@ -41,6 +41,24 @@
     font-weight: 600;
 }
 
+/* Entities already in another group — visible, no checkbox. */
+.group-members-grid .group-member-locked {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.15rem 0.25rem;
+    padding: 4px 8px 4px 28px;
+    border-radius: 4px;
+    color: var(--db-text-muted, #6F6B65);
+    opacity: 0.75;
+    cursor: not-allowed;
+    user-select: none;
+}
+
+.group-members-grid .group-member-locked-label {
+    pointer-events: none;
+}
+
 .group-icon-preview-sized {
     font-size: 1.2rem;
 }
