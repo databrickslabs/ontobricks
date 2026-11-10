@@ -152,7 +152,7 @@
             "groups": [
                 {
                     "id": "ontology-editor",
-                    "title": "Ontology Design",
+                    "title": "Design",
                     "icon": "bi-pencil-square",
                     "items": [
                         {
@@ -198,6 +198,13 @@
                             "icon": "bi-arrow-left-right",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "designchecks",
+                            "label": "Sanity Checks",
+                            "icon": "bi-clipboard2-check",
+                            "default": false,
+                            "requires": null
                         }
                     ]
                 },
@@ -210,13 +217,6 @@
                             "id": "dataquality",
                             "label": "Data Quality",
                             "icon": "bi-shield-check",
-                            "default": false,
-                            "requires": null
-                        },
-                        {
-                            "id": "designchecks",
-                            "label": "Sanity Checks",
-                            "icon": "bi-clipboard2-check",
                             "default": false,
                             "requires": null
                         },

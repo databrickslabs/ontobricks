@@ -853,3 +853,73 @@ Test result:
 - Playwright: Domain has no R2RML item; Mapping → General shows Informations | R2RML; R2RML tab renders Turtle and Unmap all stays in the header.
 - uv run --frozen pytest -q -m "not scenario" → 10258 passed, 323 skipped, 8 deselected, 0 failed in 52.86s
 - e2e/scenario suites updated but not executed (opt-in).
+
+## Ontology menu: Sanity Checks moved to the end of Ontology Design
+
+Context: the Sanity Checks item (`designchecks`) sat in the Ontology "Advanced" group. The user asked to move it to the end of the "Ontology Design" section.
+
+Changes:
+1. src/front/config/menu_config.json
+   Item `designchecks` ("Sanity Checks", bi-clipboard2-check) removed from group `ontology-advanced` and appended after `relationships` in group `ontology-editor` (Ontology Design). Advanced now lists Data Quality, Business Rules, Expr. & Axioms.
+2. src/front/templates/partials/layout/help_modal.html
+   Help Center: the Sanity Checks bullet moved from the "Advanced features" list to the Ontology "Additional sidebar sections" list.
+3. docs/user-guide.md
+   Sanity Checks section notes it is the last entry of the Ontology Design sidebar group.
+4. docs/development.md
+   Ontology sidebar inventory updated (Sanity Checks in Ontology Editor, removed from Advanced).
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- docs/development.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- Ontology groups verified from menu_config.json: Ontology Design [General, Import, Generate, Studio, Entities, Relationships, Sanity Checks]; Advanced [Data Quality, Business Rules, Expr. & Axioms].
+- Note: two tests failed in a subset run (test_settings_runs_page::test_both_tables_name_a_domain_column fails on the baseline too; test_domain_versions_cards delete test was flaky) and both pass in the full run.
+
+## Ontology menu: section "Ontology Design" renamed "Design"
+
+Context: the first group of the Ontology menu was titled "Ontology Design". The user asked to rename it to "Design".
+
+Changes:
+1. src/front/config/menu_config.json
+   Group `ontology-editor` title "Ontology Design" → "Design" (menu label only; the page `<title>` in ontology.html is unchanged).
+2. docs/user-guide.md
+   Sanity Checks section now refers to the **Design** sidebar group.
+
+Modified files:
+- src/front/config/menu_config.json
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed.
+- menu_config.json verified: Ontology groups → 'Design' [General, Import, Generate, Studio, Entities, Relationships, Sanity Checks]; 'Advanced' [Data Quality, Business Rules, Expr. & Axioms].
+
+## Global rename: user-facing "Domain" → "Context"
+
+Context: the Domain menu is now called Context. The user asked to rename "Domain" to "Context" across the app. Scope: user-visible text only. Code identifiers (`Domain` class, `domain_name` fields, `/domain/` routes, file names), persisted formats (GitHub `domains/<Domain>/` layout, Lakebase schema), the public API surface (OpenAPI tags and descriptions, `domain_name` params, Query API reference page), agent prompts and MCP tools (AI feature gate), and log lines are unchanged.
+
+Changes:
+1. src/front/templates/** (HTML labels, headings, buttons, titles, comments): "Domain" → "Context", "Domains" → "Contexts" (e.g. "New Domain" → "New Context", "All Domains" → "All Contexts", "Domain Name" → "Context Name", "Domain Publication Workflow" → "Context Publication Workflow"). Excluded: partials/settings/_settings_github.html (GitHub path formats) and partials/dtwin/_query_api.html (public Query API reference).
+2. src/front/static/**/*.js and *.css (toasts, dialog titles, table headers, labels, `[Context]` console prefix, comments): same rule. Notable: navbar.js (New/Close/Load/Save Context), domain.js ("Context info saved successfully!", "Context loaded successfully!"), registry.js ("Delete Context", "Load Context"), utils.js (New Context dialog), runs-render.js and settings-runs.js (Context column/filter). Excluded: a CDISC-related comment is untouched; `Domain.py` file reference in query-cohorts.js comment kept.
+3. src/api/routers/internal/domain.py: UI-facing success and error messages ("Context saved", "Context info saved", "Context not saved to the registry", etc.).
+4. src/back/objects/domain/Domain.py: UI-facing messages ("Context name must be CamelCase alphanumeric only", "Context imported", "Context loaded: ..."). Logger lines and identifiers unchanged.
+5. src/back/objects/domain/settings/{RegistryDomainSettings,ScheduleSettings,PermissionSettings,ObxSettings}.py, src/back/objects/registry/PermissionService.py, src/back/objects/registry/schedule/{TaskContext,BuildScheduler}.py, src/back/objects/registry/store/lakebase/{Catalog,Simulations,ChangeEvents,ReviewEvents}.py, src/back/core/helpers/SQLHelpers.py, src/back/objects/digitaltwin/build/TwinGraphBuild.py, src/back/objects/session/DomainSession.py: UI-facing validation and status messages ("Context name is required", "Context permissions saved", "Context '<x>' not found", etc.).
+6. Tests updated to the new user-facing strings: tests/units/domain/test_domain_neo4j_connection_picker.py, tests/units/front/test_domain_versions_cards.py, tests/units/front/test_settings_runs_page.py, tests/units/registry/test_v090_lakebase_audit.py, tests/units/registry/test_v090_lakebase_catalog.py, tests/units/settings/test_settings_domain_permissions.py, tests/units/settings/test_v090_settings_obx.py, tests/units/settings/test_v090_settings_permissions.py, tests/units/settings/test_v090_settings_registry_domains.py, tests/units/settings/test_v090_settings_schedule.py, tests/units/ui/test_home_and_explorer_contracts.py, tests/e2e/navigation/test_navigation_flows.py (e2e opt-in, not run).
+
+Modified files (this change):
+- src/front/templates/: base.html, domain.html, home.html, settings.html, partials/domain/{_domain_audit,_domain_documents,_domain_information,_domain_review,_domain_runs,_domain_validation}.html, partials/dtwin/_query_insights.html, partials/layout/{_workspace_map_modal,help_modal}.html, partials/ontology/{_ontology_import,_ontology_information}.html, partials/registry/{_export_obx_modal,_import_obx_modal,_registry_configuration,_registry_domains}.html, partials/settings/{_settings_locks,_settings_runs,_settings_schedule}.html
+- src/front/static/: config/js/{schedule,settings-locks,settings-runs,settings}.js; domain/css/{domain-audit,domain-collaboration,domain-information,domain-review}.css; domain/js/{domain-audit,domain-collaboration,domain-review,domain-validation,domain-versions,domain}.js; global/css/{main,permissions,review-modals}.css; global/js/{navbar,ontology-core,runs-render,uc-location-widget,utils,version-check}.js; home/css/home.css; home/js/{home-tasks,home}.js; mapping/js/mapping-shared.js; ontology/js/{ontology-import,ontology-information,ontology-shared-panels}.js; query/js/{query-sigmagraph,query-sync}.js; registry/css/{registry,registry-teams}.css; registry/js/registry.js
+- src/api/routers/internal/domain.py
+- src/back/: core/helpers/SQLHelpers.py, objects/digitaltwin/build/TwinGraphBuild.py, objects/domain/Domain.py, objects/domain/settings/{ObxSettings,PermissionSettings,RegistryDomainSettings,ScheduleSettings}.py, objects/registry/PermissionService.py, objects/registry/schedule/{BuildScheduler,TaskContext}.py, objects/registry/store/lakebase/{Catalog,ChangeEvents,ReviewEvents,Simulations}.py, objects/session/DomainSession.py
+- tests/ (12 files listed above)
+- changelogs/v0.10.0/benoitcayladbx_2026-11-10.log
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" → 10259 passed, 323 skipped, 8 deselected, 0 failed (after updating 14 expected-string assertions to the new labels).
+- Residual: whole-word "Domain" remains only in intentional places (Postgres naming comment in settings.js, `Domain.py` filename in query-cohorts.js comment) and in excluded surfaces listed above.
+- Not done: docs/ (Sphinx, user guide, README) still say "Domain"; the public API/OpenAPI tags and agent/MCP prompts were kept as-is (AI feature gate requires an eval before prompt changes).

@@ -413,7 +413,7 @@ Click **Expr. & Axioms** in the sidebar to define OWL class expressions and axio
 
 #### Sanity Checks
 
-Open **Ontology → Sanity Checks** to lint the schema itself (not instance data). Checks are **advisory**: they never block save, mapping, Knowledge Graph build, or publish. Click **Refresh** after edits. Click a finding to jump to the entity, relationship, or group. Attribute findings open the owning entity when they have a domain. Orphaned attributes (no domain) are not listed under Relationships.
+Open **Ontology → Sanity Checks** (last entry of the **Design** sidebar group) to lint the schema itself (not instance data). Checks are **advisory**: they never block save, mapping, Knowledge Graph build, or publish. Click **Refresh** after edits. Click a finding to jump to the entity, relationship, or group. Attribute findings open the owning entity when they have a domain. Orphaned attributes (no domain) are not listed under Relationships.
 
 **Auto-fix.** Most findings show an **Auto-fix** button (and **Fix all** when a rule has two or more fixable findings). Clicking it opens a confirmation modal that explains the proposed change(s), offers ranked alternatives when a decision is needed (for orphan attributes: attach to an entity or remove), and applies only after you confirm. Mechanical rules (broken refs, naming) are fixed deterministically; judgement rules (descriptions, orphan ownership, near-duplicates) use the domain LLM when one is selected in **Domain → General → AI**. With **No LLM**, Auto-fix still works for mechanical rules, missing labels (humanised ID), and orphan attributes (entity picker + Remove). Duplicate URI (DC-E06) and deep hierarchy (DC-I05) have no Auto-fix — they need a manual decision.
 
