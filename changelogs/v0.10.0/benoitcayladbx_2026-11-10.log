@@ -103,3 +103,32 @@ Test result:
 - uv run --frozen pytest -q -m "not scenario" — 10196 passed, 325 skipped,
   1 failed (the pre-existing size-budget failure on
   agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).
+
+
+================================================================================
+Graph / Inference — friendly provenance badge in the Inferred tab
+================================================================================
+
+Context:
+In Graph → Inference, the Inferred tab showed each inferred triple's raw
+provenance in a badge (e.g. "if_then:LoyalCustomer"). The "if_then" prefix is
+internal wording; the rest of the UI calls that rule family "Simple" (and
+SPARQL rules "Complex"). The badge now uses the same friendly labels.
+
+Changes:
+1. src/front/static/query/js/query-reasoning.js — new _PROVENANCE_LABELS map +
+   _provenanceLabel() helper that rewrites the provenance prefix
+   (if_then->Simple, sparql->Complex, graph->Graph, owlrl->T-Box) while keeping
+   the ":<ruleName>" suffix; the Inferred-tab badge renders through it instead
+   of the raw provenance string.
+2. tests/units/front/test_reasoning_inferred_badge.py — contract test asserting
+   if_then maps to Simple and the badge uses the helper.
+
+Modified files:
+- src/front/static/query/js/query-reasoning.js
+- tests/units/front/test_reasoning_inferred_badge.py
+
+Test result:
+- uv run --frozen pytest -q -m "not scenario" — 10198 passed, 325 skipped,
+  1 failed (the pre-existing size-budget failure on
+  agent_dtwin_chat/engine.py::run_agent 198 -> 200, untouched here).

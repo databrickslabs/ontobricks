@@ -191,6 +191,24 @@ const ReasoningModule = {
         return idx >= 0 ? uri.substring(idx + 1) : uri;
     },
 
+    // Friendly labels for inferred-triple provenance prefixes. Provenance is
+    // "<phase>:<ruleName>" (e.g. "if_then:LoyalCustomer") or a bare phase; the
+    // rule families use the same Simple/Complex wording as the rest of the UI.
+    _PROVENANCE_LABELS: {
+        if_then: 'Simple',
+        sparql: 'Complex',
+        graph: 'Graph',
+        owlrl: 'T-Box',
+    },
+
+    _provenanceLabel(prov) {
+        if (!prov) return '';
+        const idx = prov.indexOf(':');
+        const prefix = idx >= 0 ? prov.slice(0, idx) : prov;
+        const label = this._PROVENANCE_LABELS[prefix] || prefix;
+        return idx >= 0 ? `${label}:${prov.slice(idx + 1)}` : label;
+    },
+
     _esc(s) {
         if (!s) return '';
         const d = document.createElement('div');
@@ -262,7 +280,7 @@ const ReasoningModule = {
                 `<td class="small text-truncate" style="max-width:180px" title="${this._esc(t.subject)}">${this._esc(this._localName(t.subject))}</td>` +
                 `<td class="small text-truncate" style="max-width:180px" title="${this._esc(t.predicate)}">${this._esc(this._localName(t.predicate))}</td>` +
                 `<td class="small text-truncate" style="max-width:180px" title="${this._esc(t.object)}">${this._esc(this._localName(t.object))}</td>` +
-                `<td class="small"><span class="badge bg-secondary">${this._esc(t.provenance)}</span></td>`;
+                `<td class="small"><span class="badge bg-secondary">${this._esc(this._provenanceLabel(t.provenance))}</span></td>`;
             tbody.appendChild(tr);
         }
 
