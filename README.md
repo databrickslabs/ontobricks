@@ -138,7 +138,8 @@ before they break your graph.
 Materialize triples incrementally, then **reason** over the graph with OWL 2 RL
 inference, IF-THEN rules and SHACL validation. Explore interactively: two-phase
 search, N-hop neighbour expansion, cross-domain bridge navigation, community
-detection (Louvain, Label Propagation, Greedy Modularity), and explainable
+visualization from Intelligence → Community (Louvain, Label Propagation,
+Greedy Modularity), and explainable
 **cohort discovery**. Right-click any entity to run its **Data Quality Checks**
 (every SHACL shape on its class, its parents and the global ones, with
 per-dimension gauges), one of its **IF-THEN business rules**, or a class action

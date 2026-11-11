@@ -57,6 +57,14 @@ class TestDetectClusters:
             "clusters": [{"id": 0, "members": ["a", "b"], "size": 2}],
             "stats": {"node_count": 2, "edge_count": 1, "cluster_count": 1,
                       "modularity": 0.4, "algorithm": "louvain", "elapsed_ms": 3},
+            "graph": {
+                "nodes": [],
+                "edges": [],
+                "capped": False,
+                "node_total": 0,
+                "edge_total": 0,
+            },
+            "entity_meta": {},
         }
 
 

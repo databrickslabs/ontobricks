@@ -409,6 +409,80 @@ async def detect_clusters(
         raise InfrastructureError("Cluster detection failed", detail=str(e))
 
 
+@router.get("/clusters/current")
+async def current_clusters(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the materialized community partition, or empty clusters."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
+    if not graph_name:
+        raise ValidationError("Graph name is not configured")
+    result = await run_blocking(
+        DigitalTwin(domain).load_current_clusters, store, graph_name
+    )
+    return {"success": True, **result}
+
+
+@router.post(
+    "/clusters/materialize",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def materialize_clusters(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Write the preview partition into the knowledge graph (replaces previous)."""
+    assert_domain_graph_read(request)
+    data = await request.json()
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    clusters = data.get("clusters")
+    if not isinstance(clusters, list):
+        raise ValidationError("clusters must be a list")
+    stats = data.get("stats") if isinstance(data.get("stats"), dict) else {}
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
+    if not graph_name:
+        raise ValidationError("Graph name is not configured")
+    result = await run_blocking(
+        DigitalTwin(domain).materialize_clusters,
+        store,
+        graph_name,
+        clusters,
+        stats,
+    )
+    return {"success": True, **result}
+
+
+@router.delete(
+    "/clusters/current",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def delete_current_clusters(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop the materialized community partition."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
+    if not graph_name:
+        raise ValidationError("Graph name is not configured")
+    result = await run_blocking(
+        DigitalTwin(domain).clear_clusters, store, graph_name
+    )
+    return {"success": True, **result}
+
+
 # ===========================================
 # Graph Metrics
 # ===========================================

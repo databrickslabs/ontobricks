@@ -553,6 +553,15 @@ class DigitalTwin:
             max_triples=max_triples,
         )
 
+    def materialize_clusters(self, store: Any, graph_name: str, clusters: List[Dict[str, Any]], stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return TwinAnalytics(self._domain).materialize_clusters(store, graph_name, clusters, stats)
+
+    def load_current_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
+        return TwinAnalytics(self._domain).load_current_clusters(store, graph_name)
+
+    def clear_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
+        return TwinAnalytics(self._domain).clear_clusters(store, graph_name)
+
     def compute_graph_metrics(
         self,
         graph_name: str,

@@ -112,7 +112,6 @@ var SigmaGraph = (function () {
     var _clusterCount = 0;
     var _clusterColorByActive = false;
     var _showQualityRings = true;  // SHACL facet ring on checked nodes
-    var _clusterResolution = 1.0;
     var _collapsedClusters = new Set();
     var _clusterCollapseActive = false;
 
@@ -428,80 +427,52 @@ var SigmaGraph = (function () {
         return CLUSTER_COLORS[clusterId % CLUSTER_COLORS.length];
     }
 
-    function _detectClusters(resolution) {
-        if (!_graph || _graph.order === 0) return;
-        if (typeof graphologyLibrary === 'undefined' || !graphologyLibrary.communitiesLouvain) {
-            console.warn('[SigmaGraph] communitiesLouvain not available');
-            return;
-        }
+    var _clustersHydrated = false;
 
-        var louvain = graphologyLibrary.communitiesLouvain;
-        var undirected;
-        try {
-            var GraphClass = graphology.Graph || graphology;
-            undirected = new GraphClass({ multi: false, type: 'undirected' });
-            _graph.forEachNode(function (node, attrs) {
-                if (!attrs._isGroup) undirected.addNode(node);
-            });
-            _graph.forEachEdge(function (edge, attrs, source, target) {
-                if (source === target) return;
-                var sa = _graph.getNodeAttributes(source);
-                var ta = _graph.getNodeAttributes(target);
-                if (sa._isGroup || ta._isGroup) return;
-                if (!undirected.hasEdge(source, target)) {
-                    undirected.addEdge(source, target);
-                }
-            });
-        } catch (e) {
-            console.error('[SigmaGraph] Error building undirected projection:', e);
-            return;
-        }
+    function _applyClusterAssignmentsToGraph() {
+        if (!_graph || !_clusterAssignments) return;
+        _graph.forEachNode(function (node) {
+            if (_clusterAssignments[node] !== undefined) {
+                _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
+            }
+        });
+    }
 
-        if (undirected.order === 0) return;
-
-        try {
-            _clusterAssignments = louvain.assign(undirected, {
-                nodeCommunityAttribute: '_cluster',
-                resolution: resolution || 1.0
-            });
-
-            _clusterAssignments = {};
-            var maxCluster = -1;
-            undirected.forEachNode(function (node, attrs) {
-                var c = attrs._cluster;
-                if (c === undefined) c = 0;
-                _clusterAssignments[node] = c;
-                if (c > maxCluster) maxCluster = c;
-            });
-            _clusterCount = maxCluster + 1;
-
-            _graph.forEachNode(function (node) {
-                if (_clusterAssignments[node] !== undefined) {
-                    _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
-                }
-            });
-        } catch (e) {
-            console.error('[SigmaGraph] Louvain detection failed:', e);
+    function _applyMaterializedClusterPayload(data) {
+        var clusters = (data && data.clusters) || [];
+        if (!clusters.length) {
             _clusterAssignments = null;
             _clusterCount = 0;
+            _populateClustersPanel();
+            return;
         }
-
+        _clusterAssignments = {};
+        clusters.forEach(function (cl) {
+            (cl.members || []).forEach(function (uri) {
+                _clusterAssignments[uri] = cl.id;
+            });
+        });
+        _clusterCount = clusters.length;
+        _applyClusterAssignmentsToGraph();
         _populateClustersPanel();
     }
 
-    function _clearClusters() {
-        _clusterAssignments = null;
-        _clusterCount = 0;
-        _clusterColorByActive = false;
-        _collapsedClusters.clear();
-        _clusterCollapseActive = false;
-        if (_graph) {
-            _graph.forEachNode(function (node) {
-                _graph.removeNodeAttribute(node, '_cluster');
-            });
+    function _ensureMaterializedClusters() {
+        if (_clustersHydrated) {
+            _applyClusterAssignmentsToGraph();
+            return;
         }
-        _populateClustersPanel();
-        if (_renderer) _renderer.refresh();
+        _clustersHydrated = true;
+        fetch('/dtwin/clusters/current', { credentials: 'same-origin' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (data) {
+                _applyMaterializedClusterPayload(data);
+                if (_renderer) _renderer.refresh();
+            })
+            .catch(function (err) {
+                console.warn('[SigmaGraph] Could not load materialized clusters:', err);
+                _populateClustersPanel();
+            });
     }
 
     function _getClusterStats() {
@@ -528,7 +499,7 @@ var SigmaGraph = (function () {
 
         var stats = _getClusterStats();
         if (stats.length === 0) {
-            container.innerHTML = '<span class="text-muted small">No clusters detected yet.</span>';
+            container.innerHTML = '<span class="text-muted small">No materialized clusters — run Intelligence → Community → Detect.</span>';
             var countEl = document.getElementById('sgClusterCount');
             if (countEl) countEl.textContent = '';
             return;
@@ -1044,6 +1015,7 @@ var SigmaGraph = (function () {
         }
 
         _graph = _buildGraph(filterIds);
+        _ensureMaterializedClusters();
         if (!_graph || _graph.order === 0) {
             console.warn('[SigmaGraph] graph is empty (0 nodes)');
             _searchTimerPending = false;
@@ -3763,32 +3735,6 @@ var SigmaGraph = (function () {
             });
         },
 
-        // --- Data cluster detection ---
-
-        detectClusters: function (resolution) {
-            if (!_graph || _graph.order === 0) {
-                if (typeof showNotification === 'function') showNotification('No graph data loaded.', 'warning');
-                return;
-            }
-            _clusterResolution = resolution || parseFloat(document.getElementById('sgClusterResolution')?.value) || 1.0;
-            _detectClusters(_clusterResolution);
-            if (_clusterAssignments && _clusterCount > 0) {
-                if (typeof showNotification === 'function') {
-                    showNotification('Detected ' + _clusterCount + ' clusters (resolution ' + _clusterResolution.toFixed(2) + ')', 'info');
-                }
-                if (_renderer) _renderer.refresh();
-            } else {
-                if (typeof showNotification === 'function') showNotification('No clusters detected.', 'warning');
-            }
-        },
-
-        clearClusters: function () {
-            _clearClusters();
-            var colorCheck = document.getElementById('sgClusterColorBy');
-            if (colorCheck) colorCheck.checked = false;
-            if (typeof showNotification === 'function') showNotification('Clusters cleared.', 'info');
-        },
-
         toggleQualityRings: function () {
             _showQualityRings = document.getElementById('sgShowQualityRings')?.checked || false;
             if (_renderer) _renderer.refresh();
@@ -3835,60 +3781,6 @@ var SigmaGraph = (function () {
             _showPlaceholder();
             _populateClustersPanel();
             SigmaGraph.refresh(true);
-        },
-
-        detectClustersBackend: async function () {
-            if (typeof showNotification === 'function') showNotification('Detecting clusters on full graph...', 'info');
-            var algorithm = document.getElementById('sgClusterAlgorithm')?.value || 'louvain';
-            var resolution = parseFloat(document.getElementById('sgClusterResolution')?.value) || 1.0;
-            try {
-                var resp = await fetch('/dtwin/clusters/detect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ algorithm: algorithm, resolution: resolution })
-                });
-                var data = await resp.json();
-                if (!data.success) {
-                    if (typeof showNotification === 'function') showNotification(data.message || 'Detection failed', 'danger');
-                    return;
-                }
-                var clusters = data.clusters || [];
-                _clusterAssignments = {};
-                _clusterCount = clusters.length;
-                clusters.forEach(function (cl) {
-                    (cl.members || []).forEach(function (uri) {
-                        _clusterAssignments[uri] = cl.id;
-                    });
-                });
-                if (_graph) {
-                    _graph.forEachNode(function (node) {
-                        if (_clusterAssignments[node] !== undefined) {
-                            _graph.setNodeAttribute(node, '_cluster', _clusterAssignments[node]);
-                        }
-                    });
-                }
-                _populateClustersPanel();
-                if (_renderer) _renderer.refresh();
-                var stats = data.stats || {};
-                if (typeof showNotification === 'function') {
-                    showNotification(
-                        'Backend: ' + _clusterCount + ' clusters detected (' +
-                        (stats.node_count || '?') + ' nodes, ' +
-                        (stats.elapsed_ms || '?') + 'ms)',
-                        'success'
-                    );
-                }
-            } catch (e) {
-                console.error('[SigmaGraph] Backend cluster detection error:', e);
-                if (typeof showNotification === 'function') showNotification('Backend detection error: ' + e.message, 'danger');
-            }
-        },
-
-        updateClusterResolutionLabel: function () {
-            var slider = document.getElementById('sgClusterResolution');
-            var label = document.getElementById('sgClusterResolutionValue');
-            if (slider && label) label.textContent = parseFloat(slider.value).toFixed(2);
         },
 
         computeMetrics: async function () {

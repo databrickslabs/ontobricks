@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ brand_page_title('Simulation') }}{% endblock %}
+{% block title %}{{ brand_page_title('Intelligence') }}{% endblock %}
 
 {% block page_id %}simulation{% endblock %}
 
@@ -19,6 +19,10 @@
         </div>
 
         <div class="sidebar-content">
+            <div id="communities-section" class="sidebar-section">
+                {% include "partials/simulation/_sim_communities.html" %}
+            </div>
+
             <div id="cohorts-section" class="sidebar-section">
                 {% include "partials/ontology/_ontology_cohorts.html" %}
             </div>
@@ -68,6 +72,7 @@
 </script>
 
 <script defer src="{{ url_for('static', filename='simulation/js/simulation.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-communities.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/phase-tree.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/rule-editor-loader.js') }}?v={{ asset_version }}" data-asset-version="{{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-rules.js') }}?v={{ asset_version }}"></script>

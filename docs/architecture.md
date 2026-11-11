@@ -224,7 +224,7 @@ LIMIT 100
 6. **Generated Spark SQL** - Query with JOINs and UNION ALL
 7. **Triple Store Backend Dispatch** - The single `GraphDBFactory` returns the active engine — a Delta-backed store (`MaterializedStore`) or the Lakebase engine (`FlatStore`). Both subclass `GraphBackend` and expose the same `(subject, predicate, object)` contract.
 8. **RDF-style Results** - Uniform (subject, predicate, object) triples from both backends
-9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and data cluster detection (Louvain/Label Propagation/Greedy Modularity)
+9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and visualization of communities materialized from Intelligence → Community
 
 **Generated Spark SQL Example** (for generic triple query):
 ```sql
@@ -1338,7 +1338,8 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 
 ## Simulation — What-if Sandboxes
 
-The **Simulation** menu (after Graph) answers *"what
+The **Intelligence** menu (after Graph) groups **Community** detection,
+**Cohorts**, and **Simulation**. Simulation answers *"what
 would the graph conclude if these facts were true?"* without touching the live
 knowledge graph. v1 supports the **Lakebase** graph backend only; graphless
 domains redirect to Domain, other backends show a disabled page.
@@ -1437,15 +1438,26 @@ Materialise still writes to the live graph via `/dtwin/cohorts/*`.
 
 ## Graph Analysis — Community Detection
 
-OntoBricks provides **data cluster detection** on the graph viewer, allowing users to discover communities of densely connected entities. Detection is available at two levels:
+**Intelligence → Community** configures and detects partitions.
+**Explorer** only visualizes a materialized partition (colour / collapse).
 
-### Client-Side (Graphology)
+### Preview then materialize
 
-The frontend uses the `graphology-communities-louvain` algorithm (bundled with `graphology-library`) to run Louvain community detection directly in the browser on the currently displayed subgraph. This is instant and requires no backend call.
+1. **Detect** (`POST /dtwin/clusters/detect`) runs `CommunityDetector` in
+   memory and returns a preview: cluster list plus a capped entity graph
+   (`graph.nodes` / `graph.edges`, coloured by cluster) for the Intelligence
+   light explorer (no graph writes).
+2. **Materialize** (`POST /dtwin/clusters/materialize`) deletes the previous
+   community triples for the domain, then inserts `Cluster` individuals and
+   `:inCluster` membership (one active partition).
+3. **Explorer** loads assignments with `GET /dtwin/clusters/current` and
+   applies colour-by-cluster and super-node collapse.
 
 ### Server-Side (NetworkX)
 
-For full-graph analysis, the backend `CommunityDetector` service (`src/back/core/graph_analysis/CommunityDetector.py`) loads all triples from the triple store, builds an undirected NetworkX graph (filtering out RDF type/label predicates), and runs one of three algorithms:
+`CommunityDetector` (`src/back/core/graph_analysis/CommunityDetector.py`)
+loads triples from the store, builds an undirected NetworkX graph (filtering
+out RDF type/label predicates), and runs one of three algorithms:
 
 | Algorithm | NetworkX Function | Description |
 |-----------|-------------------|-------------|
@@ -1453,14 +1465,13 @@ For full-graph analysis, the backend `CommunityDetector` service (`src/back/core
 | **Label Propagation** | `community.label_propagation_communities()` | Fast, near-linear-time detection |
 | **Greedy Modularity** | `community.greedy_modularity_communities()` | Greedy agglomerative approach |
 
-The result includes cluster membership, modularity score, and per-cluster member lists. It is returned to the frontend via `POST /dtwin/clusters/detect`.
+The preview includes cluster membership, modularity, and per-cluster member
+lists. Vocabulary and replace-on-write live in `CommunityVocabulary` and
+`CommunityMaterializer`.
 
-### Visualization
+### Visualization (Explorer)
 
-Detected clusters can be visualized in several ways:
-
-- **Color by cluster** — nodes are recolored by community assignment instead of entity type
-- **Resolution slider** — controls Louvain granularity (higher resolution = more clusters)
+- **Color by cluster** — nodes are recolored by materialized community instead of entity type
 - **Collapse/expand** — clusters can be collapsed into super-nodes showing size and member count; clicking a super-node shows its members in the detail panel
 
 ### File Reference
@@ -1468,11 +1479,14 @@ Detected clusters can be visualized in several ways:
 | File | Purpose |
 |------|---------|
 | `src/back/core/graph_analysis/CommunityDetector.py` | `CommunityDetector` — loads triples, builds NetworkX graph, runs algorithm |
+| `src/back/core/graph_analysis/CommunityVocabulary.py` | Cluster / `inCluster` URI helpers |
+| `src/back/core/graph_analysis/CommunityMaterializer.py` | Replace-or-clear the active partition |
 | `src/back/core/graph_analysis/models.py` | `ClusterRequest`, `ClusterResult`, `DetectionResult`, `DetectionStats` dataclasses |
-| `src/api/routers/internal/dtwin.py` | `POST /dtwin/clusters/detect` endpoint |
-| `src/back/objects/digitaltwin/digitaltwin.py` | `DigitalTwin.detect_clusters()` method |
-| `src/front/static/query/js/query-sigmagraph.js` | Client-side Louvain detection, cluster UI logic, super-node rendering |
-| `src/front/templates/partials/dtwin/_query_sigmagraph.html` | Data Clusters sidebar panel |
+| `src/api/routers/internal/dtwin.py` | detect / current / materialize cluster endpoints |
+| `src/back/objects/digitaltwin/TwinAnalytics.py` | `detect_clusters`, `materialize_clusters`, `load_current_clusters` |
+| `src/front/static/simulation/js/simulation-communities.js` | Intelligence Community preview + materialize UI |
+| `src/front/static/query/js/query-sigmagraph.js` | Colour / collapse from materialized assignments |
+| `src/front/templates/partials/dtwin/_query_sigmagraph.html` | Data Clusters visualization panel |
 | `src/front/static/query/css/query-sigmagraph.css` | Cluster panel and chip styles |
 
 ---

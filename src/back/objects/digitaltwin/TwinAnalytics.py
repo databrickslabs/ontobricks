@@ -54,6 +54,13 @@ class TwinAnalytics:
         detector = CommunityDetector(store, graph_name)
         result = detector.detect(request)
 
+        graph = getattr(result, "preview", None) or {
+            "nodes": [],
+            "edges": [],
+            "capped": False,
+            "node_total": 0,
+            "edge_total": 0,
+        }
         return {
             "clusters": [
                 {"id": c.id, "members": c.members, "size": c.size}
@@ -67,7 +74,46 @@ class TwinAnalytics:
                 "algorithm": result.stats.algorithm,
                 "elapsed_ms": result.stats.elapsed_ms,
             },
+            "graph": graph,
+            "entity_meta": getattr(result, "entity_meta", None) or {},
         }
+
+    def _base_uri(self) -> str:
+        from shared.config.constants import DEFAULT_BASE_URI
+
+        ontology = getattr(self._domain, "ontology", None) or {}
+        if isinstance(ontology, dict):
+            return (ontology.get("base_uri") or DEFAULT_BASE_URI).strip()
+        return DEFAULT_BASE_URI
+
+    def _materializer(self, store: Any, graph_name: str):
+        from back.core.graph_analysis import CommunityMaterializer
+
+        return CommunityMaterializer(store, graph_name, self._base_uri())
+
+    def materialize_clusters(
+        self,
+        store: Any,
+        graph_name: str,
+        clusters: List[Dict[str, Any]],
+        stats: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Replace the graph partition with *clusters* (preview payload)."""
+        inserted = self._materializer(store, graph_name).materialize(
+            clusters, stats
+        )
+        return {"inserted": inserted, "cluster_count": len(clusters or [])}
+
+    def load_current_clusters(
+        self, store: Any, graph_name: str
+    ) -> Dict[str, Any]:
+        """Read the materialized partition, or empty clusters."""
+        return self._materializer(store, graph_name).load_current()
+
+    def clear_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
+        """Drop the materialized partition."""
+        deleted = self._materializer(store, graph_name).clear()
+        return {"deleted": deleted}
 
     def compute_graph_metrics(
         self,

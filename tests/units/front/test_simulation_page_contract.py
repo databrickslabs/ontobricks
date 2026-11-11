@@ -23,8 +23,9 @@ def _menu() -> dict:
     return next(m for m in menus if m["id"] == "simulation")
 
 
-def test_cohorts_group_is_first():
+def test_community_group_is_first():
     assert [g["id"] for g in _menu()["groups"]] == [
+        "simulation-community",
         "simulation-cohorts",
         "simulation-scenarios",
     ]
@@ -75,6 +76,59 @@ def test_partials_and_assets_exist():
         assert (FRONT / "templates" / partial).is_file(), partial
     for asset in re.findall(r"filename='(simulation/[^']+)'", html):
         assert (FRONT / "static" / asset).is_file(), asset
+
+
+def test_community_size_stats_helpers():
+    js = _read(FRONT / "static/simulation/js/simulation-communities.js")
+    assert "Size min" in js
+    assert "Size max" in js
+    assert "Size avg" in js
+    assert "Size median" in js
+    assert "Clusters" in js
+
+
+def test_communities_section_owns_detection():
+    html = _read(PAGE)
+    assert 'id="communities-section"' in html
+    assert "simulation-communities.js" in html
+    assert _menu()["label"] == "Intelligence"
+    comm = _read(FRONT / "templates/partials/simulation/_sim_communities.html")
+    assert re.sub(r"<!--.*?-->", "", comm, flags=re.DOTALL).strip().startswith('<div class="content-section">')
+    assert 'class="comm-layout"' in comm
+    assert 'class="comm-rail"' in comm
+    assert 'class="comm-main"' in comm
+    assert 'id="commDetectBtn"' in comm
+    assert 'class="btn btn-sm btn-primary"' in comm
+    assert 'id="commMaterializeBtn"' in comm
+    assert 'class="btn btn-sm btn-secondary"' in comm
+    assert 'id="commExplorerBtn"' in comm
+    assert 'href="/dtwin/?section=sigmagraph"' in comm
+    assert 'id="commPreviewCanvas"' in comm
+    assert 'id="commPreviewStats"' in comm
+    assert 'id="commPreviewDetails"' in comm
+    assert 'id="commPreviewLoading"' in comm
+    assert 'id="commPreviewBody"' not in comm
+    assert 'id="commPreviewClusters"' not in comm
+    # Detect lives in the top-right header actions, not in the algorithm card.
+    header, _, rest = comm.partition('id="commDetectBtn"')
+    assert 'section-header' in header
+    assert 'id="commAlgorithm"' in rest
+    js = _read(FRONT / "static/simulation/js/simulation-communities.js")
+    assert "/dtwin/clusters/detect" in js
+    assert "/dtwin/clusters/materialize" in js
+    assert "_renderPreviewGraph" in js
+    assert "_renderStats" in js
+    assert "_sizeStats" in js
+    assert "_selectCluster" in js
+    assert "_showClusterDetails" in js
+    assert "_memberInfo" in js
+    assert "_typeIcon" in js
+    assert "_erasePreview" in js
+    assert "_showPreviewLoading" in js
+    assert "entity_meta" in js
+    assert "clickNode" in js
+    assert "commPreviewCanvas" in js
+    assert "comm-member-type" in js
 
 
 def test_no_inline_scripts_or_styles():

@@ -595,6 +595,20 @@
             "navbar_actions": [],
             "groups": [
                 {
+                    "id": "simulation-community",
+                    "title": "Community",
+                    "icon": "bi-diagram-3",
+                    "items": [
+                        {
+                            "id": "communities",
+                            "label": "Detect",
+                            "icon": "bi-diagram-3",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "simulation-cohorts",
                     "title": "Cohorts",
                     "icon": "bi-people-fill",

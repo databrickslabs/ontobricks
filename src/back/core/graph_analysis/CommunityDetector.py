@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import time
-from typing import List
+from typing import Any, Dict, Iterable, List, Set
 
 import networkx as nx
 
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.logging import get_logger
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.models import (
@@ -19,6 +20,8 @@ from back.core.graph_analysis.models import (
 logger = get_logger(__name__)
 
 _SUPPORTED_ALGORITHMS = {"louvain", "label_propagation", "greedy_modularity"}
+# Cap for the Intelligence Community light explorer (not the materialize payload).
+_PREVIEW_MAX_NODES = 1_500
 
 
 class CommunityDetector(GraphBuilder):
@@ -65,6 +68,9 @@ class CommunityDetector(GraphBuilder):
 
         clusters = self._communities_to_clusters(communities)
         modularity = self._compute_modularity(nxg, communities)
+        member_uris = {m for cl in clusters for m in cl.members}
+        entity_meta = self._entity_meta(triples, member_uris)
+        preview = self._build_preview(nxg, clusters, entity_meta=entity_meta)
 
         elapsed_ms = self._elapsed_ms(t0)
         stats = DetectionStats(
@@ -83,7 +89,12 @@ class CommunityDetector(GraphBuilder):
             elapsed_ms,
         )
 
-        return DetectionResult(clusters=clusters, stats=stats)
+        return DetectionResult(
+            clusters=clusters,
+            stats=stats,
+            preview=preview,
+            entity_meta=entity_meta,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -125,6 +136,90 @@ class CommunityDetector(GraphBuilder):
             return nx.community.modularity(g, communities)
         except Exception:
             return 0.0
+
+    @staticmethod
+    def _local_label(uri: str) -> str:
+        if not uri:
+            return ""
+        tail = uri.rstrip("/").rsplit("/", 1)[-1]
+        return tail.rsplit("#", 1)[-1] or uri
+
+    @classmethod
+    def _entity_meta(
+        cls,
+        triples: Iterable[Dict[str, str]],
+        uris: Set[str],
+    ) -> Dict[str, Dict[str, str]]:
+        """Collect ``rdfs:label`` / ``rdf:type`` for *uris* from loaded triples."""
+        meta: Dict[str, Dict[str, str]] = {
+            uri: {"label": "", "type": "", "type_label": ""} for uri in uris
+        }
+        if not uris:
+            return meta
+        for triple in triples:
+            subject = triple.get("subject") or ""
+            cell = meta.get(subject)
+            if cell is None:
+                continue
+            predicate = triple.get("predicate") or ""
+            obj = triple.get("object") or ""
+            if not obj:
+                continue
+            if predicate == RDFS_LABEL and not cell["label"]:
+                cell["label"] = obj
+            elif predicate == RDF_TYPE and not cell["type"]:
+                cell["type"] = obj
+                cell["type_label"] = cls._local_label(obj)
+        for uri, cell in meta.items():
+            if not cell["label"]:
+                cell["label"] = cls._local_label(uri)
+        return meta
+
+    @classmethod
+    def _build_preview(
+        cls,
+        nxg: nx.Graph,
+        clusters: List[ClusterResult],
+        max_nodes: int = _PREVIEW_MAX_NODES,
+        entity_meta: Dict[str, Dict[str, str]] | None = None,
+    ) -> Dict[str, Any]:
+        """Build a capped entity graph coloured by cluster for the UI preview."""
+        selected: List[tuple[str, int]] = []
+        for cl in clusters:
+            for member in cl.members:
+                if len(selected) >= max_nodes:
+                    break
+                selected.append((member, cl.id))
+            if len(selected) >= max_nodes:
+                break
+
+        node_set = {uri for uri, _ in selected}
+        cluster_of = {uri: cid for uri, cid in selected}
+        meta = entity_meta or {}
+        nodes = []
+        for uri in sorted(node_set):
+            info = meta.get(uri) or {}
+            nodes.append(
+                {
+                    "id": uri,
+                    "label": info.get("label") or cls._local_label(uri),
+                    "type": info.get("type") or "",
+                    "type_label": info.get("type_label") or "",
+                    "cluster": cluster_of[uri],
+                }
+            )
+        edges: List[Dict[str, str]] = []
+        for a, b in nxg.edges():
+            if a not in node_set or b not in node_set:
+                continue
+            edges.append({"id": f"{a}|{b}", "source": a, "target": b})
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "capped": nxg.number_of_nodes() > len(node_set),
+            "node_total": nxg.number_of_nodes(),
+            "edge_total": nxg.number_of_edges(),
+        }
 
     @staticmethod
     def _elapsed_ms(t0: float) -> int:

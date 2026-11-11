@@ -1,0 +1,81 @@
+================================================================================
+Community preview: show entity label, type, and class icon
+================================================================================
+
+Context:
+Clicking a cluster node listed only URI local names. Detect already loads
+rdfs:label / rdf:type triples, so the preview now returns entity_meta and the
+details panel shows each member with its ontology class emoji (fallback 📦),
+label, and type, sorted by type then label.
+
+Changes:
+
+1. src/back/core/graph_analysis/CommunityDetector.py
+   Build entity_meta from loaded triples; enrich preview node labels/types.
+2. src/back/core/graph_analysis/models.py
+   DetectionResult.entity_meta field.
+3. src/back/objects/digitaltwin/TwinAnalytics.py
+   Include entity_meta in detect_clusters response.
+4. src/back/core/graph_analysis/CommunityMaterializer.py
+   Accept member dicts with uri when materializing (defensive).
+5. src/front/static/simulation/js/simulation-communities.js
+   Load ontology class icons; render member icon + label + type on cluster click.
+6. src/front/static/simulation/css/simulation.css
+   Member row layout for icon / label / type.
+7. tests/units/core/test_community_detector.py
+   entity_meta label/type coverage.
+8. tests/units/dtwin/test_v090_twin_analytics.py
+   Detect contract includes entity_meta.
+9. tests/units/front/test_simulation_page_contract.py
+   Member detail / type icon helpers.
+
+Modified files:
+- src/back/core/graph_analysis/CommunityDetector.py
+- src/back/core/graph_analysis/models.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/core/graph_analysis/CommunityMaterializer.py
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/core/test_community_detector.py
+- tests/units/dtwin/test_v090_twin_analytics.py
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10274 passed, 323 skipped, 8 deselected in 52.48s
+
+================================================================================
+Community: full-height layout, clear erases preview, detect spinner & styling
+================================================================================
+
+Context:
+The Community page content did not stretch to the bottom of the viewport
+(violating the desktop bottom-alignment geometry in .cursor/11). The layout is
+now structured with a direct-child .content-section, a left rail for Algorithm
+and Materialized partition, and a full-height preview pane on the right that
+aligns with the sidebar bottom. Clear graph now erases the preview. A spinner
+is shown during detection. Button styles updated: Detect is primary blue,
+Materialize is secondary grey.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Direct-child .content-section; .comm-layout with .comm-rail and .comm-main;
+   .comm-preview-loading spinner overlay; Detect changed to btn-primary (blue)
+   and Materialize to btn-secondary (grey).
+2. src/front/static/simulation/css/simulation.css
+   Full-height flex layout (.comm-layout, .comm-rail, .comm-main,
+   .comm-preview-card, .comm-preview-canvas, .comm-preview-loading) adhering
+   to desktop bottom alignment; mobile media query resets.
+3. src/front/static/simulation/js/simulation-communities.js
+   _erasePreview() on clear graph; _showPreviewLoading() during detection;
+   window resize listener for preview graph resizing.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract assertions for full-height structure, button classes, and loading
+   overlay.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/css/simulation.css
+- src/front/static/simulation/js/simulation-communities.js
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10274 passed, 323 skipped, 8 deselected in 44.69s

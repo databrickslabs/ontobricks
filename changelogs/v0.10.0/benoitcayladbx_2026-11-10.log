@@ -1428,3 +1428,239 @@ Modified files:
 - src/front/config/menu_config.json
 
 Tests: uv run --frozen pytest -q tests/units/front tests/units/config → 1794 passed.
+
+================================================================================
+Intelligence Community: detect preview then materialize clusters
+================================================================================
+
+Context:
+Cluster detection lived in Explorer View (algorithm, resolution, Detect,
+client Louvain). Intelligence now owns configuration and detection; Explorer
+only visualizes a materialized partition (colour / collapse). Flow matches
+Cohorts: Detect previews in memory, Materialize writes Cluster + inCluster
+triples and replaces the previous partition. No Unity Catalog table in this
+slice.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Intelligence group `simulation-community` (Community / Detect) first.
+2. src/front/templates/simulation.html
+   Page title Intelligence; `#communities-section` and communities script.
+3. src/front/templates/partials/simulation/_sim_communities.html
+   Algorithm, resolution, Detect preview, Materialize, Clear, current partition.
+4. src/front/static/simulation/js/simulation-communities.js
+   POST detect / materialize, GET/DELETE current; Builder edit gate.
+5. src/front/static/simulation/css/simulation.css
+   Scrollable preview and materialized tables.
+6. src/back/core/graph_analysis/CommunityVocabulary.py
+   Cluster, inCluster, fromAlgorithm, clusterSize URI helpers.
+7. src/back/core/graph_analysis/CommunityMaterializer.py
+   Replace-or-clear partition; load_current for Explorer.
+8. src/back/core/graph_analysis/__init__.py
+   Export vocabulary and materializer.
+9. src/back/core/graphdb/interfaces/TraversalMixin.py
+   `delete_community_triples` (same prefix/predicate shape as cohorts).
+10. src/back/core/graphdb/neo4j/Store.py
+    Neo4j alias for community triple delete.
+11. src/back/objects/digitaltwin/TwinAnalytics.py
+    materialize_clusters / load_current_clusters / clear_clusters.
+12. src/back/objects/digitaltwin/DigitalTwin.py
+    Thin delegators for the new analytics methods.
+13. src/api/routers/internal/dtwin.py
+    GET/DELETE `/dtwin/clusters/current`, POST `/dtwin/clusters/materialize`.
+14. src/front/templates/partials/dtwin/_query_sigmagraph.html
+    Data Clusters: colour/collapse only; empty state points to Intelligence.
+15. src/front/static/query/js/query-sigmagraph.js
+    Hydrate `_clusterAssignments` from GET current; strip detect APIs.
+16. src/front/templates/partials/layout/help_modal.html
+    Intelligence step 6; Detect first; Explorer visualization copy.
+17. docs/architecture.md, docs/user-guide.md, docs/product.md, README.md
+    Preview-then-materialize; Explorer visualization only.
+18. tests/units/core/test_community_vocabulary.py
+    Stable cluster URIs and hash-base join.
+19. tests/units/core/test_community_materializer.py
+    Insert, replace, clear, empty load.
+20. tests/units/front/test_explorer_clusters_readonly.py
+    No Detect controls; hydrate from `/dtwin/clusters/current`.
+21. tests/units/front/test_simulation_page_contract.py
+    Community section, Detect/Materialize, menu group order.
+22. tests/units/front/test_help_center_menu_sync.py
+    Intelligence pipeline label.
+23. tests/units/front/test_sidebar_content_stretch_contract.py
+    `communities` section id.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- src/back/core/graph_analysis/CommunityVocabulary.py
+- src/back/core/graph_analysis/CommunityMaterializer.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/core/graphdb/interfaces/TraversalMixin.py
+- src/back/core/graphdb/neo4j/Store.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/layout/help_modal.html
+- docs/architecture.md
+- docs/user-guide.md
+- docs/product.md
+- README.md
+- tests/units/core/test_community_vocabulary.py
+- tests/units/core/test_community_materializer.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10270 passed, 323 skipped, 8 deselected in 52.98s
+
+================================================================================
+Community Detect: light Sigma preview instead of cluster table
+================================================================================
+
+Context:
+Intelligence → Community showed Detect results as a member-sample table.
+Users need a light explorer of the partition before Materialize. Detect now
+returns a capped entity graph; the preview panel renders it with Sigma
+(coloured by cluster), matching the Compare pattern. Materialize still sends
+clusters + stats only.
+
+Changes:
+
+1. src/back/core/graph_analysis/CommunityDetector.py
+   Build capped preview graph (nodes with cluster, edges) after detection.
+2. src/back/core/graph_analysis/models.py
+   DetectionResult.preview optional field.
+3. src/back/objects/digitaltwin/TwinAnalytics.py
+   Include `graph` in detect_clusters API payload.
+4. src/front/templates/partials/simulation/_sim_communities.html
+   Preview canvas + cluster chips; drop preview table body.
+5. src/front/static/simulation/js/simulation-communities.js
+   Light Sigma explorer for detect preview; keep materialized as table.
+6. src/front/static/simulation/css/simulation.css
+   Preview canvas / chip styles with `--db-*` tokens.
+7. docs/architecture.md, docs/user-guide.md
+   Document capped light preview graph.
+8. tests/units/core/test_community_detector.py
+   Preview covers nodes; cap truncates large partitions.
+9. tests/units/dtwin/test_v090_twin_analytics.py
+   Detect contract includes empty graph fallback.
+10. tests/units/front/test_simulation_page_contract.py
+    Preview canvas contract; no `commPreviewBody`.
+
+Modified files:
+- src/back/core/graph_analysis/CommunityDetector.py
+- src/back/core/graph_analysis/models.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- docs/architecture.md
+- docs/user-guide.md
+- tests/units/core/test_community_detector.py
+- tests/units/dtwin/test_v090_twin_analytics.py
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10272 passed, 323 skipped, 8 deselected in 55.36s
+
+================================================================================
+Community preview: graph only, drop stats and cluster chips
+================================================================================
+
+Context:
+The Detect preview showed a stats line and a 73-chip cluster list above the
+Sigma canvas. The stats were not useful for judging a partition. The preview
+is now the graph alone, coloured by cluster. The materialized table (what
+Explorer loads) is unchanged. Browser check: the Detect flow with the real
+partial and the real detect payload draws 1,500 nodes in 73 cluster colours
+with no console errors.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Removed the preview stats line and the cluster chip container; empty-state
+   copy now "Run Detect to draw the community graph."
+2. src/front/static/simulation/js/simulation-communities.js
+   Removed `_renderClusterChips` and the preview stats update; detect passes
+   `graph` straight to `_renderPreviewGraph`.
+3. src/front/static/simulation/css/simulation.css
+   Removed `.comm-preview-clusters` and `.comm-cluster-*` rules.
+4. tests/units/front/test_simulation_page_contract.py
+   Asserts the preview has no stats or cluster chip containers.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10272 passed, 323 skipped, 8 deselected in 46.48s
+
+================================================================================
+Community: Detect top-right, Explorer link, size statistics
+================================================================================
+
+Context:
+Community detection needed clearer primary actions and useful partition
+metrics. Detect moves to the section header (top right). An Explorer link
+opens Graph → Explorer once a partition is materialized. Preview and
+Materialized panels show KPI tiles: clusters, nodes, edges, size
+min/max/avg/median, and modularity.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Detect in header actions; Explorer button + Open in Explorer link;
+   preview/materialized stats hosts; algorithm card no longer has Detect.
+2. src/front/static/simulation/js/simulation-communities.js
+   `_sizeStats` / `_renderStats` KPI strip; Explorer enabled when
+   materialized clusters exist.
+3. src/front/static/simulation/css/simulation.css
+   Compact community KPI sizing; disabled Explorer button opacity.
+4. tests/units/front/test_simulation_page_contract.py
+   Header Detect placement, Explorer link, size-stat labels.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10273 passed, 323 skipped, 8 deselected in 60.97s
+
+================================================================================
+Community preview: click cluster node to list entities
+================================================================================
+
+Context:
+The Detect preview graph showed coloured communities but offered no way to
+inspect who belongs to a cluster. Clicking a node now highlights that
+cluster and lists all of its entities in a side panel (full partition
+membership, not only the capped preview nodes). Clicking the canvas clears
+the selection.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Preview layout: Sigma canvas + `#commPreviewDetails` aside.
+2. src/front/static/simulation/js/simulation-communities.js
+   `clickNode` selects the node's cluster, dims other clusters, and renders
+   the member list; `clickStage` resets.
+3. src/front/static/simulation/css/simulation.css
+   Preview split layout, details pane, member list / focus styles.
+4. tests/units/front/test_simulation_page_contract.py
+   Contract for details panel and `_selectCluster` / `clickNode`.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10273 passed, 323 skipped, 8 deselected in 59.23s

@@ -1094,18 +1094,16 @@ base URI.
 
 **Data Clusters:**
 
-The Graph Viewer includes a **Data Clusters** panel (in the View tab) for detecting communities in the graph:
+The Graph Viewer **View** tab colours and collapses communities that were
+materialized in **Intelligence → Community → Detect**. Explorer does not run
+detection itself.
 
-1. **Detect clusters (local)**: Runs the Louvain community detection algorithm client-side using Graphology on the currently displayed subgraph. Adjust the **Resolution** slider to control cluster granularity (higher = more clusters).
-2. **Full graph (backend)**: Sends a request to the server which loads the entire triple store into NetworkX and runs the selected algorithm (Louvain, Label Propagation, or Greedy Modularity) on the full dataset. Use this for large graphs that exceed the visible subgraph.
-3. **Color by cluster**: Toggle to recolor nodes by their detected community instead of by entity type.
-4. **Collapse / Expand**: Collapse clusters into super-nodes that show the cluster size and member count. Click a collapsed cluster super-node to see its members in the detail panel. Expand individual clusters or all at once.
-5. **Clear clusters**: Reset all cluster assignments and return to the default visualization.
+1. **Color by cluster**: Recolor nodes by their materialized community instead of by entity type.
+2. **Collapse / Expand**: Collapse clusters into super-nodes that show the cluster size and member count. Click a collapsed cluster super-node to see its members in the detail panel. Expand individual clusters or all at once.
 
-The cluster panel also displays:
-- Total number of detected clusters
-- A color-coded chip list of all clusters with their sizes
-- Click a chip to toggle collapse/expand for that cluster
+If the panel is empty, run Detect then Materialize under Intelligence. The
+cluster list shows sizes and chips; click a chip to toggle collapse for that
+cluster.
 
 ### Analytics (Sidebar)
 
@@ -1284,11 +1282,25 @@ source triples safely.
 
 ## Step 4: Simulation (What-if Sandboxes)
 
-**Simulation** is the fifth workspace in the top navigation. It lets you assert
-hypothetical facts on a copy of part of the graph, re-run reasoning, and see
-what would change — the live knowledge graph is never modified. Simulations are
-available on domains that use the **Lakebase**, **Lakehouse (Delta)**, or
-**Neo4j** graph backend and have been saved to the registry.
+**Intelligence** is the fifth workspace in the top navigation. **Community**
+detects graph partitions; **Cohorts** authors grouping rules; **Simulation**
+runs what-if sandboxes.
+
+### Community detection
+
+**Intelligence → Community → Detect** runs NetworkX community detection
+(Louvain, Label Propagation, or Greedy Modularity) on the live knowledge
+graph. **Detect** opens a light Sigma preview of entities coloured by
+cluster (capped for large graphs); nothing is written until **Materialize**,
+which replaces the previous partition (`Cluster` individuals and `:inCluster`
+membership). **Clear graph** drops those triples. Explorer then colours and
+collapses that partition.
+
+**Simulation** lets you assert hypothetical facts on a copy of part of the
+graph, re-run reasoning, and see what would change — the live knowledge graph
+is never modified. Simulations are available on domains that use the
+**Lakebase**, **Lakehouse (Delta)**, or **Neo4j** graph backend and have been
+saved to the registry.
 
 ### How it works
 
@@ -3194,7 +3206,8 @@ After import you can:
 
 ### Simulation
 - **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
-- **Cohort design and run**: **Simulation → Cohorts** authors grouping rules; **Simulation → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
+- **Community detection**: **Intelligence → Community → Detect** previews a NetworkX partition (Louvain / Label Propagation / Greedy Modularity), then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer only visualises that partition.
+- **Cohort design and run**: **Intelligence → Cohorts** authors grouping rules; **Intelligence → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
 
 ### Graph (Sync & Explore)
 - **Two Layers**: Every build materializes a Delta view (Unity Catalog, governance) and a Graph DB engine (Lakebase Postgres today; pluggable behind `GraphDBFactory`).
@@ -3209,7 +3222,7 @@ After import you can:
 - **Graph Viewer**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, depth control, and entity detail panels. **Find Path** highlights the shortest undirected path(s) between two loaded entities (text search picker) without querying the rest of the store. The bottom-left stopwatch reports the latest search's Preview, Expansion, Display, and Total times (seed-selection dwell excluded). Delta/Lakehouse expansion traverses and fetches the bounded subgraph in one Query Warehouse statement; other graph backends retain native or iterative traversal. Graph status on first paint is cache-first so Explorer is not blocked on full triple `COUNT(*)` scans.
 - **Search cache switch**: Context → Configuration → Backend (Lakehouse / Lakebase) enables or disables adjacency, entity-search, and property companions. Default on; re-enable requires Build or Refresh cache. Public find, session find/filter, GraphQL, and MCP `describe_entity` accept `cache` to force companions on or off for one request.
 - **Lakehouse//RT query path**: Administrators can enable **Use Lakehouse//RT for queries** under **Settings → Lakehouse → SQL Warehouse**. Builds stay on a classic or serverless **Build** warehouse; Query is a distinct optional warehouse because RT compute rejects `CREATE VIEW` / CTAS. The native Kernel backend, bounded retries, and an optional **Use CloudFetch** toggle (**Settings → Databricks**) keep RT reads working in Databricks Apps.
-- **Data Cluster Detection**: Detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; color-by-cluster mode, adjustable resolution slider, cluster collapse/expand into super-nodes, and cluster member details on click.
+- **Data Cluster visualization**: Explorer View tab colours and collapses communities materialized from **Intelligence → Community** (NetworkX Louvain / Label Propagation / Greedy Modularity). Detection and materialize live on Intelligence, not Explorer.
 - **Graph Analytics**: Dedicated **Analytics** sidebar section that computes five centrality metrics over the mapped knowledge graph using a serverless Databricks Lakeflow job: PageRank (global influence), Betweenness Centrality (bridging, Brandes–Pich estimate), Degree Centrality (raw connectivity), Closeness Centrality (reachability, Brandes–Pich estimate), and Clustering Coefficient (local density). Results are organised in three tabs — **Dashboard**, **Data Model Health**, and **AI Insights**. The Dashboard shows a KPI row, then a **distribution strip** of five small histogram tiles (one per metric) summarising **every scored node in the graph** — so you can tell whether a top-ranked score is an outlier or typical — followed by a single full-width ranked **point-and-line chart** for the selected metric across **all scored nodes** (sorted by rank). Each metric switch uses one `/dtwin/metrics/series` response. The backend runs one exhaustive ordered query and, when totals exceed **5,000** nodes, returns **2,000 retained source points** with original ranks using server-side visual sampling; the chart renders those retained points directly and reports exhaustive total vs rendered points in the status line. Click a distribution tile or use the segmented control to switch metrics; a **Log scale** toggle redraws the histograms on a logarithmic count axis for heavy-tailed metrics. Histograms use 20 linear bins; median and p90 are interpolated approximations and labelled as such. Betweenness and Closeness are Brandes–Pich estimates and may be unavailable for a run (depth cap / pivots disabled) — their tiles then read "Not computed for this run". Legacy cached results (computed before this redesign) still render KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis. Clicking a ranking point navigates directly to the entity in the Graph Viewer. A PageRank Detail Table shows all five scores side-by-side with relative mini-bars, and **Top N now controls this table only** (not the chart). The ranking chart card has an explanatory popup (formula, worked example, importance). **Run Analysis** opens an **Analysis scope** dialog where an optional entity type restricts the run to a single class; the scope resets to the full graph each time it opens, and the funnel line above the results always names the scope the displayed result was computed with. Requires the admin toggle enabled, the job bundle deployed, and the domain built (which materialises the Delta snapshot the job reads).
 - **AI Graph Interpretation**: After running an Analytics computation, click **Interpret** to invoke the `agent_graph_interpreter` AI agent. The agent uses the LLM saved in **Context → Configuration → AI**, may call `get_entity_details` to look up top-ranked entities, and produces three structured insight sections (Key Findings, Notable Entities, Recommendations). Results are rendered as styled Bootstrap cards with markdown support. Clickable entity names in "Notable Entities" jump to the Graph Viewer. Unavailable when **No LLM** is selected.
 - **Audit Trail Integration**: From the AI Insights card, click **Add to audit trail** to post the AI-generated interpretation as a comment on the current domain version (markdown-formatted). The discussion panel opens automatically to show the new entry.

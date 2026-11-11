@@ -136,3 +136,63 @@ class TestCommunityDetector:
         detector = self._make_detector()
         result = detector.detect(ClusterRequest())
         assert result.stats.elapsed_ms >= 0
+
+    def test_preview_graph_covers_detected_nodes(self):
+        detector = self._make_detector()
+        result = detector.detect(ClusterRequest())
+        assert result.preview is not None
+        nodes = result.preview["nodes"]
+        edges = result.preview["edges"]
+        assert len(nodes) == result.stats.node_count
+        assert len(edges) == result.stats.edge_count
+        assert {n["id"] for n in nodes} == {
+            m for cl in result.clusters for m in cl.members
+        }
+        assert all("cluster" in n and "label" in n for n in nodes)
+        assert result.preview["capped"] is False
+
+    def test_entity_meta_includes_labels_and_types(self):
+        triples = self._make_triples() + [
+            {
+                "subject": "http://ex.org/A",
+                "predicate": "http://www.w3.org/2000/01/rdf-schema#label",
+                "object": "Alice",
+            },
+            {
+                "subject": "http://ex.org/A",
+                "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                "object": "http://ex.org/Person",
+            },
+        ]
+        detector = self._make_detector(triples)
+        result = detector.detect(ClusterRequest())
+        assert result.entity_meta is not None
+        assert "http://ex.org/A" in result.entity_meta
+        alice = result.entity_meta["http://ex.org/A"]
+        assert alice["label"] == "Alice"
+        assert alice["type"] == "http://ex.org/Person"
+        assert alice["type_label"] == "Person"
+        node_a = next(n for n in result.preview["nodes"] if n["id"] == "http://ex.org/A")
+        assert node_a["label"] == "Alice"
+        assert node_a["type_label"] == "Person"
+
+    def test_preview_graph_caps_large_partitions(self):
+        triples = []
+        for i in range(40):
+            triples.append(
+                {
+                    "subject": f"http://ex.org/n{i}",
+                    "predicate": "http://ex.org/knows",
+                    "object": f"http://ex.org/n{(i + 1) % 40}",
+                }
+            )
+        detector = self._make_detector(triples)
+        members = [f"http://ex.org/n{i}" for i in range(40)]
+        preview = CommunityDetector._build_preview(
+            detector._build_graph(triples, ClusterRequest()),
+            [ClusterResult(id=0, members=members, size=40)],
+            max_nodes=10,
+        )
+        assert len(preview["nodes"]) == 10
+        assert preview["capped"] is True
+        assert preview["node_total"] == 40

@@ -2,6 +2,8 @@
 
 from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.CommunityDetector import CommunityDetector
+from back.core.graph_analysis.CommunityMaterializer import CommunityMaterializer
+from back.core.graph_analysis.CommunityVocabulary import CommunityVocabulary
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.JobMetrics import (
     JobMetrics,
@@ -112,6 +114,8 @@ def cohort_uri(base_uri: str, rule_id: str, content_hash: str) -> str:
 
 __all__ = [
     "CohortVocabulary",
+    "CommunityVocabulary",
+    "CommunityMaterializer",
     "CommunityDetector",
     "GraphBuilder",
     "JobMetrics",

@@ -1,0 +1,101 @@
+<!-- Intelligence → Community: detect clusters, then materialize to the graph. -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-2">
+        <div class="me-auto">
+            <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Community detection</h4>
+            <p class="text-muted mb-0 small">
+                Detect communities on the live knowledge graph, preview the partition,
+                then materialize it so Explorer can colour and collapse clusters.
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="commRefreshBtn" title="Reload materialized partition">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-warning" id="commClearBtn" title="Remove materialized clusters from the graph">
+                <i class="bi bi-x-lg me-1"></i>Clear graph
+            </button>
+            <a class="btn btn-sm btn-outline-primary" id="commExplorerBtn"
+               href="/dtwin/?section=sigmagraph" title="Open Graph Explorer to colour and collapse clusters">
+                <i class="bi bi-share me-1"></i>Explorer
+            </a>
+            <button type="button" class="btn btn-sm btn-secondary" id="commMaterializeBtn" disabled>
+                <i class="bi bi-box-arrow-in-down me-1"></i>Materialize
+            </button>
+            <button type="button" class="btn btn-sm btn-primary" id="commDetectBtn">
+                <i class="bi bi-bezier2 me-1"></i>Detect
+            </button>
+        </div>
+    </div>
+
+    <div class="comm-layout">
+        <aside class="comm-rail">
+            <div class="card comm-config-card">
+                <div class="card-body py-2 px-3">
+                    <label class="form-label small fw-semibold mb-1" for="commAlgorithm">Algorithm</label>
+                    <select class="form-select form-select-sm mb-2" id="commAlgorithm">
+                        <option value="louvain" selected>Louvain</option>
+                        <option value="label_propagation">Label Propagation</option>
+                        <option value="greedy_modularity">Greedy Modularity</option>
+                    </select>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-semibold mb-0" for="commResolution">Resolution</label>
+                        <span class="small text-muted" id="commResolutionValue">1.00</span>
+                    </div>
+                    <input type="range" class="form-range mb-1" id="commResolution"
+                           min="0.1" max="3.0" step="0.05" value="1.0">
+                    <p class="form-text small mb-0 text-muted">
+                        Detection runs in memory. Materialize writes to graph.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card comm-current-card">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-baseline mb-2 gap-2 flex-wrap">
+                        <h6 class="mb-0">Materialized (Explorer)</h6>
+                        <a class="small" href="/dtwin/?section=sigmagraph">
+                            <i class="bi bi-share me-1"></i>Open in Explorer
+                        </a>
+                    </div>
+                    <div id="commCurrentStats" class="comm-stats d-none" aria-live="polite"></div>
+                    <div id="commCurrentBody" class="comm-current-body">
+                        <p class="text-muted small mb-0">No materialized clusters yet.</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <section class="comm-main">
+            <div class="card comm-preview-card">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Preview</h6>
+                    </div>
+                    <div id="commPreviewStats" class="comm-stats d-none mb-2" aria-live="polite"></div>
+                    <div id="commPreviewLoading" class="comm-preview-loading d-none text-muted small">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
+                            <h6 class="fw-semibold mb-1">Detecting communities…</h6>
+                            <p class="small text-muted mb-0">Building graph and running community detection algorithm.</p>
+                        </div>
+                    </div>
+                    <div id="commPreviewEmpty" class="comm-preview-empty text-muted small">
+                        <div class="text-center">
+                            <i class="bi bi-diagram-3 fs-1 text-muted d-block mb-2"></i>
+                            <h6 class="fw-semibold mb-1">Community graph preview</h6>
+                            <p class="small text-muted mb-0">Run <strong>Detect</strong> to draw the community graph.</p>
+                        </div>
+                    </div>
+                    <div id="commPreviewLayout" class="comm-preview-layout d-none">
+                        <div id="commPreviewCanvas" class="comm-preview-canvas"
+                             role="img" aria-label="Community detection preview graph"></div>
+                        <aside id="commPreviewDetails" class="comm-preview-details" aria-live="polite">
+                            <p class="text-muted small mb-0">Click a node to list the entities in its cluster.</p>
+                        </aside>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>

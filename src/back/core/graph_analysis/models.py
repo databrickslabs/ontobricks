@@ -45,10 +45,18 @@ class DetectionStats:
 
 @dataclass
 class DetectionResult:
-    """Full result of a community detection run."""
+    """Full result of a community detection run.
+
+    ``preview`` is an optional capped entity graph for the Intelligence
+    Community light explorer (``nodes`` / ``edges`` / cap metadata).
+    ``entity_meta`` maps member URIs to ``label`` / ``type`` / ``type_label``
+    so the preview can show entity details without a second round-trip.
+    """
 
     clusters: List[ClusterResult] = field(default_factory=list)
     stats: DetectionStats = field(default_factory=DetectionStats)
+    preview: Optional[Dict[str, Any]] = None
+    entity_meta: Optional[Dict[str, Dict[str, str]]] = None
 
 
 # ---------------------------------------------------------------------------

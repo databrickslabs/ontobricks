@@ -69,6 +69,7 @@ SECTION_INVENTORY = {
         "chat",
     },
     "simulation.html": {
+        "communities",
         "scenarios",
         "cohorts",
         "cohort-run",

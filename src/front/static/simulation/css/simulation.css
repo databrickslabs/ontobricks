@@ -525,7 +525,274 @@ a.sim-uri-link:focus-visible {
     }
 }
 
+/* ==========================================================================
+   Community Detection - Full Height Layout
+   ========================================================================== */
+.sidebar-content:has(#communities-section.active) {
+    overflow: hidden;
+    padding: 0 0.5rem;
+}
+
+#communities-section.active {
+    overflow: hidden;
+    height: 100%;
+}
+
+#communities-section > .content-section {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.comm-layout {
+    flex: 1 1 0%;
+    display: flex;
+    gap: 0.75rem;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.comm-rail {
+    width: 320px;
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 0;
+    height: 100%;
+}
+
+.comm-config-card {
+    flex: 0 0 auto;
+}
+
+.comm-current-card {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.comm-current-card > .card-body {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.comm-current-body {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.comm-main {
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.comm-preview-card {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.comm-preview-card > .card-body {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+.comm-preview-empty,
+.comm-preview-loading {
+    flex: 1 1 0%;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--db-border);
+    border-radius: var(--db-radius-card);
+    background: var(--db-canvas-warm);
+    padding: 1.5rem;
+}
+
+.comm-preview-layout {
+    flex: 1 1 0%;
+    display: flex;
+    gap: 0.75rem;
+    min-height: 0;
+    height: 100%;
+    align-items: stretch;
+}
+
+.comm-preview-canvas {
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+}
+
+.comm-preview-details {
+    flex: 0 0 17rem;
+    max-width: 18rem;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0.75rem;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    background: var(--db-canvas-warm);
+}
+
+.comm-cluster-swatch {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    flex: 0 0 auto;
+}
+
+.comm-member-list {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.comm-member {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    padding: 0.35rem 0.4rem;
+    border-radius: var(--db-radius-control);
+    font-size: 0.8125rem;
+    color: var(--db-text);
+}
+
+.comm-member.is-focused {
+    background: var(--db-primary-soft);
+    color: var(--db-primary-selected-text);
+}
+
+.comm-member-icon {
+    flex: 0 0 auto;
+    line-height: 1.2;
+    font-size: 1rem;
+}
+
+.comm-member-text {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.comm-member-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.comm-member-type {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    color: var(--db-text-secondary);
+}
+
+.comm-member.is-focused .comm-member-type {
+    color: inherit;
+    opacity: 0.85;
+}
+
+.comm-stats .sim-kpi-tile .sim-kpi-value {
+    font-size: 1.05rem;
+}
+
+#commExplorerBtn.disabled {
+    pointer-events: none;
+    opacity: 0.55;
+}
+
 @media (max-width: 991.98px) {
+    .sidebar-content:has(#communities-section.active) {
+        overflow: auto;
+    }
+    #communities-section.active {
+        height: auto;
+        overflow: visible;
+    }
+    #communities-section > .content-section {
+        height: auto;
+        overflow: visible;
+    }
+    .comm-layout {
+        flex-direction: column;
+        height: auto;
+        overflow: visible;
+    }
+    .comm-rail {
+        width: 100%;
+        max-width: 100%;
+        flex: 0 0 auto;
+        height: auto;
+    }
+    .comm-current-card {
+        height: auto;
+        max-height: 18rem;
+    }
+    .comm-main {
+        height: auto;
+    }
+    .comm-preview-card {
+        height: auto;
+    }
+    .comm-preview-empty,
+    .comm-preview-loading {
+        min-height: 220px;
+    }
+    .comm-preview-layout {
+        flex-direction: column;
+        height: auto;
+    }
+    .comm-preview-canvas {
+        height: 380px;
+        min-height: 380px;
+    }
+    .comm-preview-details {
+        flex: 0 0 auto;
+        max-width: none;
+        height: auto;
+        max-height: 16rem;
+    }
+    .comm-member-list {
+        max-height: 12rem;
+    }
     .sim-compare-layout {
         flex-direction: column;
         overflow-y: auto;

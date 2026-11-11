@@ -188,6 +188,13 @@ def test_ontology_entities_uses_list_nested_icon():
     )
 
 
+def test_intelligence_pipeline_uses_menu_label():
+    assert _menus()["simulation"]["label"] == "Intelligence"
+    html = _help_html()
+    assert "<strong>Intelligence</strong>" in html
+    assert "<strong>6. Intelligence</strong>" in html
+
+
 def test_simulation_workflow_follows_menu_order():
     page = _help_html()
     labels = [
