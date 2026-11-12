@@ -182,11 +182,11 @@ Administrators can safely delete only older, unloaded Draft versions; deletion
 atomically rechecks Draft status before attempting permanent removal of that
 version's Knowledge Store content. Cleanup failures are reported as errors
 rather than false success. Move
-domains between environments with the **OBX** export/import (UI or
-[CLI](docs/advanced_features.md#registry-import-and-export)), or mirror every
-save into the instance's **GitHub repository** — one commit per save, organised
-by domain and version, with OWL and R2RML Turtle files alongside the JSON
-sources ([Settings → GitHub](docs/user-guide.md#configuration--github-repository-mirror)).
+domains between environments with the **OBX** export/import or the
+[GitHub mirror](docs/advanced_features.md#registry-import-and-export) — one
+commit per save, organised by domain and version, with OWL and R2RML Turtle
+files alongside the JSON sources
+([Settings → GitHub](docs/user-guide.md#configuration--github-repository-mirror)).
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,

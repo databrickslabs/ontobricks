@@ -175,3 +175,34 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 53.87s
+
+## Remove undocumented registry_transfer CLI from docs (issue #227)
+
+Context: docs/advanced_features.md described scripts/registry_transfer.sh and
+src/cli/registry_transfer.py as a shipped CLI Import/Export tool, but those
+files were never present in the repository (docs-only since Apr 2026). GitHub
+issue #227 reported the gap. Correct docs for 0.10.0 to describe only the
+shipped OBX UI and GitHub mirror paths, and point inventory / large-registry
+workarounds at Registry → Browse domain organisation.
+
+Changes:
+
+1. docs/advanced_features.md
+   Drop the fake CLI section; document Registry → Browse as domain inventory
+   (domain organisation), large-registry batch/GitHub workarounds, and a
+   two-column OBX vs GitHub comparison. Regenerate TOC.
+2. docs/README.md
+   Advanced features blurb now says OBX / GitHub mirror (not registry_transfer.sh).
+3. README.md
+   Lifecycle blurb links OBX / GitHub mirror instead of a non-existent CLI.
+4. tests/units/api/test_help_api.py
+   Assert advanced-features help content mentions Registry → Browse instead of
+   registry_transfer.
+
+Modified files:
+- docs/advanced_features.md
+- docs/README.md
+- README.md
+- tests/units/api/test_help_api.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 10278 passed, 323 skipped, 8 deselected in 53.99s

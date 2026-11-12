@@ -175,7 +175,7 @@ class TestHelpDocsIndex:
         backend = client.get("/api/help/docs/backend").json()["markdown"]
         assert "Neo4j" in backend and "Aura" in backend and "Lakebase" in backend
         advanced = client.get("/api/help/docs/advanced-features").json()["markdown"]
-        assert "Cohort" in advanced and "registry_transfer" in advanced
+        assert "Cohort" in advanced and "Registry → Browse" in advanced
 
 
 class TestHelpCatalogIntegrity:
