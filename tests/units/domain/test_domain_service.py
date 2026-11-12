@@ -1,7 +1,7 @@
 """Tests for back.objects.domain.Domain."""
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from back.objects.domain import Domain, WorkspacePresence
 from back.core.errors import ConflictError, ValidationError
 from back.core.helpers import build_auto_base_uri
@@ -166,14 +166,52 @@ class TestSaveDomainInfo:
     def test_auto_base_uri_generated_from_name(self):
         """Auto mode (no custom URI) generates {default}/{Name}# — never empty."""
         domain = _mock_domain()
-        result = Domain(domain).save_domain_info({"name": "AcmeSales"})
+        with patch(
+            "back.objects.domain.Domain.resolve_default_base_uri",
+            return_value="https://databricks-ontology.com",
+        ):
+            result = Domain(domain).save_domain_info({"name": "AcmeSales"})
         assert result["base_uri"].endswith("/AcmeSales#")
         assert result["base_uri"] != "Unknown"
         assert result["base_uri_auto"] is True
 
+    def test_auto_base_uri_uses_settings_host(self):
+        domain = _mock_domain()
+        settings = MagicMock()
+        settings.databricks_host = "https://adb.example.com"
+        settings.databricks_token = "t"
+        settings.sql_warehouse_id = ""
+        with patch(
+            "back.objects.domain.Domain.resolve_default_base_uri",
+            return_value="https://apexai-ontoflow-ontology.com",
+        ):
+            result = Domain(domain, settings).save_domain_info(
+                {"name": "AcmeSales", "base_uri_auto": True}
+            )
+        assert result["base_uri"] == (
+            "https://apexai-ontoflow-ontology.com/AcmeSales#"
+        )
+
+    def test_auto_base_uri_resolve_failure_raises(self):
+        domain = _mock_domain()
+        with patch(
+            "back.objects.domain.Domain.resolve_default_base_uri",
+            side_effect=AttributeError(
+                "'NoneType' object has no attribute 'databricks_host'"
+            ),
+        ):
+            with pytest.raises(ValidationError, match="default base URI"):
+                Domain(domain, None).save_domain_info(
+                    {"name": "AcmeSales", "base_uri_auto": True}
+                )
+
     def test_shared_auto_base_uri_matches_domain_generation(self):
         domain = _mock_domain()
-        result = Domain(domain).save_domain_info({"name": "ClaimsSales"})
+        with patch(
+            "back.objects.domain.Domain.resolve_default_base_uri",
+            return_value="https://databricks-ontology.com",
+        ):
+            result = Domain(domain).save_domain_info({"name": "ClaimsSales"})
         assert result["base_uri"].endswith("/ClaimsSales#")
         assert result["base_uri_auto"] is True
         assert build_auto_base_uri(
@@ -192,15 +230,23 @@ class TestSaveDomainInfo:
     def test_empty_custom_base_uri_falls_back_to_generated(self):
         """A blank custom URI is never stored — it regenerates from the name."""
         domain = _mock_domain()
-        Domain(domain).save_domain_info(
-            {"name": "AcmeSales", "base_uri": "", "base_uri_auto": False}
-        )
+        with patch(
+            "back.objects.domain.Domain.resolve_default_base_uri",
+            return_value="https://databricks-ontology.com",
+        ):
+            Domain(domain).save_domain_info(
+                {"name": "AcmeSales", "base_uri": "", "base_uri_auto": False}
+            )
         assert domain.ontology["base_uri"].endswith("/AcmeSales#")
 
     def test_auto_base_uri_sanitizes_spaces_in_domain_name(self):
         """Domain names with spaces must not produce illegal IRI paths."""
         domain = _mock_domain()
-        result = Domain(domain).save_domain_info({"name": "WRFM - Shell"})
+        with patch(
+            "back.objects.domain.Domain.resolve_default_base_uri",
+            return_value="https://databricks-ontology.com",
+        ):
+            result = Domain(domain).save_domain_info({"name": "WRFM - Shell"})
         assert " " not in result["base_uri"]
         assert result["base_uri"].endswith("/WRFM_-_Shell#")
 

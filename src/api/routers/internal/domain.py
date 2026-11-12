@@ -59,12 +59,14 @@ async def get_domain_info(session_mgr: SessionManager = Depends(get_session_mana
 
 @router.post("/info")
 async def save_domain_info(
-    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
     """Save domain information."""
     data = await request.json()
     domain = get_domain(session_mgr)
-    response_info = Domain(domain).save_domain_info(data)
+    response_info = Domain(domain, settings).save_domain_info(data)
     return {"success": True, "info": response_info, "message": "Context info saved"}
 
 

@@ -630,22 +630,17 @@ class Domain:
     def _resolve_base_uri(
         self, domain_name: str, provided: str = "", *, auto: bool = True
     ) -> str:
-        """Return the effective ontology base URI for ``domain_name``.
-
-        Mirrors the frontend ``updateAutoBaseUri`` (``{default}/{Name}#``):
-        a custom (non-auto) value is kept (after IRI sanitization), while auto
-        mode — or an empty custom value — is generated from the globally
-        configured default base URI domain and a sanitized domain name.
-        Guarantees a non-empty, well-formed URI so a new domain never persists
-        an empty or sentinel base_uri.
-        """
+        """Return the ontology base URI (custom kept; auto from global default)."""
         if not auto and provided:
             return self._sanitize_base_uri(provided)
         try:
             default_domain = resolve_default_base_uri(self._s, self._settings)
-        except Exception as exc:  # noqa: BLE001 — never fail a save on URI gen
-            logger.debug("default base URI resolve failed: %s", exc)
-            default_domain = ""
+        except Exception as exc:  # noqa: BLE001 — surface resolve failures
+            logger.warning("default base URI resolve failed: %s", exc)
+            raise ValidationError(
+                "Could not resolve the default ontology base URI. "
+                "Check Databricks credentials and the global default base URI."
+            ) from exc
         return self._sanitize_base_uri(
             build_auto_base_uri(domain_name, default_domain)
         )

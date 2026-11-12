@@ -245,7 +245,9 @@ class DatabricksHelpers:
                 if val:
                     return val
             except Exception as exc:
-                logger.debug("Could not read global config (%s): %s", getter_name, exc)
+                logger.warning(
+                    "Could not read global config (%s): %s", getter_name, exc
+                )
         return ""
 
     @staticmethod
