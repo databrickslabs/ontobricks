@@ -1684,9 +1684,18 @@ async function initOntologyMap() {
         .text(d => d.label || d.name);
 
     // ── Neighborhood highlight helpers ──────────────────────────────────
-    function highlightNeighborhood(selectedName) {
-        // Resolve source/target: D3 forceLink replaces ids with node objects
-        const resolveName = n => (typeof n === 'object' ? n.name : n);
+    // selectedKey may be a node name (entities: id === name) or a group
+    // super-node id (__group__X) — group nodes keep id !== name.
+    function highlightNeighborhood(selectedKey) {
+        const endpointMatches = (endpoint, key) => {
+            if (endpoint && typeof endpoint === 'object') {
+                return endpoint.name === key || endpoint.id === key;
+            }
+            return endpoint === key;
+        };
+        const endpointName = (endpoint) => (
+            endpoint && typeof endpoint === 'object' ? endpoint.name : endpoint
+        );
 
         const connectedLinkSet = new Set();
         const neighborSet      = new Set();
@@ -1697,18 +1706,20 @@ async function initOntologyMap() {
             ...selfLoopLinks,
         ];
         allLinks.forEach(l => {
-            const s = resolveName(l.source);
-            const t = resolveName(l.target);
-            if (s === selectedName || t === selectedName) {
+            const sMatch = endpointMatches(l.source, selectedKey);
+            const tMatch = endpointMatches(l.target, selectedKey);
+            if (sMatch || tMatch) {
                 connectedLinkSet.add(l);
-                if (s !== selectedName) neighborSet.add(s);
-                if (t !== selectedName) neighborSet.add(t);
+                if (!sMatch) neighborSet.add(endpointName(l.source));
+                if (!tMatch) neighborSet.add(endpointName(l.target));
             }
         });
 
+        const isFocus = (d) => d && (d.name === selectedKey || d.id === selectedKey);
+
         // Nodes
         d3.selectAll('.map-node')
-            .classed('dimmed',   d => d.name !== selectedName && !neighborSet.has(d.name))
+            .classed('dimmed',   d => !isFocus(d) && !neighborSet.has(d.name))
             .classed('neighbor', d => neighborSet.has(d.name));
 
         // Links (path elements)
@@ -1759,7 +1770,9 @@ async function initOntologyMap() {
 
     // Click to edit entity (only if not dragging)
     nodeElements.on('click', function(event, d) {
-        // Group super-nodes open the group panel (member list) — no entity connections.
+        // Group super-nodes: member pane + neighborhood highlight (same CSS as
+        // entity click). Keep groups out of mapSelectedEntityNames so we never
+        // call editClassByName on a group name.
         if (d.isGroup) {
             event.stopPropagation();
             if (isDragging) {
@@ -1770,6 +1783,8 @@ async function initOntologyMap() {
             hideMapRelationshipActions();
             _clearMapSelection({ closePanel: false });
             openStudioGroupPanel(d.groupName);
+            highlightNeighborhood(d.id);
+            d3.select(this).classed('selected', true);
             return;
         }
 
@@ -2393,9 +2408,13 @@ function focusMapEntity(name) {
  *        Placement for an entity, called as (index, cx, cy, radius): the
  *        entity's index in `entityNames`, the circle centre, and its radius.
  * @param {string}   spec.logLabel     Caller name for diagnostics.
+ * @param {boolean}  [spec.applyAfter=true] When false, persist the view but
+ *        leave the Studio canvas on the current view (dropdown still refreshes).
  */
 async function _createMapBusinessView(spec) {
     const { baseName, entityNames, relLinks, inhLinks, positionFor, logLabel } = spec;
+    const applyAfter = spec.applyAfter !== false;
+    const previousView = _studioActiveView;
     try {
         // ── 1. Unique view name ─────────────────────────────────────────────
         let viewName = baseName;
@@ -2523,11 +2542,25 @@ async function _createMapBusinessView(spec) {
             throw new Error(err.detail || `Save view failed (${saveResp.status})`);
         }
 
-        // ── 6. Stay on Studio and filter the canvas to the new view ────────
-        _studioActiveView = viewName;
-        _studioViewLayout = layoutData;
-        await refreshStudioViewSelect();
-        await applyStudioView(viewName);
+        // ── 6. Optionally switch the canvas to the new view ───────────────
+        if (applyAfter) {
+            _studioActiveView = viewName;
+            _studioViewLayout = layoutData;
+            await refreshStudioViewSelect();
+            await applyStudioView(viewName);
+        } else {
+            // save-current writes the new view; restore the previous named
+            // view as backend current so later saves do not overwrite it.
+            if (previousView) {
+                await fetch('/domain/design-views/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ name: previousView }),
+                });
+            }
+            await refreshStudioViewSelect();
+        }
 
         console.log(`[Map] Business view "${viewName}" created with ${entities.length} entities.`);
     } catch (err) {
@@ -2621,6 +2654,50 @@ async function createBusinessViewFromSelection(names) {
         logLabel: 'createBusinessViewFromSelection',
     });
 }
+
+/**
+ * Snapshot a Business View of an ontology group's members (create-only).
+ * Named Group_<groupName>. Does not switch the Studio canvas.
+ * @param {string} groupName
+ * @param {string[]} members
+ */
+async function createBusinessViewFromGroup(groupName, members) {
+    if (!groupName) return;
+    const entityNames = (members || []).filter(Boolean);
+    const visibleNames = new Set(entityNames);
+    const relLinks = [];
+    const inhLinks = [];
+
+    (ontologyMapLinks || []).forEach(link => {
+        const source = _resolveLinkEndpoint(link.source);
+        const target = _resolveLinkEndpoint(link.target);
+        if (!(visibleNames.has(source) && visibleNames.has(target))) return;
+        if (link.type === 'inheritance') {
+            inhLinks.push({ source, target });
+        } else {
+            relLinks.push({ name: link.name, source, target });
+        }
+    });
+
+    await _createMapBusinessView({
+        baseName: `Group_${groupName}`,
+        entityNames,
+        relLinks,
+        inhLinks,
+        positionFor: (i, cx, cy, radius) => {
+            const angle = entityNames.length === 1
+                ? 0
+                : (2 * Math.PI / Math.max(entityNames.length, 1)) * i;
+            return {
+                x: Math.round(cx + radius * Math.cos(angle)),
+                y: Math.round(cy + radius * Math.sin(angle)),
+            };
+        },
+        logLabel: 'createBusinessViewFromGroup',
+        applyAfter: false,
+    });
+}
+window.createBusinessViewFromGroup = createBusinessViewFromGroup;
 
 
 /**

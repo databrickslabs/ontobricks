@@ -142,6 +142,16 @@
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
 }
 
+.map-group-node.selected .map-group-circle {
+    stroke: var(--db-primary);
+    stroke-width: 3px;
+    filter: drop-shadow(0 0 10px rgba(var(--db-primary-rgb), 0.55));
+}
+
+.map-node.dimmed .map-group-circle {
+    opacity: 0.25;
+}
+
 .map-group-node .map-node-icon {
     font-size: 22px;
 }

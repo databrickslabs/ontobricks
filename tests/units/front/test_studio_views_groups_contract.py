@@ -137,6 +137,33 @@ def test_clicking_group_opens_member_list_in_right_pane():
     assert ".panel-group-edit" in css
 
 
+def test_clicking_group_highlights_neighborhood_like_entity():
+    """Collapsed group click opens the member pane AND highlights incident edges."""
+    js = _read(MAP_JS)
+    assert "openStudioGroupPanel(d.groupName)" in js
+    assert "highlightNeighborhood(d.id)" in js
+    assert "no entity connections" not in js
+    # Group stays out of mapSelectedEntityNames (avoids editClassByName).
+    assert "d3.select(this).classed('selected', true)" in js
+
+
+def test_highlight_neighborhood_matches_endpoint_id_or_name():
+    """Group super-nodes use id=__group__X and name=X; highlight must match both."""
+    js = _read(MAP_JS)
+    start = js.index("function highlightNeighborhood(")
+    end = js.index("function clearHighlights(", start)
+    body = js[start:end]
+    assert "endpoint.id" in body
+    assert "endpoint.name" in body
+    assert "d.id === selectedKey" in body
+
+
+def test_selected_group_circle_has_visual_style():
+    css = _read(MAP_CSS)
+    assert ".map-group-node.selected .map-group-circle" in css
+    assert ".map-node.dimmed .map-group-circle" in css
+
+
 def test_group_toggle_css_exists():
     css = _read(MAP_CSS)
     assert ".studio-group-toggle" in css
@@ -171,6 +198,33 @@ def test_business_view_rename_is_wired_from_dropdown():
 def test_groups_crud_refreshes_studio():
     js = _read(GROUPS_JS)
     assert "refreshStudioGroups" in js
+
+
+def test_creating_group_creates_group_prefixed_business_view():
+    """New groups snapshot a Group_<name> Business View; edits do not."""
+    groups_js = _read(GROUPS_JS)
+    assert "var isNew = _editIndex < 0" in groups_js
+    assert "createBusinessViewFromGroup(name, group.members)" in groups_js
+    # Only after a successful save, and only when creating.
+    save = groups_js[groups_js.index("saveGroup:"): groups_js.index("deleteGroup:")]
+    assert "if (isNew" in save
+    assert "createBusinessViewFromGroup" in save
+
+    map_js = _read(MAP_JS)
+    assert "async function createBusinessViewFromGroup(" in map_js
+    assert "window.createBusinessViewFromGroup = createBusinessViewFromGroup" in map_js
+    block_start = map_js.index("async function createBusinessViewFromGroup(")
+    block_end = map_js.index("async function assignEntitiesToStudioGroup(", block_start)
+    block = map_js[block_start:block_end]
+    assert "baseName: `Group_${groupName}`" in block
+    assert "applyAfter: false" in block
+    assert "_createMapBusinessView(" in block
+
+    helper_start = map_js.index("async function _createMapBusinessView(")
+    helper_end = map_js.index("async function createBusinessViewFromEntity(", helper_start)
+    helper = map_js[helper_start:helper_end]
+    assert "spec.applyAfter !== false" in helper
+    assert "applyStudioView(viewName)" in helper
 
 
 def test_exclusive_group_membership_is_surfaced_in_ui():

@@ -282,16 +282,17 @@ def test_map_rebuild_does_not_close_the_panel():
 
 def test_business_view_builders_share_one_helper():
     js = MAP_JS.read_text(encoding="utf-8")
-    # create is unique to the shared helper; switch also lives in applyStudioView
-    # (Studio View dropdown), and save-current is reused when persisting layout /
-    # collapsed groups on an active Business View.
+    # create is unique to the shared helper; switch lives in applyStudioView,
+    # the helper's persist path, and applyAfter=false restore; save-current is
+    # reused when persisting layout / collapsed groups on an active view.
     assert js.count("/domain/design-views/create") == 1
     assert "async function applyStudioView(" in js
-    assert js.count("/domain/design-views/switch") == 2
+    assert js.count("/domain/design-views/switch") == 3
     assert "/domain/design-views/save-current" in js
     for signature in (
         "async function createBusinessViewFromEntity(",
         "async function createBusinessViewFromSelection(",
+        "async function createBusinessViewFromGroup(",
     ):
         block = _function_block(js, signature)
         assert "_createMapBusinessView(" in block

@@ -79,3 +79,31 @@ Modified files:
 - tests/units/front/test_simulation_page_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10274 passed, 323 skipped, 8 deselected in 44.69s
+
+================================================================================
+Studio: highlight group neighborhood on collapsed group click
+================================================================================
+
+Context:
+Clicking an entity in Studio dims the map and highlights incident
+relationships and heritage edges. Clicking a collapsed group circle only
+opened the member pane and skipped that highlight. Group click now reuses
+the same neighborhood treatment for remapped edges on the super-node.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   highlightNeighborhood matches link endpoints by node id or name (group
+   id !== name); group click opens the member pane, highlights by d.id, and
+   marks the group node selected without entering mapSelectedEntityNames.
+2. src/front/static/ontology/css/ontology-map.css
+   Selected and dimmed styles for .map-group-circle.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Contracts for group highlight call, id/name matching, and selected CSS.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_studio_views_groups_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10277 passed, 323 skipped, 8 deselected in 44.29s

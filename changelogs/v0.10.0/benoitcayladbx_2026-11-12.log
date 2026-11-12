@@ -1,0 +1,30 @@
+================================================================================
+Studio: create Group_ Business View when a group is created
+================================================================================
+
+Context:
+Creating an ontology group did not produce a matching Business View. On new
+group create only, Studio now snapshots a view named Group_<groupName>
+(suffix if taken) with the group's members and internal links, without
+switching the canvas away from the current view. Edits and deletes leave
+existing views alone.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   createBusinessViewFromGroup reuses _createMapBusinessView with
+   applyAfter: false; the helper restores the previous named view after save.
+2. src/front/static/ontology/js/ontology-groups.js
+   After a successful create (_editIndex < 0), call createBusinessViewFromGroup.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Contract that create (not edit) wires Group_ view creation.
+4. tests/units/front/test_ontology_map_multi_select.py
+   Shared-helper contract includes the group builder and extra switch restore.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/js/ontology-groups.js
+- tests/units/front/test_studio_views_groups_contract.py
+- tests/units/front/test_ontology_map_multi_select.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 55.95s

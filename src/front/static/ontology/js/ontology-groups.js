@@ -325,6 +325,7 @@ var OntologyGroups = (function () {
                 return;
             }
 
+            var isNew = _editIndex < 0;
             var group = {
                 name: name,
                 label: document.getElementById('groupLabel').value.trim() || name,
@@ -345,6 +346,9 @@ var OntologyGroups = (function () {
                         bootstrap.Modal.getInstance(document.getElementById('groupModal'))?.hide();
                         _afterGroupsChanged(data.groups || []);
                         showNotification('Group "' + name + '" saved successfully.', 'success', 3000);
+                        if (isNew && typeof window.createBusinessViewFromGroup === 'function') {
+                            window.createBusinessViewFromGroup(name, group.members);
+                        }
                     } else {
                         showNotification(data.message || 'Save failed.', 'error');
                     }
