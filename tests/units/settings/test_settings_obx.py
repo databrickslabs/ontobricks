@@ -281,19 +281,30 @@ class TestImportRegistryObx:
         assert result["imported_versions"] == 0
         registry_svc.write_version.assert_not_called()
 
-    def test_overwrite_writes_each_version(self):
+    def test_add_missing_skips_existing_and_drafts_highest_new(self):
+        from back.objects.registry.RegistryService import RegistryService
+
         session_mgr, settings = _mock_session_settings()
         registry_svc = _make_registry_svc(
             exists={"claims": True}, listing={"claims": ["1"]}
         )
-        doc1 = _fake_doc("claims", "1")
-        doc2 = _fake_doc("claims", "2")
+        doc1 = _fake_doc("Claims", "1")
+        doc1["info"]["status"] = "PUBLISHED"
+        doc2 = _fake_doc("Claims", "2")
+        doc2["info"]["status"] = "PUBLISHED"
+        doc3 = _fake_doc("Claims", "3")
+        doc3["info"]["status"] = "PUBLISHED"
         file_bytes = self._build_obx_bytes(
-            domains=[{"name": "claims", "info": {}, "versions": {"1": doc1, "2": doc2}}]
+            domains=[{
+                "name": "claims",
+                "info": {},
+                "versions": {"1": doc1, "2": doc2, "3": doc3},
+            }]
         )
 
         with patch.object(_svc_module, "RegistryService") as rs_cls:
             rs_cls.from_context.return_value = registry_svc
+            rs_cls._version_sort_key = RegistryService._version_sort_key
             result = SettingsService.import_registry_obx_result(
                 file_bytes,
                 [{"name": "claims", "action": "overwrite"}],
@@ -302,8 +313,82 @@ class TestImportRegistryObx:
             )
 
         assert result["imported_versions"] == 2
-        assert result["overwritten_versions"] == 1  # version "1" already existed
+        assert result["versions_skipped"] == 1
+        assert result["domains"][0]["skipped_versions"] == ["1"]
         assert registry_svc.write_version.call_count == 2
+        written = {
+            call.args[1]: json.loads(call.args[2])
+            for call in registry_svc.write_version.call_args_list
+        }
+        assert set(written) == {"2", "3"}
+        assert written["3"]["info"]["status"] == "DRAFT"
+        assert written["2"]["info"]["status"] == "PUBLISHED"
+
+    def test_add_missing_alias_accepted(self):
+        from back.objects.registry.RegistryService import RegistryService
+
+        session_mgr, settings = _mock_session_settings()
+        registry_svc = _make_registry_svc(
+            exists={"claims": True}, listing={"claims": ["1"]}
+        )
+        doc2 = _fake_doc("Claims", "2")
+        doc2["info"]["status"] = "PUBLISHED"
+        file_bytes = self._build_obx_bytes(
+            domains=[{"name": "claims", "info": {}, "versions": {"2": doc2}}]
+        )
+
+        with patch.object(_svc_module, "RegistryService") as rs_cls:
+            rs_cls.from_context.return_value = registry_svc
+            rs_cls._version_sort_key = RegistryService._version_sort_key
+            result = SettingsService.import_registry_obx_result(
+                file_bytes,
+                [{"name": "claims", "action": "add_missing"}],
+                session_mgr,
+                settings,
+            )
+
+        assert result["imported_versions"] == 1
+        assert result["domains"][0]["action"] == "add_missing"
+        written = json.loads(registry_svc.write_version.call_args.args[2])
+        assert written["info"]["status"] == "DRAFT"
+
+    def test_rename_highest_imported_version_is_draft(self):
+        from back.objects.registry.RegistryService import RegistryService
+
+        session_mgr, settings = _mock_session_settings()
+        registry_svc = _make_registry_svc(exists={})
+        doc1 = _fake_doc("Claims", "1")
+        doc1["info"]["status"] = "PUBLISHED"
+        doc2 = _fake_doc("Claims", "2")
+        doc2["info"]["status"] = "PUBLISHED"
+        file_bytes = self._build_obx_bytes(
+            domains=[{
+                "name": "claims",
+                "info": {},
+                "versions": {"1": doc1, "2": doc2},
+            }]
+        )
+
+        with patch.object(_svc_module, "RegistryService") as rs_cls, patch.object(
+            _svc_module,
+            "resolve_default_base_uri",
+            return_value="https://example.org",
+        ):
+            rs_cls.from_context.return_value = registry_svc
+            rs_cls._version_sort_key = RegistryService._version_sort_key
+            SettingsService.import_registry_obx_result(
+                file_bytes,
+                [{"name": "claims", "action": "rename", "new_name": "ClaimsCopy"}],
+                session_mgr,
+                settings,
+            )
+
+        written = {
+            call.args[1]: json.loads(call.args[2])
+            for call in registry_svc.write_version.call_args_list
+        }
+        assert written["2"]["info"]["status"] == "DRAFT"
+        assert written["1"]["info"]["status"] == "PUBLISHED"
 
     def test_rename_writes_to_new_folder(self):
         session_mgr, settings = _mock_session_settings()
@@ -380,7 +465,7 @@ class TestImportRegistryObx:
         assert written["triplestore"]["stats"] == {}
         assert written["assignment"] == doc["assignment"]
 
-    def test_overwrite_preserves_identity_and_build_metadata(self):
+    def test_add_missing_skips_when_all_versions_exist(self):
         session_mgr, settings = _mock_session_settings()
         registry_svc = _make_registry_svc(
             exists={"claims": True}, listing={"claims": ["1"]}
@@ -400,20 +485,17 @@ class TestImportRegistryObx:
 
         with patch.object(_svc_module, "RegistryService") as rs_cls:
             rs_cls.from_context.return_value = registry_svc
-            SettingsService.import_registry_obx_result(
+            result = SettingsService.import_registry_obx_result(
                 file_bytes,
                 [{"name": "claims", "action": "overwrite"}],
                 session_mgr,
                 settings,
             )
 
-        written = json.loads(registry_svc.write_version.call_args.args[2])
-        assert written["info"]["name"] == "Claims"
-        assert (
-            written["ontology"]["base_uri"]
-            == "https://source.example/Claims#"
-        )
-        assert written["info"]["last_build"] == "2026-09-01T10:00:00Z"
+        assert result["imported_versions"] == 0
+        assert result["versions_skipped"] == 1
+        assert result["domains"][0]["skipped_versions"] == ["1"]
+        registry_svc.write_version.assert_not_called()
 
     def test_preview_suggests_free_camelcase_import_name(self):
         session_mgr, settings = _mock_session_settings()

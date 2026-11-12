@@ -170,7 +170,6 @@
     "back/objects/domain/Domain.py::Domain.update_mappings_from_metadata": 115,
     "back/objects/domain/Domain.py::Domain.update_metadata_tables": 117,
     "back/objects/domain/HomeService.py::HomeService.get_detailed_validation": 201,
-    "back/objects/domain/settings/ObxSettings.py::ObxSettings.import_registry_obx_result": 149,
     "back/objects/domain/settings/RegistryDomainSettings.py::RegistryDomainSettings.set_registry_version_status_result": 109,
     "back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py::GraphEngineLakebaseSettings.graph_engine_lakebase_health_result": 155,
     "back/objects/domain/settings/graphengine/GraphEngineLakebaseSettings.py::GraphEngineLakebaseSettings.graph_engine_lakebase_objects_result": 127,
