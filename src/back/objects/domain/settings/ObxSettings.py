@@ -204,38 +204,96 @@ class ObxSettings:
         return candidate
 
     @staticmethod
+    def _normalize_base_prefix(uri: str) -> str:
+        return (uri or "").rstrip("/#")
+
+    @staticmethod
+    def _rewrite_uri_prefix(value: str, old_prefix: str, new_prefix: str) -> str:
+        if not value or not old_prefix:
+            return value
+        old = ObxSettings._normalize_base_prefix(old_prefix)
+        new = ObxSettings._normalize_base_prefix(new_prefix)
+        if not old or not value.startswith(old):
+            return value
+        rest = value[len(old) :]
+        if rest and rest[0] not in "/#":
+            return value
+        sep = (
+            "#"
+            if (new_prefix or "").endswith("#")
+            else ("/" if (new_prefix or "").endswith("/") else "#")
+        )
+        if rest.startswith("#") or rest.startswith("/"):
+            rest = rest[1:]
+        return f"{new}{sep}{rest}" if rest else f"{new}{sep}"
+
+    @staticmethod
+    def _rewrite_uri_strings(node: Any, old_prefix: str, new_prefix: str) -> Any:
+        if isinstance(node, dict):
+            return {
+                k: ObxSettings._rewrite_uri_strings(v, old_prefix, new_prefix)
+                for k, v in node.items()
+            }
+        if isinstance(node, list):
+            return [
+                ObxSettings._rewrite_uri_strings(v, old_prefix, new_prefix)
+                for v in node
+            ]
+        if isinstance(node, str):
+            return ObxSettings._rewrite_uri_prefix(node, old_prefix, new_prefix)
+        return node
+
+    @staticmethod
     def _prepare_renamed_version_doc(
         doc: Dict[str, Any],
         version: str,
         display_name: str,
         base_uri: str,
     ) -> Dict[str, Any]:
-        """Rewrite identity and clear graph runtime in a renamed OBX version."""
+        """Rewrite identity, URIs, and clear graph runtime for a renamed OBX version."""
         prepared = copy.deepcopy(doc)
+        old_base = ""
+        ont = prepared.get("ontology")
+        if isinstance(ont, dict):
+            old_base = ont.get("base_uri") or ""
+        if not old_base:
+            nested0 = (prepared.get("versions") or {}).get(version) or {}
+            if isinstance(nested0, dict):
+                n_ont = nested0.get("ontology") or {}
+                if isinstance(n_ont, dict):
+                    old_base = n_ont.get("base_uri") or ""
 
-        def rewrite(node: Dict[str, Any], *, root: bool = False) -> None:
+        def rewrite_identity(node: Dict[str, Any], *, root: bool = False) -> None:
             info = node.get("info")
             if root or isinstance(info, dict):
                 info = node.setdefault("info", {})
                 info["name"] = display_name
                 info["last_build"] = ""
-
             ontology = node.get("ontology")
             if isinstance(ontology, dict):
                 ontology["base_uri"] = base_uri
                 ontology["base_uri_auto"] = True
-
+                ontology["name"] = display_name
             if "last_build" in node:
                 node["last_build"] = ""
             triplestore = node.get("triplestore")
             if isinstance(triplestore, dict):
                 triplestore["stats"] = {}
 
-        rewrite(prepared, root=True)
+        rewrite_identity(prepared, root=True)
         versions = prepared.get("versions")
         nested = versions.get(version) if isinstance(versions, dict) else None
         if isinstance(nested, dict):
-            rewrite(nested)
+            rewrite_identity(nested)
+
+        if old_base and ObxSettings._normalize_base_prefix(
+            old_base
+        ) != ObxSettings._normalize_base_prefix(base_uri):
+            rewritten = ObxSettings._rewrite_uri_strings(
+                prepared, old_base, base_uri
+            )
+            prepared.clear()
+            prepared.update(rewritten)
         return prepared
 
     @staticmethod
