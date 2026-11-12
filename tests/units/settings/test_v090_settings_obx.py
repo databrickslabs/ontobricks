@@ -211,11 +211,16 @@ class TestPrepareRenamedVersionDoc:
 
         assert out["info"] == {"name": "NewName", "last_build": ""}
         assert out["last_build"] == ""
-        assert out["ontology"] == {"base_uri": "https://ex.org/NewName#", "base_uri_auto": True}
+        assert out["ontology"] == {
+            "base_uri": "https://ex.org/NewName#",
+            "base_uri_auto": True,
+            "name": "NewName",
+        }
         assert out["triplestore"]["stats"] == {}
         nested = out["versions"]["2"]
         assert nested["info"] == {"name": "NewName", "last_build": ""}
         assert nested["ontology"]["base_uri_auto"] is True
+        assert nested["ontology"]["name"] == "NewName"
         assert nested["last_build"] == ""
         assert nested["triplestore"]["stats"] == {}
         assert doc["info"]["name"] == "Old"
@@ -224,6 +229,86 @@ class TestPrepareRenamedVersionDoc:
     def test_root_info_is_created_when_missing(self):
         out = ObxSettings._prepare_renamed_version_doc({}, "1", "Fresh", "u")
         assert out["info"] == {"name": "Fresh", "last_build": ""}
+
+    def test_prepare_renamed_rewrites_all_uri_fields_and_ontology_name(self):
+        old = "https://ex.org/OldName#"
+        new = "https://ex.org/NewName#"
+        doc = {
+            "info": {"name": "OldName", "status": "PUBLISHED"},
+            "ontology": {
+                "name": "OldName",
+                "base_uri": old,
+                "base_uri_auto": False,
+                "classes": [{"name": "Claim", "uri": f"{old}Claim"}],
+                "properties": [{"name": "hasId", "uri": f"{old}hasId"}],
+                "shacl_shapes": [
+                    {
+                        "target_class_uri": f"{old}Claim",
+                        "property_uri": f"{old}hasId",
+                        "parameters": {"sh:class": f"{old}Claim"},
+                    }
+                ],
+            },
+            "assignment": {
+                "entities": [{"ontology_class": f"{old}Claim"}],
+                "relationships": [{"property": f"{old}hasId"}],
+                "r2rml_output": "",
+            },
+            "versions": {
+                "1": {
+                    "info": {"name": "OldName", "status": "PUBLISHED"},
+                    "ontology": {
+                        "name": "OldName",
+                        "base_uri": old,
+                        "classes": [{"uri": f"{old}Claim"}],
+                    },
+                    "assignment": {
+                        "entities": [{"ontology_class": f"{old}Claim"}],
+                        "relationships": [{"property": f"{old}hasId"}],
+                    },
+                }
+            },
+        }
+
+        out = ObxSettings._prepare_renamed_version_doc(doc, "1", "NewName", new)
+
+        blob = json.dumps(out)
+        assert old not in blob
+        assert out["ontology"]["name"] == "NewName"
+        assert out["ontology"]["classes"][0]["uri"] == f"{new}Claim"
+        assert out["ontology"]["properties"][0]["uri"] == f"{new}hasId"
+        assert out["ontology"]["shacl_shapes"][0]["target_class_uri"] == f"{new}Claim"
+        assert out["ontology"]["shacl_shapes"][0]["property_uri"] == f"{new}hasId"
+        assert (
+            out["ontology"]["shacl_shapes"][0]["parameters"]["sh:class"]
+            == f"{new}Claim"
+        )
+        assert out["assignment"]["entities"][0]["ontology_class"] == f"{new}Claim"
+        assert out["assignment"]["relationships"][0]["property"] == f"{new}hasId"
+        nested = out["versions"]["1"]
+        assert nested["ontology"]["name"] == "NewName"
+        assert nested["ontology"]["classes"][0]["uri"] == f"{new}Claim"
+        assert old not in json.dumps(nested)
+
+    def test_prepare_renamed_leaves_unrelated_https_hosts(self):
+        old = "https://ex.org/Old#"
+        doc = {
+            "info": {"name": "Old"},
+            "ontology": {
+                "name": "Old",
+                "base_uri": old,
+                "classes": [
+                    {"uri": f"{old}Claim"},
+                    {"uri": "https://other.org/Other#Thing"},
+                ],
+            },
+        }
+        out = ObxSettings._prepare_renamed_version_doc(
+            doc, "1", "New", "https://ex.org/New#"
+        )
+        assert out["ontology"]["classes"][1]["uri"] == (
+            "https://other.org/Other#Thing"
+        )
 
 
 # ---------------------------------------------------------------------------
