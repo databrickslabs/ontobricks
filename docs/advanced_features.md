@@ -367,15 +367,21 @@ upgrade path if the format changes in future releases.
 4. Review or change **Import as** for each selected domain. Names use
    CamelCase alphanumeric syntax (for example, `ClaimsArchive`).
 5. When **Import as** targets an existing domain, choose **Skip** or
-   **Overwrite**. When it differs from the source folder, Import creates a
-   separate domain under the new name.
-6. Click **Import**. A spinner shows on the button until the write finishes.
+   **Add missing versions**. Existing local versions are never replaced.
+   Only version numbers that do not exist locally are written; the highest
+   newly written version starts as **DRAFT**. When the import name differs
+   from the source folder, Import creates a separate domain under the new
+   name; its highest imported version starts as **DRAFT**, and older
+   imported versions keep their status. Renamed imports rewrite every
+   ontology URI from the source base URI to the new auto base URI.
+6. Click **Import**. The result lists any versions that were skipped
+   because they already existed.
 
 Renamed imports regenerate the ontology base URI from the configured default
-and the new name. Ontology, mappings, settings, and the versions present in the
-file are copied, but graph data, build state, and uploaded documents are not.
-Build the new domain before using its graph. Overwrite retains the imported
-identity and build metadata unchanged.
+and the new name, and rewrite class, property, SHACL, and mapping URIs to
+match. Ontology, mappings, settings, and the versions present in the file
+are copied, but graph data, build state, and uploaded documents are not.
+Build the new domain before using its graph.
 
 > **Note:** The 50 MB upload cap protects the in-memory parse. For larger
 > registries, export domains in batches from Registry → Browse or use the
@@ -389,7 +395,7 @@ Once **Settings → Configuration → GitHub** points at a claimed repository:
 1. Open **Registry → Browse → Import**.
 2. Click **Load from GitHub repository** instead of picking a `.obx` file.
 3. OntoBricks reads the JSON tree (`GET /settings/github/obx`) and opens the
-   same Skip / Overwrite / Rename preview as a file import.
+   same Skip / Add missing versions / Rename preview as a file import.
 4. Confirm **Import**. Turtle files (`.owl.ttl`, `.r2rml.ttl`, `shacl.ttl`)
    are ignored; Lakebase is written from the JSON sources.
 

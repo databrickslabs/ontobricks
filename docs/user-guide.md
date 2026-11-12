@@ -2446,7 +2446,7 @@ every push so they always match the JSON in the same commit.
 
 **Restore / migrate.** **Registry → Browse → Import → Load from GitHub
 repository** rebuilds the domains from the repository JSON files and opens the
-usual import preview (Skip / Overwrite / Rename). Turtle files are ignored on
+usual import preview (Skip / Add missing versions / Rename). Turtle files are ignored on
 import. The repository must already be configured and claimed in Settings.
 
 ## Troubleshooting
@@ -3324,7 +3324,7 @@ check runs, then one gauge per dimension (completeness, cardinality, uniqueness,
 - **Duplicate context names**: Save to registry is blocked when the sanitized name already exists (`/domain/check-name` + guard on **Save**); inline validation clears when the name is cleared or the check errors.
 - **Navbar context identity**: Top bar name/version invalidate cached `/navbar/state` (and related caches) after domain mutations so reloads and navigations do not show stale labels for up to 15 seconds.
 - **Import/Export**: Import OWL and RDFS ontologies, import industry-standard ontologies (FIBO, CDISC, IOF, HL7 FHIR R4/R4B/R5), import/export R2RML mappings, and export OWL files.
-- **Registry OBX Export/Import**: Export one or more registry domains to a portable `.obx` file directly from **Registry → Browse** with per-domain version-mode selection (Latest / Active / All / Choose). Import with per-domain selection checkboxes plus conflict resolution (Skip / Overwrite / Rename). An integer `format_version` field ensures backward compatibility as the format evolves.
+- **Registry OBX Export/Import**: Export one or more registry domains to a portable `.obx` file directly from **Registry → Browse** with per-domain version-mode selection (Latest / Active / All / Choose). Import with per-domain selection checkboxes plus conflict resolution (Skip / Add missing versions / Rename). Existing local versions are never replaced; the highest newly written version starts as DRAFT. An integer `format_version` field ensures backward compatibility as the format evolves.
 - **GitHub Repository Mirror**: One GitHub repository per instance (**Settings → GitHub**) receives a commit on every registry save, organised by domain and version, with the OWL and R2RML Turtle files next to the JSON sources (ontology, rules, mappings, layouts, options). Restore with **Import → Load from GitHub repository**. See [Configuration → GitHub](#configuration--github-repository-mirror).
 - **Project Save/Load**: Save and load projects as JSON for backup or sharing.
 

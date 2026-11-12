@@ -1,0 +1,37 @@
+## Registry import consistency (#229)
+
+### Context
+Registry import left renamed domains with stale namespaces, flipped auto
+base URIs to the built-in host on Domain → General save, imported
+Published copies as Published, and Overwrite replaced existing versions.
+Ported from the 0.9.3 fix onto 0.10.0.
+
+### Changes
+1. `src/api/routers/internal/domain.py` — pass `settings` into `Domain` on save
+2. `src/back/objects/domain/Domain.py` — raise when default base URI resolve fails
+3. `src/back/core/helpers/DatabricksHelpers.py` — WARNING on global-config read failure
+4. `src/back/objects/domain/settings/ObxSettings.py` — full URI rewrite on rename; skip existing versions; DRAFT highest new; extract helpers under size budget
+5. `src/api/routers/internal/settings.py` — document `add_missing` / overwrite semantics
+6. `src/front/static/registry/js/registry.js` — Add missing versions UI and skipped-version notice
+7. `docs/user-guide.md`, `docs/advanced_features.md` — import behaviour
+8. `tests/units/domain/test_domain_service.py`, `tests/units/settings/test_settings_obx.py`,
+   `tests/units/settings/test_v090_settings_obx.py`, `tests/units/architecture/baseline.json`
+   — coverage and size ratchet update
+
+### Modified files
+- src/api/routers/internal/domain.py
+- src/back/objects/domain/Domain.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/domain/settings/ObxSettings.py
+- src/api/routers/internal/settings.py
+- src/front/static/registry/js/registry.js
+- docs/user-guide.md
+- docs/advanced_features.md
+- tests/units/domain/test_domain_service.py
+- tests/units/settings/test_settings_obx.py
+- tests/units/settings/test_v090_settings_obx.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-14.log
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` — 10487 passed, 323 skipped, 8 deselected, 39 warnings in 45.97s
