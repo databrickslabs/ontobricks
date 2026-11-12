@@ -347,6 +347,22 @@ class TestPreviewObxImport:
                 raw_envelope([{"name": "d", "versions": {}}]), MagicMock(), MagicMock()
             )
 
+    def test_preview_lists_conflicting_versions_as_skipped_candidates(
+        self, svc, raw_envelope
+    ):
+        # Only the source folder exists — keep suggest_import_name from looping.
+        svc.domain_exists.side_effect = lambda folder: folder == "claims"
+        svc.list_versions_sorted.return_value = ["1", "2"]
+        payload = raw_envelope(
+            [{"name": "claims", "versions": {"1": {}, "2": {}, "3": {}}}]
+        )
+        result = ObxSettings.preview_obx_import_result(
+            payload, MagicMock(), MagicMock()
+        )
+        preview = result["domains"][0]
+        assert preview["incoming_versions"] == ["3", "2", "1"]
+        assert set(preview["conflicting_versions"]) == {"1", "2"}
+
 
 class TestImportRegistryObx:
     def _import(self, payload, decisions):
