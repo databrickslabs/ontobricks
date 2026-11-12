@@ -62,3 +62,42 @@ Modified files:
 - changelogs/v0.9.3/benoitcayladbx_2026-11-12.log
 
 Tests: 9705 passed, 337 skipped, 8 deselected, 39 warnings in 58.91s
+
+## Registry import consistency (#229)
+
+### Context
+Registry import left renamed domains with stale namespaces, flipped auto
+base URIs to the built-in host on Domain → General save, imported
+Published copies as Published, and Overwrite replaced existing versions.
+
+### Changes
+1. `src/api/routers/internal/domain.py` — pass `settings` into `Domain` on save
+2. `src/back/objects/domain/Domain.py` — raise when default base URI resolve fails
+3. `src/back/core/helpers/DatabricksHelpers.py` — WARNING on global-config read failure
+4. `src/back/objects/domain/settings/ObxSettings.py` — full URI rewrite on rename; skip existing versions; DRAFT highest new; extract helpers under size budget
+5. `src/api/routers/internal/settings.py` — document `add_missing` / overwrite semantics
+6. `src/front/static/registry/js/registry.js` — Add missing versions UI and skipped-version notice
+7. `docs/user-guide.md`, `docs/advanced_features.md` — import behaviour
+8. `tests/units/domain/test_domain_service.py`, `tests/units/settings/test_settings_obx.py`,
+   `tests/units/settings/test_v090_settings_obx.py`, `tests/units/architecture/baseline.json`
+   — coverage and size ratchet update
+9. `docs/superpowers/plans/2026-11-12-issue-229-registry-import-consistency.md` — implementation plan
+
+### Modified files
+- src/api/routers/internal/domain.py
+- src/back/objects/domain/Domain.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/domain/settings/ObxSettings.py
+- src/api/routers/internal/settings.py
+- src/front/static/registry/js/registry.js
+- docs/user-guide.md
+- docs/advanced_features.md
+- docs/superpowers/plans/2026-11-12-issue-229-registry-import-consistency.md
+- tests/units/domain/test_domain_service.py
+- tests/units/settings/test_settings_obx.py
+- tests/units/settings/test_v090_settings_obx.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.9.3/benoitcayladbx_2026-11-12.log
+
+### Test result
+`uv run --frozen pytest -q -m "not scenario"` — 9712 passed, 337 skipped, 8 deselected, 39 warnings in 43.63s
