@@ -1799,9 +1799,9 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 
 ### Updating
 
-For a supported 0.7.x-to-0.8.0 in-place update, follow
-[`update_to_0.8.md`](../update_to_0.8.md). Back up `scripts/deploy.config.sh`
-first (0.8 defaults use a new `DEFAULT_INSTANCE_ID`), restore it after the
+For a supported 0.9.x-to-0.10.0 in-place update, follow
+[`update_to_0.10.0.md`](../update_to_0.10.0.md). Back up `scripts/deploy.config.sh`
+first (0.10 defaults use a new `DEFAULT_INSTANCE_ID`), restore it after the
 checkout, then run the updater. The updater preserves the live configuration
 and applies pending registry SQL:
 

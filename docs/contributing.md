@@ -418,7 +418,7 @@ Typical release flow:
 3. Release notes from `changelogs/vX.X.X/` using `releases/ReleaseNotes_V0.2.0.md` as template → `releases/ReleaseNotes_Vx.x.x.md`.
 4. Tag `vX.X.X`, GitHub Release, then deploy (`make deploy` / DAB — [deployment.md](deployment.md)).
 
-Operators on 0.7.x → 0.8: [update_to_0.8.md](../update_to_0.8.md).
+Operators on 0.9.x → 0.10: [update_to_0.10.0.md](../update_to_0.10.0.md).
 
 ---
 

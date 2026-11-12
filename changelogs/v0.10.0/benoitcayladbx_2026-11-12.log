@@ -104,3 +104,74 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 49.90s
+
+
+================================================================================
+Replace update_to_0.9.0.md with update_to_0.10.0.sh
+================================================================================
+
+Context:
+The 0.9 markdown upgrade guide is replaced by an executable 0.10.0 in-place
+upgrade script. Operators run one command that backs up deploy.config / live
+app JSON, warns when sample DEFAULT_INSTANCE_ID=10x would create a parallel
+install, then delegates to scripts/update-deployed-app.sh. No new 0.9→0.10
+registry DDL is required.
+
+Changes:
+
+1. update_to_0.10.0.sh
+   New 0.9.x→0.10.0 upgrade script (preflight, backups, instance-id guard,
+   delegate to update-deployed-app.sh, post-upgrade notes).
+2. update_to_0.9.0.md
+   Removed; superseded by update_to_0.10.0.sh.
+3. docs/deployment.md
+   Updating section points at ./update_to_0.10.0.sh for 0.9→0.10.
+4. docs/contributing.md
+   Release operator link retargeted to update_to_0.10.0.sh.
+5. .gitignore
+   Ignore local .upgrade-backup-0.10/ snapshots created by the script.
+
+Modified files:
+- update_to_0.10.0.sh
+- update_to_0.9.0.md
+- docs/deployment.md
+- docs/contributing.md
+- .gitignore
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 49.88s
+
+
+================================================================================
+Document 0.10 upgrade as Markdown (not a shell script)
+================================================================================
+
+Context:
+Operators need a process guide for 0.9.x → 0.10.0, not a separate upgrade
+binary. Schema/grant updates stay automatic in make deploy /
+scripts/update-deployed-app.sh. Replace the short-lived update_to_0.10.0.sh
+with update_to_0.10.0.md (same role as the former update_to_0.9.0.md).
+
+Changes:
+
+1. update_to_0.10.0.md
+   Fresh-install and in-place upgrade guide for 0.10.0; points at
+   update-deployed-app.sh / make deploy for the automatic migration step.
+2. update_to_0.10.0.sh
+   Removed; upgrade automation stays in the deployment scripts.
+3. docs/deployment.md
+   Updating section retargeted to update_to_0.10.0.md.
+4. docs/contributing.md
+   Operator link retargeted to update_to_0.10.0.md.
+5. .gitignore
+   Dropped .upgrade-backup-0.10/ entries that only served the removed script.
+
+Modified files:
+- update_to_0.10.0.md
+- update_to_0.10.0.sh
+- docs/deployment.md
+- docs/contributing.md
+- .gitignore
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 53.87s
