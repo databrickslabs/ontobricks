@@ -172,7 +172,7 @@ function _applyDbxStorageKind(isViewMode) {
             ? '<i class="bi bi-eye me-1"></i>VIEW · no data copy'
             : '<i class="bi bi-table me-1"></i>TABLE · materialized copy';
         badge.title = isViewMode
-            ? 'Views only: ..._data is a SELECT over the gateway view, so it '
+            ? 'Virtual Graph (no copy): ..._data is a SELECT over the gateway view, so it '
               + 'always reflects the current source data.'
             : 'Materialized: ..._data is a Delta copy of the gateway view, '
               + 'refreshed only by a build.';
@@ -181,7 +181,7 @@ function _applyDbxStorageKind(isViewMode) {
     const note = document.getElementById('dbxBuildStorageNote');
     if (note) {
         note.textContent = isViewMode
-            ? 'Views only — Build refreshes the gateway definition; no triples '
+            ? 'Virtual Graph (no copy) — Build refreshes the gateway definition; no triples '
               + 'are copied. Inferred triples keep their own Delta table.'
             : 'Materialized — Build copies the gateway output into this Delta '
               + 'table, so it is a point-in-time snapshot of the source.';

@@ -152,7 +152,7 @@ Product conventions (class `name` vs `rdfs:label`, instance `{Class}/{id}`,
 
 ### Option A: Studio (Recommended)
 
-Open **Ontology → Studio** for the interactive ontology canvas. Use the toolbar **View** dropdown to show **All** entities or filter to a saved **Business View**. To rename a Business View, open the dropdown and click the pencil next to it (not available to viewers). Create a Business View from a multi-selection (right-click → Create Business View); the dropdown switches to that view and filters the canvas. Manage entity groups from the Studio **Groups** toolbar button (create/edit/delete). Assign an entity to a group from the right pane **General** tab or via right-click → **Add to group** (works with multi-select too). When an entity already belongs to a group, right-click also offers **Remove from group**. An entity can belong to only one group. Collapsed groups use the **+** badge on a member node (group circle with **+** to expand).
+Open **Ontology → Studio** for the interactive ontology canvas. Use the toolbar **View** dropdown to show **All** entities or filter to a saved **Business View**. To rename a Business View, open the dropdown and click the pencil next to it (not available to viewers). Create a Business View from a multi-selection (right-click → Create Business View); the dropdown switches to that view and filters the canvas. Manage entity groups from the Studio **Groups** toolbar button (create/edit/delete). Assign an entity to a group from the right pane **General** tab or via right-click → **Add to group** (works with multi-select too). When an entity already belongs to a group, right-click also offers **Remove from group**. An entity can belong to only one group. Collapsed groups use the **+** badge on a member node (group circle with **+** to expand). The toolbar **expand/collapse all groups** button collapses every group, or expands them all when they are already collapsed.
 
 #### Creating Entities
 
@@ -919,7 +919,7 @@ Click **Build** in the sidebar to manage your triple store:
 
 **Storage kind (Lakehouse domains).** On a Lakehouse domain the page names the kind of object `…_data` is, because the two [materialization modes](#materialization-modes-lakehouse) produce objects with the same name and very different behaviour. Next to the target FQN a badge reads either **TABLE · materialized copy** or **VIEW · no data copy**, and the page's subtitle, the note under the FQN, and the status card title all follow the same mode:
 
-| | `Materialized - Faster but needs refresh` | `Views only` |
+| | `Materialized Graph` | `Virtual Graph (no copy)` |
 |---|---|---|
 | Badge | **TABLE · materialized copy** | **VIEW · no data copy** |
 | What Build does | Copies the gateway output into the Delta table | Refreshes the gateway definition; copies nothing |
@@ -1605,8 +1605,8 @@ No LLM, including OWL/IF-THEN reasoning, SHACL validation, and cohort operations
 | Field | Description |
 |-------|-------------|
 | **Backend** | Select the Graph DB engine for this domain (`lakebase`, `databricks` / Lakehouse, or `neo4j`). Build always also creates the Unity Catalog triple-store family below. |
-| **Access type** | Lakehouse only. `Views only` (default) makes `…_data` a pass-through view over the gateway — nothing is duplicated. `Materialized - Faster but needs refresh` copies the mapped triples into `…_data` at build time. See [Materialization modes](#materialization-modes-lakehouse). |
-| **Search cache** | Lakehouse and Lakebase. On by default. Materializes adjacency, entity-search, and property indexes used by Explorer, GraphQL lists, and MCP `describe_entity`. Turn off to always read the live triple relation (Lakehouse Views only then hits mapping SQL). Re-enabling does not reuse a stale snapshot — Build or **Refresh cache** is required first (`pending_refresh`). Request `cache=true`/`false` on find, filter, GraphQL, and MCP overrides the switch. |
+| **Access type** | Lakehouse only. `Virtual Graph (no copy)` (default) makes `…_data` a pass-through view over the gateway — nothing is duplicated. `Materialized Graph` copies the mapped triples into `…_data` at build time. See [Materialization modes](#materialization-modes-lakehouse). |
+| **Search cache** | Lakehouse and Lakebase. On by default. Materializes adjacency, entity-search, and property indexes used by Explorer, GraphQL lists, and MCP `describe_entity`. Turn off to always read the live triple relation (Lakehouse Virtual Graph (no copy) then hits mapping SQL). Re-enabling does not reuse a stale snapshot — Build or **Refresh cache** is required first (`pending_refresh`). Request `cache=true`/`false` on find, filter, GraphQL, and MCP overrides the switch. |
 | **Triple-Store** | Read-only. Base name in the domain's registry `catalog.schema`: `triplestore_<domain>_V<version>`. Build creates four related objects from that base (see below). |
 | **Graph DB table** | Read-only. For Lakebase, the flat triple table name is derived as `g_<domain>_v<version>` in the configured Postgres schema (default `ontobricks_graph`). |
 
@@ -1617,7 +1617,7 @@ When you **commit** the domain name (blur the field or trigger `change`) or chan
 | Object | Kind | What it is for |
 |--------|------|----------------|
 | `triplestore_<domain>_V<n>` | VIEW | Live R2RML mapping over your source tables |
-| `…_data` | Delta TABLE *or* VIEW | Mapped triples — what **Analytics** reads; also the bulk half of the graph. A pass-through view by default (`Views only`); a Delta table under `Materialized` access type |
+| `…_data` | Delta TABLE *or* VIEW | Mapped triples — what **Analytics** reads; also the bulk half of the graph. A pass-through view by default (`Virtual Graph (no copy)`); a Delta table under `Materialized Graph` access type |
 | `…_inferred` | Delta TABLE | Reasoning / cohort / app-written triples |
 | `…_graph` | VIEW | `_data ∪ _inferred` — what Explorer and most graph reads use |
 
@@ -1627,7 +1627,7 @@ Full detail: [Architecture → Lakehouse Unity Catalog objects](architecture.md#
 
 | Backend | Storage | Sync | Best for |
 |---------|---------|------|----------|
-| **Lakehouse (Delta)** | The UC objects above (SQL Warehouse) | Build CTAS + companion tables, or views only | Unity Catalog governance, analytics on the mapped snapshot, no separate graph DB |
+| **Lakehouse (Delta)** | The UC objects above (SQL Warehouse) | Build CTAS + companion tables, or Virtual Graph (no copy) | Unity Catalog governance, analytics on the mapped snapshot, no separate graph DB |
 | **Lakebase Postgres** | Flat `(subject, predicate, object)` table on the App-bound Lakebase instance | App-managed (`COPY FROM STDIN`) or managed-synced (Lakeflow) | Low-latency reads from the FastAPI process, reasoning, BFS / cohort builds |
 | **Neo4j** | Bolt-connected property graph | Build `MERGE` of mapped triples | Cypher traversal workloads |
 
@@ -1639,13 +1639,13 @@ Short version:
 | Backend / mode | Copy of mapped triples? | How they are created | Indexes (`_adj_*`, `_entity_search`, `_props`) |
 |----------------|-------------------------|----------------------|--------------------------------------|
 | Lakehouse · **Materialized** | Yes — `_data` TABLE | Build CTAS + `OPTIMIZE` on the Build SQL Warehouse | Physical Delta tables rebuilt at end of Build and by **Refresh cache** |
-| Lakehouse · **Views only** | No — `_data` is a pass-through VIEW | Build only refreshes VIEW DDL | Still physical Delta tables (a snapshot of hops/search). Refresh cache recaptures live sources |
+| Lakehouse · **Virtual Graph (no copy)** | No — `_data` is a pass-through VIEW | Build only refreshes VIEW DDL | Still physical Delta tables (a snapshot of hops/search). Refresh cache recaptures live sources |
 | Lakebase · **app_managed** | Yes, twice: UC `_data` TABLE + Postgres `_sync` | App streams warehouse rows into `_sync`; `__app` holds inferred rows; readers use the union view | Postgres tables rebuilt from that union view |
 | Lakebase · **managed_synced** | Yes, twice: UC `_data` TABLE + Lakeflow `_sync` | Lakeflow owns `_sync`; the app owns `__app` and the union view | Same Postgres index rebuild |
 | Neo4j | Yes, twice: UC `_data` TABLE + Neo4j nodes | Build `MERGE` | None — native Bolt traversal |
 
 **Performance:**
-- **Delta** materialises the R2RML VIEW into `_data` with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW. **Overview** and the KG status badge read the graph-index companions (`_entity_search`, `_adj_*`, `_props`) instead of `COUNT(*)` on that VIEW — a pass-through `_graph` on a large mapping would otherwise time out. Under `Views only` materialization there is nothing to cluster or optimise on `_data`, and SPARQL / uncached traversals still re-execute the mapping SQL.
+- **Delta** materialises the R2RML VIEW into `_data` with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW. **Overview** and the KG status badge read the graph-index companions (`_entity_search`, `_adj_*`, `_props`) instead of `COUNT(*)` on that VIEW — a pass-through `_graph` on a large mapping would otherwise time out. Under `Virtual Graph (no copy)` there is nothing to cluster or optimise on `_data`, and SPARQL / uncached traversals still re-execute the mapping SQL.
 - **Lakebase** stores triples in Postgres flat tables. Two modes are available: `managed_synced` (what Settings → Lakebase proposes: Databricks Lakeflow Snapshot-syncs a table from the mapped view; Triggered/Continuous need CDF and cannot run on a view) and `app_managed` (the app streams batches via `COPY FROM STDIN`, used at runtime when `sync_mode` was never saved).
 
 #### Materialization modes (Lakehouse)
@@ -1654,7 +1654,7 @@ A Lakehouse domain chooses how `…_data` is built, in **Context → Configurati
 Backend → Access type**. The rest of the object family is identical
 either way, and a change takes effect on the next Build.
 
-| | Views only (default) | Materialized - Faster but needs refresh |
+| | Virtual Graph (no copy) (default) | Materialized Graph |
 |---|---|---|
 | `…_data` | View: `SELECT subject, predicate, object FROM <gateway view>` | Delta table, `CLUSTER BY (predicate, subject)` |
 | Storage used | None | One copy of every mapped triple |
@@ -1673,7 +1673,7 @@ Two things are unaffected by the choice:
   whole mapping query on every pass. A leftover snapshot (from a run that died)
   is listed under **Settings → Lakehouse** and can be purged there.
 
-Pick `Views only` when source data changes constantly and you would rather pay
+Pick `Virtual Graph (no copy)` when source data changes constantly and you would rather pay
 per query than rebuild, or when duplicating the triples is not acceptable for
 governance or cost reasons. Keep the default when the graph is queried
 interactively — Explorer, GraphQL and reasoning all read through `…_graph`, and

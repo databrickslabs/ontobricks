@@ -571,7 +571,7 @@ class TestExportImport:
         assert domain_session.info["lakehouse_materialization"] == "view"
 
     def test_new_session_defaults_lakehouse_materialization_to_view(self, domain_session):
-        """The Information picker defaults to Views only for a brand-new domain."""
+        """The Information picker defaults to Virtual Graph (no copy) for a brand-new domain."""
         assert domain_session.info["lakehouse_materialization"] == "view"
 
     def test_new_session_search_cache_pending_until_rebuild(self, domain_session):

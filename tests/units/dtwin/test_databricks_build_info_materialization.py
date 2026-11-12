@@ -73,7 +73,7 @@ def test_the_field_defaults_to_table_when_missing(api_client, domain_session):
 
 
 def test_a_new_domain_defaults_to_view(api_client, domain_session):
-    """The Access type picker default is Views only."""
+    """The Access type picker default is Virtual Graph (no copy)."""
     assert _info(api_client, _configure(domain_session))["materialization"] == "view"
 
 

@@ -64,6 +64,8 @@ def test_studio_toolbar_has_view_dropdown_and_groups_menu():
     assert 'id="studioDeleteViewBtn"' in html
     assert 'id="studioGroupsBtn"' in html
     assert 'id="studioNewGroupBtn"' in html
+    assert 'id="studioToggleAllGroupsBtn"' in html
+    assert 'aria-pressed=' in html[html.index("studioToggleAllGroupsBtn") :]
 
 
 def test_groups_modal_has_delete_and_no_sidebar_section():
@@ -97,6 +99,9 @@ def test_map_exposes_view_and_group_apis():
         "loadStudioGroups",
         "collapseStudioGroup",
         "expandStudioGroup",
+        "toggleAllStudioGroups",
+        "applyStudioGroupsToggle",
+        "initStudioGroupsToggle",
         "refreshStudioGroups",
         "_snapshotStudioEntityPositions",
         "_applyStudioEntityPosition",
@@ -111,6 +116,15 @@ def test_map_exposes_view_and_group_apis():
     # Collapse/expand must await persist + rebuild so layout cannot race.
     assert "await persistStudioCollapsedGroups()" in js
     assert "await initOntologyMap()" in js
+    # Expand/collapse-all is one persist + rebuild, not a per-group loop.
+    toggle_start = js.index("async function toggleAllStudioGroups(")
+    toggle_end = js.index("async function collapseStudioGroup(", toggle_start + 1)
+    toggle = js[toggle_start:toggle_end]
+    assert "collapseStudioGroup(" not in toggle
+    assert "expandStudioGroup(" not in toggle
+    assert "await persistStudioCollapsedGroups()" in toggle
+    assert "await initOntologyMap()" in toggle
+    assert "initStudioGroupsToggle()" in js
     # Group circle anchors on the entity whose − badge was clicked.
     assert "collapseStudioGroup(gName, d.name)" in js
     assert "_studioGroupAnchors.set(name, anchorEntityName)" in js

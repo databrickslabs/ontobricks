@@ -92,8 +92,8 @@ class TestThePicker:
         block_start = html.index(f'id="{SECTION_ID}"')
         block = html[block_start : block_start + 1600]
         assert "Access type" in block
-        assert "Materialized - Faster but needs refresh" in block
-        assert "Views only" in block
+        assert "Materialized Graph" in block
+        assert "Virtual Graph (no copy)" in block
 
     def test_the_default_selection_is_views_only(self):
         """A new Lakehouse domain must not copy triples until the user opts in."""

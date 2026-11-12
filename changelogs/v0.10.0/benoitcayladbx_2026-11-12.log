@@ -28,3 +28,79 @@ Modified files:
 - tests/units/front/test_ontology_map_multi_select.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 55.95s
+
+
+================================================================================
+Lakehouse Access type: rename options to "Virtual Graph (no copy)" / "Materialized Graph"
+================================================================================
+
+Context:
+The Lakehouse "Access type" picker used the labels "Views only — no data copy"
+and "Materialized - Faster but needs refresh". Both options are renamed to the
+shorter product names "Virtual Graph (no copy)" and "Materialized Graph". The
+stored values (`view` / `table`) and the behaviour are unchanged.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_information.html
+   Option labels renamed; the helper text and the alert under the picker now
+   use the same names.
+2. src/front/static/query/js/query-databricks-build.js
+   Build page status text for the view mode names "Virtual Graph (no copy)".
+3. tests/units/front/test_lakehouse_materialization_ui.py
+   Section contract asserts the new option labels.
+4. tests/units/domain/test_domain_session.py
+   Docstring updated to the new default name (no behaviour change).
+5. tests/units/dtwin/test_databricks_build_info_materialization.py
+   Docstring updated to the new default name (no behaviour change).
+6. docs/user-guide.md
+   Access type row, materialization modes table, search cache and backend
+   tables use the new names.
+7. docs/architecture.md
+   Capability table column headers use the new names.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/query/js/query-databricks-build.js
+- tests/units/front/test_lakehouse_materialization_ui.py
+- tests/units/domain/test_domain_session.py
+- tests/units/dtwin/test_databricks_build_info_materialization.py
+- docs/user-guide.md
+- docs/architecture.md
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 47.37s
+
+
+================================================================================
+Studio toolbar: expand/collapse all ontology groups
+================================================================================
+
+Context:
+Studio already collapsed and expanded a group from the + / − badges on the
+canvas. There was no toolbar control to collapse or expand every group in one
+click.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   Added #studioToggleAllGroupsBtn next to the Groups dropdown.
+2. src/front/static/ontology/js/ontology-map.js
+   Toggle collapses every group, or expands them all when they are already
+   collapsed; one persist + rebuild. Disabled when the ontology has no groups.
+3. tests/units/front/test_studio_views_groups_contract.py
+   Toolbar id, APIs, and single persist/rebuild contract.
+4. docs/user-guide.md
+   Studio groups paragraph mentions the toolbar toggle.
+5. src/front/templates/partials/layout/help_modal.html
+   Studio help line mentions expand/collapse all from the toolbar.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_studio_views_groups_contract.py
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10278 passed, 323 skipped, 8 deselected in 49.90s

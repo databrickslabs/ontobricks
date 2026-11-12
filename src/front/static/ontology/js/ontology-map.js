@@ -354,6 +354,7 @@ async function loadStudioGroups() {
                 _studioGroupAnchors.delete(gName);
             }
         }
+        applyStudioGroupsToggle();
     } catch (err) {
         console.warn('[Studio] Could not load groups:', err);
     }
@@ -451,6 +452,63 @@ function _syncGroupAnchorPosition(groupNode) {
     const y = groupNode.fy != null ? groupNode.fy : groupNode.y;
     if (x == null || y == null) return;
     _studioEntityPositions.set(anchorName, { x: x, y: y, fx: x, fy: y });
+}
+
+function _studioGroupNames() {
+    return (_studioGroupsDefs || []).map(g => g && g.name).filter(Boolean);
+}
+
+function studioGroupsAllCollapsed() {
+    const names = _studioGroupNames();
+    return names.length > 0 && names.every(n => _studioCollapsedGroups.has(n));
+}
+
+/**
+ * Sync the expand/collapse-all toolbar button with the current group set.
+ */
+function applyStudioGroupsToggle() {
+    const btn = document.getElementById('studioToggleAllGroupsBtn');
+    if (!btn) return;
+    const names = _studioGroupNames();
+    const has = names.length > 0;
+    btn.disabled = !has;
+    const allCollapsed = has && studioGroupsAllCollapsed();
+    btn.classList.toggle('active', allCollapsed);
+    btn.setAttribute('aria-pressed', allCollapsed ? 'true' : 'false');
+    const icon = btn.querySelector('i');
+    if (allCollapsed) {
+        btn.title = 'Expand all groups';
+        if (icon) icon.className = 'bi bi-arrows-expand';
+    } else {
+        btn.title = 'Collapse all groups';
+        if (icon) icon.className = 'bi bi-arrows-collapse';
+    }
+    btn.setAttribute('aria-label', btn.title);
+}
+
+function initStudioGroupsToggle() {
+    const btn = document.getElementById('studioToggleAllGroupsBtn');
+    applyStudioGroupsToggle();
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.onclick = () => { toggleAllStudioGroups(); };
+}
+
+async function toggleAllStudioGroups() {
+    const names = _studioGroupNames();
+    if (!names.length) return;
+    _snapshotStudioEntityPositions(ontologyMapNodes);
+    if (studioGroupsAllCollapsed()) {
+        names.forEach(n => {
+            _studioCollapsedGroups.delete(n);
+            _studioGroupAnchors.delete(n);
+        });
+    } else {
+        names.forEach(n => _studioCollapsedGroups.add(n));
+    }
+    await persistStudioCollapsedGroups();
+    applyStudioGroupsToggle();
+    await initOntologyMap();
 }
 
 async function collapseStudioGroup(name, anchorEntityName) {
@@ -971,6 +1029,7 @@ async function initOntologyMap() {
 
     initMapGridToggle();
     initMapSelectToggle();
+    initStudioGroupsToggle();
     wireStudioViewControls();
     showOntologyMapLoading(true);
     

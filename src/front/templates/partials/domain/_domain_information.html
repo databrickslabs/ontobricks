@@ -260,19 +260,19 @@
                             </label>
                             <select class="form-select domain-editable" id="domainLakehouseMaterialization"
                                     data-saved-value="{{ domain.lakehouse_materialization or 'view' }}">
-                                <option value="view" {% if (domain.lakehouse_materialization or 'view') != 'table' %}selected{% endif %}>Views only &mdash; no data copy</option>
-                                <option value="table" {% if domain.lakehouse_materialization == 'table' %}selected{% endif %}>Materialized - Faster but needs refresh</option>
+                                <option value="view" {% if (domain.lakehouse_materialization or 'view') != 'table' %}selected{% endif %}>Virtual Graph (no copy)</option>
+                                <option value="table" {% if domain.lakehouse_materialization == 'table' %}selected{% endif %}>Materialized Graph</option>
                             </select>
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>How the mapped triples
-                                (<code>&hellip;_data</code>) are stored. <strong>Materialized</strong> copies them
-                                into a clustered Delta table at build time. <strong>Views only</strong> creates a
+                                (<code>&hellip;_data</code>) are stored. <strong>Materialized Graph</strong> copies them
+                                into a clustered Delta table at build time. <strong>Virtual Graph (no copy)</strong> creates a
                                 pass-through view over the Triple-Store Gateway instead &mdash; nothing is
                                 duplicated and queries always read live source data.
                             </small>
                             <div class="alert alert-light border small mt-2 py-2 mb-0">
                                 <i class="bi bi-lightbulb me-1"></i>
-                                In <strong>Views only</strong> mode, builds are near-instant and no storage is
+                                In <strong>Virtual Graph (no copy)</strong> mode, builds are near-instant and no storage is
                                 consumed, but every graph query re-runs the mapping SQL against your source
                                 tables. Inferred triples (reasoning, cohorts) always keep their own Delta table,
                                 and Graph Analytics materializes a temporary snapshot for the duration of a run.
@@ -299,7 +299,7 @@
                                 Materialized indexes (adjacency, entity-search, properties) speed
                                 Explorer Preview, expansion, GraphQL lists, and MCP
                                 <code>describe_entity</code>. Turn off to always read the live
-                                triple relation — Lakehouse Views only then hits source mapping SQL.
+                                triple relation — Lakehouse Virtual Graph (no copy) then hits source mapping SQL.
                             </small>
                             <div class="small mt-2" id="searchCacheStatusLine"></div>
                         </div>

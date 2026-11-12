@@ -1024,7 +1024,7 @@ surface exposes ontology information only.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
-| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + Delta tables, or views only (SQL Warehouse) | Spark SQL | Yes (mapped triples = `_data`) |
+| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + Delta tables, or Virtual Graph (no copy) (SQL Warehouse) | Spark SQL | Yes (mapped triples = `_data`) |
 | **Lakebase Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the mapped snapshot |
 | **Databricks Graph DB** | `graph` (engine `databricks`) | Same Delta objects as the triple store (no second copy) | Spark SQL | The mapped snapshot itself |
 | **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the mapped snapshot |
@@ -1036,7 +1036,7 @@ Build always creates the Unity Catalog triple-store family in the registry
 *mirrors* them (Lakebase, Neo4j). **Copy** below means a physical snapshot of
 rows; **no copy** means a VIEW that re-reads the source on each query.
 
-| Capability | Lakehouse · table (copy) | Lakehouse · views only (no mapped copy) | Lakebase · `app_managed` | Lakebase · `managed_synced` | Neo4j |
+| Capability | Lakehouse · Materialized Graph | Lakehouse · Virtual Graph (no copy) | Lakebase · `app_managed` | Lakebase · `managed_synced` | Neo4j |
 |------------|--------------------------|-----------------------------------------|--------------------------|-----------------------------|-------|
 | Chosen where | Context → Knowledge Graph, backend `databricks`, materialization `table` | Same backend, materialization `view` | Domain backend `lakebase`; Settings → Lakebase `sync_mode` | Same backend, `sync_mode=managed_synced` | Domain backend `neo4j` |
 | Mapped triples | `_data` **TABLE** — CTAS from the R2RML VIEW, then `OPTIMIZE` / Liquid Clustering | `_data` **VIEW** — pass-through over the R2RML VIEW; no row copy | UC `_data` is always a **TABLE** (analytics needs a Delta scan). Postgres `_sync` is a second copy loaded by the app (`COPY FROM STDIN`) | UC `_data` **TABLE**. Postgres `_sync` is a second copy kept by Lakeflow | UC `_data` **TABLE**. Neo4j nodes are a second copy (`MERGE`) |
