@@ -369,142 +369,196 @@ class ObxSettings:
             ) from e
 
     @staticmethod
+    def _mark_highest_new_as_draft(
+        prepared_by_ver: Dict[str, Dict[str, Any]],
+        new_versions: List[str],
+    ) -> None:
+        if not new_versions:
+            return
+        from back.objects.registry.RegistryService import RegistryService
+
+        highest = max(new_versions, key=RegistryService._version_sort_key)
+        doc = prepared_by_ver[highest]
+        doc.setdefault("info", {})["status"] = "DRAFT"
+        nested = (doc.get("versions") or {}).get(highest)
+        if isinstance(nested, dict):
+            nested.setdefault("info", {})["status"] = "DRAFT"
+
+    @staticmethod
+    def _prepare_docs_for_import(
+        versions: Dict[str, Any],
+        *,
+        action: str,
+        existing: set,
+        rename_display_name: str,
+        rename_base_uri: str,
+        target_folder: str,
+        errors: List[str],
+    ) -> tuple[Dict[str, Dict[str, Any]], List[str], List[str]]:
+        """Return ``(prepared_by_ver, to_write, skipped)``; never touches existing rows."""
+        prepared: Dict[str, Dict[str, Any]] = {}
+        to_write: List[str] = []
+        skipped: List[str] = []
+        for ver, doc in versions.items():
+            if not isinstance(doc, dict):
+                errors.append(
+                    f"{target_folder} v{ver}: payload is not an object, skipped"
+                )
+                continue
+            if ver in existing:
+                skipped.append(ver)
+                continue
+            body = (
+                ObxSettings._prepare_renamed_version_doc(
+                    doc, ver, rename_display_name, rename_base_uri
+                )
+                if action == "rename"
+                else copy.deepcopy(doc)
+            )
+            prepared[ver] = body
+            to_write.append(ver)
+        ObxSettings._mark_highest_new_as_draft(prepared, to_write)
+        return prepared, to_write, skipped
+
+    @staticmethod
+    def _resolve_import_target(
+        svc: Any,
+        domain_session: Any,
+        settings: Settings,
+        folder: str,
+        decision: Dict[str, Any],
+        action: str,
+        summary: Dict[str, Any],
+    ) -> Optional[tuple[str, str, str, str]]:
+        """Return ``(target_folder, action_label, rename_name, rename_uri)`` or None to skip."""
+        if action == "rename":
+            rename_display_name = (decision.get("new_name") or "").strip()
+            if not re.fullmatch(r"[A-Z][A-Za-z0-9]{0,63}", rename_display_name):
+                raise ValidationError(
+                    "Imported domain name must be CamelCase alphanumeric"
+                )
+            target_folder = _ss.sanitize_domain_folder(rename_display_name)
+            if svc.domain_exists(target_folder):
+                summary["errors"].append(
+                    f'Rename target "{target_folder}" already exists; '
+                    f'"{folder}" was skipped'
+                )
+                summary["skipped_domains"] += 1
+                summary["domains"].append(
+                    {"name": folder, "action": "skipped_rename_conflict"}
+                )
+                return None
+            rename_base_uri = _ss.build_auto_base_uri(
+                rename_display_name,
+                _ss.resolve_default_base_uri(domain_session, settings),
+            )
+            summary["renamed_domains"] += 1
+            return target_folder, "rename", rename_display_name, rename_base_uri
+        if action in ("overwrite", "add_missing"):
+            return folder, "add_missing", "", ""
+        raise ValidationError(
+            f"Unknown import action '{action}' for domain '{folder}'"
+        )
+
+    @staticmethod
+    def _import_one_domain_entry(
+        entry: Dict[str, Any],
+        decision_map: Dict[str, Dict[str, Any]],
+        svc: Any,
+        domain_session: Any,
+        settings: Settings,
+        summary: Dict[str, Any],
+    ) -> None:
+        raw_name = (entry.get("name") or "").strip()
+        if not raw_name:
+            summary["errors"].append("Domain entry without a name was skipped")
+            return
+        folder = _ss.sanitize_domain_folder(raw_name)
+        decision = decision_map.get(folder) or decision_map.get(raw_name) or {}
+        action = (decision.get("action") or "skip").lower()
+        if action == "skip":
+            summary["skipped_domains"] += 1
+            summary["domains"].append({"name": folder, "action": "skipped"})
+            return
+        resolved = ObxSettings._resolve_import_target(
+            svc, domain_session, settings, folder, decision, action, summary
+        )
+        if resolved is None:
+            return
+        target_folder, action_label, rename_name, rename_uri = resolved
+        existing = (
+            set(svc.list_versions_sorted(target_folder))
+            if svc.domain_exists(target_folder)
+            else set()
+        )
+        prepared, to_write, skipped = ObxSettings._prepare_docs_for_import(
+            entry.get("versions") or {},
+            action="rename" if action == "rename" else "add_missing",
+            existing=existing,
+            rename_display_name=rename_name,
+            rename_base_uri=rename_uri,
+            target_folder=target_folder,
+            errors=summary["errors"],
+        )
+        wrote = 0
+        for ver in to_write:
+            ok, msg = svc.write_version(
+                target_folder, ver, json.dumps(prepared[ver])
+            )
+            if not ok:
+                summary["errors"].append(f"{target_folder} v{ver}: {msg}")
+                continue
+            wrote += 1
+        summary["imported_versions"] += wrote
+        summary["versions_skipped"] += len(skipped)
+        summary["domains"].append(
+            {
+                "name": target_folder,
+                "original_name": folder,
+                "action": action_label,
+                "versions_written": wrote,
+                "skipped_versions": skipped,
+            }
+        )
+
+    @staticmethod
     def import_registry_obx_result(
         file_bytes: bytes,
         decisions: List[Dict[str, Any]],
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        """Apply per-domain decisions and write the contents of *file_bytes*
-        into the registry.
+        """Apply per-domain decisions and write *file_bytes* into the registry.
 
-        Each decision: ``{"name": <folder>, "action": "skip"|"overwrite"|"rename",
-        "new_name": <str>}``. Missing entries default to ``"skip"`` so callers
-        can't accidentally overwrite a domain they didn't review.
+        Each decision: ``{"name": <folder>,
+        "action": "skip"|"overwrite"|"add_missing"|"rename", "new_name": <str>}``.
+        ``overwrite`` and ``add_missing`` both write only missing versions.
+        Missing entries default to ``"skip"``.
         """
         try:
             domain_session = _ss.get_domain(session_mgr)
             svc = _ss.RegistryService.from_context(domain_session, settings)
             if not svc.cfg.is_configured:
                 raise ValidationError("Registry not configured")
-
             envelope = SettingsService._decode_obx_payload(file_bytes)
-
-            decision_map: Dict[str, Dict[str, Any]] = {}
-            for d in decisions or []:
-                key = (d.get("name") or "").strip()
-                if key:
-                    decision_map[key] = d
-
-            summary = {
+            decision_map: Dict[str, Dict[str, Any]] = {
+                (d.get("name") or "").strip(): d
+                for d in (decisions or [])
+                if (d.get("name") or "").strip()
+            }
+            summary: Dict[str, Any] = {
                 "imported_versions": 0,
                 "skipped_domains": 0,
                 "renamed_domains": 0,
-                "overwritten_versions": 0,
+                "versions_skipped": 0,
                 "errors": [],
                 "domains": [],
             }
-
             for entry in envelope.get("domains", []):
-                raw_name = (entry.get("name") or "").strip()
-                if not raw_name:
-                    summary["errors"].append("Domain entry without a name was skipped")
-                    continue
-
-                folder = _ss.sanitize_domain_folder(raw_name)
-                decision = decision_map.get(folder) or decision_map.get(raw_name) or {}
-                action = (decision.get("action") or "skip").lower()
-
-                if action == "skip":
-                    summary["skipped_domains"] += 1
-                    summary["domains"].append({"name": folder, "action": "skipped"})
-                    continue
-
-                target_folder = folder
-                rename_display_name = ""
-                rename_base_uri = ""
-                if action == "rename":
-                    rename_display_name = (
-                        decision.get("new_name") or ""
-                    ).strip()
-                    if not re.fullmatch(
-                        r"[A-Z][A-Za-z0-9]{0,63}", rename_display_name
-                    ):
-                        raise ValidationError(
-                            "Imported domain name must be CamelCase alphanumeric"
-                        )
-                    target_folder = _ss.sanitize_domain_folder(rename_display_name)
-                    if svc.domain_exists(target_folder):
-                        summary["errors"].append(
-                            f'Rename target "{target_folder}" already exists; '
-                            f'"{folder}" was skipped'
-                        )
-                        summary["skipped_domains"] += 1
-                        summary["domains"].append(
-                            {"name": folder, "action": "skipped_rename_conflict"}
-                        )
-                        continue
-                    rename_base_uri = _ss.build_auto_base_uri(
-                        rename_display_name,
-                        _ss.resolve_default_base_uri(domain_session, settings),
-                    )
-                    summary["renamed_domains"] += 1
-                elif action != "overwrite":
-                    raise ValidationError(
-                        f"Unknown import action '{action}' for domain '{folder}'"
-                    )
-
-                existing = (
-                    set(svc.list_versions_sorted(target_folder))
-                    if svc.domain_exists(target_folder)
-                    else set()
+                ObxSettings._import_one_domain_entry(
+                    entry, decision_map, svc, domain_session, settings, summary
                 )
-                versions = entry.get("versions") or {}
-                wrote = 0
-                overwrote = 0
-                for ver, doc in versions.items():
-                    if not isinstance(doc, dict):
-                        summary["errors"].append(
-                            f"{target_folder} v{ver}: payload is not an object, skipped"
-                        )
-                        continue
-                    is_overwrite = ver in existing
-                    document_to_write = (
-                        SettingsService._prepare_renamed_version_doc(
-                            doc,
-                            ver,
-                            rename_display_name,
-                            rename_base_uri,
-                        )
-                        if action == "rename"
-                        else doc
-                    )
-                    ok, msg = svc.write_version(
-                        target_folder, ver, json.dumps(document_to_write)
-                    )
-                    if not ok:
-                        summary["errors"].append(
-                            f"{target_folder} v{ver}: {msg}"
-                        )
-                        continue
-                    wrote += 1
-                    if is_overwrite:
-                        overwrote += 1
-
-                summary["imported_versions"] += wrote
-                summary["overwritten_versions"] += overwrote
-                summary["domains"].append(
-                    {
-                        "name": target_folder,
-                        "original_name": folder,
-                        "action": action,
-                        "versions_written": wrote,
-                        "versions_overwritten": overwrote,
-                    }
-                )
-
             _ss.invalidate_registry_cache()
-
             return {
                 "success": True,
                 "message": (

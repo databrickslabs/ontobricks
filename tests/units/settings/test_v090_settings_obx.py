@@ -388,30 +388,35 @@ class TestImportRegistryObx:
         assert svc.write_version.call_args.args[0] == "my_claims"
 
     def test_bad_payloads_and_write_failures_are_reported(self, svc, raw_envelope):
+        from back.objects.registry.RegistryService import RegistryService
+
         svc.domain_exists.return_value = True
         svc.list_versions_sorted.return_value = ["1"]
         svc.write_version.side_effect = lambda folder, ver, body: (
             (False, "disk full") if ver == "2" else (True, "ok")
         )
 
+        # Patch the class used via _ss.RegistryService for _version_sort_key
+        _ss.RegistryService._version_sort_key = RegistryService._version_sort_key
+
         result = self._import(
             raw_envelope([{"name": "claims", "versions": {"1": {}, "2": {}, "3": "oops"}}]),
             [{"name": "claims", "action": "overwrite"}],
         )
 
-        assert result["imported_versions"] == 1
-        assert result["overwritten_versions"] == 1
+        assert result["imported_versions"] == 0
+        assert result["versions_skipped"] == 1
         assert result["errors"] == [
-            "claims v2: disk full",
             "claims v3: payload is not an object, skipped",
+            "claims v2: disk full",
         ]
         assert result["domains"] == [
             {
                 "name": "claims",
                 "original_name": "claims",
-                "action": "overwrite",
-                "versions_written": 1,
-                "versions_overwritten": 1,
+                "action": "add_missing",
+                "versions_written": 0,
+                "skipped_versions": ["1"],
             }
         ]
 

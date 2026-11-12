@@ -525,8 +525,10 @@ async def import_registry_obx(
     * ``from_github`` -- ``1`` to rebuild and import from the GitHub
       repository (no file; blobs are read at confirm time).
     * ``decisions`` -- JSON string ``[{"name": <folder>,
-      "action": "skip"|"overwrite"|"rename", "new_name": <str>}]``.
-      Missing entries default to ``"skip"``.
+      "action": "skip"|"overwrite"|"add_missing"|"rename",
+      "new_name": <str>}]``. ``overwrite`` and ``add_missing`` both write
+      only versions that do not exist locally. Missing entries default
+      to ``"skip"``.
     """
     form = await request.form()
     from_github = str(form.get("from_github") or "").lower() in ("1", "true", "yes")
