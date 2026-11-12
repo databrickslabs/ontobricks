@@ -1,5 +1,6 @@
 """R2RML utilities for mapping generation and parsing."""
 
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from back.core.w3c.r2rml.R2RMLGenerator import R2RMLGenerator
 from back.core.w3c.r2rml.R2RMLParser import R2RMLParser
 
@@ -15,6 +16,7 @@ def parse_r2rml_content(content):
 
 
 __all__ = [
+    "InstanceIdentity",
     "R2RMLGenerator",
     "generate_r2rml_from_config",
     "R2RMLParser",

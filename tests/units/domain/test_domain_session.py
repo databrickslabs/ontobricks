@@ -752,3 +752,18 @@ class TestLegacyMigration:
         )
         ds = DomainSession(mock_session_mgr)
         assert len(ds.get_entity_mappings()) == 1
+
+
+class TestIdentityScopeSession:
+    def test_identity_scope_round_trip(self, domain_session):
+        domain_session.ontology["identity_scope"] = "hierarchy"
+        export = domain_session.export_for_save()
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.ontology["identity_scope"] == "hierarchy"
+
+    def test_identity_scope_change_stamps_last_update(self, domain_session):
+        domain_session._rebake_snapshots()
+        domain_session.ontology["identity_scope"] = "hierarchy"
+        domain_session.save()
+        assert domain_session.last_update

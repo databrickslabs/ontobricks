@@ -222,6 +222,10 @@ Open **Ontology → Studio** for the force-directed map of every class. This is 
 
 If `Employé` inherits from `Personne` and `Personne` has `habiteÀ → Ville`, Studio and Mapping draw a dashed `Employé → Ville` edge. The entity panel lists it as inherited from `Personne` (read-only). Mapping reuses `Personne`’s `habiteÀ` mapping — there is no second SQL on `Employé`. OWL export still declares `rdfs:domain Personne` and `Employé rdfs:subClassOf Personne`.
 
+**Instance IRI scope**
+
+By default every mapped class mints its own instance URIs (`…/Azienda/{id}`), so a parent and a subclass mapped with the same ID become two separate nodes. Set **Domain → General → Instance IRI scope** to **Per hierarchy** to mint instance URIs from the root class instead (`…/Parte/{id}` for an `Azienda`). A parent and a subclass that share an ID then become one node carrying both types and all their relationships. Sibling subclasses under the same root must use distinct IDs, otherwise their instances merge; Mapping → Diagnostics flags mapped siblings with an `identity_scope` warning. Changing the scope requires rebuilding the Knowledge Graph.
+
 **Select**
 
 1. Click an entity to select only that entity and open its detail panel (1-hop neighbourhood highlight stays as today).

@@ -195,6 +195,8 @@ Mapped individuals are **not** the class IRI. R2RML always mints:
 {base_uri}{ClassLocalName}/{id_column_value}
 ```
 
+With **Instance IRI scope = Per hierarchy** (Domain → General), `ClassLocalName` is the root of the class's designer `parent` chain, so `Azienda ⊂ Parte` mints `…#Parte/{id}`. Classes without a parent are unchanged.
+
 Example: `https://databricks-ontology.com/MyOrg#Customer/C-42`
 
 | Piece | Source | Used for |

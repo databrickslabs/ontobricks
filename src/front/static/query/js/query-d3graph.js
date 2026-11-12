@@ -228,10 +228,12 @@ async function buildGraph(results, columns) {
                                    predicateLocalName === 'a';  // SPARQL shorthand
             if (isTypePredicate && entities.has(subject)) {
                 const entity = entities.get(subject);
-                const extractedType = extractEntityLabel(object);
-                console.log(`Setting entity type: ${subject.substring(subject.length-20)} -> ${extractedType} (from ${object})`);
-                entity.type = extractedType;
-                entity.typeUri = object;  // Store full URI for filtering
+                const keepCurrent = entity.typeUri && typeof isMoreSpecificType === 'function'
+                    && !isMoreSpecificType(object, entity.typeUri);
+                if (!keepCurrent) {
+                    entity.type = extractEntityLabel(object);
+                    entity.typeUri = object;  // Store full URI for filtering
+                }
             }
             
             // Capture rdfs:label (be selective to avoid picking up wrong attributes)

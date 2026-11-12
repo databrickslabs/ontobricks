@@ -720,6 +720,8 @@ edges; the entity panel lists them read-only. OWL export and R2RML keep a
 single `rdfs:domain` on the declaring class. Incoming (range) inheritance is
 out of scope.
 
+**Instance IRI scope.** `ontology["identity_scope"]` (`class` by default, `hierarchy` opt-in) controls the class segment of minted instance URIs. `InstanceIdentity.segment_map` maps each class to the root of its designer `parent` chain; `R2RMLGenerator` and `TwinMapping` apply it to entity subjects and to relationship subject/object templates, while each TriplesMap keeps its own `rr:class`, so the shared node carries every mapped type. `InstanceIdentity.sibling_collisions` drives the Mapping diagnostics warning for unrelated mapped classes under one root.
+
 ### Page Structure
 
 Each main page (Ontology, Mapping, Knowledge Graph) follows this pattern:

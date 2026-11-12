@@ -311,6 +311,7 @@ async function saveDomainInfo() {
             graph_cache_enabled: (graphBackendEl && (graphBackendEl.value === 'databricks' || graphBackendEl.value === 'lakebase'))
                 ? ((document.getElementById('domainGraphCacheEnabled') || {}).checked !== false)
                 : undefined,
+            identity_scope: (document.getElementById('domainIdentityScope') || {}).value || undefined,
         };
     
     try {

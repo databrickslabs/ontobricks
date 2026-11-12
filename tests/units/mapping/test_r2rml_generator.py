@@ -472,3 +472,123 @@ class TestSpacedOntologyUris:
         assert " " not in r2rml or "rr:sqlQuery" in r2rml  # spaces only ok in literals
         # Class IRI must be percent-encoded, not raw spaces
         assert "WRFM%20-%20Shell" in r2rml or "WRFM%20-%20Shell#Sensor" in r2rml
+
+
+from rdflib import Graph as _Graph, Namespace as _Namespace
+
+_RR = _Namespace("http://www.w3.org/ns/r2rml#")
+_B = "http://test.org/onto#"
+_NB = "http://test.org/onto/"
+
+
+def _issue_228_ontology(scope):
+    return {
+        "identity_scope": scope,
+        "classes": [
+            {"name": "Contratto", "uri": _B + "Contratto"},
+            {
+                "name": "ContrattoDiFornitura",
+                "uri": _B + "ContrattoDiFornitura",
+                "parent": "Contratto",
+            },
+            {"name": "Parte", "uri": _B + "Parte"},
+            {"name": "Azienda", "uri": _B + "Azienda", "parent": "Parte"},
+            {"name": "Sede", "uri": _B + "Sede"},
+        ],
+        "properties": [
+            {
+                "name": "sottoscrittoDa",
+                "uri": _B + "sottoscrittoDa",
+                "type": "ObjectProperty",
+                "domain": "Contratto",
+                "range": "Parte",
+            },
+            {
+                "name": "haSede",
+                "uri": _B + "haSede",
+                "type": "ObjectProperty",
+                "domain": "Azienda",
+                "range": "Sede",
+            },
+        ],
+    }
+
+
+def _issue_228_mapping():
+    def entity(name):
+        return {
+            "ontology_class": _B + name,
+            "ontology_class_label": name,
+            "sql_query": f"SELECT id FROM v_{name.lower()}",
+            "id_column": "id",
+            "attribute_mappings": {},
+        }
+
+    def rel(prop, src, tgt, src_col, tgt_col):
+        return {
+            "property": _B + prop,
+            "property_label": prop,
+            "sql_query": f"SELECT {src_col}, {tgt_col} FROM v_{prop.lower()}",
+            "source_class": _B + src,
+            "source_class_label": src,
+            "target_class": _B + tgt,
+            "target_class_label": tgt,
+            "source_id_column": src_col,
+            "target_id_column": tgt_col,
+            "direction": "forward",
+        }
+
+    names = ["Contratto", "ContrattoDiFornitura", "Parte", "Azienda", "Sede"]
+    return {
+        "entities": [entity(n) for n in names],
+        "relationships": [
+            rel("sottoscrittoDa", "Contratto", "Parte", "contract_id", "party_id"),
+            rel("haSede", "Azienda", "Sede", "company_id", "site_id"),
+        ],
+    }
+
+
+def _generate(scope):
+    ttl = R2RMLGenerator(_NB).generate_mapping(
+        _issue_228_mapping(), _issue_228_ontology(scope)
+    )
+    graph = _Graph().parse(data=ttl, format="turtle")
+    templates = {str(o) for o in graph.objects(None, _RR.template)}
+    classes = {str(o) for o in graph.objects(None, _RR["class"])}
+    return templates, classes
+
+
+class TestHierarchyIriScope:
+    def test_class_scope_keeps_one_namespace_per_class(self):
+        templates, _ = _generate("class")
+        assert _NB + "ContrattoDiFornitura/{id}" in templates
+        assert _NB + "Azienda/{id}" in templates
+        assert _NB + "Azienda/{company_id}" in templates
+
+    def test_hierarchy_scope_mints_subclass_entities_under_their_root(self):
+        templates, _ = _generate("hierarchy")
+        assert _NB + "Contratto/{id}" in templates
+        assert _NB + "Parte/{id}" in templates
+        assert not any("/ContrattoDiFornitura/" in t or "/Azienda/" in t for t in templates)
+
+    def test_hierarchy_scope_joins_relations_on_the_root_node(self):
+        templates, _ = _generate("hierarchy")
+        assert _NB + "Contratto/{contract_id}" in templates
+        assert _NB + "Parte/{party_id}" in templates
+        assert _NB + "Parte/{company_id}" in templates
+        assert _NB + "Sede/{site_id}" in templates
+
+    def test_hierarchy_scope_keeps_every_class_type(self):
+        _, classes = _generate("hierarchy")
+        assert {
+            _B + "Azienda",
+            _B + "Parte",
+            _B + "ContrattoDiFornitura",
+            _B + "Contratto",
+        } <= classes
+
+    def test_missing_scope_behaves_like_class_scope(self):
+        ontology = _issue_228_ontology("class")
+        ontology.pop("identity_scope")
+        ttl = R2RMLGenerator(_NB).generate_mapping(_issue_228_mapping(), ontology)
+        assert _NB + "Azienda/{id}" in ttl

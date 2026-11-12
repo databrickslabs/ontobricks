@@ -12,6 +12,7 @@ from typing import Any, Dict, Set
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.helpers import extract_local_name
 from back.core.logging import get_logger
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 
 logger = get_logger(__name__)
 
@@ -52,6 +53,19 @@ class TwinMapping:
             if name:
                 return name.replace(" ", "_")
         return "Entity"
+
+    @staticmethod
+    def _uri_segment(
+        class_label: str, class_uri: str, segment_map: Dict[str, str]
+    ) -> str:
+        """Instance-URI class segment; the hierarchy scope swaps in the root class."""
+        for ref in (extract_local_name(class_uri) if class_uri else "", class_label):
+            root = (
+                segment_map.get(InstanceIdentity.sanitize_segment(ref)) if ref else None
+            )
+            if root:
+                return root
+        return TwinMapping._safe_class_label(class_label, class_uri)
 
     # ------------------------------------------------------------------
     # SQL column extraction
@@ -278,9 +292,8 @@ class TwinMapping:
         all_dsm = (mapping_config or {}).get(
             "entities", (mapping_config or {}).get("data_source_mappings", [])
         )
-        excluded_class_uris = {
-            m.get("ontology_class") for m in all_dsm if m.get("excluded")
-        }
+        excluded_class_uris = {m.get("ontology_class") for m in all_dsm if m.get("excluded")}
+        segment_map = InstanceIdentity.segment_map(ontology_config)
 
         data_source_mappings = mapping_config.get(
             "entities", mapping_config.get("data_source_mappings", [])
@@ -304,7 +317,7 @@ class TwinMapping:
                 class_uri if class_uri.startswith("http") else f"{base_uri}{class_uri}"
             )
 
-            sanitized_label = TwinMapping._safe_class_label(class_label, class_uri)
+            sanitized_label = TwinMapping._uri_segment(class_label, class_uri, segment_map)
 
             if full_class_uri not in entity_mappings:
                 entity_mappings[full_class_uri] = {
@@ -426,9 +439,8 @@ class TwinMapping:
         all_dsm = (mapping_config or {}).get(
             "entities", (mapping_config or {}).get("data_source_mappings", [])
         )
-        excluded_entity_uris = {
-            m.get("ontology_class") for m in all_dsm if m.get("excluded")
-        }
+        excluded_entity_uris = {m.get("ontology_class") for m in all_dsm if m.get("excluded")}
+        segment_map = InstanceIdentity.segment_map(ontology_config)
         excluded_class_names = set()
         for c in ontology_config.get("classes", []):
             if c.get("uri") in excluded_entity_uris:
@@ -463,7 +475,7 @@ class TwinMapping:
                 class_uri if class_uri.startswith("http") else f"{base_uri}{class_uri}"
             )
 
-            sanitized_label = TwinMapping._safe_class_label(class_label, class_uri)
+            sanitized_label = TwinMapping._uri_segment(class_label, class_uri, segment_map)
             entity_info = {
                 "uri_base": f"{base_uri}{sanitized_label}/",
                 "id_column": id_column,
@@ -582,7 +594,7 @@ class TwinMapping:
                 or (entity_lookup.get(source_local) if source_local else None)
                 or (entity_lookup.get(source_local.lower()) if source_local else None)
                 or {
-                    "uri_base": f"{base_uri}{source_label.replace(' ', '_') if source_label else 'Entity'}/",
+                    "uri_base": f"{base_uri}{TwinMapping._uri_segment(source_label, source_class, segment_map)}/",
                     "id_column": source_column,
                 }
             )
@@ -598,7 +610,7 @@ class TwinMapping:
                 or (entity_lookup.get(target_local) if target_local else None)
                 or (entity_lookup.get(target_local.lower()) if target_local else None)
                 or {
-                    "uri_base": f"{base_uri}{target_label.replace(' ', '_') if target_label else 'Entity'}/",
+                    "uri_base": f"{base_uri}{TwinMapping._uri_segment(target_label, target_class, segment_map)}/",
                     "id_column": target_column,
                 }
             )
