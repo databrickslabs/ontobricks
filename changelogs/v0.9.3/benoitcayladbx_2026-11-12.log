@@ -1,0 +1,64 @@
+## Add opt-in hierarchy instance IRI scope (issue #228)
+
+Context: A parent class and a subclass mapped with the same business id produced
+two unlinked Knowledge Graph nodes, because instance URIs embed the mapped class
+name ({base}{Class}/{id}) and inherited relations (#43) stay on the declaring
+class URI. A new domain setting mints root-class URIs so both mappings land on one
+node carrying every type and relationship.
+
+Changes:
+
+1. src/back/core/w3c/r2rml/InstanceIdentity.py
+   New pure helper: scope normalization, root-class segment map, sibling collision detection.
+2. src/back/core/w3c/r2rml/__init__.py
+   Re-export InstanceIdentity.
+3. src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Entity and relationship templates use the root-class segment in hierarchy scope.
+4. src/back/objects/digitaltwin/query/TwinMapping.py
+   Fallback URI templates follow the same root-class segment.
+5. src/back/objects/domain/Domain.py
+   Save identity_scope on the ontology, reset generated R2RML, expose it to UI.
+6. src/back/objects/session/DomainSession.py
+   Export identity_scope with the ontology.
+7. src/back/objects/mapping/Mapping.py
+   Diagnostics warn when unrelated mapped classes share a root.
+8. src/front/templates/partials/domain/_domain_information.html, src/front/static/domain/js/domain.js,
+   src/front/static/global/js/navbar.js, src/front/static/domain/js/domain-information.js
+   Instance IRI scope selector, save payload and refresh.
+9. src/front/static/query/js/query-loaders.js, src/front/static/query/js/query-d3graph.js
+   Explorer keeps the most specific rdf:type of multi-typed nodes.
+10. docs/user-guide.md, docs/architecture.md, docs/advanced_features.md
+    Document the instance IRI scope.
+11. tests/units/mapping/test_instance_identity.py, tests/units/mapping/test_r2rml_generator.py,
+    tests/units/dtwin/test_v090_twin_mapping.py, tests/units/domain/test_domain_service.py,
+    tests/units/domain/test_domain_session.py, tests/units/mapping/test_mapping_service.py,
+    tests/units/front/test_identity_scope_ui.py
+    Unit coverage for root minting, persistence, diagnostics, and UI contracts.
+
+Modified files:
+- src/back/core/w3c/r2rml/InstanceIdentity.py
+- src/back/core/w3c/r2rml/__init__.py
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/objects/digitaltwin/query/TwinMapping.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/mapping/Mapping.py
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain.js
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain-information.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-d3graph.js
+- docs/user-guide.md
+- docs/architecture.md
+- docs/advanced_features.md
+- tests/units/mapping/test_instance_identity.py
+- tests/units/mapping/test_r2rml_generator.py
+- tests/units/dtwin/test_v090_twin_mapping.py
+- tests/units/domain/test_domain_service.py
+- tests/units/domain/test_domain_session.py
+- tests/units/mapping/test_mapping_service.py
+- tests/units/front/test_identity_scope_ui.py
+- changelogs/v0.9.3/benoitcayladbx_2026-11-12.log
+
+Tests: 9705 passed, 337 skipped, 8 deselected, 39 warnings in 58.91s

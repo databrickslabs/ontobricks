@@ -46,6 +46,7 @@ from back.core.helpers import (
     run_blocking,
 )
 from back.core.logging import get_logger
+from back.core.w3c.r2rml.InstanceIdentity import InstanceIdentity
 from back.core.mcp_tools import (
     MCP_CONTEXT_FEATURES,
     MCP_DOMAIN_TOOLS,
@@ -252,6 +253,7 @@ class Domain:
             "version": self._s.current_version,
             "base_uri": self._s.ontology.get("base_uri", ""),
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
+            "identity_scope": InstanceIdentity.normalize_scope(self._s.ontology.get("identity_scope")),
             "llm_endpoint": llm_endpoint,
             "llm_endpoint_kind": (
                 normalize_llm_endpoint_kind(
@@ -410,15 +412,11 @@ class Domain:
         self._s.info.update(
             {
                 "name": domain_name,
-                "description": data.get(
-                    "description", self._s.info.get("description", "")
-                ),
+                "description": data.get("description", self._s.info.get("description", "")),
                 "author": data.get("author", self._s.info.get("author", "")),
                 "llm_endpoint": llm_endpoint,
                 "llm_endpoint_kind": llm_endpoint_kind,
-                "mcp_enabled": data.get(
-                    "mcp_enabled", self._s.info.get("mcp_enabled", False)
-                ),
+                "mcp_enabled": data.get("mcp_enabled", self._s.info.get("mcp_enabled", False)),
                 "review_quorum": self._coerce_quorum(
                     data.get(
                         "review_quorum",
@@ -486,6 +484,8 @@ class Domain:
             domain_name, provided, auto=auto
         )
         self._s.ontology["base_uri_auto"] = auto
+        if InstanceIdentity.apply_scope(self._s.ontology, data):
+            self._s.set_r2rml("")
 
         # Update version separately
         if data.get("version"):
@@ -662,6 +662,7 @@ class Domain:
             "description": self._s.info.get("description", ""),
             "base_uri": self._s.ontology.get("base_uri", ""),
             "base_uri_auto": self._s.ontology.get("base_uri_auto", None),
+            "identity_scope": InstanceIdentity.normalize_scope(self._s.ontology.get("identity_scope")),
             "version": self._s.current_version,
             "author": self._s.info.get("author", ""),
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),

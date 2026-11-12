@@ -776,3 +776,50 @@ class TestDiagnoseRelationshipColumns:
             if c["check"] == "source_id_column"
         ][0]
         assert src["status"] == "error"
+
+
+class TestIdentityScopeDiagnostics:
+    _B = "http://t#"
+
+    def _ontology(self, scope):
+        return {
+            "identity_scope": scope,
+            "classes": [
+                {"name": "Contratto", "uri": self._B + "Contratto"},
+                {"name": "Fornitura", "uri": self._B + "Fornitura", "parent": "Contratto"},
+                {"name": "Servizi", "uri": self._B + "Servizi", "parent": "Contratto"},
+            ],
+            "properties": [],
+        }
+
+    def _entities(self):
+        return [
+            {
+                "ontology_class": self._B + n,
+                "ontology_class_label": n,
+                "sql_query": f"SELECT id FROM v_{n.lower()}",
+                "id_column": "id",
+            }
+            for n in ("Fornitura", "Servizi")
+        ]
+
+    def test_hierarchy_siblings_get_a_warning(self):
+        domain = _mock_domain(entities=self._entities(), ontology=self._ontology("hierarchy"))
+        result = Mapping(domain).run_diagnostics()
+        checks = [
+            c
+            for e in result["entities"]
+            for c in e["checks"]
+            if c["check"] == "identity_scope"
+        ]
+        assert len(checks) == 2
+        assert all(c["status"] == "warning" for c in checks)
+
+    def test_class_scope_has_no_identity_warning(self):
+        domain = _mock_domain(entities=self._entities(), ontology=self._ontology("class"))
+        result = Mapping(domain).run_diagnostics()
+        assert not any(
+            c["check"] == "identity_scope"
+            for e in result["entities"]
+            for c in e["checks"]
+        )

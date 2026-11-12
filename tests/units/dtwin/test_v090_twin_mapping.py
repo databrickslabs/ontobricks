@@ -454,3 +454,69 @@ class TestExecuteSparkQuery:
         with _spark(_client(), extract_exc=KeyError("x")):
             with pytest.raises(InfrastructureError, match="unexpected"):
                 await _execute()
+
+
+_HB = "http://test.org/onto#"
+_HNB = "http://test.org/onto/"
+
+
+def _hierarchy_ontology(scope):
+    return {
+        "identity_scope": scope,
+        "classes": [
+            {"name": "Parte", "uri": _HB + "Parte"},
+            {"name": "Azienda", "uri": _HB + "Azienda", "parent": "Parte"},
+            {"name": "Sede", "uri": _HB + "Sede"},
+        ],
+        "properties": [],
+    }
+
+
+def _hierarchy_mapping():
+    return {
+        "entities": [
+            {
+                "ontology_class": _HB + n,
+                "ontology_class_label": n,
+                "sql_query": f"SELECT id FROM v_{n.lower()}",
+                "id_column": "id",
+            }
+            for n in ("Parte", "Azienda", "Sede")
+        ],
+        "relationships": [
+            {
+                "property": _HB + "haSede",
+                "property_label": "haSede",
+                "sql_query": "SELECT company_id, site_id FROM v_sites",
+                "source_class": _HB + "Azienda",
+                "source_class_label": "Azienda",
+                "target_class": _HB + "Sede",
+                "target_class_label": "Sede",
+                "source_id_column": "company_id",
+                "target_id_column": "site_id",
+            },
+        ],
+    }
+
+
+class TestHierarchyIriScope:
+    def test_entity_template_uses_root_in_hierarchy_scope(self):
+        out = TwinMapping.augment_mappings_from_config(
+            {}, _hierarchy_mapping(), _HB, _hierarchy_ontology("hierarchy")
+        )
+        assert out[_HB + "Azienda"]["uri_template"] == _HNB + "Parte/{id}"
+
+    def test_relationship_templates_use_root_in_hierarchy_scope(self):
+        rels = TwinMapping.augment_relationships_from_config(
+            [], _hierarchy_mapping(), _HB, _hierarchy_ontology("hierarchy")
+        )
+        rel = next(r for r in rels if r["predicate"].endswith("haSede"))
+        assert rel["subject_template"] == _HNB + "Parte/{company_id}"
+        assert rel["object_template"] == _HNB + "Sede/{site_id}"
+
+    def test_class_scope_is_unchanged(self):
+        rels = TwinMapping.augment_relationships_from_config(
+            [], _hierarchy_mapping(), _HB, _hierarchy_ontology("class")
+        )
+        rel = next(r for r in rels if r["predicate"].endswith("haSede"))
+        assert rel["subject_template"] == _HNB + "Azienda/{company_id}"

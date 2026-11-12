@@ -810,6 +810,7 @@ function buildDomainInfoPayload() {
             if (backend !== 'databricks' && backend !== 'lakebase') return undefined;
             return cacheEl ? cacheEl.checked : true;
         })(),
+        identity_scope: (document.getElementById('domainIdentityScope') || {}).value || undefined,
         version: versionEl ? versionEl.value : undefined,
         mcp_policy: buildMcpPolicy(),
     };

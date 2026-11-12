@@ -531,3 +531,23 @@ class TestSaveDomainToUcLifecycleLock:
         result = Domain(domain).save_domain_to_uc(svc)
         assert result["success"] is True
         svc.write_version.assert_called_once()
+
+
+class TestIdentityScope:
+    def test_save_identity_scope_marks_r2rml_for_regeneration(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"identity_scope": "hierarchy"})
+        assert domain.ontology["identity_scope"] == "hierarchy"
+        domain.set_r2rml.assert_called_once_with("")
+
+    def test_default_identity_scope_on_legacy_domain_is_a_no_op(self):
+        domain = _mock_domain()
+        Domain(domain).save_domain_info({"identity_scope": "class"})
+        assert "identity_scope" not in domain.ontology
+        domain.set_r2rml.assert_not_called()
+
+    def test_domain_info_exposes_identity_scope(self):
+        domain = _mock_domain()
+        assert Domain(domain).get_domain_info()["info"]["identity_scope"] == "class"
+        domain.ontology["identity_scope"] = "hierarchy"
+        assert Domain(domain).get_domain_info()["info"]["identity_scope"] == "hierarchy"
