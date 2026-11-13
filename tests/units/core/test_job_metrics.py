@@ -23,7 +23,6 @@ from back.core.graph_analysis.JobMetrics import (
     distributions_query,
     interpolate_quantile,
     metric_series_query,
-    sample_metric_series,
     resolve_analytics_source,
     summary_query,
     top_nodes_query,
@@ -281,7 +280,6 @@ class TestReadBackSql:
         sql = metric_series_query("cat.sch.metrics", "pagerank")
         assert "pagerank AS score" in sql
         assert "ORDER BY pagerank DESC, node_uri ASC" in sql
-        assert "COUNT(*) OVER() AS total_count" not in sql
         assert "LIMIT " not in sql
         assert "OFFSET " not in sql
 
@@ -296,54 +294,33 @@ class TestReadBackSql:
         with pytest.raises(ValidationError, match="Unsupported graph metric"):
             metric_series_query("cat.sch.metrics", "drop table metrics")
 
-    def test_metric_series_returns_all_rows_through_threshold(self):
-        rows = [
-            {"node_uri": f"urn:{i}", "label": f"N{i}", "score": float(10 - i)}
-            for i in range(8)
+    def test_metric_series_returns_every_node_at_or_below_bucket_count(self):
+        rows = self._db().query(metric_series_query("metrics", "pagerank", buckets=10))
+        assert [r["node_rank"] for r in rows] == [1, 2, 3, 4, 5]
+        assert [r["node_uri"] for r in rows] == [f"{NS}{c}" for c in "ABCDE"]
+        assert {r["total_count"] for r in rows} == {5}
+
+    def test_metric_series_is_bounded_by_buckets_on_large_graphs(self):
+        nodes = [
+            {"node_uri": f"urn:{i:04d}", "pagerank": float(1000 - i)}
+            for i in range(1000)
         ]
-        sampled_rows, ranks, sampled = sample_metric_series(
-            rows, threshold=10, sample_size=4
+        rows = _OutputDB(nodes).query(
+            metric_series_query("metrics", "pagerank", buckets=50)
         )
-        assert sampled is False
-        assert sampled_rows == rows
-        assert ranks == [1, 2, 3, 4, 5, 6, 7, 8]
-
-    def test_metric_series_lttb_samples_exact_size_and_preserves_edges(self):
-        rows = [
-            {
-                "node_uri": f"urn:{i}",
-                "label": f"N{i}",
-                "score": float(((i * 17) % 97) / 97.0),
-            }
-            for i in range(6001)
-        ]
-        sampled_rows, ranks, sampled = sample_metric_series(rows)
-        assert sampled is True
-        assert len(sampled_rows) == 2000
-        assert len(ranks) == 2000
-        assert ranks[0] == 1
-        assert ranks[-1] == 6001
-        assert sampled_rows[0]["node_uri"] == "urn:0"
-        assert sampled_rows[-1]["node_uri"] == "urn:6000"
+        ranks = [r["node_rank"] for r in rows]
+        assert len(rows) <= 100
         assert ranks == sorted(ranks)
+        assert ranks[0] == 1 and ranks[-1] == 1000
+        assert rows[0]["node_uri"] == "urn:0000"
+        assert rows[-1]["node_uri"] == "urn:0999"
+        assert {r["total_count"] for r in rows} == {1000}
+        scores = [r["score"] for r in rows]
+        assert scores == sorted(scores, reverse=True)
 
-    def test_metric_series_lttb_is_deterministic_for_same_input(self):
-        rows = [
-            {
-                "node_uri": f"urn:{i}",
-                "label": f"N{i}",
-                "score": float((i % 37) / 37.0),
-            }
-            for i in range(7000)
-        ]
-        first_rows, first_ranks, first_sampled = sample_metric_series(rows)
-        second_rows, second_ranks, second_sampled = sample_metric_series(rows)
-        assert first_sampled is True
-        assert second_sampled is True
-        assert first_ranks == second_ranks
-        assert [r["node_uri"] for r in first_rows] == [
-            r["node_uri"] for r in second_rows
-        ]
+    def test_metric_series_bucket_arithmetic_is_widened_before_multiplying(self):
+        sql = metric_series_query("cat.sch.metrics", "degree", buckets=1000)
+        assert "AS BIGINT) * 1000" in sql
 
     def test_type_profiles_query_reads_the_rollup_table(self):
         db = _OutputDB(_sample_rows())

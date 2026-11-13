@@ -9,12 +9,10 @@ from back.core.graph_analysis.JobCommunities import (
 )
 from back.core.graph_analysis.JobMetrics import (
     JobMetrics,
+    METRIC_SERIES_BUCKETS,
     METRIC_SERIES_COLUMNS,
-    METRIC_SERIES_SAMPLE_SIZE,
-    METRIC_SERIES_SAMPLE_THRESHOLD,
     analytics_snapshot,
     metric_series_query,
-    sample_metric_series,
     validate_metric_series_column,
     resolve_analytics_source,
 )
@@ -119,13 +117,11 @@ __all__ = [
     "JobCommunities",
     "community_output_table",
     "JobMetrics",
+    "METRIC_SERIES_BUCKETS",
     "METRIC_SERIES_COLUMNS",
-    "METRIC_SERIES_SAMPLE_THRESHOLD",
-    "METRIC_SERIES_SAMPLE_SIZE",
     "LakeflowRunner",
     "analytics_snapshot",
     "metric_series_query",
-    "sample_metric_series",
     "validate_metric_series_column",
     "resolve_analytics_source",
     "analytics_job_configured",

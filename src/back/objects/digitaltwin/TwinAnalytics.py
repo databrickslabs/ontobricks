@@ -295,10 +295,9 @@ class TwinAnalytics:
         metric: str,
         settings: Any = None,
     ) -> Dict[str, Any]:
-        """Return one exhaustive node-series, sampled server-side if needed."""
+        """Return the ranked node-series, rank-bucketed on the warehouse."""
         from back.core.graph_analysis import (
             metric_series_query,
-            sample_metric_series,
             validate_metric_series_column,
         )
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
@@ -319,15 +318,14 @@ class TwinAnalytics:
         )
         sql = metric_series_query(output_table, metric_name)
         rows = builder.execute_query(sql) or []
-        sampled_rows, ranks, sampled = sample_metric_series(rows)
-        total = len(rows)
+        total = int(rows[0].get("total_count") or len(rows)) if rows else 0
         return {
             "total": total,
-            "sampled": sampled,
-            "ranks": ranks,
-            "uris": [str(row.get("node_uri") or "") for row in sampled_rows],
-            "labels": [str(row.get("label") or "") for row in sampled_rows],
-            "scores": [float(row.get("score", 0.0) or 0.0) for row in sampled_rows],
+            "sampled": len(rows) < total,
+            "ranks": [int(row.get("node_rank") or i + 1) for i, row in enumerate(rows)],
+            "uris": [str(row.get("node_uri") or "") for row in rows],
+            "labels": [str(row.get("label") or "") for row in rows],
+            "scores": [float(row.get("score", 0.0) or 0.0) for row in rows],
         }
 
     @staticmethod

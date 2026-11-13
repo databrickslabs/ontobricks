@@ -528,3 +528,50 @@ Modified files:
 - tests/units/front/test_domain_pages_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10395 passed, 323 skipped, 8 deselected in 49.54s
+
+================================================================================
+Analytics → Ranked chart: bucket the metric series on the warehouse (crash fix)
+================================================================================
+
+Context:
+Opening Analytics on a large domain crashed the deployed app (ontobricks-10x,
+2026-11-13 13:47Z): ``GET /dtwin/metrics/series`` pulled one row per scored
+node into the app process (``SELECT … ORDER BY`` + ``fetchall``) and only then
+LTTB-sampled it in Python, so memory and payload grew with the graph and the
+proxy returned 502 before the process died. The distribution histograms were
+already binned in SQL and are unchanged.
+
+Changes:
+
+1. src/back/core/graph_analysis/JobMetrics.py
+   ``metric_series_query`` now ranks nodes with ``ROW_NUMBER``, splits ranks
+   into ``METRIC_SERIES_BUCKETS`` (1,000) equal buckets and returns only each
+   bucket's first and last node with ``node_rank`` / ``total_count`` — at most
+   2,000 rows whatever the graph size. Rank is widened to BIGINT before the
+   bucket multiply (Spark INT overflow). Removed the Python LTTB
+   ``sample_metric_series`` and the ``METRIC_SERIES_SAMPLE_*`` constants.
+2. src/back/core/graph_analysis/__init__.py
+   Export ``METRIC_SERIES_BUCKETS``; drop the removed symbols.
+3. src/back/objects/digitaltwin/TwinAnalytics.py
+   ``load_graph_metric_series`` builds the payload from the bounded rows; total
+   comes from ``total_count`` and ``sampled`` is ``rows < total``. Response
+   contract unchanged for the front end.
+4. tests/units/core/test_job_metrics.py
+   Replace LTTB tests with SQLite-executed bucketing tests (whole series below
+   bucket count, bounded + edge-preserving above it, BIGINT widening).
+5. tests/units/api/test_dtwin_metric_series.py, tests/units/dtwin/test_v090_twin_analytics.py
+   Fakes carry ``node_rank`` / ``total_count``; new test for ``sampled``/total
+   when the warehouse returns fewer rows than nodes.
+6. docs/user-guide.md
+   Describe rank-bucketed series (≤ 2,000 points) instead of 5,000/2,000 LTTB.
+
+Modified files:
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- tests/units/core/test_job_metrics.py
+- tests/units/api/test_dtwin_metric_series.py
+- tests/units/dtwin/test_v090_twin_analytics.py
+- docs/user-guide.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/core/test_pattern_job_sql.py → 10396 passed, 323 skipped, 8 deselected in 53.04s (the ignored file is untracked pattern-detection WIP that fails at import, unrelated to this change)

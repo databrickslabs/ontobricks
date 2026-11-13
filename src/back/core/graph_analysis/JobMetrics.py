@@ -58,8 +58,10 @@ UNAVAILABLE_METRICS = ("betweenness", "closeness")
 METRIC_SERIES_COLUMNS = frozenset(
     {"pagerank", "betweenness", "degree", "closeness", "clustering"}
 )
-METRIC_SERIES_SAMPLE_THRESHOLD = 5_000
-METRIC_SERIES_SAMPLE_SIZE = 2_000
+#: Rank buckets for the ranked chart. The warehouse keeps the first and last
+#: node of each bucket, so the app never receives more than twice this many
+#: rows, whatever the graph size.
+METRIC_SERIES_BUCKETS = 1_000
 
 
 # ---------------------------------------------------------------------------
@@ -185,82 +187,46 @@ def validate_metric_series_column(metric: str) -> str:
     return metric_name
 
 
-def metric_series_query(output_table: str, metric: str) -> str:
-    """One exhaustive series query for a validated metric column."""
-    metric_name = validate_metric_series_column(metric)
-    return (
-        "SELECT node_uri, label, "
-        f"{metric_name} AS score\n"
-        f"FROM {output_table}\n"
-        f"ORDER BY {metric_name} DESC, node_uri ASC"
-    )
+def metric_series_query(
+    output_table: str, metric: str, buckets: int = METRIC_SERIES_BUCKETS
+) -> str:
+    """Rank-bucketed series for a validated metric column.
 
+    Ranks every node on the warehouse, splits the ranks into *buckets* equal
+    slices, and returns only the first and last node of each slice. The series
+    is sorted, so those two rows bound every value in between and the chart's
+    shape is kept with at most ``2 * buckets`` rows. A graph with no more nodes
+    than *buckets* comes back whole.
 
-def sample_metric_series(
-    rows: List[Dict[str, Any]],
-    *,
-    threshold: int = METRIC_SERIES_SAMPLE_THRESHOLD,
-    sample_size: int = METRIC_SERIES_SAMPLE_SIZE,
-) -> Tuple[List[Dict[str, Any]], List[int], bool]:
-    """Return sampled rows and their original one-based ranks.
-
-    Uses pure LTTB above *threshold*. For *threshold* or fewer rows, returns
-    the full input with identity ranks.
+    Each row carries ``node_rank`` (1-based) and ``total_count``. The rank is
+    widened to ``BIGINT`` before multiplying: ``ROW_NUMBER`` is a 32-bit
+    ``INT`` on Spark and ``rank * buckets`` overflows it past ~2M nodes.
     """
-    total = len(rows)
-    if total <= max(1, int(threshold)):
-        return list(rows), [i + 1 for i in range(total)], False
-
-    target = min(total, max(3, int(sample_size)))
-    if target >= total:
-        return list(rows), [i + 1 for i in range(total)], False
-
-    def _score(index: int) -> float:
-        try:
-            return float(rows[index].get("score", 0.0) or 0.0)
-        except (TypeError, ValueError):
-            return 0.0
-
-    bucket_width = float(total - 2) / float(target - 2)
-    sampled_indexes: List[int] = [0]
-    a = 0
-
-    for bucket in range(target - 2):
-        avg_start = int((bucket + 1) * bucket_width) + 1
-        avg_end = int((bucket + 2) * bucket_width) + 1
-        avg_start = min(max(1, avg_start), total - 1)
-        avg_end = min(max(avg_start + 1, avg_end), total)
-
-        avg_count = max(1, avg_end - avg_start)
-        avg_x = 0.0
-        avg_y = 0.0
-        for idx in range(avg_start, avg_end):
-            avg_x += float(idx)
-            avg_y += _score(idx)
-        avg_x /= float(avg_count)
-        avg_y /= float(avg_count)
-
-        range_start = int(bucket * bucket_width) + 1
-        range_end = int((bucket + 1) * bucket_width) + 1
-        range_start = min(max(1, range_start), total - 1)
-        range_end = min(max(range_start + 1, range_end), total - 1)
-
-        ax = float(a)
-        ay = _score(a)
-        max_area = -1.0
-        best = range_start
-        for idx in range(range_start, range_end):
-            area = abs((ax - avg_x) * (_score(idx) - ay) - (ax - float(idx)) * (avg_y - ay))
-            if area > max_area:
-                max_area = area
-                best = idx
-        sampled_indexes.append(best)
-        a = best
-
-    sampled_indexes.append(total - 1)
-    sampled_rows = [rows[idx] for idx in sampled_indexes]
-    ranks = [idx + 1 for idx in sampled_indexes]
-    return sampled_rows, ranks, True
+    metric_name = validate_metric_series_column(metric)
+    n = max(1, int(buckets))
+    return (
+        "WITH ranked AS (\n"
+        f"  SELECT node_uri, label, {metric_name} AS score,\n"
+        f"         ROW_NUMBER() OVER (ORDER BY {metric_name} DESC, node_uri ASC)"
+        " AS node_rank,\n"
+        "         COUNT(*) OVER () AS total_count\n"
+        f"  FROM {output_table}\n"
+        "), bucketed AS (\n"
+        "  SELECT node_uri, label, score, node_rank, total_count,\n"
+        f"         CAST(CAST(node_rank - 1 AS BIGINT) * {n} / total_count"
+        " AS BIGINT) AS bucket\n"
+        "  FROM ranked\n"
+        "), bounded AS (\n"
+        "  SELECT node_uri, label, score, node_rank, total_count,\n"
+        "         MIN(node_rank) OVER (PARTITION BY bucket) AS bucket_first,\n"
+        "         MAX(node_rank) OVER (PARTITION BY bucket) AS bucket_last\n"
+        "  FROM bucketed\n"
+        ")\n"
+        "SELECT node_uri, label, score, node_rank, total_count\n"
+        "FROM bounded\n"
+        "WHERE node_rank = bucket_first OR node_rank = bucket_last\n"
+        "ORDER BY node_rank"
+    )
 
 
 def type_profiles_query(output_table: str) -> str:

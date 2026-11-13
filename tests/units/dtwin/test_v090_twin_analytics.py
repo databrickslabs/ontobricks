@@ -215,8 +215,10 @@ class TestMetricSeries:
     def test_series_is_read_through_the_build_warehouse(self):
         client = MagicMock()
         client.execute_query.return_value = [
-            {"node_uri": "u1", "label": "A", "score": 0.9},
-            {"node_uri": None, "label": None, "score": None},
+            {"node_uri": "u1", "label": "A", "score": 0.9,
+             "node_rank": 1, "total_count": 2},
+            {"node_uri": None, "label": None, "score": None,
+             "node_rank": 2, "total_count": 2},
         ]
         with _job_wiring(client) as (create, _r, _j):
             out = TwinAnalytics(_domain()).load_graph_metric_series(
