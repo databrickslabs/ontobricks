@@ -25,7 +25,11 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-JOB_YML = REPO_ROOT / "resources/graph_analytics.job.yml"
+#: (resource file, job key) for every job the bundle declares.
+JOBS = (
+    ("resources/graph_analytics.job.yml", "graph_analytics_job"),
+    ("resources/community_detection.job.yml", "community_detection_job"),
+)
 
 
 class TestAllBundleResourcesParse:
@@ -42,9 +46,10 @@ class TestAllBundleResourcesParse:
         yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
 
 
-@pytest.fixture(scope="module")
-def job() -> dict:
-    return yaml.safe_load(JOB_YML.read_text())["resources"]["jobs"]["graph_analytics_job"]
+@pytest.fixture(scope="module", params=JOBS, ids=lambda j: j[1])
+def job(request) -> dict:
+    path, key = request.param
+    return yaml.safe_load((REPO_ROOT / path).read_text())["resources"]["jobs"][key]
 
 
 @pytest.fixture(scope="module")
@@ -112,13 +117,16 @@ class TestFlagsMatchTheJobCli:
         sys.modules["_gaj_under_test"] = module
         try:
             spec.loader.exec_module(module)
-            argv = [
-                p if p.startswith("--") else (p.replace("{{job.parameters.", "").replace("}}", ""))
-                for p in task_parameters
-            ]
-            # Substitute plausible values for the two numeric flags.
+            # Parameter references take their declared default (or a placeholder);
+            # literal values such as ``--task communities`` pass through.
             defaults = {p["name"]: p.get("default", "") for p in job["parameters"]}
-            argv = [p if p.startswith("--") else defaults.get(p, "x") or "x" for p in argv]
+            argv = []
+            for p in task_parameters:
+                if p.startswith("{{job.parameters."):
+                    name = p.removeprefix("{{job.parameters.").removesuffix("}}")
+                    argv.append(defaults.get(name, "x") or "x")
+                else:
+                    argv.append(p)
             ns = module.parse_args(argv)
             assert ns.source_table and ns.output_table
         finally:
@@ -237,6 +245,9 @@ class TestAnalyticsJobPermissionBootstrap:
         assert "CAN_MANAGE_RUN" in bootstrap_script
         assert "permissions update jobs" in bootstrap_script
         assert "graph-analytics" in bootstrap_script
+
+    def test_bootstrap_grants_can_manage_run_on_the_community_job(self, bootstrap_script):
+        assert "community-detection" in bootstrap_script
 
     def test_bootstrap_resolves_dev_mode_prefixed_job_names(self, bootstrap_script):
         # DAB development mode prefixes the name with '[dev <user>] '.

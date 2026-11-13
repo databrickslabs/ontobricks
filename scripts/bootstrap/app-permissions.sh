@@ -232,8 +232,9 @@ fi
 # not the env default — ``./app-permissions.sh ontobricks-07x …`` must grant
 # on ``ontobricks-07x-graph-analytics``, not the hard-coded sandbox default.
 _MAIN_APP="${FIRST_APP:-${APP_FOR_CAN_USE:-${APP_NAME}}}"
-_JOB_NAME="${_MAIN_APP}-graph-analytics"
-_JOB_ID="$(databricks jobs list -o json 2>/dev/null | python3 -c "
+# The community-detection job (``…-community-detection``) needs the same grant.
+for _JOB_NAME in "${_MAIN_APP}-graph-analytics" "${_MAIN_APP}-community-detection"; do
+    _JOB_ID="$(databricks jobs list -o json 2>/dev/null | python3 -c "
 import sys, json
 name = sys.argv[1]
 try:
@@ -254,31 +255,32 @@ if match:
     print(match[0].get('job_id', ''))
 " "$_JOB_NAME" 2>/dev/null || true)"
 
-if [[ -n "$_JOB_ID" ]]; then
-    echo
-    echo "=== Graph analytics job CAN_MANAGE_RUN: ${_JOB_NAME} (${_JOB_ID}) ==="
-    _JOB_SP_COUNT=0
-    for sp in "${APP_SP_ID:-}" "${MCP_SP_ID:-}"; do
-        [[ -z "$sp" ]] && continue
-        _JOB_SP_COUNT=$((_JOB_SP_COUNT + 1))
-        if databricks permissions update jobs "$_JOB_ID" \
-            --json "{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_MANAGE_RUN\"}]}" \
-            >/dev/null 2>&1; then
-            echo "  ✓ CAN_MANAGE_RUN on ${_JOB_NAME} → $sp"
-        else
-            echo "  ✗ job grant failed for $sp — run manually:"
-            echo "    databricks permissions update jobs ${_JOB_ID} \\"
-            echo "      --json '{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_MANAGE_RUN\"}]}'"
+    if [[ -n "$_JOB_ID" ]]; then
+        echo
+        echo "=== Analytics job CAN_MANAGE_RUN: ${_JOB_NAME} (${_JOB_ID}) ==="
+        _JOB_SP_COUNT=0
+        for sp in "${APP_SP_ID:-}" "${MCP_SP_ID:-}"; do
+            [[ -z "$sp" ]] && continue
+            _JOB_SP_COUNT=$((_JOB_SP_COUNT + 1))
+            if databricks permissions update jobs "$_JOB_ID" \
+                --json "{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_MANAGE_RUN\"}]}" \
+                >/dev/null 2>&1; then
+                echo "  ✓ CAN_MANAGE_RUN on ${_JOB_NAME} → $sp"
+            else
+                echo "  ✗ job grant failed for $sp — run manually:"
+                echo "    databricks permissions update jobs ${_JOB_ID} \\"
+                echo "      --json '{\"access_control_list\":[{\"service_principal_name\":\"${sp}\",\"permission_level\":\"CAN_MANAGE_RUN\"}]}'"
+                FAILED=$((FAILED + 1))
+            fi
+        done
+        if [[ $_JOB_SP_COUNT -eq 0 ]]; then
+            echo "  ✗ no app service principals resolved — cannot grant CAN_MANAGE_RUN on ${_JOB_NAME}"
             FAILED=$((FAILED + 1))
         fi
-    done
-    if [[ $_JOB_SP_COUNT -eq 0 ]]; then
-        echo "  ✗ no app service principals resolved — cannot grant CAN_MANAGE_RUN on ${_JOB_NAME}"
-        FAILED=$((FAILED + 1))
+    else
+        echo "  [analytics job] SKIP — '${_JOB_NAME}' not found (deploy the bundle first)"
     fi
-else
-    echo "  [analytics job] SKIP — '${_JOB_NAME}' not found (deploy the bundle first)"
-fi
+done
 
 # ── UC schema ALL_PRIVILEGES for both SPs ────────────────────────────────────
 # The SP must be able to CREATE OR REPLACE views/tables in the registry schema

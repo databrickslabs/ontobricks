@@ -438,36 +438,63 @@ var SigmaGraph = (function () {
         });
     }
 
-    function _applyMaterializedClusterPayload(data) {
-        var clusters = (data && data.clusters) || [];
-        if (!clusters.length) {
-            _clusterAssignments = null;
-            _clusterCount = 0;
-            _populateClustersPanel();
+    // Materialized partitions can span millions of entities: the summary
+    // comes from /dtwin/clusters/current, and memberships are looked up only
+    // for the nodes actually drawn.
+    var ASSIGNMENTS_BATCH = 5000;
+    var _assignmentsAsked = {};
+
+    function _fetchClusterAssignments() {
+        if (!_graph || !_clusterCount) return;
+        var pending = [];
+        _graph.forEachNode(function (node, attrs) {
+            if (attrs._isGroup || attrs._isClusterNode || _assignmentsAsked[node]) return;
+            _assignmentsAsked[node] = true;
+            pending.push(node);
+        });
+        if (!pending.length) {
+            _applyClusterAssignmentsToGraph();
             return;
         }
-        _clusterAssignments = {};
-        clusters.forEach(function (cl) {
-            (cl.members || []).forEach(function (uri) {
-                _clusterAssignments[uri] = cl.id;
+        var batches = [];
+        for (var i = 0; i < pending.length; i += ASSIGNMENTS_BATCH) {
+            batches.push(pending.slice(i, i + ASSIGNMENTS_BATCH));
+        }
+        Promise.all(batches.map(function (uris) {
+            return fetch('/dtwin/clusters/assignments', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uris: uris })
+            }).then(function (resp) { return resp.json(); });
+        })).then(function (results) {
+            results.forEach(function (data) {
+                var found = (data && data.assignments) || {};
+                for (var uri in found) _clusterAssignments[uri] = found[uri];
             });
+            _applyClusterAssignmentsToGraph();
+            _populateClustersPanel();
+            if (_renderer) _renderer.refresh();
+        }).catch(function (err) {
+            console.warn('[SigmaGraph] Could not load cluster assignments:', err);
         });
-        _clusterCount = clusters.length;
-        _applyClusterAssignmentsToGraph();
-        _populateClustersPanel();
     }
 
     function _ensureMaterializedClusters() {
         if (_clustersHydrated) {
-            _applyClusterAssignmentsToGraph();
+            _fetchClusterAssignments();
             return;
         }
         _clustersHydrated = true;
-        fetch('/dtwin/clusters/current', { credentials: 'same-origin' })
+        fetch('/dtwin/clusters/current?top=1', { credentials: 'same-origin' })
             .then(function (resp) { return resp.json(); })
             .then(function (data) {
-                _applyMaterializedClusterPayload(data);
-                if (_renderer) _renderer.refresh();
+                var stats = (data && data.stats) || {};
+                _clusterCount = ((data && data.clusters) || []).length ? (stats.cluster_count || 0) : 0;
+                _clusterAssignments = _clusterCount ? {} : null;
+                _assignmentsAsked = {};
+                _populateClustersPanel();
+                _fetchClusterAssignments();
             })
             .catch(function (err) {
                 console.warn('[SigmaGraph] Could not load materialized clusters:', err);
@@ -506,7 +533,11 @@ var SigmaGraph = (function () {
         }
 
         var countEl = document.getElementById('sgClusterCount');
-        if (countEl) countEl.textContent = stats.length + ' clusters found';
+        if (countEl) {
+            countEl.textContent = _clusterCount > stats.length
+                ? stats.length + ' of ' + _clusterCount.toLocaleString() + ' clusters in view'
+                : stats.length + ' clusters found';
+        }
 
         var html = '';
         stats.forEach(function (cl) {

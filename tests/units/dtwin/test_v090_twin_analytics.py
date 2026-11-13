@@ -36,36 +36,89 @@ def _settings(**over):
 
 
 class TestDetectClusters:
-    def test_detector_result_is_serialised_to_the_api_contract(self):
-        cluster = SimpleNamespace(id=0, members=["a", "b"], size=2)
-        stats = SimpleNamespace(node_count=2, edge_count=1, cluster_count=1,
-                                modularity=0.4, algorithm="louvain", elapsed_ms=3)
-        detector = MagicMock()
-        detector.detect.return_value = SimpleNamespace(clusters=[cluster], stats=stats)
+    def test_unreadable_domain_raises_with_reason(self):
         with patch(
-            "back.core.graph_analysis.CommunityDetector", return_value=detector
-        ) as cls:
+            "back.core.graph_analysis.resolve_analytics_source",
+            return_value=("", "no snapshot"),
+        ):
+            with pytest.raises(InfrastructureError) as exc:
+                TwinAnalytics(_domain()).detect_clusters("g", settings=None)
+        assert exc.value.detail == "no snapshot"
+
+    def test_job_runs_on_the_snapshot_table(self):
+        @contextmanager
+        def _snapshot(domain, settings, source):
+            assert source == "c.s.v_data"
+            yield "c.s.tmp_snapshot"
+
+        communities = MagicMock()
+        communities.run.return_value = {"cluster_count": 3}
+        progress = MagicMock()
+        with patch(
+            "back.core.graph_analysis.resolve_analytics_source",
+            return_value=("c.s.v_data", ""),
+        ), patch("back.core.graph_analysis.analytics_snapshot", _snapshot), patch.object(
+            TwinAnalytics, "build_job_communities", return_value=communities
+        ) as build:
             out = TwinAnalytics(_domain()).detect_clusters(
-                "store", "g", algorithm="label_propagation", resolution=0.5,
-                predicate_filter=["p"], class_filter=["C"], max_triples=10,
+                "g", class_filter=["C"], predicate_filter=["p"], settings="s",
+                on_progress=progress,
             )
 
-        cls.assert_called_once_with("store", "g")
-        req = detector.detect.call_args.args[0]
-        assert (req.algorithm, req.resolution, req.max_triples) == ("label_propagation", 0.5, 10)
-        assert out == {
-            "clusters": [{"id": 0, "members": ["a", "b"], "size": 2}],
-            "stats": {"node_count": 2, "edge_count": 1, "cluster_count": 1,
-                      "modularity": 0.4, "algorithm": "louvain", "elapsed_ms": 3},
-            "graph": {
-                "nodes": [],
-                "edges": [],
-                "capped": False,
-                "node_total": 0,
-                "edge_total": 0,
-            },
-            "entity_meta": {},
+        assert out == {"cluster_count": 3}
+        assert build.call_args.args[2:] == ("g", "c.s.tmp_snapshot")
+        assert communities.run.call_args.kwargs == {
+            "class_filter": ["C"], "exclude_predicates": ["p"], "on_progress": progress,
         }
+
+
+class TestBuildJobCommunities:
+    def test_reads_through_the_build_warehouse(self):
+        client = MagicMock()
+        with patch(
+            "back.core.graphdb.delta.Base.create_databricks_client",
+            MagicMock(return_value=client),
+        ), patch("back.core.graph_analysis.LakeflowRunner") as runner, patch(
+            "back.core.graph_analysis.JobCommunities"
+        ) as job, patch(
+            "back.core.helpers.resolve_community_job_name", return_value="ob-community"
+        ), patch(
+            "back.objects.registry.RegistryCfg.RegistryCfg.from_domain",
+            return_value=SimpleNamespace(catalog="reg_cat", schema="reg_sch"),
+        ):
+            TwinAnalytics.build_job_communities(_domain(), _settings(), "g", "c.s.v_data")
+
+        runner.assert_called_once_with(
+            "ob-community", timeout_s=3600, running_label="Detecting communities on Databricks"
+        )
+        args, kwargs = job.call_args
+        assert args == ("c.s.v_data",)
+        kwargs["query"]("SELECT 1")
+        client.execute_query.assert_called_once_with("SELECT 1")
+        assert kwargs["output_table"] == "reg_cat.reg_sch.graph_communities_sales_domain_4"
+
+
+class TestMaterializeClusters:
+    def test_without_a_run_asks_for_detect_first(self):
+        from back.core.errors import ValidationError
+
+        communities = MagicMock()
+        communities.summary.return_value = None
+        with patch.object(TwinAnalytics, "build_job_communities", return_value=communities):
+            with pytest.raises(ValidationError, match="Run Detect first"):
+                TwinAnalytics(_domain()).materialize_clusters("store", "g")
+
+    def test_writes_the_last_run(self):
+        communities = MagicMock()
+        communities.summary.return_value = {"cluster_count": 2}
+        mat = MagicMock()
+        mat.materialize.return_value = 13
+        with patch.object(
+            TwinAnalytics, "build_job_communities", return_value=communities
+        ), patch("back.core.graph_analysis.CommunityMaterializer", return_value=mat):
+            out = TwinAnalytics(_domain()).materialize_clusters("store", "g")
+        assert out == {"inserted": 13, "cluster_count": 2}
+        assert mat.materialize.call_args.args == (communities, {"cluster_count": 2})
 
 
 class TestComputeGraphMetrics:
@@ -285,3 +338,30 @@ class TestDtwinIndicator:
     def test_built_with_both_missing_lists_both(self):
         out = self._ind({"has_data": False}, {"view_exists": False}, "2026")
         assert out["title"] == "Knowledge Graph incomplete — view missing, graph not loaded"
+
+
+class TestCommunityTasks:
+    def test_detect_task_completes_with_counts(self):
+        from back.objects.digitaltwin.TwinBackgroundTasks import TwinBackgroundTasks
+
+        tm = MagicMock()
+        with patch.object(
+            TwinAnalytics, "detect_clusters",
+            return_value={"cluster_count": 4, "node_count": 90, "run_page_url": "u"},
+        ):
+            TwinBackgroundTasks.run_community_task(tm, "t", _domain(), _settings(), "g")
+        kwargs = tm.complete_task.call_args.kwargs
+        assert kwargs["result"]["cluster_count"] == 4
+        assert kwargs["result"]["run_page_url"] == "u"
+        tm.fail_task.assert_not_called()
+
+    def test_detect_task_failure_keeps_the_job_detail(self):
+        from back.objects.digitaltwin.TwinBackgroundTasks import TwinBackgroundTasks
+
+        tm = MagicMock()
+        boom = InfrastructureError("Community detection job failed", detail="run https://x/run/1")
+        with patch.object(TwinAnalytics, "detect_clusters", side_effect=boom):
+            TwinBackgroundTasks.run_community_task(tm, "t", _domain(), _settings(), "g")
+        assert tm.fail_task.call_args.args == (
+            "t", "Community detection job failed: run https://x/run/1",
+        )

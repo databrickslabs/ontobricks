@@ -109,17 +109,6 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Knowledge-graph analytics: the maximum number of triples the cluster
-    # detection endpoint will load into memory. Raise with care: the full
-    # triple set is held in memory during community detection.
-    analytics_max_triples: int = Field(
-        default=500_000,
-        validation_alias=AliasChoices(
-            "ONTOBRICKS_ANALYTICS_MAX_TRIPLES",
-            "analytics_max_triples",
-        ),
-    )
-
     # How many top-ranked nodes per metric the job path returns. The
     # Analytics page "Top N" selector is capped well below this, so the
     # returned set is always a superset of what the UI can chart while keeping
@@ -160,6 +149,17 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices(
             "ONTOBRICKS_ANALYTICS_JOB_NAME",
             "analytics_job_name",
+        ),
+    )
+
+    # Deployed name of the community-detection job. Empty means "derive it
+    # from the app name" as ``<app>-community-detection``, matching the bundle
+    # (``resources/community_detection.job.yml``).
+    community_job_name: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_COMMUNITY_JOB_NAME",
+            "community_job_name",
         ),
     )
 

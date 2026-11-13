@@ -132,10 +132,6 @@ env:
   # spelled out here so an admin can retune a deployed app without a code
   # change; edit the value, then re-run `make deploy`.
   #
-  # In-memory triple cap for community detection (POST /clusters/detect).
-  # Graph analytics does not read this — it always runs in the job.
-  - name: ONTOBRICKS_ANALYTICS_MAX_TRIPLES
-    value: "500000"
   # Top-ranked nodes per metric returned by the job.
   # This is what keeps the persisted payload bounded on a graph of any
   # size; the Analytics page "Top N" selector is capped well below it.
@@ -165,6 +161,11 @@ env:
   # renamed the job; a bundle deployed in development mode prefixes the
   # name with "[dev <user>] ", which the lookup already allows for.
   - name: ONTOBRICKS_ANALYTICS_JOB_NAME
+    value: ""
+  # Deployed name of the community-detection job (Intelligence -> Community).
+  # Leave empty to derive "<app>-community-detection", matching the bundle.
+  # Gated by the same ONTOBRICKS_ANALYTICS_JOB_ENABLED toggle.
+  - name: ONTOBRICKS_COMMUNITY_JOB_NAME
     value: ""
   # PageRank power iterations. 20 fixes the top-N ordering; raise it only
   # if you need converged absolute scores rather than a ranking.

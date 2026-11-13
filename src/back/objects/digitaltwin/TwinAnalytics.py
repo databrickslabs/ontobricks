@@ -27,56 +27,109 @@ class TwinAnalytics:
     # Community detection
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def analytics_output_schema(domain: Any, settings: Any) -> str:
+        """``catalog.schema`` holding the analytics jobs' output tables."""
+        from back.objects.registry import RegistryCfg
+
+        schema = (getattr(settings, "analytics_job_output_schema", "") or "").strip()
+        if schema:
+            return schema
+        rcfg = RegistryCfg.from_domain(domain, settings)
+        return f"{rcfg.catalog}.{rcfg.schema}"
+
+    @staticmethod
+    def build_job_communities(
+        domain: Any, settings: Any, graph_name: str, source_table: str = ""
+    ) -> Any:
+        """Wire a :class:`JobCommunities` on the Build warehouse.
+
+        *source_table* is only needed to start a run; reading a previous run's
+        output does not touch the source.
+        """
+        from back.core.graph_analysis import (
+            JobCommunities,
+            LakeflowRunner,
+            community_output_table,
+        )
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.helpers import resolve_community_job_name
+
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        if not builder.has_client():
+            raise InfrastructureError(
+                "The community detection output cannot be read",
+                detail="No Build SQL Warehouse client could be created",
+            )
+        runner = LakeflowRunner(
+            resolve_community_job_name(settings),
+            timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
+            running_label="Detecting communities on Databricks",
+        )
+        return JobCommunities(
+            source_table,
+            runner=runner,
+            query=builder.execute_query,
+            output_table=community_output_table(
+                TwinAnalytics.analytics_output_schema(domain, settings),
+                domain,
+                graph_name,
+            ),
+        )
+
     def detect_clusters(
         self,
-        store: Any,
         graph_name: str,
-        algorithm: str = "louvain",
-        resolution: float = 1.0,
-        predicate_filter: Optional[List[str]] = None,
+        *,
         class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
+        predicate_filter: Optional[List[str]] = None,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Run community detection on the full knowledge graph.
+        """Run the community job on the mapped snapshot; blocks until done.
 
-        Delegates to :class:`CommunityDetector` from ``back.core.graph_analysis``.
-        Returns a JSON-serializable dict matching the API contract.
+        Called from a background task. Returns the run summary; the partition
+        itself stays in the job's output tables (see :meth:`latest_clusters`).
         """
-        from back.core.graph_analysis import CommunityDetector, ClusterRequest
+        from back.core.graph_analysis import analytics_snapshot, resolve_analytics_source
 
-        request = ClusterRequest(
-            algorithm=algorithm,
-            resolution=resolution,
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
+        source_table, reason = resolve_analytics_source(self._domain, settings)
+        if not source_table:
+            raise InfrastructureError(
+                "The community detection job cannot read this domain", detail=reason
+            )
+        with analytics_snapshot(self._domain, settings, source_table) as scan_table:
+            communities = self.build_job_communities(
+                self._domain, settings, graph_name, scan_table
+            )
+            return communities.run(
+                class_filter=class_filter,
+                exclude_predicates=predicate_filter,
+                on_progress=on_progress,
+            )
+
+    def latest_clusters(
+        self, graph_name: str, settings: Any = None, top_n: int = 50
+    ) -> Dict[str, Any]:
+        """Summary, top-N clusters and preview of the last detection run."""
+        return self.build_job_communities(self._domain, settings, graph_name).latest(top_n)
+
+    def detection_summary(self, graph_name: str, settings: Any = None) -> Optional[Dict[str, Any]]:
+        """Stats of the last detection run, or ``None`` when there is none."""
+        return self.build_job_communities(self._domain, settings, graph_name).summary()
+
+    def cluster_members(
+        self,
+        graph_name: str,
+        cluster_id: int,
+        offset: int = 0,
+        limit: int = 100,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        """One page of a cluster from the last detection run."""
+        return self.build_job_communities(self._domain, settings, graph_name).members(
+            cluster_id, offset, limit
         )
-        detector = CommunityDetector(store, graph_name)
-        result = detector.detect(request)
-
-        graph = getattr(result, "preview", None) or {
-            "nodes": [],
-            "edges": [],
-            "capped": False,
-            "node_total": 0,
-            "edge_total": 0,
-        }
-        return {
-            "clusters": [
-                {"id": c.id, "members": c.members, "size": c.size}
-                for c in result.clusters
-            ],
-            "stats": {
-                "node_count": result.stats.node_count,
-                "edge_count": result.stats.edge_count,
-                "cluster_count": result.stats.cluster_count,
-                "modularity": result.stats.modularity,
-                "algorithm": result.stats.algorithm,
-                "elapsed_ms": result.stats.elapsed_ms,
-            },
-            "graph": graph,
-            "entity_meta": getattr(result, "entity_meta", None) or {},
-        }
 
     def _base_uri(self) -> str:
         from shared.config.constants import DEFAULT_BASE_URI
@@ -95,20 +148,38 @@ class TwinAnalytics:
         self,
         store: Any,
         graph_name: str,
-        clusters: List[Dict[str, Any]],
-        stats: Optional[Dict[str, Any]] = None,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
     ) -> Dict[str, Any]:
-        """Replace the graph partition with *clusters* (preview payload)."""
+        """Replace the graph partition with the last detection run."""
+        from back.core.errors import ValidationError
+
+        communities = self.build_job_communities(self._domain, settings, graph_name)
+        stats = communities.summary()
+        if not stats:
+            raise ValidationError("No community detection run to materialize. Run Detect first.")
         inserted = self._materializer(store, graph_name).materialize(
-            clusters, stats
+            communities, stats, on_progress=on_progress
         )
-        return {"inserted": inserted, "cluster_count": len(clusters or [])}
+        return {"inserted": inserted, "cluster_count": stats["cluster_count"]}
 
     def load_current_clusters(
-        self, store: Any, graph_name: str
+        self, store: Any, graph_name: str, limit: int = 50
     ) -> Dict[str, Any]:
-        """Read the materialized partition, or empty clusters."""
-        return self._materializer(store, graph_name).load_current()
+        """Top-N materialized clusters and totals, or empty clusters."""
+        return self._materializer(store, graph_name).load_current(limit)
+
+    def materialized_members(
+        self, store: Any, graph_name: str, cluster_id: int, offset: int = 0, limit: int = 100
+    ) -> Dict[str, Any]:
+        """One page of a materialized cluster's members."""
+        return self._materializer(store, graph_name).members(cluster_id, offset, limit)
+
+    def cluster_assignments(
+        self, store: Any, graph_name: str, uris: List[str]
+    ) -> Dict[str, int]:
+        """Materialized cluster id for each of *uris* that has one."""
+        return self._materializer(store, graph_name).assignments(uris)
 
     def clear_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
         """Drop the materialized partition."""
@@ -186,7 +257,6 @@ class TwinAnalytics:
         from back.core.graph_analysis import JobMetrics, LakeflowRunner
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.helpers import resolve_analytics_job_name
-        from back.objects.registry import RegistryCfg
 
         builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
         if not builder.has_client():
@@ -202,12 +272,7 @@ class TwinAnalytics:
             timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
         )
 
-        output_schema = (
-            getattr(settings, "analytics_job_output_schema", "") or ""
-        ).strip()
-        if not output_schema:
-            rcfg = RegistryCfg.from_domain(domain, settings)
-            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+        output_schema = TwinAnalytics.analytics_output_schema(domain, settings)
 
         return JobMetrics(
             source_table,
@@ -237,7 +302,6 @@ class TwinAnalytics:
             validate_metric_series_column,
         )
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
-        from back.objects.registry import RegistryCfg
 
         metric_name = validate_metric_series_column(metric)
 
@@ -248,12 +312,7 @@ class TwinAnalytics:
                 detail="No Build SQL Warehouse client could be created",
             )
 
-        output_schema = (
-            getattr(settings, "analytics_job_output_schema", "") or ""
-        ).strip()
-        if not output_schema:
-            rcfg = RegistryCfg.from_domain(self._domain, settings)
-            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+        output_schema = self.analytics_output_schema(self._domain, settings)
 
         output_table = _dt().analytics_output_table(
             output_schema, self._domain, graph_name

@@ -192,8 +192,9 @@ class TestResolveAnalyticsJobName:
     """
 
     class _S:
-        def __init__(self, name="", app=""):
+        def __init__(self, name="", app="", community=""):
             self.analytics_job_name = name
+            self.community_job_name = community
             self.ontobricks_app_name = app
 
     def test_explicit_name_wins_over_the_derivation(self):
@@ -232,6 +233,57 @@ class TestResolveAnalyticsJobName:
         # The bundle names it "${var.app_name}-graph-analytics".
         assert job["name"] == "${var.app_name}-graph-analytics"
         derived = DatabricksHelpers.resolve_analytics_job_name(self._S(app="APP"))
+        assert derived == job["name"].replace("${var.app_name}", "APP")
+
+
+class TestResolveCommunityJobName:
+    """Community job name mirrors the analytics one, including the local-dev
+    case where only ``ONTOBRICKS_ANALYTICS_JOB_NAME`` is set in ``.env``.
+    """
+
+    class _S:
+        def __init__(self, name="", app="", community=""):
+            self.analytics_job_name = name
+            self.community_job_name = community
+            self.ontobricks_app_name = app
+
+    def test_explicit_name_wins(self):
+        s = self._S(community="renamed-community", app="ontobricks-07x", name="x-graph-analytics")
+        assert DatabricksHelpers.resolve_community_job_name(s) == "renamed-community"
+
+    def test_name_is_derived_from_the_app_name(self):
+        s = self._S(app="ontobricks-07x")
+        assert (
+            DatabricksHelpers.resolve_community_job_name(s)
+            == "ontobricks-07x-community-detection"
+        )
+
+    def test_falls_back_from_the_analytics_job_name(self):
+        """Local ``.env`` only pins the analytics job; community follows it."""
+        s = self._S(name="ontobricks-07x-graph-analytics")
+        assert (
+            DatabricksHelpers.resolve_community_job_name(s)
+            == "ontobricks-07x-community-detection"
+        )
+
+    def test_empty_when_nothing_is_available(self):
+        assert DatabricksHelpers.resolve_community_job_name(self._S()) == ""
+
+    def test_analytics_fallback_requires_the_bundle_suffix(self):
+        assert (
+            DatabricksHelpers.resolve_community_job_name(self._S(name="custom-job"))
+            == ""
+        )
+
+    def test_derived_name_matches_the_bundle_resource(self):
+        import yaml
+
+        repo_root = Path(__file__).resolve().parents[3]
+        job = yaml.safe_load(
+            (repo_root / "resources/community_detection.job.yml").read_text()
+        )["resources"]["jobs"]["community_detection_job"]
+        assert job["name"] == "${var.app_name}-community-detection"
+        derived = DatabricksHelpers.resolve_community_job_name(self._S(app="APP"))
         assert derived == job["name"].replace("${var.app_name}", "APP")
 
 

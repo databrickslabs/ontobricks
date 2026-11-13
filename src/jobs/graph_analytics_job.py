@@ -38,10 +38,8 @@ logger = logging.getLogger("ontobricks.jobs.graph_analytics")
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
-#: Predicates that never form an entity-entity edge. Mirrors
-#: ``back.core.graph_analysis.GraphBuilder._DEFAULT_EXCLUDED_PREDICATES``;
-#: duplicated because this file must run standalone on the Spark driver, and
-#: the app passes its own list through ``--exclude-predicates`` anyway.
+#: Predicates that never form an entity-entity edge. Kept here because this
+#: file must run standalone on the Spark driver.
 DEFAULT_EXCLUDED_PREDICATES = (
     RDF_TYPE,
     RDFS_LABEL,
@@ -1053,6 +1051,324 @@ def _run_pivot_centrality(
     return pivot_count, bfs_complete
 
 
+# ---------------------------------------------------------------------------
+# Community detection (``--task communities``)
+# ---------------------------------------------------------------------------
+
+COMMUNITY_ALGORITHM = "label_propagation"
+
+#: Hard cap on label-propagation rounds. Two rounds make one full parity
+#: cycle, so this allows 15 complete passes over every node.
+DEFAULT_LP_ITERATIONS = 30
+
+#: A round counts as quiet when at most this fraction of nodes changed label.
+#: Two quiet rounds in a row (one full parity cycle) stop the loop. The exact
+#: fixed point is not worth chasing on a 100M-node graph: the last few
+#: thousand flips do not move the partition the UI shows.
+DEFAULT_LP_MIN_CHANGE_RATIO = 0.001
+
+#: Bounds of the preview graph the Community page draws.
+PREVIEW_COMMUNITIES = 20
+PREVIEW_MAX_NODES = 1_500
+PREVIEW_MAX_EDGES = 5_000
+
+#: First hex digit of ``md5(node)`` for the half of the nodes updated on even
+#: rounds; the other half updates on odd rounds.
+_EVEN_HALF = ", ".join(f"'{c}'" for c in "01234567")
+
+
+@dataclass
+class CommunitySQL(GraphAnalyticsSQL):
+    """SQL for semi-synchronous label propagation and its outputs.
+
+    Reuses the edge list, the bidirectional table and the degree table of
+    :class:`GraphAnalyticsSQL`, so both tasks agree on what an edge is.
+
+    Each round updates only the half of the nodes selected by the parity of
+    ``md5(node)``. Fully synchronous propagation flips forever between two
+    labellings on bipartite graphs, which is the usual shape of a knowledge
+    graph (Customer -> Order -> Product); updating one half at a time breaks
+    that two-cycle. A node's own label counts as one vote, and ties go to the
+    smallest label, so a re-run on the same data yields the same partition.
+    """
+
+    @property
+    def sizes_table(self) -> str:
+        return f"{self.output_table}_sizes"
+
+    @property
+    def preview_nodes_table(self) -> str:
+        return f"{self.output_table}_preview_nodes"
+
+    @property
+    def preview_edges_table(self) -> str:
+        return f"{self.output_table}_preview_edges"
+
+    def lp_table(self, slot: str) -> str:
+        return f"{self.work_prefix}_lp_{slot}"
+
+    def work_tables(self) -> List[str]:
+        return [
+            self.edges,
+            self.bi,
+            self.deg,
+            self.lp_table("a"),
+            self.lp_table("b"),
+        ]
+
+    def lp_init(self) -> List[str]:
+        return self._recreate(
+            self.lp_table("a"), f"SELECT n, n AS label FROM {self.deg}"
+        )
+
+    def lp_iteration(self, read_slot: str, write_slot: str, parity: int) -> List[str]:
+        """One round: the selected half adopts its neighbourhood's majority label."""
+        src = self.lp_table(read_slot)
+        dst = self.lp_table(write_slot)
+        half = "IN" if parity % 2 == 0 else "NOT IN"
+        return self._recreate(
+            dst,
+            f"SELECT cur.n AS n,\n"
+            f"       CASE WHEN substr(md5(cur.n), 1, 1) {half} ({_EVEN_HALF})\n"
+            f"            THEN best.label ELSE cur.label END AS label\n"
+            f"FROM {src} cur\n"
+            f"JOIN (\n"
+            f"  SELECT n, label FROM (\n"
+            f"    SELECT n, label,\n"
+            f"           ROW_NUMBER() OVER (PARTITION BY n ORDER BY c DESC, label) AS rk\n"
+            f"    FROM (\n"
+            f"      SELECT n, label, SUM(c) AS c FROM (\n"
+            f"        SELECT b.u AS n, nb.label AS label, 1 AS c\n"
+            f"        FROM {self.bi} b\n"
+            f"        JOIN {src} nb ON nb.n = b.v\n"
+            f"        UNION ALL\n"
+            f"        SELECT n, label, 1 AS c FROM {src}\n"
+            f"      ) v\n"
+            f"      GROUP BY n, label\n"
+            f"    ) agg\n"
+            f"  ) ranked\n"
+            f"  WHERE rk = 1\n"
+            f") best ON best.n = cur.n",
+        )
+
+    def lp_changed_query(self, read_slot: str, write_slot: str) -> str:
+        return (
+            f"SELECT COUNT(*) AS changed\n"
+            f"FROM {self.lp_table(read_slot)} a\n"
+            f"JOIN {self.lp_table(write_slot)} b ON b.n = a.n\n"
+            f"WHERE a.label <> b.label"
+        )
+
+    def write_sizes(self, slot: str) -> List[str]:
+        """One row per community, ranked by size desc then seed URI.
+
+        ``community_rank`` is the cluster id everywhere downstream; ranking
+        by size makes cluster 0 the largest, matching the in-memory ordering
+        this replaced.
+        """
+        return self._recreate(
+            self.sizes_table,
+            f"SELECT s.community_rank AS community_rank,\n"
+            f"       s.size AS size,\n"
+            f"       s.seed_uri AS seed_uri,\n"
+            f"       lb.label AS seed_label\n"
+            f"FROM (\n"
+            f"  SELECT label AS seed_uri, size,\n"
+            f"         ROW_NUMBER() OVER (ORDER BY size DESC, label) - 1 AS community_rank\n"
+            f"  FROM (\n"
+            f"    SELECT label, COUNT(*) AS size FROM {self.lp_table(slot)} GROUP BY label\n"
+            f"  ) c\n"
+            f") s\n"
+            f"LEFT JOIN ({self.node_label_select()}) lb ON lb.n = s.seed_uri",
+        )
+
+    def write_community_output(self, slot: str) -> List[str]:
+        return self._recreate(
+            self.output_table,
+            f"SELECT l.n AS node_uri,\n"
+            f"       s.community_rank AS community_rank,\n"
+            f"       d.d AS degree_raw,\n"
+            f"       ty.type_uri AS type_uri,\n"
+            f"       lb.label AS label\n"
+            f"FROM {self.lp_table(slot)} l\n"
+            f"JOIN {self.sizes_table} s ON s.seed_uri = l.label\n"
+            f"JOIN {self.deg} d ON d.n = l.n\n"
+            f"LEFT JOIN ({self.node_type_select()}) ty ON ty.n = l.n\n"
+            f"LEFT JOIN ({self.node_label_select()}) lb ON lb.n = l.n",
+        )
+
+    def community_count_query(self) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.sizes_table}"
+
+    def intra_edges_query(self) -> str:
+        """Edges whose two endpoints share a community (``sum L_c``)."""
+        return (
+            f"SELECT COUNT(*) AS n\n"
+            f"FROM {self.edges} e\n"
+            f"JOIN {self.output_table} a ON a.node_uri = e.src\n"
+            f"JOIN {self.output_table} b ON b.node_uri = e.dst\n"
+            f"WHERE a.community_rank = b.community_rank"
+        )
+
+    def degree_square_sum_query(self) -> str:
+        """``sum D_c^2`` over communities, in DOUBLE to stay clear of overflow."""
+        return (
+            f"SELECT SUM(CAST(ds AS DOUBLE) * ds) AS n FROM (\n"
+            f"  SELECT SUM(degree_raw) AS ds FROM {self.output_table}\n"
+            f"  GROUP BY community_rank\n"
+            f") q"
+        )
+
+    def write_preview(self) -> List[str]:
+        """Highest-degree members of the largest communities, plus their edges."""
+        per_community = -(-PREVIEW_MAX_NODES // PREVIEW_COMMUNITIES)
+        statements = self._recreate(
+            self.preview_nodes_table,
+            f"SELECT node_uri, community_rank, label, type_uri FROM (\n"
+            f"  SELECT node_uri, community_rank, label, type_uri,\n"
+            f"         ROW_NUMBER() OVER (\n"
+            f"           PARTITION BY community_rank ORDER BY degree_raw DESC, node_uri\n"
+            f"         ) AS rk\n"
+            f"  FROM {self.output_table}\n"
+            f"  WHERE community_rank < {PREVIEW_COMMUNITIES}\n"
+            f") q\n"
+            f"WHERE rk <= {per_community}",
+        )
+        statements += self._recreate(
+            self.preview_edges_table,
+            f"SELECT e.src AS src, e.dst AS dst\n"
+            f"FROM {self.edges} e\n"
+            f"JOIN {self.preview_nodes_table} a ON a.node_uri = e.src\n"
+            f"JOIN {self.preview_nodes_table} b ON b.node_uri = e.dst\n"
+            f"ORDER BY e.src, e.dst\n"
+            f"LIMIT {PREVIEW_MAX_EDGES}",
+        )
+        return statements
+
+    def write_community_summary(self, stats: Dict[str, object]) -> List[str]:
+        columns = [
+            f"{int(stats['node_count'])} AS node_count",
+            f"{int(stats['edge_count'])} AS edge_count",
+            f"{int(stats['community_count'])} AS community_count",
+            f"{float(stats['modularity'])} AS modularity",
+            f"{int(stats['iterations'])} AS iterations",
+            f"{'true' if stats['converged'] else 'false'} AS converged",
+            f"'{sql_escape(str(stats['algorithm']))}' AS algorithm",
+            f"'{sql_escape(','.join(self.class_filter))}' AS class_filter",
+            f"'{sql_escape(str(stats['source_table']))}' AS source_table",
+            f"'{sql_escape(str(stats.get('computed_at', '') or ''))}' AS computed_at",
+        ]
+        return self._recreate(
+            self.summary_table, "SELECT " + ",\n       ".join(columns)
+        )
+
+
+def modularity_from_sums(intra_edges: float, degree_square_sum: float, edge_count: int) -> float:
+    """Newman modularity ``sum(L_c)/m - sum(D_c^2)/(4 m^2)`` (resolution 1)."""
+    if edge_count <= 0:
+        return 0.0
+    m = float(edge_count)
+    return float(intra_edges) / m - float(degree_square_sum) / (4.0 * m * m)
+
+
+def run_communities(
+    execute,
+    scalar,
+    builder: CommunitySQL,
+    *,
+    lp_iterations: int = DEFAULT_LP_ITERATIONS,
+    min_change_ratio: float = DEFAULT_LP_MIN_CHANGE_RATIO,
+    computed_at: str = "",
+    cleanup: bool = True,
+) -> Dict[str, object]:
+    """Run label propagation and write the community outputs.
+
+    Same engine-agnostic contract as :func:`run_analysis`: *execute* runs a
+    statement, *scalar* returns the first column of the first row. Work tables
+    are dropped on the way out, failure included, unless *cleanup* is False.
+    """
+    try:
+        return _run_community_stages(
+            execute,
+            scalar,
+            builder,
+            lp_iterations=lp_iterations,
+            min_change_ratio=min_change_ratio,
+            computed_at=computed_at,
+        )
+    finally:
+        if cleanup:
+            _drop_work_tables(execute, builder)
+
+
+def _run_community_stages(
+    execute,
+    scalar,
+    builder: CommunitySQL,
+    *,
+    lp_iterations: int,
+    min_change_ratio: float,
+    computed_at: str,
+) -> Dict[str, object]:
+    for stmt in builder.build_edges():
+        execute(stmt)
+    node_count = int(scalar(builder.node_count_query()) or 0)
+    edge_count = int(scalar(builder.edge_count_query()) or 0)
+    logger.info("communities: %d nodes, %d edges", node_count, edge_count)
+
+    for stmt in builder.lp_init():
+        execute(stmt)
+    slot = "a"
+    iterations = 0
+    converged = node_count == 0
+    quiet_rounds = 0
+    min_change = max(0, int(node_count * max(0.0, min_change_ratio)))
+    for i in range(max(1, lp_iterations) if node_count else 0):
+        nxt = "b" if slot == "a" else "a"
+        for stmt in builder.lp_iteration(slot, nxt, parity=i):
+            execute(stmt)
+        changed = int(scalar(builder.lp_changed_query(slot, nxt)) or 0)
+        slot = nxt
+        iterations += 1
+        logger.info("label propagation round %d: %d labels changed", iterations, changed)
+        quiet_rounds = quiet_rounds + 1 if changed <= min_change else 0
+        if quiet_rounds >= 2:
+            converged = True
+            break
+    if not converged:
+        logger.warning(
+            "label propagation did not settle in %d rounds — the partition is "
+            "reported as unconverged",
+            iterations,
+        )
+
+    for stmt in builder.write_sizes(slot) + builder.write_community_output(slot):
+        execute(stmt)
+    community_count = int(scalar(builder.community_count_query()) or 0)
+    modularity = modularity_from_sums(
+        float(scalar(builder.intra_edges_query()) or 0),
+        float(scalar(builder.degree_square_sum_query()) or 0),
+        edge_count,
+    )
+    for stmt in builder.write_preview():
+        execute(stmt)
+
+    stats: Dict[str, object] = {
+        "node_count": node_count,
+        "edge_count": edge_count,
+        "community_count": community_count,
+        "modularity": round(modularity, 6),
+        "iterations": iterations,
+        "converged": converged,
+        "algorithm": COMMUNITY_ALGORITHM,
+        "source_table": builder.source_table,
+        "computed_at": computed_at,
+    }
+    for stmt in builder.write_community_summary(stats):
+        execute(stmt)
+    return stats
+
+
 def merge_excluded_predicates(raw: Optional[str]) -> List[str]:
     """Combine the caller's ``--exclude-predicates`` with the defaults.
 
@@ -1070,6 +1386,12 @@ def merge_excluded_predicates(raw: Optional[str]) -> List[str]:
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compute iterative graph metrics for an OntoBricks knowledge graph"
+    )
+    parser.add_argument(
+        "--task",
+        choices=("metrics", "communities"),
+        default="metrics",
+        help="metrics: centrality and structure; communities: label propagation",
     )
     parser.add_argument(
         "--source-table",
@@ -1118,6 +1440,14 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH)
     parser.add_argument("--damping", type=float, default=DEFAULT_DAMPING)
     parser.add_argument(
+        "--lp-iterations", type=int, default=DEFAULT_LP_ITERATIONS,
+        help="Cap on label-propagation rounds (communities task)",
+    )
+    parser.add_argument(
+        "--computed-at", default="",
+        help="Run timestamp recorded in the community summary",
+    )
+    parser.add_argument(
         "--keep-work-tables",
         action="store_true",
         help="Leave intermediate tables in place for debugging",
@@ -1150,7 +1480,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if class_filter:
         logger.info("class filter: %d type(s) — %s", len(class_filter), ", ".join(class_filter))
 
-    builder = GraphAnalyticsSQL(
+    builder_cls = CommunitySQL if args.task == "communities" else GraphAnalyticsSQL
+    builder = builder_cls(
         source_table=args.source_table,
         work_prefix=work_prefix,
         output_table=args.output_table,
@@ -1166,6 +1497,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     def scalar(query: str):
         row = spark.sql(query).head()
         return row[0] if row is not None else None
+
+    if args.task == "communities":
+        stats = run_communities(
+            execute,
+            scalar,
+            builder,
+            lp_iterations=args.lp_iterations,
+            computed_at=args.computed_at,
+            cleanup=not args.keep_work_tables,
+        )
+        print("ONTOBRICKS_COMMUNITY_SUMMARY " + json.dumps(stats, default=str))
+        logger.info(
+            "wrote %s (%s communities)", args.output_table, stats["community_count"]
+        )
+        return 0
 
     stats = run_analysis(
         execute,

@@ -529,39 +529,6 @@ class DigitalTwin:
     def is_owlrl_available() -> bool:
         return TwinResolve.is_owlrl_available()
 
-    # ------------------------------------------------------------------
-    # Community detection
-    # ------------------------------------------------------------------
-
-    def detect_clusters(
-        self,
-        store: Any,
-        graph_name: str,
-        algorithm: str = "louvain",
-        resolution: float = 1.0,
-        predicate_filter: Optional[List[str]] = None,
-        class_filter: Optional[List[str]] = None,
-        max_triples: int = 500_000,
-    ) -> Dict[str, Any]:
-        return TwinAnalytics(self._domain).detect_clusters(
-            store,
-            graph_name,
-            algorithm=algorithm,
-            resolution=resolution,
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
-        )
-
-    def materialize_clusters(self, store: Any, graph_name: str, clusters: List[Dict[str, Any]], stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        return TwinAnalytics(self._domain).materialize_clusters(store, graph_name, clusters, stats)
-
-    def load_current_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
-        return TwinAnalytics(self._domain).load_current_clusters(store, graph_name)
-
-    def clear_clusters(self, store: Any, graph_name: str) -> Dict[str, Any]:
-        return TwinAnalytics(self._domain).clear_clusters(store, graph_name)
-
     def compute_graph_metrics(
         self,
         graph_name: str,

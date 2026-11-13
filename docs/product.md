@@ -372,7 +372,7 @@ OntoBricks provides an end-to-end, web-based solution that runs directly on Data
 #### Graph Viewer Exploration
 
 - **Interactive Graph Viewer**: Sigma.js WebGL-powered graph with search, filtering, depth control, and entity detail panels.
-- **Data Cluster visualization**: Explorer colours and collapses communities materialized from Intelligence → Community (NetworkX Louvain / Label Propagation / Greedy Modularity).
+- **Data Cluster visualization**: Explorer colours and collapses communities materialized from Intelligence → Community (label propagation on a Databricks job).
 - **Triples grid**: Sortable, searchable table view of all materialized triples.
 - **Dashboard integration**: Embed Databricks SQL dashboards with parameter mapping to ontology entities.
 
@@ -448,7 +448,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 | Backend    | Python 3.11+, FastAPI, RDFLib, Databricks SDK                                             |
 | Reasoning  | owlrl 7.0+ (OWL 2 RL forward chaining), PySHACL 0.26+ (SHACL validation), custom IF-THEN engine (SQL translator) |
 | Graph DB   | Lakebase Postgres flat triple store (`psycopg`, `COPY FROM STDIN`, optional Lakeflow synced tables); pluggable behind `GraphDBBackend` |
-| Graph Analysis | NetworkX 3.0+ (community detection: Louvain, Label Propagation, Greedy Modularity)    |
+| Graph Analysis | Databricks Lakeflow jobs (graph metrics, label-propagation communities); NetworkX 3.0+ (cohorts) |
 | Frontend   | Bootstrap 5, Sigma.js, Graphology (+ communities-louvain), D3.js, OntoViz (custom), Vanilla JS |
 | Data       | Databricks SQL Connector, Unity Catalog, Delta Lake                                       |
 | AI         | Databricks AI Gateway model services and Model Serving endpoints                          |
@@ -466,7 +466,7 @@ A **production-ready, source-available Databricks App** under the [Databricks Li
 - **Triple store + Graph DB layers**: Delta view (Unity Catalog) + Lakebase Postgres flat store, pluggable behind `GraphDBFactory`
 - MCP server deployed and operational for Databricks Playground
 - **Entity Groups**: OWL-compliant class grouping via `owl:equivalentClass` + `owl:unionOf`, with expand/collapse super-nodes in the Graph Viewer visualization
-- **Data Cluster Detection**: Intelligence → Community runs NetworkX Louvain / Label Propagation / Greedy Modularity, then materializes one partition (`Cluster` + `:inCluster`); Explorer colour-by-cluster and collapse/expand super-nodes consume that partition
+- **Data Cluster Detection**: Intelligence → Community runs label propagation on a Databricks job, then materializes one partition (`Cluster` + `:inCluster`); Explorer colour-by-cluster and collapse/expand super-nodes consume that partition
 - Knowledge Graph REST API with design status, ontology, R2RML, Spark SQL endpoints
 - GraphQL API with configurable depth and auto-generated schema
 - Documentation: README, user guide, architecture, API reference, import guide, automated pipeline guide

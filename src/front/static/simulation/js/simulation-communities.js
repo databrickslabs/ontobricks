@@ -1,19 +1,26 @@
 /**
- * Intelligence → Community: detect a partition, then materialize it.
- * Preview uses a light Sigma explorer (same CDN libs as Compare).
+ * Intelligence → Community: detect a partition on the Databricks job, then
+ * materialize it. Both run as background tasks; every read is bounded (top
+ * clusters, a capped preview, members paged on demand). The preview uses a
+ * light Sigma explorer (same CDN libs as Compare).
  */
 const SimulationCommunities = {
-    preview: null,
+    latest: null,
     current: null,
-    entityMeta: {},
+    blockedReason: '',
+    runPageUrl: '',
     ontologyClasses: null,
     graph: null,
     renderer: null,
     selectedCluster: null,
+    _members: null,
     _busy: false,
     _libsPromise: null,
     _resizeObserver: null,
     _nodeBase: null,
+
+    TOP_CLUSTERS: 50,
+    MEMBERS_PAGE: 100,
 
     LIB_URLS: [
         'https://cdnjs.cloudflare.com/ajax/libs/graphology/0.26.0/graphology.umd.min.js',
@@ -36,22 +43,35 @@ const SimulationCommunities = {
         on('commDetectBtn', () => this.detect());
         on('commMaterializeBtn', () => this.materialize());
         on('commClearBtn', () => this.clear());
-        on('commRefreshBtn', () => this.loadCurrent());
-        const slider = document.getElementById('commResolution');
-        if (slider) {
-            slider.addEventListener('input', () => this._syncResolutionLabel());
+        on('commRefreshBtn', () => this.refresh());
+        const details = document.getElementById('commPreviewDetails');
+        if (details) {
+            details.addEventListener('click', (e) => {
+                if (e.target.closest('[data-comm-more]')) this._loadMoreMembers();
+            });
         }
-        this._syncResolutionLabel();
+        const current = document.getElementById('commCurrentBody');
+        if (current) {
+            current.addEventListener('click', (e) => {
+                const more = e.target.closest('[data-comm-current-more]');
+                if (more) {
+                    this._loadCurrentMembers(Number(more.dataset.commCurrentMore), true);
+                    return;
+                }
+                const row = e.target.closest('[data-comm-cluster]');
+                if (row) this._toggleCurrentMembers(Number(row.dataset.commCluster));
+            });
+        }
         this._applyEditGate();
         document.addEventListener('sidebarSectionChanged', (e) => {
             if (e.detail && e.detail.section === 'communities') {
-                this.loadCurrent();
+                this.refresh();
                 this._resizePreview();
             }
         });
         const section = document.getElementById('communities-section');
         if (section && section.classList.contains('active')) {
-            this.loadCurrent();
+            this.refresh();
         }
         window.addEventListener('resize', () => this._resizePreview());
         const explorer = document.getElementById('commExplorerBtn');
@@ -68,24 +88,42 @@ const SimulationCommunities = {
 
     _applyEditGate() {
         const editable = this._canEdit();
-        ['commDetectBtn', 'commMaterializeBtn', 'commClearBtn'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el && id !== 'commMaterializeBtn') el.disabled = !editable;
-        });
+        const clearBtn = document.getElementById('commClearBtn');
+        if (clearBtn) clearBtn.disabled = !editable;
+        this._syncDetectEnabled();
         this._syncMaterializeEnabled();
     },
 
-    _syncResolutionLabel() {
-        const slider = document.getElementById('commResolution');
-        const label = document.getElementById('commResolutionValue');
-        if (slider && label) label.textContent = parseFloat(slider.value).toFixed(2);
+    _syncDetectEnabled() {
+        const btn = document.getElementById('commDetectBtn');
+        if (!btn) return;
+        btn.disabled = !this._canEdit() || this._busy || !!this.blockedReason;
+        btn.title = this.blockedReason || 'Run community detection on Databricks';
     },
 
     _syncMaterializeEnabled() {
         const btn = document.getElementById('commMaterializeBtn');
         if (!btn) return;
-        const hasPreview = !!(this.preview && (this.preview.clusters || []).length);
-        btn.disabled = !this._canEdit() || !hasPreview || this._busy;
+        const hasRun = !!(this.latest && this.latest.stats);
+        btn.disabled = !this._canEdit() || !hasRun || this._busy;
+    },
+
+    _setBusy(busy) {
+        this._busy = busy;
+        this._syncDetectEnabled();
+        this._syncMaterializeEnabled();
+    },
+
+    _renderJobStatus() {
+        const el = document.getElementById('commJobStatus');
+        if (!el) return;
+        if (!this.blockedReason) {
+            el.classList.add('d-none');
+            el.textContent = '';
+            return;
+        }
+        el.classList.remove('d-none');
+        el.textContent = this.blockedReason;
     },
 
     _notify(msg, kind) {
@@ -109,98 +147,143 @@ const SimulationCommunities = {
         return data;
     },
 
-    _sizeStats(clusters) {
-        const sizes = (clusters || [])
-            .map((cl) => Number(cl.size != null ? cl.size : (cl.members || []).length) || 0)
-            .filter((n) => n >= 0);
-        if (!sizes.length) {
-            return { count: 0, min: null, max: null, avg: null, median: null };
-        }
-        const sorted = sizes.slice().sort((a, b) => a - b);
-        const sum = sorted.reduce((acc, n) => acc + n, 0);
-        const mid = Math.floor(sorted.length / 2);
-        const median = sorted.length % 2
-            ? sorted[mid]
-            : (sorted[mid - 1] + sorted[mid]) / 2;
-        return {
-            count: sorted.length,
-            min: sorted[0],
-            max: sorted[sorted.length - 1],
-            avg: sum / sorted.length,
-            median,
-        };
-    },
-
     _fmtNum(value, digits) {
-        if (value == null || Number.isNaN(value)) return '–';
+        if (value == null || Number.isNaN(Number(value))) return '–';
         const n = Number(value);
         if (digits != null) return n.toFixed(digits);
-        return Number.isInteger(n) ? String(n) : n.toFixed(1);
+        return Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1);
     },
 
-    _renderStats(elId, { clusters, stats, graph } = {}) {
+    _fmtWhen(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+    },
+
+    _renderStats(elId, stats, meta) {
         const el = document.getElementById(elId);
         if (!el) return;
-        const sizes = this._sizeStats(clusters);
-        if (!sizes.count) {
+        const s = stats || {};
+        if (!s.cluster_count) {
             el.classList.add('d-none');
             el.innerHTML = '';
             return;
         }
-        const s = stats || {};
         const tiles = [
-            { label: 'Clusters', value: this._fmtNum(sizes.count) },
-            { label: 'Nodes', value: this._fmtNum(s.node_count) },
-            { label: 'Edges', value: this._fmtNum(s.edge_count) },
-            { label: 'Size min', value: this._fmtNum(sizes.min) },
-            { label: 'Size max', value: this._fmtNum(sizes.max) },
-            { label: 'Size avg', value: this._fmtNum(sizes.avg, 1) },
-            { label: 'Size median', value: this._fmtNum(sizes.median, 1) },
-            {
-                label: 'Modularity',
-                value: s.modularity != null ? Number(s.modularity).toFixed(3) : '–',
-            },
-        ];
-        const meta = [
-            s.algorithm || '',
-            s.resolution != null ? `resolution ${Number(s.resolution).toFixed(2)}` : '',
-            s.elapsed_ms != null ? `${s.elapsed_ms} ms` : '',
-            graph && graph.capped
-                ? `preview ${ (graph.nodes || []).length } of ${graph.node_total} nodes`
-                : '',
-        ].filter(Boolean).join(' · ');
+            { label: 'Clusters', value: s.cluster_count },
+            { label: 'Nodes', value: s.node_count },
+            { label: 'Edges', value: s.edge_count },
+            { label: 'Size min', value: s.size_min },
+            { label: 'Size max', value: s.size_max },
+            { label: 'Size avg', value: s.size_avg, digits: 1 },
+            { label: 'Size median', value: s.size_median, digits: 1 },
+            { label: 'Modularity', value: s.modularity, digits: 3 },
+        ].filter((t) => t.value != null);
         el.classList.remove('d-none');
         el.innerHTML = `
             <div class="row g-2 mb-2">
                 ${tiles.map((t) => `
                     <div class="col-6 col-md-3 col-xl">
                         <div class="sim-kpi-tile h-100">
-                            <div class="sim-kpi-value">${this._esc(t.value)}</div>
+                            <div class="sim-kpi-value">${this._esc(this._fmtNum(t.value, t.digits))}</div>
                             <div class="sim-kpi-label">${this._esc(t.label)}</div>
                         </div>
                     </div>`).join('')}
             </div>
-            ${meta ? `<div class="small text-muted mb-2">${this._esc(meta)}</div>` : ''}`;
+            ${meta ? `<div class="small text-muted mb-2">${meta}</div>` : ''}`;
     },
 
-    _table(clusters) {
+    _runMeta(stats, graph) {
+        const s = stats || {};
+        const parts = [];
+        if (s.algorithm) parts.push(this._esc(s.algorithm.replace(/_/g, ' ')));
+        if (s.iterations != null) {
+            parts.push(this._esc(`${s.iterations} rounds${s.converged === false ? ' (not converged)' : ''}`));
+        }
+        if (s.class_filter && s.class_filter.length) {
+            parts.push(this._esc(`scope: ${s.class_filter.map((u) => this._shortLabel(u)).join(', ')}`));
+        }
+        const when = this._fmtWhen(s.computed_at);
+        if (when) parts.push(this._esc(`computed ${when}`));
+        if (graph && graph.capped) {
+            parts.push(this._esc(`preview ${(graph.nodes || []).length.toLocaleString()} of ${Number(graph.node_total || 0).toLocaleString()} nodes`));
+        }
+        if (this.runPageUrl) {
+            parts.push(`<a href="${this._esc(this.runPageUrl)}" target="_blank" rel="noopener">Databricks run <i class="bi bi-box-arrow-up-right"></i></a>`);
+        }
+        return parts.join(' · ');
+    },
+
+    _table(clusters, total) {
         if (!clusters || !clusters.length) {
             return '<p class="text-muted small mb-0">No clusters.</p>';
         }
-        const rows = clusters.map((cl) => {
-            const members = cl.members || [];
-            const sample = members.slice(0, 3).map((m) => this._esc(m.split(/[#/]/).pop())).join(', ');
-            const more = members.length > 3 ? ` +${members.length - 3}` : '';
-            return `<tr>
+        const rows = clusters.map((cl) => `
+            <tr class="comm-current-row" data-comm-cluster="${this._esc(cl.id)}" role="button" tabindex="0"
+                title="Show the entities in this cluster">
                 <td>${this._esc(cl.id)}</td>
-                <td class="text-end">${this._esc(cl.size || members.length)}</td>
-                <td class="small text-muted">${sample}${more}</td>
-            </tr>`;
-        }).join('');
+                <td class="text-end">${this._esc(this._fmtNum(cl.size))}</td>
+                <td class="small text-muted text-truncate">${this._esc(cl.label || '')}</td>
+            </tr>
+            <tr class="comm-current-members d-none" data-comm-members-for="${this._esc(cl.id)}">
+                <td colspan="3"></td>
+            </tr>`).join('');
+        const more = total > clusters.length
+            ? `<p class="small text-muted mt-2 mb-0">Top ${clusters.length} of ${Number(total).toLocaleString()} clusters.</p>`
+            : '';
         return `<table class="table table-sm sim-table mb-0">
-            <thead><tr><th>Id</th><th class="text-end">Size</th><th>Members (sample)</th></tr></thead>
+            <thead><tr><th>Id</th><th class="text-end">Size</th><th>Seed</th></tr></thead>
             <tbody>${rows}</tbody>
-        </table>`;
+        </table>${more}`;
+    },
+
+    _memberItems(members) {
+        return members.map((m) => {
+            const info = this._memberInfo(m);
+            return `<li class="comm-member" title="${this._esc(info.uri)}">
+                <span class="comm-member-icon" aria-hidden="true">${this._esc(info.icon)}</span>
+                <span class="comm-member-text">
+                    <span class="comm-member-label">${this._esc(info.label)}</span>
+                    <span class="comm-member-type">${this._esc(info.typeLabel)}</span>
+                </span>
+            </li>`;
+        }).join('');
+    },
+
+    async _toggleCurrentMembers(clusterId) {
+        const row = document.querySelector(`[data-comm-members-for="${clusterId}"]`);
+        if (!row) return;
+        const open = row.classList.toggle('d-none') === false;
+        if (open && !row.dataset.loaded) await this._loadCurrentMembers(clusterId, false);
+    },
+
+    async _loadCurrentMembers(clusterId, append) {
+        const row = document.querySelector(`[data-comm-members-for="${clusterId}"]`);
+        if (!row) return;
+        const cell = row.querySelector('td');
+        const offset = append ? Number(row.dataset.loaded || 0) : 0;
+        try {
+            await this._ensureOntologyClasses();
+            const page = await this._json(
+                `/dtwin/clusters/${clusterId}/members?source=materialized&offset=${offset}&limit=${this.MEMBERS_PAGE}`
+            );
+            const members = page.members || [];
+            row.dataset.loaded = String(offset + members.length);
+            let list = cell.querySelector('.comm-member-list');
+            if (!list) {
+                cell.innerHTML = '<ul class="comm-member-list list-unstyled mb-0"></ul>';
+                list = cell.querySelector('.comm-member-list');
+            }
+            list.insertAdjacentHTML('beforeend', this._memberItems(members));
+            const moreBtn = cell.querySelector('[data-comm-current-more]');
+            if (moreBtn) moreBtn.remove();
+            if (page.has_more) {
+                cell.insertAdjacentHTML('beforeend',
+                    `<button type="button" class="btn btn-sm btn-link px-0" data-comm-current-more="${clusterId}">Load more</button>`);
+            }
+        } catch (err) {
+            cell.innerHTML = `<p class="text-muted small mb-0">${this._esc(err.message)}</p>`;
+        }
     },
 
     _clusterColor(id) {
@@ -241,6 +324,7 @@ const SimulationCommunities = {
         this.renderer = null;
         this.graph = null;
         this.selectedCluster = null;
+        this._members = null;
         this._nodeBase = null;
         const canvas = document.getElementById('commPreviewCanvas');
         if (canvas) canvas.innerHTML = '';
@@ -290,14 +374,13 @@ const SimulationCommunities = {
         return (cls && (cls.emoji || cls.icon)) || '📦';
     },
 
-    _memberInfo(uri) {
-        const meta = (this.entityMeta && this.entityMeta[uri]) || {};
-        const label = meta.label || this._shortLabel(uri);
-        const typeUri = meta.type || '';
-        const typeLabel = meta.type_label || this._shortLabel(typeUri) || 'Entity';
+    _memberInfo(member) {
+        const m = typeof member === 'string' ? { uri: member } : (member || {});
+        const typeUri = m.type || '';
+        const typeLabel = m.type_label || this._shortLabel(typeUri) || 'Entity';
         return {
-            uri,
-            label,
+            uri: m.uri,
+            label: m.label || this._shortLabel(m.uri),
             typeUri,
             typeLabel,
             icon: this._typeIcon(typeUri, typeLabel),
@@ -305,7 +388,7 @@ const SimulationCommunities = {
     },
 
     _clusterById(clusterId) {
-        const clusters = (this.preview && this.preview.clusters) || [];
+        const clusters = (this.latest && this.latest.clusters) || [];
         return clusters.find((cl) => Number(cl.id) === Number(clusterId)) || null;
     },
 
@@ -325,55 +408,60 @@ const SimulationCommunities = {
         }
     },
 
-    _showClusterDetails(clusterId, focusUri) {
+    async _showClusterDetails(clusterId) {
         const box = document.getElementById('commPreviewDetails');
         if (!box) return;
-        const cluster = this._clusterById(clusterId);
-        if (!cluster) {
-            box.innerHTML = `<p class="text-muted small mb-0">Cluster #${this._esc(clusterId)} has no members in the preview.</p>`;
-            return;
-        }
-        const members = cluster.members || [];
-        const size = cluster.size || members.length;
-        const color = this._clusterColor(cluster.id);
-        const infos = members.map((uri) => this._memberInfo(uri));
-        infos.sort((a, b) => {
-            const byType = String(a.typeLabel).localeCompare(String(b.typeLabel));
-            if (byType) return byType;
-            return String(a.label).localeCompare(String(b.label));
-        });
-        const rows = infos.map((info) => {
-            const focused = focusUri && info.uri === focusUri ? ' is-focused' : '';
-            return `<li class="comm-member${focused}" title="${this._esc(info.uri)}">
-                <span class="comm-member-icon" aria-hidden="true">${this._esc(info.icon)}</span>
-                <span class="comm-member-text">
-                    <span class="comm-member-label">${this._esc(info.label)}</span>
-                    <span class="comm-member-type">${this._esc(info.typeLabel)}</span>
-                </span>
-            </li>`;
-        }).join('');
+        const known = this._clusterById(clusterId);
+        const color = this._clusterColor(clusterId);
         box.innerHTML = `
             <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="comm-cluster-swatch" style="background:${color}"></span>
                 <div>
-                    <div class="fw-semibold">Cluster #${this._esc(cluster.id)}</div>
-                    <div class="small text-muted">${this._esc(size)} entities</div>
+                    <div class="fw-semibold">Cluster #${this._esc(clusterId)}</div>
+                    <div class="small text-muted" data-comm-size>${known ? this._esc(this._fmtNum(known.size)) + ' entities' : ''}</div>
                 </div>
             </div>
-            <ul class="comm-member-list list-unstyled mb-0">${rows || '<li class="text-muted small">No members.</li>'}</ul>`;
-        if (focusUri) {
-            const focusedEl = box.querySelector('.comm-member.is-focused');
-            if (focusedEl && typeof focusedEl.scrollIntoView === 'function') {
-                focusedEl.scrollIntoView({ block: 'nearest' });
+            <ul class="comm-member-list list-unstyled mb-0"></ul>
+            <div class="comm-member-more"></div>`;
+        this._members = { clusterId, loaded: 0 };
+        await this._loadMoreMembers();
+    },
+
+    async _loadMoreMembers() {
+        const box = document.getElementById('commPreviewDetails');
+        const state = this._members;
+        if (!box || !state) return;
+        const list = box.querySelector('.comm-member-list');
+        const more = box.querySelector('.comm-member-more');
+        if (more) more.innerHTML = '<span class="small text-muted">Loading…</span>';
+        try {
+            const page = await this._json(
+                `/dtwin/clusters/${state.clusterId}/members?offset=${state.loaded}&limit=${this.MEMBERS_PAGE}`
+            );
+            if (this._members !== state) return;
+            const members = page.members || [];
+            state.loaded += members.length;
+            if (list) list.insertAdjacentHTML('beforeend', this._memberItems(members));
+            const sizeEl = box.querySelector('[data-comm-size]');
+            if (sizeEl && page.size != null) {
+                sizeEl.textContent = `${this._fmtNum(page.size)} entities`;
             }
+            if (more) {
+                more.innerHTML = page.has_more
+                    ? `<button type="button" class="btn btn-sm btn-link px-0" data-comm-more>Load more (${this._fmtNum(state.loaded)} of ${this._fmtNum(page.size)})</button>`
+                    : '';
+            }
+            if (!state.loaded && list) list.innerHTML = '<li class="text-muted small">No members.</li>';
+        } catch (err) {
+            if (more) more.innerHTML = `<span class="small text-danger">${this._esc(err.message)}</span>`;
         }
     },
 
-    async _selectCluster(clusterId, focusUri) {
+    async _selectCluster(clusterId) {
         this.selectedCluster = clusterId;
         this._applyClusterHighlight(clusterId);
         await this._ensureOntologyClasses();
-        this._showClusterDetails(clusterId, focusUri);
+        await this._showClusterDetails(clusterId);
     },
 
     _resizePreview() {
@@ -499,8 +587,7 @@ const SimulationCommunities = {
             return;
         }
         this.renderer.on('clickNode', ({ node }) => {
-            const clusterId = graph.getNodeAttribute(node, 'cluster');
-            this._selectCluster(clusterId, node);
+            this._selectCluster(graph.getNodeAttribute(node, 'cluster'));
         });
         this.renderer.on('clickStage', () => {
             this.selectedCluster = null;
@@ -515,10 +602,8 @@ const SimulationCommunities = {
     },
 
     _erasePreview() {
-        this.preview = null;
-        this.entityMeta = {};
-        this.selectedCluster = null;
-        this._nodeBase = null;
+        this.latest = null;
+        this.runPageUrl = '';
         this._teardownPreview();
         const statsEl = document.getElementById('commPreviewStats');
         if (statsEl) {
@@ -529,129 +614,177 @@ const SimulationCommunities = {
         if (layoutEl) layoutEl.classList.add('d-none');
         const emptyEl = document.getElementById('commPreviewEmpty');
         if (emptyEl) emptyEl.classList.remove('d-none');
-        const loadingEl = document.getElementById('commPreviewLoading');
-        if (loadingEl) loadingEl.classList.add('d-none');
+        this._showPreviewLoading(false);
         this._syncMaterializeEnabled();
     },
 
-    _showPreviewLoading(loading) {
+    _showPreviewLoading(loading, message) {
         const loadingEl = document.getElementById('commPreviewLoading');
         const emptyEl = document.getElementById('commPreviewEmpty');
         const layoutEl = document.getElementById('commPreviewLayout');
         const statsEl = document.getElementById('commPreviewStats');
+        const msgEl = document.getElementById('commPreviewLoadingMsg');
+        if (msgEl && message) msgEl.textContent = message;
         if (loading) {
             if (loadingEl) loadingEl.classList.remove('d-none');
             if (emptyEl) emptyEl.classList.add('d-none');
             if (layoutEl) layoutEl.classList.add('d-none');
             if (statsEl) statsEl.classList.add('d-none');
+        } else if (loadingEl) {
+            loadingEl.classList.add('d-none');
+        }
+    },
+
+    async _populateScope() {
+        const select = document.getElementById('commClassFilter');
+        if (!select || select.dataset.ready) return;
+        const classes = await this._ensureOntologyClasses();
+        const options = classes
+            .map((cls) => ({ uri: cls.uri || cls.id || '', name: cls.label || cls.name || this._shortLabel(cls.uri) }))
+            .filter((c) => c.uri)
+            .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        select.insertAdjacentHTML('beforeend', options.map(
+            (c) => `<option value="${this._esc(c.uri)}">${this._esc(c.name)}</option>`
+        ).join(''));
+        select.dataset.ready = '1';
+    },
+
+    async _findRunningTask(types) {
+        try {
+            const data = await this._json('/tasks/?include_completed=false');
+            return (data.tasks || []).find((t) => types.includes(t.task_type)
+                && (t.status === 'running' || t.status === 'pending')) || null;
+        } catch (_) {
+            return null;
+        }
+    },
+
+    async refresh() {
+        this._populateScope();
+        await Promise.all([this.loadLatest(), this.loadCurrent()]);
+        if (this._busy) return;
+        const running = await this._findRunningTask(['community_detection', 'community_materialize']);
+        if (!running) return;
+        if (running.task_type === 'community_detection') {
+            await this._awaitDetection(running.id);
         } else {
-            if (loadingEl) loadingEl.classList.add('d-none');
+            await this._awaitMaterialize(running.id);
+        }
+    },
+
+    async loadLatest() {
+        try {
+            const data = await this._json(`/dtwin/clusters/latest?top=${this.TOP_CLUSTERS}`);
+            this.blockedReason = data.job_available === false ? (data.blocked_reason || '') : '';
+            this._renderJobStatus();
+            this._syncDetectEnabled();
+            if (!data.stats) {
+                this._erasePreview();
+                return;
+            }
+            this.latest = { clusters: data.clusters || [], stats: data.stats };
+            await this._ensureOntologyClasses();
+            const graph = data.graph || { nodes: [], edges: [] };
+            this._showPreviewLoading(false);
+            this._renderStats('commPreviewStats', data.stats, this._runMeta(data.stats, graph));
+            await this._renderPreviewGraph(graph);
+        } catch (err) {
+            this._notify(err.message || 'Could not load the last detection run', 'danger');
+        } finally {
+            this._syncMaterializeEnabled();
+        }
+    },
+
+    async _awaitDetection(taskId) {
+        this._setBusy(true);
+        this._showPreviewLoading(true, 'Running label propagation on Databricks…');
+        try {
+            const task = await waitForTask(taskId, (t) => {
+                if (t && t.message) this._showPreviewLoading(true, t.message);
+            });
+            this.runPageUrl = (task.result && task.result.run_page_url) || '';
+            await this.loadLatest();
+            const stats = (this.latest && this.latest.stats) || {};
+            this._notify(
+                `${this._fmtNum(stats.cluster_count || 0)} communities detected — materialize to publish.`,
+                'success'
+            );
+        } catch (err) {
+            this._showPreviewLoading(false);
+            await this.loadLatest();
+            this._notify(err.message || 'Detection failed', 'danger');
+        } finally {
+            this._setBusy(false);
         }
     },
 
     async detect() {
-        if (this._busy || !this._canEdit()) return;
-        this._busy = true;
-        this._syncMaterializeEnabled();
-        const btn = document.getElementById('commDetectBtn');
-        if (btn) btn.disabled = true;
-        this._showPreviewLoading(true);
+        if (this._busy || !this._canEdit() || this.blockedReason) return;
+        const scope = document.getElementById('commClassFilter')?.value || '';
         try {
-            const algorithm = document.getElementById('commAlgorithm')?.value || 'louvain';
-            const resolution = parseFloat(document.getElementById('commResolution')?.value) || 1.0;
-            this._notify('Detecting communities…', 'info');
             const data = await this._json('/dtwin/clusters/detect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ algorithm, resolution }),
+                body: JSON.stringify(scope ? { class_filter: [scope] } : {}),
             });
-            this.preview = {
-                clusters: data.clusters || [],
-                stats: Object.assign({}, data.stats || {}, { algorithm, resolution }),
-            };
-            this.entityMeta = data.entity_meta || {};
-            await this._ensureOntologyClasses();
-            const graph = data.graph || { nodes: [], edges: [] };
-            this._showPreviewLoading(false);
-            this._renderStats('commPreviewStats', {
-                clusters: this.preview.clusters,
-                stats: this.preview.stats,
-                graph,
-            });
-            await this._renderPreviewGraph(graph);
-            this._notify(
-                `${(this.preview.clusters || []).length} clusters in preview — materialize to publish.`,
-                'success'
-            );
+            if (typeof refreshTasks === 'function') refreshTasks();
+            this._notify('Community detection started on Databricks.', 'info');
+            await this._awaitDetection(data.task_id);
         } catch (err) {
-            this._showPreviewLoading(false);
-            const emptyEl = document.getElementById('commPreviewEmpty');
-            if (emptyEl) emptyEl.classList.remove('d-none');
             this._notify(err.message || 'Detection failed', 'danger');
+        }
+    },
+
+    async _awaitMaterialize(taskId) {
+        this._setBusy(true);
+        try {
+            const task = await waitForTask(taskId);
+            this._notify(task.message || 'Communities materialized.', 'success');
+        } catch (err) {
+            this._notify(err.message || 'Materialize failed', 'danger');
         } finally {
-            this._busy = false;
-            if (btn) btn.disabled = !this._canEdit();
-            this._syncMaterializeEnabled();
+            this._setBusy(false);
+            await this.loadCurrent();
         }
     },
 
     async materialize() {
-        if (this._busy || !this._canEdit() || !this.preview) return;
-        this._busy = true;
-        this._syncMaterializeEnabled();
+        if (this._busy || !this._canEdit() || !(this.latest && this.latest.stats)) return;
         try {
-            const data = await this._json('/dtwin/clusters/materialize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.preview),
-            });
-            this._notify(
-                `Materialized ${data.cluster_count || 0} clusters (${data.inserted || 0} triples).`,
-                'success'
-            );
-            await this.loadCurrent();
+            const data = await this._json('/dtwin/clusters/materialize', { method: 'POST' });
+            if (typeof refreshTasks === 'function') refreshTasks();
+            this._notify('Writing communities into the graph…', 'info');
+            await this._awaitMaterialize(data.task_id);
         } catch (err) {
             this._notify(err.message || 'Materialize failed', 'danger');
-        } finally {
-            this._busy = false;
-            this._syncMaterializeEnabled();
         }
     },
 
     async clear() {
         if (this._busy || !this._canEdit()) return;
-        this._busy = true;
+        this._setBusy(true);
         try {
             await this._json('/dtwin/clusters/current', { method: 'DELETE' });
             this._notify('Materialized clusters removed.', 'info');
-            this._erasePreview();
             await this.loadCurrent();
         } catch (err) {
             this._notify(err.message || 'Clear failed', 'danger');
         } finally {
-            this._busy = false;
-            this._syncMaterializeEnabled();
+            this._setBusy(false);
         }
     },
 
     async loadCurrent() {
         try {
-            const data = await this._json('/dtwin/clusters/current');
+            const data = await this._json(`/dtwin/clusters/current?top=${this.TOP_CLUSTERS}`);
             this.current = data;
             const clusters = data.clusters || [];
-            this._renderStats('commCurrentStats', {
-                clusters,
-                stats: Object.assign({}, data.stats || {}, {
-                    cluster_count: clusters.length,
-                    node_count: (data.stats && data.stats.node_count != null)
-                        ? data.stats.node_count
-                        : clusters.reduce((n, cl) => n + (cl.size || (cl.members || []).length), 0),
-                }),
-            });
+            const stats = data.stats || {};
+            this._renderStats('commCurrentStats', stats, '');
             const body = document.getElementById('commCurrentBody');
             if (body) {
                 body.innerHTML = clusters.length
-                    ? this._table(clusters)
+                    ? this._table(clusters, stats.cluster_count || clusters.length)
                     : '<p class="text-muted small mb-0">No materialized clusters yet.</p>';
             }
             const explorer = document.getElementById('commExplorerBtn');
@@ -663,7 +796,7 @@ const SimulationCommunities = {
                     : 'Materialize a partition before opening Explorer';
             }
         } catch (err) {
-            this._renderStats('commCurrentStats', { clusters: [] });
+            this._renderStats('commCurrentStats', null, '');
             const body = document.getElementById('commCurrentBody');
             if (body) {
                 body.innerHTML = `<p class="text-muted small mb-0">${this._esc(err.message)}</p>`;

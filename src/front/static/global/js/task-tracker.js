@@ -31,6 +31,8 @@ const TASK_TYPE_URLS = {
     'registry_archive': '/dtwin#sync',
     'quality_checks': '/dtwin#quality',
     'graph_analytics': '/dtwin#analytics',
+    'community_detection': '/simulation/?section=communities',
+    'community_materialize': '/simulation/?section=communities',
     'entity_job_action': '/dtwin',
     'simulation': '/simulation/?section=scenarios'
 };

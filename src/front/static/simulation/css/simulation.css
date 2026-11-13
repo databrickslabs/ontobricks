@@ -593,6 +593,14 @@ a.sim-uri-link:focus-visible {
     overflow-x: hidden;
 }
 
+.comm-current-row {
+    cursor: pointer;
+}
+
+.comm-current-members .comm-member-list {
+    max-height: 14rem;
+}
+
 .comm-main {
     flex: 1 1 0%;
     min-width: 0;

@@ -1,10 +1,12 @@
 """Graph analysis: community detection, cohort discovery, and graph metrics."""
 
 from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
-from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.CommunityMaterializer import CommunityMaterializer
 from back.core.graph_analysis.CommunityVocabulary import CommunityVocabulary
-from back.core.graph_analysis.GraphBuilder import GraphBuilder
+from back.core.graph_analysis.JobCommunities import (
+    JobCommunities,
+    community_output_table,
+)
 from back.core.graph_analysis.JobMetrics import (
     JobMetrics,
     METRIC_SERIES_COLUMNS,
@@ -20,14 +22,12 @@ from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
 from back.core.graph_analysis.preflight import (
     analytics_job_configured,
     analytics_job_status,
+    community_job_configured,
+    community_job_status,
     probe_data_table,
 )
 from back.core.graph_analysis.models import (
     MODE_JOB,
-    ClusterRequest,
-    ClusterResult,
-    DetectionResult,
-    DetectionStats,
     EntityTypeProfile,
     MetricsRequest,
     NodeMetrics,
@@ -116,8 +116,8 @@ __all__ = [
     "CohortVocabulary",
     "CommunityVocabulary",
     "CommunityMaterializer",
-    "CommunityDetector",
-    "GraphBuilder",
+    "JobCommunities",
+    "community_output_table",
     "JobMetrics",
     "METRIC_SERIES_COLUMNS",
     "METRIC_SERIES_SAMPLE_THRESHOLD",
@@ -130,6 +130,8 @@ __all__ = [
     "resolve_analytics_source",
     "analytics_job_configured",
     "analytics_job_status",
+    "community_job_configured",
+    "community_job_status",
     "probe_data_table",
     "EntityTypeProfile",
     "MetricsRequest",
@@ -137,10 +139,6 @@ __all__ = [
     "MetricsStats",
     "MetricsResult",
     "MODE_JOB",
-    "ClusterRequest",
-    "ClusterResult",
-    "DetectionResult",
-    "DetectionStats",
     "CohortHop",
     "CohortLink",
     "CohortCompat",

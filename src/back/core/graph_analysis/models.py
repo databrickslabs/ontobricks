@@ -7,59 +7,6 @@ from typing import Any, Dict, List, Optional
 
 
 # ---------------------------------------------------------------------------
-# Community detection (existing)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class ClusterRequest:
-    """Parameters for a community detection request."""
-
-    algorithm: str = "louvain"
-    resolution: float = 1.0
-    predicate_filter: Optional[List[str]] = None
-    class_filter: Optional[List[str]] = None
-    max_triples: int = 500_000
-
-
-@dataclass
-class ClusterResult:
-    """A single detected community cluster."""
-
-    id: int
-    members: List[str] = field(default_factory=list)
-    size: int = 0
-
-
-@dataclass
-class DetectionStats:
-    """Aggregate statistics from a community detection run."""
-
-    node_count: int = 0
-    edge_count: int = 0
-    cluster_count: int = 0
-    modularity: float = 0.0
-    algorithm: str = "louvain"
-    elapsed_ms: int = 0
-
-
-@dataclass
-class DetectionResult:
-    """Full result of a community detection run.
-
-    ``preview`` is an optional capped entity graph for the Intelligence
-    Community light explorer (``nodes`` / ``edges`` / cap metadata).
-    ``entity_meta`` maps member URIs to ``label`` / ``type`` / ``type_label``
-    so the preview can show entity details without a second round-trip.
-    """
-
-    clusters: List[ClusterResult] = field(default_factory=list)
-    stats: DetectionStats = field(default_factory=DetectionStats)
-    preview: Optional[Dict[str, Any]] = None
-    entity_meta: Optional[Dict[str, Dict[str, str]]] = None
-
-
-# ---------------------------------------------------------------------------
 # Graph metrics (centrality & structure)
 # ---------------------------------------------------------------------------
 

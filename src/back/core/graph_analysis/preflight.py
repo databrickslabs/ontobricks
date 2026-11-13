@@ -24,6 +24,7 @@ from back.core.graph_analysis.JobMetrics import resolve_analytics_source
 from back.core.helpers import (
     resolve_analytics_job_enabled,
     resolve_analytics_job_name,
+    resolve_community_job_name,
 )
 from back.core.logging import get_logger
 
@@ -43,7 +44,7 @@ _ABSENT_MARKERS = (
 )
 
 
-def _names_a_missing_object(exc: Exception) -> bool:
+def names_a_missing_object(exc: Exception) -> bool:
     text = str(exc).lower()
     return any(marker in text for marker in _ABSENT_MARKERS)
 
@@ -72,27 +73,35 @@ def probe_data_table(
         rows = builder.execute_query(f"SELECT 1 AS ok FROM {table} LIMIT 1")
         return bool(rows), ""
     except Exception as exc:  # noqa: BLE001
-        if _names_a_missing_object(exc):
+        if names_a_missing_object(exc):
             logger.info("mapped snapshot %s does not exist yet: %s", table, exc)
             return False, ""
         logger.warning("mapped-snapshot probe failed for %s: %s", table, exc)
         return None, str(exc).strip()
 
 
-def analytics_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
+def analytics_job_configured(
+    domain: Any, settings: Any, *, community: bool = False
+) -> Tuple[bool, str]:
     """Return ``(configured, reason_it_is_not)`` without touching the warehouse.
 
     The reason is empty whenever the toggle is off, because then nothing
     is broken: not using the job is the configured behaviour.
+
+    *community* checks the community-detection job's name instead of the
+    graph-metrics one; both jobs share the toggle and the source snapshot.
     """
     if not resolve_analytics_job_enabled(domain, settings):
         return False, ""
 
-    if not resolve_analytics_job_name(settings):
+    if community:
+        job_name, env_var = resolve_community_job_name(settings), "ONTOBRICKS_COMMUNITY_JOB_NAME"
+    else:
+        job_name, env_var = resolve_analytics_job_name(settings), "ONTOBRICKS_ANALYTICS_JOB_NAME"
+    if not job_name:
         return False, (
-            "No Databricks job name could be determined. Set "
-            "ONTOBRICKS_ANALYTICS_JOB_NAME, or deploy the bundle so the name can "
-            "be derived from the app name."
+            f"No Databricks job name could be determined. Set {env_var}, or "
+            f"deploy the bundle so the name can be derived from the app name."
         )
 
     source, reason = resolve_analytics_source(domain, settings)
@@ -104,13 +113,15 @@ def analytics_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
     return True, ""
 
 
-def analytics_job_status(domain: Any, settings: Any) -> Tuple[bool, str]:
+def analytics_job_status(
+    domain: Any, settings: Any, *, community: bool = False
+) -> Tuple[bool, str]:
     """Return ``(analytics_available, reason_it_is_not)`` for this domain.
 
     :func:`analytics_job_configured` plus a probe that the snapshot
     actually holds triples.
     """
-    configured, reason = analytics_job_configured(domain, settings)
+    configured, reason = analytics_job_configured(domain, settings, community=community)
     if not configured:
         return False, reason
 
@@ -128,3 +139,13 @@ def analytics_job_status(domain: Any, settings: Any) -> Tuple[bool, str]:
         )
 
     return True, ""
+
+
+def community_job_status(domain: Any, settings: Any) -> Tuple[bool, str]:
+    """:func:`analytics_job_status` for the community-detection job."""
+    return analytics_job_status(domain, settings, community=True)
+
+
+def community_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
+    """:func:`analytics_job_configured` for the community-detection job."""
+    return analytics_job_configured(domain, settings, community=True)

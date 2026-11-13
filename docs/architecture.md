@@ -481,7 +481,7 @@ src/
 │   │   │   ├── cdisc/                  # CdiscImportService
 │   │   │   └── iof/                    # IofImportService
 │   │   │
-│   │   ├── graph_analysis/             # Community detection & clustering
+│   │   ├── graph_analysis/             # Graph metrics & community jobs, cohorts
 │   │   │   ├── CommunityDetector.py    # CommunityDetector (NetworkX backend)
 │   │   │   └── models.py              # ClusterRequest, ClusterResult, DetectionResult, DetectionStats
 │   │   │
@@ -1443,33 +1443,45 @@ Materialise still writes to the live graph via `/dtwin/cohorts/*`.
 **Intelligence → Community** configures and detects partitions.
 **Explorer** only visualizes a materialized partition (colour / collapse).
 
-### Preview then materialize
+### Detect on Databricks, then materialize
 
-1. **Detect** (`POST /dtwin/clusters/detect`) runs `CommunityDetector` in
-   memory and returns a preview: cluster list plus a capped entity graph
-   (`graph.nodes` / `graph.edges`, coloured by cluster) for the Intelligence
-   light explorer (no graph writes).
-2. **Materialize** (`POST /dtwin/clusters/materialize`) deletes the previous
-   community triples for the domain, then inserts `Cluster` individuals and
-   `:inCluster` membership (one active partition).
-3. **Explorer** loads assignments with `GET /dtwin/clusters/current` and
-   applies colour-by-cluster and super-node collapse.
+Detection used to load every triple into the app and run NetworkX in memory,
+which could not finish on large domains (proxy timeout, memory). It now runs
+on a dedicated serverless Lakeflow job, and every read the app performs is
+bounded.
 
-### Server-Side (NetworkX)
+1. **Detect** (`POST /dtwin/clusters/detect`) checks `community_job_status`
+   (admin toggle → job name → non-empty `…_data` snapshot), then starts a
+   `community_detection` background task. `TwinAnalytics.detect_clusters`
+   takes an `analytics_snapshot` and calls `JobCommunities.run`, which
+   triggers `<app>-community-detection` through `LakeflowRunner`.
+2. The job (`src/jobs/graph_analytics_job.py --task communities`,
+   `CommunitySQL`) runs **semi-synchronous label propagation** in Spark SQL:
+   each round updates half the nodes (by `md5` parity), a node's own label
+   counts as one vote, ties break on the smallest label, and it stops after
+   two quiet rounds or `lp_iterations` (30). It writes, per domain version:
 
-`CommunityDetector` (`src/back/core/graph_analysis/CommunityDetector.py`)
-loads triples from the store, builds an undirected NetworkX graph (filtering
-out RDF type/label predicates), and runs one of three algorithms:
+   | Table | Content |
+   |-------|---------|
+   | `graph_communities_<slug>` | node → `community_rank` (0 = largest), label, type |
+   | `…_sizes` | size and seed per community |
+   | `…_preview_nodes` / `…_preview_edges` | capped preview (top 20 communities × 75, ≤ 1,500 nodes / 5,000 edges) |
+   | `…_summary` | counts, SQL-computed modularity, rounds, convergence |
 
-| Algorithm | NetworkX Function | Description |
-|-----------|-------------------|-------------|
-| **Louvain** | `community.louvain_communities()` | Modularity-maximizing hierarchical clustering (default) |
-| **Label Propagation** | `community.label_propagation_communities()` | Fast, near-linear-time detection |
-| **Greedy Modularity** | `community.greedy_modularity_communities()` | Greedy agglomerative approach |
+3. **Read back** — `GET /dtwin/clusters/latest` returns the summary, top-N
+   clusters (≤ 200) and the preview; `GET /dtwin/clusters/{id}/members` pages
+   members (≤ 500 per page, `source=latest|materialized`).
+4. **Materialize** (`POST /dtwin/clusters/materialize`) starts a
+   `community_materialize` task. `CommunityMaterializer` clears the previous
+   partition, then on Delta runs two `INSERT … SELECT` statements straight from
+   the job output (no row transits the app); other stores stream keyset
+   batches of 50k memberships. A failure clears the partial partition.
+5. **Explorer** reads totals from `GET /dtwin/clusters/current` (top-N, no
+   members) and looks up memberships for the drawn nodes only with
+   `POST /dtwin/clusters/assignments` (≤ 5,000 URIs per call).
 
-The preview includes cluster membership, modularity, and per-cluster member
-lists. Vocabulary and replace-on-write live in `CommunityVocabulary` and
-`CommunityMaterializer`.
+Bounded reads on Neo4j fall back to a scan of the graph's community triples;
+SQL stores (Delta, Lakebase) aggregate in the database.
 
 ### Visualization (Explorer)
 
@@ -1480,14 +1492,16 @@ lists. Vocabulary and replace-on-write live in `CommunityVocabulary` and
 
 | File | Purpose |
 |------|---------|
-| `src/back/core/graph_analysis/CommunityDetector.py` | `CommunityDetector` — loads triples, builds NetworkX graph, runs algorithm |
+| `src/jobs/graph_analytics_job.py` | `CommunitySQL` / `run_communities` — label propagation and outputs on the job |
+| `resources/community_detection.job.yml` | Bundle job `<app>-community-detection` |
+| `src/back/core/graph_analysis/JobCommunities.py` | Trigger the job and read its bounded outputs |
 | `src/back/core/graph_analysis/CommunityVocabulary.py` | Cluster / `inCluster` URI helpers |
-| `src/back/core/graph_analysis/CommunityMaterializer.py` | Replace-or-clear the active partition |
-| `src/back/core/graph_analysis/models.py` | `ClusterRequest`, `ClusterResult`, `DetectionResult`, `DetectionStats` dataclasses |
-| `src/api/routers/internal/dtwin.py` | detect / current / materialize cluster endpoints |
-| `src/back/objects/digitaltwin/TwinAnalytics.py` | `detect_clusters`, `materialize_clusters`, `load_current_clusters` |
-| `src/front/static/simulation/js/simulation-communities.js` | Intelligence Community preview + materialize UI |
-| `src/front/static/query/js/query-sigmagraph.js` | Colour / collapse from materialized assignments |
+| `src/back/core/graph_analysis/CommunityMaterializer.py` | Set-based materialize, bounded `load_current` / `assignments` / `members`, clear |
+| `src/api/routers/internal/dtwin.py` | detect / latest / members / current / assignments / materialize / clear endpoints |
+| `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and cluster read/write entry points |
+| `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `run_community_task`, `run_community_materialize_task` |
+| `src/front/static/simulation/js/simulation-communities.js` | Intelligence Community UI (tasks, preview, paged members) |
+| `src/front/static/query/js/query-sigmagraph.js` | Colour / collapse from assignments of drawn nodes |
 | `src/front/templates/partials/dtwin/_query_sigmagraph.html` | Data Clusters visualization panel |
 | `src/front/static/query/css/query-sigmagraph.css` | Cluster panel and chip styles |
 

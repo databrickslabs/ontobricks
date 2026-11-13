@@ -15,6 +15,18 @@ from back.objects.digitaltwin.models import DomainSnapshot
 logger = get_logger(__name__)
 
 
+def _error_text(exc: Exception) -> str:
+    """Task failure text: the error message plus its detail, when any."""
+    detail = getattr(exc, "detail", None)
+    return f"{exc}: {detail}" if detail and str(detail) not in str(exc) else str(exc)
+
+
+def _analytics():
+    from back.objects.digitaltwin.TwinAnalytics import TwinAnalytics
+
+    return TwinAnalytics
+
+
 def _dt():
     from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 
@@ -425,6 +437,79 @@ class TwinBackgroundTasks:
                 except Exception:  # noqa: BLE001
                     pass
             tm.fail_task(task_id, str(exc))
+
+    @staticmethod
+    def run_community_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        graph_name: str,
+        *,
+        class_filter: Optional[List[str]] = None,
+        predicate_filter: Optional[List[str]] = None,
+    ) -> None:
+        """Run community detection on the Databricks job in a worker thread.
+
+        The partition stays in the job's output tables; the client reads it
+        through ``/dtwin/clusters/latest`` once the task completes.
+        """
+        try:
+            tm.start_task(task_id, "Detecting communities...")
+            tm.update_progress(task_id, 20, "Starting the Databricks community detection job")
+            stats = _analytics()(domain).detect_clusters(
+                graph_name,
+                class_filter=class_filter,
+                predicate_filter=predicate_filter,
+                settings=settings,
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+            )
+            clusters = int(stats.get("cluster_count", 0) or 0)
+            nodes = int(stats.get("node_count", 0) or 0)
+            tm.complete_task(
+                task_id,
+                result={
+                    "cluster_count": clusters,
+                    "node_count": nodes,
+                    "converged": bool(stats.get("converged", True)),
+                    "run_page_url": stats.get("run_page_url", ""),
+                },
+                message=f"{clusters:,} communities over {nodes:,} nodes (computed on Databricks)",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Community detection task failed: %s", exc)
+            tm.fail_task(task_id, _error_text(exc))
+
+    @staticmethod
+    def run_community_materialize_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        store,
+        graph_name: str,
+    ) -> None:
+        """Write the last detection run into the graph in a worker thread."""
+        try:
+            tm.start_task(task_id, "Materializing communities...")
+            tm.update_progress(task_id, 10, "Clearing the previous partition")
+            result = _analytics()(domain).materialize_clusters(
+                store,
+                graph_name,
+                settings=settings,
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+            )
+            tm.complete_task(
+                task_id,
+                result=result,
+                message=(
+                    f"Materialized {result.get('cluster_count', 0):,} clusters "
+                    f"({result.get('inserted', 0):,} triples)"
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Community materialization task failed: %s", exc)
+            tm.fail_task(task_id, _error_text(exc))
 
     @staticmethod
     def run_inference_task(

@@ -29,6 +29,7 @@ from back.core.graph_analysis import (
     MODE_JOB,
     analytics_job_configured,
     analytics_job_status,
+    community_job_status,
 )
 from back.objects.digitaltwin import (
     CohortEngineContext,
@@ -39,7 +40,9 @@ from back.objects.digitaltwin import (
     NodeBusinessRuleService,
     NodeContextService,
     NodeShaclService,
+    TwinAnalytics,
     TwinAssistantCache,
+    TwinBackgroundTasks,
     TwinDataQualityRun,
     TwinGraphAccess,
     TwinGraphBuild,
@@ -363,69 +366,170 @@ async def load_triplestore(
 # ===========================================
 
 
+def _cluster_graph(domain, settings):
+    """Graph store and graph name for the clusters routes."""
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
+    if not graph_name:
+        raise ValidationError("Graph name is not configured")
+    return store, graph_name
+
+
+def _string_list(value, field: str) -> Optional[list]:
+    if value in (None, "", []):
+        return None
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        raise ValidationError(f"{field} must be a list of strings")
+    return value
+
+
 @router.post("/clusters/detect")
 async def detect_clusters(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Run community detection on the full knowledge graph."""
+    """Start community detection on the Databricks job (background task).
+
+    Clients poll ``/tasks/{task_id}`` and then read ``/dtwin/clusters/latest``.
+    """
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
     assert_domain_graph_read(request)
     try:
         data = await request.json()
-        algorithm = data.get("algorithm", "louvain")
-        resolution = float(data.get("resolution", 1.0))
-        predicate_filter = data.get("predicate_filter")
-        class_filter = data.get("class_filter")
-        max_triples = int(data.get("max_triples", settings.analytics_max_triples))
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    class_filter = _string_list(data.get("class_filter"), "class_filter")
+    predicate_filter = _string_list(data.get("predicate_filter"), "predicate_filter")
 
-        domain = get_domain(session_mgr)
-        store = _require_graph_store(domain, settings)
-        graph_name = _graph_query_table(domain, settings, store)
-        if not graph_name:
-            raise ValidationError("Graph name is not configured")
-
-        dt = DigitalTwin(domain)
-        result = await run_blocking(
-            dt.detect_clusters,
-            store,
-            graph_name,
-            algorithm=algorithm,
-            resolution=resolution,
-            predicate_filter=predicate_filter,
-            class_filter=class_filter,
-            max_triples=max_triples,
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = community_job_status(domain, settings)
+    if not available:
+        raise ValidationError(
+            reason
+            or (
+                "Community detection runs on Databricks, which is not enabled "
+                "for this workspace. Enable 'Compute large-graph metrics on "
+                "Databricks' in Settings."
+            )
         )
 
-        return {"success": True, **result}
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Community Detection",
+        task_type="community_detection",
+        steps=[{"name": "detect", "description": "Detecting communities on Databricks"}],
+    )
 
-    except (ValidationError, InfrastructureError, NotFoundError):
-        raise
-    except ValueError as e:
-        logger.warning("Cluster detection rejected: %s", e)
-        raise ValidationError("Cluster detection parameters are invalid", detail=str(e))
-    except Exception as e:
-        logger.exception("Cluster detection failed: %s", e)
-        raise InfrastructureError("Cluster detection failed", detail=str(e))
+    def run():
+        TwinBackgroundTasks.run_community_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            graph_name,
+            class_filter=class_filter,
+            predicate_filter=predicate_filter,
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": "Community detection started (running on Databricks)",
+    }
+
+
+@router.get("/clusters/latest")
+async def latest_clusters(
+    request: Request,
+    top: int = Query(50, ge=1, le=200),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Summary, top clusters and preview of the last detection run."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = community_job_status(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).latest_clusters, graph_name, settings, top
+    )
+    return {
+        "success": True,
+        **result,
+        "job_available": available,
+        "blocked_reason": "" if available else (reason or ""),
+    }
 
 
 @router.get("/clusters/current")
 async def current_clusters(
     request: Request,
+    top: int = Query(50, ge=1, le=200),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return the materialized community partition, or empty clusters."""
+    """Top materialized clusters and totals (no members), or empty clusters."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store = _require_graph_store(domain, settings)
-    graph_name = _graph_query_table(domain, settings, store)
-    if not graph_name:
-        raise ValidationError("Graph name is not configured")
+    store, graph_name = _cluster_graph(domain, settings)
     result = await run_blocking(
-        DigitalTwin(domain).load_current_clusters, store, graph_name
+        TwinAnalytics(domain).load_current_clusters, store, graph_name, top
     )
     return {"success": True, **result}
+
+
+@router.get("/clusters/{cluster_id}/members")
+async def cluster_members(
+    request: Request,
+    cluster_id: int,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    source: str = Query("latest", pattern="^(latest|materialized)$"),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of a cluster, from the last run or the materialized graph."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    analytics = TwinAnalytics(domain)
+    if source == "materialized":
+        result = await run_blocking(
+            analytics.materialized_members, store, graph_name, cluster_id, offset, limit
+        )
+    else:
+        result = await run_blocking(
+            analytics.cluster_members, graph_name, cluster_id, offset, limit, settings
+        )
+    return {"success": True, **result}
+
+
+@router.post("/clusters/assignments")
+async def cluster_assignments(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Materialized cluster id for each requested entity URI (drawn nodes)."""
+    assert_domain_graph_read(request)
+    data = await request.json()
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    uris = _string_list(data.get("uris"), "uris") or []
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    assignments = await run_blocking(
+        TwinAnalytics(domain).cluster_assignments, store, graph_name, uris
+    )
+    return {"success": True, "assignments": assignments}
 
 
 @router.post(
@@ -437,28 +541,30 @@ async def materialize_clusters(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Write the preview partition into the knowledge graph (replaces previous)."""
+    """Write the last detection run into the graph (background task)."""
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
     assert_domain_graph_read(request)
-    data = await request.json()
-    if not isinstance(data, dict):
-        raise ValidationError("Body must be a JSON object")
-    clusters = data.get("clusters")
-    if not isinstance(clusters, list):
-        raise ValidationError("clusters must be a list")
-    stats = data.get("stats") if isinstance(data.get("stats"), dict) else {}
     domain = get_domain(session_mgr)
-    store = _require_graph_store(domain, settings)
-    graph_name = _graph_query_table(domain, settings, store)
-    if not graph_name:
-        raise ValidationError("Graph name is not configured")
-    result = await run_blocking(
-        DigitalTwin(domain).materialize_clusters,
-        store,
-        graph_name,
-        clusters,
-        stats,
+    store, graph_name = _cluster_graph(domain, settings)
+    if not await run_blocking(TwinAnalytics(domain).detection_summary, graph_name, settings):
+        raise ValidationError("No community detection run to materialize. Run Detect first.")
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Materialize Communities",
+        task_type="community_materialize",
+        steps=[{"name": "write", "description": "Writing clusters into the graph"}],
     )
-    return {"success": True, **result}
+
+    def run():
+        TwinBackgroundTasks.run_community_materialize_task(
+            tm, task.id, domain, settings, store, graph_name
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"success": True, "task_id": task.id, "message": "Materialization started"}
 
 
 @router.delete(
@@ -473,12 +579,9 @@ async def delete_current_clusters(
     """Drop the materialized community partition."""
     assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
-    store = _require_graph_store(domain, settings)
-    graph_name = _graph_query_table(domain, settings, store)
-    if not graph_name:
-        raise ValidationError("Graph name is not configured")
+    store, graph_name = _cluster_graph(domain, settings)
     result = await run_blocking(
-        DigitalTwin(domain).clear_clusters, store, graph_name
+        TwinAnalytics(domain).clear_clusters, store, graph_name
     )
     return {"success": True, **result}
 

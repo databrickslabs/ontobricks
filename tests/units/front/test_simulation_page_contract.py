@@ -85,6 +85,7 @@ def test_community_size_stats_helpers():
     assert "Size avg" in js
     assert "Size median" in js
     assert "Clusters" in js
+    assert "size_median" in js
 
 
 def test_communities_section_owns_detection():
@@ -118,17 +119,34 @@ def test_communities_section_owns_detection():
     assert "/dtwin/clusters/materialize" in js
     assert "_renderPreviewGraph" in js
     assert "_renderStats" in js
-    assert "_sizeStats" in js
     assert "_selectCluster" in js
     assert "_showClusterDetails" in js
     assert "_memberInfo" in js
     assert "_typeIcon" in js
     assert "_erasePreview" in js
     assert "_showPreviewLoading" in js
-    assert "entity_meta" in js
     assert "clickNode" in js
     assert "commPreviewCanvas" in js
     assert "comm-member-type" in js
+
+
+def test_community_detection_runs_as_a_databricks_task():
+    """Detect and Materialize are background tasks; reads are bounded."""
+    comm = _read(FRONT / "templates/partials/simulation/_sim_communities.html")
+    assert "Label propagation (Databricks)" in comm
+    assert 'id="commResolution"' not in comm
+    assert 'id="commClassFilter"' in comm
+    assert 'id="commJobStatus"' in comm
+    assert "Detection runs on Databricks" in comm
+    js = _read(FRONT / "static/simulation/js/simulation-communities.js")
+    assert "waitForTask" in js
+    assert "/dtwin/clusters/latest" in js
+    assert "community_detection" in js
+    assert "community_materialize" in js
+    assert "/members?" in js
+    assert "Load more" in js
+    assert "blocked_reason" in js
+    assert "JSON.stringify(this.preview)" not in js
 
 
 def test_no_inline_scripts_or_styles():
@@ -687,3 +705,12 @@ def test_evaluate_css_fills_the_tab_height():
     css = _read(FRONT / "static/simulation/css/simulation.css")
     assert "#simCompareTabContent > .tab-pane.active" in css
     assert ".sim-eval-output" in css
+
+
+def test_community_tasks_have_an_open_task_link():
+    """Community tasks reach the tracker's "Open task" / notification links."""
+    tracker = _read(FRONT / "static/global/js/task-tracker.js")
+    for task_type in ("community_detection", "community_materialize"):
+        assert f"'{task_type}': '/simulation/?section=communities'" in tracker
+    menu = _read(FRONT / "config/menu_config.json")
+    assert '"id": "communities"' in menu

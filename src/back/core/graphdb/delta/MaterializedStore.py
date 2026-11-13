@@ -280,6 +280,23 @@ class MaterializedStore(ReadStore, MaterializedGraphBackend):
         )
         return self._execute_insert_triples(target, triples, batch_size, on_progress)
 
+    def insert_triples_from_select(self, table_name: str, select_sql: str) -> None:
+        """``INSERT INTO <companion> SELECT …`` on the warehouse.
+
+        *select_sql* must project ``subject, predicate, object``. Used for
+        bulk writes whose rows already live in Delta (community partitions),
+        so no row transits the app.
+        """
+        target = (
+            table_name
+            if self._domain is None
+            else self._ensure_companion_objects(table_name)
+        )
+        validate_table_name(target)
+        self._client.execute_statement(
+            f"INSERT INTO {target} (subject, predicate, object)\n{select_sql}"
+        )
+
     def optimize_inferred_companion(self, table_name: str) -> None:
         """Compact and re-cluster the inferred companion after app writes."""
         try:

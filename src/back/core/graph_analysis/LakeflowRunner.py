@@ -53,8 +53,10 @@ class LakeflowRunner:
         sleep: Optional[Callable[[float], None]] = None,
         poll_interval_s: float = DEFAULT_POLL_INTERVAL_S,
         timeout_s: int = DEFAULT_TIMEOUT_S,
+        running_label: str = "Computing graph metrics on Databricks",
     ) -> None:
         self._job_name = (job_name or "").strip()
+        self._running_label = running_label
         self._client_factory = client_factory or self._default_factory
         self._sleep = sleep or time.sleep
         self._poll_interval_s = max(0.0, float(poll_interval_s))
@@ -160,17 +162,28 @@ class LakeflowRunner:
         max_depth: int = 32,
         class_filter: Optional[List[str]] = None,
     ) -> int:
-        """Start a run and return its run id."""
+        """Start a graph-metrics run and return its run id."""
+        return self.submit_params(
+            {
+                "source_table": source_table,
+                "output_table": output_table,
+                "exclude_predicates": ",".join(exclude_predicates or []),
+                "pagerank_iterations": str(int(pagerank_iterations)),
+                "pivots": str(int(pivots)),
+                "max_depth": str(int(max_depth)),
+                "class_filter": ",".join(class_filter or []),
+            }
+        )
+
+    def submit_params(self, params: Dict[str, str]) -> int:
+        """Start a run with *params* as ``job_parameters`` and return its run id.
+
+        The job-agnostic entry point: each job declares its own parameter set,
+        so the caller owns the dict and every value must already be a string.
+        """
         job_id = self.resolve_job_id()
-        params = {
-            "source_table": source_table,
-            "output_table": output_table,
-            "exclude_predicates": ",".join(exclude_predicates or []),
-            "pagerank_iterations": str(int(pagerank_iterations)),
-            "pivots": str(int(pivots)),
-            "max_depth": str(int(max_depth)),
-            "class_filter": ",".join(class_filter or []),
-        }
+        source_table = params.get("source_table", "")
+        output_table = params.get("output_table", "")
         try:
             started = self._w().jobs.run_now(job_id=job_id, job_parameters=params)
         except Exception as exc:  # noqa: BLE001
@@ -229,6 +242,8 @@ class LakeflowRunner:
             if life_cycle != last_state:
                 last_state = life_cycle
                 percent, label = self._progress_for(life_cycle)
+                if life_cycle == "RUNNING":
+                    label = self._running_label
                 logger.info("Graph analytics run %s: %s %s", run_id, life_cycle, message)
                 if on_progress:
                     on_progress(percent, label)
@@ -275,6 +290,14 @@ class LakeflowRunner:
             class_filter=class_filter,
         )
         return self.wait_for(run_id, on_progress=on_progress)
+
+    def run_params_and_wait(
+        self,
+        params: Dict[str, str],
+        on_progress: Optional[Callable[[int, str], None]] = None,
+    ) -> Dict[str, Any]:
+        """Job-agnostic counterpart of :meth:`run_and_wait`."""
+        return self.wait_for(self.submit_params(params), on_progress=on_progress)
 
     @staticmethod
     def _progress_for(life_cycle: str) -> tuple:

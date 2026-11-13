@@ -273,3 +273,180 @@ Modified files:
 - changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
 
 Tests: 10323 passed, 323 skipped, 8 deselected, 39 warnings in 48.86s
+
+================================================================================
+Community detection at scale: label propagation on a Databricks job
+================================================================================
+
+Context:
+Intelligence → Community → Detect failed or returned nothing on large domains
+(e.g. Customers100M). Detection loaded every triple into the app and ran
+NetworkX in memory inside a synchronous request: the triple guard only fired
+after the full load, the request hit the Databricks Apps proxy timeout, and
+detect / materialize / current all moved unbounded member lists between the
+browser and the server. Detection now runs as semi-synchronous label
+propagation in Spark SQL on a dedicated serverless Lakeflow job; the app reads
+back bounded results, materializes server-side, and every heavy step is a
+background task.
+
+Changes:
+1. src/jobs/graph_analytics_job.py — new `CommunitySQL` builder and
+   `run_communities` stage runner (`--task communities`): portable LPA
+   (md5-parity half updates, self vote, smallest-label tie break, stop after
+   two quiet rounds or `--lp-iterations`), SQL modularity, and the outputs
+   `graph_communities_<slug>`, `…_sizes`, `…_preview_nodes`,
+   `…_preview_edges` (≤ 1,500 nodes / 5,000 edges) and `…_summary`.
+2. resources/community_detection.job.yml — new bundle job
+   `<app>-community-detection` (same script, max_concurrent_runs 1).
+3. scripts/bootstrap/app-permissions.sh — grants CAN_MANAGE_RUN on both
+   analytics jobs.
+4. src/back/core/graph_analysis/LakeflowRunner.py — `submit_params`,
+   `run_params_and_wait` and a configurable running label.
+5. src/back/core/graph_analysis/JobCommunities.py (new) — triggers the job and
+   reads its outputs with bounded queries (summary, top clusters ≤ 200,
+   preview, member pages ≤ 500, keyset batches).
+6. src/back/core/graph_analysis/CommunityMaterializer.py — rewritten:
+   `INSERT … SELECT` from the job output on Delta, 50k keyset batches on other
+   stores, clear on failure; bounded `load_current(limit)`,
+   `assignments(uris)` (≤ 5,000) and `members(cluster_id, offset, limit)`.
+7. src/back/core/graphdb/delta/MaterializedStore.py — new
+   `insert_triples_from_select` writing into the inferred companion table.
+8. src/back/core/graph_analysis/preflight.py, helpers/DatabricksHelpers.py —
+   `community_job_status` / `community_job_configured` and
+   `resolve_community_job_name`.
+9. src/back/objects/digitaltwin/TwinAnalytics.py — job wiring
+   (`build_job_communities`, shared `analytics_output_schema`), detect on the
+   analytics snapshot, latest / members / summary reads, materialize and
+   bounded materialized reads.
+10. src/back/objects/digitaltwin/TwinBackgroundTasks.py — `run_community_task`
+    and `run_community_materialize_task`; task failures keep the error detail
+    (job run URL).
+11. src/api/routers/internal/dtwin.py — detect and materialize return a
+    task_id (preflight / "Run Detect first" → 400); new
+    `GET /clusters/latest`, `GET /clusters/{id}/members`,
+    `POST /clusters/assignments`; `GET /clusters/current` is top-N without
+    members.
+12. Removed `CommunityDetector`, `graph_analysis/GraphBuilder.py`,
+    `ClusterRequest` / `ClusterResult` / `DetectionResult` / `DetectionStats`,
+    the `analytics_max_triples` setting and `ONTOBRICKS_ANALYTICS_MAX_TRIPLES`;
+    added `ONTOBRICKS_COMMUNITY_JOB_NAME`. The DigitalTwin cluster delegators
+    were dropped (routes call TwinAnalytics / TwinBackgroundTasks directly).
+13. src/front/static/simulation/js/simulation-communities.js,
+    _sim_communities.html, simulation.css — Detect / Materialize run as
+    tracked tasks (resumed on section open), single "Label propagation
+    (Databricks)" algorithm, entity-type scope, inline preflight reason,
+    run status line (rounds, convergence, Databricks run link), members paged
+    on demand, Materialized panel rows expand to paged members.
+14. src/front/static/query/js/query-sigmagraph.js — Explorer reads totals from
+    `/clusters/current` and looks up assignments for drawn nodes only.
+15. tests/units/architecture/baseline.json — ratchet tightened; manual entry
+    for `jobs/graph_analytics_job.py` (2 classes: the job script must stay a
+    single standalone file on the Spark driver).
+16. Docs — README, getting-started (env vars), user-guide, architecture
+    (new "Detect on Databricks, then materialize" section), product,
+    development, Sphinx graph_analysis page, help modal.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- resources/community_detection.job.yml (new)
+- scripts/bootstrap/app-permissions.sh
+- app.yaml.template
+- src/shared/config/settings.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/core/graph_analysis/LakeflowRunner.py
+- src/back/core/graph_analysis/preflight.py
+- src/back/core/graph_analysis/JobCommunities.py (new)
+- src/back/core/graph_analysis/CommunityMaterializer.py
+- src/back/core/graph_analysis/CommunityDetector.py (deleted)
+- src/back/core/graph_analysis/GraphBuilder.py (deleted)
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/core/graphdb/delta/MaterializedStore.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-sigmagraph.js
+- README.md
+- docs/getting-started.md
+- docs/user-guide.md
+- docs/architecture.md
+- docs/product.md
+- docs/development.md
+- docs/sphinx/api/app.core.graph_analysis.rst
+- tests/units/core/test_community_job_sql.py (new)
+- tests/units/core/test_job_communities.py (new)
+- tests/units/core/test_community_materializer.py
+- tests/units/core/test_community_detector.py (deleted)
+- tests/units/api/test_dtwin_clusters.py (new)
+- tests/units/dtwin/test_v090_twin_analytics.py
+- tests/units/settings/test_bundle_job_resource.py
+- tests/units/settings/test_app_yaml_template.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_explorer_clusters_readonly.py
+- tests/units/architecture/baseline.json
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: 10360 passed, 323 skipped, 8 deselected, 39 warnings in 44.60s
+
+--------------------------------------------------------------------------------
+Community tasks follow-up: task tracker links
+--------------------------------------------------------------------------------
+
+Context:
+Community detection and materialization already run as TaskManager tasks, so
+they appear in the task dropdown and notification centre like the other async
+tasks. Their "Open task" and notification links had no entry in the tracker's
+task-type map, so clicking them did nothing. They now deep-link to
+Intelligence → Community, as graph analytics links to its page.
+
+Changes:
+1. src/front/static/global/js/task-tracker.js — `TASK_TYPE_URLS` maps
+   `community_detection` and `community_materialize` to
+   `/simulation/?section=communities`.
+2. tests/units/front/test_simulation_page_contract.py — new
+   `test_community_tasks_have_an_open_task_link` pins the mapping and the
+   `communities` sidebar key.
+
+Modified files:
+- src/front/static/global/js/task-tracker.js
+- tests/units/front/test_simulation_page_contract.py
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: 10361 passed, 323 skipped, 8 deselected, 39 warnings in 48.24s
+
+--------------------------------------------------------------------------------
+Community job name: fall back from the analytics job name
+--------------------------------------------------------------------------------
+
+Context:
+Locally, `.env` pins `ONTOBRICKS_ANALYTICS_JOB_NAME` because
+`DATABRICKS_APP_NAME` is absent outside Apps. Community detection had no
+matching pin and no app name to derive from, so preflight reported
+"No Databricks job name could be determined" even though analytics was
+configured. The community resolver now derives from the analytics job name
+when both the explicit community setting and the app name are empty.
+
+Changes:
+1. src/back/core/helpers/DatabricksHelpers.py —
+   `resolve_community_job_name` falls back by replacing `-graph-analytics`
+   with `-community-detection` on the resolved analytics job name.
+2. .env — `ONTOBRICKS_COMMUNITY_JOB_NAME=ontobricks-07x-community-detection`
+   (local pin, parallel to the analytics job).
+3. tests/units/core/test_helpers.py — `TestResolveCommunityJobName` covers
+   explicit, app-name, analytics-fallback, and bundle-name drift.
+4. docs/getting-started.md — documents the analytics-name fallback.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- tests/units/core/test_helpers.py
+- docs/getting-started.md
+- .env
+- changelogs/v0.10.0/benoitcayladbx_2026-11-12.log
+
+Tests: TestResolveCommunityJobName + TestResolveAnalyticsJobName — 13 passed

@@ -4,12 +4,12 @@
         <div class="me-auto">
             <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Community detection</h4>
             <p class="text-muted mb-0 small">
-                Detect communities on the live knowledge graph, preview the partition,
-                then materialize it so Explorer can colour and collapse clusters.
+                Detect communities across the whole knowledge graph on Databricks, preview
+                the partition, then materialize it so Explorer can colour and collapse clusters.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="commRefreshBtn" title="Reload materialized partition">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="commRefreshBtn" title="Reload the last run and the materialized partition">
                 <i class="bi bi-arrow-clockwise"></i>
             </button>
             <button type="button" class="btn btn-sm btn-outline-warning" id="commClearBtn" title="Remove materialized clusters from the graph">
@@ -33,20 +33,17 @@
             <div class="card comm-config-card">
                 <div class="card-body py-2 px-3">
                     <label class="form-label small fw-semibold mb-1" for="commAlgorithm">Algorithm</label>
-                    <select class="form-select form-select-sm mb-2" id="commAlgorithm">
-                        <option value="louvain" selected>Louvain</option>
-                        <option value="label_propagation">Label Propagation</option>
-                        <option value="greedy_modularity">Greedy Modularity</option>
+                    <select class="form-select form-select-sm mb-2" id="commAlgorithm" disabled>
+                        <option value="label_propagation" selected>Label propagation (Databricks)</option>
                     </select>
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <label class="form-label small fw-semibold mb-0" for="commResolution">Resolution</label>
-                        <span class="small text-muted" id="commResolutionValue">1.00</span>
-                    </div>
-                    <input type="range" class="form-range mb-1" id="commResolution"
-                           min="0.1" max="3.0" step="0.05" value="1.0">
+                    <label class="form-label small fw-semibold mb-1" for="commClassFilter">Scope</label>
+                    <select class="form-select form-select-sm mb-2" id="commClassFilter">
+                        <option value="" selected>All entity types</option>
+                    </select>
                     <p class="form-text small mb-0 text-muted">
-                        Detection runs in memory. Materialize writes to graph.
+                        Detection runs on Databricks. Materialize writes to the graph.
                     </p>
+                    <div id="commJobStatus" class="alert alert-warning small py-2 px-2 mt-2 mb-0 d-none" role="status"></div>
                 </div>
             </div>
 
@@ -77,7 +74,7 @@
                         <div class="text-center">
                             <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
                             <h6 class="fw-semibold mb-1">Detecting communities…</h6>
-                            <p class="small text-muted mb-0">Building graph and running community detection algorithm.</p>
+                            <p class="small text-muted mb-0" id="commPreviewLoadingMsg">Running label propagation on Databricks…</p>
                         </div>
                     </div>
                     <div id="commPreviewEmpty" class="comm-preview-empty text-muted small">

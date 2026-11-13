@@ -24,6 +24,9 @@ def test_sigma_hydrates_from_current_endpoint():
     js = SIGMA_JS.read_text(encoding="utf-8")
     assert "/dtwin/clusters/current" in js
     assert "_ensureMaterializedClusters" in js
+    # Memberships are looked up for drawn nodes only, never loaded wholesale.
+    assert "/dtwin/clusters/assignments" in js
+    assert "cl.members" not in js
     assert "function _detectClusters" not in js
     assert "detectClusters:" not in js
     assert "detectClustersBackend:" not in js
