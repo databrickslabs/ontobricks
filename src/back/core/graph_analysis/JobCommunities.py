@@ -70,11 +70,8 @@ def _bounded(value: Any, default: int, upper: int) -> int:
 
 
 def summary_query(out: str) -> str:
-    return (
-        "SELECT node_count, edge_count, community_count, modularity, iterations, "
-        "converged, algorithm, class_filter, source_table, computed_at "
-        f"FROM {out}_summary"
-    )
+    # SELECT * so older summary tables (pre-elapsed_ms) still read cleanly.
+    return f"SELECT * FROM {out}_summary"
 
 
 def size_stats_query(out: str) -> str:
@@ -209,7 +206,10 @@ class JobCommunities:
             on_progress(90, "Reading communities back")
         stats = self.summary() or {}
         stats["run_page_url"] = outcome.get("run_page_url", "")
-        stats["elapsed_ms"] = int((time.time() - t0) * 1000)
+        # Prefer the job-persisted detection duration; fall back to wait time
+        # when the summary table predates the elapsed_ms column.
+        if stats.get("elapsed_ms") is None:
+            stats["elapsed_ms"] = int((time.time() - t0) * 1000)
         return stats
 
     # ------------------------------------------------------------------
@@ -231,6 +231,11 @@ class JobCommunities:
         if not rows:
             return None
         row = rows[0]
+        elapsed_raw = row.get("elapsed_ms")
+        try:
+            elapsed_ms = int(elapsed_raw) if elapsed_raw is not None else None
+        except (TypeError, ValueError):
+            elapsed_ms = None
         stats: Dict[str, Any] = {
             "node_count": int(row.get("node_count", 0) or 0),
             "edge_count": int(row.get("edge_count", 0) or 0),
@@ -243,6 +248,7 @@ class JobCommunities:
                 c for c in str(row.get("class_filter") or "").split(",") if c
             ],
             "computed_at": str(row.get("computed_at") or ""),
+            "elapsed_ms": elapsed_ms,
         }
         stats.update(self._size_stats())
         return stats

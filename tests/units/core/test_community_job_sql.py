@@ -136,6 +136,9 @@ class TestOutputs:
         assert row["algorithm"] == COMMUNITY_ALGORITHM
         assert row["computed_at"] == "2026-11-12T00:00:00Z"
         assert stats["edge_count"] == row["edge_count"]
+        assert isinstance(row["elapsed_ms"], int)
+        assert row["elapsed_ms"] >= 0
+        assert stats["elapsed_ms"] == row["elapsed_ms"]
 
     def test_preview_is_capped_per_community(self):
         # 30 disjoint triangles: only the 20 largest communities are sampled.

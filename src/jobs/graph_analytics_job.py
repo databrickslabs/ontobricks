@@ -30,6 +30,7 @@ import argparse
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -1257,6 +1258,7 @@ class CommunitySQL(GraphAnalyticsSQL):
             f"'{sql_escape(','.join(self.class_filter))}' AS class_filter",
             f"'{sql_escape(str(stats['source_table']))}' AS source_table",
             f"'{sql_escape(str(stats.get('computed_at', '') or ''))}' AS computed_at",
+            f"{int(stats.get('elapsed_ms', 0) or 0)} AS elapsed_ms",
         ]
         return self._recreate(
             self.summary_table, "SELECT " + ",\n       ".join(columns)
@@ -1310,6 +1312,7 @@ def _run_community_stages(
     min_change_ratio: float,
     computed_at: str,
 ) -> Dict[str, object]:
+    t0 = time.time()
     for stmt in builder.build_edges():
         execute(stmt)
     node_count = int(scalar(builder.node_count_query()) or 0)
@@ -1363,6 +1366,7 @@ def _run_community_stages(
         "algorithm": COMMUNITY_ALGORITHM,
         "source_table": builder.source_table,
         "computed_at": computed_at,
+        "elapsed_ms": int((time.time() - t0) * 1000),
     }
     for stmt in builder.write_community_summary(stats):
         execute(stmt)

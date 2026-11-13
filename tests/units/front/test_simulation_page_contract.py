@@ -108,6 +108,8 @@ def test_communities_section_owns_detection():
     assert 'id="commPreviewStats"' in comm
     assert 'id="commPreviewDetails"' in comm
     assert 'id="commPreviewLoading"' in comm
+    assert 'id="commPreviewLoadingTitle"' in comm
+    assert 'id="commCurrentLoading"' in comm
     assert 'id="commPreviewBody"' not in comm
     assert 'id="commPreviewClusters"' not in comm
     # Detect lives in the top-right header actions, not in the algorithm card.
@@ -125,9 +127,19 @@ def test_communities_section_owns_detection():
     assert "_typeIcon" in js
     assert "_erasePreview" in js
     assert "_showPreviewLoading" in js
+    assert "_showCurrentLoading" in js
+    assert "_setBtnSpinner" in js
+    assert "ob-btn-spinner" in js
+    assert "_fmtElapsed" in js
+    assert "duration ${duration}" in js or "duration " in js
+    assert "elapsed_ms" in js
     assert "clickNode" in js
     assert "commPreviewCanvas" in js
     assert "comm-member-type" in js
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert ".comm-current-loading" in css
+    assert "#commDetectBtn.is-busy" in css
+    assert "#commMaterializeBtn.is-busy" in css
 
 
 def test_community_detection_runs_as_a_databricks_task():

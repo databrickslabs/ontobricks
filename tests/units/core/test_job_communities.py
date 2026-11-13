@@ -71,6 +71,8 @@ def test_latest_returns_stats_clusters_and_preview(detected):
     assert stats["node_count"] == 12
     assert stats["size_max"] == 6 and stats["size_min"] == 2
     assert stats["size_median"] == 4
+    assert isinstance(stats["elapsed_ms"], int)
+    assert stats["elapsed_ms"] >= 0
     assert [c["id"] for c in out["clusters"]] == [0, 1, 2]
     assert [c["size"] for c in out["clusters"]] == [6, 4, 2]
     assert out["graph"]["node_total"] == 12

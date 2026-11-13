@@ -114,6 +114,22 @@ const SimulationCommunities = {
         this._syncMaterializeEnabled();
     },
 
+    /** Mirror navbar Save: swap the button icon for a spinner while the action runs. */
+    _setBtnSpinner(btnId, busy) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.classList.toggle('is-busy', busy);
+        btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+        btn.querySelector('i.bi')?.classList.toggle('d-none', busy);
+        btn.querySelector('.ob-btn-spinner')?.remove();
+        if (busy) {
+            btn.insertAdjacentHTML(
+                'afterbegin',
+                '<span class="spinner-border spinner-border-sm ob-btn-spinner" role="status" aria-hidden="true"></span>'
+            );
+        }
+    },
+
     _renderJobStatus() {
         const el = document.getElementById('commJobStatus');
         if (!el) return;
@@ -160,6 +176,19 @@ const SimulationCommunities = {
         return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
     },
 
+    /** Same scale as analytics / task tracker (``formatTaskSeconds``). */
+    _fmtElapsed(ms) {
+        if (ms == null || Number.isNaN(Number(ms))) return '';
+        const n = Number(ms);
+        if (window.formatTaskSeconds) return window.formatTaskSeconds(n / 1000);
+        if (n < 1000) return `${Math.round(n)} ms`;
+        const s = n / 1000;
+        if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`;
+        const m = Math.floor(s / 60);
+        const rem = Math.round(s % 60);
+        return `${m}m ${rem}s`;
+    },
+
     _renderStats(elId, stats, meta) {
         const el = document.getElementById(elId);
         if (!el) return;
@@ -200,6 +229,8 @@ const SimulationCommunities = {
         if (s.iterations != null) {
             parts.push(this._esc(`${s.iterations} rounds${s.converged === false ? ' (not converged)' : ''}`));
         }
+        const duration = this._fmtElapsed(s.elapsed_ms);
+        if (duration) parts.push(this._esc(`duration ${duration}`));
         if (s.class_filter && s.class_filter.length) {
             parts.push(this._esc(`scope: ${s.class_filter.map((u) => this._shortLabel(u)).join(', ')}`));
         }
@@ -208,8 +239,9 @@ const SimulationCommunities = {
         if (graph && graph.capped) {
             parts.push(this._esc(`preview ${(graph.nodes || []).length.toLocaleString()} of ${Number(graph.node_total || 0).toLocaleString()} nodes`));
         }
-        if (this.runPageUrl) {
-            parts.push(`<a href="${this._esc(this.runPageUrl)}" target="_blank" rel="noopener">Databricks run <i class="bi bi-box-arrow-up-right"></i></a>`);
+        if (this.runPageUrl || s.run_page_url) {
+            const url = this.runPageUrl || s.run_page_url;
+            parts.push(`<a href="${this._esc(url)}" target="_blank" rel="noopener">Databricks run <i class="bi bi-box-arrow-up-right"></i></a>`);
         }
         return parts.join(' · ');
     },
@@ -618,12 +650,14 @@ const SimulationCommunities = {
         this._syncMaterializeEnabled();
     },
 
-    _showPreviewLoading(loading, message) {
+    _showPreviewLoading(loading, message, title) {
         const loadingEl = document.getElementById('commPreviewLoading');
         const emptyEl = document.getElementById('commPreviewEmpty');
         const layoutEl = document.getElementById('commPreviewLayout');
         const statsEl = document.getElementById('commPreviewStats');
         const msgEl = document.getElementById('commPreviewLoadingMsg');
+        const titleEl = document.getElementById('commPreviewLoadingTitle');
+        if (titleEl && title) titleEl.textContent = title;
         if (msgEl && message) msgEl.textContent = message;
         if (loading) {
             if (loadingEl) loadingEl.classList.remove('d-none');
@@ -632,6 +666,20 @@ const SimulationCommunities = {
             if (statsEl) statsEl.classList.add('d-none');
         } else if (loadingEl) {
             loadingEl.classList.add('d-none');
+        }
+    },
+
+    _showCurrentLoading(loading) {
+        const loadingEl = document.getElementById('commCurrentLoading');
+        const body = document.getElementById('commCurrentBody');
+        const statsEl = document.getElementById('commCurrentStats');
+        if (loading) {
+            if (loadingEl) loadingEl.classList.remove('d-none');
+            if (body) body.classList.add('d-none');
+            if (statsEl) statsEl.classList.add('d-none');
+        } else {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            if (body) body.classList.remove('d-none');
         }
     },
 
@@ -672,7 +720,15 @@ const SimulationCommunities = {
         }
     },
 
-    async loadLatest() {
+    async loadLatest(opts) {
+        const quiet = !!(opts && opts.quiet);
+        if (!quiet) {
+            this._showPreviewLoading(
+                true,
+                'Fetching the last detection run…',
+                'Loading preview…'
+            );
+        }
         try {
             const data = await this._json(`/dtwin/clusters/latest?top=${this.TOP_CLUSTERS}`);
             this.blockedReason = data.job_available === false ? (data.blocked_reason || '') : '';
@@ -689,6 +745,7 @@ const SimulationCommunities = {
             this._renderStats('commPreviewStats', data.stats, this._runMeta(data.stats, graph));
             await this._renderPreviewGraph(graph);
         } catch (err) {
+            this._showPreviewLoading(false);
             this._notify(err.message || 'Could not load the last detection run', 'danger');
         } finally {
             this._syncMaterializeEnabled();
@@ -697,13 +754,20 @@ const SimulationCommunities = {
 
     async _awaitDetection(taskId) {
         this._setBusy(true);
-        this._showPreviewLoading(true, 'Running label propagation on Databricks…');
+        this._setBtnSpinner('commDetectBtn', true);
+        this._showPreviewLoading(
+            true,
+            'Running label propagation on Databricks…',
+            'Detecting communities…'
+        );
         try {
             const task = await waitForTask(taskId, (t) => {
-                if (t && t.message) this._showPreviewLoading(true, t.message);
+                if (t && t.message) {
+                    this._showPreviewLoading(true, t.message, 'Detecting communities…');
+                }
             });
             this.runPageUrl = (task.result && task.result.run_page_url) || '';
-            await this.loadLatest();
+            await this.loadLatest({ quiet: true });
             const stats = (this.latest && this.latest.stats) || {};
             this._notify(
                 `${this._fmtNum(stats.cluster_count || 0)} communities detected — materialize to publish.`,
@@ -711,9 +775,10 @@ const SimulationCommunities = {
             );
         } catch (err) {
             this._showPreviewLoading(false);
-            await this.loadLatest();
+            await this.loadLatest({ quiet: true });
             this._notify(err.message || 'Detection failed', 'danger');
         } finally {
+            this._setBtnSpinner('commDetectBtn', false);
             this._setBusy(false);
         }
     },
@@ -721,6 +786,8 @@ const SimulationCommunities = {
     async detect() {
         if (this._busy || !this._canEdit() || this.blockedReason) return;
         const scope = document.getElementById('commClassFilter')?.value || '';
+        this._setBtnSpinner('commDetectBtn', true);
+        this._setBusy(true);
         try {
             const data = await this._json('/dtwin/clusters/detect', {
                 method: 'POST',
@@ -729,33 +796,44 @@ const SimulationCommunities = {
             });
             if (typeof refreshTasks === 'function') refreshTasks();
             this._notify('Community detection started on Databricks.', 'info');
+            // _awaitDetection owns busy/spinner teardown.
             await this._awaitDetection(data.task_id);
         } catch (err) {
+            this._setBtnSpinner('commDetectBtn', false);
+            this._setBusy(false);
             this._notify(err.message || 'Detection failed', 'danger');
         }
     },
 
     async _awaitMaterialize(taskId) {
         this._setBusy(true);
+        this._setBtnSpinner('commMaterializeBtn', true);
+        this._showCurrentLoading(true);
         try {
             const task = await waitForTask(taskId);
             this._notify(task.message || 'Communities materialized.', 'success');
         } catch (err) {
             this._notify(err.message || 'Materialize failed', 'danger');
         } finally {
+            this._setBtnSpinner('commMaterializeBtn', false);
             this._setBusy(false);
-            await this.loadCurrent();
+            await this.loadCurrent({ quiet: true });
         }
     },
 
     async materialize() {
         if (this._busy || !this._canEdit() || !(this.latest && this.latest.stats)) return;
+        this._setBtnSpinner('commMaterializeBtn', true);
+        this._setBusy(true);
         try {
             const data = await this._json('/dtwin/clusters/materialize', { method: 'POST' });
             if (typeof refreshTasks === 'function') refreshTasks();
             this._notify('Writing communities into the graph…', 'info');
+            // _awaitMaterialize owns busy/spinner teardown.
             await this._awaitMaterialize(data.task_id);
         } catch (err) {
+            this._setBtnSpinner('commMaterializeBtn', false);
+            this._setBusy(false);
             this._notify(err.message || 'Materialize failed', 'danger');
         }
     },
@@ -774,7 +852,9 @@ const SimulationCommunities = {
         }
     },
 
-    async loadCurrent() {
+    async loadCurrent(opts) {
+        const quiet = !!(opts && opts.quiet);
+        if (!quiet) this._showCurrentLoading(true);
         try {
             const data = await this._json(`/dtwin/clusters/current?top=${this.TOP_CLUSTERS}`);
             this.current = data;
@@ -801,6 +881,8 @@ const SimulationCommunities = {
             if (body) {
                 body.innerHTML = `<p class="text-muted small mb-0">${this._esc(err.message)}</p>`;
             }
+        } finally {
+            this._showCurrentLoading(false);
         }
     },
 };

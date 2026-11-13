@@ -56,6 +56,12 @@
                         </a>
                     </div>
                     <div id="commCurrentStats" class="comm-stats d-none" aria-live="polite"></div>
+                    <div id="commCurrentLoading" class="comm-current-loading d-none text-muted small" aria-live="polite">
+                        <div class="text-center">
+                            <div class="spinner-border spinner-border-sm text-primary mb-2" role="status" aria-hidden="true"></div>
+                            <p class="small text-muted mb-0">Loading materialized clusters…</p>
+                        </div>
+                    </div>
                     <div id="commCurrentBody" class="comm-current-body">
                         <p class="text-muted small mb-0">No materialized clusters yet.</p>
                     </div>
@@ -70,11 +76,11 @@
                         <h6 class="mb-0">Preview</h6>
                     </div>
                     <div id="commPreviewStats" class="comm-stats d-none mb-2" aria-live="polite"></div>
-                    <div id="commPreviewLoading" class="comm-preview-loading d-none text-muted small">
+                    <div id="commPreviewLoading" class="comm-preview-loading d-none text-muted small" aria-live="polite">
                         <div class="text-center">
                             <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
-                            <h6 class="fw-semibold mb-1">Detecting communities…</h6>
-                            <p class="small text-muted mb-0" id="commPreviewLoadingMsg">Running label propagation on Databricks…</p>
+                            <h6 class="fw-semibold mb-1" id="commPreviewLoadingTitle">Loading preview…</h6>
+                            <p class="small text-muted mb-0" id="commPreviewLoadingMsg">Fetching the last detection run…</p>
                         </div>
                     </div>
                     <div id="commPreviewEmpty" class="comm-preview-empty text-muted small">

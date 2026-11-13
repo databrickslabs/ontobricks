@@ -593,6 +593,31 @@ a.sim-uri-link:focus-visible {
     overflow-x: hidden;
 }
 
+.comm-current-loading {
+    flex: 1 1 0%;
+    min-height: 6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--db-border);
+    border-radius: var(--db-radius-card);
+    background: var(--db-canvas-warm);
+    padding: 1rem;
+}
+
+#commDetectBtn.is-busy,
+#commMaterializeBtn.is-busy {
+    pointer-events: none;
+    cursor: progress;
+}
+
+#commDetectBtn .ob-btn-spinner,
+#commMaterializeBtn .ob-btn-spinner {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-width: 0.15em;
+}
+
 .comm-current-row {
     cursor: pointer;
 }

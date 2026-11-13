@@ -466,6 +466,7 @@ class TwinBackgroundTasks:
             )
             clusters = int(stats.get("cluster_count", 0) or 0)
             nodes = int(stats.get("node_count", 0) or 0)
+            elapsed_ms = stats.get("elapsed_ms")
             tm.complete_task(
                 task_id,
                 result={
@@ -473,8 +474,14 @@ class TwinBackgroundTasks:
                     "node_count": nodes,
                     "converged": bool(stats.get("converged", True)),
                     "run_page_url": stats.get("run_page_url", ""),
+                    "elapsed_ms": elapsed_ms,
                 },
-                message=f"{clusters:,} communities over {nodes:,} nodes (computed on Databricks)",
+                message=(
+                    f"{clusters:,} communities over {nodes:,} nodes "
+                    f"(computed on Databricks"
+                    + (f" in {int(elapsed_ms)} ms" if elapsed_ms is not None else "")
+                    + ")"
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Community detection task failed: %s", exc)
