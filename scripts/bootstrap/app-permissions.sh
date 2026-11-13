@@ -232,8 +232,8 @@ fi
 # not the env default — ``./app-permissions.sh ontobricks-07x …`` must grant
 # on ``ontobricks-07x-graph-analytics``, not the hard-coded sandbox default.
 _MAIN_APP="${FIRST_APP:-${APP_FOR_CAN_USE:-${APP_NAME}}}"
-# The community-detection job (``…-community-detection``) needs the same grant.
-for _JOB_NAME in "${_MAIN_APP}-graph-analytics" "${_MAIN_APP}-community-detection"; do
+# The community-detection and pattern-detection jobs need the same grant.
+for _JOB_NAME in "${_MAIN_APP}-graph-analytics" "${_MAIN_APP}-community-detection" "${_MAIN_APP}-pattern-detection"; do
     _JOB_ID="$(databricks jobs list -o json 2>/dev/null | python3 -c "
 import sys, json
 name = sys.argv[1]

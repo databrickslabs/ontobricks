@@ -15,6 +15,7 @@
 - [Triple Store & Graph DB Backends](#triple-store--graph-db-backends)
 - [Reasoning Engine](#reasoning-engine)
 - [Simulation — What-if Sandboxes](#simulation--what-if-sandboxes)
+- [Graph Analysis — Pattern Detection](#graph-analysis--pattern-detection)
 - [Graph Analysis — Community Detection](#graph-analysis--community-detection)
 - [SHACL Data Quality](#shacl-data-quality)
 - [Technology Stack](#technology-stack)
@@ -1341,7 +1342,7 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 ## Simulation — What-if Sandboxes
 
 The **Intelligence** menu (after Graph) groups **Community** detection,
-**Cohorts**, and **Simulation**. Simulation answers *"what
+**Cohorts**, **Patterns**, and **Simulation**. Simulation answers *"what
 would the graph conclude if these facts were true?"* without touching the live
 knowledge graph. v1 supports the **Lakebase** graph backend only; graphless
 domains redirect to Domain, other backends show a disabled page.
@@ -1428,13 +1429,67 @@ and projects it into a capped `{nodes, edges, summary}` payload.
 | `src/api/routers/internal/simulation.py` | Internal JSON API |
 | `src/api/routers/simulation.py` | Public `/api/v1/simulations` CRUD + run |
 | `src/back/objects/digitaltwin/query/TwinSandboxSparql.py` | SPARQL over a ready sandbox snapshot |
-| `src/front/templates/simulation.html` | Cohorts / Run / Scenarios / Compare / Runs page (scenario editor is not a sidebar item) |
+| `src/front/templates/simulation.html` | Community / Cohorts / Patterns / Scenarios / Compare / Runs page (scenario editor is not a sidebar item) |
 | `src/front/static/simulation/js/simulation-compare.js` | Compare section: scenario picker, Sigma overlay graph, details panel |
 
 Cohort **design** (former Ontology → Advanced → Cohorts) and cohort **run**
 (former Knowledge Graph → Cohorts) live under this menu. Bookmarks to
 `/ontology/?section=cohorts` and `/dtwin/?section=cohorts` redirect here.
 Materialise still writes to the live graph via `/dtwin/cohorts/*`.
+
+---
+
+## Graph Analysis — Pattern Detection
+
+**Intelligence → Patterns → Discover** finds recurring egocentric neighbourhood
+signatures for a required anchor class. **Saved** lists and deletes named
+materializations. Same job-only gate as Community (analytics toggle +
+`…_data` snapshot); job name is `ONTOBRICKS_PATTERN_JOB_NAME` /
+`<app>-pattern-detection`.
+
+### Discover on Databricks, then materialize
+
+1. **Detect** (`POST /dtwin/patterns/detect`) checks `pattern_job_status`, then
+   starts a `pattern_detection` task. `TwinAnalytics.detect_patterns` calls
+   `JobPatterns.run`, which triggers `<app>-pattern-detection` via
+   `LakeflowRunner`.
+2. The job (`src/jobs/graph_analytics_job.py --task patterns`, `PatternSQL`)
+   expands anchors up to `hops`, bins attributes, hashes canonical
+   signatures, filters by `min_support`, optionally refines top-N
+   multiplicity near-duplicates (`refine_top`), and writes:
+
+   | Table | Content |
+   |-------|---------|
+   | `graph_patterns_<slug>` | anchor → `pattern_id`, support rank |
+   | `…_shapes` | shape tokens, support, refined / near-duplicate metadata |
+   | `…_preview_nodes` / `…_preview_edges` | capped preview |
+   | `…_summary` | counts, hops, bins, min_support, algorithm |
+
+3. **Read back** — `GET /dtwin/patterns/latest` (top-N + stats + job gate);
+   `GET /dtwin/patterns/{id}/shape` and `/members` (paged ≤ 500).
+4. **Materialize** (`POST /dtwin/patterns/materialize`) starts
+   `pattern_materialize`. `PatternMaterializer` writes a named `Pattern`
+   individual + `:inPattern` memberships (multiple saved patterns coexist).
+5. **Saved** — `GET /dtwin/patterns/saved`, delete one saved pattern's triples.
+
+`class_filter` for patterns is a **single** required anchor type; hops walk
+the full graph (not induced). `via` in shape records is the full predicate
+URI. Variation axes (structure, bins, frequency, refine, run params,
+lifecycle) are documented for operators — not separate product modes in v1.
+
+### File Reference
+
+| File | Purpose |
+|------|---------|
+| `src/jobs/graph_analytics_job.py` | `PatternSQL` / `run_patterns` — signatures, refine, outputs |
+| `resources/pattern_detection.job.yml` | Bundle job `<app>-pattern-detection` |
+| `src/back/core/graph_analysis/JobPatterns.py` | Trigger the job and read bounded outputs |
+| `src/back/core/graph_analysis/PatternVocabulary.py` | Pattern / `inPattern` URI helpers |
+| `src/back/core/graph_analysis/PatternMaterializer.py` | Named save, list, delete |
+| `src/api/routers/internal/dtwin.py` | `/dtwin/patterns/*` endpoints |
+| `src/back/objects/digitaltwin/TwinAnalytics.py` | Job wiring and pattern entry points |
+| `src/back/objects/digitaltwin/TwinBackgroundTasks.py` | `pattern_detection`, `pattern_materialize` |
+| `src/front/static/simulation/js/simulation-patterns.js` | Discover / Saved UI |
 
 ---
 

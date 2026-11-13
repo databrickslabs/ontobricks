@@ -575,3 +575,87 @@ Modified files:
 - docs/user-guide.md
 
 Tests: uv run --frozen pytest -q -m "not scenario" --ignore=tests/units/core/test_pattern_job_sql.py → 10396 passed, 323 skipped, 8 deselected in 53.04s (the ignored file is untracked pattern-detection WIP that fails at import, unrelated to this change)
+
+================================================================================
+Pattern detection (Intelligence → Patterns)
+================================================================================
+
+Context:
+Discover recurring typed neighbourhoods on Databricks for a chosen entity
+type (attributes + multi-hop relationships), preview them under Intelligence
+→ Patterns → Discover, and materialize named matches under Saved. Job-only
+compute, same analytics toggle as Community; optional motif refine for
+multiplicity near-duplicates.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   PatternSQL + run_patterns (--task patterns): egocentric signatures,
+   attribute bins, min_support, optional refine; main dispatch extracted.
+2. resources/pattern_detection.job.yml
+   Dedicated serverless DAB job `<app>-pattern-detection`.
+3. src/back/core/graph_analysis/PatternVocabulary.py
+   Pattern / inPattern / fromDiscovery URI helpers.
+4. src/back/core/graph_analysis/JobPatterns.py
+   Trigger job and bounded read-back (latest, shape, members).
+5. src/back/core/graph_analysis/PatternMaterializer.py
+   Named save / list / delete of Pattern triples.
+6. src/back/core/graph_analysis/preflight.py
+   pattern_job_configured / pattern_job_status; skip name resolve when
+   analytics toggle is off.
+7. src/back/core/helpers/DatabricksHelpers.py, src/shared/config/settings.py,
+   app.yaml.template, docs/getting-started.md
+   ONTOBRICKS_PATTERN_JOB_NAME resolve + env documentation.
+8. src/back/objects/digitaltwin/TwinAnalytics.py,
+   TwinBackgroundTasks.py, src/api/routers/internal/dtwin.py
+   detect / latest / shape / members / materialize / saved APIs and tasks.
+9. src/front/config/menu_config.json, simulation.html,
+   _sim_patterns.html, _sim_patterns_saved.html, simulation-patterns.js,
+   simulation.css, task-tracker.js, help_modal.html
+   Intelligence → Patterns (Discover + Saved) UI wired to working APIs.
+10. scripts/bootstrap/app-permissions.sh
+    Grant CAN_MANAGE_RUN on `<app>-pattern-detection`.
+11. docs/user-guide.md, docs/architecture.md
+    Operator + architecture docs; variation taxonomy; TOC refresh.
+12. tests (units/core, api, front, settings, architecture baseline)
+    SQLite harness, materializer, contracts, sidebar inventory.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- resources/pattern_detection.job.yml
+- src/back/core/graph_analysis/PatternVocabulary.py
+- src/back/core/graph_analysis/JobPatterns.py
+- src/back/core/graph_analysis/PatternMaterializer.py
+- src/back/core/graph_analysis/preflight.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/shared/config/settings.py
+- app.yaml.template
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- src/api/routers/internal/dtwin.py
+- src/front/config/menu_config.json
+- src/front/templates/simulation.html
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/templates/partials/simulation/_sim_patterns_saved.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- src/front/static/global/js/task-tracker.js
+- scripts/bootstrap/app-permissions.sh
+- docs/user-guide.md
+- docs/architecture.md
+- docs/getting-started.md
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_job_patterns.py
+- tests/units/core/test_pattern_vocabulary.py
+- tests/units/core/test_pattern_materializer.py
+- tests/units/core/test_helpers.py
+- tests/units/api/test_dtwin_patterns.py
+- tests/units/front/test_simulation_page_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/settings/test_app_yaml_template.py
+- tests/units/architecture/baseline.json
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10436 passed, 323 skipped, 8 deselected in 44.08s

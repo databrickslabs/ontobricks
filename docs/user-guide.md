@@ -1316,8 +1316,9 @@ source triples safely.
 ## Step 4: Simulation (What-if Sandboxes)
 
 **Intelligence** is the fifth workspace in the top navigation. **Community**
-detects graph partitions; **Cohorts** authors grouping rules; **Simulation**
-runs what-if sandboxes.
+detects graph partitions; **Cohorts** authors grouping rules; **Patterns**
+discovers recurring neighbourhood shapes; **Simulation** runs what-if
+sandboxes.
 
 ### Community detection
 
@@ -1334,6 +1335,28 @@ Nothing is written to the graph until **Materialize**, which replaces the
 previous partition (`Cluster` individuals and `:inCluster` membership) as a
 background task. **Clear graph** drops those triples. Explorer then colours and
 collapses that partition, looking up memberships only for the entities it draws.
+
+### Pattern detection
+
+**Intelligence → Patterns → Discover** finds recurring egocentric neighbourhood
+signatures for a **required** anchor entity type on a dedicated Databricks job
+(`…-pattern-detection`). It uses the same admin toggle and `…_data` snapshot as
+Community / Analytics. Each anchor's attributes (categorical top-N +
+`__other`, numeric quantile bins) and multi-hop relationships (full predicate
+URIs; hops walk the full graph, not an induced subgraph) are hashed into a
+canonical signature; patterns are ranked by support. Raise **Min support** to
+drop the long tail. Optional **Refine top-N** merges near-duplicates that
+differ only by relationship multiplicity into a motif. Nothing is written to
+the graph until **Save & materialize**, which stores a named pattern
+(`Pattern` + `:inPattern` memberships) you can list or delete under
+**Patterns → Saved**. Re-run Detect after the graph changes; saved patterns do
+not auto-refresh.
+
+Patterns vary by structure (attribute-heavy, 1-hop, multi-hop, fan-out),
+attribute bins, frequency, optional refine, and run parameters (`hops`,
+`bins`, `min_support`, `refine_top`) — these are views of the same graph, not
+separate product modes. Side-by-side compare and anomaly mode are out of
+scope for v1.
 
 **Simulation** lets you assert hypothetical facts on a copy of part of the
 graph, re-run reasoning, and see what would change — the live knowledge graph
@@ -3246,6 +3269,7 @@ After import you can:
 ### Simulation
 - **What-if sandboxes**: Assert hypothetical facts on a Lakebase copy of a graph slice, re-run reasoning, and inspect the before/after diff. The live graph is never mutated. Knowledge Graph **Explorer**, **Query**, and **Chat** share a **Graph** dropdown listing live inferred, live asserted, and one entry per ready sandbox (and Results → **Explorer** opens the sandbox). GraphQL and Chat tools read that overlay; SPARQL still compiles to mapped warehouse tables.
 - **Community detection**: **Intelligence → Community → Detect** previews a label-propagation partition computed on a Databricks job, then **Materialize** writes `Cluster` + `:inCluster` triples (one active partition). Explorer only visualises that partition.
+- **Pattern detection**: **Intelligence → Patterns → Discover** finds recurring typed neighbourhoods (attributes + multi-hop relationships) on a Databricks job; **Save & materialize** writes named `Pattern` + `:inPattern` triples. **Saved** lists and deletes them.
 - **Cohort design and run**: **Intelligence → Cohorts** authors grouping rules; **Intelligence → Run** previews and materialises them (`:inCohort` and/or a Unity Catalog table). Former Ontology / Knowledge Graph Cohort pages redirect here.
 
 ### Graph (Sync & Explore)
