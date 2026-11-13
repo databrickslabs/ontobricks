@@ -749,6 +749,10 @@ def test_patterns_section_owns_discovery():
     assert 'class="btn btn-sm btn-primary"' in disc
     assert 'id="patSaveBtn"' in disc
     assert 'id="patClassFilter"' in disc
+    assert 'for="patClassFilter">Entity</label>' in disc
+    assert "Anchor type" not in disc
+    js_patterns = _read(FRONT / "static/simulation/js/simulation-patterns.js")
+    assert "cls.emoji || '📦'" in js_patterns
     assert 'id="patJobStatus"' in disc
     assert 'id="patPatternList"' in disc
     assert 'id="patDetails"' in disc

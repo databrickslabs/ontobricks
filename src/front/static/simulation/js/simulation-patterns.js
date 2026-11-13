@@ -172,8 +172,9 @@ const SimulationPatterns = {
         classes.forEach((cls) => {
             const uri = cls.uri || cls.id || '';
             const label = cls.label || cls.name || uri;
+            const icon = cls.emoji || '📦';
             if (!uri) return;
-            opts.push(`<option value="${this._esc(uri)}">${this._esc(label)}</option>`);
+            opts.push(`<option value="${this._esc(uri)}">${this._esc(icon)} ${this._esc(label)}</option>`);
         });
         sel.innerHTML = opts.join('');
         if (prev) sel.value = prev;

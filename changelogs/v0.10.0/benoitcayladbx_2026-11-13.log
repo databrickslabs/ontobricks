@@ -690,3 +690,29 @@ Modified files:
 - tests/units/core/test_pattern_job_preflight.py (new)
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10444 passed, 323 skipped, 8 deselected in 50.26s
+
+================================================================================
+Pattern discovery: Entity selector with class icons
+================================================================================
+
+Context:
+The Intelligence → Patterns → Discover rail labelled its anchor selector
+"Anchor type". The user asked for the label to read "Entity" and for the
+options to show each ontology class icon, matching the icons used across the
+ontology editor.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_patterns.html
+   Rail label renamed from "Anchor type" to "Entity".
+2. src/front/static/simulation/js/simulation-patterns.js
+   Entity dropdown options prefixed with the class emoji (fallback 📦).
+3. tests/units/front/test_simulation_page_contract.py
+   Contract: label reads "Entity", old label absent, option icon fallback present.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/static/simulation/js/simulation-patterns.js
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10444 passed, 323 skipped, 8 deselected in 46.82s
