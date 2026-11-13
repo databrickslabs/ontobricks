@@ -186,6 +186,157 @@ class TwinAnalytics:
         deleted = self._materializer(store, graph_name).clear()
         return {"deleted": deleted}
 
+    # ------------------------------------------------------------------
+    # Pattern detection
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def build_job_patterns(
+        domain: Any, settings: Any, graph_name: str, source_table: str = ""
+    ) -> Any:
+        """Wire a :class:`JobPatterns` on the Build warehouse."""
+        from back.core.graph_analysis import (
+            JobPatterns,
+            LakeflowRunner,
+            pattern_output_table,
+        )
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.helpers import resolve_pattern_job_name
+
+        builder = GraphDBFactory.get_builder(domain, settings, engine="delta")
+        if not builder.has_client():
+            raise InfrastructureError(
+                "The pattern detection output cannot be read",
+                detail="No Build SQL Warehouse client could be created",
+            )
+        runner = LakeflowRunner(
+            resolve_pattern_job_name(settings),
+            timeout_s=int(getattr(settings, "analytics_job_timeout_s", 3600) or 3600),
+            running_label="Detecting patterns on Databricks",
+        )
+        return JobPatterns(
+            source_table,
+            runner=runner,
+            query=builder.execute_query,
+            output_table=pattern_output_table(
+                TwinAnalytics.analytics_output_schema(domain, settings),
+                domain,
+                graph_name,
+            ),
+        )
+
+    def detect_patterns(
+        self,
+        graph_name: str,
+        *,
+        class_filter: str,
+        hops: int = 3,
+        bins: int = 8,
+        min_support: int = 3,
+        refine_top: int = 0,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Run the pattern job on the mapped snapshot; blocks until done."""
+        from back.core.errors import ValidationError
+        from back.core.graph_analysis import analytics_snapshot, resolve_analytics_source
+
+        if not (class_filter or "").strip():
+            raise ValidationError("class_filter is required")
+        source_table, reason = resolve_analytics_source(self._domain, settings)
+        if not source_table:
+            raise InfrastructureError(
+                "The pattern detection job cannot read this domain", detail=reason
+            )
+        with analytics_snapshot(self._domain, settings, source_table) as scan_table:
+            patterns = self.build_job_patterns(
+                self._domain, settings, graph_name, scan_table
+            )
+            return patterns.run(
+                class_filter=class_filter.strip(),
+                hops=hops,
+                bins=bins,
+                min_support=min_support,
+                refine_top=refine_top,
+                on_progress=on_progress,
+            )
+
+    def latest_patterns(
+        self, graph_name: str, settings: Any = None, top_n: int = 50
+    ) -> Dict[str, Any]:
+        return self.build_job_patterns(self._domain, settings, graph_name).latest(top_n)
+
+    def pattern_detection_summary(
+        self, graph_name: str, settings: Any = None
+    ) -> Optional[Dict[str, Any]]:
+        return self.build_job_patterns(self._domain, settings, graph_name).summary()
+
+    def pattern_members(
+        self,
+        graph_name: str,
+        pattern_id: str,
+        offset: int = 0,
+        limit: int = 100,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        return self.build_job_patterns(self._domain, settings, graph_name).members(
+            pattern_id, offset, limit
+        )
+
+    def pattern_shape(
+        self, graph_name: str, pattern_id: str, settings: Any = None
+    ) -> Optional[Dict[str, Any]]:
+        return self.build_job_patterns(self._domain, settings, graph_name).shape(
+            pattern_id
+        )
+
+    def _pattern_materializer(self, store: Any, graph_name: str):
+        from back.core.graph_analysis import PatternMaterializer
+
+        return PatternMaterializer(store, graph_name, self._base_uri())
+
+    def materialize_pattern(
+        self,
+        store: Any,
+        graph_name: str,
+        pattern_id: str,
+        label: str,
+        settings: Any = None,
+        on_progress: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        from back.core.errors import ValidationError
+
+        patterns = self.build_job_patterns(self._domain, settings, graph_name)
+        if not patterns.summary():
+            raise ValidationError(
+                "No pattern detection run to materialize. Run Detect first."
+            )
+        return self._pattern_materializer(store, graph_name).materialize(
+            patterns, pattern_id, label, on_progress=on_progress
+        )
+
+    def list_saved_patterns(self, store: Any, graph_name: str) -> Dict[str, Any]:
+        items = self._pattern_materializer(store, graph_name).list_saved()
+        return {"patterns": items, "count": len(items)}
+
+    def saved_pattern_members(
+        self,
+        store: Any,
+        graph_name: str,
+        saved_id: str,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        return self._pattern_materializer(store, graph_name).members(
+            saved_id, offset, limit
+        )
+
+    def delete_saved_pattern(
+        self, store: Any, graph_name: str, saved_id: str
+    ) -> Dict[str, Any]:
+        deleted = self._pattern_materializer(store, graph_name).delete(saved_id)
+        return {"deleted": deleted, "saved_id": saved_id}
+
     def compute_graph_metrics(
         self,
         graph_name: str,

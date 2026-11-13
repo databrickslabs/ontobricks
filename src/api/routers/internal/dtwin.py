@@ -30,6 +30,7 @@ from back.core.graph_analysis import (
     analytics_job_configured,
     analytics_job_status,
     community_job_status,
+    pattern_job_status,
 )
 from back.objects.digitaltwin import (
     CohortEngineContext,
@@ -584,6 +585,263 @@ async def delete_current_clusters(
         TwinAnalytics(domain).clear_clusters, store, graph_name
     )
     return {"success": True, **result}
+
+
+# ---------------------------------------------------------------------------
+# Pattern detection (Intelligence → Patterns)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/patterns/detect")
+async def detect_patterns(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Start pattern discovery on the Databricks job (background task)."""
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
+    assert_domain_graph_read(request)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    class_filter = data.get("class_filter")
+    if not isinstance(class_filter, str) or not class_filter.strip():
+        raise ValidationError("class_filter is required")
+    hops = int(data.get("hops") or 3)
+    bins = int(data.get("bins") or 8)
+    min_support = int(data.get("min_support") or 3)
+    refine_top = int(data.get("refine_top") or 0)
+
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = pattern_job_status(domain, settings)
+    if not available:
+        raise ValidationError(
+            reason
+            or (
+                "Pattern discovery runs on Databricks, which is not enabled "
+                "for this workspace. Enable 'Compute large-graph metrics on "
+                "Databricks' in Settings."
+            )
+        )
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Pattern Detection",
+        task_type="pattern_detection",
+        steps=[{"name": "detect", "description": "Detecting patterns on Databricks"}],
+    )
+
+    def run():
+        TwinBackgroundTasks.run_pattern_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            graph_name,
+            class_filter=class_filter.strip(),
+            hops=hops,
+            bins=bins,
+            min_support=min_support,
+            refine_top=refine_top,
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {
+        "success": True,
+        "task_id": task.id,
+        "message": "Pattern detection started (running on Databricks)",
+    }
+
+
+@router.get("/patterns/latest")
+async def latest_patterns(
+    request: Request,
+    top: int = Query(50, ge=1, le=200),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Summary, top patterns and preview of the last discovery run."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    available, reason = pattern_job_status(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).latest_patterns, graph_name, settings, top
+    )
+    return {
+        "success": True,
+        **result,
+        "job_available": available,
+        "blocked_reason": "" if available else (reason or ""),
+    }
+
+
+@router.get("/patterns/saved")
+async def list_saved_patterns(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Named materialized patterns."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).list_saved_patterns, store, graph_name
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/saved/{saved_id}/members")
+async def saved_pattern_members(
+    request: Request,
+    saved_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of a saved pattern's members."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).saved_pattern_members,
+        store,
+        graph_name,
+        saved_id,
+        offset,
+        limit,
+    )
+    return {"success": True, **result}
+
+
+@router.delete(
+    "/patterns/saved/{saved_id}",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def delete_saved_pattern(
+    request: Request,
+    saved_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop one named materialized pattern."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).delete_saved_pattern, store, graph_name, saved_id
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/{pattern_id}/members")
+async def pattern_members(
+    request: Request,
+    pattern_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of a discovered pattern's members (last run)."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).pattern_members,
+        graph_name,
+        pattern_id,
+        offset,
+        limit,
+        settings,
+    )
+    return {"success": True, **result}
+
+
+@router.get("/patterns/{pattern_id}/shape")
+async def pattern_shape(
+    request: Request,
+    pattern_id: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Canonical shape payload for one discovered pattern."""
+    assert_domain_graph_read(request)
+    domain = get_domain(session_mgr)
+    _, graph_name = _cluster_graph(domain, settings)
+    result = await run_blocking(
+        TwinAnalytics(domain).pattern_shape, graph_name, pattern_id, settings
+    )
+    if not result:
+        raise ValidationError(f"Unknown pattern_id: {pattern_id}")
+    return {"success": True, **result}
+
+
+@router.post(
+    "/patterns/materialize",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def materialize_pattern(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save one discovered pattern into the graph (background task)."""
+    import threading
+
+    from back.core.task_manager import get_task_manager
+
+    assert_domain_graph_read(request)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        raise ValidationError("Body must be a JSON object")
+    pattern_id = data.get("pattern_id")
+    label = data.get("label")
+    if not isinstance(pattern_id, str) or not pattern_id.strip():
+        raise ValidationError("pattern_id is required")
+    if not isinstance(label, str) or not label.strip():
+        raise ValidationError("label is required")
+
+    domain = get_domain(session_mgr)
+    store, graph_name = _cluster_graph(domain, settings)
+    if not await run_blocking(
+        TwinAnalytics(domain).pattern_detection_summary, graph_name, settings
+    ):
+        raise ValidationError("No pattern detection run to materialize. Run Detect first.")
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Materialize Pattern",
+        task_type="pattern_materialize",
+        steps=[{"name": "write", "description": "Writing pattern into the graph"}],
+    )
+
+    def run():
+        TwinBackgroundTasks.run_pattern_materialize_task(
+            tm,
+            task.id,
+            domain,
+            settings,
+            store,
+            graph_name,
+            pattern_id=pattern_id.strip(),
+            label=label.strip(),
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"success": True, "task_id": task.id, "message": "Pattern materialization started"}
 
 
 # ===========================================

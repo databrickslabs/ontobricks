@@ -519,6 +519,93 @@ class TwinBackgroundTasks:
             tm.fail_task(task_id, _error_text(exc))
 
     @staticmethod
+    def run_pattern_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        graph_name: str,
+        *,
+        class_filter: str,
+        hops: int = 3,
+        bins: int = 8,
+        min_support: int = 3,
+        refine_top: int = 0,
+    ) -> None:
+        """Run pattern discovery on the Databricks job in a worker thread."""
+        try:
+            tm.start_task(task_id, "Detecting patterns...")
+            tm.update_progress(task_id, 20, "Starting the Databricks pattern detection job")
+            stats = _analytics()(domain).detect_patterns(
+                graph_name,
+                class_filter=class_filter,
+                hops=hops,
+                bins=bins,
+                min_support=min_support,
+                refine_top=refine_top,
+                settings=settings,
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+            )
+            patterns = int(stats.get("pattern_count", 0) or 0)
+            anchors = int(stats.get("anchor_count", 0) or 0)
+            elapsed_ms = stats.get("elapsed_ms")
+            tm.complete_task(
+                task_id,
+                result={
+                    "pattern_count": patterns,
+                    "anchor_count": anchors,
+                    "run_page_url": stats.get("run_page_url", ""),
+                    "elapsed_ms": elapsed_ms,
+                },
+                message=(
+                    f"{patterns:,} patterns over {anchors:,} anchors "
+                    f"(computed on Databricks"
+                    + (f" in {int(elapsed_ms)} ms" if elapsed_ms is not None else "")
+                    + ")"
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Pattern detection task failed: %s", exc)
+            tm.fail_task(task_id, _error_text(exc))
+
+    @staticmethod
+    def run_pattern_materialize_task(
+        tm,
+        task_id: str,
+        domain,
+        settings,
+        store,
+        graph_name: str,
+        *,
+        pattern_id: str,
+        label: str,
+    ) -> None:
+        """Write one discovered pattern into the graph in a worker thread."""
+        try:
+            tm.start_task(task_id, "Materializing pattern...")
+            tm.update_progress(task_id, 10, "Writing pattern memberships")
+            result = _analytics()(domain).materialize_pattern(
+                store,
+                graph_name,
+                pattern_id,
+                label,
+                settings=settings,
+                on_progress=lambda pct, msg: tm.update_progress(task_id, pct, msg),
+            )
+            tm.complete_task(
+                task_id,
+                result=result,
+                message=(
+                    f"Saved pattern '{result.get('label', label)}' "
+                    f"({result.get('size', 0):,} members, "
+                    f"{result.get('inserted', 0):,} triples)"
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Pattern materialization task failed: %s", exc)
+            tm.fail_task(task_id, _error_text(exc))
+
+    @staticmethod
     def run_inference_task(
         tm,
         task_id: str,
