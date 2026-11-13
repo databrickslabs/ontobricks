@@ -68,8 +68,9 @@ const PagesManager = {
             }
         });
 
-        this.loadSelection();
-        this.ensureDomains();
+        // Resolve Databricks Domain labels first so tables never flash
+        // raw ``domains/{uuid}`` resource names.
+        this.ensureDomains().finally(() => this.loadSelection());
     },
 
     async loadSelection() {
@@ -141,24 +142,46 @@ const PagesManager = {
         this.domains = domains || [];
         this.domainLabels = {};
         this.domains.forEach((d) => {
-            this.domainLabels[d.name] = d.label || d.name;
+            const resource = d.name || '';
+            const label = (d.label || '').trim();
+            if (resource) {
+                this.domainLabels[resource] = label || resource;
+            }
         });
         this.domainsLoaded = true;
         const sel = document.getElementById('pagesDomainFilter');
-        if (!sel) return;
-        const current = sel.value;
-        const opts = ['<option value="">All domains</option>'];
-        this.domains.forEach((d) => {
-            opts.push(
-                '<option value="' + this._escAttr(d.name) + '">' +
-                this._esc(d.label || d.name) +
-                '</option>'
-            );
-        });
-        sel.innerHTML = opts.join('');
-        if (current && [...sel.options].some((o) => o.value === current)) {
-            sel.value = current;
+        if (sel) {
+            const current = sel.value;
+            const opts = ['<option value="">All domains</option>'];
+            this.domains.forEach((d) => {
+                opts.push(
+                    '<option value="' + this._escAttr(d.name) + '">' +
+                    this._esc(this._domainLabel(d.name)) +
+                    '</option>'
+                );
+            });
+            sel.innerHTML = opts.join('');
+            if (current && [...sel.options].some((o) => o.value === current)) {
+                sel.value = current;
+            }
         }
+        this.renderSelected();
+        this.renderSearchHits();
+    },
+
+    /** Human-readable Databricks Domain name (tag key), never the raw resource id. */
+    _domainLabel(domainResource) {
+        const name = domainResource || '';
+        if (!name) return '—';
+        const mapped = (this.domainLabels[name] || '').trim();
+        if (mapped && !mapped.startsWith('domains/')) {
+            return mapped;
+        }
+        // Last resort: strip ``domains/`` rather than show the full resource.
+        if (name.startsWith('domains/')) {
+            return name.slice('domains/'.length) || '—';
+        }
+        return name;
     },
 
     buildFilter() {
@@ -295,7 +318,7 @@ const PagesManager = {
         body.innerHTML = this.searchHits
             .map((p) => {
                 const already = this.selected.has(p.name);
-                const domainLabel = this.domainLabels[p.domain] || p.domain || '—';
+                const domainLabel = this._domainLabel(p.domain);
                 const state = p.state || '';
                 const badge =
                     state === 'PUBLISHED'
@@ -399,7 +422,7 @@ const PagesManager = {
         );
         list.innerHTML = items
             .map((p) => {
-                const domainLabel = this.domainLabels[p.domain] || p.domain || '—';
+                const domainLabel = this._domainLabel(p.domain);
                 const state = p.state || '';
                 const badge =
                     state === 'PUBLISHED'
@@ -515,7 +538,7 @@ const PagesManager = {
             const synonyms = (p.synonyms || []).join(', ');
             body.innerHTML =
                 '<p class="small mb-2"><span class="text-muted">Domain:</span> ' +
-                this._esc(this.domainLabels[p.domain] || p.domain || '—') +
+                this._esc(this._domainLabel(p.domain)) +
                 ' &nbsp;·&nbsp; <span class="badge ' +
                 (p.state === 'PUBLISHED' ? 'text-bg-success' : 'text-bg-warning') +
                 '">' +

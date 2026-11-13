@@ -499,3 +499,32 @@ Modified files:
 - tests/units/front/test_ontology_generate_wizard_staged.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10394 passed, 323 skipped, 8 deselected in 44.27s
+
+================================================================================
+Context → Pages: show Databricks Domain name instead of domains/{uuid}
+================================================================================
+
+Context:
+The Domain column showed resource names like ``domains/a02e2f40-…`` because the
+selected list rendered before Domains labels loaded, and the API label preferred
+subtitle over the governed tag key (the actual domain name).
+
+Changes:
+
+1. src/back/core/databricks/KnowledgePageService.py
+   Prefer ``tag_key`` over ``subtitle`` when building the domain label.
+2. src/front/static/domain/js/domain-pages.js
+   Load Domains before selection; ``_domainLabel`` resolves display names;
+   re-render tables after labels arrive.
+3. tests/units/core/test_knowledge_pages.py
+   Expect label = tag_key.
+4. tests/units/front/test_domain_pages_contract.py
+   Contract for ``_domainLabel`` and Domains-before-selection load order.
+
+Modified files:
+- src/back/core/databricks/KnowledgePageService.py
+- src/front/static/domain/js/domain-pages.js
+- tests/units/core/test_knowledge_pages.py
+- tests/units/front/test_domain_pages_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10395 passed, 323 skipped, 8 deselected in 49.54s

@@ -152,9 +152,11 @@ class KnowledgePageService:
                         name = f"domains/{domain_id}"
                     if not name.startswith("domains/"):
                         continue
+                    # tag_key is the governed-tag domain name people recognize;
+                    # subtitle is only a short description.
                     label = (
-                        str(d.get("subtitle") or "").strip()
-                        or str(d.get("tag_key") or "").strip()
+                        str(d.get("tag_key") or "").strip()
+                        or str(d.get("subtitle") or "").strip()
                         or domain_id
                         or name
                     )

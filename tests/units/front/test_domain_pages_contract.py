@@ -125,6 +125,15 @@ def test_pages_title_is_preview_hyperlink_instead_of_preview_button():
     assert ">Preview</button>" not in js
 
 
+def test_pages_domain_column_uses_resolved_domain_label():
+    """Domain column must resolve via _domainLabel, not raw domains/{uuid}."""
+    js = _read(PAGES_JS)
+    assert "_domainLabel" in js
+    assert "this._domainLabel(p.domain)" in js
+    assert "ensureDomains().finally(() => this.loadSelection())" in js
+    assert "this.domainLabels[p.domain] || p.domain" not in js
+
+
 def test_pages_css_exists():
     css = _read(PAGES_CSS)
     assert ".pages-search-results" in css

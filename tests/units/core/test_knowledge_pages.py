@@ -137,5 +137,6 @@ class TestKnowledgePageService:
         auth = DatabricksAuth(host="https://h.com", token="tok")
         domains = KnowledgePageService(auth).list_domains()
         assert len(domains) == 1
-        assert domains[0]["label"] == "Shipments"
+        # Prefer governed tag_key (domain name) over subtitle description.
+        assert domains[0]["label"] == "Logistics"
         assert domains[0]["name"].startswith("domains/")
