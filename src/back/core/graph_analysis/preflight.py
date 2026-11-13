@@ -18,7 +18,7 @@ endpoint and the scheduler.
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 from back.core.graph_analysis.JobMetrics import resolve_analytics_source
 from back.core.helpers import (
@@ -85,13 +85,20 @@ def _job_configured(
     domain: Any,
     settings: Any,
     *,
-    job_name: str,
+    job_name_for: Callable[[], str],
     env_var: str,
+    off_reason: str = "",
 ) -> Tuple[bool, str]:
-    """Shared gate: analytics toggle + resolvable job name + source table."""
-    if not resolve_analytics_job_enabled(domain, settings):
-        return False, ""
+    """Shared gate: analytics toggle + resolvable job name + source table.
 
+    The job name is resolved lazily, after the toggle, because the lookup can
+    be remote. *off_reason* is returned when the toggle is off; empty means
+    "not using the job is the configured behaviour".
+    """
+    if not resolve_analytics_job_enabled(domain, settings):
+        return False, off_reason
+
+    job_name = job_name_for()
     if not job_name:
         return False, (
             f"No Databricks job name could be determined. Set {env_var}, or "
@@ -118,21 +125,19 @@ def analytics_job_configured(
     *community* checks the community-detection job's name instead of the
     graph-metrics one; both jobs share the toggle and the source snapshot.
     """
-    # Resolve the job name only after the toggle check — name lookup can be
-    # remote and ``TestToggleOff`` asserts we skip it when analytics is off.
-    if not resolve_analytics_job_enabled(domain, settings):
-        return False, ""
     if community:
-        job_name, env_var = (
-            resolve_community_job_name(settings),
-            "ONTOBRICKS_COMMUNITY_JOB_NAME",
+        return _job_configured(
+            domain,
+            settings,
+            job_name_for=lambda: resolve_community_job_name(settings),
+            env_var="ONTOBRICKS_COMMUNITY_JOB_NAME",
         )
-    else:
-        job_name, env_var = (
-            resolve_analytics_job_name(settings),
-            "ONTOBRICKS_ANALYTICS_JOB_NAME",
-        )
-    return _job_configured(domain, settings, job_name=job_name, env_var=env_var)
+    return _job_configured(
+        domain,
+        settings,
+        job_name_for=lambda: resolve_analytics_job_name(settings),
+        env_var="ONTOBRICKS_ANALYTICS_JOB_NAME",
+    )
 
 
 def analytics_job_status(
@@ -173,15 +178,25 @@ def community_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
     return analytics_job_configured(domain, settings, community=True)
 
 
+PATTERN_TOGGLE_OFF_REASON = (
+    "Pattern discovery runs only on the Databricks job. Enable "
+    "'Compute large-graph metrics on Databricks' in Settings → Global "
+    "(or set ONTOBRICKS_ANALYTICS_JOB_ENABLED=true), then retry."
+)
+
+
 def pattern_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
-    """Toggle + pattern job name + resolvable source, without a warehouse probe."""
-    if not resolve_analytics_job_enabled(domain, settings):
-        return False, ""
+    """Toggle + pattern job name + resolvable source, without a warehouse probe.
+
+    Unlike community or graph analytics there is no in-app fallback, so a
+    disabled toggle is reported with its remedy rather than silently.
+    """
     return _job_configured(
         domain,
         settings,
-        job_name=resolve_pattern_job_name(settings),
+        job_name_for=lambda: resolve_pattern_job_name(settings),
         env_var="ONTOBRICKS_PATTERN_JOB_NAME",
+        off_reason=PATTERN_TOGGLE_OFF_REASON,
     )
 
 

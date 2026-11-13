@@ -659,3 +659,34 @@ Modified files:
 - tests/units/architecture/baseline.json
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10436 passed, 323 skipped, 8 deselected in 44.08s
+
+================================================================================
+Pattern discovery: explain why the job is unavailable
+================================================================================
+
+Context:
+Intelligence → Patterns → Discover showed the generic "Pattern job
+unavailable" banner. The pattern gate returned an empty reason whenever the
+analytics toggle ("Compute large-graph metrics on Databricks") was off, so
+the UI had nothing to show. Pattern discovery is job-only (no in-app
+fallback), so a disabled toggle must name its remedy. Also removes a
+duplicate toggle lookup introduced in the analytics gate.
+
+Changes:
+
+1. src/back/core/graph_analysis/preflight.py
+   `_job_configured` takes a lazy `job_name_for` callable and an `off_reason`;
+   the job name is resolved only after the toggle check. Pattern gate returns
+   `PATTERN_TOGGLE_OFF_REASON` (names Settings → Global and
+   ONTOBRICKS_ANALYTICS_JOB_ENABLED). Community / graph analytics keep their
+   silent toggle-off behaviour. Removes the duplicate toggle check in
+   `analytics_job_configured`.
+2. tests/units/core/test_pattern_job_preflight.py
+   New: toggle-off reason, no probe / no name lookup when off, missing job
+   name, missing source, reason never empty when unavailable.
+
+Modified files:
+- src/back/core/graph_analysis/preflight.py
+- tests/units/core/test_pattern_job_preflight.py (new)
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10444 passed, 323 skipped, 8 deselected in 50.26s
