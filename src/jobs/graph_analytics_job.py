@@ -1294,18 +1294,27 @@ PATTERN_PREVIEW_MAX_EDGES = PREVIEW_MAX_EDGES
 
 
 def _portable_is_numeric_sql(column: str) -> str:
-    """True when *column* looks like an optional-sign decimal number.
+    """True when *column* is a plain decimal: optional leading ``-``, one ``.``.
 
-    Built from nested ``replace`` so the same SQL runs on Spark and SQLite
-    (no ``RLIKE`` / ``GLOB``).
+    Spark serverless runs in ANSI mode, where ``CAST('2026-11-13' AS DOUBLE)``
+    or ``CAST('1.2.3' AS DOUBLE)`` raises ``CAST_INVALID_INPUT`` instead of
+    returning NULL. Matching only the *alphabet* (digits, ``.``, ``-``) is not
+    enough, so this also requires at most one ``.``, a ``-`` only in first
+    position, and at least one digit.
+
+    Built from ``replace`` / ``substr`` / ``length`` so the same SQL runs on
+    Spark and SQLite (no ``RLIKE`` / ``GLOB``).
     """
     stripped = column
     for ch in "0123456789":
         stripped = f"replace({stripped}, '{ch}', '')"
     stripped = f"replace(replace({stripped}, '.', ''), '-', '')"
+    tail = f"substr({column}, 2)"
     return (
         f"({column} <> '' AND {column} <> '-' AND {column} <> '.' "
-        f"AND {column} <> '-.' AND {stripped} = '')"
+        f"AND {column} <> '-.' AND {stripped} = '' "
+        f"AND length({column}) - length(replace({column}, '.', '')) <= 1 "
+        f"AND replace({tail}, '-', '') = {tail})"
     )
 
 
@@ -1470,7 +1479,11 @@ class PatternSQL(GraphAnalyticsSQL):
             f"             PARTITION BY prop ORDER BY CAST(value AS DOUBLE), value\n"
             f"           ) AS vrk,\n"
             f"           COUNT(*) OVER (PARTITION BY prop) AS n_vals\n"
-            f"    FROM (SELECT DISTINCT prop, value FROM typed) dv\n"
+            f"    FROM (\n"
+            f"      SELECT DISTINCT d.prop AS prop, d.value AS value\n"
+            f"      FROM typed d\n"
+            f"      JOIN prop_kind k ON k.prop = d.prop AND k.pkind = 'num'\n"
+            f"    ) dv\n"
             f"  ) vr ON vr.prop = t.prop AND vr.value = t.value\n"
             f"),\n"
             f"categorical AS (\n"

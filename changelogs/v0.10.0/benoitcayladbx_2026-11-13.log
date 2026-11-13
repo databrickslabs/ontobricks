@@ -716,3 +716,41 @@ Modified files:
 - tests/units/front/test_simulation_page_contract.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 10444 passed, 323 skipped, 8 deselected in 46.82s
+
+================================================================================
+Fix: pattern detection job fails on Spark ANSI cast (CAST_INVALID_INPUT)
+================================================================================
+
+Context
+-------
+The Databricks job `ontobricks-10x-pattern-detection` failed in task
+`detect_patterns` with
+`[CAST_INVALID_INPUT] The value 'AGT138' of the type "STRING" cannot be cast to "DOUBLE"`.
+Serverless compute runs Spark in ANSI mode, where casting non-numeric text
+raises, whereas the SQLite test harness casts leniently and hid the bug.
+Two causes in `PatternSQL.build_bins`: (1) the ranking window did
+`ORDER BY CAST(value AS DOUBLE)` over every property, not just numeric ones;
+(2) the "is numeric" gate was too loose (dates like 2026-11-13 and versions
+like 1.2.3 slipped through).
+
+Changes
+-------
+1. src/jobs/graph_analytics_job.py - `_portable_is_numeric_sql` is now strict:
+   only plain decimals (optional leading '-', at most one '.').
+2. src/jobs/graph_analytics_job.py - `build_bins` ranking subquery joins
+   `prop_kind` and only reads properties classified `num`, so the DOUBLE cast
+   never sees categorical values.
+3. tests/units/core/test_pattern_job_sql.py - harness variant that raises on
+   invalid DOUBLE casts (mimics ANSI); `TestStrictCastSafety` (ids, dates,
+   versions stay categorical; real numerics still binned) and
+   `TestPortableIsNumeric` (edge cases of the gate).
+
+Modified files
+--------------
+- src/jobs/graph_analytics_job.py
+- tests/units/core/test_pattern_job_sql.py
+
+Tests
+-----
+uv run --frozen pytest -q -m "not scenario" -> 10472 passed, 323 skipped, 8 deselected.
+Requires `make deploy` / `make deploy-no-run` so the job picks up the new script.

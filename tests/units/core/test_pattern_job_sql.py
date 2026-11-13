@@ -14,6 +14,7 @@ from jobs.graph_analytics_job import (
     RDF_TYPE,
     RDFS_LABEL,
     PatternSQL,
+    _portable_is_numeric_sql,
     run_patterns,
 )
 from tests.units.core.test_graph_analytics_job_sql import SqliteRunner
@@ -183,3 +184,115 @@ class TestPatternCli:
         assert ns.task == "patterns"
         assert ns.pattern_hops == 2
         assert ns.refine_top == 10
+
+
+AGENT_ID = NS + "agentId"
+SIGNUP_DATE = NS + "signupDate"
+VERSION = NS + "version"
+
+
+def mixed_literals_fixture() -> List[Dict[str, str]]:
+    """Customers whose literals include IDs, dates and dotted versions.
+
+    A real numeric attribute (``orderCount``) sits next to values that merely
+    *contain* digits, ``.`` and ``-`` — the shapes that Spark's ANSI ``CAST``
+    rejects (``'AGT138'``, ``'2026-11-13'``, ``'1.2.3'``).
+    """
+    rows = []
+    specs = (
+        ("Ann", "AGT138", "2026-11-13", "1.2.3", "2"),
+        ("Ben", "AGT7", "2026-11-14", "1.2.4", "5"),
+        ("Cy", "AGT138", "2026-11-13", "1.2.3", "9"),
+        ("Dee", "AGT9", "2026-12-01", "2.0.0", "11"),
+    )
+    for name, agent, signup, version, count in specs:
+        rows += _entity(
+            NS + name,
+            CUSTOMER,
+            name,
+            **{
+                AGENT_ID: agent,
+                SIGNUP_DATE: signup,
+                VERSION: version,
+                ORDER_COUNT: count,
+            },
+        )
+    return rows
+
+
+def _ansi_runner(triples) -> SqliteRunner:
+    """A SqliteRunner whose numeric ordering cast fails like Spark ANSI mode.
+
+    SQLite casts ``'AGT138'`` to 0.0; Spark serverless raises
+    ``CAST_INVALID_INPUT``. Rewriting the cast to ``float()`` makes the harness
+    reproduce that failure instead of hiding it.
+    """
+    runner = SqliteRunner(triples)
+    runner.conn.create_function("ansi_double", 1, lambda value: float(value))
+    raw_execute = runner.execute
+
+    def execute(stmt: str) -> None:
+        raw_execute(stmt.replace("CAST(value AS DOUBLE)", "ansi_double(value)"))
+
+    runner.execute = execute
+    return runner
+
+
+class TestStrictCastSafety:
+    def _bins(self):
+        runner = _ansi_runner(mixed_literals_fixture())
+        builder = _builder()
+        run_patterns(
+            runner.execute, runner.scalar, builder, cleanup=False, computed_at="t0"
+        )
+        rows = runner.rows(f"SELECT n, prop, bin_label FROM {builder.bins_table}")
+        by_prop: Dict[str, set] = {}
+        for r in rows:
+            by_prop.setdefault(r["prop"], set()).add(r["bin_label"])
+        return by_prop
+
+    def test_non_numeric_literals_never_reach_the_numeric_cast(self):
+        # Raises sqlite3.OperationalError (ansi_double) before the fix.
+        self._bins()
+
+    def test_a_real_numeric_attribute_is_still_binned(self):
+        labels = self._bins()[ORDER_COUNT]
+        assert labels and all(label.startswith("q") for label in labels)
+
+    @pytest.mark.parametrize("prop", [AGENT_ID, SIGNUP_DATE, VERSION])
+    def test_ids_dates_and_versions_stay_categorical(self, prop):
+        labels = self._bins()[prop]
+        assert not any(
+            label.startswith("q") and label[1:].isdigit() for label in labels
+        ), f"{prop} was binned as numeric: {labels}"
+
+
+class TestPortableIsNumeric:
+    """The gate in front of ``CAST(value AS DOUBLE)`` must never admit text that
+    Spark's ANSI cast rejects."""
+
+    @staticmethod
+    def _is_numeric(value: str) -> bool:
+        conn = SqliteRunner([]).conn
+        sql = _portable_is_numeric_sql("value")
+        row = conn.execute(
+            f"SELECT CASE WHEN {sql} THEN 1 ELSE 0 END FROM (SELECT ? AS value)",
+            (value,),
+        ).fetchone()
+        return bool(row[0])
+
+    @pytest.mark.parametrize(
+        "value", ["0", "42", "-5", "3.14", "-0.5", ".5", "5.", "-.5", "007"]
+    )
+    def test_plain_decimals_are_numeric(self, value):
+        assert self._is_numeric(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "", "-", ".", "-.", "--", "..", "1.2.3", "5-3",
+            "2026-11-13", "AGT138", "1e5", "+5", " 5", "5 ",
+        ],
+    )
+    def test_everything_else_is_not(self, value):
+        assert not self._is_numeric(value)
