@@ -4,7 +4,7 @@
 <div class="content-section">
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h4 class="mb-1"><i class="bi bi-file-earmark-text me-2"></i>Knowledge Store</h4>
+        <h4 class="mb-1"><i class="bi bi-file-earmark-text me-2"></i>Documents</h4>
         <p class="text-muted mb-0 small">Upload documents, parse them once, and consult the retrieved text</p>
     </div>
     <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
@@ -21,12 +21,23 @@
     </div>
     <div class="card-body">
         <p class="text-muted mb-3">
-            Upload files to the domain's Knowledge Store.
+            Upload files to this domain's documents.
             The domain must be saved to the registry first.
         </p>
         <div class="alert alert-info d-flex align-items-start py-2" role="note">
             <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
             <span class="small">Files are parsed once after upload (max 10&nbsp;MB per file); only the retrieved text is kept. Generate and Mapping use that same ready document text.</span>
+        </div>
+        <div class="doc-supported-types mb-3" aria-label="Supported document types">
+            <p class="small fw-semibold mb-1"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Supported file types</p>
+            <ul class="small mb-1 ps-3">
+                <li><strong>Parsed by Databricks</strong> (text extracted once):
+                    PDF, Word (DOCX, DOC), PowerPoint (PPTX, PPT), images (PNG, JPG, JPEG)</li>
+                <li><strong>Read as text</strong>:
+                    TXT, MD, CSV, JSON, XML, HTML, CSS, JS, TS, PY, SQL, LOG, YAML, YML, TOML, INI, CFG,
+                    TTL, OWL, RDF</li>
+            </ul>
+            <p class="small text-muted mb-0">Any other type is rejected with <em>Unsupported document type</em>.</p>
         </div>
 
         <!-- Drop Zone -->
@@ -36,7 +47,7 @@
             <p class="text-muted small mb-2">or</p>
             <label class="btn btn-outline-primary btn-sm">
                 <i class="bi bi-folder2-open"></i> Browse Files
-                <input type="file" id="docFileInput" multiple class="d-none">
+                <input type="file" id="docFileInput" multiple class="d-none" accept=".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.txt,.md,.csv,.json,.xml,.html,.css,.js,.ts,.py,.sql,.log,.yaml,.yml,.toml,.ini,.cfg,.ttl,.owl,.rdf">
             </label>
         </div>
 
@@ -73,7 +84,7 @@
     <div class="card-body">
         <div id="docFileList" aria-live="polite">
             <div class="text-muted small fst-italic">
-                <i class="bi bi-info-circle"></i> Save the domain to the registry to enable the Knowledge Store.
+                <i class="bi bi-info-circle"></i> Save the domain to the registry to enable documents.
             </div>
         </div>
     </div>

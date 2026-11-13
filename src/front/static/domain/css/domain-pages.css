@@ -1,0 +1,81 @@
+/* Context → Pages — Genie search + curated Generate list */
+
+.pages-search-form .form-label {
+    color: var(--db-text-muted, #6F6B65);
+}
+
+.pages-search-results {
+    border: 1px solid var(--db-border, #ECEAE6);
+    border-radius: var(--db-radius-control, 10px);
+    overflow: hidden;
+    background: var(--db-surface-warm, #FFFFFF);
+}
+
+.pages-search-results .table {
+    margin-bottom: 0;
+}
+
+#pagesSelectedList .btn-link {
+    text-decoration: none;
+}
+
+.pages-title-link {
+    color: var(--db-primary, #4F46E5);
+    cursor: pointer;
+}
+
+.pages-title-link:hover,
+.pages-title-link:focus-visible {
+    text-decoration: underline !important;
+}
+
+.pages-preview-body {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    max-height: 24rem;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    background: var(--db-canvas-warm, #FAFAF9);
+    border: 1px solid var(--db-border, #ECEAE6);
+    border-radius: var(--db-radius-control, 10px);
+    padding: 0.75rem 1rem;
+}
+
+.pages-preview-body h1,
+.pages-preview-body h2,
+.pages-preview-body h3,
+.pages-preview-body h4,
+.pages-preview-body h5,
+.pages-preview-body h6 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.pages-preview-body h1 { font-size: 1.4rem; }
+.pages-preview-body h2 { font-size: 1.25rem; }
+.pages-preview-body h3 { font-size: 1.1rem; }
+
+.pages-preview-body p,
+.pages-preview-body ul,
+.pages-preview-body ol {
+    margin-bottom: 0.75rem;
+}
+
+.pages-preview-body img {
+    max-width: 100%;
+    height: auto;
+}
+
+.pages-preview-body table {
+    width: 100%;
+    margin-bottom: 0.75rem;
+}
+
+.pages-preview-body code {
+    font-size: 0.85em;
+}
+
+/* Fallback when Markdown renderer is unavailable: plain text, keep line breaks. */
+.pages-preview-plain {
+    white-space: pre-wrap;
+}

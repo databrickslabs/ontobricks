@@ -68,7 +68,13 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="wizard-tab-documents" data-bs-toggle="tab" data-bs-target="#wizard-pane-documents"
                         type="button" role="tab" aria-controls="wizard-pane-documents" aria-selected="false">
-                    <i class="bi bi-file-earmark-text"></i> Knowledge Store
+                    <i class="bi bi-file-earmark-text"></i> Documents
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="wizard-tab-pages" data-bs-toggle="tab" data-bs-target="#wizard-pane-pages"
+                        type="button" role="tab" aria-controls="wizard-pane-pages" aria-selected="false">
+                    <i class="bi bi-journal-richtext"></i> Pages
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -134,8 +140,8 @@
 
             <!-- Documents Tab -->
             <div class="tab-pane fade" id="wizard-pane-documents" role="tabpanel" aria-labelledby="wizard-tab-documents">
-                <h6 class="mb-2"><i class="bi bi-file-earmark-text"></i> Knowledge Store</h6>
-                <p class="text-muted small mb-3">Select documents from the domain's Knowledge Store to include as additional context for entity detection.</p>
+                <h6 class="mb-2"><i class="bi bi-file-earmark-text"></i> Documents</h6>
+                <p class="text-muted small mb-3">Select documents from the domain's documents to include as additional context for entity detection.</p>
                 <div id="wizardDocsStatus">
                     <div class="d-flex align-items-center text-muted">
                         <div class="spinner-border spinner-border-sm me-2" role="status">
@@ -163,7 +169,49 @@
                 </div>
                 <div id="wizardNoDocs" class="mt-3 ob-hidden">
                     <div class="text-muted small fst-italic">
-                        <i class="bi bi-info-circle me-1"></i>No documents uploaded. You can upload documents in <a href="/domain/?section=documents">Configuration &gt; Knowledge Store</a>.
+                        <i class="bi bi-info-circle me-1"></i>No documents uploaded. You can upload documents in <a href="/domain/?section=documents">Context &gt; Documents</a>.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Genie Pages Tab (from Context → Pages selection) -->
+            <div class="tab-pane fade" id="wizard-pane-pages" role="tabpanel" aria-labelledby="wizard-tab-pages">
+                <h6 class="mb-2"><i class="bi bi-journal-richtext"></i> Genie Pages</h6>
+                <p class="text-muted small mb-3">
+                    These Unity Catalog Knowledge Pages were curated under
+                    <a href="/domain/?section=pages">Context &gt; Pages</a>.
+                    Included pages are sent to the agent as additional documentation for entity detection.
+                    Uncheck any page you want to skip for this run.
+                </p>
+                <div id="wizardPagesStatus">
+                    <div class="d-flex align-items-center text-muted">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        Checking Genie Pages…
+                    </div>
+                </div>
+                <div id="wizardPagesPreview" class="mt-3 ob-hidden">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small text-muted">Include as additional documentation:</span>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" data-action="wizard-pages-bulk" data-select-all="true">
+                                <i class="bi bi-check-all me-1"></i>Select All
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" data-action="wizard-pages-bulk" data-select-all="false">
+                                <i class="bi bi-x me-1"></i>Select None
+                            </button>
+                        </div>
+                    </div>
+                    <div class="wizard-docs-list-scroll">
+                        <div id="wizardPagesList"></div>
+                    </div>
+                    <div id="wizardPagesSelectedCount" class="mt-2 small text-muted"></div>
+                </div>
+                <div id="wizardNoPages" class="mt-3 ob-hidden">
+                    <div class="text-muted small fst-italic">
+                        <i class="bi bi-info-circle me-1"></i>No Genie Pages selected yet.
+                        Curate them in <a href="/domain/?section=pages">Context &gt; Pages</a>.
                     </div>
                 </div>
             </div>
@@ -303,4 +351,23 @@
 </div>
 
     <!-- Progress overlay is dynamically created by JavaScript -->
+</div>
+
+<!-- Genie Page preview (Markdown → HTML); sibling of content-section stretch root -->
+<div class="modal fade" id="wizardPagesPreviewModal" tabindex="-1"
+     aria-labelledby="wizardPagesPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="wizardPagesPreviewModalLabel">Page preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="wizardPagesPreviewBody">
+                <p class="text-muted small">Loading…</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
 </div>

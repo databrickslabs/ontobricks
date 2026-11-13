@@ -20,7 +20,7 @@ Operator guides for this version. Full details:
 |---------|------------------------|
 | Lakehouse//RT query warehouse, SEA, CloudFetch | [Get Started](getting-started.md#sql-warehouses-and-explorer-timing), [User Guide](user-guide.md#lakehouse-sql-warehouses-and-cloudfetch), [Deployment](deployment.md) |
 | Three-stage Ontology Generate (detect → review → complete) | [User Guide](user-guide.md#option-c-ai-powered-wizard) |
-| Knowledge Store (parsed text in Lakebase, no Volume) | [User Guide](user-guide.md#knowledge-store), [Get Started](getting-started.md#upload-documents-to-the-knowledge-store-optional) |
+| Documents (parsed text in Lakebase, no Volume) | [User Guide](user-guide.md#documents), [Get Started](getting-started.md#upload-documents-optional) |
 | Ontology Studio (renamed Designer), entity panel tabs | [User Guide](user-guide.md#ontology-studio-map-full-graph) |
 | Entity Data Quality Checks, IF-THEN on an entity, Jobs as class actions | [User Guide](user-guide.md#feature-inventory), [MCP](mcp.md) |
 | SPARQL playground | [User Guide](user-guide.md#sparql-playground) |
@@ -46,7 +46,7 @@ release until this documentation is published.
 
 | Guide | What you'll find |
 |-------|------------------|
-| [User Guide](user-guide.md) | Context General (cockpit), Configuration, Studio, Knowledge Store, staged Generate, mapping, Explorer quality/rules/jobs, SPARQL, GitHub mirror. Ends with the [feature inventory](user-guide.md#feature-inventory) |
+| [User Guide](user-guide.md) | Context General (cockpit), Configuration, Studio, Documents, staged Generate, mapping, Explorer quality/rules/jobs, SPARQL, GitHub mirror. Ends with the [feature inventory](user-guide.md#feature-inventory) |
 | [Advanced features](advanced_features.md) | [Ontology specifics](advanced_features.md#ontology-specifics) (`name` vs `label`, URI minting, `ontobricks:` vocabulary), [registry import and export](advanced_features.md#registry-import-and-export) (OBX, GitHub mirror), [cohort discovery](advanced_features.md#cohort-discovery) |
 | [MCP](mcp.md) | MCP server, Playground, clients, [Unity Catalog + Genie One registration](mcp.md#register-the-mcp-in-unity-catalog-and-genie-one) |
 

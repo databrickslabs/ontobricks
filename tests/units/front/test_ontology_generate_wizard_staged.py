@@ -47,6 +47,8 @@ def test_review_js_is_wired_into_the_ontology_page():
     assert page.index("ontology-wizard-review.js") < page.index(
         "ontology-wizard.js"
     ) or "ontology-wizard.js" in page
+    # Shared Pages preview styles (title link + Markdown body).
+    assert "domain/css/domain-pages.css" in page
 
 
 def test_review_js_file_exists_and_is_not_empty():
@@ -54,13 +56,13 @@ def test_review_js_file_exists_and_is_not_empty():
     assert len(_read(REVIEW_JS)) > 200
 
 
-def test_documents_tab_copy_reads_knowledge_store():
+def test_documents_tab_copy_reads_documents():
     html = _read(HTML)
-    assert "Knowledge Store" in html
+    assert "Knowledge Store" not in html
     assert "Domain Documents" not in html
     # The deep link into the domain page keeps its section id.
     assert 'href="/domain/?section=documents"' in html
-    assert "Configuration &gt; Knowledge Store" in html
+    assert "Context &gt; Documents" in html
 
 
 def test_docs_preview_pane_revealed_with_explicit_block():
@@ -73,8 +75,8 @@ def test_docs_preview_pane_revealed_with_explicit_block():
     assert "previewEl.style.display = 'block';" in js
 
 
-def test_documents_tab_button_labelled_knowledge_store():
-    """The wizard nav tab reads 'Knowledge Store' (internal id unchanged)."""
+def test_documents_tab_button_labelled_documents():
+    """The wizard nav tab reads 'Documents' (internal id unchanged)."""
     html = _read(HTML)
     m = re.search(
         r'id="wizard-tab-documents"[^>]*>(.*?)</button>',
@@ -83,8 +85,31 @@ def test_documents_tab_button_labelled_knowledge_store():
     )
     assert m, "wizard documents tab button not found"
     label = m.group(1)
-    assert "Knowledge Store" in label
-    assert ">Documents<" not in label and " Documents\n" not in label
+    assert "Documents" in label
+    assert "Knowledge Store" not in label
+
+
+def test_pages_tab_loads_context_selection_and_posts_pages():
+    """Generate wizard Pages tab mirrors Context → Pages with unselect."""
+    html = _read(HTML)
+    assert 'id="wizard-tab-pages"' in html
+    assert 'id="wizard-pane-pages"' in html
+    assert 'id="wizardPagesList"' in html
+    assert 'href="/domain/?section=pages"' in html
+    assert 'id="wizardPagesPreviewModal"' in html
+    js = _read(WIZARD_JS)
+    assert "loadWizardPages" in js
+    assert "/domain/pages/selection" in js
+    assert "wizardSelectedPages" in js
+    assert "pages: pages" in js or "pages:pages" in js
+    assert "getSelectedPageNames" in js
+    assert "wizard-page-checkbox" in js
+    assert "wizard-pages-bulk" in js
+    assert "wizard-page-preview" in js
+    assert "previewWizardPage" in js
+    assert "/domain/pages/preview" in js
+    assert "pages-title-link" in js
+    assert "renderMarkdown" in js
 
 
 def test_detection_note_aligns_with_the_padded_tab_content():

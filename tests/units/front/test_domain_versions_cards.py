@@ -295,7 +295,7 @@ def test_domain_delete_confirmation_names_domain_version_and_knowledge_store():
             assert.equal(confirmation.message.includes('<img'), false);
             assert.equal(confirmation.message.includes('&lt;script'), true);
             assert.equal(confirmation.message.includes('&lt;img'), true);
-            assert.equal(confirmation.message.includes('Knowledge Store'), true);
+            assert.equal(confirmation.message.includes('Documents'), true);
             assert.equal(confirmation.message.includes('permanently'), true);
         })().catch((error) => {
             console.error(error);
@@ -443,7 +443,7 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
             assert.equal(confirmation.message.includes('&lt;img'), true);
             assert.equal(confirmation.message.includes(domain), false);
             assert.equal(confirmation.message.includes(version), false);
-            assert.equal(confirmation.message.includes('Knowledge Store'), true);
+            assert.equal(confirmation.message.includes('Documents'), true);
             assert.equal(confirmation.message.includes('permanently'), true);
         })().catch((error) => {
             console.error(error);
@@ -454,14 +454,14 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
     )
 
 
-def test_registry_domain_delete_confirmation_escapes_name_and_names_knowledge_store():
+def test_registry_domain_delete_confirmation_escapes_name_and_names_documents():
     js = REGISTRY_JS.read_text(encoding="utf-8")
     delete_domain = js[
         js.index("async function deleteRegistryDomain") :
         js.index("document.addEventListener")
     ]
     assert "escapeHtml(domainName)" in delete_domain
-    assert "Knowledge Store" in delete_domain
+    assert "Documents" in delete_domain
     assert "githubDomainDeleteExtras(registryGithubEnabled)" in delete_domain
     assert "deleteGithubQuery" in delete_domain
 

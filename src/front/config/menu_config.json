@@ -109,8 +109,15 @@
                         },
                         {
                             "id": "documents",
-                            "label": "Knowledge Store",
+                            "label": "Documents",
                             "icon": "bi-file-earmark-text",
+                            "default": false,
+                            "requires": "domain_saved"
+                        },
+                        {
+                            "id": "pages",
+                            "label": "Pages",
+                            "icon": "bi-journal-richtext",
                             "default": false,
                             "requires": "domain_saved"
                         }

@@ -237,9 +237,9 @@ In local development mode, there are no restrictions — all users have full adm
    Then run `make bootstrap-lakebase` once to grant the app SP
    USAGE/DML on the freshly-created schema.
 
-### Upload documents to the Knowledge Store (optional)
+### Upload documents (optional)
 
-Use **Context → Knowledge Store** to upload specifications or glossaries
+Use **Context → Documents** to upload specifications or glossaries
 before Generate or Auto-Map. OntoBricks parses each file once
 (`ai_parse_document` on the SQL warehouse) and stores **only the parsed
 text** in Lakebase. There is a 10 MB per-file cap. Generate and Mapping

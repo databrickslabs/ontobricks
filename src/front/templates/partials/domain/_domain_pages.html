@@ -1,0 +1,144 @@
+<!-- Context → Pages: search Genie Pages, curate selection for Ontology Generate -->
+<!-- JS: /static/domain/js/domain-pages.js -->
+<!-- CSS: /static/domain/css/domain-pages.css -->
+
+<div class="content-section">
+<div class="section-header d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1"><i class="bi bi-journal-richtext me-2"></i>Pages</h4>
+        <p class="text-muted mb-0 small">Search Genie Knowledge Pages and keep the ones Ontology Generate will use</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                title="Open the domain discussion" onclick="openDomainDiscussion()">
+            <i class="bi bi-chat-dots"></i>
+        </button>
+    </div>
+</div>
+
+<div class="alert alert-info d-flex align-items-start py-2 mb-4" role="note">
+    <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
+    <span class="small">
+        Search for Genie Pages, add them to the list below, then <strong>Save selection</strong>.
+        That list is what <strong>Ontology → Generate</strong> will use later — nothing is imported here.
+    </span>
+</div>
+
+<!-- Genie Pages search -->
+<div class="card mb-4" id="pagesSearchCard">
+    <div class="card-header">
+        <i class="bi bi-search me-1"></i> Genie Pages search
+    </div>
+    <div class="card-body">
+        <!-- Div search bar (not a form): native submit would reload /domain/ onto General. -->
+        <div id="pagesSearchForm" class="pages-search-form" role="search">
+            <div class="row g-2 align-items-end">
+                <div class="col-lg-5">
+                    <label class="form-label small mb-1" for="pagesSearchInput">Search</label>
+                    <input type="search" class="form-control" id="pagesSearchInput"
+                           placeholder="Page title, synonym, or keyword…"
+                           aria-label="Search Genie Pages" autocomplete="off">
+                </div>
+                <div class="col-md-4 col-lg-3">
+                    <label class="form-label small mb-1" for="pagesDomainFilter">Databricks Domain</label>
+                    <select class="form-select" id="pagesDomainFilter" aria-label="Filter by Databricks Domain">
+                        <option value="">All domains</option>
+                    </select>
+                </div>
+                <div class="col-md-4 col-lg-2">
+                    <label class="form-label small mb-1" for="pagesStateFilter">State</label>
+                    <select class="form-select" id="pagesStateFilter" aria-label="Filter by state">
+                        <option value="PUBLISHED" selected>Published</option>
+                        <option value="DRAFT">Draft</option>
+                        <option value="">All states</option>
+                    </select>
+                </div>
+                <div class="col-md-4 col-lg-2">
+                    <button type="button" class="btn btn-primary w-100" id="pagesSearchBtn">
+                        <i class="bi bi-search me-1"></i> Search
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="pagesSearchStatus" class="small text-muted mt-2" aria-live="polite"></div>
+        <div id="pagesSearchResults" class="pages-search-results mt-3 d-none">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle" id="pagesSearchTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Title</th>
+                            <th scope="col">Domain</th>
+                            <th scope="col">State</th>
+                            <th scope="col" class="text-end pe-3" style="width:8rem;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pagesSearchBody"></tbody>
+                </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+                <span class="small text-muted" id="pagesSearchCount"></span>
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="pagesSearchMoreBtn">
+                    Load more matches
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Curated list for Generate -->
+<div class="card" id="pagesSelectedCard">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-check2-square me-1"></i> Pages for Ontology Generate</span>
+        <span class="badge text-bg-secondary" id="pagesSelectedCount">0</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle" id="pagesSelectedTable">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col" class="ps-3">Title</th>
+                        <th scope="col">Domain</th>
+                        <th scope="col">State</th>
+                        <th scope="col">Updated</th>
+                        <th scope="col" class="pe-3 text-end" style="width:8rem;"></th>
+                    </tr>
+                </thead>
+                <tbody id="pagesSelectedList">
+                    <tr id="pagesSelectedLoadingRow">
+                        <td colspan="5" class="text-muted small px-3 py-3">
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Loading selected pages…
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-sm btn-primary ontology-edit-btn" id="pagesSaveSelectionBtn">
+            <i class="bi bi-cloud-upload me-1"></i> Save selection
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary ontology-edit-btn" id="pagesClearSelectionBtn">
+            Clear
+        </button>
+    </div>
+</div>
+</div>
+
+<!-- Preview modal -->
+<div class="modal fade" id="pagesPreviewModal" tabindex="-1" aria-labelledby="pagesPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pagesPreviewModalLabel">Page preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="pagesPreviewBody">
+                <p class="text-muted small">Loading…</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

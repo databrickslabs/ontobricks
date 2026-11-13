@@ -141,7 +141,7 @@
                                     <div class="help-step-badge">3</div>
                                     <div>
                                         <h5><i class="bi bi-magic me-2"></i>Generate the Ontology</h5>
-                                        <p>Open <strong>Ontology &rarr; Generate</strong> (AI Wizard), select your LLM endpoint, optionally choose a <em>Quick Template</em> (CRM, IoT, Healthcare, Energy, ...) and click <em>Generate</em>. The LLM produces entities, relationships and attributes &mdash; grounded in the metadata and any documents you imported. Review in the <strong>Model</strong> tab.</p>
+                                        <p>Open <strong>Ontology &rarr; Generate</strong> (AI Wizard), select your LLM endpoint, optionally choose a <em>Quick Template</em> (CRM, IoT, Healthcare, Energy, ...), include Documents and Genie <em>Pages</em> as needed, and click <em>Generate</em>. The LLM produces entities, relationships and attributes &mdash; grounded in the metadata and any documentation you included. Review in the <strong>Model</strong> tab.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
@@ -207,7 +207,8 @@
                                                 <li><strong>Configuration</strong> &mdash; name, description, base URI, custom URI override</li>
                                                 <li><strong>Versions</strong> &mdash; manage snapshots of your domain</li>
                                                 <li><strong>Data Assets</strong> &mdash; import Unity Catalog metadata (catalog, schema, tables, columns)</li>
-                                                <li><strong>Knowledge Store</strong> &mdash; upload documents; parsed text is stored in Lakebase and shared by Generate and Mapping</li>
+                                                <li><strong>Documents</strong> &mdash; upload documents; parsed text is stored in Lakebase and shared by Generate and Mapping</li>
+                                                <li><strong>Pages</strong> &mdash; select Unity Catalog Knowledge Pages to use later in Ontology Generate</li>
                                             </ul>
                                             <p>Loading a domain (Home, navbar Load, Registry, Versions) always opens <strong>Configuration</strong>.</p>
                                             <p><strong>Save</strong> your domain (<kbd>Cmd/Ctrl+S</kbd>) before moving to Ontology or Mapping.</p>
@@ -227,7 +228,7 @@
                                             <p>Four ways to build an ontology:</p>
                                             <ol>
                                                 <li><strong>Studio</strong> &mdash; force-directed ontology canvas. Use the View dropdown (All or a Business View) to filter entities. Collapse or expand all ontology groups from the toolbar, or use the + / &minus; badges on the canvas. Click the smiley face (<i class="bi bi-emoji-smile"></i>) to auto-assign emoji icons via LLM.</li>
-                                                <li><strong>Generate (Wizard)</strong> &mdash; AI generates the full ontology from your UC metadata. Pick a Quick Template or write custom guidelines.</li>
+                                                <li><strong>Generate (Wizard)</strong> &mdash; AI generates the full ontology from UC metadata, Documents, and optional Genie Pages. Pick a Quick Template or write custom guidelines.</li>
                                                 <li><strong>Import</strong> &mdash; load OWL/RDFS files, or pull industry standards: <em>FIBO</em>, <em>CDISC</em>, <em>IOF</em>.</li>
                                                 <li><strong>Form-based</strong> &mdash; use the <strong>Entities</strong> and <strong>Relationships</strong> sidebar sections to add entities and object properties manually.</li>
                                             </ol>

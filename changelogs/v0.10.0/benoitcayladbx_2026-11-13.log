@@ -1,0 +1,501 @@
+
+================================================================================
+Context → Pages: browse, select, and persist UC Knowledge Pages
+================================================================================
+
+Context:
+Operators need to curate which Unity Catalog Knowledge Pages (Genie Ontology
+pages) should later feed Ontology → Generate. This change ships browse +
+select + persist only: selection is stored on `domain.info.knowledge_pages`.
+Generate wizard/agent consumption is deferred (see user-guide Pages section
+and docs/superpowers/specs/2026-11-13-knowledge-pages-generate-followup.md).
+
+Changes:
+
+1. src/back/core/databricks/knowledge_pages.py
+   Normalize/validate knowledge page snapshots for domain.info persistence.
+2. src/back/core/databricks/KnowledgePageService.py
+   Databricks REST client for list/get Knowledge Pages and list Domains.
+3. src/back/core/databricks/constants.py
+   Knowledge Pages API path and pagination defaults.
+4. src/back/core/databricks/DatabricksClient.py
+   Expose KnowledgePageService on the shared client.
+5. src/back/core/databricks/__init__.py
+   Export KnowledgePageService.
+6. src/back/objects/session/DomainSession.py
+   Default `knowledge_pages: []`; export/import helpers normalize selection;
+   GET/POST selection helpers on the session path via API.
+7. src/back/objects/domain/Domain.py
+   Include knowledge_pages in domain info template/get/save via shared
+   graph-settings helper (size-budget extraction).
+8. src/api/routers/internal/domain.py
+   Routes: GET /pages/list, GET /pages/preview, GET/POST /pages/selection.
+9. src/front/config/menu_config.json
+   Context → Metadata → Pages menu item (requires domain_saved).
+10. src/front/templates/domain.html
+    Include #pages-section partial plus domain-pages CSS/JS.
+11. src/front/templates/partials/domain/_domain_pages.html
+    Browse/filter table, selected strip, Save/Clear, preview modal.
+12. src/front/static/domain/js/domain-pages.js
+    Client for list/preview/selection and UI interactions.
+13. src/front/static/domain/css/domain-pages.css
+    Thin layout for filters and selected panel.
+14. src/front/templates/partials/layout/help_modal.html
+    Help one-liner for Context → Pages.
+15. docs/user-guide.md
+    Pages section + TOC; documents Generate follow-up handoff.
+16. tests/units/core/test_knowledge_pages.py
+    KnowledgePageService unit tests (mocked HTTP).
+17. tests/units/domain/test_knowledge_pages_selection.py
+    Selection GET/POST / normalize round-trip tests.
+18. tests/units/front/test_domain_pages_contract.py
+    Menu, section, script, and control id contracts.
+19. tests/units/front/test_sidebar_content_stretch_contract.py
+    Inventory + stretch partial for pages section.
+20. tests/units/architecture/baseline.json
+    Ratchet after Domain/DomainSession helper extraction.
+
+Modified files:
+- src/back/core/databricks/knowledge_pages.py
+- src/back/core/databricks/KnowledgePageService.py
+- src/back/core/databricks/constants.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/databricks/__init__.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/Domain.py
+- src/api/routers/internal/domain.py
+- src/front/config/menu_config.json
+- src/front/templates/domain.html
+- src/front/templates/partials/domain/_domain_pages.html
+- src/front/static/domain/js/domain-pages.js
+- src/front/static/domain/css/domain-pages.css
+- src/front/templates/partials/layout/help_modal.html
+- docs/user-guide.md
+- tests/units/core/test_knowledge_pages.py
+- tests/units/domain/test_knowledge_pages_selection.py
+- tests/units/front/test_domain_pages_contract.py
+- tests/units/front/test_sidebar_content_stretch_contract.py
+- tests/units/architecture/baseline.json
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10384 passed, 323 skipped, 8 deselected in 46.18s
+
+
+================================================================================
+Deploy pre-flight: fix size-budget regressions from Knowledge Pages work
+================================================================================
+
+Context:
+Requested "deploy". Pre-flight tests failed on the architecture size budget:
+the uncommitted Knowledge Pages changes grew Domain (class and save_domain_info)
+and DomainSession (class, export_for_save, import_from_file) past their frozen
+baseline. Fixed by extracting shared code instead of raising the budget. Also
+aligned the sidebar inventory contract with the new "Pages" section.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   Graph/cache/Knowledge Pages fields shared by get_domain_info,
+   save_domain_info and get_domain_template_data now come from one helper,
+   _graph_settings_info(). Removed the _coerce_knowledge_pages wrapper; callers
+   use normalize_knowledge_pages directly (top-level import).
+2. src/back/objects/session/DomainSession.py
+   The domain.info export block moved to module-level _export_domain_info(domain);
+   the domain.info import block moved to module-level _import_domain_info(domain,
+   info). export_for_save and import_from_file now delegate to them. Behaviour
+   unchanged (same normalisation, same defaults, same legacy neo4j_database pop).
+3. tests/units/architecture/baseline.json
+   Ratchet tightened after the extraction (Domain 2304 -> 2294, DomainSession
+   1381 -> 1278, save_domain_info 154 -> 139, import_from_file 188 -> 130,
+   export_for_save dropped under budget).
+4. tests/units/front/test_sidebar_content_stretch_contract.py
+   SECTION_INVENTORY for domain.html includes the new "pages" sidebar section.
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- tests/units/architecture/baseline.json
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10384 passed, 323 skipped, 8 deselected in 46.18s
+
+================================================================================
+Context → Pages: Genie search-first picker (no browse-all)
+================================================================================
+
+Context:
+Operators should not see every Knowledge Page on open. Context → Pages is now a
+Genie Pages search engine: type a keyword, add matches, and the primary list is
+only the pages curated for Ontology → Generate.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_pages.html
+   Replaced browse table with search form + results panel; primary surface is
+   "Pages for Ontology Generate".
+2. src/front/static/domain/js/domain-pages.js
+   Search-on-submit only (no auto list); Add/Remove; selection save unchanged.
+3. src/front/static/domain/css/domain-pages.css
+   Styles for search results panel; dropped browse-filter layout.
+4. tests/units/front/test_domain_pages_contract.py
+   Contracts for search-first controls and no browse autoload.
+5. docs/user-guide.md
+   Pages section describes search → add → save selection flow.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_pages.html
+- src/front/static/domain/js/domain-pages.js
+- src/front/static/domain/css/domain-pages.css
+- tests/units/front/test_domain_pages_contract.py
+- docs/user-guide.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10384 passed, 323 skipped, 8 deselected in 47.01s
+
+================================================================================
+Ontology → Generate: Pages tab (Genie docs with unselect)
+================================================================================
+
+Context:
+Context → Pages already curated Knowledge Pages on the domain. Operators need
+those pages in Ontology → Generate as optional additional documentation, with
+the ability to unselect per detect run. Page bodies are injected into the
+detection guidelines appendix (no agent prompt/tool change); page names join
+the source fingerprint.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_wizard.html
+   New Pages tab listing Context-curated Genie Pages with Select All/None.
+2. src/front/static/ontology/js/ontology-wizard.js
+   Load /domain/pages/selection; default-select; POST pages[] on detect.
+3. src/api/routers/internal/ontology.py
+   Accept pages on POST /wizard/generate/detect; pass selected_pages.
+4. src/back/objects/ontology/generate/GenerateWorkflow.py
+   Fetch page bodies, append documentation appendix, fingerprint pages;
+   extract _prepare_detection_source / _raise_if_detection_failed for size budget.
+5. tests/units/front/test_ontology_generate_wizard_staged.py
+   Pages tab / JS / detect payload contracts.
+6. tests/units/api/test_generate_routes.py
+   Assert selected_pages forwarded from detect route.
+7. tests/units/ontology/test_generate_workflow.py
+   Pages fingerprint + guidelines injection unit test.
+8. docs/user-guide.md / help_modal.html
+   Document Generate Pages tab behaviour.
+9. tests/units/architecture/baseline.json
+   Ratchet after run_detection extraction.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/ontology/js/ontology-wizard.js
+- src/api/routers/internal/ontology.py
+- src/back/objects/ontology/generate/GenerateWorkflow.py
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- tests/units/api/test_generate_routes.py
+- tests/units/ontology/test_generate_workflow.py
+- docs/user-guide.md
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/architecture/baseline.json
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10386 passed, 323 skipped, 8 deselected in 46.30s
+
+================================================================================
+Community Detect: pane + button spinners
+================================================================================
+
+Context:
+Intelligence → Community left Preview/Materialized blank while fetching, and
+Detect/Materialize gave no in-button feedback during long Databricks runs.
+Add pane loading overlays and Save-style button spinners.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_communities.html
+   Added commCurrentLoading; Preview loading title/message ids for load vs detect.
+2. src/front/static/simulation/js/simulation-communities.js
+   loadLatest/loadCurrent show pane spinners; Detect/Materialize use _setBtnSpinner
+   (icon swap + aria-busy) for the duration of the background task.
+3. src/front/static/simulation/css/simulation.css
+   Styles for .comm-current-loading and #commDetectBtn/#commMaterializeBtn.is-busy.
+4. tests/units/front/test_simulation_page_contract.py
+   Contracts for loading nodes, _setBtnSpinner, and busy CSS.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_communities.html
+- src/front/static/simulation/js/simulation-communities.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10386 passed, 323 skipped, 8 deselected in 46.13s
+
+================================================================================
+Generate detect: allowlist Knowledge Pages against domain selection
+================================================================================
+
+Context:
+Follow-up from the Generate wizard exploration: detect clients must not be able
+to request arbitrary Databricks page ids. Only names present on
+`domain.info.knowledge_pages` (Context → Pages) are fetched and fingerprinted.
+
+Changes:
+
+1. src/back/objects/ontology/generate/GenerateWorkflow.py
+   `_allowlisted_page_names` intersects the detect payload with the curated set.
+2. tests/units/ontology/test_generate_workflow.py
+   Cover allowlist + update curated fixture for the injection test.
+
+Modified files:
+- src/back/objects/ontology/generate/GenerateWorkflow.py
+- tests/units/ontology/test_generate_workflow.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10387 passed, 323 skipped, 8 deselected, 39 warnings in 44.42s
+
+================================================================================
+Community Detect Preview: show detection duration
+================================================================================
+
+Context:
+Preview showed algorithm/rounds/computed-at but not how long detection took.
+Persist job wall-clock elapsed_ms on the summary table and surface it in the
+Preview meta line (same formatter as analytics / task tracker).
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Time _run_community_stages and write elapsed_ms into the community summary row.
+2. src/back/core/graph_analysis/JobCommunities.py
+   summary() reads elapsed_ms (SELECT *); detect() falls back to wait time only
+   when the column is absent on older tables.
+3. src/front/static/simulation/js/simulation-communities.js
+   _fmtElapsed + "duration …" in Preview _runMeta.
+4. src/back/objects/digitaltwin/TwinBackgroundTasks.py
+   Task result/message include elapsed_ms when present.
+5. tests/units/core/test_community_job_sql.py
+   tests/units/core/test_job_communities.py
+   tests/units/front/test_simulation_page_contract.py
+   Cover persisted elapsed_ms and Preview duration wiring.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/JobCommunities.py
+- src/front/static/simulation/js/simulation-communities.js
+- src/back/objects/digitaltwin/TwinBackgroundTasks.py
+- tests/units/core/test_community_job_sql.py
+- tests/units/core/test_job_communities.py
+- tests/units/front/test_simulation_page_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10387 passed, 323 skipped, 8 deselected in 46.69s
+
+================================================================================
+Context → Pages: stop Search from navigating to General
+================================================================================
+
+Context:
+Clicking Search on Context → Pages submitted a native HTML form without a
+stable section URL, which reloaded /domain/ and dropped the user on General.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_pages.html
+   Replaced the search <form> with a div; Search is type="button".
+2. src/front/static/domain/js/domain-pages.js
+   Wire Search click + Enter keydown to runSearch (no form submit).
+3. tests/units/front/test_domain_pages_contract.py
+   Assert no form/submit control on the Pages partial.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_pages.html
+- src/front/static/domain/js/domain-pages.js
+- tests/units/front/test_domain_pages_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10387 passed, 323 skipped, 8 deselected, 39 warnings in 44.01s
+
+================================================================================
+Context → Pages: fix JS syntax error and missing TimedTaskLog on Context page
+================================================================================
+
+Context:
+Search did nothing and the Databricks Domain dropdown never filled: a
+typographic quote inside a JS string literal made domain-pages.js fail to
+parse ("missing ) after argument list"). Separately, the Context page loaded
+query-sync.js without timed-task-log.js (gap since the shared timed build log
+refactor), raising "TimedTaskLog is not defined".
+
+Changes:
+
+1. src/front/static/domain/js/domain-pages.js
+   Replaced smart quotes with ASCII quotes in the no-match status message;
+   surface Databricks Domains load errors instead of swallowing them.
+2. src/front/templates/domain.html
+   Load query/js/timed-task-log.js before query-sync.js.
+3. tests/units/front/test_domain_pages_contract.py
+   Guard against typographic quotes in domain-pages.js and assert the
+   timed-task-log include order.
+
+Modified files:
+- src/front/static/domain/js/domain-pages.js
+- src/front/templates/domain.html
+- tests/units/front/test_domain_pages_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10389 passed, 323 skipped, 8 deselected in 52.51s
+
+================================================================================
+Context → Pages: render page preview body as HTML, not Markdown
+================================================================================
+
+Context:
+The preview modal showed the Knowledge Page body as escaped plain text. The
+body is HTML and must render as HTML, not be parsed as Markdown. Rendering uses
+DOMPurify (already loaded in base.html) so untrusted markup cannot run scripts
+or event handlers; without DOMPurify it falls back to escaped plain text.
+
+Changes:
+
+1. src/front/static/domain/js/domain-pages.js
+   Preview body rendered via new `_renderPageHtml` (DOMPurify.sanitize, HTML
+   profile). Empty bodies show "(empty body)"; no marked/renderMarkdown.
+2. src/front/static/domain/css/domain-pages.css
+   Dropped pre-wrap from the preview container; added image/table rules and a
+   pre-wrap class only for the plain-text fallback.
+3. tests/units/front/test_domain_pages_contract.py
+   Contract: preview uses sanitized HTML, not Markdown or escaped body.
+
+Modified files:
+- src/front/static/domain/js/domain-pages.js
+- src/front/static/domain/css/domain-pages.css
+- tests/units/front/test_domain_pages_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10392 passed, 323 skipped, 8 deselected in 47.45s
+
+================================================================================
+Context → Knowledge Store renamed to Documents; supported import types listed
+================================================================================
+
+Context:
+The Context menu entry, page heading and wizard labels still said "Knowledge
+Store". The user asked for the name "Documents" and for the page to state which
+file types can be imported.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Menu label "Knowledge Store" → "Documents" (id `documents` unchanged).
+2. src/front/templates/partials/domain/_domain_documents.html
+   Page heading and copy now say "Documents". New "Supported file types" block
+   listing the parsed types (PDF, DOCX/DOC, PPTX/PPT, PNG/JPG/JPEG) and the
+   read-as-text types. The file picker `#docFileInput` gets an `accept` filter
+   with the same extensions.
+3. src/front/templates/partials/ontology/_ontology_wizard.html
+   Wizard tab, heading, helper text and empty-state link renamed to Documents
+   (link text "Context > Documents").
+4. src/front/templates/partials/layout/help_modal.html
+   Help copy renamed to Documents.
+5. src/front/static/registry/js/registry.js, src/front/static/domain/js/domain-versions.js
+   Delete confirmations now say "removes all Documents content".
+6. src/front/static/domain/js/domain-documents.js
+   Header comment renamed (no behaviour change).
+7. src/agents/tools/documents.py
+   Empty-corpus message points to "Context → Documents".
+8. docs/user-guide.md, docs/getting-started.md, docs/README.md, docs/development.md
+   Section heading, anchors and UI paths renamed; user guide documents the
+   supported import types.
+9. tests/units/front/test_domain_documents_ui.py
+   Label contracts updated; new contract that the supported-types panel and the
+   file picker `accept` list match DocumentExtractor.SUPPORTED_EXTENSIONS and
+   DocumentParseService.TEXT_EXTENSIONS.
+10. tests/units/front/test_ontology_generate_wizard_staged.py,
+    tests/units/front/test_domain_versions_cards.py
+    Assertions updated to the new label.
+
+Kept on purpose: internal identifiers, backend error messages ("Knowledge Store
+cleanup failed", asserted by registry/settings tests) and architecture docs that
+describe the Lakebase store.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_documents.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/js/domain-documents.js
+- src/agents/tools/documents.py
+- docs/user-guide.md
+- docs/getting-started.md
+- docs/README.md
+- docs/development.md
+- tests/units/front/test_domain_documents_ui.py
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- tests/units/front/test_domain_versions_cards.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10392 passed, 323 skipped, 8 deselected, 39 warnings in 46.08s
+
+================================================================================
+Context → Pages: hyperlink page name to open preview modal
+================================================================================
+
+Context:
+Replaced the separate "Preview" action buttons with a clickable hyperlink
+directly on the page name in both the search results table and the selected
+pages list. Clicking the page title opens the preview modal.
+
+Changes:
+
+1. src/front/static/domain/js/domain-pages.js
+   Render the page title as an anchor tag with `data-pages-preview` and class
+   `pages-title-link`; remove the standalone "Preview" buttons from the action
+   cells in search and selected tables.
+2. src/front/static/domain/css/domain-pages.css
+   Style `.pages-title-link` using `--db-primary` with hover/focus underline.
+3. tests/units/front/test_domain_pages_contract.py
+   Contract test asserting page title has preview hyperlink and standalone
+   preview buttons are removed.
+
+Modified files:
+- src/front/static/domain/js/domain-pages.js
+- src/front/static/domain/css/domain-pages.css
+- tests/units/front/test_domain_pages_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10393 passed, 323 skipped, 8 deselected in 44.73s
+
+================================================================================
+Pages UX: loading spinner, Markdown→HTML preview, wizard title hyperlink
+================================================================================
+
+Context:
+Three UX polish items for Knowledge Pages: (1) the curated "Pages for Ontology
+Generate" list showed empty until load finished with no spinner; (2) page
+bodies are Markdown (headings, lists) but preview was treating them as raw HTML
+so `#` markers stayed visible; (3) Ontology → Generate Pages tab lacked the
+same clickable-title preview as Context → Pages.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_pages.html
+   Initial selected-list row is a loading spinner.
+2. src/front/static/domain/js/domain-pages.js
+   `_showSelectedLoading` while fetching selection; `_renderPageHtml` uses
+   `renderMarkdown` / marked+DOMPurify.
+3. src/front/static/domain/css/domain-pages.css
+   Heading/paragraph styles for rendered Markdown preview bodies.
+4. src/front/templates/partials/ontology/_ontology_wizard.html
+   Wizard page preview modal.
+5. src/front/static/ontology/js/ontology-wizard.js
+   Page title hyperlink (`wizard-page-preview`) + `previewWizardPage` with
+   Markdown→HTML rendering.
+6. src/front/templates/ontology.html
+   Include domain-pages.css for shared title-link and preview styles.
+7. tests/units/front/test_domain_pages_contract.py
+   Spinner + Markdown render contracts.
+8. tests/units/front/test_ontology_generate_wizard_staged.py
+   Wizard preview hyperlink / modal / CSS contracts.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_pages.html
+- src/front/static/domain/js/domain-pages.js
+- src/front/static/domain/css/domain-pages.css
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/templates/ontology.html
+- tests/units/front/test_domain_pages_contract.py
+- tests/units/front/test_ontology_generate_wizard_staged.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10394 passed, 323 skipped, 8 deselected in 44.27s

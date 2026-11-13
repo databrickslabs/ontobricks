@@ -125,7 +125,12 @@ class TestStartGenerateDetection:
 
         result = await route_ctx.routes.start_generate_detection(
             _Request(
-                {"metadata": {"tables": []}, "guidelines": "g", "documents": ["a.pdf"]}
+                {
+                    "metadata": {"tables": []},
+                    "guidelines": "g",
+                    "documents": ["a.pdf"],
+                    "pages": ["pages/abc-123"],
+                }
             ),
             session_mgr=object(),
             settings=object(),
@@ -137,6 +142,7 @@ class TestStartGenerateDetection:
         assert captured["token"] == "t"
         assert captured["endpoint_name"] == "e"
         assert captured["selected_docs"] == ["a.pdf"]
+        assert captured["selected_pages"] == ["pages/abc-123"]
         assert captured["warehouse_id"] == "wh1"
 
         assert len(route_ctx.tm.completed) == 1

@@ -6,7 +6,8 @@
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
 - [Settings: Lakehouse Health (Registry permissions)](#settings-lakehouse-health-registry-permissions)
-- [Knowledge Store](#knowledge-store)
+- [Documents](#documents)
+- [Pages](#pages)
 - [Application Workflow](#application-workflow)
 - [Step 1: Design Ontology](#step-1-design-ontology)
 - [Step 2: Map Data Assets (Mapping)](#step-2-map-data-assets-mapping)
@@ -91,14 +92,14 @@ Lakehouse backend; UC objects belonging to Lakebase or Neo4j versions are
 excluded. Health answers only one question: "Can this principal operate on the
 configured Registry schema?"
 
-## Knowledge Store
+## Documents
 
-Use **Context → Knowledge Store** to upload specifications, glossaries, and other
+Use **Context → Documents** to upload specifications, glossaries, and other
 evidence for ontology Generate and Mapping. OntoBricks parses each supported
 file once after upload and stores **only the parsed text** in Lakebase (the
 original binary is **not** retained). Both agents then read the same durable
 parsed text; agent runs never re-parse the source. You can view a document's
-parsed content directly in the Knowledge Store, upload new files, and **purge one
+parsed content directly on the Documents page, upload new files, and **purge one
 or several documents at once** (multi-select). There is a **10 MB per-file upload
 limit**, and previews show the parsed text only — there is no binary download.
 
@@ -109,9 +110,37 @@ The document list shows one of three states:
 - **Parse failed** — the parsed text could not be produced; use **Retry** after
   fixing warehouse access or a transient parser issue.
 
-UTF-8 text formats are ready immediately. Unsupported formats remain failed
-and are not sent to Generate or Mapping. Creating a new domain version copies the
-parsed documents forward.
+The Documents page lists the supported import types:
+
+- **Parsed by Databricks** (`ai_parse_document`, text extracted once):
+  PDF, Word (`.docx`, `.doc`), PowerPoint (`.pptx`, `.ppt`), and images
+  (`.png`, `.jpg`, `.jpeg`).
+- **Read as text** (UTF-8, ready immediately): `.txt`, `.md`, `.csv`, `.json`,
+  `.xml`, `.html`, `.css`, `.js`, `.ts`, `.py`, `.sql`, `.log`, `.yaml`, `.yml`,
+  `.toml`, `.ini`, `.cfg`, `.ttl`, `.owl`, `.rdf`.
+
+The file picker is filtered to these extensions. Any other type is rejected with
+*Unsupported document type* and is not sent to Generate or Mapping. Creating a new
+domain version copies the parsed documents forward.
+
+## Pages
+
+Use **Context → Pages** to search Unity Catalog Knowledge Pages (Genie Ontology
+pages) and build the list that should later feed **Ontology → Generate**. The
+screen does **not** dump every page up front: use the **Genie Pages search**
+(title / synonym / keyword, optional Databricks Domain and state), **Add**
+matches to **Pages for Ontology Generate**, then **Save selection**. The saved
+set lives on the context as `domain.info.knowledge_pages` (title, domain, state,
+description, synonyms — not the page body). Preview loads the Markdown body on
+demand.
+
+On **Ontology → Generate**, the **Pages** tab lists this curated set (all
+included by default). Uncheck any page to skip it for that detect run. Included
+page bodies are fetched from Databricks and passed to the detection agent as
+additional documentation (alongside Documents and guidelines).
+
+Requires Databricks authentication and permission to list Knowledge Pages
+(account Manage Discover, or MANAGE DOMAIN when filtering by a Databricks Domain).
 
 ## Application Workflow
 
@@ -629,7 +658,7 @@ process — you can navigate away and come back at any point, and every step
 in progress survives a page reload:
 
 1. **Configure & Detect** — choose which **catalog/schema** metadata to
-   include, (optionally) select uploaded **Knowledge Store** documents, write custom
+   include, (optionally) select uploaded **Documents**, write custom
    **Guidelines** or pick a **Quick Template**, then click **Detect
    Entities**. Detection only proposes entities — relationships and
    attributes are inferred later, after review. This runs as a background
@@ -669,7 +698,7 @@ Unity AI Gateway model service or a legacy Model Serving endpoint). With
 
 #### Documents (PDF and other formats)
 
-Documents uploaded under **Context → Knowledge Store** feed the Wizard. Files are
+Documents uploaded under **Context → Documents** feed the Wizard. Files are
 parsed once at upload using the Databricks `ai_parse_document` function (called
 inline with the uploaded bytes as base64), which runs on your configured **SQL
 warehouse** — so a warehouse must be configured. No Volume access grant is

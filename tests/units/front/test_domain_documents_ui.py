@@ -1,7 +1,11 @@
-"""UI contracts for the Knowledge Store (parse status, retry, purge, view)."""
+"""UI contracts for the Documents page (parse status, retry, purge, view)."""
 
 import json
+import re
 from pathlib import Path
+
+from back.core.databricks.document.DocumentExtractor import DocumentExtractor
+from back.core.databricks.document.DocumentParseService import DocumentParseService
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCUMENTS_JS = REPO_ROOT / "src/front/static/domain/js/domain-documents.js"
@@ -13,16 +17,34 @@ MENU_CONFIG = REPO_ROOT / "src/front/config/menu_config.json"
 UTILS_JS = REPO_ROOT / "src/front/static/global/js/utils.js"
 
 
-def test_feature_is_named_knowledge_store():
+def test_feature_is_named_documents():
     html = DOCUMENTS_HTML.read_text(encoding="utf-8")
-    assert "Knowledge Store" in html
+    assert "Knowledge Store" not in html
+    assert ">Documents</h4>" in html
     assert "Document Management" not in html
+
+
+def test_menu_entry_is_labelled_documents():
     menu = MENU_CONFIG.read_text(encoding="utf-8")
     ids = json.loads(menu)
     # The menu id stays 'documents'; only the label renames.
-    assert '"label": "Knowledge Store"' in menu
+    assert '"label": "Documents"' in menu
+    assert "Knowledge Store" not in menu
     assert '"id": "documents"' in menu
     assert ids is not None
+
+
+def test_supported_types_panel_matches_backend():
+    html = DOCUMENTS_HTML.read_text(encoding="utf-8")
+    binary = set(DocumentExtractor.SUPPORTED_EXTENSIONS)
+    text = set(DocumentParseService.TEXT_EXTENSIONS)
+    # The panel lists every accepted type (uppercase, no dot).
+    for ext in binary | text:
+        assert ext.upper() in html, f"{ext} missing from supported types panel"
+    # The file picker filters to exactly the accepted extensions.
+    accept = re.search(r'id="docFileInput"[^>]*accept="([^"]+)"', html)
+    assert accept, "docFileInput must declare an accept filter"
+    assert set(accept.group(1).split(",")) == {f".{e}" for e in binary | text}
 
 
 def test_no_volume_location_banner():

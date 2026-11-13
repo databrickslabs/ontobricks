@@ -14,6 +14,7 @@ from .StatementExecutionWarehouse import StatementExecutionWarehouse
 from .uc import UnityCatalog, VolumeFileService
 from .WorkspaceService import WorkspaceService
 from .DashboardService import DashboardService
+from .KnowledgePageService import KnowledgePageService
 from .SecretsService import SecretsService
 
 
@@ -53,6 +54,7 @@ class DatabricksClient:
         self.volumes = VolumeFileService(auth=self.auth)
         self.workspace = WorkspaceService(self.auth)
         self.dashboards = DashboardService(self.auth)
+        self.knowledge_pages = KnowledgePageService(self.auth)
         self.secrets = SecretsService(self.auth)
 
     @property

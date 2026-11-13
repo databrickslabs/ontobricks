@@ -2087,6 +2087,7 @@ async def start_generate_detection(
     guidelines = data.get("guidelines", "")
     options = data.get("options", {})
     documents = data.get("documents", [])
+    pages = data.get("pages", [])
     tables = data.get("tables", [])
 
     tables_count = len(metadata.get("tables", []))
@@ -2129,6 +2130,7 @@ async def start_generate_detection(
                 options=options,
                 selected_tables=tables,
                 selected_docs=documents,
+                selected_pages=pages,
                 warehouse_id=warehouse_id,
                 on_step=on_step,
             )

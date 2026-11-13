@@ -37,6 +37,7 @@ from back.core.databricks import (
     has_metadata as check_has_metadata,
     validate_metadata,
 )
+from back.core.databricks.knowledge_pages import normalize_knowledge_pages
 from back.core.helpers import (
     build_auto_base_uri,
     get_databricks_host_and_token,
@@ -267,22 +268,7 @@ class Domain:
             "status": self._s.info.get("status", "DRAFT"),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            "graph_backend": self._coerce_graph_backend(
-                self._s.info.get("graph_backend")
-            ),
-            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
-            "lakehouse_materialization": self._coerce_lakehouse_materialization(
-                self._s.info.get("lakehouse_materialization")
-            ),
-            "graph_cache_enabled": self._coerce_graph_cache_enabled(
-                self._s.info.get("graph_cache_enabled")
-            ),
-            "graph_cache_state": self._coerce_graph_cache_state(
-                self._s.info.get("graph_cache_state"),
-                enabled=self._coerce_graph_cache_enabled(
-                    self._s.info.get("graph_cache_enabled")
-                ),
-            ),
+            **self._graph_settings_info(),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -504,6 +490,12 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
+            **self._graph_settings_info(),
+        }
+
+    def _graph_settings_info(self) -> Dict[str, Any]:
+        """Graph backend, cache, and curated Knowledge Pages fields of ``domain.info``."""
+        return {
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
@@ -520,6 +512,7 @@ class Domain:
                     self._s.info.get("graph_cache_enabled")
                 ),
             ),
+            "knowledge_pages": normalize_knowledge_pages(self._s.info.get("knowledge_pages")),
         }
 
     @staticmethod
@@ -547,6 +540,19 @@ class Domain:
         return normalize_lakehouse_materialization(
             raw if isinstance(raw, str) else None
         )
+
+    def get_knowledge_pages_selection(self) -> list:
+        """Return the curated Knowledge Pages selection for this domain."""
+        pages = normalize_knowledge_pages(self._s.info.get("knowledge_pages"))
+        self._s.info["knowledge_pages"] = pages
+        return pages
+
+    def save_knowledge_pages_selection(self, pages: Any) -> list:
+        """Replace the curated Knowledge Pages selection and persist the session."""
+        normalized = normalize_knowledge_pages(pages)
+        self._s.info["knowledge_pages"] = normalized
+        self._s.save()
+        return normalized
 
     @staticmethod
     def _coerce_graph_cache_enabled(raw: Any) -> bool:
@@ -669,22 +675,7 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
             "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
-            "graph_backend": self._coerce_graph_backend(
-                self._s.info.get("graph_backend")
-            ),
-            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
-            "lakehouse_materialization": self._coerce_lakehouse_materialization(
-                self._s.info.get("lakehouse_materialization")
-            ),
-            "graph_cache_enabled": self._coerce_graph_cache_enabled(
-                self._s.info.get("graph_cache_enabled")
-            ),
-            "graph_cache_state": self._coerce_graph_cache_state(
-                self._s.info.get("graph_cache_state"),
-                enabled=self._coerce_graph_cache_enabled(
-                    self._s.info.get("graph_cache_enabled")
-                ),
-            ),
+            **self._graph_settings_info(),
             # Catalog for the MCP tab, so the template never restates the
             # tool / context lists that live in back.core.mcp_tools.
             "mcp_domain_tools": list(MCP_DOMAIN_TOOLS),

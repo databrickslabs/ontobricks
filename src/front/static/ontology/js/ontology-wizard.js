@@ -31,6 +31,8 @@ let wizardMetadataCache = null;
 let wizardSelectedTables = new Set();
 let wizardSelectedDocs = new Set();
 let wizardDocsCache = [];
+let wizardSelectedPages = new Set(); // page resource names pages/{uuid}
+let wizardPagesCache = [];
 let wizardCurrentTaskId = null;  // Track running task (detect or complete)
 
 // Session storage keys — task ids only. All draft/entity/checkpoint state
@@ -69,6 +71,7 @@ async function initOntologyWizard() {
 
     await loadWizardMetadata();
     await loadWizardDocuments();
+    await loadWizardPages();
     await loadWizardTemplatesFromServer();
 
     const detectTaskId = sessionStorage.getItem(WIZARD_DETECT_TASK_KEY);
@@ -704,20 +707,22 @@ async function runGenerateDetection() {
     const documents = selectedDocumentFiles
         .filter(file => file.parse_status === 'ready')
         .map(file => file.name);
+    const pages = getSelectedPageNames();
 
     const hasMetadata = selectedMetadata && selectedMetadata.tables && selectedMetadata.tables.length > 0;
     const hasGuidelines = guidelines.length > 0;
     const hasDocs = documents.length > 0;
+    const hasPages = pages.length > 0;
 
     if (unavailableDocuments.length > 0) {
         const names = unavailableDocuments.map(file => file.name).join(', ');
         showNotification(`Document parsing is not ready for: ${names}`, 'warning');
     }
 
-    if (!hasMetadata && !hasGuidelines && !hasDocs) {
+    if (!hasMetadata && !hasGuidelines && !hasDocs && !hasPages) {
         const message = unavailableDocuments.length > 0
             ? 'Document parsing is not ready. Wait for a ready document or provide another input.'
-            : 'Please provide at least data assets, documents, or guidelines';
+            : 'Please provide at least data assets, documents, Genie Pages, or guidelines';
         showNotification(message, 'warning');
         return;
     }
@@ -731,6 +736,7 @@ async function runGenerateDetection() {
                 guidelines: guidelines,
                 options: {},
                 documents: documents,
+                pages: pages,
                 tables: hasMetadata ? Array.from(wizardSelectedTables) : [],
             }),
             credentials: 'same-origin'
@@ -1190,6 +1196,187 @@ function formatDocSize(bytes) {
 }
 
 // =====================================================
+// GENIE PAGES SELECTION (from Context → Pages)
+// =====================================================
+
+/**
+ * Load curated Knowledge Pages from domain.info.knowledge_pages.
+ * All are selected by default; the user can unselect for this detect run.
+ */
+async function loadWizardPages() {
+    const statusEl = document.getElementById('wizardPagesStatus');
+    const previewEl = document.getElementById('wizardPagesPreview');
+    const noPagesEl = document.getElementById('wizardNoPages');
+
+    try {
+        const response = await fetch('/domain/pages/selection', { credentials: 'same-origin' });
+        const result = await response.json();
+
+        if (result.success && result.pages && result.pages.length > 0) {
+            wizardPagesCache = result.pages;
+            wizardSelectedPages.clear();
+            wizardPagesCache.forEach((p) => {
+                if (p && p.name) wizardSelectedPages.add(p.name);
+            });
+
+            if (statusEl) {
+                statusEl.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-check-circle-fill text-success me-2 fs-5"></i>
+                    <div><strong>${wizardPagesCache.length} Genie Page${wizardPagesCache.length !== 1 ? 's' : ''}</strong> from Context → Pages</div>
+                </div>`;
+            }
+            renderWizardPagesList();
+            if (previewEl) previewEl.style.display = 'block';
+            if (noPagesEl) noPagesEl.style.display = 'none';
+        } else {
+            wizardPagesCache = [];
+            wizardSelectedPages.clear();
+            if (statusEl) statusEl.innerHTML = '';
+            if (previewEl) previewEl.style.display = 'none';
+            if (noPagesEl) noPagesEl.style.display = 'block';
+        }
+    } catch (err) {
+        console.warn('[Wizard] Could not load Genie Pages selection:', err);
+        wizardPagesCache = [];
+        wizardSelectedPages.clear();
+        if (statusEl) statusEl.innerHTML = '';
+        if (previewEl) previewEl.style.display = 'none';
+        if (noPagesEl) noPagesEl.style.display = 'block';
+    }
+}
+
+function renderWizardPagesList() {
+    const container = document.getElementById('wizardPagesList');
+    if (!container) return;
+
+    let html = '<div class="list-group list-group-flush">';
+    wizardPagesCache.forEach((page) => {
+        const name = page.name || '';
+        const title = page.display_name || name;
+        const state = page.state || '';
+        const checked = wizardSelectedPages.has(name) ? 'checked' : '';
+        const badge =
+            state === 'PUBLISHED'
+                ? 'text-bg-success'
+                : state === 'DRAFT'
+                  ? 'text-bg-warning'
+                  : 'text-bg-secondary';
+        const safeNameAttr = escWizardAttr(name);
+        const safeTitle = escapeHtml(title);
+        const safeState = escapeHtml(state || '—');
+        const desc = page.description
+            ? `<div class="small text-muted text-truncate">${escapeHtml(page.description)}</div>`
+            : '';
+        const pageNameAttr = encodeURIComponent(name);
+        html += `
+            <div class="list-group-item list-group-item-action d-flex align-items-start py-2">
+                <input type="checkbox" class="form-check-input me-3 mt-1 wizard-page-checkbox"
+                       value="${safeNameAttr}" ${checked}
+                       aria-label="Include ${safeNameAttr}">
+                <i class="bi bi-journal-richtext me-2 mt-1 text-primary"></i>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="d-flex align-items-center flex-wrap gap-2">
+                        <a href="#" class="fw-semibold text-truncate text-decoration-none pages-title-link"
+                           data-action="wizard-page-preview" data-page-name="${pageNameAttr}"
+                           role="button" title="Preview ${safeNameAttr}">${safeTitle}</a>
+                        <span class="badge ${badge}">${safeState}</span>
+                    </div>
+                    ${desc}
+                </div>
+            </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    updateWizardPagesCount();
+}
+
+/**
+ * Preview a Genie Knowledge Page (Markdown body → sanitised HTML).
+ */
+async function previewWizardPage(name) {
+    const modalEl = document.getElementById('wizardPagesPreviewModal');
+    const body = document.getElementById('wizardPagesPreviewBody');
+    const title = document.getElementById('wizardPagesPreviewModalLabel');
+    if (!modalEl || !body || !name) return;
+    body.innerHTML = '<p class="text-muted small">Loading…</p>';
+    if (title) title.textContent = 'Page preview';
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    try {
+        const resp = await fetch(
+            '/domain/pages/preview?name=' + encodeURIComponent(name),
+            { credentials: 'same-origin' }
+        );
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            throw new Error(data.message || data.detail || 'Preview failed');
+        }
+        const p = data.page || {};
+        if (title) title.textContent = p.display_name || p.name || 'Page preview';
+        const synonyms = (p.synonyms || []).join(', ');
+        const state = p.state || '';
+        const badgeCls = state === 'PUBLISHED' ? 'text-bg-success' : 'text-bg-warning';
+        const renderedBody = (typeof renderMarkdown === 'function')
+            ? renderMarkdown(p.body || '')
+            : escapeHtml(p.body || '(empty body)');
+        body.innerHTML =
+            '<p class="small mb-2"><span class="text-muted">State:</span> ' +
+            '<span class="badge ' + badgeCls + '">' + escapeHtml(state || '—') + '</span></p>' +
+            (p.description
+                ? '<p class="mb-2">' + escapeHtml(p.description) + '</p>'
+                : '') +
+            (synonyms
+                ? '<p class="small text-muted mb-3">Synonyms: ' + escapeHtml(synonyms) + '</p>'
+                : '') +
+            '<div class="pages-preview-body">' +
+            (String(p.body || '').trim()
+                ? renderedBody
+                : '<p class="text-muted small mb-0">(empty body)</p>') +
+            '</div>';
+    } catch (err) {
+        body.innerHTML =
+            '<p class="text-danger small">' + escapeHtml(err.message || 'Preview failed') + '</p>';
+    }
+}
+
+function updateWizardPageSelection(checkbox) {
+    if (checkbox.checked) {
+        wizardSelectedPages.add(checkbox.value);
+    } else {
+        wizardSelectedPages.delete(checkbox.value);
+    }
+    updateWizardPagesCount();
+}
+
+function selectAllWizardPages(selectAll) {
+    wizardSelectedPages.clear();
+    if (selectAll) {
+        wizardPagesCache.forEach((p) => {
+            if (p && p.name) wizardSelectedPages.add(p.name);
+        });
+    }
+    document.querySelectorAll('.wizard-page-checkbox').forEach((cb) => {
+        cb.checked = !!selectAll;
+    });
+    updateWizardPagesCount();
+}
+
+function updateWizardPagesCount() {
+    const el = document.getElementById('wizardPagesSelectedCount');
+    if (!el) return;
+    const total = wizardPagesCache.length;
+    const selected = wizardSelectedPages.size;
+    el.textContent = `${selected} of ${total} page${total !== 1 ? 's' : ''} selected`;
+}
+
+function getSelectedPageNames() {
+    return wizardPagesCache
+        .filter((p) => p && p.name && wizardSelectedPages.has(p.name))
+        .map((p) => p.name);
+}
+
+// =====================================================
 // AGENT STEPS LOG
 // =====================================================
 
@@ -1206,6 +1393,9 @@ window.updateWizardTableSelection = updateWizardTableSelection;
 window.selectAllWizardTables = selectAllWizardTables;
 window.updateWizardDocSelection = updateWizardDocSelection;
 window.selectAllWizardDocs = selectAllWizardDocs;
+window.updateWizardPageSelection = updateWizardPageSelection;
+window.selectAllWizardPages = selectAllWizardPages;
+window.previewWizardPage = previewWizardPage;
 
 /**
  * Wizard UI: data-action click delegation and checkbox change handling (no inline handlers).
@@ -1230,6 +1420,9 @@ window.selectAllWizardDocs = selectAllWizardDocs;
                 case 'wizard-docs-bulk':
                     selectAllWizardDocs(el.dataset.selectAll === 'true');
                     break;
+                case 'wizard-pages-bulk':
+                    selectAllWizardPages(el.dataset.selectAll === 'true');
+                    break;
                 case 'wizard-complete-retry':
                     retryGenerateCompletion();
                     break;
@@ -1250,6 +1443,19 @@ window.selectAllWizardDocs = selectAllWizardDocs;
                     }
                     break;
                 }
+                case 'wizard-page-preview': {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const raw = el.getAttribute('data-page-name') || '';
+                    let name = '';
+                    try {
+                        name = decodeURIComponent(raw);
+                    } catch (err) {
+                        name = raw;
+                    }
+                    if (name) previewWizardPage(name);
+                    break;
+                }
                 default:
                     break;
             }
@@ -1267,6 +1473,10 @@ window.selectAllWizardDocs = selectAllWizardDocs;
             }
             if (t.classList && t.classList.contains('wizard-doc-checkbox')) {
                 updateWizardDocSelection(t);
+                return;
+            }
+            if (t.classList && t.classList.contains('wizard-page-checkbox')) {
+                updateWizardPageSelection(t);
             }
         });
     }

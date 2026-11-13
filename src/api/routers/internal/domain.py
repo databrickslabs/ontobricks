@@ -1297,3 +1297,112 @@ async def preview_document(
     except Exception as e:
         logger.exception("Preview document failed: %s", e)
         raise InfrastructureError("Preview document failed", detail=str(e))
+
+
+# ===========================================
+# UC Knowledge Pages (Context → Pages)
+# ===========================================
+
+
+def _knowledge_page_service(domain: Any, settings: Settings):
+    """Build a KnowledgePageService from the domain's Databricks client."""
+    client = get_databricks_client(domain, settings)
+    if client is None:
+        raise InfrastructureError(
+            "Databricks client is not configured — cannot list Knowledge Pages"
+        )
+    return client.knowledge_pages
+
+
+@router.get("/pages/list")
+async def list_knowledge_pages(
+    page_size: int = Query(50, ge=1, le=100),
+    page_token: Optional[str] = Query(None),
+    filter: Optional[str] = Query(None, alias="filter"),
+    include_domains: bool = Query(False),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Proxy Databricks Knowledge Pages list (account-visible, filterable)."""
+    domain = get_domain(session_mgr)
+    try:
+        svc = _knowledge_page_service(domain, settings)
+        result = svc.list_pages(
+            page_size=page_size,
+            page_token=page_token,
+            filter_str=filter,
+        )
+        payload: Dict[str, Any] = {
+            "success": True,
+            "pages": result.get("pages") or [],
+            "next_page_token": result.get("next_page_token"),
+        }
+        if include_domains:
+            try:
+                payload["domains"] = svc.list_domains()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Domains list for Pages filter failed: %s", exc)
+                payload["domains"] = []
+                payload["domains_error"] = str(exc)
+        return payload
+    except InfrastructureError:
+        raise
+    except Exception as e:
+        logger.exception("List Knowledge Pages failed: %s", e)
+        raise InfrastructureError(
+            "List Knowledge Pages failed",
+            detail=str(e),
+        )
+
+
+@router.get("/pages/preview")
+async def preview_knowledge_page(
+    name: str = Query(..., min_length=1),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Fetch a full Knowledge Page (including body) for preview."""
+    domain = get_domain(session_mgr)
+    try:
+        svc = _knowledge_page_service(domain, settings)
+        page = svc.get_page(name)
+        return {"success": True, "page": page}
+    except ValueError as e:
+        raise ValidationError(str(e))
+    except InfrastructureError:
+        raise
+    except Exception as e:
+        logger.exception("Preview Knowledge Page failed: %s", e)
+        raise InfrastructureError(
+            "Preview Knowledge Page failed",
+            detail=str(e),
+        )
+
+
+@router.get("/pages/selection")
+async def get_knowledge_pages_selection(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Return the curated Knowledge Pages selection for the loaded domain."""
+    pages = Domain(get_domain(session_mgr)).get_knowledge_pages_selection()
+    return {"success": True, "pages": pages}
+
+
+@router.post("/pages/selection")
+async def save_knowledge_pages_selection(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Replace the curated Knowledge Pages selection (snapshots, no body)."""
+    data = await request.json()
+    raw = data.get("pages") if isinstance(data, dict) else None
+    if raw is None and isinstance(data, list):
+        raw = data
+    if raw is None:
+        raise ValidationError("Request body must include a 'pages' array")
+    pages = Domain(get_domain(session_mgr)).save_knowledge_pages_selection(raw)
+    return {
+        "success": True,
+        "pages": pages,
+        "message": "Knowledge Pages selection saved",
+    }

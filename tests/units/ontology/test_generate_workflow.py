@@ -144,6 +144,102 @@ class TestRunDetection:
         assert draft.selected_source_config["documents"] == ["spec.pdf"]
         assert draft.source_fingerprint.startswith("sha256:")
 
+    def test_selected_pages_fingerprinted_and_injected_into_guidelines(
+        self, domain_session, monkeypatch
+    ):
+        """Genie Pages names enter the fingerprint; bodies append to guidelines."""
+        domain_session.info["knowledge_pages"] = [
+            {
+                "name": "pages/abc",
+                "domain": "domains/x",
+                "display_name": "On-Time Delivery",
+                "state": "PUBLISHED",
+                "description": "OTD metric",
+                "synonyms": [],
+                "update_time": "",
+            }
+        ]
+        monkeypatch.setattr(
+            wf,
+            "list_ready_document_manifests",
+            lambda *_a, **_kw: [],
+        )
+        monkeypatch.setattr(
+            wf,
+            "load_knowledge_page_bodies",
+            lambda *_a, **_kw: [
+                {
+                    "name": "pages/abc",
+                    "display_name": "On-Time Delivery",
+                    "state": "PUBLISHED",
+                    "description": "OTD metric",
+                    "body": "A shipment is on time when…",
+                }
+            ],
+        )
+        captured = {}
+
+        def _fake_detect(**kw):
+            captured.update(kw)
+            return _detection_result(["Shipment"])
+
+        monkeypatch.setattr(wf.owl_staged, "detect_entities", _fake_detect)
+        draft = wf.run_detection(
+            domain_session,
+            _settings(),
+            host="h",
+            token="t",
+            endpoint_name="e",
+            guidelines="Focus on logistics.",
+            selected_pages=["pages/abc", "pages/abc"],
+        )
+        assert draft.selected_source_config["pages"] == ["pages/abc"]
+        assert "ADDITIONAL DOCUMENTATION" in captured["guidelines"]
+        assert "On-Time Delivery" in captured["guidelines"]
+        assert "A shipment is on time when…" in captured["guidelines"]
+        assert captured["guidelines"].startswith("Focus on logistics.")
+
+    def test_selected_pages_not_on_domain_are_ignored(
+        self, domain_session, monkeypatch
+    ):
+        """Detect cannot pull arbitrary page ids outside Context → Pages."""
+        domain_session.info["knowledge_pages"] = [
+            {
+                "name": "pages/allowed",
+                "domain": "",
+                "display_name": "Allowed",
+                "state": "PUBLISHED",
+                "description": "",
+                "synonyms": [],
+                "update_time": "",
+            }
+        ]
+        monkeypatch.setattr(
+            wf, "list_ready_document_manifests", lambda *_a, **_kw: []
+        )
+        loaded = []
+
+        def _fake_load(_domain, _settings, names):
+            loaded.extend(names)
+            return []
+
+        monkeypatch.setattr(wf, "load_knowledge_page_bodies", _fake_load)
+        monkeypatch.setattr(
+            wf.owl_staged,
+            "detect_entities",
+            lambda **kw: _detection_result(["X"]),
+        )
+        draft = wf.run_detection(
+            domain_session,
+            _settings(),
+            host="h",
+            token="t",
+            endpoint_name="e",
+            selected_pages=["pages/allowed", "pages/evil"],
+        )
+        assert draft.selected_source_config["pages"] == ["pages/allowed"]
+        assert loaded == ["pages/allowed"]
+
     def test_no_ready_documents_still_detects_from_metadata_only(
         self, domain_session, monkeypatch
     ):

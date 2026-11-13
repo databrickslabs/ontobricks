@@ -300,7 +300,7 @@ async function deleteVersionFromList(domainFolder, version, triggerButton = null
                 + 'Store content. This cannot be undone.'
             : 'Permanently delete version v' + escapeHtml(version)
                 + ' from domain "' + escapeHtml(domainFolder)
-                + '"? This permanently removes its Knowledge Store content '
+                + '"? This permanently removes its Documents content '
                 + 'and cannot be undone.',
         confirmText: 'Delete Version',
         confirmClass: 'btn-danger',

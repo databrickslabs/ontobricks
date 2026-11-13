@@ -48,6 +48,116 @@ from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 
+# Cap Genie Page bodies injected into detection guidelines (token budget).
+_MAX_PAGE_BODY_CHARS = 20_000
+_MAX_PAGES_IN_DETECT = 15
+
+
+def _normalize_page_names(selected_pages: Optional[List[str]]) -> List[str]:
+    """Deduplicate page resource names while preserving order."""
+    seen: Set[str] = set()
+    out: List[str] = []
+    for raw in selected_pages or []:
+        name = str(raw or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+    return out
+
+
+def _allowlisted_page_names(domain, selected_pages: Optional[List[str]]) -> List[str]:
+    """Keep only page names present on ``domain.info.knowledge_pages``.
+
+    Prevents the detect client from injecting arbitrary Databricks page ids
+    that were never curated under Context → Pages.
+    """
+    requested = _normalize_page_names(selected_pages)
+    if not requested:
+        return []
+    try:
+        curated = {
+            str(p.get("name") or "").strip()
+            for p in (domain.info.get("knowledge_pages") or [])
+            if isinstance(p, dict)
+        }
+    except Exception:  # noqa: BLE001 — treat missing info as empty allowlist
+        curated = set()
+    curated.discard("")
+    return [name for name in requested if name in curated]
+
+
+def _format_pages_as_documentation(pages: List[Dict[str, Any]]) -> str:
+    """Build a guidelines appendix from fetched Knowledge Page bodies."""
+    if not pages:
+        return ""
+    blocks = [
+        "",
+        "# ADDITIONAL DOCUMENTATION (Genie Knowledge Pages)",
+        "The following Unity Catalog Knowledge Pages were selected as domain",
+        "documentation. Treat them as evidence for entity detection (same as",
+        "READY Knowledge Store documents).",
+    ]
+    for page in pages:
+        title = page.get("display_name") or page.get("name") or "Untitled"
+        name = page.get("name") or ""
+        state = page.get("state") or ""
+        desc = (page.get("description") or "").strip()
+        body = (page.get("body") or "").strip()
+        if len(body) > _MAX_PAGE_BODY_CHARS:
+            body = body[:_MAX_PAGE_BODY_CHARS] + "\n…[truncated]"
+        blocks.append("")
+        blocks.append(f"## {title}")
+        blocks.append(f"Source: {name}" + (f" ({state})" if state else ""))
+        if desc:
+            blocks.append(desc)
+        if body:
+            blocks.append(body)
+        else:
+            blocks.append("(empty page body)")
+    return "\n".join(blocks)
+
+
+def load_knowledge_page_bodies(
+    domain,
+    settings,
+    selected_pages: Optional[List[str]],
+) -> List[Dict[str, Any]]:
+    """Fetch full Knowledge Page snapshots (incl. body) for detect injection.
+
+    Best-effort: missing auth or per-page failures are logged and skipped so
+    detection can still proceed from other sources.
+    """
+    names = _normalize_page_names(selected_pages)[:_MAX_PAGES_IN_DETECT]
+    if not names:
+        return []
+    try:
+        from back.core.helpers import get_databricks_client
+
+        client = get_databricks_client(domain, settings)
+        if client is None or getattr(client, "knowledge_pages", None) is None:
+            logger.warning(
+                "load_knowledge_page_bodies: Databricks client unavailable"
+            )
+            return []
+        svc = client.knowledge_pages
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "load_knowledge_page_bodies: client setup failed", exc_info=True
+        )
+        return []
+
+    loaded: List[Dict[str, Any]] = []
+    for name in names:
+        try:
+            loaded.append(svc.get_page(name))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "load_knowledge_page_bodies: failed for %s: %s", name, exc
+            )
+    return loaded
+
+
 # Editable Stage 2 fields a review "update" op may change on a candidate.
 _EDITABLE_FIELDS = frozenset(
     {
@@ -242,6 +352,65 @@ class GenerateWorkflow:
         )
 
     @staticmethod
+    def _prepare_detection_source(
+        domain,
+        settings,
+        *,
+        guidelines: str,
+        selected_tables: Optional[List[str]],
+        selected_docs: Optional[List[str]],
+        selected_pages: Optional[List[str]],
+    ) -> tuple:
+        """Build anchors, fingerprint, source config, and guidelines+pages.
+
+        ``selected_pages`` are UC Knowledge Page names (``pages/{uuid}``). Bodies
+        are fetched and appended to guidelines as additional documentation
+        (no agent prompt/tool change).
+        """
+        anchors = build_locked_anchors_from_classes(domain.get_classes())
+        ready_docs = list_ready_document_manifests(domain, settings)
+        page_names = _allowlisted_page_names(domain, selected_pages)
+        selected_source_config = {
+            "tables": list(selected_tables or []),
+            "documents": list(selected_docs or []),
+            "pages": list(page_names),
+        }
+        fingerprint = compute_source_fingerprint(
+            selected_source_config=selected_source_config,
+            ready_documents=ready_docs,
+            existing_anchors=anchors,
+        )
+        page_docs = load_knowledge_page_bodies(domain, settings, page_names)
+        guidelines_with_pages = (guidelines or "") + _format_pages_as_documentation(
+            page_docs
+        )
+        return anchors, fingerprint, selected_source_config, guidelines_with_pages
+
+    @staticmethod
+    def _raise_if_detection_failed(result) -> None:
+        """Map a failed DetectionResult to DraftValidationError / InfrastructureError."""
+        if result.success:
+            return
+        if result.rejected:
+            # Reject-only, user-safe message: the raw parser/schema error
+            # (`result.error`) may echo back arbitrary model text and is
+            # logged server-side for diagnosis only, never surfaced to the
+            # end user — see the live Stage-1 detection failure fix (SPEC
+            # §6, "zero-new-candidate" failure mode).
+            logger.warning(
+                "Stage-1 detection output rejected (not surfaced to the "
+                "user): %s",
+                result.error,
+            )
+            raise DraftValidationError(
+                "The AI model did not return the expected structured "
+                "entity list for this request. Please retry detection."
+            )
+        raise InfrastructureError(
+            "Ontology entity detection failed", detail=result.error
+        )
+
+    @staticmethod
     def run_detection(
         domain,
         settings,
@@ -254,6 +423,7 @@ class GenerateWorkflow:
         options: Optional[dict] = None,
         selected_tables: Optional[List[str]] = None,
         selected_docs: Optional[List[str]] = None,
+        selected_pages: Optional[List[str]] = None,
         warehouse_id: str = "",
         on_step: Optional[Callable[[str], None]] = None,
     ) -> GenerateDraft:
@@ -266,16 +436,18 @@ class GenerateWorkflow:
         network/endpoint failure. Callers must invoke this from a background
         worker thread — it makes a blocking LLM call.
         """
-        anchors = build_locked_anchors_from_classes(domain.get_classes())
-        ready_docs = list_ready_document_manifests(domain, settings)
-        selected_source_config = {
-            "tables": list(selected_tables or []),
-            "documents": list(selected_docs or []),
-        }
-        fingerprint = compute_source_fingerprint(
-            selected_source_config=selected_source_config,
-            ready_documents=ready_docs,
-            existing_anchors=anchors,
+        (
+            anchors,
+            fingerprint,
+            selected_source_config,
+            guidelines_with_pages,
+        ) = GenerateWorkflow._prepare_detection_source(
+            domain,
+            settings,
+            guidelines=guidelines,
+            selected_tables=selected_tables,
+            selected_docs=selected_docs,
+            selected_pages=selected_pages,
         )
 
         result = owl_staged.detect_entities(
@@ -283,7 +455,7 @@ class GenerateWorkflow:
             token=token,
             endpoint_name=endpoint_name,
             metadata=metadata,
-            guidelines=guidelines,
+            guidelines=guidelines_with_pages,
             options=options,
             existing_anchors=anchors,
             selected_tables=selected_tables,
@@ -295,38 +467,9 @@ class GenerateWorkflow:
             warehouse_id=warehouse_id,
             on_step=on_step,
         )
-        if not result.success:
-            if result.rejected:
-                # Reject-only, user-safe message: the raw parser/schema error
-                # (`result.error`) may echo back arbitrary model text and is
-                # logged server-side for diagnosis only, never surfaced to the
-                # end user — see the live Stage-1 detection failure fix (SPEC
-                # §6, "zero-new-candidate" failure mode).
-                logger.warning(
-                    "Stage-1 detection output rejected (not surfaced to the "
-                    "user): %s",
-                    result.error,
-                )
-                raise DraftValidationError(
-                    "The AI model did not return the expected structured "
-                    "entity list for this request. Please retry detection."
-                )
-            raise InfrastructureError(
-                "Ontology entity detection failed", detail=result.error
-            )
+        GenerateWorkflow._raise_if_detection_failed(result)
 
-        # Defense-in-depth dedup against locked anchors. ``detect_entities``
-        # already dedups internally against the anchors it was given, but this
-        # workflow layer is the actual persistence boundary and must not depend
-        # on every caller's mock/stub reproducing that behavior:
-        # - by normalized canonical/alternate label (a candidate re-proposing an
-        #   anchor's synonym), which would otherwise fail ``GenerateDraft``'s
-        #   label-uniqueness invariant; and
-        # - by the class *name* the merge would mint for it (``id_to_name``'s
-        #   ``_sanitize_pascal``) colliding with an existing anchor's raw id —
-        #   anchors use the live ontology class's ``name`` as their id (see
-        #   :func:`build_locked_anchors_from_classes`), which is independent of
-        #   that class's display ``label``.
+        # Defense-in-depth dedup against locked anchors (labels + minted class name).
         anchor_labels: Set[str] = set()
         anchor_ids = {a.id for a in anchors}
         for anchor in anchors:

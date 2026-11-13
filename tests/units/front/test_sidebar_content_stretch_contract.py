@@ -35,6 +35,7 @@ SECTION_INVENTORY = {
         "documents",
         "sync",
         "audit",
+        "pages",
     },
     "ontology.html": {
         "wizard",
@@ -108,6 +109,7 @@ STRETCH_PARTIALS = (
     "partials/domain/_domain_discussions.html",
     "partials/domain/_domain_versions.html",
     "partials/domain/_domain_documents.html",
+    "partials/domain/_domain_pages.html",
     "partials/domain/_domain_audit.html",
     "partials/ontology/_ontology_wizard.html",
     "partials/ontology/_ontology_information.html",

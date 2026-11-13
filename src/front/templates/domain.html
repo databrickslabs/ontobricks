@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-versions.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-audit.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-collaboration.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-pages.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}">
 {% endblock %}
 
@@ -64,6 +65,11 @@
             <!-- Documents Section -->
             <div id="documents-section" class="sidebar-section">
                 {% include "partials/domain/_domain_documents.html" %}
+            </div>
+
+            <!-- UC Knowledge Pages Section -->
+            <div id="pages-section" class="sidebar-section">
+                {% include "partials/domain/_domain_pages.html" %}
             </div>
 
             <!-- Build / Sync Section -->
@@ -127,7 +133,9 @@
 <script src="{{ url_for('static', filename='domain/js/domain-audit.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-collaboration.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='domain/js/domain-documents.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='domain/js/domain-pages.js') }}?v={{ asset_version }}"></script>
 <!-- Build section (sync): parse injected JSON before query-sync -->
 <script src="{{ url_for('static', filename='domain/js/domain_init.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='query/js/timed-task-log.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
 {% endblock %}

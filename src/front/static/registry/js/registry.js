@@ -57,7 +57,7 @@ async function deleteRegistryDomain(domainName) {
         title: 'Delete Context',
         message: 'Permanently delete domain "' + escapeHtml(domainName)
             + '" and all its versions from the registry? This permanently '
-            + 'removes all Knowledge Store content and cannot be undone.',
+            + 'removes all Documents content and cannot be undone.',
         confirmText: 'Delete',
         confirmClass: 'btn-danger',
         icon: 'trash',
@@ -105,7 +105,7 @@ async function deleteRegistryVersion(
                 + 'Store content. This cannot be undone.'
             : 'Permanently delete version v' + escapeHtml(String(version)) +
                 ' from domain "' + escapeHtml(String(domainName)) +
-                '"? This permanently removes its Knowledge Store content '
+                '"? This permanently removes its Documents content '
                 + 'and cannot be undone.',
         confirmText: 'Delete',
         confirmClass: 'btn-danger',
