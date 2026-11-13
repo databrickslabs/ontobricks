@@ -98,7 +98,7 @@
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">5</span><div><strong>Graph</strong><br><small>Synchronize, explore, query</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">6</span><div><strong>Intelligence</strong><br><small>Communities, cohorts, and what-if sandboxes</small></div></div>
+                                <div class="help-step"><span class="help-step-num">6</span><div><strong>Intelligence</strong><br><small>Communities, cohorts, patterns, and what-if sandboxes</small></div></div>
                             </div>
                         </section>
 
@@ -300,7 +300,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw6">
-                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>6. Intelligence</strong> &mdash; communities, cohorts, sandboxes
+                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>6. Intelligence</strong> &mdash; communities, cohorts, patterns, sandboxes
                                         </button>
                                     </h2>
                                     <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
@@ -309,6 +309,8 @@
                                                 <li><strong>Detect</strong> &mdash; run community detection (label propagation on a Databricks job, any graph size), preview the largest communities, then materialize the partition to the knowledge graph for Explorer</li>
                                                 <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;)</li>
                                                 <li><strong>Run</strong> &mdash; preview a saved cohort rule and materialise it to the graph or a Unity Catalog table</li>
+                                                <li><strong>Discover</strong> &mdash; automatically find recurring neighbourhood patterns for a chosen entity type (attributes + multi-hop relationships) on Databricks, then save matching entities to the graph</li>
+                                                <li><strong>Saved</strong> &mdash; list and delete named patterns materialized from Discover</li>
                                                 <li><strong>Scenarios</strong> &mdash; list, run, purge and delete named what-if simulations. <em>Purge</em> drops the sandbox after-picture and resets the scenario to draft; the definition is kept. <em>New scenario</em> (or Explorer <em>Simulate from here</em>) opens the editor on the same page: pick a scope, add hypothetical facts, see the sandbox tables/views the run will create, choose the same reasoning phases and individual rules as Graph → Business rules, and run. Refresh keeps the open scenario. After a run, the editor&rsquo;s <em>Results</em> tab shows the triples added or removed by comparing the materialised sandbox after-picture to its before-picture companion; <em>Explorer</em> opens that sandbox in the graph viewer</li>
                                                 <li><strong>Compare</strong> &mdash; overlay a ready sandbox on the current live graph (inferred or asserted only), on the same scope as the scenario: one colour-coded graph of unchanged, added (sandbox only) and removed (live only) triples, with exact counters and a details panel</li>
                                                 <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>

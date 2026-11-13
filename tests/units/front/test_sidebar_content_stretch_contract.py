@@ -74,6 +74,8 @@ SECTION_INVENTORY = {
         "scenarios",
         "cohorts",
         "cohort-run",
+        "patterns",
+        "patterns-saved",
         "compare",
         "runs",
     },

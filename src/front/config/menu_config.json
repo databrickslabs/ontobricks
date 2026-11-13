@@ -637,6 +637,27 @@
                     ]
                 },
                 {
+                    "id": "simulation-patterns",
+                    "title": "Patterns",
+                    "icon": "bi-grid-3x3-gap",
+                    "items": [
+                        {
+                            "id": "patterns",
+                            "label": "Discover",
+                            "icon": "bi-grid-3x3-gap",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "patterns-saved",
+                            "label": "Saved",
+                            "icon": "bi-bookmark-check",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
                     "id": "simulation-scenarios",
                     "title": "Simulation",
                     "icon": "bi-sliders2-vertical",

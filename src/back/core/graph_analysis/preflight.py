@@ -118,6 +118,10 @@ def analytics_job_configured(
     *community* checks the community-detection job's name instead of the
     graph-metrics one; both jobs share the toggle and the source snapshot.
     """
+    # Resolve the job name only after the toggle check — name lookup can be
+    # remote and ``TestToggleOff`` asserts we skip it when analytics is off.
+    if not resolve_analytics_job_enabled(domain, settings):
+        return False, ""
     if community:
         job_name, env_var = (
             resolve_community_job_name(settings),
@@ -171,6 +175,8 @@ def community_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
 
 def pattern_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
     """Toggle + pattern job name + resolvable source, without a warehouse probe."""
+    if not resolve_analytics_job_enabled(domain, settings):
+        return False, ""
     return _job_configured(
         domain,
         settings,

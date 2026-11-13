@@ -2086,39 +2086,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    """Spark entry point. Imports pyspark lazily so the builders stay testable."""
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
-    args = parse_args(argv)
-
-    from pyspark.sql import SparkSession
-
-    spark = SparkSession.builder.getOrCreate()
-
-    excluded = merge_excluded_predicates(args.exclude_predicates)
-
-    class_filter = [
-        v.strip() for v in (args.class_filter or "").split(",") if v.strip()
-    ]
-
-    work_prefix = args.work_prefix or f"{args.output_table}_work"
-    validate_identifier(args.source_table, "--source-table")
-    validate_identifier(args.output_table, "--output-table")
-    validate_identifier(work_prefix, "--work-prefix")
-
-    if class_filter:
-        logger.info("class filter: %d type(s) — %s", len(class_filter), ", ".join(class_filter))
-
-    def execute(stmt: str) -> None:
-        logger.debug("executing: %s", stmt)
-        spark.sql(stmt)
-
-    def scalar(query: str):
-        row = spark.sql(query).head()
-        return row[0] if row is not None else None
-
+def _run_selected_task(args, execute, scalar, *, excluded, class_filter, work_prefix) -> int:
+    """Dispatch ``--task`` to patterns, communities, or graph metrics."""
     if args.task == "patterns":
         builder = PatternSQL(
             source_table=args.source_table,
@@ -2186,12 +2155,48 @@ def main(argv: Optional[List[str]] = None) -> int:
         max_depth=args.max_depth,
         cleanup=not args.keep_work_tables,
     )
-
     # Printed so the run output carries the summary even if the caller only
     # reads the driver log rather than the summary table.
     print("ONTOBRICKS_GRAPH_ANALYTICS_SUMMARY " + json.dumps(stats, default=str))
     logger.info("wrote %s (%s nodes)", args.output_table, stats["node_count"])
     return 0
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Spark entry point. Imports pyspark lazily so the builders stay testable."""
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+    )
+    args = parse_args(argv)
+
+    from pyspark.sql import SparkSession
+
+    spark = SparkSession.builder.getOrCreate()
+
+    excluded = merge_excluded_predicates(args.exclude_predicates)
+    class_filter = [
+        v.strip() for v in (args.class_filter or "").split(",") if v.strip()
+    ]
+    work_prefix = args.work_prefix or f"{args.output_table}_work"
+    validate_identifier(args.source_table, "--source-table")
+    validate_identifier(args.output_table, "--output-table")
+    validate_identifier(work_prefix, "--work-prefix")
+
+    if class_filter:
+        logger.info("class filter: %d type(s) — %s", len(class_filter), ", ".join(class_filter))
+
+    def execute(stmt: str) -> None:
+        logger.debug("executing: %s", stmt)
+        spark.sql(stmt)
+
+    def scalar(query: str):
+        row = spark.sql(query).head()
+        return row[0] if row is not None else None
+
+    return _run_selected_task(
+        args, execute, scalar,
+        excluded=excluded, class_filter=class_filter, work_prefix=work_prefix,
+    )
 
 
 def run_cli(argv: Optional[List[str]] = None) -> None:

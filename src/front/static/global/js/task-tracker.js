@@ -33,6 +33,8 @@ const TASK_TYPE_URLS = {
     'graph_analytics': '/dtwin#analytics',
     'community_detection': '/simulation/?section=communities',
     'community_materialize': '/simulation/?section=communities',
+    'pattern_detection': '/simulation/?section=patterns',
+    'pattern_materialize': '/simulation/?section=patterns',
     'entity_job_action': '/dtwin',
     'simulation': '/simulation/?section=scenarios'
 };

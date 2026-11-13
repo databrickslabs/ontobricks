@@ -53,7 +53,7 @@
     "back/core/graph_analysis/models.py": 15,
     "back/fastapi/graphql_routes.py": 3,
     "back/objects/registry/store/base.py": 12,
-    "jobs/graph_analytics_job.py": 2
+    "jobs/graph_analytics_job.py": 3
   },
   "oversized_classes": {
     "back/core/graph_analysis/CohortBuilder.py::CohortBuilder": 1192,

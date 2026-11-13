@@ -31,6 +31,14 @@
                 {% include "partials/dtwin/_query_cohorts.html" %}
             </div>
 
+            <div id="patterns-section" class="sidebar-section">
+                {% include "partials/simulation/_sim_patterns.html" %}
+            </div>
+
+            <div id="patterns-saved-section" class="sidebar-section">
+                {% include "partials/simulation/_sim_patterns_saved.html" %}
+            </div>
+
             <div id="scenarios-section" class="sidebar-section active">
                 <div id="simScenariosList" class="content-section">
                     {% include "partials/simulation/_sim_scenarios.html" %}
@@ -73,6 +81,7 @@
 
 <script defer src="{{ url_for('static', filename='simulation/js/simulation.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-communities.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-patterns.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/phase-tree.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='global/js/rule-editor-loader.js') }}?v={{ asset_version }}" data-asset-version="{{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='simulation/js/simulation-rules.js') }}?v={{ asset_version }}"></script>

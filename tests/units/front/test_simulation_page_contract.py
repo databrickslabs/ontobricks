@@ -27,11 +27,14 @@ def test_community_group_is_first():
     assert [g["id"] for g in _menu()["groups"]] == [
         "simulation-community",
         "simulation-cohorts",
+        "simulation-patterns",
         "simulation-scenarios",
     ]
     items = [i["id"] for g in _menu()["groups"] for i in g["items"]]
     assert "results" not in items
     assert "runs" in items
+    assert "patterns" in items
+    assert "patterns-saved" in items
 
 
 def test_menu_follows_knowledge_graph():
@@ -726,3 +729,48 @@ def test_community_tasks_have_an_open_task_link():
         assert f"'{task_type}': '/simulation/?section=communities'" in tracker
     menu = _read(FRONT / "config/menu_config.json")
     assert '"id": "communities"' in menu
+
+
+def test_patterns_section_owns_discovery():
+    html = _read(PAGE)
+    assert 'id="patterns-section"' in html
+    assert 'id="patterns-saved-section"' in html
+    assert "simulation-patterns.js" in html
+    assert _menu()["label"] == "Intelligence"
+    groups = {g["id"]: g for g in _menu()["groups"]}
+    assert [i["label"] for i in groups["simulation-patterns"]["items"]] == ["Discover", "Saved"]
+    disc = _read(FRONT / "templates/partials/simulation/_sim_patterns.html")
+    saved = _read(FRONT / "templates/partials/simulation/_sim_patterns_saved.html")
+    assert re.sub(r"<!--.*?-->", "", disc, flags=re.DOTALL).strip().startswith('<div class="content-section">')
+    assert 'class="pat-layout"' in disc
+    assert 'class="pat-rail"' in disc
+    assert 'class="pat-main"' in disc
+    assert 'id="patDetectBtn"' in disc
+    assert 'class="btn btn-sm btn-primary"' in disc
+    assert 'id="patSaveBtn"' in disc
+    assert 'id="patClassFilter"' in disc
+    assert 'id="patJobStatus"' in disc
+    assert 'id="patPatternList"' in disc
+    assert 'id="patDetails"' in disc
+    assert "Discovery runs on Databricks" in disc
+    assert "onclick=" not in disc
+    assert 'id="patSavedList"' in saved
+    assert "onclick=" not in saved
+    js = _read(FRONT / "static/simulation/js/simulation-patterns.js")
+    assert "/dtwin/patterns/detect" in js
+    assert "/dtwin/patterns/latest" in js
+    assert "/dtwin/patterns/materialize" in js
+    assert "waitForTask" in js
+    assert "pattern_detection" in js
+    assert "pattern_materialize" in js
+    assert "showDeleteConfirm" in js
+    assert "alert(" not in js
+    assert "confirm(" not in js
+    assert "prompt(" not in js
+    css = _read(FRONT / "static/simulation/css/simulation.css")
+    assert ".pat-layout" in css
+    assert ".pat-rail" in css
+    assert ".pat-main" in css
+    tracker = _read(FRONT / "static/global/js/task-tracker.js")
+    for task_type in ("pattern_detection", "pattern_materialize"):
+        assert f"'{task_type}': '/simulation/?section=patterns'" in tracker
