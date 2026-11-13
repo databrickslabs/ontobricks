@@ -1273,6 +1273,610 @@ def modularity_from_sums(intra_edges: float, degree_square_sum: float, edge_coun
     return float(intra_edges) / m - float(degree_square_sum) / (4.0 * m * m)
 
 
+# ---------------------------------------------------------------------------
+# Pattern detection (``--task patterns``)
+# ---------------------------------------------------------------------------
+
+PATTERN_ALGORITHM = "egocentric_signature"
+
+DEFAULT_PATTERN_HOPS = 3
+DEFAULT_PATTERN_BINS = 8
+DEFAULT_PATTERN_MIN_SUPPORT = 3
+DEFAULT_PATTERN_FRONTIER = 50_000
+DEFAULT_PATTERN_REFINE_TOP = 0
+CATEGORICAL_TOP_N = 20
+
+PREVIEW_PATTERNS = 20
+# Preview caps reuse the community constants when available; keep local aliases
+# so this block stays readable next to the community preview helpers.
+PATTERN_PREVIEW_MAX_NODES = PREVIEW_MAX_NODES
+PATTERN_PREVIEW_MAX_EDGES = PREVIEW_MAX_EDGES
+
+
+def _portable_is_numeric_sql(column: str) -> str:
+    """True when *column* looks like an optional-sign decimal number.
+
+    Built from nested ``replace`` so the same SQL runs on Spark and SQLite
+    (no ``RLIKE`` / ``GLOB``).
+    """
+    stripped = column
+    for ch in "0123456789":
+        stripped = f"replace({stripped}, '{ch}', '')"
+    stripped = f"replace(replace({stripped}, '.', ''), '-', '')"
+    return (
+        f"({column} <> '' AND {column} <> '-' AND {column} <> '.' "
+        f"AND {column} <> '-.' AND {stripped} = '')"
+    )
+
+
+@dataclass
+class PatternSQL(GraphAnalyticsSQL):
+    """SQL for egocentric neighbourhood signatures and optional motif refine.
+
+    ``class_filter`` selects **anchor** nodes only; hop expansion walks the
+    full directed edge set so neighbours of other types still appear in the
+    signature. ``via`` is the full predicate URI (the UI local-names it).
+    """
+
+    hops: int = DEFAULT_PATTERN_HOPS
+    bins: int = DEFAULT_PATTERN_BINS
+    min_support: int = DEFAULT_PATTERN_MIN_SUPPORT
+    frontier_cap: int = DEFAULT_PATTERN_FRONTIER
+    refine_top: int = DEFAULT_PATTERN_REFINE_TOP
+    categorical_top_n: int = CATEGORICAL_TOP_N
+
+    @property
+    def directed(self) -> str:
+        return f"{self.work_prefix}_dir"
+
+    @property
+    def literals(self) -> str:
+        return f"{self.work_prefix}_lit"
+
+    @property
+    def anchors(self) -> str:
+        return f"{self.work_prefix}_anchors"
+
+    @property
+    def bins_table(self) -> str:
+        return f"{self.work_prefix}_bins"
+
+    @property
+    def tokens(self) -> str:
+        return f"{self.work_prefix}_tokens"
+
+    @property
+    def signatures(self) -> str:
+        return f"{self.work_prefix}_sigs"
+
+    @property
+    def refine_map(self) -> str:
+        return f"{self.work_prefix}_refine"
+
+    @property
+    def shapes_table(self) -> str:
+        return f"{self.output_table}_shapes"
+
+    @property
+    def preview_nodes_table(self) -> str:
+        return f"{self.output_table}_preview_nodes"
+
+    @property
+    def preview_edges_table(self) -> str:
+        return f"{self.output_table}_preview_edges"
+
+    def frontier(self, hop: int) -> str:
+        return f"{self.work_prefix}_frontier_{int(hop)}"
+
+    def work_tables(self) -> List[str]:
+        tables = [
+            self.directed,
+            self.literals,
+            self.anchors,
+            self.bins_table,
+            self.tokens,
+            self.signatures,
+            self.refine_map,
+        ]
+        for h in range(max(0, int(self.hops)) + 1):
+            tables.append(self.frontier(h))
+        return tables
+
+    def node_type_select_all(self) -> str:
+        """One ``rdf:type`` per node, ignoring the anchor ``class_filter``."""
+        return (
+            f"SELECT subject AS n, MIN(object) AS type_uri\n"
+            f"FROM {self.source_table}\n"
+            f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''\n"
+            f"GROUP BY subject"
+        )
+
+    def build_directed_edges(self) -> List[str]:
+        """Directed URI edges both ways, keeping the predicate as ``via``."""
+        src = self.source_table
+        excl = _in_list(self.excluded_predicates)
+        uri = "(object LIKE 'http://%' OR object LIKE 'https://%')"
+        return self._recreate(
+            self.directed,
+            f"SELECT subject AS src, object AS dst, predicate AS via, "
+            f"'out' AS direction\n"
+            f"FROM {src}\n"
+            f"WHERE subject <> '' AND object <> '' AND subject <> object\n"
+            f"  AND {uri}\n"
+            f"  AND predicate NOT IN ({excl})\n"
+            f"UNION ALL\n"
+            f"SELECT object AS src, subject AS dst, predicate AS via, "
+            f"'in' AS direction\n"
+            f"FROM {src}\n"
+            f"WHERE subject <> '' AND object <> '' AND subject <> object\n"
+            f"  AND {uri}\n"
+            f"  AND predicate NOT IN ({excl})",
+        )
+
+    def build_literals(self) -> List[str]:
+        src = self.source_table
+        excl = _in_list(self.excluded_predicates)
+        return self._recreate(
+            self.literals,
+            f"SELECT subject AS n, predicate AS prop, object AS value\n"
+            f"FROM {src}\n"
+            f"WHERE subject <> '' AND object <> ''\n"
+            f"  AND object NOT LIKE 'http://%'\n"
+            f"  AND object NOT LIKE 'https://%'\n"
+            f"  AND predicate NOT IN ({excl})",
+        )
+
+    def build_anchors(self) -> List[str]:
+        return self._recreate(
+            self.anchors,
+            f"SELECT a.n AS n, a.type_uri AS type_uri, lb.label AS label\n"
+            f"FROM ({self.typed_nodes_select()}) t\n"
+            f"JOIN ({self.node_type_select()}) a ON a.n = t.n\n"
+            f"LEFT JOIN ({self.node_label_select()}) lb ON lb.n = t.n",
+        )
+
+    def build_bins(self) -> List[str]:
+        """Per-(node, property) bin labels for anchors and hop neighbours."""
+        is_num = _portable_is_numeric_sql("value")
+        top_n = max(1, int(self.categorical_top_n))
+        bins = max(1, int(self.bins))
+        return self._recreate(
+            self.bins_table,
+            f"WITH typed AS (\n"
+            f"  SELECT n, prop, value,\n"
+            f"         CASE WHEN {is_num} THEN 1 ELSE 0 END AS is_num\n"
+            f"  FROM {self.literals}\n"
+            f"),\n"
+            f"prop_kind AS (\n"
+            f"  SELECT prop,\n"
+            f"         CASE WHEN MIN(is_num) = 1 THEN 'num' ELSE 'cat' END AS pkind\n"
+            f"  FROM typed GROUP BY prop\n"
+            f"),\n"
+            f"numeric AS (\n"
+            f"  SELECT t.n AS n, t.prop AS prop,\n"
+            f"         'q' || CAST(\n"
+            f"           CASE\n"
+            f"             WHEN vr.n_vals <= 1 THEN 0\n"
+            f"             WHEN CAST(((vr.vrk - 1) * {bins}) / vr.n_vals AS INT) "
+            f">= {bins} THEN {bins - 1}\n"
+            f"             ELSE CAST(((vr.vrk - 1) * {bins}) / vr.n_vals AS INT)\n"
+            f"           END AS VARCHAR(16)\n"
+            f"         ) AS bin_label\n"
+            f"  FROM typed t\n"
+            f"  JOIN prop_kind pk ON pk.prop = t.prop AND pk.pkind = 'num'\n"
+            f"  JOIN (\n"
+            f"    SELECT prop, value,\n"
+            f"           ROW_NUMBER() OVER (\n"
+            f"             PARTITION BY prop ORDER BY CAST(value AS DOUBLE), value\n"
+            f"           ) AS vrk,\n"
+            f"           COUNT(*) OVER (PARTITION BY prop) AS n_vals\n"
+            f"    FROM (SELECT DISTINCT prop, value FROM typed) dv\n"
+            f"  ) vr ON vr.prop = t.prop AND vr.value = t.value\n"
+            f"),\n"
+            f"categorical AS (\n"
+            f"  SELECT t.n AS n, t.prop AS prop,\n"
+            f"         CASE WHEN fr.freq_rank <= {top_n} THEN t.value\n"
+            f"              ELSE '__other' END AS bin_label\n"
+            f"  FROM typed t\n"
+            f"  JOIN prop_kind pk ON pk.prop = t.prop AND pk.pkind = 'cat'\n"
+            f"  JOIN (\n"
+            f"    SELECT prop, value,\n"
+            f"           ROW_NUMBER() OVER (\n"
+            f"             PARTITION BY prop ORDER BY cnt DESC, value\n"
+            f"           ) AS freq_rank\n"
+            f"    FROM (\n"
+            f"      SELECT prop, value, COUNT(*) AS cnt\n"
+            f"      FROM typed GROUP BY prop, value\n"
+            f"    ) freq\n"
+            f"  ) fr ON fr.prop = t.prop AND fr.value = t.value\n"
+            f")\n"
+            f"SELECT n, prop, bin_label FROM numeric\n"
+            f"UNION ALL\n"
+            f"SELECT n, prop, bin_label FROM categorical",
+        )
+
+    def build_frontier_0(self) -> List[str]:
+        return self._recreate(
+            self.frontier(0),
+            f"SELECT n AS anchor, n AS node FROM {self.anchors}",
+        )
+
+    def build_hop(self, hop: int) -> List[str]:
+        """Expand one hop and emit structural + neighbour-attribute tokens."""
+        prev = self.frontier(hop - 1)
+        cur = self.frontier(hop)
+        cap = max(1, int(self.frontier_cap))
+        hop_lit = str(int(hop))
+        # Ranked expansion, then frontier + tokens for survivors.
+        expanded = f"{self.work_prefix}_exp_{int(hop)}"
+        statements = self._recreate(
+            expanded,
+            f"SELECT anchor, node, via, direction FROM (\n"
+            f"  SELECT f.anchor AS anchor, e.dst AS node, e.via AS via,\n"
+            f"         e.direction AS direction,\n"
+            f"         ROW_NUMBER() OVER (\n"
+            f"           PARTITION BY f.anchor ORDER BY e.via, e.dst\n"
+            f"         ) AS rk\n"
+            f"  FROM {prev} f\n"
+            f"  JOIN {self.directed} e ON e.src = f.node\n"
+            f") q\n"
+            f"WHERE rk <= {cap}",
+        )
+        statements += self._recreate(
+            cur,
+            f"SELECT DISTINCT anchor, node FROM {expanded}",
+        )
+        # Structural tokens (kind = 's').
+        statements.append(
+            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"SELECT e.anchor,\n"
+            f"       '{hop_lit}|' || e.via || '|' || coalesce(ty.type_uri, '') "
+            f"|| '|' || e.direction,\n"
+            f"       's'\n"
+            f"FROM {expanded} e\n"
+            f"LEFT JOIN ({self.node_type_select_all()}) ty ON ty.n = e.node"
+        )
+        # Neighbour attribute tokens (kind = 'na').
+        statements.append(
+            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"SELECT e.anchor,\n"
+            f"       '{hop_lit}|' || e.via || '|' || coalesce(ty.type_uri, '') "
+            f"|| '|' || e.direction || '|' || b.prop || '|' || b.bin_label,\n"
+            f"       'na'\n"
+            f"FROM {expanded} e\n"
+            f"JOIN {self.bins_table} b ON b.n = e.node\n"
+            f"LEFT JOIN ({self.node_type_select_all()}) ty ON ty.n = e.node"
+        )
+        statements.append(f"DROP TABLE IF EXISTS {expanded}")
+        return statements
+
+    def init_tokens(self) -> List[str]:
+        """Create the tokens table and seed hop-0 attribute tokens."""
+        statements = [
+            f"DROP TABLE IF EXISTS {self.tokens}",
+            f"CREATE TABLE {self.tokens} (anchor VARCHAR(1024), token VARCHAR(4096), "
+            f"kind VARCHAR(8))",
+        ]
+        statements.append(
+            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"SELECT a.n,\n"
+            f"       '0||' || coalesce(a.type_uri, '') || '|self|' || b.prop "
+            f"|| '|' || b.bin_label,\n"
+            f"       'a0'\n"
+            f"FROM {self.anchors} a\n"
+            f"JOIN {self.bins_table} b ON b.n = a.n"
+        )
+        # Anchors with no attributes still need a type token so empty
+        # neighbourhoods are distinguishable by type.
+        statements.append(
+            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"SELECT a.n,\n"
+            f"       '0||' || coalesce(a.type_uri, '') || '|self||',\n"
+            f"       'a0'\n"
+            f"FROM {self.anchors} a\n"
+            f"WHERE NOT EXISTS (\n"
+            f"  SELECT 1 FROM {self.bins_table} b WHERE b.n = a.n\n"
+            f")"
+        )
+        return statements
+
+    def build_signatures(self) -> List[str]:
+        """Hash each anchor's full token multiset into ``pattern_id``."""
+        return self._recreate(
+            self.signatures,
+            f"SELECT anchor AS anchor_uri,\n"
+            f"       md5(concat_ws('|', sort_array(collect_list(token)))) "
+            f"AS pattern_id\n"
+            f"FROM {self.tokens}\n"
+            f"GROUP BY anchor",
+        )
+
+    def write_pattern_output(self) -> List[str]:
+        """Anchors whose pattern meets ``min_support``."""
+        support = max(1, int(self.min_support))
+        return self._recreate(
+            self.output_table,
+            f"SELECT s.anchor_uri AS anchor_uri,\n"
+            f"       s.pattern_id AS pattern_id,\n"
+            f"       a.type_uri AS type_uri,\n"
+            f"       a.label AS label\n"
+            f"FROM {self.signatures} s\n"
+            f"JOIN {self.anchors} a ON a.n = s.anchor_uri\n"
+            f"JOIN (\n"
+            f"  SELECT pattern_id FROM {self.signatures}\n"
+            f"  GROUP BY pattern_id HAVING COUNT(*) >= {support}\n"
+            f") ok ON ok.pattern_id = s.pattern_id",
+        )
+
+    def write_shapes(self, *, refined: bool) -> List[str]:
+        refined_i = 1 if refined else 0
+        return self._recreate(
+            self.shapes_table,
+            f"SELECT p.pattern_id AS pattern_id,\n"
+            f"       p.support AS support,\n"
+            f"       coalesce(h.hop_count, 0) AS hop_count,\n"
+            f"       coalesce(sh.shape_json, '[]') AS shape_json,\n"
+            f"       p.seed_label AS seed_label,\n"
+            f"       {refined_i} AS refined,\n"
+            f"       coalesce(nd.near_duplicate_count, 1) AS near_duplicate_count\n"
+            f"FROM (\n"
+            f"  SELECT pattern_id, COUNT(*) AS support,\n"
+            f"         MIN(label) AS seed_label\n"
+            f"  FROM {self.output_table}\n"
+            f"  GROUP BY pattern_id\n"
+            f") p\n"
+            f"LEFT JOIN (\n"
+            f"  SELECT o.pattern_id AS pattern_id,\n"
+            f"         MAX(CAST(substr(t.token, 1, instr(t.token || '|', '|') - 1) "
+            f"AS INT)) AS hop_count\n"
+            f"  FROM {self.output_table} o\n"
+            f"  JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+            f"  GROUP BY o.pattern_id\n"
+            f") h ON h.pattern_id = p.pattern_id\n"
+            f"LEFT JOIN (\n"
+            f"  SELECT pattern_id,\n"
+            f"         '[' || concat_ws(',', sort_array(collect_list(qtok))) "
+            f"|| ']' AS shape_json\n"
+            f"  FROM (\n"
+            f"    SELECT DISTINCT o.pattern_id AS pattern_id,\n"
+            f"           '\"' || t.token || '\"' AS qtok\n"
+            f"    FROM {self.output_table} o\n"
+            f"    JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+            f"  ) d\n"
+            f"  GROUP BY pattern_id\n"
+            f") sh ON sh.pattern_id = p.pattern_id\n"
+            f"LEFT JOIN (\n"
+            f"  SELECT new_id AS pattern_id, COUNT(*) AS near_duplicate_count\n"
+            f"  FROM {self.refine_map}\n"
+            f"  GROUP BY new_id\n"
+            f") nd ON nd.pattern_id = p.pattern_id",
+        )
+
+    def write_pattern_preview(self) -> List[str]:
+        per = -(-PATTERN_PREVIEW_MAX_NODES // PREVIEW_PATTERNS)
+        statements = self._recreate(
+            self.preview_nodes_table,
+            f"SELECT node_uri, pattern_id, label, type_uri FROM (\n"
+            f"  SELECT o.anchor_uri AS node_uri, o.pattern_id AS pattern_id,\n"
+            f"         o.label AS label, o.type_uri AS type_uri,\n"
+            f"         ROW_NUMBER() OVER (\n"
+            f"           PARTITION BY o.pattern_id ORDER BY o.anchor_uri\n"
+            f"         ) AS rk,\n"
+            f"         dense_rank() OVER (ORDER BY s.support DESC, o.pattern_id) "
+            f"AS prank\n"
+            f"  FROM {self.output_table} o\n"
+            f"  JOIN (\n"
+            f"    SELECT pattern_id, COUNT(*) AS support\n"
+            f"    FROM {self.output_table} GROUP BY pattern_id\n"
+            f"  ) s ON s.pattern_id = o.pattern_id\n"
+            f") q\n"
+            f"WHERE prank <= {PREVIEW_PATTERNS} AND rk <= {per}",
+        )
+        statements += self._recreate(
+            self.preview_edges_table,
+            f"SELECT e.src AS src, e.dst AS dst\n"
+            f"FROM {self.directed} e\n"
+            f"JOIN {self.preview_nodes_table} a ON a.node_uri = e.src\n"
+            f"JOIN {self.preview_nodes_table} b ON b.node_uri = e.dst\n"
+            f"WHERE e.direction = 'out'\n"
+            f"ORDER BY e.src, e.dst\n"
+            f"LIMIT {PATTERN_PREVIEW_MAX_EDGES}",
+        )
+        return statements
+
+    def write_pattern_summary(self, stats: Dict[str, object]) -> List[str]:
+        columns = [
+            f"'{sql_escape(str(stats.get('anchor_type', '') or ''))}' AS anchor_type",
+            f"{int(stats['anchor_count'])} AS anchor_count",
+            f"{int(stats['pattern_count'])} AS pattern_count",
+            f"{int(stats['hop_count'])} AS hop_count",
+            f"{int(stats['bins'])} AS bins",
+            f"{int(stats['refined'])} AS refined",
+            f"{int(stats['min_support'])} AS min_support",
+            f"'{sql_escape(str(stats['algorithm']))}' AS algorithm",
+            f"'{sql_escape(','.join(self.class_filter))}' AS class_filter",
+            f"'{sql_escape(str(stats['source_table']))}' AS source_table",
+            f"'{sql_escape(str(stats.get('computed_at', '') or ''))}' AS computed_at",
+            f"{int(stats.get('elapsed_ms', 0) or 0)} AS elapsed_ms",
+        ]
+        return self._recreate(
+            self.summary_table, "SELECT " + ",\n       ".join(columns)
+        )
+
+    def empty_refine_map(self) -> List[str]:
+        return self._recreate(
+            self.refine_map,
+            "SELECT CAST(NULL AS VARCHAR(64)) AS old_id, "
+            "CAST(NULL AS VARCHAR(64)) AS new_id WHERE 1 = 0",
+        )
+
+    def build_refine_map(self) -> List[str]:
+        """Map exact pattern_ids in the top-N to multiplicity-stripped ids."""
+        top = max(0, int(self.refine_top))
+        # Stripped tokens: hop-0 attributes + distinct structural keys only.
+        stripped = f"{self.work_prefix}_stripped"
+        statements = self._recreate(
+            stripped,
+            f"SELECT DISTINCT o.anchor_uri AS anchor, t.token AS token\n"
+            f"FROM {self.output_table} o\n"
+            f"JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+            f"WHERE t.kind IN ('a0', 's')",
+        )
+        refined_sigs = f"{self.work_prefix}_refined_sigs"
+        statements += self._recreate(
+            refined_sigs,
+            f"SELECT anchor AS anchor_uri,\n"
+            f"       md5(concat_ws('|', sort_array(collect_list(token)))) "
+            f"AS refined_id\n"
+            f"FROM {stripped}\n"
+            f"GROUP BY anchor",
+        )
+        # Only remap anchors whose exact pattern is among the top-N by support.
+        statements += self._recreate(
+            self.refine_map,
+            f"SELECT DISTINCT o.pattern_id AS old_id, r.refined_id AS new_id\n"
+            f"FROM {self.output_table} o\n"
+            f"JOIN {refined_sigs} r ON r.anchor_uri = o.anchor_uri\n"
+            f"JOIN (\n"
+            f"  SELECT pattern_id FROM (\n"
+            f"    SELECT pattern_id, COUNT(*) AS support,\n"
+            f"           ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, pattern_id) "
+            f"AS rk\n"
+            f"    FROM {self.output_table}\n"
+            f"    GROUP BY pattern_id\n"
+            f"  ) ranked WHERE rk <= {top}\n"
+            f") topn ON topn.pattern_id = o.pattern_id",
+        )
+        statements.append(f"DROP TABLE IF EXISTS {stripped}")
+        statements.append(f"DROP TABLE IF EXISTS {refined_sigs}")
+        return statements
+
+    def apply_refine_map(self) -> List[str]:
+        """Rewrite ``pattern_id`` for anchors covered by the refine map.
+
+        Writes through a temp table because ``_recreate`` drops the target
+        before the ``SELECT``, so the output cannot be read from itself.
+        """
+        tmp = f"{self.work_prefix}_out_refined"
+        statements = self._recreate(
+            tmp,
+            f"SELECT o.anchor_uri AS anchor_uri,\n"
+            f"       coalesce(m.new_id, o.pattern_id) AS pattern_id,\n"
+            f"       o.type_uri AS type_uri,\n"
+            f"       o.label AS label\n"
+            f"FROM {self.output_table} o\n"
+            f"LEFT JOIN {self.refine_map} m ON m.old_id = o.pattern_id",
+        )
+        statements += self._recreate(self.output_table, f"SELECT * FROM {tmp}")
+        statements.append(f"DROP TABLE IF EXISTS {tmp}")
+        return statements
+
+    def pattern_count_query(self) -> str:
+        return f"SELECT COUNT(DISTINCT pattern_id) AS n FROM {self.output_table}"
+
+    def anchor_count_query(self) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.anchors}"
+
+    def output_anchor_count_query(self) -> str:
+        return f"SELECT COUNT(*) AS n FROM {self.output_table}"
+
+
+def run_patterns(
+    execute,
+    scalar,
+    builder: PatternSQL,
+    *,
+    computed_at: str = "",
+    cleanup: bool = True,
+) -> Dict[str, object]:
+    """Run egocentric signature discovery and write pattern outputs."""
+    try:
+        return _run_pattern_stages(execute, scalar, builder, computed_at=computed_at)
+    finally:
+        if cleanup:
+            _drop_work_tables(execute, builder)
+
+
+def _run_pattern_stages(
+    execute,
+    scalar,
+    builder: PatternSQL,
+    *,
+    computed_at: str,
+) -> Dict[str, object]:
+    if not builder.class_filter:
+        raise ValueError("class_filter is required for pattern detection")
+
+    t0 = time.time()
+    for stmt in builder.build_directed_edges():
+        execute(stmt)
+    for stmt in builder.build_literals():
+        execute(stmt)
+    for stmt in builder.build_anchors():
+        execute(stmt)
+    for stmt in builder.build_bins():
+        execute(stmt)
+    for stmt in builder.init_tokens():
+        execute(stmt)
+    for stmt in builder.build_frontier_0():
+        execute(stmt)
+
+    hops = max(0, int(builder.hops))
+    for h in range(1, hops + 1):
+        for stmt in builder.build_hop(h):
+            execute(stmt)
+        logger.info("pattern hop %d expanded", h)
+
+    for stmt in builder.build_signatures():
+        execute(stmt)
+    for stmt in builder.write_pattern_output():
+        execute(stmt)
+
+    refined = 0
+    if int(builder.refine_top) > 0:
+        for stmt in builder.build_refine_map():
+            execute(stmt)
+        for stmt in builder.apply_refine_map():
+            execute(stmt)
+        refined = 1
+    else:
+        for stmt in builder.empty_refine_map():
+            execute(stmt)
+
+    for stmt in builder.write_shapes(refined=bool(refined)):
+        execute(stmt)
+    for stmt in builder.write_pattern_preview():
+        execute(stmt)
+
+    pattern_count = int(scalar(builder.pattern_count_query()) or 0)
+    # Anchors that survived min_support (and refine), not the raw class count.
+    anchor_count = int(scalar(builder.output_anchor_count_query()) or 0)
+    raw_anchor_count = int(scalar(builder.anchor_count_query()) or 0)
+    if raw_anchor_count and not pattern_count:
+        # Keep population visible even when nothing met min_support.
+        anchor_count = 0
+
+    stats: Dict[str, object] = {
+        "anchor_type": builder.class_filter[0] if builder.class_filter else "",
+        "anchor_count": raw_anchor_count if pattern_count else raw_anchor_count,
+        "pattern_count": pattern_count,
+        "hop_count": hops,
+        "bins": int(builder.bins),
+        "refined": refined,
+        "min_support": int(builder.min_support),
+        "algorithm": PATTERN_ALGORITHM,
+        "source_table": builder.source_table,
+        "computed_at": computed_at,
+        "elapsed_ms": int((time.time() - t0) * 1000),
+    }
+    # When patterns exist, report how many anchors were kept in the output.
+    if pattern_count:
+        stats["anchor_count"] = int(scalar(builder.output_anchor_count_query()) or 0)
+    for stmt in builder.write_pattern_summary(stats):
+        execute(stmt)
+    return stats
+
+
 def run_communities(
     execute,
     scalar,

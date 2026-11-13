@@ -37,19 +37,51 @@ REL = NS + "rel"
 NAME = NS + "name"
 
 
+class _CollectList:
+    """SQLite stand-in for Spark ``collect_list`` (join with a private separator)."""
+
+    def __init__(self):
+        self.items = []
+
+    def step(self, value):
+        if value is not None:
+            self.items.append(str(value))
+
+    def finalize(self):
+        return "\x1f".join(self.items)
+
+
+def _sort_array(blob):
+    """SQLite stand-in for Spark ``sort_array`` over a ``collect_list`` blob."""
+    if blob is None:
+        return ""
+    return "\x1f".join(sorted(str(blob).split("\x1f")))
+
+
+def _concat_ws(sep, blob):
+    """SQLite stand-in for Spark ``concat_ws(sep, array)``."""
+    if blob is None:
+        return ""
+    return str(blob).replace("\x1f", sep if sep is not None else "|")
+
+
 class SqliteRunner:
     """Executes the job's SQL against SQLite, standing in for the Spark driver."""
 
     def __init__(self, triples: List[Dict[str, str]]) -> None:
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
-        # The only two functions the generated SQL uses that SQLite lacks.
+        # Functions the generated SQL uses that SQLite lacks.
         self.conn.create_function("least", 2, lambda a, b: min(a, b))
         self.conn.create_function("greatest", 2, lambda a, b: max(a, b))
         # Spark and Postgres both ship md5; SQLite does not.
         self.conn.create_function(
             "md5", 1, lambda s: hashlib.md5((s or "").encode()).hexdigest()
         )
+        # Pattern signatures: md5(concat_ws('|', sort_array(collect_list(token)))).
+        self.conn.create_aggregate("collect_list", 1, _CollectList)
+        self.conn.create_function("sort_array", 1, _sort_array)
+        self.conn.create_function("concat_ws", 2, _concat_ws)
         self.conn.execute(
             "CREATE TABLE triples (subject TEXT, predicate TEXT, object TEXT)"
         )
