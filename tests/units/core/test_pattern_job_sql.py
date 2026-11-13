@@ -296,3 +296,84 @@ class TestPortableIsNumeric:
     )
     def test_everything_else_is_not(self, value):
         assert not self._is_numeric(value)
+
+
+TIER = NS + "tier"
+CODE = NS + "code"
+
+
+def _customers_with_one_order(n: int, **per_customer) -> List[Dict[str, str]]:
+    """*n* customers, each with exactly one Order; *per_customer* maps an
+    attribute predicate to ``lambda i: value``."""
+    rows: List[Dict[str, str]] = []
+    for i in range(n):
+        cust = NS + f"Cust{i}"
+        attrs = {pred: fn(i) for pred, fn in per_customer.items()}
+        rows += _entity(cust, CUSTOMER, f"Cust{i}", **attrs)
+        order = NS + f"Ord{i}"
+        rows += _entity(order, ORDER, f"Ord{i}")
+        rows.append(_t(cust, HAS_ORDER, order))
+    return rows
+
+
+def _summary(runner) -> Dict[str, object]:
+    return runner.rows("SELECT * FROM out_summary")[0]
+
+
+class TestDetailLevels:
+    """Hashing every token makes rich neighbourhoods unique; discovery falls
+    back to coarser signatures until the patterns explain enough anchors."""
+
+    def test_identifier_like_attribute_does_not_split_patterns(self):
+        # 24 distinct codes: more than CATEGORICAL_MAX_VALUES, so left out.
+        triples = _customers_with_one_order(24, **{CODE: lambda i: f"C{i:03d}"})
+        runner, _, stats = _run(triples, min_support=3)
+        assert stats["detail_level"] == "full"
+        assert stats["pattern_count"] == 1
+        assert stats["anchor_count"] == 24
+
+    def test_falls_back_to_structure_when_attributes_are_noise(self):
+        # 12 distinct tiers (kept as an attribute): unique at every level that
+        # includes attributes, identical once only the structure is hashed.
+        triples = _customers_with_one_order(12, **{TIER: lambda i: f"t{i}"})
+        runner, _, stats = _run(triples, min_support=3)
+        assert stats["detail_level"] == "structure"
+        assert stats["pattern_count"] == 1
+        assert stats["anchor_count"] == 12
+        assert _summary(runner)["detail_level"] == "structure"
+
+    def test_shape_only_lists_tokens_of_the_chosen_level(self):
+        triples = _customers_with_one_order(12, **{TIER: lambda i: f"t{i}"})
+        runner, _, _ = _run(triples, min_support=3)
+        shape = runner.rows("SELECT shape_json FROM out_shapes")[0]["shape_json"]
+        assert "tier" not in shape
+        assert HAS_ORDER in shape
+
+    def test_stays_exact_when_exact_patterns_explain_enough(self):
+        runner, _, stats = _run(alice_bob_carol(), min_support=2)
+        assert stats["detail_level"] == "full"
+        assert stats["anchor_count"] == 2
+
+    def test_coarser_levels_ignore_multiplicity(self):
+        # Dana has 2 orders, Eve has 5: different multisets, same set.
+        runner, _, stats = _run(multiplicity_fixture(), min_support=2)
+        assert stats["detail_level"] == "neighbour"
+        assert stats["pattern_count"] == 1
+
+    def test_anchors_without_relations_form_an_isolated_pattern(self):
+        triples: List[Dict[str, str]] = []
+        for i in range(4):
+            triples += _entity(
+                NS + f"Lone{i}", CUSTOMER, f"Lone{i}", **{TIER: f"t{i}"}
+            )
+        runner, _, stats = _run(triples, min_support=3)
+        assert stats["detail_level"] == "structure"
+        assert stats["pattern_count"] == 1
+        assert runner.rows("SELECT hop_count FROM out_shapes")[0]["hop_count"] == 0
+
+    def test_refine_is_skipped_below_the_finest_level(self):
+        runner, _, stats = _run(
+            multiplicity_fixture(), min_support=2, refine_top=5
+        )
+        assert stats["detail_level"] == "neighbour"
+        assert stats["refined"] == 0

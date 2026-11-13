@@ -128,6 +128,10 @@ def test_run_passes_job_parameters_and_reads_summary(detected):
     assert stats["run_page_url"] == "https://run/1"
 
 
+def test_summary_reports_the_detail_level_the_job_settled_on(detected):
+    assert detected.summary()["detail_level"] == "full"
+
+
 def test_run_requires_class_filter(detected):
     with pytest.raises(ValueError, match="class_filter"):
         detected.run(class_filter="")

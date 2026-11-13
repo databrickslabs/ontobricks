@@ -753,6 +753,8 @@ def test_patterns_section_owns_discovery():
     assert "Anchor type" not in disc
     js_patterns = _read(FRONT / "static/simulation/js/simulation-patterns.js")
     assert "cls.emoji || '📦'" in js_patterns
+    assert "['Detail', this._detailLabel(stats.detail_level)]" in js_patterns
+    assert "structure: 'Structure only'" in js_patterns
     assert 'id="patJobStatus"' in disc
     assert 'id="patPatternList"' in disc
     assert 'id="patDetails"' in disc

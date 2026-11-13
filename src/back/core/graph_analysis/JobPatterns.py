@@ -213,6 +213,7 @@ class JobPatterns:
             "bins": int(row.get("bins", 0) or 0),
             "refined": int(row.get("refined", 0) or 0),
             "min_support": int(row.get("min_support", 0) or 0),
+            "detail_level": str(row.get("detail_level") or "full"),
             "algorithm": str(row.get("algorithm") or "egocentric_signature"),
             "class_filter": [
                 c for c in str(row.get("class_filter") or "").split(",") if c

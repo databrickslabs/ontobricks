@@ -1284,7 +1284,16 @@ DEFAULT_PATTERN_BINS = 8
 DEFAULT_PATTERN_MIN_SUPPORT = 3
 DEFAULT_PATTERN_FRONTIER = 50_000
 DEFAULT_PATTERN_REFINE_TOP = 0
-CATEGORICAL_TOP_N = 20
+#: A categorical attribute with more distinct values than this is identifier-like
+#: (email, phone, id, free text): it can never be shared by ``min_support``
+#: anchors, so it is left out of the signature instead of being binned.
+CATEGORICAL_MAX_VALUES = 20
+#: Signature detail levels, finest first. Hashing every token of a rich
+#: neighbourhood makes almost every anchor unique, so discovery walks down this
+#: list and keeps the first level whose patterns explain enough of the anchors.
+PATTERN_LEVELS = ("full", "neighbour", "own", "structure")
+#: Share of the anchors a level's patterns must cover to be accepted.
+DEFAULT_PATTERN_COVERAGE = 0.5
 
 PREVIEW_PATTERNS = 20
 # Preview caps reuse the community constants when available; keep local aliases
@@ -1332,7 +1341,8 @@ class PatternSQL(GraphAnalyticsSQL):
     min_support: int = DEFAULT_PATTERN_MIN_SUPPORT
     frontier_cap: int = DEFAULT_PATTERN_FRONTIER
     refine_top: int = DEFAULT_PATTERN_REFINE_TOP
-    categorical_top_n: int = CATEGORICAL_TOP_N
+    categorical_max_values: int = CATEGORICAL_MAX_VALUES
+    min_coverage: float = DEFAULT_PATTERN_COVERAGE
 
     @property
     def directed(self) -> str:
@@ -1447,7 +1457,7 @@ class PatternSQL(GraphAnalyticsSQL):
     def build_bins(self) -> List[str]:
         """Per-(node, property) bin labels for anchors and hop neighbours."""
         is_num = _portable_is_numeric_sql("value")
-        top_n = max(1, int(self.categorical_top_n))
+        max_values = max(1, int(self.categorical_max_values))
         bins = max(1, int(self.bins))
         return self._recreate(
             self.bins_table,
@@ -1487,21 +1497,13 @@ class PatternSQL(GraphAnalyticsSQL):
             f"  ) vr ON vr.prop = t.prop AND vr.value = t.value\n"
             f"),\n"
             f"categorical AS (\n"
-            f"  SELECT t.n AS n, t.prop AS prop,\n"
-            f"         CASE WHEN fr.freq_rank <= {top_n} THEN t.value\n"
-            f"              ELSE '__other' END AS bin_label\n"
+            f"  SELECT t.n AS n, t.prop AS prop, t.value AS bin_label\n"
             f"  FROM typed t\n"
             f"  JOIN prop_kind pk ON pk.prop = t.prop AND pk.pkind = 'cat'\n"
             f"  JOIN (\n"
-            f"    SELECT prop, value,\n"
-            f"           ROW_NUMBER() OVER (\n"
-            f"             PARTITION BY prop ORDER BY cnt DESC, value\n"
-            f"           ) AS freq_rank\n"
-            f"    FROM (\n"
-            f"      SELECT prop, value, COUNT(*) AS cnt\n"
-            f"      FROM typed GROUP BY prop, value\n"
-            f"    ) freq\n"
-            f"  ) fr ON fr.prop = t.prop AND fr.value = t.value\n"
+            f"    SELECT prop FROM typed\n"
+            f"    GROUP BY prop HAVING COUNT(DISTINCT value) <= {max_values}\n"
+            f"  ) lc ON lc.prop = t.prop\n"
             f")\n"
             f"SELECT n, prop, bin_label FROM numeric\n"
             f"UNION ALL\n"
@@ -1541,21 +1543,23 @@ class PatternSQL(GraphAnalyticsSQL):
         )
         # Structural tokens (kind = 's').
         statements.append(
-            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
             f"SELECT e.anchor,\n"
             f"       '{hop_lit}|' || e.via || '|' || coalesce(ty.type_uri, '') "
             f"|| '|' || e.direction,\n"
-            f"       's'\n"
+            f"       's',\n"
+            f"       {hop_lit}\n"
             f"FROM {expanded} e\n"
             f"LEFT JOIN ({self.node_type_select_all()}) ty ON ty.n = e.node"
         )
         # Neighbour attribute tokens (kind = 'na').
         statements.append(
-            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
             f"SELECT e.anchor,\n"
             f"       '{hop_lit}|' || e.via || '|' || coalesce(ty.type_uri, '') "
             f"|| '|' || e.direction || '|' || b.prop || '|' || b.bin_label,\n"
-            f"       'na'\n"
+            f"       'na',\n"
+            f"       {hop_lit}\n"
             f"FROM {expanded} e\n"
             f"JOIN {self.bins_table} b ON b.n = e.node\n"
             f"LEFT JOIN ({self.node_type_select_all()}) ty ON ty.n = e.node"
@@ -1568,24 +1572,26 @@ class PatternSQL(GraphAnalyticsSQL):
         statements = [
             f"DROP TABLE IF EXISTS {self.tokens}",
             f"CREATE TABLE {self.tokens} (anchor VARCHAR(1024), token VARCHAR(4096), "
-            f"kind VARCHAR(8))",
+            f"kind VARCHAR(8), hop INT)",
         ]
         statements.append(
-            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
             f"SELECT a.n,\n"
             f"       '0||' || coalesce(a.type_uri, '') || '|self|' || b.prop "
             f"|| '|' || b.bin_label,\n"
-            f"       'a0'\n"
+            f"       'a0',\n"
+            f"       0\n"
             f"FROM {self.anchors} a\n"
             f"JOIN {self.bins_table} b ON b.n = a.n"
         )
         # Anchors with no attributes still need a type token so empty
         # neighbourhoods are distinguishable by type.
         statements.append(
-            f"INSERT INTO {self.tokens} (anchor, token, kind)\n"
+            f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
             f"SELECT a.n,\n"
             f"       '0||' || coalesce(a.type_uri, '') || '|self||',\n"
-            f"       'a0'\n"
+            f"       'a0',\n"
+            f"       0\n"
             f"FROM {self.anchors} a\n"
             f"WHERE NOT EXISTS (\n"
             f"  SELECT 1 FROM {self.bins_table} b WHERE b.n = a.n\n"
@@ -1593,15 +1599,41 @@ class PatternSQL(GraphAnalyticsSQL):
         )
         return statements
 
-    def build_signatures(self) -> List[str]:
-        """Hash each anchor's full token multiset into ``pattern_id``."""
+    @staticmethod
+    def level_filter(level: str, alias: str = "t") -> str:
+        """Token predicate for one signature detail level (see ``PATTERN_LEVELS``)."""
+        if level == "structure":
+            return f"{alias}.kind = 's'"
+        if level == "own":
+            return f"{alias}.kind IN ('s', 'a0')"
+        if level == "neighbour":
+            return (
+                f"({alias}.kind IN ('s', 'a0') "
+                f"OR ({alias}.kind = 'na' AND {alias}.hop <= 1))"
+            )
+        return "1 = 1"
+
+    def build_signatures(self, level: str = "full") -> List[str]:
+        """Hash each anchor's tokens at *level* into ``pattern_id``.
+
+        ``full`` hashes the exact multiset (counts matter); coarser levels hash
+        the *set* of the kept tokens, so "has 2 orders" and "has 5 orders" share
+        a signature. Anchors with no token at that level hash the empty set.
+        """
+        source = self.tokens
+        if level != "full":
+            source = (
+                f"(SELECT DISTINCT anchor, token FROM {self.tokens} t "
+                f"WHERE {self.level_filter(level)})"
+            )
         return self._recreate(
             self.signatures,
-            f"SELECT anchor AS anchor_uri,\n"
-            f"       md5(concat_ws('|', sort_array(collect_list(token)))) "
+            f"SELECT a.n AS anchor_uri,\n"
+            f"       md5(concat_ws('|', sort_array(collect_list(t.token)))) "
             f"AS pattern_id\n"
-            f"FROM {self.tokens}\n"
-            f"GROUP BY anchor",
+            f"FROM {self.anchors} a\n"
+            f"LEFT JOIN {source} t ON t.anchor = a.n\n"
+            f"GROUP BY a.n",
         )
 
     def write_pattern_output(self) -> List[str]:
@@ -1621,8 +1653,10 @@ class PatternSQL(GraphAnalyticsSQL):
             f") ok ON ok.pattern_id = s.pattern_id",
         )
 
-    def write_shapes(self, *, refined: bool) -> List[str]:
+    def write_shapes(self, *, refined: bool, level: str = "full") -> List[str]:
+        """One row per pattern; the shape lists only tokens kept at *level*."""
         refined_i = 1 if refined else 0
+        keep = self.level_filter(level)
         return self._recreate(
             self.shapes_table,
             f"SELECT p.pattern_id AS pattern_id,\n"
@@ -1640,10 +1674,10 @@ class PatternSQL(GraphAnalyticsSQL):
             f") p\n"
             f"LEFT JOIN (\n"
             f"  SELECT o.pattern_id AS pattern_id,\n"
-            f"         MAX(CAST(substr(t.token, 1, instr(t.token || '|', '|') - 1) "
-            f"AS INT)) AS hop_count\n"
+            f"         MAX(t.hop) AS hop_count\n"
             f"  FROM {self.output_table} o\n"
             f"  JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+            f"  WHERE {keep}\n"
             f"  GROUP BY o.pattern_id\n"
             f") h ON h.pattern_id = p.pattern_id\n"
             f"LEFT JOIN (\n"
@@ -1655,6 +1689,7 @@ class PatternSQL(GraphAnalyticsSQL):
             f"           '\"' || t.token || '\"' AS qtok\n"
             f"    FROM {self.output_table} o\n"
             f"    JOIN {self.tokens} t ON t.anchor = o.anchor_uri\n"
+            f"    WHERE {keep}\n"
             f"  ) d\n"
             f"  GROUP BY pattern_id\n"
             f") sh ON sh.pattern_id = p.pattern_id\n"
@@ -1706,6 +1741,7 @@ class PatternSQL(GraphAnalyticsSQL):
             f"{int(stats['bins'])} AS bins",
             f"{int(stats['refined'])} AS refined",
             f"{int(stats['min_support'])} AS min_support",
+            f"'{sql_escape(str(stats.get('detail_level', 'full')))}' AS detail_level",
             f"'{sql_escape(str(stats['algorithm']))}' AS algorithm",
             f"'{sql_escape(','.join(self.class_filter))}' AS class_filter",
             f"'{sql_escape(str(stats['source_table']))}' AS source_table",
@@ -1810,17 +1846,8 @@ def run_patterns(
             _drop_work_tables(execute, builder)
 
 
-def _run_pattern_stages(
-    execute,
-    scalar,
-    builder: PatternSQL,
-    *,
-    computed_at: str,
-) -> Dict[str, object]:
-    if not builder.class_filter:
-        raise ValueError("class_filter is required for pattern detection")
-
-    t0 = time.time()
+def _expand_neighbourhoods(execute, builder: PatternSQL) -> None:
+    """Stage everything the signatures hash: edges, bins, hop-by-hop tokens."""
     for stmt in builder.build_directed_edges():
         execute(stmt)
     for stmt in builder.build_literals():
@@ -1833,20 +1860,50 @@ def _run_pattern_stages(
         execute(stmt)
     for stmt in builder.build_frontier_0():
         execute(stmt)
-
-    hops = max(0, int(builder.hops))
-    for h in range(1, hops + 1):
+    for h in range(1, max(0, int(builder.hops)) + 1):
         for stmt in builder.build_hop(h):
             execute(stmt)
         logger.info("pattern hop %d expanded", h)
 
-    for stmt in builder.build_signatures():
-        execute(stmt)
-    for stmt in builder.write_pattern_output():
-        execute(stmt)
 
+def _choose_detail_level(execute, scalar, builder: PatternSQL) -> str:
+    """Write the pattern output at the finest level that explains enough anchors.
+
+    Walks ``PATTERN_LEVELS`` (finest first) and stops at the first level whose
+    patterns (groups of ``>= min_support`` anchors) cover ``min_coverage`` of
+    the anchors. The coarsest level is the floor and is always accepted.
+    """
+    total = int(scalar(builder.anchor_count_query()) or 0)
+    for level in PATTERN_LEVELS:
+        for stmt in builder.build_signatures(level):
+            execute(stmt)
+        for stmt in builder.write_pattern_output():
+            execute(stmt)
+        covered = int(scalar(builder.output_anchor_count_query()) or 0)
+        logger.info("pattern level %s covers %d of %d anchors", level, covered, total)
+        if covered and covered >= builder.min_coverage * total:
+            return level
+    return PATTERN_LEVELS[-1]
+
+
+def _run_pattern_stages(
+    execute,
+    scalar,
+    builder: PatternSQL,
+    *,
+    computed_at: str,
+) -> Dict[str, object]:
+    if not builder.class_filter:
+        raise ValueError("class_filter is required for pattern detection")
+
+    t0 = time.time()
+    _expand_neighbourhoods(execute, builder)
+    level = _choose_detail_level(execute, scalar, builder)
+
+    # Refine merges multiplicity near-duplicates, which only exist when the
+    # signature kept exact counts, i.e. at the finest level.
     refined = 0
-    if int(builder.refine_top) > 0:
+    if int(builder.refine_top) > 0 and level == PATTERN_LEVELS[0]:
         for stmt in builder.build_refine_map():
             execute(stmt)
         for stmt in builder.apply_refine_map():
@@ -1856,35 +1913,36 @@ def _run_pattern_stages(
         for stmt in builder.empty_refine_map():
             execute(stmt)
 
-    for stmt in builder.write_shapes(refined=bool(refined)):
+    for stmt in builder.write_shapes(refined=bool(refined), level=level):
         execute(stmt)
     for stmt in builder.write_pattern_preview():
         execute(stmt)
 
     pattern_count = int(scalar(builder.pattern_count_query()) or 0)
-    # Anchors that survived min_support (and refine), not the raw class count.
-    anchor_count = int(scalar(builder.output_anchor_count_query()) or 0)
-    raw_anchor_count = int(scalar(builder.anchor_count_query()) or 0)
-    if raw_anchor_count and not pattern_count:
-        # Keep population visible even when nothing met min_support.
-        anchor_count = 0
+    # With patterns: the anchors they cover. Without: the whole population.
+    anchor_count = int(
+        scalar(
+            builder.output_anchor_count_query()
+            if pattern_count
+            else builder.anchor_count_query()
+        )
+        or 0
+    )
 
     stats: Dict[str, object] = {
-        "anchor_type": builder.class_filter[0] if builder.class_filter else "",
-        "anchor_count": raw_anchor_count if pattern_count else raw_anchor_count,
+        "anchor_type": builder.class_filter[0],
+        "anchor_count": anchor_count,
         "pattern_count": pattern_count,
-        "hop_count": hops,
+        "hop_count": max(0, int(builder.hops)),
         "bins": int(builder.bins),
         "refined": refined,
         "min_support": int(builder.min_support),
+        "detail_level": level,
         "algorithm": PATTERN_ALGORITHM,
         "source_table": builder.source_table,
         "computed_at": computed_at,
         "elapsed_ms": int((time.time() - t0) * 1000),
     }
-    # When patterns exist, report how many anchors were kept in the output.
-    if pattern_count:
-        stats["anchor_count"] = int(scalar(builder.output_anchor_count_query()) or 0)
     for stmt in builder.write_pattern_summary(stats):
         execute(stmt)
     return stats

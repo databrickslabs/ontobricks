@@ -200,6 +200,16 @@ const SimulationPatterns = {
         }
     },
 
+    // Signature detail the job settled on (finest level that explained enough anchors).
+    _detailLabel(level) {
+        return {
+            full: 'Exact',
+            neighbour: 'Neighbours (1 hop)',
+            own: 'Own attributes',
+            structure: 'Structure only',
+        }[level] || level || '—';
+    },
+
     _renderStats(stats) {
         const el = document.getElementById('patPreviewStats');
         if (!el) return;
@@ -215,6 +225,7 @@ const SimulationPatterns = {
             ['Hops', stats.hop_count],
             ['Bins', stats.bins],
             ['Min support', stats.min_support],
+            ['Detail', this._detailLabel(stats.detail_level)],
             ['Refined', stats.refined ? 'yes' : 'no'],
         ].map(([k, v]) => (
             `<div class="pat-stat"><span class="pat-stat-label">${this._esc(k)}</span>`

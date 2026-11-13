@@ -1341,12 +1341,22 @@ collapses that partition, looking up memberships only for the entities it draws.
 **Intelligence → Patterns → Discover** finds recurring egocentric neighbourhood
 signatures for a **required** anchor entity type on a dedicated Databricks job
 (`…-pattern-detection`). It uses the same admin toggle and `…_data` snapshot as
-Community / Analytics. Each anchor's attributes (categorical top-N +
-`__other`, numeric quantile bins) and multi-hop relationships (full predicate
-URIs; hops walk the full graph, not an induced subgraph) are hashed into a
-canonical signature; patterns are ranked by support. Raise **Min support** to
-drop the long tail. Optional **Refine top-N** merges near-duplicates that
-differ only by relationship multiplicity into a motif. Nothing is written to
+Community / Analytics. Each anchor's attributes (numeric quantile bins;
+categorical values, except identifier-like attributes with more than 20
+distinct values such as ids, emails or dates, which are ignored) and multi-hop
+relationships (full predicate URIs; hops walk the full graph, not an induced
+subgraph) are hashed into a canonical signature; patterns are ranked by
+support. Raise **Min support** to drop the long tail.
+
+Hashing every attribute of a rich neighbourhood makes almost every anchor
+unique, so discovery picks the **detail level** automatically: it tries the
+finest signature first (**Exact**, then **Neighbours (1 hop)**, then **Own
+attributes**) and keeps the first one whose patterns cover at least half of the
+anchors, falling back to **Structure only** (which relationships to which
+types, ignoring attributes and counts). The level used is shown as **Detail**
+next to the run stats. Optional **Refine top-N** merges near-duplicates that
+differ only by relationship multiplicity into a motif; it only applies at the
+**Exact** level. Nothing is written to
 the graph until **Save & materialize**, which stores a named pattern
 (`Pattern` + `:inPattern` memberships) you can list or delete under
 **Patterns → Saved**. Re-run Detect after the graph changes; saved patterns do

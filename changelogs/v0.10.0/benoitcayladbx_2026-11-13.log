@@ -754,3 +754,67 @@ Tests
 -----
 uv run --frozen pytest -q -m "not scenario" -> 10472 passed, 323 skipped, 8 deselected.
 Requires `make deploy` / `make deploy-no-run` so the job picks up the new script.
+
+================================================================================
+Fix: pattern detection returned "0 patterns" - automatic signature detail levels
+================================================================================
+
+Context
+-------
+After the ANSI cast fix the Databricks job ran to completion but reported
+"0 patterns over 200 anchors" (Cust360Auto Customer, 3 hops, min support 3).
+Reproduced against the real triple table with the work tables kept: the exact
+token multiset was unique for every customer. Causes: (1) identifier-like
+attributes (customerid, email, phone, street, first name, dates) gave the top
+20 values their own label, so those anchors were unique even at hop 0;
+(2) exact neighbour counts plus neighbour attribute bins over 3 hops made each
+signature unique (hop 0 alone: 193 distinct signatures out of 200). Measured
+on the real data: structure-only signatures give 16 patterns covering 136 of
+200 customers, attribute-including signatures give <= 3 patterns.
+After the fix the same run yields 17 patterns covering 140 of 200 customers.
+
+Changes
+-------
+1. src/jobs/graph_analytics_job.py - categorical attributes with more than 20
+   distinct values (CATEGORICAL_MAX_VALUES) are ignored instead of being binned
+   into top-20 + "__other".
+2. src/jobs/graph_analytics_job.py - tokens table gains a `hop` column;
+   `PatternSQL.level_filter` / `build_signatures(level)` hash the tokens kept at
+   a detail level (full = exact multiset; neighbour / own / structure = token
+   set). Anchors with no token at a level hash the empty set (isolated pattern).
+3. src/jobs/graph_analytics_job.py - `_choose_detail_level` walks
+   PATTERN_LEVELS finest-first and keeps the first level whose patterns cover
+   >= 50% of the anchors (structure is the floor). `_run_pattern_stages` split
+   into `_expand_neighbourhoods` + `_choose_detail_level`; refine only runs at
+   the full level; shapes list only the tokens of the chosen level; summary
+   table gains `detail_level`.
+4. src/back/core/graph_analysis/JobPatterns.py - summary read-back exposes
+   `detail_level`.
+5. src/front/static/simulation/js/simulation-patterns.js - "Detail" stat
+   (Exact / Neighbours (1 hop) / Own attributes / Structure only).
+6. tests - TestDetailLevels (identifier-like attribute ignored, fallback to
+   structure, stays exact when exact works, multiplicity ignored at coarse
+   levels, isolated anchors, refine skipped below full, shapes limited to the
+   level), summary read-back and JS contract tests.
+7. docs/user-guide.md, docs/architecture.md,
+   docs/superpowers/specs/2026-11-13-pattern-detection-design.md - describe the
+   detail levels and the measured rationale.
+
+Modified files
+--------------
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/JobPatterns.py
+- src/front/static/simulation/js/simulation-patterns.js
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_job_patterns.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+- docs/superpowers/specs/2026-11-13-pattern-detection-design.md
+
+Tests
+-----
+uv run --frozen pytest -q -m "not scenario" -> 10480 passed, 323 skipped, 8 deselected.
+Verified on the real Cust360Auto Customer data (3 hops, 8 bins, min support 3):
+17 patterns / 140 of 200 anchors at the `structure` level (was 0 patterns).
+Requires `make deploy` / `make deploy-no-run` so the job picks up the new script.

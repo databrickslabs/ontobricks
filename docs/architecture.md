@@ -1455,7 +1455,8 @@ materializations. Same job-only gate as Community (analytics toggle +
    `LakeflowRunner`.
 2. The job (`src/jobs/graph_analytics_job.py --task patterns`, `PatternSQL`)
    expands anchors up to `hops`, bins attributes, hashes canonical
-   signatures, filters by `min_support`, optionally refines top-N
+   signatures (finest detail level that covers >= 50% of anchors, down to
+   structure-only), filters by `min_support`, optionally refines top-N
    multiplicity near-duplicates (`refine_top`), and writes:
 
    | Table | Content |
