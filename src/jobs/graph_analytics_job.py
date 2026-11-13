@@ -1997,9 +1997,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--task",
-        choices=("metrics", "communities"),
+        choices=("metrics", "communities", "patterns"),
         default="metrics",
-        help="metrics: centrality and structure; communities: label propagation",
+        help=(
+            "metrics: centrality and structure; communities: label propagation; "
+            "patterns: egocentric neighbourhood signatures"
+        ),
     )
     parser.add_argument(
         "--source-table",
@@ -2052,8 +2055,28 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Cap on label-propagation rounds (communities task)",
     )
     parser.add_argument(
+        "--pattern-hops", type=int, default=DEFAULT_PATTERN_HOPS,
+        help="Neighbourhood depth for pattern signatures",
+    )
+    parser.add_argument(
+        "--pattern-bins", type=int, default=DEFAULT_PATTERN_BINS,
+        help="Quantile buckets for numeric attribute bins",
+    )
+    parser.add_argument(
+        "--pattern-min-support", type=int, default=DEFAULT_PATTERN_MIN_SUPPORT,
+        help="Drop patterns with fewer anchors than this",
+    )
+    parser.add_argument(
+        "--pattern-frontier", type=int, default=DEFAULT_PATTERN_FRONTIER,
+        help="Max neighbours kept per anchor per hop",
+    )
+    parser.add_argument(
+        "--refine-top", type=int, default=DEFAULT_PATTERN_REFINE_TOP,
+        help="Collapse multiplicity near-duplicates among the top-N patterns (0=off)",
+    )
+    parser.add_argument(
         "--computed-at", default="",
-        help="Run timestamp recorded in the community summary",
+        help="Run timestamp recorded in the community/pattern summary",
     )
     parser.add_argument(
         "--keep-work-tables",
@@ -2088,16 +2111,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     if class_filter:
         logger.info("class filter: %d type(s) — %s", len(class_filter), ", ".join(class_filter))
 
-    builder_cls = CommunitySQL if args.task == "communities" else GraphAnalyticsSQL
-    builder = builder_cls(
-        source_table=args.source_table,
-        work_prefix=work_prefix,
-        output_table=args.output_table,
-        excluded_predicates=excluded,
-        damping=args.damping,
-        class_filter=class_filter,
-    )
-
     def execute(stmt: str) -> None:
         logger.debug("executing: %s", stmt)
         spark.sql(stmt)
@@ -2106,7 +2119,41 @@ def main(argv: Optional[List[str]] = None) -> int:
         row = spark.sql(query).head()
         return row[0] if row is not None else None
 
+    if args.task == "patterns":
+        builder = PatternSQL(
+            source_table=args.source_table,
+            work_prefix=work_prefix,
+            output_table=args.output_table,
+            excluded_predicates=excluded,
+            class_filter=class_filter,
+            hops=args.pattern_hops,
+            bins=args.pattern_bins,
+            min_support=args.pattern_min_support,
+            frontier_cap=args.pattern_frontier,
+            refine_top=args.refine_top,
+        )
+        stats = run_patterns(
+            execute,
+            scalar,
+            builder,
+            computed_at=args.computed_at,
+            cleanup=not args.keep_work_tables,
+        )
+        print("ONTOBRICKS_PATTERN_SUMMARY " + json.dumps(stats, default=str))
+        logger.info(
+            "wrote %s (%s patterns)", args.output_table, stats["pattern_count"]
+        )
+        return 0
+
     if args.task == "communities":
+        builder = CommunitySQL(
+            source_table=args.source_table,
+            work_prefix=work_prefix,
+            output_table=args.output_table,
+            excluded_predicates=excluded,
+            damping=args.damping,
+            class_filter=class_filter,
+        )
         stats = run_communities(
             execute,
             scalar,
@@ -2121,6 +2168,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
         return 0
 
+    builder = GraphAnalyticsSQL(
+        source_table=args.source_table,
+        work_prefix=work_prefix,
+        output_table=args.output_table,
+        excluded_predicates=excluded,
+        damping=args.damping,
+        class_filter=class_filter,
+    )
     stats = run_analysis(
         execute,
         scalar,

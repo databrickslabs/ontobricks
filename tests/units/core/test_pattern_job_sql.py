@@ -158,3 +158,28 @@ class TestRefine:
         assert shape[0]["refined"] == 1
         assert shape[0]["near_duplicate_count"] == 2
         assert shape[0]["support"] == 2
+
+
+class TestPatternCli:
+    def test_parse_args_patterns_task(self):
+        from jobs.graph_analytics_job import parse_args
+
+        ns = parse_args(
+            [
+                "--task",
+                "patterns",
+                "--source-table",
+                "c.s.t",
+                "--output-table",
+                "c.s.o",
+                "--class-filter",
+                CUSTOMER,
+                "--pattern-hops",
+                "2",
+                "--refine-top",
+                "10",
+            ]
+        )
+        assert ns.task == "patterns"
+        assert ns.pattern_hops == 2
+        assert ns.refine_top == 10
