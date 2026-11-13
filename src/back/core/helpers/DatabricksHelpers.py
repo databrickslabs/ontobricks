@@ -439,6 +439,29 @@ class DatabricksHelpers:
         return ""
 
     @staticmethod
+    def resolve_pattern_job_name(settings) -> str:
+        """Return the pattern-detection job name, or ``""`` if none can be formed.
+
+        ``ONTOBRICKS_PATTERN_JOB_NAME`` wins when set. Otherwise:
+
+        1. ``<app>-pattern-detection`` from the app name (Apps runtime), or
+        2. the analytics job name with its ``-graph-analytics`` suffix swapped
+           for ``-pattern-detection`` — so a local ``.env`` that only pins
+           ``ONTOBRICKS_ANALYTICS_JOB_NAME`` also resolves the sister job.
+        """
+        explicit = (getattr(settings, "pattern_job_name", "") or "").strip()
+        if explicit:
+            return explicit
+        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+        if app_name:
+            return f"{app_name}-pattern-detection"
+        analytics = DatabricksHelpers.resolve_analytics_job_name(settings)
+        suffix = "-graph-analytics"
+        if analytics.endswith(suffix):
+            return f"{analytics[: -len(suffix)]}-pattern-detection"
+        return ""
+
+    @staticmethod
     def get_databricks_client(domain, settings):
         """Get Databricks client from domain session or settings.
 

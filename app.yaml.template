@@ -167,6 +167,11 @@ env:
   # Gated by the same ONTOBRICKS_ANALYTICS_JOB_ENABLED toggle.
   - name: ONTOBRICKS_COMMUNITY_JOB_NAME
     value: ""
+  # Deployed name of the pattern-detection job (Intelligence -> Patterns).
+  # Leave empty to derive "<app>-pattern-detection", matching the bundle.
+  # Gated by the same ONTOBRICKS_ANALYTICS_JOB_ENABLED toggle.
+  - name: ONTOBRICKS_PATTERN_JOB_NAME
+    value: ""
   # PageRank power iterations. 20 fixes the top-N ordering; raise it only
   # if you need converged absolute scores rather than a ranking.
   - name: ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS

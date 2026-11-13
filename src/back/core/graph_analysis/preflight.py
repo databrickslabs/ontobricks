@@ -25,6 +25,7 @@ from back.core.helpers import (
     resolve_analytics_job_enabled,
     resolve_analytics_job_name,
     resolve_community_job_name,
+    resolve_pattern_job_name,
 )
 from back.core.logging import get_logger
 
@@ -80,24 +81,17 @@ def probe_data_table(
         return None, str(exc).strip()
 
 
-def analytics_job_configured(
-    domain: Any, settings: Any, *, community: bool = False
+def _job_configured(
+    domain: Any,
+    settings: Any,
+    *,
+    job_name: str,
+    env_var: str,
 ) -> Tuple[bool, str]:
-    """Return ``(configured, reason_it_is_not)`` without touching the warehouse.
-
-    The reason is empty whenever the toggle is off, because then nothing
-    is broken: not using the job is the configured behaviour.
-
-    *community* checks the community-detection job's name instead of the
-    graph-metrics one; both jobs share the toggle and the source snapshot.
-    """
+    """Shared gate: analytics toggle + resolvable job name + source table."""
     if not resolve_analytics_job_enabled(domain, settings):
         return False, ""
 
-    if community:
-        job_name, env_var = resolve_community_job_name(settings), "ONTOBRICKS_COMMUNITY_JOB_NAME"
-    else:
-        job_name, env_var = resolve_analytics_job_name(settings), "ONTOBRICKS_ANALYTICS_JOB_NAME"
     if not job_name:
         return False, (
             f"No Databricks job name could be determined. Set {env_var}, or "
@@ -111,6 +105,30 @@ def analytics_job_configured(
         )
 
     return True, ""
+
+
+def analytics_job_configured(
+    domain: Any, settings: Any, *, community: bool = False
+) -> Tuple[bool, str]:
+    """Return ``(configured, reason_it_is_not)`` without touching the warehouse.
+
+    The reason is empty whenever the toggle is off, because then nothing
+    is broken: not using the job is the configured behaviour.
+
+    *community* checks the community-detection job's name instead of the
+    graph-metrics one; both jobs share the toggle and the source snapshot.
+    """
+    if community:
+        job_name, env_var = (
+            resolve_community_job_name(settings),
+            "ONTOBRICKS_COMMUNITY_JOB_NAME",
+        )
+    else:
+        job_name, env_var = (
+            resolve_analytics_job_name(settings),
+            "ONTOBRICKS_ANALYTICS_JOB_NAME",
+        )
+    return _job_configured(domain, settings, job_name=job_name, env_var=env_var)
 
 
 def analytics_job_status(
@@ -149,3 +167,35 @@ def community_job_status(domain: Any, settings: Any) -> Tuple[bool, str]:
 def community_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
     """:func:`analytics_job_configured` for the community-detection job."""
     return analytics_job_configured(domain, settings, community=True)
+
+
+def pattern_job_configured(domain: Any, settings: Any) -> Tuple[bool, str]:
+    """Toggle + pattern job name + resolvable source, without a warehouse probe."""
+    return _job_configured(
+        domain,
+        settings,
+        job_name=resolve_pattern_job_name(settings),
+        env_var="ONTOBRICKS_PATTERN_JOB_NAME",
+    )
+
+
+def pattern_job_status(domain: Any, settings: Any) -> Tuple[bool, str]:
+    """:func:`pattern_job_configured` plus a probe that the snapshot has rows."""
+    configured, reason = pattern_job_configured(domain, settings)
+    if not configured:
+        return False, reason
+
+    source, _ = resolve_analytics_source(domain, settings)
+    has_rows, detail = probe_data_table(domain, settings, source)
+    if has_rows is None:
+        return False, (
+            f"The mapped-triples table {source} could not be probed: "
+            f"{detail or 'no detail was reported'}"
+        )
+    if not has_rows:
+        return False, (
+            f"The mapped-triples table {source} is missing or empty. Run "
+            f"Knowledge Graph → Build to materialise it, then retry."
+        )
+
+    return True, ""

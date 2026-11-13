@@ -29,6 +29,7 @@ ANALYTICS_VARS = {
     "ONTOBRICKS_ANALYTICS_JOB_ENABLED": "analytics_job_enabled",
     "ONTOBRICKS_ANALYTICS_JOB_NAME": "analytics_job_name",
     "ONTOBRICKS_COMMUNITY_JOB_NAME": "community_job_name",
+    "ONTOBRICKS_PATTERN_JOB_NAME": "pattern_job_name",
     "ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS": "analytics_job_pagerank_iterations",
     "ONTOBRICKS_ANALYTICS_JOB_PIVOTS": "analytics_job_pivots",
 }

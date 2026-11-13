@@ -287,6 +287,47 @@ class TestResolveCommunityJobName:
         assert derived == job["name"].replace("${var.app_name}", "APP")
 
 
+class TestResolvePatternJobName:
+    class _S:
+        def __init__(self, name="", app="", pattern=""):
+            self.analytics_job_name = name
+            self.pattern_job_name = pattern
+            self.ontobricks_app_name = app
+            self.community_job_name = ""
+
+    def test_explicit_name_wins(self):
+        s = self._S(pattern="renamed-pattern", app="ontobricks-07x", name="x-graph-analytics")
+        assert DatabricksHelpers.resolve_pattern_job_name(s) == "renamed-pattern"
+
+    def test_name_is_derived_from_the_app_name(self):
+        s = self._S(app="ontobricks-07x")
+        assert (
+            DatabricksHelpers.resolve_pattern_job_name(s)
+            == "ontobricks-07x-pattern-detection"
+        )
+
+    def test_falls_back_from_the_analytics_job_name(self):
+        s = self._S(name="ontobricks-07x-graph-analytics")
+        assert (
+            DatabricksHelpers.resolve_pattern_job_name(s)
+            == "ontobricks-07x-pattern-detection"
+        )
+
+    def test_empty_when_nothing_is_available(self):
+        assert DatabricksHelpers.resolve_pattern_job_name(self._S()) == ""
+
+    def test_derived_name_matches_the_bundle_resource(self):
+        import yaml
+
+        repo_root = Path(__file__).resolve().parents[3]
+        job = yaml.safe_load(
+            (repo_root / "resources/pattern_detection.job.yml").read_text()
+        )["resources"]["jobs"]["pattern_detection_job"]
+        assert job["name"] == "${var.app_name}-pattern-detection"
+        derived = DatabricksHelpers.resolve_pattern_job_name(self._S(app="APP"))
+        assert derived == job["name"].replace("${var.app_name}", "APP")
+
+
 class TestResolveAnalyticsJobEnabled:
     """Settings → Global admin toggle wins over the env-var deployment default.
 

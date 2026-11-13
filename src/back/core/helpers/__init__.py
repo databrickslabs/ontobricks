@@ -66,6 +66,7 @@ resolve_build_use_sea = DatabricksHelpers.resolve_build_use_sea
 resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 resolve_analytics_job_name = DatabricksHelpers.resolve_analytics_job_name
 resolve_community_job_name = DatabricksHelpers.resolve_community_job_name
+resolve_pattern_job_name = DatabricksHelpers.resolve_pattern_job_name
 resolve_app_registry_context = DatabricksHelpers.resolve_app_registry_context
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_data_plane_client = DatabricksHelpers.get_data_plane_client
@@ -93,6 +94,7 @@ __all__ = [
     "resolve_analytics_job_enabled",
     "resolve_analytics_job_name",
     "resolve_community_job_name",
+    "resolve_pattern_job_name",
     "resolve_app_registry_context",
     "get_databricks_client",
     "get_data_plane_client",

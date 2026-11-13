@@ -163,6 +163,18 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Deployed name of the pattern-detection job. Empty means "derive it
+    # from the app name" as ``<app>-pattern-detection``, matching the bundle
+    # (``resources/pattern_detection.job.yml``). Gated by the same analytics
+    # toggle as metrics / communities.
+    pattern_job_name: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "ONTOBRICKS_PATTERN_JOB_NAME",
+            "pattern_job_name",
+        ),
+    )
+
     # Unity Catalog schema (``catalog.schema``) that holds the job's per-node
     # output tables. Empty means "use the registry catalog/schema".
     analytics_job_output_schema: str = Field(

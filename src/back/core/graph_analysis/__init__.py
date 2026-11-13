@@ -24,6 +24,8 @@ from back.core.graph_analysis.preflight import (
     analytics_job_status,
     community_job_configured,
     community_job_status,
+    pattern_job_configured,
+    pattern_job_status,
     probe_data_table,
 )
 from back.core.graph_analysis.models import (
@@ -133,6 +135,8 @@ __all__ = [
     "analytics_job_status",
     "community_job_configured",
     "community_job_status",
+    "pattern_job_configured",
+    "pattern_job_status",
     "probe_data_table",
     "EntityTypeProfile",
     "MetricsRequest",
