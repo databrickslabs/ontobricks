@@ -3,6 +3,8 @@
 from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.CommunityMaterializer import CommunityMaterializer
 from back.core.graph_analysis.CommunityVocabulary import CommunityVocabulary
+from back.core.graph_analysis.PatternVocabulary import PatternVocabulary
+from back.core.graph_analysis.JobPatterns import JobPatterns, pattern_output_table
 from back.core.graph_analysis.JobCommunities import (
     JobCommunities,
     community_output_table,
@@ -114,6 +116,9 @@ __all__ = [
     "CohortVocabulary",
     "CommunityVocabulary",
     "CommunityMaterializer",
+    "PatternVocabulary",
+    "JobPatterns",
+    "pattern_output_table",
     "JobCommunities",
     "community_output_table",
     "JobMetrics",
