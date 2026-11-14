@@ -152,14 +152,7 @@ class RegistryCfg:
         # (Initialize path) so re-binding the Volume + re-running
         # Initialize propagates the new triplet into the row.
         if not prefer_volume_binding:
-            try:
-                from back.objects.registry.store.lakebase.store import (
-                    fetch_lakebase_registry_triplet,
-                )
-
-                triplet = fetch_lakebase_registry_triplet(lb_schema, lb_database)
-            except Exception:  # noqa: BLE001 -- best-effort, Lakebase may be unreachable
-                triplet = None
+            triplet = cls._lakebase_row_triplet(lb_schema, lb_database)
             if triplet:
                 cat, sch, vol = triplet
                 if bound_cfg is not None:
@@ -199,6 +192,25 @@ class RegistryCfg:
             lakebase_schema=lb_schema,
             lakebase_database=lb_database,
         )
+
+    @staticmethod
+    def _lakebase_row_triplet(lb_schema: str, lb_database: str) -> Optional[tuple]:
+        """``(catalog, schema, volume)`` from the Lakebase ``registries`` row, or ``None``.
+
+        ``None`` without touching Lakebase when the registry runs on another backend.
+        """
+        from back.objects.registry.store import RegistryFactory
+
+        if RegistryFactory.backend_name() != "lakebase":
+            return None
+        try:
+            from back.objects.registry.store.lakebase.store import (
+                fetch_lakebase_registry_triplet,
+            )
+
+            return fetch_lakebase_registry_triplet(lb_schema, lb_database)
+        except Exception:  # noqa: BLE001 -- best-effort, Lakebase may be unreachable
+            return None
 
     @staticmethod
     def _first_nonempty(*values: object) -> str:

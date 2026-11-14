@@ -73,3 +73,20 @@ class TestGraphBackendDefault:
     def test_explicit_domain_choice_is_kept(self, backend):
         backend("sqlite")
         assert normalize_graph_backend("neo4j") == "neo4j"
+
+
+class TestRegistryCfgWithoutLakebase:
+    def test_sqlite_backend_never_looks_up_the_lakebase_row(self, backend, monkeypatch):
+        """The Lakebase ``registries`` row lookup would retry Lakebase every minute."""
+        from back.objects.registry.store.lakebase import store as _lb_store
+
+        backend("sqlite")
+        calls = []
+        monkeypatch.setattr(
+            _lb_store,
+            "fetch_lakebase_registry_triplet",
+            lambda schema, database="": calls.append(schema),
+        )
+        settings = type("S", (), {"registry_volume_path": "/Volumes/c/s/v"})()
+        cfg = RegistryCfg.from_domain(None, settings)
+        assert calls == [] and (cfg.catalog, cfg.schema, cfg.volume) == ("c", "s", "v")

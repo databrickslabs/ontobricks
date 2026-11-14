@@ -193,7 +193,7 @@
     "back/objects/ontology/generate/GenerateWorkflow.py::GenerateWorkflow.run_completion": 139,
     "back/objects/ontology/generate/GenerateWorkflow.py::GenerateWorkflow.run_detection": 106,
     "back/objects/registry/PermissionService.py::PermissionService.save_domain_permissions_batch": 102,
-    "back/objects/registry/RegistryCfg.py::RegistryCfg.from_domain": 127,
+    "back/objects/registry/RegistryCfg.py::RegistryCfg.from_domain": 120,
     "back/objects/registry/schedule/BuildScheduler.py::_run_scheduled_task": 160,
     "back/objects/registry/store/lakebase/Bootstrap.py::Bootstrap.check_permissions": 169,
     "back/objects/registry/store/lakebase/Bootstrap.py::Bootstrap.init_status": 101,

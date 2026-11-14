@@ -231,3 +231,38 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9756 passed, 339 skipped
 (readiness-route test deselected: it retries a fake SQL host for ~15 min).
+
+================================================================================
+## SQLite registry: stop probing Lakebase for the registry row
+================================================================================
+
+Context:
+The app log of the SQLite-registry test instance showed, at startup and then
+about once a minute (when the 60 s negative cache expires), a Lakebase
+connection pool being created and two failed project/branch host lookups.
+`RegistryCfg.from_domain` reads the UC triplet from the Lakebase `registries`
+row before falling back to the Volume binding, regardless of the registry
+backend. It failed soft, but cost failing workspace API calls on page renders
+and logged a misleading "Created Lakebase connection pool" INFO line.
+
+Changes:
+
+1. src/back/objects/registry/RegistryCfg.py
+   Extract Method `_lakebase_row_triplet`: returns None without touching
+   Lakebase when `RegistryFactory.backend_name()` is not `lakebase`.
+   `from_domain` shrinks from 127 to 120 lines.
+
+2. tests/units/architecture/baseline.json
+   Tightened the `RegistryCfg.from_domain` entry (127 -> 120).
+
+3. tests/units/registry/test_registry_factory_backend.py
+   New `test_sqlite_backend_never_looks_up_the_lakebase_row` (red before,
+   green after).
+
+Modified files:
+- src/back/objects/registry/RegistryCfg.py
+- tests/units/architecture/baseline.json
+- tests/units/registry/test_registry_factory_backend.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9757 passed, 339 skipped
+(readiness-route test deselected, as above).
