@@ -173,3 +173,23 @@ class TestDeltaGetStatusAvoidsFullCount:
         store = DeltaFlatStore(client, domain=_domain())
 
         assert store.get_status(GRAPH)["count"] == 1
+
+    def test_graph_status_probes_data_when_search_cache_not_built(self):
+        """Search cache ``pending_refresh``: no companions yet, but ``…_data`` holds triples."""
+        client = MagicMock()
+        client.sql = None
+
+        def _query(sql):
+            if GRAPH in sql:
+                raise RuntimeError("CLOUD_IO_INVALID_ARGUMENT: graph view")
+            if "_props" in sql or "_entity_search" in sql:
+                raise RuntimeError("TABLE_OR_VIEW_NOT_FOUND: companion")
+            if sql == f"SELECT 1 FROM {DATA} LIMIT 1":
+                return [{"1": 1}]
+            raise AssertionError(f"unexpected SQL: {sql}")
+
+        client.execute_query.side_effect = _query
+        store = DeltaFlatStore(client, domain=_domain())
+
+        assert store.get_status(GRAPH)["count"] == 1
+        assert not any(GRAPH in sql for sql in _sqls(client))

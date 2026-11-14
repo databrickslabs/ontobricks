@@ -521,6 +521,9 @@ class DeltaFlatStore(GraphDBBackend):
             else None
         )
         status["count"] = total if total else self._companion_has_row_count(probe)
+        if not status["count"] and probe != table_name and not row:
+            # Search cache not built yet (pending refresh): the triples live in ``…_data``.
+            status["count"] = self._companion_has_row_count(self.synced_table_name(table_name))
         return status
 
     def _companion_has_row_count(self, table_name: str) -> int:

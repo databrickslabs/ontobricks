@@ -200,3 +200,34 @@ Modified files:
 
 Tests: live scenario campaign against the SQLite-registry test instance (see
 the next section for results).
+
+================================================================================
+## Lakehouse graph reported as empty while its search cache is pending
+================================================================================
+
+Context:
+The scenario validation flagged "V1 knowledge graph built: 0 triples" on a
+Lakehouse (zero-copy) domain whose `…_graph` view held 2,318 rows. The domain
+had `graph_cache_state = pending_refresh`, so the `…_entity_search` / `…_props`
+companions did not exist yet. `get_status` probes only those companions (it
+must not scan the pass-through graph view), so it returned 0 and
+`/dtwin/sync/status` answered "Graph is empty". The same code is on 0.10.0
+(`delta/ReadStore.py`).
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   `get_status`: when the probe is the `…_entity_search` companion and it has no
+   Delta detail (not built), fall back to a `LIMIT 1` on the `…_data` relation
+   (`synced_table_name`). The graph view itself is still never queried.
+
+2. tests/units/graphdb/delta/test_delta_status_probe.py
+   New `test_graph_status_probes_data_when_search_cache_not_built`
+   (red before the fix, green after).
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/graphdb/delta/test_delta_status_probe.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 9756 passed, 339 skipped
+(readiness-route test deselected: it retries a fake SQL host for ~15 min).
