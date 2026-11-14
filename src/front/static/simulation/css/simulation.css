@@ -986,17 +986,6 @@ a.sim-uri-link:focus-visible {
     background: rgba(13, 110, 253, 0.06);
 }
 
-.pat-shape {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-}
-
-.pat-token {
-    font-size: 0.75rem;
-    word-break: break-all;
-}
-
 .pat-member-list {
     max-height: 14rem;
     overflow: auto;

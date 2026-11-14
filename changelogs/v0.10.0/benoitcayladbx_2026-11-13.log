@@ -818,3 +818,46 @@ uv run --frozen pytest -q -m "not scenario" -> 10480 passed, 323 skipped, 8 dese
 Verified on the real Cust360Auto Customer data (3 hops, 8 bins, min support 3):
 17 patterns / 140 of 200 anchors at the `structure` level (was 0 patterns).
 Requires `make deploy` / `make deploy-no-run` so the job picks up the new script.
+
+================================================================================
+UI: pattern Details pane lists the matching entities
+================================================================================
+
+Context
+-------
+The Patterns list (left) selects a pattern; the Details pane (right) showed the
+support, hop count and raw shape tokens (full predicate/type URIs) before the
+member list. The user wants the right pane to show the entities that match the
+selected pattern.
+
+Changes
+-------
+1. src/front/static/simulation/js/simulation-patterns.js - `selectPattern` loads
+   only the members page (no longer calls `/dtwin/patterns/{id}/shape`); the
+   Details pane shows "<total> entities match this pattern" then the member list
+   with Load more.
+2. src/front/templates/partials/simulation/_sim_patterns.html - placeholder text
+   points to the matching entities.
+3. src/front/static/simulation/css/simulation.css - removed unused `.pat-shape`
+   and `.pat-token` rules.
+4. tests/units/front/test_simulation_page_contract.py - Details contract: loads
+   members, does not fetch the shape, shows the match count.
+
+Left unchanged
+--------------
+`GET /dtwin/patterns/{id}/shape` stays in the API (documented in
+docs/architecture.md and covered by tests/units/core/test_job_patterns.py); the
+UI no longer calls it.
+
+Modified files
+--------------
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/templates/partials/simulation/_sim_patterns.html
+- src/front/static/simulation/css/simulation.css
+- tests/units/front/test_simulation_page_contract.py
+
+Tests
+-----
+node --check on simulation-patterns.js: OK.
+uv run --frozen pytest -q -m "not scenario" -> 10480 passed, 323 skipped, 8 deselected.
+Requires `make deploy-no-run` for the Databricks app to serve the new UI.

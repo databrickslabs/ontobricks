@@ -263,14 +263,10 @@ const SimulationPatterns = {
         if (!details) return;
         details.innerHTML = '<p class="text-muted small mb-0">Loading…</p>';
         try {
-            const [shape, members] = await Promise.all([
-                this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/shape`),
-                this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`),
-            ]);
+            const members = await this._json(
+                `/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`
+            );
             this._members = members;
-            const tokens = (shape.shape || []).slice(0, 40).map((t) => (
-                `<code class="pat-token">${this._esc(String(t))}</code>`
-            )).join(' ');
             const rows = (members.members || []).map((m) => (
                 `<li><span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
                 + `<span class="text-muted small ms-1">${this._esc(m.type_label || '')}</span></li>`
@@ -279,11 +275,7 @@ const SimulationPatterns = {
                 ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
                 : '';
             details.innerHTML = `
-                <p class="small mb-2"><strong>Support</strong> ${this._fmtNum(shape.support)}
-                · <strong>Hops</strong> ${this._fmtNum(shape.hop_count)}
-                ${shape.refined ? ' · refined' : ''}</p>
-                <div class="pat-shape mb-3">${tokens || '<span class="text-muted small">No shape tokens</span>'}</div>
-                <h6 class="mb-1">Members</h6>
+                <p class="small mb-2"><strong>${this._fmtNum(members.total)}</strong> entities match this pattern</p>
                 <ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>
                 ${more}`;
         } catch (err) {
