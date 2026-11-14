@@ -5,6 +5,7 @@ neighbourhood signatures over the ``…_data`` snapshot and writes five tables:
 
 * ``<out>``                one row per surviving anchor: ``pattern_id``, type, label
 * ``<out>_shapes``         one row per pattern (support, shape_json, …)
+* ``<out>_shape_edges``    per pattern: typed edges for the diagram
 * ``<out>_preview_nodes``  the capped sample the Patterns page draws
 * ``<out>_preview_edges``  edges among the preview nodes
 * ``<out>_summary``        counts, hops, bins, refine flag, run timestamp
@@ -22,6 +23,11 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from back.core.errors import InfrastructureError
+from back.core.graph_analysis.pattern_diagram import (
+    MAX_DIAGRAM_EDGES,
+    build_pattern_diagram,
+    local_label as _local_label,
+)
 from back.core.graph_analysis.preflight import names_a_missing_object
 from back.core.logging import get_logger
 
@@ -39,13 +45,6 @@ def pattern_output_table(output_schema: str, domain: Any, graph_name: str) -> st
     version = str(getattr(domain, "current_version", "") or "")
     slug = re.sub(r"[^A-Za-z0-9_]+", "_", f"{folder}_{version}").strip("_").lower()
     return f"{output_schema}.graph_patterns_{slug or 'default'}"
-
-
-def _local_label(uri: str) -> str:
-    if not uri:
-        return ""
-    tail = uri.rstrip("/").rsplit("/", 1)[-1]
-    return tail.rsplit("#", 1)[-1] or uri
 
 
 def _bounded(value: Any, default: int, upper: int) -> int:
@@ -105,6 +104,15 @@ def shape_query(out: str, pattern_id: str) -> str:
         "SELECT pattern_id, support, hop_count, shape_json, seed_label, "
         "refined, near_duplicate_count "
         f"FROM {out}_shapes WHERE pattern_id = {_sql_str(pattern_id)}"
+    )
+
+
+def shape_edges_query(out: str, pattern_id: str) -> str:
+    return (
+        "SELECT hop, parent_type, via, child_type, direction, member_count, "
+        f"edge_total FROM {out}_shape_edges "
+        f"WHERE pattern_id = {_sql_str(pattern_id)} "
+        f"ORDER BY hop, member_count DESC, via LIMIT {MAX_DIAGRAM_EDGES + 1}"
     )
 
 
@@ -324,7 +332,9 @@ class JobPatterns:
             "has_more": start + len(members) < size,
         }
 
-    def shape(self, pattern_id: str) -> Optional[Dict[str, Any]]:
+    def shape(
+        self, pattern_id: str, *, with_diagram: bool = False
+    ) -> Optional[Dict[str, Any]]:
         rows = self._safe_rows(shape_query(self._out, pattern_id)) or []
         if not rows:
             return None
@@ -336,16 +346,36 @@ class JobPatterns:
             tokens = []
         if not isinstance(tokens, list):
             tokens = []
+        support = int(row.get("support", 0) or 0)
         return {
             "pattern_id": str(row.get("pattern_id") or pattern_id),
-            "support": int(row.get("support", 0) or 0),
+            "support": support,
             "hop_count": int(row.get("hop_count", 0) or 0),
             "seed_label": str(row.get("seed_label") or ""),
             "refined": int(row.get("refined", 0) or 0),
             "near_duplicate_count": int(row.get("near_duplicate_count", 1) or 1),
             "shape": tokens,
             "shape_json": raw,
+            "diagram": (
+                self._diagram(pattern_id, support, tokens) if with_diagram else None
+            ),
         }
+
+    def _diagram(
+        self, pattern_id: str, support: int, tokens: List[Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Layered diagram, or ``None`` for runs older than the edges table."""
+        edge_rows = self._safe_rows(shape_edges_query(self._out, pattern_id))
+        if edge_rows is None:
+            return None
+        stats = self.summary() or {}
+        return build_pattern_diagram(
+            anchor_type=str(stats.get("anchor_type") or ""),
+            support=support,
+            edge_rows=edge_rows,
+            tokens=[str(t) for t in tokens],
+            bins=int(stats.get("bins") or 0),
+        )
 
     def iter_memberships(
         self, pattern_id: str, batch_size: int = 50_000

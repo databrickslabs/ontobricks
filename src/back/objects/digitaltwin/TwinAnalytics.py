@@ -287,7 +287,7 @@ class TwinAnalytics:
         self, graph_name: str, pattern_id: str, settings: Any = None
     ) -> Optional[Dict[str, Any]]:
         return self.build_job_patterns(self._domain, settings, graph_name).shape(
-            pattern_id
+            pattern_id, with_diagram=True
         )
 
     def _pattern_materializer(self, store: Any, graph_name: str):

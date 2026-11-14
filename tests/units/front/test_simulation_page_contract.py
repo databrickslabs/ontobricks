@@ -763,10 +763,14 @@ def test_patterns_section_owns_discovery():
     assert 'id="patSavedList"' in saved
     assert "onclick=" not in saved
     js = _read(FRONT / "static/simulation/js/simulation-patterns.js")
-    # Details pane lists the matching entities; the shape tokens are not shown.
+    # Details pane: a layered diagram of the pattern, then the matching entities.
     assert "/members?offset=0" in js
-    assert "/shape`" not in js
+    assert "/shape`" in js
+    assert "this._diagramSvg(shape.diagram)" in js
+    assert 'text-anchor="end"' in js
+    assert "Re-run <strong>Detect</strong> to draw this pattern." in js
     assert "entities match this pattern" in js
+    assert "pat-token" not in js
     js = _read(FRONT / "static/simulation/js/simulation-patterns.js")
     assert "/dtwin/patterns/detect" in js
     assert "/dtwin/patterns/latest" in js

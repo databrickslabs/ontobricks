@@ -377,3 +377,62 @@ class TestDetailLevels:
         )
         assert stats["detail_level"] == "neighbour"
         assert stats["refined"] == 0
+
+
+class TestShapeEdges:
+    """Typed edges per pattern feed the diagram on the Patterns page."""
+
+    def _edges(self, runner, anchor_name):
+        pid = runner.scalar(
+            f"SELECT pattern_id FROM out WHERE anchor_uri = '{NS}{anchor_name}'"
+        )
+        return runner.rows(
+            "SELECT hop, parent_type, via, child_type, direction, member_count, "
+            f"edge_total FROM out_shape_edges WHERE pattern_id = '{pid}' "
+            "ORDER BY hop, via"
+        )
+
+    def test_edges_link_parent_and_child_types_per_hop(self):
+        runner, _, _ = _run(alice_bob_carol())
+        edges = self._edges(runner, "Alice")
+        assert [(e["hop"], e["parent_type"], e["via"], e["child_type"], e["direction"])
+                for e in edges] == [
+            (1, CUSTOMER, HAS_ORDER, ORDER, "out"),
+            (2, ORDER, HAS_PRODUCT, PRODUCT, "out"),
+        ]
+
+    def test_counts_members_and_neighbours(self):
+        runner, _, _ = _run(alice_bob_carol())
+        hop1 = self._edges(runner, "Alice")[0]
+        # Alice and Bob share the pattern, two orders each.
+        assert hop1["member_count"] == 2
+        assert hop1["edge_total"] == 4
+
+    def test_walk_never_steps_back_onto_the_anchor(self):
+        runner, _, _ = _run(alice_bob_carol(), hops=3)
+        back = runner.rows(
+            f"SELECT 1 FROM out_shape_edges WHERE child_type = '{CUSTOMER}'"
+        )
+        assert back == []
+
+
+class TestShortestDistanceShells:
+    """Hop k only holds nodes exactly k steps away from the anchor."""
+
+    def test_hop_three_does_not_step_back_to_hop_one(self):
+        # Alice -> O1 -> Phone <- O3 (Bob's order): hop 3 is O3, not O1 again.
+        runner, _, _ = _run(alice_bob_carol(), hops=3)
+        rows = runner.rows(
+            "SELECT hop, parent_type, child_type, direction FROM out_shape_edges "
+            "ORDER BY hop"
+        )
+        assert (3, PRODUCT, ORDER, "in") in {
+            (r["hop"], r["parent_type"], r["child_type"], r["direction"]) for r in rows
+        }
+        frontier_1 = {r["node"] for r in runner.rows(
+            f"SELECT node FROM w_frontier_1 WHERE anchor = '{NS}Alice'")}
+        frontier_3 = {r["node"] for r in runner.rows(
+            f"SELECT node FROM w_frontier_3 WHERE anchor = '{NS}Alice'")}
+        assert frontier_1 == {NS + "O1", NS + "O2"}
+        assert frontier_3 == {NS + "O3", NS + "O4"}
+        assert not frontier_1 & frontier_3

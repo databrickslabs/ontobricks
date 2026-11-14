@@ -263,10 +263,14 @@ const SimulationPatterns = {
         if (!details) return;
         details.innerHTML = '<p class="text-muted small mb-0">Loading…</p>';
         try {
-            const members = await this._json(
-                `/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`
-            );
+            const [shape, members] = await Promise.all([
+                this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/shape`),
+                this._json(`/dtwin/patterns/${encodeURIComponent(patternId)}/members?offset=0&limit=${this.MEMBERS_PAGE}`),
+            ]);
             this._members = members;
+            const diagram = shape.diagram
+                ? this._diagramSvg(shape.diagram)
+                : '<p class="text-muted small mb-0">Re-run <strong>Detect</strong> to draw this pattern.</p>';
             const rows = (members.members || []).map((m) => (
                 `<li><span class="fw-medium">${this._esc(m.label || m.uri)}</span>`
                 + `<span class="text-muted small ms-1">${this._esc(m.type_label || '')}</span></li>`
@@ -275,12 +279,119 @@ const SimulationPatterns = {
                 ? '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-pat-more>Load more</button>'
                 : '';
             details.innerHTML = `
+                <div class="pat-diagram mb-3">${diagram}</div>
                 <p class="small mb-2"><strong>${this._fmtNum(members.total)}</strong> entities match this pattern</p>
                 <ul class="pat-member-list mb-0">${rows || '<li class="text-muted">None</li>'}</ul>
                 ${more}`;
         } catch (err) {
             details.innerHTML = `<p class="text-danger small mb-0">${this._esc(err.message || 'Failed')}</p>`;
         }
+    },
+
+    DIAGRAM: { colW: 280, nodeW: 150, headH: 34, attrH: 14, gapY: 22, pad: 16, top: 26 },
+
+    _classIcon(typeUri, typeLabel) {
+        const classes = this.ontologyClasses || [];
+        const low = String(typeLabel || '').toLowerCase();
+        const cls = classes.find((c) => (c.uri || c.id) === typeUri)
+            || classes.find((c) => String(c.name || c.label || '').toLowerCase() === low);
+        return (cls && cls.emoji) || '📦';
+    },
+
+    _trim(text, max) {
+        const s = String(text || '');
+        return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+    },
+
+    // Columns by hop, nodes stacked in each column and centred vertically.
+    _layoutDiagram(diagram) {
+        const D = this.DIAGRAM;
+        const cols = {};
+        diagram.nodes.forEach((n) => { (cols[n.hop] = cols[n.hop] || []).push(n); });
+        const heightOf = (n) => D.headH + D.attrH * (n.attributes || []).length;
+        const colH = (list) => list.reduce((h, n) => h + heightOf(n), 0) + D.gapY * (list.length - 1);
+        const maxH = Math.max(...Object.values(cols).map(colH));
+        const pos = {};
+        Object.entries(cols).forEach(([hop, list]) => {
+            let y = D.top + (maxH - colH(list)) / 2;
+            list.forEach((n) => {
+                pos[n.id] = { x: D.pad + Number(hop) * D.colW, y, h: heightOf(n) };
+                y += heightOf(n) + D.gapY;
+            });
+        });
+        const maxHop = Math.max(...Object.keys(cols).map(Number));
+        return {
+            pos,
+            maxHop,
+            width: D.pad * 2 + maxHop * D.colW + D.nodeW,
+            height: D.top + maxH + D.pad,
+        };
+    },
+
+    _diagramEdge(e, pos, incoming, incomingTotal) {
+        const D = this.DIAGRAM;
+        const a = pos[e.source];
+        const b = pos[e.target];
+        if (!a || !b) return '';
+        const slot = incoming[e.target] = (incoming[e.target] || 0) + 1;
+        const nIn = incomingTotal[e.target] || 1;
+        const dy = (slot - (nIn + 1) / 2) * 12;
+        const x1 = a.x + D.nodeW;
+        const y1 = a.y + a.h / 2;
+        const x2 = b.x;
+        const y2 = b.y + b.h / 2 + dy;
+        const mx = (x1 + x2) / 2;
+        const path = `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+        const dashed = e.share < 1 ? ' stroke-dasharray="4 3"' : '';
+        // Arrow follows the RDF edge: "in" means the neighbour points at its parent.
+        const marker = e.direction === 'in' ? 'marker-start="url(#patArrowIn)"' : 'marker-end="url(#patArrow)"';
+        const extra = [
+            e.avg > 1 ? `×${e.avg}` : '',
+            e.share < 1 ? `${Math.round(e.share * 100)}%` : '',
+        ].filter(Boolean).join(' · ');
+        const label = this._trim(e.via_label, 16) + (extra ? ` ${extra}` : '');
+        return `<path d="${path}" class="pat-dg-edge"${dashed} ${marker}><title>${this._esc(e.via)}</title></path>`
+            + `<text x="${x2 - 8}" y="${y2 - 4}" class="pat-dg-edge-label" text-anchor="end">${this._esc(label)}</text>`;
+    },
+
+    _diagramNode(n, p) {
+        const D = this.DIAGRAM;
+        const icon = this._classIcon(n.type, n.type_label);
+        const cls = n.hop === 0 ? 'pat-dg-node pat-dg-anchor' : 'pat-dg-node';
+        const attrs = (n.attributes || []).map((at, i) => (
+            `<text x="${p.x + 10}" y="${p.y + D.headH + 4 + i * D.attrH}" class="pat-dg-attr">`
+            + `${this._esc(this._trim(`${at.prop}: ${at.value}`, 26))}</text>`
+        )).join('');
+        return `<g><rect x="${p.x}" y="${p.y}" width="${D.nodeW}" height="${p.h}" rx="8" class="${cls}"><title>${this._esc(n.type)}</title></rect>`
+            + `<text x="${p.x + 10}" y="${p.y + 21}" class="pat-dg-type">${this._esc(icon)} ${this._esc(this._trim(n.type_label, 18))}</text>`
+            + `${attrs}</g>`;
+    },
+
+    _diagramSvg(diagram) {
+        if (!diagram || !(diagram.nodes || []).length) return '';
+        const D = this.DIAGRAM;
+        const L = this._layoutDiagram(diagram);
+        const heads = Array.from({ length: L.maxHop + 1 }, (_, h) => (
+            `<text x="${D.pad + h * D.colW + D.nodeW / 2}" y="14" class="pat-dg-head" text-anchor="middle">`
+            + `${h === 0 ? 'Entity' : `${h} hop${h > 1 ? 's' : ''}`}</text>`
+        )).join('');
+        const incomingTotal = {};
+        (diagram.edges || []).forEach((e) => {
+            incomingTotal[e.target] = (incomingTotal[e.target] || 0) + 1;
+        });
+        const incoming = {};
+        const edges = (diagram.edges || []).map((e) => this._diagramEdge(e, L.pos, incoming, incomingTotal)).join('');
+        const nodes = diagram.nodes.map((n) => this._diagramNode(n, L.pos[n.id])).join('');
+        const note = diagram.truncated ? '<p class="text-muted small mb-0">Showing the most common relationships only.</p>' : '';
+        return `<div class="pat-diagram-scroll"><svg class="pat-diagram-svg" width="${L.width}" height="${L.height}" `
+            + `viewBox="0 0 ${L.width} ${L.height}" role="img" aria-label="Pattern diagram">`
+            + '<defs>'
+            + '<marker id="patArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="pat-dg-arrow"/></marker>'
+            + '<marker id="patArrowIn" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" class="pat-dg-arrow"/></marker>'
+            + '</defs>'
+            + `${heads}${edges}${nodes}</svg></div>`
+            + '<p class="text-muted small mb-0 mt-1">Dashed: not every member has it · ×n: average per member · hover for full URIs.</p>'
+            + note;
     },
 
     async _loadMoreMembers() {

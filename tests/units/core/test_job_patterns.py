@@ -128,6 +128,33 @@ def test_run_passes_job_parameters_and_reads_summary(detected):
     assert stats["run_page_url"] == "https://run/1"
 
 
+def test_shape_diagram_is_opt_in(detected):
+    pid = detected.top_patterns(1)[0]["id"]
+    assert detected.shape(pid)["diagram"] is None
+    diagram = detected.shape(pid, with_diagram=True)["diagram"]
+    labels = [n["type_label"] for n in diagram["nodes"]]
+    assert labels[0] == "Customer"
+    assert "Order" in labels
+    assert diagram["edges"][0]["via_label"] == "hasOrder"
+
+
+def test_shape_diagram_is_none_for_runs_without_the_edges_table():
+    runner = SqliteRunner(alice_bob_carol())
+    builder = PatternSQL(
+        source_table="triples",
+        work_prefix="w",
+        output_table="out",
+        class_filter=[CUSTOMER],
+        hops=2,
+        min_support=1,
+    )
+    run_patterns(runner.execute, runner.scalar, builder, computed_at="t0", cleanup=False)
+    runner.execute("DROP TABLE out_shape_edges")
+    jp = JobPatterns("triples", runner=_Runner(), query=_query(runner), output_table="out")
+    pid = jp.top_patterns(1)[0]["id"]
+    assert jp.shape(pid, with_diagram=True)["diagram"] is None
+
+
 def test_summary_reports_the_detail_level_the_job_settled_on(detected):
     assert detected.summary()["detail_level"] == "full"
 

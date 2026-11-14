@@ -35,3 +35,56 @@ Ported from the 0.9.3 fix onto 0.10.0.
 
 ### Test result
 `uv run --frozen pytest -q -m "not scenario"` — 10487 passed, 323 skipped, 8 deselected, 39 warnings in 45.97s
+
+================================================================================
+## Draw a layered neighbourhood diagram for a selected pattern
+================================================================================
+
+Context: The Patterns Discover page listed matching entities but did not show
+what the pattern itself looks like. Selecting a pattern now draws a hop-layered
+diagram (entity type, then neighbours at 1 / 2 / 3 hops) above the member list.
+Hop expansion also keeps shortest-distance shells so the walk does not step
+back onto nodes it already visited.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Materialise node types once; emit typed edges per hop; write
+   `<out>_shape_edges`; skip already-seen nodes when expanding.
+2. src/back/core/graph_analysis/pattern_diagram.py
+   Pure builder: shape-edge rows + tokens → layered `{nodes, edges}`.
+3. src/back/core/graph_analysis/JobPatterns.py
+   `/shape` can attach the diagram (opt-in, so materialize stays cheap).
+4. src/back/objects/digitaltwin/TwinAnalytics.py
+   Pattern shape API requests the diagram.
+5. src/front/static/simulation/js/simulation-patterns.js
+   SVG diagram in Details; labels sit next to the target node.
+6. src/front/static/simulation/css/simulation.css
+   Diagram node / edge styles using theme variables.
+7. tests/units/core/test_pattern_job_sql.py
+   Typed edges, no backtrack to the anchor, shortest-distance shells.
+8. tests/units/core/test_pattern_diagram.py
+   Isolated pattern, hop/type nodes, attribute chips, edge cap.
+9. tests/units/core/test_job_patterns.py
+   Diagram is opt-in; missing edges table returns null.
+10. tests/units/front/test_simulation_page_contract.py
+    Details loads `/shape` and draws the diagram.
+11. docs/user-guide.md, docs/architecture.md
+    Diagram, `_shape_edges` table, `pattern_diagram.py`.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/pattern_diagram.py
+- src/back/core/graph_analysis/JobPatterns.py
+- src/back/objects/digitaltwin/TwinAnalytics.py
+- src/front/static/simulation/js/simulation-patterns.js
+- src/front/static/simulation/css/simulation.css
+- tests/units/core/test_pattern_job_sql.py
+- tests/units/core/test_pattern_diagram.py
+- tests/units/core/test_job_patterns.py
+- tests/units/front/test_simulation_page_contract.py
+- docs/user-guide.md
+- docs/architecture.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 10499 passed, 323 skipped, 8 deselected.
+Requires `make deploy-no-run` so the job writes `_shape_edges`, then re-run Detect.

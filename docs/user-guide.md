@@ -1354,13 +1354,16 @@ finest signature first (**Exact**, then **Neighbours (1 hop)**, then **Own
 attributes**) and keeps the first one whose patterns cover at least half of the
 anchors, falling back to **Structure only** (which relationships to which
 types, ignoring attributes and counts). The level used is shown as **Detail**
-next to the run stats. Optional **Refine top-N** merges near-duplicates that
+next to the run stats. Select a pattern to see a layered diagram of that
+neighbourhood (entity type at hop 0, then 1 / 2 / 3 hops) and the list of
+matching entities. Optional **Refine top-N** merges near-duplicates that
 differ only by relationship multiplicity into a motif; it only applies at the
 **Exact** level. Nothing is written to
 the graph until **Save & materialize**, which stores a named pattern
 (`Pattern` + `:inPattern` memberships) you can list or delete under
 **Patterns → Saved**. Re-run Detect after the graph changes; saved patterns do
-not auto-refresh.
+not auto-refresh. A run from before the diagram table was added asks you to
+Detect again before it can draw.
 
 Patterns vary by structure (attribute-heavy, 1-hop, multi-hop, fan-out),
 attribute bins, frequency, optional refine, and run parameters (`hops`,

@@ -1463,11 +1463,13 @@ materializations. Same job-only gate as Community (analytics toggle +
    |-------|---------|
    | `graph_patterns_<slug>` | anchor → `pattern_id`, support rank |
    | `…_shapes` | shape tokens, support, refined / near-duplicate metadata |
+   | `…_shape_edges` | typed edges the Discover diagram draws |
    | `…_preview_nodes` / `…_preview_edges` | capped preview |
    | `…_summary` | counts, hops, bins, min_support, algorithm |
 
 3. **Read back** — `GET /dtwin/patterns/latest` (top-N + stats + job gate);
-   `GET /dtwin/patterns/{id}/shape` and `/members` (paged ≤ 500).
+   `GET /dtwin/patterns/{id}/shape` (tokens + layered diagram) and `/members`
+   (paged ≤ 500).
 4. **Materialize** (`POST /dtwin/patterns/materialize`) starts
    `pattern_materialize`. `PatternMaterializer` writes a named `Pattern`
    individual + `:inPattern` memberships (multiple saved patterns coexist).
@@ -1485,6 +1487,7 @@ lifecycle) are documented for operators — not separate product modes in v1.
 | `src/jobs/graph_analytics_job.py` | `PatternSQL` / `run_patterns` — signatures, refine, outputs |
 | `resources/pattern_detection.job.yml` | Bundle job `<app>-pattern-detection` |
 | `src/back/core/graph_analysis/JobPatterns.py` | Trigger the job and read bounded outputs |
+| `src/back/core/graph_analysis/pattern_diagram.py` | Shape-edge rows → layered diagram model |
 | `src/back/core/graph_analysis/PatternVocabulary.py` | Pattern / `inPattern` URI helpers |
 | `src/back/core/graph_analysis/PatternMaterializer.py` | Named save, list, delete |
 | `src/api/routers/internal/dtwin.py` | `/dtwin/patterns/*` endpoints |

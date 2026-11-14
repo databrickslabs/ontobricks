@@ -1373,8 +1373,21 @@ class PatternSQL(GraphAnalyticsSQL):
         return f"{self.work_prefix}_refine"
 
     @property
+    def node_types(self) -> str:
+        return f"{self.work_prefix}_ntypes"
+
+    @property
+    def typed_edges(self) -> str:
+        """Per anchor: (hop, parent type, via, child type, direction) + count."""
+        return f"{self.work_prefix}_tedges"
+
+    @property
     def shapes_table(self) -> str:
         return f"{self.output_table}_shapes"
+
+    @property
+    def shape_edges_table(self) -> str:
+        return f"{self.output_table}_shape_edges"
 
     @property
     def preview_nodes_table(self) -> str:
@@ -1396,6 +1409,8 @@ class PatternSQL(GraphAnalyticsSQL):
             self.tokens,
             self.signatures,
             self.refine_map,
+            self.node_types,
+            self.typed_edges,
         ]
         for h in range(max(0, int(self.hops)) + 1):
             tables.append(self.frontier(h))
@@ -1409,6 +1424,10 @@ class PatternSQL(GraphAnalyticsSQL):
             f"WHERE predicate = '{sql_escape(RDF_TYPE)}' AND object <> ''\n"
             f"GROUP BY subject"
         )
+
+    def build_node_types(self) -> List[str]:
+        """Materialise :meth:`node_type_select_all` once for every hop."""
+        return self._recreate(self.node_types, self.node_type_select_all())
 
     def build_directed_edges(self) -> List[str]:
         """Directed URI edges both ways, keeping the predicate as ``via``."""
@@ -1522,18 +1541,29 @@ class PatternSQL(GraphAnalyticsSQL):
         cur = self.frontier(hop)
         cap = max(1, int(self.frontier_cap))
         hop_lit = str(int(hop))
+        # Shortest-distance shells: hop k only keeps nodes not already seen at
+        # hop k-1 or k-2 (edges run both ways, so a step from hop k-1 lands
+        # there or at hop k). Walking back says nothing new about the anchor.
+        seen = [prev] + ([self.frontier(hop - 2)] if hop >= 2 else [])
+        unseen = "".join(
+            f"    AND NOT EXISTS (SELECT 1 FROM {t} s{i} "
+            f"WHERE s{i}.anchor = f.anchor AND s{i}.node = e.dst)\n"
+            for i, t in enumerate(seen)
+        )
         # Ranked expansion, then frontier + tokens for survivors.
         expanded = f"{self.work_prefix}_exp_{int(hop)}"
         statements = self._recreate(
             expanded,
-            f"SELECT anchor, node, via, direction FROM (\n"
-            f"  SELECT f.anchor AS anchor, e.dst AS node, e.via AS via,\n"
-            f"         e.direction AS direction,\n"
+            f"SELECT anchor, parent, node, via, direction FROM (\n"
+            f"  SELECT f.anchor AS anchor, f.node AS parent, e.dst AS node,\n"
+            f"         e.via AS via, e.direction AS direction,\n"
             f"         ROW_NUMBER() OVER (\n"
             f"           PARTITION BY f.anchor ORDER BY e.via, e.dst\n"
             f"         ) AS rk\n"
             f"  FROM {prev} f\n"
             f"  JOIN {self.directed} e ON e.src = f.node\n"
+            f"  WHERE 1 = 1\n"
+            f"{unseen}"
             f") q\n"
             f"WHERE rk <= {cap}",
         )
@@ -1550,7 +1580,7 @@ class PatternSQL(GraphAnalyticsSQL):
             f"       's',\n"
             f"       {hop_lit}\n"
             f"FROM {expanded} e\n"
-            f"LEFT JOIN ({self.node_type_select_all()}) ty ON ty.n = e.node"
+            f"LEFT JOIN {self.node_types} ty ON ty.n = e.node"
         )
         # Neighbour attribute tokens (kind = 'na').
         statements.append(
@@ -1562,7 +1592,19 @@ class PatternSQL(GraphAnalyticsSQL):
             f"       {hop_lit}\n"
             f"FROM {expanded} e\n"
             f"JOIN {self.bins_table} b ON b.n = e.node\n"
-            f"LEFT JOIN ({self.node_type_select_all()}) ty ON ty.n = e.node"
+            f"LEFT JOIN {self.node_types} ty ON ty.n = e.node"
+        )
+        # Typed edges (parent type -> child type) for the pattern diagram.
+        statements.append(
+            f"INSERT INTO {self.typed_edges} "
+            f"(anchor, hop, parent_type, via, child_type, direction, cnt)\n"
+            f"SELECT e.anchor, {hop_lit}, coalesce(pt.type_uri, ''), e.via,\n"
+            f"       coalesce(ty.type_uri, ''), e.direction, COUNT(*)\n"
+            f"FROM {expanded} e\n"
+            f"LEFT JOIN {self.node_types} ty ON ty.n = e.node\n"
+            f"LEFT JOIN {self.node_types} pt ON pt.n = e.parent\n"
+            f"GROUP BY e.anchor, coalesce(pt.type_uri, ''), e.via,\n"
+            f"         coalesce(ty.type_uri, ''), e.direction"
         )
         statements.append(f"DROP TABLE IF EXISTS {expanded}")
         return statements
@@ -1573,6 +1615,10 @@ class PatternSQL(GraphAnalyticsSQL):
             f"DROP TABLE IF EXISTS {self.tokens}",
             f"CREATE TABLE {self.tokens} (anchor VARCHAR(1024), token VARCHAR(4096), "
             f"kind VARCHAR(8), hop INT)",
+            f"DROP TABLE IF EXISTS {self.typed_edges}",
+            f"CREATE TABLE {self.typed_edges} (anchor VARCHAR(1024), hop INT, "
+            f"parent_type VARCHAR(1024), via VARCHAR(1024), "
+            f"child_type VARCHAR(1024), direction VARCHAR(8), cnt BIGINT)",
         ]
         statements.append(
             f"INSERT INTO {self.tokens} (anchor, token, kind, hop)\n"
@@ -1698,6 +1744,20 @@ class PatternSQL(GraphAnalyticsSQL):
             f"  FROM {self.refine_map}\n"
             f"  GROUP BY new_id\n"
             f") nd ON nd.pattern_id = p.pattern_id",
+        )
+
+    def write_shape_edges(self) -> List[str]:
+        """Per pattern: typed edges with how many members have them, and how often."""
+        return self._recreate(
+            self.shape_edges_table,
+            f"SELECT o.pattern_id AS pattern_id, t.hop AS hop,\n"
+            f"       t.parent_type AS parent_type, t.via AS via,\n"
+            f"       t.child_type AS child_type, t.direction AS direction,\n"
+            f"       COUNT(*) AS member_count, SUM(t.cnt) AS edge_total\n"
+            f"FROM {self.output_table} o\n"
+            f"JOIN {self.typed_edges} t ON t.anchor = o.anchor_uri\n"
+            f"GROUP BY o.pattern_id, t.hop, t.parent_type, t.via, t.child_type, "
+            f"t.direction",
         )
 
     def write_pattern_preview(self) -> List[str]:
@@ -1854,6 +1914,8 @@ def _expand_neighbourhoods(execute, builder: PatternSQL) -> None:
         execute(stmt)
     for stmt in builder.build_anchors():
         execute(stmt)
+    for stmt in builder.build_node_types():
+        execute(stmt)
     for stmt in builder.build_bins():
         execute(stmt)
     for stmt in builder.init_tokens():
@@ -1914,6 +1976,8 @@ def _run_pattern_stages(
             execute(stmt)
 
     for stmt in builder.write_shapes(refined=bool(refined), level=level):
+        execute(stmt)
+    for stmt in builder.write_shape_edges():
         execute(stmt)
     for stmt in builder.write_pattern_preview():
         execute(stmt)
